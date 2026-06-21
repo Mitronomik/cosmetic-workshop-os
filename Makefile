@@ -22,4 +22,4 @@ package-macos:
 	@echo "TODO: implement macOS packaging in a future PR"
 
 smoke:
-	@echo "Run PR1 smoke manually: backend /api/health, frontend build, navigation placeholders."
+	@echo "Run current smoke manually: backend health endpoints, database status/settings endpoints, temporary SQLite migrations, frontend build."

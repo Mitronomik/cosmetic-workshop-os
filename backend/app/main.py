@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.database import router as database_router
 from app.api.health import router as health_router
+from app.api.settings import router as settings_router
 
 APP_NAME = "cosmetic-workshop-os"
 PRODUCT_NAME = "Мастерская косметолога"
@@ -23,6 +25,8 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router, prefix="/api")
     app.include_router(health_router)
+    app.include_router(database_router, prefix="/api")
+    app.include_router(settings_router, prefix="/api")
     return app
 
 
