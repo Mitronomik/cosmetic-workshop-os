@@ -28,6 +28,29 @@ from app.db.paths import (
 )
 from app.services.startup import initialize_startup, startup_database_config
 
+FORBIDDEN_PR6_BUSINESS_TABLES = {
+    "ingredient_lots",
+    "stock_movements",
+    "packaging_items",
+    "recipes",
+    "recipe_versions",
+    "recipe_ingredients",
+    "client_recipes",
+    "client_recipe_ingredients",
+    "clients",
+    "client_wishes",
+    "client_feedback",
+    "orders",
+    "production_batches",
+    "import_sources",
+    "import_drafts",
+    "backup_records",
+}
+
+
+def assert_no_forbidden_pr6_business_tables(tables):
+    assert not FORBIDDEN_PR6_BUSINESS_TABLES & tables
+
 
 def table_names(database_path):
     with sqlite3.connect(database_path) as connection:
@@ -61,7 +84,7 @@ def test_database_initialization_creates_infrastructure_tables(tmp_path):
 
     applied = initialize_database(config)
 
-    assert applied == ["0001_infrastructure"]
+    assert applied == expected_migration_ids()
     tables = table_names(config.path)
     assert "app_settings" in tables
     assert "audit_logs" in tables
@@ -107,21 +130,7 @@ def test_database_contains_only_allowed_pr6_tables(tmp_path):
     tables = table_names(config.path)
 
     assert tables <= ALLOWED_PR6_TABLES
-    assert not {
-        "recipes",
-        "recipe_versions",
-        "recipe_ingredients",
-        "client_recipes",
-        "ingredient_lots",
-        "packaging_items",
-        "stock_movements",
-        "clients",
-        "orders",
-        "production_batches",
-        "import_sources",
-        "import_drafts",
-        "backup_records",
-    } & tables
+    assert_no_forbidden_pr6_business_tables(tables)
 
 
 def test_settings_read_returns_seeded_app_configuration_after_explicit_init(tmp_path):
@@ -297,7 +306,9 @@ def test_explicit_user_startup_initialization_creates_directories_and_applies_mi
     assert result.database_path == user_data_dir / "data" / "cosmetic_workshop.sqlite"
     assert result.applied_migrations == expected_migration_ids()
     assert all(directory.is_dir() for directory in result.user_data_paths.required_directories)
-    assert table_names(result.database_path) <= ALLOWED_INFRASTRUCTURE_TABLES
+    tables = table_names(result.database_path)
+    assert tables <= ALLOWED_PR6_TABLES
+    assert_no_forbidden_pr6_business_tables(tables)
 
 
 def test_explicit_development_startup_initialization_respects_database_path_override(monkeypatch, tmp_path):
@@ -313,7 +324,9 @@ def test_explicit_development_startup_initialization_respects_database_path_over
     assert result.database_path == database_path
     assert result.applied_migrations == expected_migration_ids()
     assert not user_data_dir.exists()
-    assert table_names(database_path) <= ALLOWED_INFRASTRUCTURE_TABLES
+    tables = table_names(database_path)
+    assert tables <= ALLOWED_PR6_TABLES
+    assert_no_forbidden_pr6_business_tables(tables)
 
 
 def test_status_endpoint_still_does_not_apply_migrations_when_user_data_env_exists(monkeypatch, tmp_path):
@@ -429,7 +442,9 @@ def test_user_mode_startup_creates_backup_before_migration_for_existing_database
     assert marker == "before migration"
     assert "app_settings" not in backup_tables
     assert result.applied_migrations == expected_migration_ids()
-    assert table_names(database_path) <= (ALLOWED_INFRASTRUCTURE_TABLES | {"legacy_marker"})
+    tables = table_names(database_path)
+    assert tables <= (ALLOWED_PR6_TABLES | {"legacy_marker"})
+    assert_no_forbidden_pr6_business_tables(tables)
 
 
 def test_brand_new_user_mode_startup_does_not_create_unnecessary_backup(monkeypatch, tmp_path):
