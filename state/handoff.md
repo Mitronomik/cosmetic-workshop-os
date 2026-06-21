@@ -1,6 +1,8 @@
 # Handoff
 
 ## Last completed work
+Implemented PR15 inventory overview UI foundation. Added a read-only `Склад` frontend route at `/inventory` that uses the existing `/api/inventory/overview`, `/api/inventory/ingredient-lot-balances`, and `/api/inventory/packaging-balances` endpoints for overview cards and stock tables. The UI includes loading, empty, and error states and adds no write forms, backend migrations, alerts, purchase list, production, recipes, clients, orders, imports, cloud, mobile, OCR, auth, or roles.
+
 Implemented PR13 packaging stock movements foundation. Added `packaging_stock_movements`, pieces-only movement validation, service/repository/API create/read/list endpoints, movement-derived packaging balances, negative-balance prevention, and transactional `packaging_stock_movement.created` audit logging. No packaging lots, purchase list, production behavior, recipes, clients, orders, import/export, frontend UI, launcher behavior, or cloud/mobile/auth scope was added.
 
 Implemented PR12 transactional write services foundation. Added a small SQLite transaction helper and updated ingredient, ingredient lot, stock movement, packaging item, and audited onboarding write services to commit entity/state changes and audit logs atomically. Repository write methods can now use a shared connection, and rollback tests cover simulated audit failures, validation failures, and stock movement derived balance safety. No migrations, tables, public API routes, frontend code, launcher behavior, or schemas were added.
@@ -16,7 +18,7 @@ Previously implemented PR9 ingredient lots foundation. The backend now has an `i
 Previously implemented PR8 first-run onboarding skeleton. The backend stores onboarding state as typed JSON in the existing `app_settings` table, exposes thin `/api/onboarding` endpoints, and records minimal audit events for starting, completing a step, and completing onboarding or skipping/closing the checklist. The frontend Dashboard shows a warm Russian welcome/checklist experience and graceful backend-unavailable fallback.
 
 ## Current repo state
-PR13 adds backend packaging/tare stock accounting through immutable packaging stock movements and derived balances. PR12 adds backend transaction safety for existing write services without schema or API changes. No migrations, frontend code, or launcher code changed. Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, packaging stock movement endpoints, and onboarding endpoints. Frontend remains a branded static shell with onboarding and placeholder empty states only. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
+PR13 adds backend packaging/tare stock accounting through immutable packaging stock movements and derived balances. PR12 adds backend transaction safety for existing write services without schema or API changes. No migrations, frontend code, or launcher code changed. Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, packaging stock movement endpoints, and onboarding endpoints. Frontend remains a branded local-first shell with onboarding, placeholders, and the PR15 read-only inventory overview. No frontend write flows exist yet. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
 
 ## Important decisions
 - Repo: `cosmetic-workshop-os`
@@ -36,7 +38,7 @@ PR13 adds backend packaging/tare stock accounting through immutable packaging st
 - Frontend onboarding fetches `/api/onboarding`; if the frontend is served separately without the backend proxy/runtime, it intentionally falls back to a non-technical unavailable state.
 
 ## Next recommended task
-Proceed to the next roadmap-scoped task after PR13 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
+Proceed to the next roadmap-scoped task after PR15 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
 
 ## Commands to rerun during handoff
 - `git status --short`
@@ -120,3 +122,10 @@ Proceed to the next roadmap-scoped task after PR13 review/merge. Do not add FEFO
 - Packaging balances are derived from `packaging_stock_movements` and remain pieces-only.
 - Inventory overview reports counts only; it does not sum incompatible units or create alerts/purchase suggestions.
 - PR14 intentionally adds no migrations, tables, stored `current_quantity`/`remaining_quantity`, frontend UI, alerts engine, purchase list, recipes, clients, orders, production, import/export, cloud, mobile, OCR, auth, or roles.
+
+
+## PR15 notes
+- Inventory UI route: `/inventory` (navigation label `Склад`).
+- Frontend reads only existing PR14 endpoints: `/api/inventory/overview`, `/api/inventory/ingredient-lot-balances`, and `/api/inventory/packaging-balances`.
+- UI shows overview cards, ingredient lot balance table, packaging balance table, and loading/empty/error states.
+- PR15 intentionally excludes write actions/forms, backend changes, migrations, new tables, alerts engine, purchase suggestions, production, recipes, clients, orders, imports/exports, cloud, mobile, OCR, auth, and roles.
