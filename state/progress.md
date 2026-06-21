@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR7 - Local runtime launcher MVP
+PR8 - First-run onboarding skeleton
 
 ## Done
 - Architecture draft
@@ -30,43 +30,32 @@ PR7 - Local runtime launcher MVP
 - PR3 user data directory resolver for `~/Documents/Мастерская косметолога/` with `data`, `backups`, `exports`, `attachments`, and `logs` paths
 - PR3 optional `COSMETIC_WORKSHOP_USER_DATA_DIR` override for user-mode data directory resolution
 - PR3 explicit startup initialization service that creates user data directories and applies migrations only when called
-- PR3 tests/smoke coverage for development fallback, env overrides, directory creation, explicit startup initialization, invalid startup modes, no hidden endpoint migrations, and no business tables
 - PR4 backend backup service for copying existing SQLite databases into user-data `backups/` without modifying or overwriting the source
 - PR4 user-mode startup backup-before-migration guard for existing databases with pending migrations
-- PR4 tests for missing-source failures, copy fidelity, non-overwrite filenames, explicit backup directory creation, startup backup behavior, brand-new startup behavior, ordinary read endpoint safety, and no business tables
 - PR5 backend-only Decimal parsing and quantization helpers for grams, milliliters, percentages, money, counts, and density
 - PR5 MVP unit primitives for grams, milliliters, percent, and pieces with canonical codes and Russian labels
 - PR5 lightweight measurement value objects for weight, volume, percentage, money, quantity/count, and density
 - PR5 density conversion foundation that converts ml to grams only with an explicit density and returns a missing-density warning otherwise
-- PR5 validation issue/error primitives for invalid decimals, float rejection, negative quantities, percentage bounds, and missing/invalid density
-- PR5 tests for Decimal utilities, units, measurement validation, density conversion, missing-density warnings, whole-number count validation, fractional-count rejection, and no business tables
 - PR6 `ingredients` migration with no stock, lot, recipe, client, order, production, import, packaging, or purchase tables
 - PR6 backend ingredient domain category/unit/name/density validation using existing Decimal/Density primitives with missing density allowed
 - PR6 repository/service/API foundation for create, read, list active, full PUT update, and deactivate ingredients, plus minimal ingredient audit events
-- PR6 tests/smoke coverage for migration scope, infrastructure continuity, valid/invalid ingredient inputs, missing/non-positive/float density, active listing, deactivation, and API behavior where dependencies are available
-- PR6 hotfix updated database foundation tests to expect all current migration ids and allow only the PR6 `ingredients` table alongside infrastructure tables while keeping future business tables forbidden.
+- PR7 local runtime launcher MVP with localhost-only config, explicit user-mode startup initialization, backend process launch helper, optional browser opening, launcher tests, and docs
+- PR8 backend onboarding state stored as typed JSON in `app_settings` without adding a new table
+- PR8 thin onboarding API for read/start/complete-step/complete/reset with minimal audit events for started, step completed, and completed
+- PR8 frontend first-run welcome/checklist skeleton in Russian with graceful backend-unavailable fallback and small empty-state text for Recipes, Clients, and Stock
 
 ## In progress
-- PR7 local runtime launcher MVP foundation
+- PR8 validation, smoke, commit, and PR creation
 
 ## Blocked
 - none
 
 ## Next
-- Continue with the next roadmap-scoped task after PR7 review/merge. Final packaging, Electron, Docker, stock lots, stock movements, recipes, clients, orders, production, imports, and frontend UI remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR8 review/merge. Real ingredient UI, ingredient lots, stock movements, packaging, recipes, clients, orders, production, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
 
 ## Important notes
-- PR4 intentionally keeps backup-before-migration tied to explicit user-mode startup; development mode behavior remains simple/test-friendly.
-- PR3 intentionally does not change normal development database behavior: default development SQLite path remains repository-root `.local/cosmetic_workshop.sqlite` and `COSMETIC_WORKSHOP_DB_PATH` still works.
-- User-mode data paths are resolved separately and default to `~/Documents/Мастерская косметолога/`, but directories/database are created only by explicit helper/startup calls.
-- Startup modes are runtime-validated; only `development` and `user` are accepted.
+- PR8 intentionally reuses `app_settings` for onboarding state and does not add an `onboarding_state` table or any future business tables.
+- PR8 onboarding checklist steps are placeholders only; marking a step complete does not create ingredients, recipes, clients, orders, stock movements, backups, or exports.
+- User-mode startup and backup-before-migration behavior remain unchanged from PR3-PR4/PR7.
 - Read/status GET endpoints do not apply migrations or create user data directories implicitly.
 - Tests and smoke use temporary directories and should not write real user data.
-- Dependency installation and backend tests may fail in environments where Python package registry access is blocked; rerun after installing backend dependencies from an available registry/cache.
-
-- PR5 intentionally adds no migrations, routes, frontend code, or business entities. Follow-up fixed count quantities so fractional pieces/items fail validation instead of rounding silently.
-- PR6 intentionally adds only the `ingredients` business table and no inventory behavior; ingredient deactivation is used instead of hard delete. Ingredient full update uses `PUT /api/ingredients/{id}`; no partial PATCH contract is exposed.
-
-- PR7 adds a minimal `launcher/` Python runtime foundation with localhost-only config, explicit user-mode startup initialization, backend process launch helper, optional browser opening, launcher tests, and developer docs. It intentionally does not add final packaging, static frontend serving, Electron, Docker, migrations, or new business tables.
-
-- PR7 follow-up: launcher now checks backend port availability before user-mode startup side effects; the existing second guard in backend process launch remains in place.

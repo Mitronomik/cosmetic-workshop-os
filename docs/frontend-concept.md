@@ -1528,3 +1528,9 @@ frontend concept =
 Пользователь должен открыть приложение и понять, что делать дальше,
 не чувствуя, что перед ним техническая база данных, ERP или бухгалтерская система.
 ```
+
+## PR8 first-run onboarding skeleton
+
+The first-run surface is intentionally small and non-technical. The Dashboard may show a welcome card, a local-data explanation, and a placeholder checklist for the first workspace steps: welcome, data location, first ingredient, first recipe, first client, first order, and first backup. These checklist steps do not create business records yet; they only help the user understand the recommended order of work while later roadmap PRs add the real flows.
+
+If the backend is unavailable, the shell must still render a warm fallback explanation instead of a technical error. The copy should continue to explain that the product is a local workspace and that data belongs on the user's computer.
