@@ -62,4 +62,4 @@ Proceed to the next roadmap-scoped task after PR10 review/merge. Do not add FEFO
 - Movement quantities are stored as positive Decimal strings; signed deltas are derived from `direction`.
 - Movement type controls direction: receipts/manual in are `in`; manual out/write-off/return to supplier are `out`.
 - Outgoing movements are rejected when they would make the derived lot balance negative.
-- Existing FastAPI TestClient tests may be blocked unless `httpx2` is available in the environment.
+- Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.

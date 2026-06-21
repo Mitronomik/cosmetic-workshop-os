@@ -55,7 +55,7 @@ PR10 - Stock movements foundation
 - PR10 commit and PR creation
 
 ## Blocked
-- FastAPI TestClient-based tests remain blocked in this Codex environment because `httpx2` cannot be installed; registry access returned 403 during dependency installation.
+- Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
 - Continue with the next roadmap-scoped task after PR10 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
