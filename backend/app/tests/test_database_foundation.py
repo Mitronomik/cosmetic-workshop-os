@@ -329,3 +329,29 @@ def test_status_endpoint_still_does_not_apply_migrations_when_user_data_env_exis
     assert response.json()["status"] == "not_initialized"
     assert not database_path.exists()
     assert not user_data_dir.exists()
+
+
+def test_startup_database_config_rejects_unsupported_mode(monkeypatch, tmp_path):
+    database_path = tmp_path / "should-not-exist.sqlite"
+    user_data_dir = tmp_path / "should-not-exist-user-data"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+
+    with pytest.raises(ValueError, match="Unsupported startup mode 'production'"):
+        startup_database_config("production")
+
+    assert not database_path.exists()
+    assert not user_data_dir.exists()
+
+
+def test_initialize_startup_rejects_unsupported_mode_without_side_effects(monkeypatch, tmp_path):
+    database_path = tmp_path / "should-not-exist.sqlite"
+    user_data_dir = tmp_path / "should-not-exist-user-data"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+
+    with pytest.raises(ValueError, match="Allowed modes: development, user"):
+        initialize_startup("production")
+
+    assert not database_path.exists()
+    assert not user_data_dir.exists()

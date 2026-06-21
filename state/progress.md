@@ -30,7 +30,7 @@ PR3 - User data directory and explicit startup initialization implemented
 - PR3 user data directory resolver for `~/Documents/Мастерская косметолога/` with `data`, `backups`, `exports`, `attachments`, and `logs` paths
 - PR3 optional `COSMETIC_WORKSHOP_USER_DATA_DIR` override for user-mode data directory resolution
 - PR3 explicit startup initialization service that creates user data directories and applies migrations only when called
-- PR3 tests/smoke coverage for development fallback, env overrides, directory creation, explicit startup initialization, no hidden endpoint migrations, and no business tables
+- PR3 tests/smoke coverage for development fallback, env overrides, directory creation, explicit startup initialization, invalid startup modes, no hidden endpoint migrations, and no business tables
 
 ## In progress
 - none
@@ -44,6 +44,7 @@ PR3 - User data directory and explicit startup initialization implemented
 ## Important notes
 - PR3 intentionally does not change normal development database behavior: default development SQLite path remains repository-root `.local/cosmetic_workshop.sqlite` and `COSMETIC_WORKSHOP_DB_PATH` still works.
 - User-mode data paths are resolved separately and default to `~/Documents/Мастерская косметолога/`, but directories/database are created only by explicit helper/startup calls.
+- Startup modes are runtime-validated; only `development` and `user` are accepted.
 - Read/status GET endpoints do not apply migrations or create user data directories implicitly.
 - Tests and smoke use temporary directories and should not write real user data.
 - Dependency installation and backend tests may fail in environments where Python package registry access is blocked; rerun after installing backend dependencies from an available registry/cache.

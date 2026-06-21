@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
 import os
-import platform
 
 from app.db.config import DEFAULT_DATABASE_PATH
 
@@ -34,11 +33,9 @@ class UserDataPaths:
 
 def default_user_data_base_dir(home: Path | None = None, system: str | None = None) -> Path:
     user_home = home or Path.home()
-    current_system = system or platform.system()
-    if current_system == "Windows":
-        documents = user_home / "Documents"
-    else:
-        documents = user_home / "Documents"
+    # All currently supported platforms use Documents for the human-readable default.
+    # Keep the system argument for tests and future platform-specific adjustments.
+    documents = user_home / "Documents"
     return documents / USER_DOCUMENTS_DIRNAME
 
 

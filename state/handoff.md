@@ -1,7 +1,7 @@
 # Handoff
 
 ## Last completed work
-Implemented PR3 user data directory and explicit startup initialization foundation. The backend now has a user-mode data path resolver for `~/Documents/Мастерская косметолога/`, safe directory creation helpers for `data`, `backups`, `exports`, `attachments`, and `logs`, and an explicit startup initialization service that can create those directories and apply migrations only when called.
+Implemented PR3 user data directory and explicit startup initialization foundation. The backend now has a user-mode data path resolver for `~/Documents/Мастерская косметолога/`, safe directory creation helpers for `data`, `backups`, `exports`, `attachments`, and `logs`, and an explicit startup initialization service that validates startup mode before creating directories or applying migrations.
 
 ## Current repo state
 Minimal local-first foundation exists. Backend exposes stable health payloads plus technical database/settings endpoints from PR2. Frontend remains the branded static shell from PR1b with no new business UI. No recipes, clients, inventory, orders, production, imports, exports, backups, cloud, mobile, OCR, auth or roles were implemented.
@@ -16,6 +16,7 @@ Minimal local-first foundation exists. Backend exposes stable health payloads pl
 - User-mode data directory defaults to `~/Documents/Мастерская косметолога/` and can be overridden with `COSMETIC_WORKSHOP_USER_DATA_DIR`.
 - User-mode database path resolves to `data/cosmetic_workshop.sqlite` inside the user data directory.
 - Directory creation and migrations are explicit startup actions; ordinary GET/read endpoints must not create directories, initialize a database, or apply migrations as side effects.
+- Startup mode validation accepts only `development` and `user`; unsupported modes raise `ValueError` before filesystem/database side effects.
 - Migration metadata is stored in `schema_migrations`.
 - Initial migration creates only `app_settings` and `audit_logs`, plus indexes and metadata.
 
