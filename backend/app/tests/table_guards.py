@@ -5,11 +5,11 @@ CURRENT_ALLOWED_TABLES = {
     "ingredients",
     "ingredient_lots",
     "stock_movements",
+    "packaging_items",
     "sqlite_sequence",
 }
 
 FORBIDDEN_FUTURE_TABLES = {
-    "packaging_items",
     "recipes",
     "recipe_versions",
     "recipe_ingredients",

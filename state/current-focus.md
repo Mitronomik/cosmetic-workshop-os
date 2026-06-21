@@ -1,12 +1,12 @@
 # Current Focus
 
-Current task: PR10 - Stock movements foundation.
+Current task: PR11 - Packaging foundation.
 
 ## Allowed scope
-Backend-only ingredient stock movement foundation for active ingredient lots: `stock_movements` migration, immutable movement domain validation, repository/service/API basics, derived lot balance helper, negative-balance prevention, minimal audit event, backend tests, smoke notes, and state documentation updates.
+Backend-only packaging/tare directory foundation: `packaging_items` migration, packaging kind/unit/capacity/cost validation, repository/service/API basics, minimal audit events, backend tests, smoke notes, and state documentation updates.
 
 ## Do not touch
-Frontend inventory UI, recipes, production, automatic write-off, FEFO allocation, packaging inventory, packaging stock movements, clients, orders, purchase suggestions, imports/exports, launcher runtime changes, Docker, cloud/mobile access, OCR, auth, or roles.
+Frontend packaging UI, packaging stock movements, packaging balances, packaging lots, recipes, production, clients, orders, purchase suggestions, imports/exports, launcher runtime changes, final app packaging/installers, Docker, cloud/mobile access, OCR, auth, or roles.
 
 ## Acceptance
-Stock movements belong to existing active ingredient lots, use positive Decimal quantities with explicit `in`/`out` directions, reject invalid lots/units/directions/quantities/fractional pieces/floats/percent units, derive current lot quantity from movements, prevent outgoing movements from making balance negative, do not add `remaining_quantity` or stored balance columns, keep movements immutable, and update state files with checks and smoke results.
+Packaging items can be created/read/listed/updated/deactivated, use stable MVP kind codes, use pieces as their only stock unit, support optional positive Decimal capacity in ml or g, support optional non-negative Decimal unit cost, reject floats/invalid units/percent units/invalid capacity/cost, do not add `remaining_quantity` or `current_quantity`, and do not create packaging stock movement/balance/future business tables.
