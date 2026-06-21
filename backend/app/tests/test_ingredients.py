@@ -9,27 +9,12 @@ from app.domain.errors import DomainIssueCode, DomainValidationError
 from app.domain.ingredients import IngredientDraft
 from app.domain.units import UnitCode
 from app.main import create_app
+from app.repositories.database import FORBIDDEN_FUTURE_TABLES
 from app.repositories.ingredients import IngredientRepository
 from app.services.database import initialize_database
 from app.services.ingredients import IngredientService
 
-FORBIDDEN_TABLES = {
-    "stock_movements",
-    "packaging_items",
-    "recipes",
-    "recipe_versions",
-    "recipe_ingredients",
-    "client_recipes",
-    "client_recipe_ingredients",
-    "clients",
-    "client_wishes",
-    "client_feedback",
-    "orders",
-    "production_batches",
-    "import_sources",
-    "import_drafts",
-    "backup_records",
-}
+FORBIDDEN_TABLES = FORBIDDEN_FUTURE_TABLES
 
 
 def table_names(database_path):

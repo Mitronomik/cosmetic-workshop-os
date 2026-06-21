@@ -3,7 +3,27 @@ from app.db.connection import session
 from app.db.migrations import expected_migration_ids
 
 ALLOWED_INFRASTRUCTURE_TABLES = {"app_settings", "audit_logs", "schema_migrations", "sqlite_sequence"}
-ALLOWED_CURRENT_TABLES = ALLOWED_INFRASTRUCTURE_TABLES | {"ingredients", "ingredient_lots"}
+ALLOWED_CURRENT_TABLES = ALLOWED_INFRASTRUCTURE_TABLES | {
+    "ingredients",
+    "ingredient_lots",
+    "stock_movements",
+}
+FORBIDDEN_FUTURE_TABLES = {
+    "packaging_items",
+    "recipes",
+    "recipe_versions",
+    "recipe_ingredients",
+    "client_recipes",
+    "client_recipe_ingredients",
+    "clients",
+    "client_wishes",
+    "client_feedback",
+    "orders",
+    "production_batches",
+    "import_sources",
+    "import_drafts",
+    "backup_records",
+}
 REQUIRED_INFRASTRUCTURE_TABLES = ("app_settings", "audit_logs", "schema_migrations")
 
 

@@ -13,7 +13,7 @@ from app.db.config import (
 )
 from app.db.migrations import apply_migrations, current_migrations, expected_migration_ids
 from app.main import create_app
-from app.repositories.database import ALLOWED_CURRENT_TABLES, DatabaseRepository
+from app.repositories.database import ALLOWED_CURRENT_TABLES, FORBIDDEN_FUTURE_TABLES, DatabaseRepository
 from app.repositories.settings import SettingsNotInitializedError
 from app.services.backup import BackupSourceMissingError, backup_sqlite_database
 from app.services.database import database_status, initialize_database
@@ -28,23 +28,7 @@ from app.db.paths import (
 )
 from app.services.startup import initialize_startup, startup_database_config
 
-FORBIDDEN_PR6_BUSINESS_TABLES = {
-    "stock_movements",
-    "packaging_items",
-    "recipes",
-    "recipe_versions",
-    "recipe_ingredients",
-    "client_recipes",
-    "client_recipe_ingredients",
-    "clients",
-    "client_wishes",
-    "client_feedback",
-    "orders",
-    "production_batches",
-    "import_sources",
-    "import_drafts",
-    "backup_records",
-}
+FORBIDDEN_PR6_BUSINESS_TABLES = FORBIDDEN_FUTURE_TABLES
 
 
 def assert_no_forbidden_pr6_business_tables(tables):

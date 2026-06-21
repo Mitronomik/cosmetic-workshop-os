@@ -3,27 +3,11 @@ import sqlite3
 
 from app.db.config import DATABASE_PATH_ENV, DatabaseConfig
 from app.main import create_app
+from app.repositories.database import FORBIDDEN_FUTURE_TABLES
 from app.services.database import initialize_database
 from app.services.onboarding import ONBOARDING_SETTING_KEY, ONBOARDING_STEPS, OnboardingService
 
-FORBIDDEN_TABLES = {
-    "stock_movements",
-    "packaging_items",
-    "recipes",
-    "recipe_versions",
-    "recipe_ingredients",
-    "client_recipes",
-    "client_recipe_ingredients",
-    "clients",
-    "client_wishes",
-    "client_feedback",
-    "orders",
-    "production_batches",
-    "import_sources",
-    "import_drafts",
-    "backup_records",
-    "onboarding_state",
-}
+FORBIDDEN_TABLES = FORBIDDEN_FUTURE_TABLES | {"onboarding_state"}
 
 
 def initialized_config(tmp_path):

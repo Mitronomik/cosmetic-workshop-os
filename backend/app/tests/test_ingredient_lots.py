@@ -14,28 +14,13 @@ from app.repositories.ingredient_lots import (
     IngredientLotInactiveIngredientError,
     IngredientLotIngredientMissingError,
 )
+from app.repositories.database import ALLOWED_CURRENT_TABLES, FORBIDDEN_FUTURE_TABLES
 from app.services.database import initialize_database
 from app.services.ingredient_lots import IngredientLotService
 from app.services.ingredients import IngredientService
 
-ALLOWED_TABLES = {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots", "sqlite_sequence"}
-FORBIDDEN_TABLES = {
-    "stock_movements",
-    "packaging_items",
-    "recipes",
-    "recipe_versions",
-    "recipe_ingredients",
-    "client_recipes",
-    "client_recipe_ingredients",
-    "clients",
-    "client_wishes",
-    "client_feedback",
-    "orders",
-    "production_batches",
-    "import_sources",
-    "import_drafts",
-    "backup_records",
-}
+ALLOWED_TABLES = ALLOWED_CURRENT_TABLES
+FORBIDDEN_TABLES = FORBIDDEN_FUTURE_TABLES
 
 
 def table_names(database_path):
