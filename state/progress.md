@@ -14,6 +14,7 @@ Ready for PR1 - App shell
 - Domain model
 - Repository starter structure and documentation placement
 - Documentation structure review against project contracts
+- Nested `AGENTS.md` contracts expanded for backend, frontend, launcher, docs, ADRs, state, help and scripts
 
 ## In progress
 - none
