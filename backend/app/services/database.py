@@ -8,5 +8,4 @@ def initialize_database(config: DatabaseConfig | None = None) -> list[str]:
 
 
 def database_status(config: DatabaseConfig | None = None) -> dict[str, object]:
-    initialize_database(config)
     return DatabaseRepository(config).status()

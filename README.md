@@ -47,9 +47,9 @@ Frontend dependency note: `frontend/package.json` declares `typescript` as a dev
 
 Backend database foundation notes:
 
-- Local development uses SQLite. If `COSMETIC_WORKSHOP_DB_PATH` is unset, the backend uses `.local/cosmetic_workshop.sqlite`, which is gitignored and intended only for local development.
+- Local development uses SQLite. If `COSMETIC_WORKSHOP_DB_PATH` is unset, the backend uses repository-root `.local/cosmetic_workshop.sqlite`, which is gitignored and intended only for local development.
 - Tests should set `COSMETIC_WORKSHOP_DB_PATH` or pass a temporary database path through backend helpers.
-- Technical endpoints added in PR2: `GET /api/database/status` and `GET /api/settings`.
+- Technical endpoints added in PR2: `GET /api/database/status` and `GET /api/settings`. They do not run migrations implicitly; initialize the database explicitly before reading settings.
 - Only infrastructure tables are created in PR2: `app_settings`, `audit_logs`, and migration metadata. Business tables remain future roadmap scope.
 
 Backend dependency note: the PR1 backend runtime is FastAPI only; install backend dependencies with `python3 -m pip install -e "backend[test]"` before running backend tests or local API startup.

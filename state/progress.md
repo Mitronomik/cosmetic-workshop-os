@@ -23,9 +23,10 @@ PR2 - Database, migrations, settings and audit foundation implemented
 - PR1 follow-up: temporary backend ASGI fallback removed; FastAPI is now the only backend runtime path
 - PR1b branding pass: compact sidebar brand area, existing monogram/logo usage, warm cream/deep brown/rose-gold styling, favicon wiring, responsive shell refinements
 - PR2 SQLite persistence foundation with test-friendly database configuration
+- PR2 stable repository-root default development database path with `COSMETIC_WORKSHOP_DB_PATH` override
 - PR2 migration helper and initial infrastructure migration for `app_settings` and `audit_logs` only
-- PR2 technical API endpoints for database status and app settings
-- PR2 tests for temporary database initialization, idempotent migrations, infrastructure table presence, endpoint behavior, and no business table creation
+- PR2 technical API endpoints for database status and app settings with no hidden migration side effects
+- PR2 tests for temporary database initialization, idempotent migrations, stable path behavior, explicit initialization, infrastructure table presence, endpoint behavior, and no business table creation
 
 ## In progress
 - none
@@ -38,6 +39,7 @@ PR2 - Database, migrations, settings and audit foundation implemented
 
 ## Important notes
 - PR2 intentionally creates only infrastructure tables: `app_settings`, `audit_logs`, and migration metadata.
-- The default development SQLite path is `.local/cosmetic_workshop.sqlite`; this is gitignored and is not the final user data directory behavior.
+- The default development SQLite path is repository-root `.local/cosmetic_workshop.sqlite`; this is gitignored and is not the final user data directory behavior.
+- Read/status GET endpoints do not apply migrations implicitly; initialization remains explicit.
 - Tests use temporary SQLite paths and should not write real user data.
 - Dependency installation and backend tests may fail in environments where Python package registry access is blocked; rerun after installing backend dependencies from an available registry/cache.

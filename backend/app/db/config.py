@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import os
 
-DEFAULT_DATABASE_PATH = Path(".local/cosmetic_workshop.sqlite")
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_DATABASE_PATH = REPOSITORY_ROOT / ".local" / "cosmetic_workshop.sqlite"
 DATABASE_PATH_ENV = "COSMETIC_WORKSHOP_DB_PATH"
 
 
