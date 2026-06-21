@@ -21,7 +21,7 @@ Minimal local-first foundation exists. Backend exposes stable health payloads, t
 - Existing launcher decisions from PR7 remain unchanged.
 
 ## Known issues
-- In this environment, FastAPI/Starlette tests that import `TestClient` fail until the `httpx2` package is installed. Attempting `python3 -m pip install -e 'backend[test]'` was blocked by registry/proxy 403 while fetching build dependencies.
+- In this Codex environment, full FastAPI/Starlette `TestClient` test runs can be blocked if backend test dependencies are not installed. Attempting `python3 -m pip install -e 'backend[test]'` was blocked by registry/proxy 403 while fetching build dependencies.
 - Frontend onboarding fetches `/api/onboarding`; if the frontend is served separately without the backend proxy/runtime, it intentionally falls back to a non-technical unavailable state.
 
 ## Next recommended task

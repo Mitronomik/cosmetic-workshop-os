@@ -52,7 +52,7 @@ PR9 - Ingredient lots foundation
 - PR9 validation, smoke, commit, and PR creation
 
 ## Blocked
-- Full pytest-based checks are blocked in this environment until the Starlette `httpx2` test dependency can be installed; registry access returned 403 during dependency installation.
+- Full pytest-based checks were blocked in this Codex environment because backend test dependencies could not be installed; registry access returned 403 during dependency installation.
 
 ## Next
 - Continue with the next roadmap-scoped task after PR9 review/merge. Stock movements, remaining balances, FEFO allocation, packaging, recipes, clients, orders, production, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
