@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR0 - Project documentation contract
+Ready for PR1 - App shell
 
 ## Done
 - Architecture draft
@@ -12,12 +12,19 @@ PR0 - Project documentation contract
 - PR testing and smoke rules
 - Product specification
 - Domain model
+- Repository starter structure and documentation placement
+- Documentation structure review against project contracts
+- Nested `AGENTS.md` contracts expanded for backend, frontend, launcher, docs, ADRs, state, help and scripts
 
 ## In progress
-- Repository starter structure and documentation placement
+- none
 
 ## Blocked
 - none
 
 ## Next
 - PR1 - App shell
+
+## Important notes
+- Application code is not implemented yet.
+- Next PR should stay limited to the backend/frontend shell described in `docs/roadmap.md` PR1.

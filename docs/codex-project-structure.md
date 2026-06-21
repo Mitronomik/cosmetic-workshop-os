@@ -562,7 +562,7 @@ Nested `AGENTS.md` нужны для локальных правил.
 ```text
 how-to-create-recipe.md
 how-to-add-ingredient.md
-how-to-add-client.md
+how-to-create-client.md
 how-to-create-order.md
 how-to-produce-order.md
 how-to-create-backup.md
