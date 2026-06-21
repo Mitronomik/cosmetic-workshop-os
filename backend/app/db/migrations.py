@@ -24,6 +24,28 @@ def applied_migration_ids(connection) -> set[str]:
     return {row["migration_id"] for row in rows}
 
 
+def pending_migration_ids(config: DatabaseConfig | None = None) -> list[str]:
+    expected = expected_migration_ids()
+    if config is not None and not config.path.exists():
+        return expected
+    if config is None:
+        from app.db.config import get_database_config
+
+        resolved_config = get_database_config()
+        if not resolved_config.path.exists():
+            return expected
+        config = resolved_config
+    with session(config) as connection:
+        table_exists = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (MIGRATION_TABLE,),
+        ).fetchone()
+        if table_exists is None:
+            return expected
+        existing = applied_migration_ids(connection)
+    return [migration_id for migration_id in expected if migration_id not in existing]
+
+
 def apply_migrations(config: DatabaseConfig | None = None) -> list[str]:
     applied: list[str] = []
     with session(config) as connection:

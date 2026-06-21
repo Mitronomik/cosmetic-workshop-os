@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR3 - User data directory and explicit startup initialization implemented
+PR4 - Backup-before-migration foundation implemented
 
 ## Done
 - Architecture draft
@@ -31,6 +31,9 @@ PR3 - User data directory and explicit startup initialization implemented
 - PR3 optional `COSMETIC_WORKSHOP_USER_DATA_DIR` override for user-mode data directory resolution
 - PR3 explicit startup initialization service that creates user data directories and applies migrations only when called
 - PR3 tests/smoke coverage for development fallback, env overrides, directory creation, explicit startup initialization, invalid startup modes, no hidden endpoint migrations, and no business tables
+- PR4 backend backup service for copying existing SQLite databases into user-data `backups/` without modifying or overwriting the source
+- PR4 user-mode startup backup-before-migration guard for existing databases with pending migrations
+- PR4 tests for missing-source failures, copy fidelity, non-overwrite filenames, explicit backup directory creation, startup backup behavior, brand-new startup behavior, ordinary read endpoint safety, and no business tables
 
 ## In progress
 - none
@@ -39,9 +42,10 @@ PR3 - User data directory and explicit startup initialization implemented
 - none
 
 ## Next
-- Continue with the next roadmap-scoped foundation task after PR3 review/merge. Do not add business tables or business CRUD until explicitly scoped.
+- Continue with the next roadmap-scoped foundation task after PR4 review/merge. Do not add business tables or business CRUD until explicitly scoped.
 
 ## Important notes
+- PR4 intentionally keeps backup-before-migration tied to explicit user-mode startup; development mode behavior remains simple/test-friendly.
 - PR3 intentionally does not change normal development database behavior: default development SQLite path remains repository-root `.local/cosmetic_workshop.sqlite` and `COSMETIC_WORKSHOP_DB_PATH` still works.
 - User-mode data paths are resolved separately and default to `~/Documents/Мастерская косметолога/`, but directories/database are created only by explicit helper/startup calls.
 - Startup modes are runtime-validated; only `development` and `user` are accepted.
