@@ -34,6 +34,11 @@ def complete_onboarding() -> OnboardingStateResponse:
     return _response(OnboardingService().complete())
 
 
+@router.post("/skip", response_model=OnboardingStateResponse)
+def skip_onboarding() -> OnboardingStateResponse:
+    return _response(OnboardingService().skip())
+
+
 @router.post("/reset", response_model=OnboardingStateResponse)
 def reset_onboarding() -> OnboardingStateResponse:
     return _response(OnboardingService().reset())

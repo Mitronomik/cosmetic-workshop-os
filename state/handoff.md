@@ -1,7 +1,7 @@
 # Handoff
 
 ## Last completed work
-Implemented PR8 first-run onboarding skeleton. The backend stores onboarding state as typed JSON in the existing `app_settings` table, exposes thin `/api/onboarding` endpoints, and records minimal audit events for starting, completing a step, and completing/skipping onboarding. The frontend Dashboard now shows a warm Russian welcome/checklist experience, explains that data is local to the computer, and renders a graceful fallback if the backend is unavailable.
+Implemented PR8 first-run onboarding skeleton. The backend stores onboarding state as typed JSON in the existing `app_settings` table, exposes thin `/api/onboarding` endpoints, and records minimal audit events for starting, completing a step, and completing onboarding or skipping/closing the checklist. The frontend Dashboard now shows a warm Russian welcome/checklist experience, explains that data is local to the computer, and renders a graceful fallback if the backend is unavailable.
 
 Previously implemented PR7 local runtime launcher MVP foundation with localhost-only defaults, explicit user-mode startup initialization, backend process launch support, optional browser opening, and clear startup/port-conflict messages.
 
@@ -15,7 +15,7 @@ Minimal local-first foundation exists. Backend exposes stable health payloads, t
 - SQLite is used for the persistence foundation.
 - Onboarding state is stored under `app_settings.key = 'onboarding.state'` with `value_type = 'json'` to avoid adding a table for this small infrastructure state.
 - PR8 does not add an `onboarding_state` table and does not add forbidden future business tables.
-- Onboarding checklist steps are placeholders only and do not create business records.
+- Onboarding checklist steps are placeholders only and do not create business records. `skip()` closes onboarding without marking uncompleted steps as complete; `complete()` remains the explicit complete-all path.
 - Existing database/startup decisions from PR2-PR4 remain unchanged.
 - Existing launcher decisions from PR7 remain unchanged.
 
@@ -43,5 +43,6 @@ Proceed to the next roadmap-scoped task after PR8 review/merge. Do not add Ingre
   - `POST /api/onboarding/start`
   - `POST /api/onboarding/complete-step`
   - `POST /api/onboarding/complete`
+  - `POST /api/onboarding/skip`
   - `POST /api/onboarding/reset`
-- Smoke should use a temporary database/user data directory and verify onboarding read/start/step-complete/complete plus absence of forbidden future business tables.
+- Smoke should use a temporary database/user data directory and verify onboarding read/start/step-complete/skip/complete plus absence of forbidden future business tables.

@@ -86,6 +86,28 @@ class OnboardingService:
         )
         return next_state
 
+    def skip(self) -> OnboardingState:
+        state = self.get_state()
+        now = _now_iso()
+        next_state = OnboardingState(
+            has_started=True,
+            is_completed=True,
+            current_step=state.current_step if state.current_step in ONBOARDING_STEPS else _next_step(state.completed_steps),
+            completed_steps=state.completed_steps,
+            dismissed_hints=state.dismissed_hints,
+            created_at=state.created_at or now,
+            updated_at=now,
+        )
+        self._save_state(next_state)
+        self.audit.create_log(
+            action="onboarding.skipped",
+            entity_type="onboarding",
+            entity_id=None,
+            summary="Пользователь закрыл чек-лист первичной настройки без отметки всех шагов.",
+            metadata={"current_step": next_state.current_step, "completed_steps": list(next_state.completed_steps)},
+        )
+        return next_state
+
     def complete(self) -> OnboardingState:
         state = self.get_state()
         now = _now_iso()

@@ -41,8 +41,9 @@ PR8 - First-run onboarding skeleton
 - PR6 repository/service/API foundation for create, read, list active, full PUT update, and deactivate ingredients, plus minimal ingredient audit events
 - PR7 local runtime launcher MVP with localhost-only config, explicit user-mode startup initialization, backend process launch helper, optional browser opening, launcher tests, and docs
 - PR8 backend onboarding state stored as typed JSON in `app_settings` without adding a new table
-- PR8 thin onboarding API for read/start/complete-step/complete/reset with minimal audit events for started, step completed, and completed
+- PR8 thin onboarding API for read/start/complete-step/complete/skip/reset with minimal audit events for started, step completed, and completed
 - PR8 frontend first-run welcome/checklist skeleton in Russian with graceful backend-unavailable fallback and small empty-state text for Recipes, Clients, and Stock
+- PR8 follow-up separates true completion from skip/close behavior so skipped onboarding does not falsely mark all checklist steps complete
 
 ## In progress
 - PR8 validation, smoke, commit, and PR creation
@@ -55,7 +56,7 @@ PR8 - First-run onboarding skeleton
 
 ## Important notes
 - PR8 intentionally reuses `app_settings` for onboarding state and does not add an `onboarding_state` table or any future business tables.
-- PR8 onboarding checklist steps are placeholders only; marking a step complete does not create ingredients, recipes, clients, orders, stock movements, backups, or exports.
+- PR8 onboarding checklist steps are placeholders only; marking a step complete does not create ingredients, recipes, clients, orders, stock movements, backups, or exports. Skipping closes the checklist while preserving only the steps actually completed.
 - User-mode startup and backup-before-migration behavior remain unchanged from PR3-PR4/PR7.
 - Read/status GET endpoints do not apply migrations or create user data directories implicitly.
 - Tests and smoke use temporary directories and should not write real user data.

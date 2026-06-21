@@ -72,6 +72,49 @@ def test_onboarding_start_step_and_complete_are_persisted_in_app_settings(tmp_pa
     assert audit_actions == ["onboarding.started", "onboarding.step_completed", "onboarding.completed"]
 
 
+def test_skip_default_state_closes_checklist_without_completing_all_steps(tmp_path):
+    config = initialized_config(tmp_path)
+
+    skipped = OnboardingService(config).skip()
+
+    assert skipped.has_started is True
+    assert skipped.is_completed is True
+    assert skipped.current_step == "welcome"
+    assert skipped.completed_steps == ()
+    assert skipped.completed_steps != ONBOARDING_STEPS
+    with sqlite3.connect(config.path) as connection:
+        audit_actions = [row[0] for row in connection.execute("SELECT action FROM audit_logs ORDER BY id")]
+    assert audit_actions == ["onboarding.skipped"]
+    assert not (FORBIDDEN_TABLES & table_names(config.path))
+
+
+def test_skip_after_welcome_preserves_only_actual_completed_steps(tmp_path):
+    config = initialized_config(tmp_path)
+    service = OnboardingService(config)
+
+    service.complete_step("welcome")
+    skipped = service.skip()
+
+    assert skipped.has_started is True
+    assert skipped.is_completed is True
+    assert skipped.current_step == "data_location"
+    assert skipped.completed_steps == ("welcome",)
+    with sqlite3.connect(config.path) as connection:
+        audit_actions = [row[0] for row in connection.execute("SELECT action FROM audit_logs ORDER BY id")]
+    assert audit_actions == ["onboarding.step_completed", "onboarding.skipped"]
+
+
+def test_complete_still_marks_all_steps_completed(tmp_path):
+    config = initialized_config(tmp_path)
+
+    completed = OnboardingService(config).complete()
+
+    assert completed.has_started is True
+    assert completed.is_completed is True
+    assert completed.current_step == "first_backup"
+    assert completed.completed_steps == ONBOARDING_STEPS
+
+
 def test_onboarding_api_flow(monkeypatch, tmp_path):
     import pytest
     try:
@@ -100,6 +143,12 @@ def test_onboarding_api_flow(monkeypatch, tmp_path):
     invalid_step = client.post("/api/onboarding/complete-step", json={"step": "not-a-step"})
     assert invalid_step.status_code == 422
 
+    skipped = client.post("/api/onboarding/skip")
+    assert skipped.status_code == 200
+    assert skipped.json()["is_completed"] is True
+    assert skipped.json()["completed_steps"] == ["welcome"]
+
     completed = client.post("/api/onboarding/complete")
     assert completed.status_code == 200
     assert completed.json()["is_completed"] is True
+    assert completed.json()["completed_steps"] == list(ONBOARDING_STEPS)
