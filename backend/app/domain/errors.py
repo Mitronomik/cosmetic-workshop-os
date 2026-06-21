@@ -6,6 +6,7 @@ class DomainIssueCode(StrEnum):
     INVALID_DECIMAL = "invalid_decimal"
     FLOAT_NOT_ALLOWED = "float_not_allowed"
     NEGATIVE_QUANTITY = "negative_quantity"
+    NON_INTEGER_QUANTITY = "non_integer_quantity"
     ZERO_QUANTITY = "zero_quantity"
     MISSING_DENSITY = "missing_density"
     ZERO_OR_NEGATIVE_DENSITY = "zero_or_negative_density"

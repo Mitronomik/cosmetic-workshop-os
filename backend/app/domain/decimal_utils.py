@@ -72,7 +72,18 @@ def quantize_money(value: Decimal | int | str, *, field: str = "money") -> Decim
 
 
 def quantize_count(value: Decimal | int | str, *, field: str = "count") -> Decimal:
-    return quantize_decimal(value, COUNT_QUANT, field=field)
+    parsed = parse_decimal(value, field=field)
+    if parsed != parsed.to_integral_value():
+        raise DomainValidationError(
+            DomainIssue(
+                code=DomainIssueCode.NON_INTEGER_QUANTITY,
+                message=f"Поле “{field}” должно быть целым числом для штук/предметов.",
+                field=field,
+                value=str(parsed),
+                next_action="Укажите целое количество, например 2 или 3.",
+            )
+        )
+    return parsed.quantize(COUNT_QUANT, rounding=ROUNDING_MODE)
 
 
 def quantize_density(value: Decimal | int | str, *, field: str = "density_g_per_ml") -> Decimal:

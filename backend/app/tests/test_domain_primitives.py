@@ -57,7 +57,7 @@ def test_quantization_rules_are_explicit_and_half_up():
     assert quantize_volume("2.3455") == Decimal("2.346")
     assert quantize_percentage("3.455") == Decimal("3.46")
     assert quantize_money("10.005") == Decimal("10.01")
-    assert quantize_count("2.5") == Decimal("3")
+    assert quantize_count("2.0") == Decimal("2")
 
 
 def test_mvp_unit_definitions_have_canonical_codes_and_russian_labels():
@@ -74,8 +74,26 @@ def test_measurement_value_objects_quantize_and_attach_units():
     assert Volume.from_value("5.5555").milliliters == Decimal("5.556")
     assert Percentage.from_value("12.345").value == Decimal("12.35")
     assert Money.from_value("99.995").amount == Decimal("100.00")
-    assert Quantity.from_value("4.4").count == Decimal("4")
+    assert Quantity.from_value("4.0").count == Decimal("4")
     assert Density.from_value("0.98765").grams_per_milliliter == Decimal("0.9877")
+
+
+def test_fractional_counts_are_rejected_instead_of_rounded():
+    with pytest.raises(DomainValidationError) as quantize_exc:
+        quantize_count("2.5")
+    assert quantize_exc.value.issue.code == DomainIssueCode.NON_INTEGER_QUANTITY
+
+    with pytest.raises(DomainValidationError) as quantity_exc:
+        Quantity.from_value("4.4")
+    assert quantity_exc.value.issue.code == DomainIssueCode.NON_INTEGER_QUANTITY
+
+
+def test_whole_number_counts_are_accepted_and_normalized():
+    assert quantize_count("2") == Decimal("2")
+    assert quantize_count(2) == Decimal("2")
+    assert quantize_count(Decimal("2")) == Decimal("2")
+    assert quantize_count("2.0") == Decimal("2")
+    assert Quantity.from_value("3.0").count == Decimal("3")
 
 
 def test_negative_measurements_are_rejected():

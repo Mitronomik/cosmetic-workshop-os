@@ -39,7 +39,7 @@ PR5 - Domain primitives, units and Decimal foundation implemented
 - PR5 lightweight measurement value objects for weight, volume, percentage, money, quantity/count, and density
 - PR5 density conversion foundation that converts ml to grams only with an explicit density and returns a missing-density warning otherwise
 - PR5 validation issue/error primitives for invalid decimals, float rejection, negative quantities, percentage bounds, and missing/invalid density
-- PR5 tests for Decimal utilities, units, measurement validation, density conversion, missing-density warnings, and no business tables
+- PR5 tests for Decimal utilities, units, measurement validation, density conversion, missing-density warnings, whole-number count validation, fractional-count rejection, and no business tables
 
 ## In progress
 - none
@@ -59,4 +59,4 @@ PR5 - Domain primitives, units and Decimal foundation implemented
 - Tests and smoke use temporary directories and should not write real user data.
 - Dependency installation and backend tests may fail in environments where Python package registry access is blocked; rerun after installing backend dependencies from an available registry/cache.
 
-- PR5 intentionally adds no migrations, routes, frontend code, or business entities.
+- PR5 intentionally adds no migrations, routes, frontend code, or business entities. Follow-up fixed count quantities so fractional pieces/items fail validation instead of rounding silently.
