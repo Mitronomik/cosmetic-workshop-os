@@ -7,6 +7,7 @@ from app.api.ingredients import router as ingredients_router
 from app.api.ingredient_lots import router as ingredient_lots_router
 from app.api.onboarding import router as onboarding_router
 from app.api.settings import router as settings_router
+from app.api.stock_movements import router as stock_movements_router
 
 APP_NAME = "cosmetic-workshop-os"
 PRODUCT_NAME = "Мастерская косметолога"
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router, prefix="/api")
     app.include_router(ingredients_router, prefix="/api")
     app.include_router(ingredient_lots_router, prefix="/api")
+    app.include_router(stock_movements_router, prefix="/api")
     app.include_router(onboarding_router, prefix="/api")
     return app
 

@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR9 - Ingredient lots foundation
+PR10 - Stock movements foundation
 
 ## Done
 - Architecture draft
@@ -47,17 +47,22 @@ PR9 - Ingredient lots foundation
 - PR9 `ingredient_lots` migration with ingredient relationship, cost/shelf-life/supplier/density metadata, and no stock movement or remaining balance fields
 - PR9 backend ingredient lot domain validation using existing UnitCode, Decimal money quantization, and Density primitives with missing density/costs allowed
 - PR9 repository/service/API foundation for create, read, list active, list by ingredient, full PUT update, and deactivate ingredient lots, plus minimal lot audit events
+- PR10 `stock_movements` migration for immutable ingredient-lot movements with no stored lot balance or `remaining_quantity` columns
+- PR10 backend stock movement domain validation for Decimal quantities, allowed stock units, direction/type consistency, no floats, no percent units, and whole-number pieces
+- PR10 repository/service/API foundation for create, read, list, list by lot, derived lot balance, negative-balance prevention, and minimal `stock_movement.created` audit events
 
 ## In progress
-- PR9 validation, smoke, commit, and PR creation
+- PR10 commit and PR creation
 
 ## Blocked
-- Full pytest-based checks were blocked in this Codex environment because backend test dependencies could not be installed; registry access returned 403 during dependency installation.
+- FastAPI TestClient-based tests remain blocked in this Codex environment because `httpx2` cannot be installed; registry access returned 403 during dependency installation.
 
 ## Next
-- Continue with the next roadmap-scoped task after PR9 review/merge. Stock movements, remaining balances, FEFO allocation, packaging, recipes, clients, orders, production, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR10 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
 
 ## Important notes
+- PR10 intentionally does not add `remaining_quantity`, materialized balance tables, production write-off logic, FEFO allocation, packaging movements, or frontend inventory UI.
+- Stock movement balances are derived by summing immutable movement rows for a lot; corrections should be represented by new movements rather than editing/deleting existing rows.
 - PR9 intentionally does not add `remaining_quantity`, stock movement tables, production write-off logic, FEFO allocation, or frontend inventory UI.
 - Ingredient lot `unit` is restricted to grams, milliliters, or pieces; percent is rejected as a lot stock unit.
 - Lot creation/update rejects missing and inactive ingredients; inactive lots are hidden from active list endpoints.
