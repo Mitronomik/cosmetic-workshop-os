@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR11 - Packaging foundation
+PR11 hotfix - stock movement table guard cleanup
 
 ## Done
 - Architecture draft
@@ -56,9 +56,10 @@ PR11 - Packaging foundation
 - PR11 backend packaging item domain validation for stable MVP kind codes, pieces-only unit, optional positive Decimal capacity in ml/g, optional non-negative Decimal unit cost, no floats, and normalized names/text fields
 - PR11 repository/service/API foundation for create, read, list active, full PUT update, and deactivate packaging items, plus minimal packaging audit events
 - PR11 table guard update treats `packaging_items` as current while recipe/client/order/production/import/backup future tables remain forbidden
+- PR11 hotfix: `test_stock_movements.py` now uses the centralized test-only table guard helpers instead of stale local allowed/forbidden table sets.
 
 ## In progress
-- PR11 packaging foundation implementation and PR update
+- PR11 hotfix validation and PR update
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.

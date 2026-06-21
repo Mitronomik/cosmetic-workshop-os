@@ -1,6 +1,8 @@
 # Handoff
 
 ## Last completed work
+Implemented PR11 hotfix for stock movement table guard cleanup. `backend/app/tests/test_stock_movements.py` now uses the centralized table guard helpers so `packaging_items` is accepted as a current PR11 table while future recipe/client/order/production/import/backup tables remain forbidden.
+
 Implemented PR11 packaging foundation. The backend now has a `packaging_items` migration, packaging item domain validation, repository/service/API operations for create/read/list/update/deactivate, and minimal `packaging_item.created`, `packaging_item.updated`, and `packaging_item.deactivated` audit events. Packaging remains a directory only: no packaging stock movements, balances, lots, `remaining_quantity`, `current_quantity`, production consumption, purchase suggestions, or frontend UI were added.
 
 Previously implemented PR10 stock movements foundation. The backend now has a `stock_movements` migration, immutable movement domain validation, repository/service/API operations for create/read/list/list-by-lot/balance, negative-balance prevention, and a minimal `stock_movement.created` audit event. Current lot quantity is derived from movement history and no `remaining_quantity` or stored balance was added to ingredient lots. PR10 hotfix follow-up keeps those table guards in `backend/app/tests/table_guards.py` so future-table policy remains test-only; `stock_movements` is current and future business tables remain forbidden.
@@ -10,7 +12,7 @@ Previously implemented PR9 ingredient lots foundation. The backend now has an `i
 Previously implemented PR8 first-run onboarding skeleton. The backend stores onboarding state as typed JSON in the existing `app_settings` table, exposes thin `/api/onboarding` endpoints, and records minimal audit events for starting, completing a step, and completing onboarding or skipping/closing the checklist. The frontend Dashboard shows a warm Russian welcome/checklist experience and graceful backend-unavailable fallback.
 
 ## Current repo state
-Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, and onboarding endpoints. Frontend remains a branded static shell with onboarding and placeholder empty states only. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
+PR11 hotfix changed tests only; no application code, migrations, frontend code, or launcher code changed. Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, and onboarding endpoints. Frontend remains a branded static shell with onboarding and placeholder empty states only. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
 
 ## Important decisions
 - Repo: `cosmetic-workshop-os`
