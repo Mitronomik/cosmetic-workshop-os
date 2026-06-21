@@ -21,9 +21,9 @@ Current foundation behavior:
 - Directory creation and database migration are explicit startup actions, not side effects of ordinary status/read endpoints.
 - Backup creation is implemented as a backend service operation that copies an existing SQLite database file into `backups/` without modifying the original file.
 - Backup filenames include a UTC timestamp, the database filename stem, and a reason such as `before_migration`; if a generated filename already exists, the service chooses a non-overwriting suffixed filename.
-- Backup directory creation happens only when an explicit backup operation or user-mode startup initialization calls the backup service.
+- The `backups/` directory is part of the required user-data layout and may be created by explicit user-mode startup even when no backup file is created; a direct backup operation also creates it when needed.
 - User-mode startup creates a `before_migration` backup only when the user database file already exists and pending migrations may be applied.
-- Brand-new user-mode startup does not create a backup file for a database that does not exist yet.
+- Brand-new user-mode startup may create the empty `backups/` directory as part of the user-data layout, but it does not create a backup file for a database that does not exist yet.
 - Ordinary status/settings reads must not create backup directories, backup files, databases, or migrations.
 - Restore, backup UI, scheduled backups, export files, and cloud backup are not implemented yet.
 
