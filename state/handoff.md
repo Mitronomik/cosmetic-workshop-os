@@ -139,3 +139,5 @@ Proceed to the next roadmap-scoped task after PR16 review/merge. Do not add FEFO
 - The backend remains unchanged; no migrations or new tables were added.
 - Deactivation is soft: the UI calls the existing deactivate endpoint after a confirmation and refreshes the active ingredient list.
 - PR16 intentionally excludes ingredient lots UI, stock movement UI, packaging write UI, recipes, clients, orders, production, purchase list, alerts, imports/exports, cloud, mobile, OCR, auth, and roles.
+
+- PR16 follow-up aligned frontend ingredient category options with backend IngredientCategory codes and labels, and clears stale ingredient form errors after successful saves/deactivation.

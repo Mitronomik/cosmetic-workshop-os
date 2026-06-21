@@ -94,3 +94,5 @@ PR16 - Ingredient catalog UI foundation
 - PR15 inventory overview UI foundation: added a read-only `/inventory`/`Склад` frontend screen that consumes existing PR14 inventory read endpoints for overview cards, ingredient lot balances, and packaging balances. It includes loading, empty, and error states and intentionally adds no write forms, backend migrations, alerts, purchase list, production, recipes, clients, or orders.
 
 - PR16 ingredient/component directory UI foundation: added a `/ingredients`/`Компоненты` frontend screen that consumes existing ingredient endpoints for active-list, create, full update, and soft deactivation. It includes loading, empty, and error states and intentionally adds no lots, stock movements, packaging write flows, recipes, clients, orders, production, purchase list, alerts, migrations, or new tables.
+
+- PR16 follow-up aligned frontend ingredient category options with backend IngredientCategory codes and labels, and clears stale ingredient form errors after successful saves/deactivation.
