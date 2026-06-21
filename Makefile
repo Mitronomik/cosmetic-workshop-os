@@ -1,4 +1,4 @@
-.PHONY: setup dev test build test-backend build-frontend package-macos smoke
+.PHONY: setup dev run-local test build test-backend build-frontend package-macos smoke
 
 setup:
 	python3 -m pip install -e "backend[test]"
@@ -8,10 +8,13 @@ dev:
 	@echo "Start backend: cd backend && python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
 	@echo "Start frontend in another terminal: cd frontend && npm run dev"
 
+run-local:
+	python3 -m launcher.main --no-browser
+
 test: test-backend
 
 test-backend:
-	cd backend && python3 -m pytest
+	python3 -m pytest
 
 build: build-frontend
 

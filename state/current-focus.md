@@ -1,12 +1,12 @@
 # Current Focus
 
-Current task: PR5 - Domain primitives, units and Decimal foundation.
+Current task: PR7 - Local runtime launcher MVP.
 
 ## Allowed scope
-Backend-only Decimal helpers, unit definitions, measurement value objects, validation issues/results, and density conversion primitives.
+Minimal launcher/runtime foundation under `launcher/`, safe runtime configuration, explicit backend startup initialization in user mode, local backend process launch helper, optional browser opening, launcher tests, and related developer/user documentation.
 
 ## Do not touch
-Business entities, database tables, migrations, API endpoints, frontend UI, inventory, recipes, clients, orders, production, imports, exports, cloud, mobile, OCR, auth or roles.
+Final macOS `.app`/`.dmg`, installers, Electron, Docker, auto-update, cloud/mobile access, business UI, recipes, clients, orders, production, import/export features, new business tables, or migrations.
 
 ## Acceptance
-Decimal/unit/measurement/conversion primitives exist, tests cover scoped behavior, no business tables or migrations are added, and state handoff is updated.
+Launcher MVP exists with localhost-only defaults, user data override works in tests, user-mode startup is explicit, backup-before-migration remains active through existing startup, no real user Documents directory is touched by tests, no new business tables are added, docs/state are updated, and checks/smoke are reported.

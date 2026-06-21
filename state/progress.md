@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR6 hotfix - Database foundation tests updated for ingredients migration
+PR7 - Local runtime launcher MVP
 
 ## Done
 - Architecture draft
@@ -47,13 +47,13 @@ PR6 hotfix - Database foundation tests updated for ingredients migration
 - PR6 hotfix updated database foundation tests to expect all current migration ids and allow only the PR6 `ingredients` table alongside infrastructure tables while keeping future business tables forbidden.
 
 ## In progress
-- none
+- PR7 local runtime launcher MVP foundation
 
 ## Blocked
 - none
 
 ## Next
-- Continue with the next roadmap-scoped task after PR6 hotfix review/merge. Stock lots, stock movements, recipes, clients, orders, production, imports, and frontend UI remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR7 review/merge. Final packaging, Electron, Docker, stock lots, stock movements, recipes, clients, orders, production, imports, and frontend UI remain out of scope until explicitly requested.
 
 ## Important notes
 - PR4 intentionally keeps backup-before-migration tied to explicit user-mode startup; development mode behavior remains simple/test-friendly.
@@ -66,3 +66,7 @@ PR6 hotfix - Database foundation tests updated for ingredients migration
 
 - PR5 intentionally adds no migrations, routes, frontend code, or business entities. Follow-up fixed count quantities so fractional pieces/items fail validation instead of rounding silently.
 - PR6 intentionally adds only the `ingredients` business table and no inventory behavior; ingredient deactivation is used instead of hard delete. Ingredient full update uses `PUT /api/ingredients/{id}`; no partial PATCH contract is exposed.
+
+- PR7 adds a minimal `launcher/` Python runtime foundation with localhost-only config, explicit user-mode startup initialization, backend process launch helper, optional browser opening, launcher tests, and developer docs. It intentionally does not add final packaging, static frontend serving, Electron, Docker, migrations, or new business tables.
+
+- PR7 follow-up: launcher now checks backend port availability before user-mode startup side effects; the existing second guard in backend process launch remains in place.
