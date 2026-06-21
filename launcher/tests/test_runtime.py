@@ -1,10 +1,12 @@
+import socket
 import sqlite3
 from pathlib import Path
 
 import pytest
 
 from launcher.config import build_runtime_config, resolve_runtime_paths, RuntimeConfigError
-from launcher.runtime import initialize_backend_startup
+from launcher import runtime
+from launcher.runtime import RuntimeLaunchError, initialize_backend_startup
 
 FORBIDDEN_TABLES = {
     "ingredient_lots", "stock_movements", "packaging_items", "recipes", "recipe_versions",
@@ -76,3 +78,31 @@ def test_launcher_startup_creates_backup_before_migration(monkeypatch, tmp_path)
     assert result.backup.backup_path.parent == user_data_dir / "backups"
     with sqlite3.connect(result.backup.backup_path) as connection:
         assert connection.execute("SELECT value FROM legacy_marker").fetchone()[0] == "before"
+
+
+def test_run_local_runtime_checks_port_before_user_data_startup(monkeypatch, tmp_path):
+    user_data_dir = tmp_path / "user-data"
+    fake_home = tmp_path / "home"
+    startup_called = False
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    monkeypatch.setenv("COSMETIC_WORKSHOP_USER_DATA_DIR", str(user_data_dir))
+    monkeypatch.delenv("COSMETIC_WORKSHOP_DB_PATH", raising=False)
+
+    def fail_if_startup_is_called(mode, paths):
+        nonlocal startup_called
+        startup_called = True
+        raise AssertionError("startup must not run when the backend port is already occupied")
+
+    monkeypatch.setattr(runtime, "initialize_backend_startup", fail_if_startup_is_called)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied_socket:
+        occupied_socket.bind(("127.0.0.1", 0))
+        occupied_socket.listen(1)
+        occupied_port = occupied_socket.getsockname()[1]
+        config = build_runtime_config(backend_port=occupied_port, open_browser=False)
+
+        with pytest.raises(RuntimeLaunchError, match="Порт .* уже занят"):
+            runtime.run_local_runtime(config, resolve_runtime_paths())
+
+    assert startup_called is False
+    assert not user_data_dir.exists()
+    assert not (fake_home / "Documents" / "Мастерская косметолога").exists()

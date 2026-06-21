@@ -87,6 +87,7 @@ def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths |
     runtime_config = config or build_runtime_config()
     runtime_paths = paths or resolve_runtime_paths()
     print("Мастерская косметолога: запуск локального режима…")
+    assert_port_available(runtime_config.host, runtime_config.backend_port)
     print(f"Данные пользователя будут храниться вне кода приложения (режим: {runtime_config.mode}).")
     startup = initialize_backend_startup(runtime_config.mode, runtime_paths)
     print(f"База данных готова: {startup.database_path}")

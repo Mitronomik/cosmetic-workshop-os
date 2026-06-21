@@ -68,3 +68,5 @@ PR7 - Local runtime launcher MVP
 - PR6 intentionally adds only the `ingredients` business table and no inventory behavior; ingredient deactivation is used instead of hard delete. Ingredient full update uses `PUT /api/ingredients/{id}`; no partial PATCH contract is exposed.
 
 - PR7 adds a minimal `launcher/` Python runtime foundation with localhost-only config, explicit user-mode startup initialization, backend process launch helper, optional browser opening, launcher tests, and developer docs. It intentionally does not add final packaging, static frontend serving, Electron, Docker, migrations, or new business tables.
+
+- PR7 follow-up: launcher now checks backend port availability before user-mode startup side effects; the existing second guard in backend process launch remains in place.

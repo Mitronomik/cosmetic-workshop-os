@@ -52,3 +52,5 @@ Python syntax compilation passed. Scoped domain primitive tests passed before PR
 - Run launcher MVP with `python3 -m launcher.main --no-browser` or `make run-local` in developer mode.
 - Launcher default mode is `user` and respects `COSMETIC_WORKSHOP_USER_DATA_DIR`; tests use temporary directories and do not touch the real Documents folder.
 - Static frontend serving/final user package remain follow-up work.
+
+- PR7 follow-up: launcher now checks backend port availability before user-mode startup side effects; the existing second guard in backend process launch remains in place.
