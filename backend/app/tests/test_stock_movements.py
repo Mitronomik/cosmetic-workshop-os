@@ -18,13 +18,7 @@ from app.services.database import initialize_database
 from app.services.ingredient_lots import IngredientLotService
 from app.services.ingredients import IngredientService
 from app.services.stock_movements import StockMovementService
-
-ALLOWED_TABLES = {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots", "stock_movements", "sqlite_sequence"}
-FORBIDDEN_TABLES = {
-    "packaging_items", "recipes", "recipe_versions", "recipe_ingredients", "client_recipes", "client_recipe_ingredients",
-    "clients", "client_wishes", "client_feedback", "orders", "production_batches", "import_sources", "import_drafts",
-    "backup_records",
-}
+from app.tests.table_guards import assert_no_forbidden_future_tables, assert_only_current_tables
 
 
 def table_names(database_path):
@@ -54,8 +48,8 @@ def test_migration_creates_only_stock_movements_as_new_allowed_table(tmp_path):
     config = initialized_config(tmp_path)
     tables = table_names(config.path)
     assert {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots", "stock_movements"} <= tables
-    assert tables <= ALLOWED_TABLES
-    assert not FORBIDDEN_TABLES & tables
+    assert_only_current_tables(tables)
+    assert_no_forbidden_future_tables(tables)
     with sqlite3.connect(config.path) as connection:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(ingredient_lots)")}
     assert "remaining_quantity" not in columns
