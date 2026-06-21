@@ -29,7 +29,6 @@ from app.db.paths import (
 from app.services.startup import initialize_startup, startup_database_config
 
 FORBIDDEN_PR6_BUSINESS_TABLES = {
-    "ingredient_lots",
     "stock_movements",
     "packaging_items",
     "recipes",

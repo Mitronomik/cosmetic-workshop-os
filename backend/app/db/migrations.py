@@ -6,6 +6,7 @@ from app.db.connection import session
 MIGRATION_MODULES = [
     "app.migrations.versions.0001_infrastructure",
     "app.migrations.versions.0002_ingredients",
+    "app.migrations.versions.0003_ingredient_lots",
 ]
 MIGRATION_TABLE = "schema_migrations"
 

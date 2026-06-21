@@ -14,7 +14,6 @@ from app.services.database import initialize_database
 from app.services.ingredients import IngredientService
 
 FORBIDDEN_TABLES = {
-    "ingredient_lots",
     "stock_movements",
     "packaging_items",
     "recipes",
