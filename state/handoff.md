@@ -1,6 +1,8 @@
 # Handoff
 
 ## Last completed work
+Implemented PR12 transactional write services foundation. Added a small SQLite transaction helper and updated ingredient, ingredient lot, stock movement, packaging item, and audited onboarding write services to commit entity/state changes and audit logs atomically. Repository write methods can now use a shared connection, and rollback tests cover simulated audit failures, validation failures, and stock movement derived balance safety. No migrations, tables, public API routes, frontend code, launcher behavior, or schemas were added.
+
 Implemented PR11 hotfix for stock movement table guard cleanup. `backend/app/tests/test_stock_movements.py` now uses the centralized table guard helpers so `packaging_items` is accepted as a current PR11 table while future recipe/client/order/production/import/backup tables remain forbidden.
 
 Implemented PR11 packaging foundation. The backend now has a `packaging_items` migration, packaging item domain validation, repository/service/API operations for create/read/list/update/deactivate, and minimal `packaging_item.created`, `packaging_item.updated`, and `packaging_item.deactivated` audit events. Packaging remains a directory only: no packaging stock movements, balances, lots, `remaining_quantity`, `current_quantity`, production consumption, purchase suggestions, or frontend UI were added.
@@ -12,7 +14,7 @@ Previously implemented PR9 ingredient lots foundation. The backend now has an `i
 Previously implemented PR8 first-run onboarding skeleton. The backend stores onboarding state as typed JSON in the existing `app_settings` table, exposes thin `/api/onboarding` endpoints, and records minimal audit events for starting, completing a step, and completing onboarding or skipping/closing the checklist. The frontend Dashboard shows a warm Russian welcome/checklist experience and graceful backend-unavailable fallback.
 
 ## Current repo state
-PR11 hotfix changed tests only; no application code, migrations, frontend code, or launcher code changed. Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, and onboarding endpoints. Frontend remains a branded static shell with onboarding and placeholder empty states only. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
+PR12 adds backend transaction safety for existing write services without schema or API changes. No migrations, frontend code, or launcher code changed. Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, and onboarding endpoints. Frontend remains a branded static shell with onboarding and placeholder empty states only. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
 
 ## Important decisions
 - Repo: `cosmetic-workshop-os`
@@ -32,7 +34,7 @@ PR11 hotfix changed tests only; no application code, migrations, frontend code, 
 - Frontend onboarding fetches `/api/onboarding`; if the frontend is served separately without the backend proxy/runtime, it intentionally falls back to a non-technical unavailable state.
 
 ## Next recommended task
-Proceed to the next roadmap-scoped task after PR11 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
+Proceed to the next roadmap-scoped task after PR12 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
 
 ## Commands to rerun during handoff
 - `git status --short`
@@ -83,3 +85,11 @@ Proceed to the next roadmap-scoped task after PR11 review/merge. Do not add FEFO
 - Capacity is optional; when present it must be a positive Decimal string/integer/Decimal with unit `ml` or `g`. Missing capacity is accepted and does not imply ml equals grams.
 - Unit cost is optional, Decimal-backed, and non-negative. Floats are rejected for capacity and cost.
 - PR11 intentionally excludes packaging stock movement tables, derived balances, lots, purchase planning, production write-off, and frontend UI.
+
+
+## PR12 notes
+- Transaction helper: `backend/app/db/transactions.py`.
+- Audited service writes now use one SQLite transaction for main write plus audit event.
+- If audit logging fails, ingredient, lot, stock movement, packaging item, and audited onboarding state writes roll back.
+- Stock movement rows remain immutable; derived lot balance is still calculated from movement rows and is unchanged after rollback.
+- PR12 intentionally adds no migrations, no new tables, no API routes, no frontend changes, no launcher changes, and no schema changes.

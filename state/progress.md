@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR11 hotfix - stock movement table guard cleanup
+PR12 - Transactional write services foundation
 
 ## Done
 - Architecture draft
@@ -58,16 +58,21 @@ PR11 hotfix - stock movement table guard cleanup
 - PR11 table guard update treats `packaging_items` as current while recipe/client/order/production/import/backup future tables remain forbidden
 - PR11 hotfix: `test_stock_movements.py` now uses the centralized test-only table guard helpers instead of stale local allowed/forbidden table sets.
 
+- PR12 transactional write service foundation adds a small SQLite transaction helper and moves ingredient, ingredient lot, stock movement, packaging item, and audited onboarding state writes into service-level transactions so business writes and audit logs commit or roll back together.
+- PR12 repository write methods can accept a shared SQLite connection while preserving standalone repository behavior for callers that do not pass one.
+- PR12 rollback tests cover audit failure for ingredient, ingredient lot, stock movement, packaging item, and onboarding writes; stock movement rollback leaves derived lot balance unchanged.
+
 ## In progress
-- PR11 hotfix validation and PR update
+- PR12 validation and PR update
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- Continue with the next roadmap-scoped task after PR11 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR12 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
 
 ## Important notes
+- PR12 intentionally does not add migrations, tables, API routes, frontend changes, packaging stock movements, recipes, clients, orders, production, import/export, or cloud/mobile/auth behavior.
 - PR11 intentionally does not add packaging stock movements, packaging lots, packaging balances, `remaining_quantity`, `current_quantity`, purchase suggestions, production consumption, or frontend packaging UI.
 - PR10 intentionally does not add `remaining_quantity`, materialized balance tables, production write-off logic, FEFO allocation, packaging movements, or frontend inventory UI.
 - Stock movement balances are derived by summing immutable movement rows for a lot; corrections should be represented by new movements rather than editing/deleting existing rows.

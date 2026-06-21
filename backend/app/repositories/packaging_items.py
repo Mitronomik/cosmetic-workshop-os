@@ -1,4 +1,6 @@
+from contextlib import nullcontext
 from decimal import Decimal
+import sqlite3
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
@@ -15,8 +17,8 @@ class PackagingItemRepository:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config or get_database_config()
 
-    def create(self, draft: PackagingItemDraft) -> PackagingItem:
-        with session(self.config) as connection:
+    def create(self, draft: PackagingItemDraft, *, connection: sqlite3.Connection | None = None) -> PackagingItem:
+        with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 """
                 INSERT INTO packaging_items (
@@ -41,8 +43,8 @@ class PackagingItemRepository:
             rows = connection.execute("SELECT * FROM packaging_items WHERE is_active = 1 ORDER BY name, id").fetchall()
         return [_row_to_packaging_item(row) for row in rows]
 
-    def update_basic(self, packaging_item_id: int, draft: PackagingItemDraft) -> PackagingItem:
-        with session(self.config) as connection:
+    def update_basic(self, packaging_item_id: int, draft: PackagingItemDraft, *, connection: sqlite3.Connection | None = None) -> PackagingItem:
+        with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 """
                 UPDATE packaging_items
@@ -57,8 +59,8 @@ class PackagingItemRepository:
             row = connection.execute("SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)).fetchone()
         return _row_to_packaging_item(row)
 
-    def deactivate(self, packaging_item_id: int) -> PackagingItem:
-        with session(self.config) as connection:
+    def deactivate(self, packaging_item_id: int, *, connection: sqlite3.Connection | None = None) -> PackagingItem:
+        with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 "UPDATE packaging_items SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (packaging_item_id,),
@@ -99,3 +101,7 @@ def _row_to_packaging_item(row) -> PackagingItem:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+def _connection_scope(config: DatabaseConfig, connection: sqlite3.Connection | None):
+    return nullcontext(connection) if connection is not None else session(config)

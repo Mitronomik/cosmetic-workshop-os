@@ -1,4 +1,5 @@
 from app.db.config import DatabaseConfig
+from app.db.transactions import transaction
 from app.domain.ingredients import IngredientDraft
 from app.models.ingredient import Ingredient
 from app.repositories.audit import AuditLogRepository
@@ -7,18 +8,21 @@ from app.repositories.ingredients import IngredientNotFoundError, IngredientRepo
 
 class IngredientService:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
+        self.config = config
         self.repository = IngredientRepository(config)
         self.audit = AuditLogRepository(config)
 
     def create_ingredient(self, draft: IngredientDraft) -> Ingredient:
-        ingredient = self.repository.create(draft)
-        self.audit.create_log(
-            action="ingredient.created",
-            entity_type="ingredient",
-            entity_id=str(ingredient.id),
-            summary=f"Ingredient created: {ingredient.name}",
-            metadata={"category": ingredient.category.value},
-        )
+        with transaction(self.config) as connection:
+            ingredient = self.repository.create(draft, connection=connection)
+            self.audit.create_log(
+                action="ingredient.created",
+                entity_type="ingredient",
+                entity_id=str(ingredient.id),
+                summary=f"Ingredient created: {ingredient.name}",
+                metadata={"category": ingredient.category.value},
+                connection=connection,
+            )
         return ingredient
 
     def get_ingredient(self, ingredient_id: int) -> Ingredient:
@@ -28,24 +32,28 @@ class IngredientService:
         return self.repository.list_active()
 
     def update_ingredient(self, ingredient_id: int, draft: IngredientDraft) -> Ingredient:
-        ingredient = self.repository.update_basic(ingredient_id, draft)
-        self.audit.create_log(
-            action="ingredient.updated",
-            entity_type="ingredient",
-            entity_id=str(ingredient.id),
-            summary=f"Ingredient updated: {ingredient.name}",
-            metadata={"category": ingredient.category.value},
-        )
+        with transaction(self.config) as connection:
+            ingredient = self.repository.update_basic(ingredient_id, draft, connection=connection)
+            self.audit.create_log(
+                action="ingredient.updated",
+                entity_type="ingredient",
+                entity_id=str(ingredient.id),
+                summary=f"Ingredient updated: {ingredient.name}",
+                metadata={"category": ingredient.category.value},
+                connection=connection,
+            )
         return ingredient
 
     def deactivate_ingredient(self, ingredient_id: int) -> Ingredient:
-        ingredient = self.repository.deactivate(ingredient_id)
-        self.audit.create_log(
-            action="ingredient.deactivated",
-            entity_type="ingredient",
-            entity_id=str(ingredient.id),
-            summary=f"Ingredient deactivated: {ingredient.name}",
-        )
+        with transaction(self.config) as connection:
+            ingredient = self.repository.deactivate(ingredient_id, connection=connection)
+            self.audit.create_log(
+                action="ingredient.deactivated",
+                entity_type="ingredient",
+                entity_id=str(ingredient.id),
+                summary=f"Ingredient deactivated: {ingredient.name}",
+                connection=connection,
+            )
         return ingredient
 
 

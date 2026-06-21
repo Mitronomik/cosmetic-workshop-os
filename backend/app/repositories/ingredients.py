@@ -1,4 +1,6 @@
+from contextlib import nullcontext
 from decimal import Decimal
+import sqlite3
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
@@ -16,8 +18,8 @@ class IngredientRepository:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config or get_database_config()
 
-    def create(self, draft: IngredientDraft) -> Ingredient:
-        with session(self.config) as connection:
+    def create(self, draft: IngredientDraft, *, connection: sqlite3.Connection | None = None) -> Ingredient:
+        with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 """
                 INSERT INTO ingredients (
@@ -55,8 +57,8 @@ class IngredientRepository:
             ).fetchall()
         return [_row_to_ingredient(row) for row in rows]
 
-    def update_basic(self, ingredient_id: int, draft: IngredientDraft) -> Ingredient:
-        with session(self.config) as connection:
+    def update_basic(self, ingredient_id: int, draft: IngredientDraft, *, connection: sqlite3.Connection | None = None) -> Ingredient:
+        with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 """
                 UPDATE ingredients
@@ -83,8 +85,8 @@ class IngredientRepository:
             row = connection.execute("SELECT * FROM ingredients WHERE id = ?", (ingredient_id,)).fetchone()
         return _row_to_ingredient(row)
 
-    def deactivate(self, ingredient_id: int) -> Ingredient:
-        with session(self.config) as connection:
+    def deactivate(self, ingredient_id: int, *, connection: sqlite3.Connection | None = None) -> Ingredient:
+        with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 "UPDATE ingredients SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (ingredient_id,),
@@ -115,3 +117,7 @@ def _row_to_ingredient(row) -> Ingredient:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+def _connection_scope(config: DatabaseConfig, connection: sqlite3.Connection | None):
+    return nullcontext(connection) if connection is not None else session(config)
