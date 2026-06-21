@@ -43,7 +43,7 @@ def test_migration_creates_packaging_items_without_future_tables_or_balance_colu
     item_columns = columns(config.path, "packaging_items")
     assert "remaining_quantity" not in item_columns
     assert "current_quantity" not in item_columns
-    assert "packaging_stock_movements" not in tables
+    assert "packaging_stock_movements" in tables
 
 
 def test_create_get_list_update_and_deactivate_packaging_item(tmp_path):

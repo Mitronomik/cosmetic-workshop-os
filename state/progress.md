@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR12 - Transactional write services foundation
+PR13 - Packaging stock movements foundation
 
 ## Done
 - Architecture draft
@@ -62,16 +62,23 @@ PR12 - Transactional write services foundation
 - PR12 repository write methods can accept a shared SQLite connection while preserving standalone repository behavior for callers that do not pass one.
 - PR12 rollback tests cover audit failure for ingredient, ingredient lot, stock movement, packaging item, and onboarding writes; stock movement rollback leaves derived lot balance unchanged.
 
+- PR13 `packaging_stock_movements` migration for immutable packaging/tare stock movements with no stored packaging balance, no `current_quantity`/`remaining_quantity`, and no packaging lots.
+- PR13 backend packaging stock movement domain validation for positive integer pieces only, stable MVP movement types, no floats, no fractional pieces, no percent/ml/g/arbitrary movement units, and active packaging item requirements.
+- PR13 repository/service/API foundation for create, read, list, list-by-packaging-item, and movement-derived packaging item balance, plus negative-balance prevention.
+- PR13 transactional `packaging_stock_movement.created` audit event so audit failure rolls back movement creation and leaves derived balance unchanged.
+- PR13 follow-up replaced the packaging stock movement `packaging_item_id` validator with packaging-specific validation messages so invalid tare selection no longer references ingredients/components.
+
 ## In progress
-- PR12 validation and PR update
+- PR13 validation and PR update
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- Continue with the next roadmap-scoped task after PR12 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR13 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
 
 ## Important notes
+- PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.
 - PR12 intentionally does not add migrations, tables, API routes, frontend changes, packaging stock movements, recipes, clients, orders, production, import/export, or cloud/mobile/auth behavior.
 - PR11 intentionally does not add packaging stock movements, packaging lots, packaging balances, `remaining_quantity`, `current_quantity`, purchase suggestions, production consumption, or frontend packaging UI.
 - PR10 intentionally does not add `remaining_quantity`, materialized balance tables, production write-off logic, FEFO allocation, packaging movements, or frontend inventory UI.
