@@ -3,7 +3,10 @@ from importlib import import_module
 from app.db.config import DatabaseConfig
 from app.db.connection import session
 
-MIGRATION_MODULES = ["app.migrations.versions.0001_infrastructure"]
+MIGRATION_MODULES = [
+    "app.migrations.versions.0001_infrastructure",
+    "app.migrations.versions.0002_ingredients",
+]
 MIGRATION_TABLE = "schema_migrations"
 
 

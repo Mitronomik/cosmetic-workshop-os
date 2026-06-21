@@ -3,6 +3,7 @@ from app.db.connection import session
 from app.db.migrations import expected_migration_ids
 
 ALLOWED_INFRASTRUCTURE_TABLES = {"app_settings", "audit_logs", "schema_migrations", "sqlite_sequence"}
+ALLOWED_PR6_TABLES = ALLOWED_INFRASTRUCTURE_TABLES | {"ingredients"}
 REQUIRED_INFRASTRUCTURE_TABLES = ("app_settings", "audit_logs", "schema_migrations")
 
 

@@ -12,6 +12,9 @@ class DomainIssueCode(StrEnum):
     ZERO_OR_NEGATIVE_DENSITY = "zero_or_negative_density"
     PERCENTAGE_OUT_OF_RANGE = "percentage_out_of_range"
     RECIPE_PERCENTAGE_SUM_NOT_100 = "recipe_percentage_sum_not_100"
+    REQUIRED_FIELD = "required_field"
+    INVALID_CATEGORY = "invalid_category"
+    INVALID_UNIT = "invalid_unit"
 
 
 @dataclass(frozen=True)

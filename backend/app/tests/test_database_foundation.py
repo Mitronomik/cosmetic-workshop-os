@@ -13,7 +13,7 @@ from app.db.config import (
 )
 from app.db.migrations import apply_migrations, current_migrations, expected_migration_ids
 from app.main import create_app
-from app.repositories.database import ALLOWED_INFRASTRUCTURE_TABLES, DatabaseRepository
+from app.repositories.database import ALLOWED_PR6_TABLES, DatabaseRepository
 from app.repositories.settings import SettingsNotInitializedError
 from app.services.backup import BackupSourceMissingError, backup_sqlite_database
 from app.services.database import database_status, initialize_database
@@ -100,19 +100,18 @@ def test_migrations_apply_to_temporary_sqlite_database(tmp_path):
     assert current_migrations(config) == set(expected_migration_ids())
 
 
-def test_database_contains_only_allowed_infrastructure_tables(tmp_path):
+def test_database_contains_only_allowed_pr6_tables(tmp_path):
     config = DatabaseConfig(path=tmp_path / "scope-test.sqlite")
     initialize_database(config)
 
     tables = table_names(config.path)
 
-    assert tables <= ALLOWED_INFRASTRUCTURE_TABLES
+    assert tables <= ALLOWED_PR6_TABLES
     assert not {
         "recipes",
         "recipe_versions",
         "recipe_ingredients",
         "client_recipes",
-        "ingredients",
         "ingredient_lots",
         "packaging_items",
         "stock_movements",

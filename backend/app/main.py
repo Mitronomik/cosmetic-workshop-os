@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.database import router as database_router
 from app.api.health import router as health_router
+from app.api.ingredients import router as ingredients_router
 from app.api.settings import router as settings_router
 
 APP_NAME = "cosmetic-workshop-os"
@@ -20,13 +21,14 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
         allow_credentials=False,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST", "PATCH"],
         allow_headers=["*"],
     )
     app.include_router(health_router, prefix="/api")
     app.include_router(health_router)
     app.include_router(database_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
+    app.include_router(ingredients_router, prefix="/api")
     return app
 
 
