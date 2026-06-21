@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR5 - Domain primitives, units and Decimal foundation implemented
+PR6 - Ingredients foundation implemented
 
 ## Done
 - Architecture draft
@@ -40,6 +40,10 @@ PR5 - Domain primitives, units and Decimal foundation implemented
 - PR5 density conversion foundation that converts ml to grams only with an explicit density and returns a missing-density warning otherwise
 - PR5 validation issue/error primitives for invalid decimals, float rejection, negative quantities, percentage bounds, and missing/invalid density
 - PR5 tests for Decimal utilities, units, measurement validation, density conversion, missing-density warnings, whole-number count validation, fractional-count rejection, and no business tables
+- PR6 `ingredients` migration with no stock, lot, recipe, client, order, production, import, packaging, or purchase tables
+- PR6 backend ingredient domain category/unit/name/density validation using existing Decimal/Density primitives with missing density allowed
+- PR6 repository/service/API foundation for create, read, list active, full PUT update, and deactivate ingredients, plus minimal ingredient audit events
+- PR6 tests/smoke coverage for migration scope, infrastructure continuity, valid/invalid ingredient inputs, missing/non-positive/float density, active listing, deactivation, and API behavior where dependencies are available
 
 ## In progress
 - none
@@ -48,7 +52,7 @@ PR5 - Domain primitives, units and Decimal foundation implemented
 - none
 
 ## Next
-- Continue with the next roadmap-scoped task after PR5 review/merge. Business tables and CRUD remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR6 review/merge. Stock lots, stock movements, recipes, clients, orders, production, imports, and frontend UI remain out of scope until explicitly requested.
 
 ## Important notes
 - PR4 intentionally keeps backup-before-migration tied to explicit user-mode startup; development mode behavior remains simple/test-friendly.
@@ -60,3 +64,4 @@ PR5 - Domain primitives, units and Decimal foundation implemented
 - Dependency installation and backend tests may fail in environments where Python package registry access is blocked; rerun after installing backend dependencies from an available registry/cache.
 
 - PR5 intentionally adds no migrations, routes, frontend code, or business entities. Follow-up fixed count quantities so fractional pieces/items fail validation instead of rounding silently.
+- PR6 intentionally adds only the `ingredients` business table and no inventory behavior; ingredient deactivation is used instead of hard delete. Ingredient full update uses `PUT /api/ingredients/{id}`; no partial PATCH contract is exposed.
