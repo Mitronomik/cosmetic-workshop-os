@@ -1,12 +1,12 @@
 # Current Focus
 
-Current task: PR9 - Ingredient lots foundation.
+Current task: PR10 - Stock movements foundation.
 
 ## Allowed scope
-Backend-only ingredient lot/batch foundation: `ingredient_lots` migration, lot domain validation, repository/service/API CRUD-style basics, deactivation, minimal audit events, backend tests, smoke notes, and state documentation updates.
+Backend-only ingredient stock movement foundation for active ingredient lots: `stock_movements` migration, immutable movement domain validation, repository/service/API basics, derived lot balance helper, negative-balance prevention, minimal audit event, backend tests, smoke notes, and state documentation updates.
 
 ## Do not touch
-Frontend inventory UI, stock movements, remaining balances, FEFO allocation, production write-off/readiness/confirmation, recipes, clients, orders, packaging inventory, purchases, imports/exports, launcher runtime changes, Docker, cloud/mobile access, OCR, auth, or roles.
+Frontend inventory UI, recipes, production, automatic write-off, FEFO allocation, packaging inventory, packaging stock movements, clients, orders, purchase suggestions, imports/exports, launcher runtime changes, Docker, cloud/mobile access, OCR, auth, or roles.
 
 ## Acceptance
-Ingredient lots belong to existing active ingredients, invalid ingredient/date/cost/unit/density inputs are rejected, missing density and missing costs are accepted, Decimal-backed density/costs are stored as text, no stock balance or movement behavior is added, forbidden future tables are absent, checks/smoke are reported, and state files are updated.
+Stock movements belong to existing active ingredient lots, use positive Decimal quantities with explicit `in`/`out` directions, reject invalid lots/units/directions/quantities/fractional pieces/floats/percent units, derive current lot quantity from movements, prevent outgoing movements from making balance negative, do not add `remaining_quantity` or stored balance columns, keep movements immutable, and update state files with checks and smoke results.
