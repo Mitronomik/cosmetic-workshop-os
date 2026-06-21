@@ -1,6 +1,8 @@
 type HealthStatus = 'checking' | 'online' | 'offline';
 type OnboardingStatus = 'loading' | 'ready' | 'unavailable';
 type InventoryStatus = 'idle' | 'loading' | 'ready' | 'error';
+type IngredientsStatus = 'idle' | 'loading' | 'ready' | 'error';
+type IngredientFormMode = 'create' | 'edit';
 
 type OnboardingState = {
   has_started: boolean;
@@ -61,7 +63,43 @@ type InventoryState = {
   packagingItems: PackagingBalance[];
 };
 
-const navigationItems = ['Главная','Рецепты','Клиенты','Заказы','Склад','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
+type Ingredient = {
+  id: number;
+  name: string;
+  category: string;
+  default_unit: string;
+  density_g_per_ml: string | null;
+  is_active: boolean;
+  notes: string;
+  inci_name: string;
+  supplier_hint: string;
+  allergen_note: string;
+  usage_note: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type IngredientPayload = {
+  name: string;
+  category: string;
+  default_unit: string;
+  density_g_per_ml: string | null;
+  notes: string;
+  inci_name: string;
+  supplier_hint: string;
+  allergen_note: string;
+  usage_note: string;
+};
+
+type IngredientFormState = IngredientPayload & { id: number | null };
+
+type IngredientsState = {
+  items: Ingredient[];
+  formMode: IngredientFormMode;
+  form: IngredientFormState;
+};
+
+const navigationItems = ['Главная','Компоненты','Рецепты','Клиенты','Заказы','Склад','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
 const stepLabels: Record<string, string> = {
   welcome: 'Познакомиться с рабочим пространством',
   data_location: 'Понять, где хранятся локальные данные',
@@ -80,9 +118,15 @@ let onboardingMessage = '';
 let inventoryStatus: InventoryStatus = 'idle';
 let inventoryState: InventoryState = { overview: null, ingredientLots: [], packagingItems: [] };
 let inventoryError = '';
+let ingredientsStatus: IngredientsStatus = 'idle';
+let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm() };
+let ingredientsError = '';
+let ingredientsMessage = '';
 
 function sectionFromLocation() {
-  return window.location.pathname === '/inventory' ? 'Склад' : 'Главная';
+  if (window.location.pathname === '/inventory') return 'Склад';
+  if (window.location.pathname === '/ingredients') return 'Компоненты';
+  return 'Главная';
 }
 
 function render() {
@@ -103,7 +147,7 @@ function render() {
           <div><p class="eyebrow">Рабочее пространство</p><h1>${activeSection}</h1></div>
           <span class="status ${healthStatus}">${healthLabel}</span>
         </header>
-        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : sectionPlaceholder(activeSection)}
+        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : sectionPlaceholder(activeSection)}
       </main>
     </div>`;
   bindEvents(root);
@@ -114,8 +158,9 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       activeSection = button.dataset.section ?? 'Главная';
-      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : '/');
+      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : '/');
       if (activeSection === 'Склад') loadInventory();
+      if (activeSection === 'Компоненты') loadIngredients();
       render();
     });
   });
@@ -126,10 +171,33 @@ function bindEvents(root: HTMLElement) {
   });
   root.querySelector<HTMLButtonElement>('[data-action="skip-onboarding"]')?.addEventListener('click', () => updateOnboarding('/api/onboarding/skip'));
   root.querySelector<HTMLButtonElement>('[data-action="reload-inventory"]')?.addEventListener('click', () => loadInventory(true));
+  root.querySelector<HTMLButtonElement>('[data-action="reload-ingredients"]')?.addEventListener('click', () => loadIngredients(true));
+  root.querySelector<HTMLButtonElement>('[data-action="new-ingredient"]')?.addEventListener('click', () => { ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsMessage = ''; render(); });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient"]').forEach((button) => button.addEventListener('click', () => startEditIngredient(Number(button.dataset.id))));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient"]').forEach((button) => button.addEventListener('click', () => deactivateIngredient(Number(button.dataset.id))));
+  root.querySelector<HTMLFormElement>('[data-form="ingredient"]')?.addEventListener('submit', submitIngredientForm);
 }
 
 function dashboardPlaceholder() {
   return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Первые рабочие разделы появятся постепенно</h2><p>Здесь будет спокойная рабочая панель: активные заказы, предупреждения, закупки, производство и резервные копии.</p><p class="next-step">Начните с компонентов, затем рецептов, клиентов и заказов. Каждый раздел будет подключаться отдельным безопасным шагом.</p></section>`;
+}
+
+
+function ingredientsPage() {
+  if (ingredientsStatus === 'idle' || ingredientsStatus === 'loading') return `<section class="card"><p class="card-kicker">Компоненты</p><h2>Загружаем компоненты…</h2><p>Получаем справочник компонентов из локального API.</p></section>`;
+  if (ingredientsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Компоненты</p><h2>Не удалось загрузить компоненты</h2><p>${ingredientsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredients">Повторить загрузку</button></section>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Компоненты</p><h2>Справочник компонентов</h2><p>Добавляйте базовые записи компонентов, чтобы позже учитывать партии, остатки и рецептуры. Партии и движения склада в этом разделе не меняются.</p></div><button class="secondary-action" type="button" data-action="new-ingredient">Очистить форму</button></section>${ingredientsMessage ? `<p class="page-message">${ingredientsMessage}</p>` : ''}${ingredientsError ? `<p class="page-message error-message">${ingredientsError}</p>` : ''}${ingredientForm()}${ingredientList()}</div>`;
+}
+
+function ingredientForm() {
+  const form = ingredientsState.form;
+  const isEdit = ingredientsState.formMode === 'edit';
+  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить компонент' : 'Создать компонент'}</h2><form data-form="ingredient" class="ingredient-form"><div class="form-grid"><label>Название<input name="name" required maxlength="160" value="${escapeHtml(form.name)}" placeholder="Например, масло ши" /></label><label>Категория<select name="category">${categoryOptions(form.category)}</select></label><label>Единица учета<select name="default_unit">${unitOptions(form.default_unit)}</select></label><label>Плотность<input name="density_g_per_ml" inputmode="decimal" value="${escapeHtml(form.density_g_per_ml ?? '')}" placeholder="Например, 0.950" /></label><label>Поставщик<input name="supplier_hint" maxlength="160" value="${escapeHtml(form.supplier_hint)}" placeholder="Необязательно" /></label><label>INCI<input name="inci_name" maxlength="240" value="${escapeHtml(form.inci_name)}" placeholder="Необязательно" /></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки">${escapeHtml(form.notes)}</textarea></label><label class="full-span">Ограничения и аллергены<textarea name="allergen_note" rows="2" maxlength="800" placeholder="Необязательно">${escapeHtml(form.allergen_note)}</textarea></label><label class="full-span">Применение<textarea name="usage_note" rows="2" maxlength="800" placeholder="Необязательно">${escapeHtml(form.usage_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить изменения' : 'Создать компонент'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="new-ingredient">Отменить редактирование</button>' : ''}</div></form></section>`;
+}
+
+function ingredientList() {
+  if (ingredientsState.items.length === 0) return `<section class="card empty-card"><h2>Компонентов пока нет</h2><p>Добавьте первый компонент, чтобы потом учитывать партии и остатки на складе.</p><p class="next-step">Следующее действие: заполните название, единицу учета и при необходимости плотность, затем нажмите «Создать компонент».</p></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Компоненты</h2><div class="table-wrap"><table><thead><tr><th>Название</th><th>Ед. учета</th><th>Плотность</th><th>Статус</th><th>Заметки</th><th>Действия</th></tr></thead><tbody>${ingredientsState.items.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(categoryLabel(item.category))}${item.supplier_hint ? ` · ${escapeHtml(item.supplier_hint)}` : ''}</small></td><td>${unitLabel(item.default_unit)}</td><td>${item.density_g_per_ml ? `${escapeHtml(item.density_g_per_ml)} г/мл` : 'Не указана'}</td><td><span class="pill ${item.is_active ? 'success' : 'muted'}">${item.is_active ? 'Активен' : 'Неактивен'}</span></td><td>${escapeHtml(item.notes || 'Без заметок')}</td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient" data-id="${item.id}">Изменить</button>${item.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient" data-id="${item.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div></section>`;
 }
 
 function inventoryPage() {
@@ -178,10 +246,42 @@ function checklistItem(step: string, currentStep: string) { const isDone = onboa
 function stepHint(step: string) { return ({ welcome: 'Коротко понять назначение системы.', data_location: 'Данные остаются на этом компьютере; будущие резервные копии помогут защитить работу.', first_ingredient: 'Позже здесь появится добавление компонентов и плотностей.', first_recipe: 'Рецепты будут храниться версиями, без скрытого изменения истории.', first_client: 'Клиентские данные будут заполняться аккуратно и понятно.', first_order: 'Заказы и производство появятся отдельным roadmap-шагом.', first_backup: 'Резервные копии — обязательная привычка для локальной системы.' } as Record<string, string>)[step] ?? 'Шаг будет уточнен позже.'; }
 function sectionPlaceholder(title: string) { const emptyStates: Record<string, string> = { Рецепты: 'Рецепты появятся здесь позже. Пока можно завершить первичную настройку на главной странице.', Клиенты: 'Клиенты появятся здесь позже. В будущих шагах здесь будут карточки клиентов и индивидуальные формулы.', Запасы: 'Складской обзор теперь доступен в разделе «Склад». Формы добавления компонентов и движений появятся отдельными PR.' }; return `<section class="card"><p class="card-kicker">Раздел приложения</p><h2>${title}</h2><p>${emptyStates[title] ?? 'Этот раздел подготовлен как понятная навигационная заглушка. Формы и бизнес-функции будут добавляться в отдельных PR.'}</p><p class="next-step">Следующее действие: дождаться реализации соответствующего roadmap-шага.</p></section>`; }
 
+
+function emptyIngredientForm(): IngredientFormState { return { id: null, name: '', category: 'other', default_unit: 'g', density_g_per_ml: null, notes: '', inci_name: '', supplier_hint: '', allergen_note: '', usage_note: '' }; }
+function categoryLabel(category: string) { return ({ oil: 'Масла', butter: 'Баттеры', emulsifier: 'Эмульгаторы', active: 'Активы', preservative: 'Консерванты', fragrance: 'Отдушки', water: 'Водная фаза', extract: 'Экстракты', colorant: 'Красители', other: 'Другое' } as Record<string, string>)[category] ?? category; }
+function categoryOptions(current: string) { return ['oil','butter','emulsifier','active','preservative','fragrance','water','extract','colorant','other'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${categoryLabel(value)}</option>`).join(''); }
+function unitOptions(current: string) { return ['g','ml','pcs'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
+function ingredientPayloadFromForm(form: HTMLFormElement): IngredientPayload { const data = new FormData(form); const density = String(data.get('density_g_per_ml') ?? '').trim(); return { name: String(data.get('name') ?? '').trim(), category: String(data.get('category') ?? 'other'), default_unit: String(data.get('default_unit') ?? 'g'), density_g_per_ml: density || null, notes: String(data.get('notes') ?? '').trim(), inci_name: String(data.get('inci_name') ?? '').trim(), supplier_hint: String(data.get('supplier_hint') ?? '').trim(), allergen_note: String(data.get('allergen_note') ?? '').trim(), usage_note: String(data.get('usage_note') ?? '').trim() }; }
+function startEditIngredient(id: number) { const item = ingredientsState.items.find((ingredient) => ingredient.id === id); if (!item) return; ingredientsState.formMode = 'edit'; ingredientsState.form = { id: item.id, name: item.name, category: item.category, default_unit: item.default_unit, density_g_per_ml: item.density_g_per_ml, notes: item.notes, inci_name: item.inci_name, supplier_hint: item.supplier_hint, allergen_note: item.allergen_note, usage_note: item.usage_note }; ingredientsMessage = ''; render(); }
+
 function apiGet<T>(url: string): Promise<T> { return fetch(url).then((response) => { if (!response.ok) throw new Error('API request failed'); return response.json() as Promise<T>; }); }
+function apiSend<T>(url: string, method: 'POST' | 'PUT', body?: unknown): Promise<T> { return fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('API request failed'); return response.json() as Promise<T>; }); }
+function getIngredients() { return apiGet<{ ingredients: Ingredient[] }>('/api/ingredients'); }
+function createIngredient(payload: IngredientPayload) { return apiSend<Ingredient>('/api/ingredients', 'POST', payload); }
+function updateIngredient(id: number, payload: IngredientPayload) { return apiSend<Ingredient>(`/api/ingredients/${id}`, 'PUT', payload); }
+function deactivateIngredientRequest(id: number) { return apiSend<Ingredient>(`/api/ingredients/${id}/deactivate`, 'POST'); }
 function getInventoryOverview() { return apiGet<InventoryOverview>('/api/inventory/overview'); }
 function getIngredientLotBalances() { return apiGet<{ ingredient_lot_balances: IngredientLotBalance[] }>('/api/inventory/ingredient-lot-balances'); }
 function getPackagingBalances() { return apiGet<{ packaging_balances: PackagingBalance[] }>('/api/inventory/packaging-balances'); }
+
+
+function loadIngredients(force = false) {
+  if (!force && (ingredientsStatus === 'loading' || ingredientsStatus === 'ready')) return;
+  ingredientsStatus = 'loading'; ingredientsError = ''; render();
+  getIngredients().then((response) => { ingredientsState.items = response.ingredients; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsStatus = 'error'; ingredientsError = 'Не получилось получить справочник компонентов из локального API.'; render(); });
+}
+function submitIngredientForm(event: SubmitEvent) {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const payload = ingredientPayloadFromForm(form);
+  const request = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? updateIngredient(ingredientsState.form.id, payload) : createIngredient(payload);
+  request.then(() => { ingredientsMessage = ingredientsState.formMode === 'edit' ? 'Компонент сохранен.' : 'Компонент создан.'; ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить компонент. Проверьте обязательные поля и попробуйте еще раз.'; ingredientsStatus = 'ready'; render(); });
+}
+function deactivateIngredient(id: number) {
+  const item = ingredientsState.items.find((ingredient) => ingredient.id === id);
+  if (!item || !window.confirm(`Деактивировать компонент «${item.name}»? Он не будет удален из истории.`)) return;
+  deactivateIngredientRequest(id).then(() => { ingredientsMessage = 'Компонент деактивирован.'; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsMessage = ''; ingredientsError = 'Не удалось деактивировать компонент. Попробуйте еще раз.'; ingredientsStatus = 'ready'; render(); });
+}
 
 function loadInventory(force = false) {
   if (!force && (inventoryStatus === 'loading' || inventoryStatus === 'ready')) return;
@@ -193,8 +293,9 @@ function loadInventory(force = false) {
 function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!response.ok) throw new Error('Onboarding is unavailable'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = ''; render(); }).catch(() => { onboardingStatus = 'unavailable'; render(); }); }
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
-window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); render(); });
+window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); render(); });
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
 if (activeSection === 'Склад') loadInventory();
+if (activeSection === 'Компоненты') loadIngredients();

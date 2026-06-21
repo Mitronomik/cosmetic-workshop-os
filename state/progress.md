@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR13 - Packaging stock movements foundation
+PR16 - Ingredient catalog UI foundation
 
 ## Done
 - Architecture draft
@@ -69,13 +69,13 @@ PR13 - Packaging stock movements foundation
 - PR13 follow-up replaced the packaging stock movement `packaging_item_id` validator with packaging-specific validation messages so invalid tare selection no longer references ingredients/components.
 
 ## In progress
-- PR15 inventory overview UI foundation validation and PR update
+- PR16 ingredient/component directory UI foundation validation and PR update
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- Continue with the next roadmap-scoped task after PR15 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR16 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
 
 ## Important notes
 - PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.
@@ -92,3 +92,5 @@ PR13 - Packaging stock movements foundation
 
 - PR14 backend inventory read models: added read-only ingredient lot balance, packaging balance, and inventory overview DTO/service/repository/API layers. Balances are derived from immutable stock movement history; no stored balance fields, migrations, tables, frontend UI, alerts, purchase list, production, recipes, clients, or orders were added.
 - PR15 inventory overview UI foundation: added a read-only `/inventory`/`Склад` frontend screen that consumes existing PR14 inventory read endpoints for overview cards, ingredient lot balances, and packaging balances. It includes loading, empty, and error states and intentionally adds no write forms, backend migrations, alerts, purchase list, production, recipes, clients, or orders.
+
+- PR16 ingredient/component directory UI foundation: added a `/ingredients`/`Компоненты` frontend screen that consumes existing ingredient endpoints for active-list, create, full update, and soft deactivation. It includes loading, empty, and error states and intentionally adds no lots, stock movements, packaging write flows, recipes, clients, orders, production, purchase list, alerts, migrations, or new tables.

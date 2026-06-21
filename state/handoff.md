@@ -1,6 +1,8 @@
 # Handoff
 
 ## Last completed work
+Implemented PR16 ingredient catalog UI foundation. Added a `Компоненты` frontend route at `/ingredients` that uses the existing `/api/ingredients` endpoints for active-list, create, full update, and soft deactivation. The UI includes loading, empty, error, create, edit, and deactivate states/actions and adds no ingredient lots UI, stock movement UI, packaging write flows, recipes, clients, orders, production, purchase list, alerts, backend migrations, new tables, imports, cloud, mobile, OCR, auth, or roles.
+
 Implemented PR15 inventory overview UI foundation. Added a read-only `Склад` frontend route at `/inventory` that uses the existing `/api/inventory/overview`, `/api/inventory/ingredient-lot-balances`, and `/api/inventory/packaging-balances` endpoints for overview cards and stock tables. The UI includes loading, empty, and error states and adds no write forms, backend migrations, alerts, purchase list, production, recipes, clients, orders, imports, cloud, mobile, OCR, auth, or roles.
 
 Implemented PR13 packaging stock movements foundation. Added `packaging_stock_movements`, pieces-only movement validation, service/repository/API create/read/list endpoints, movement-derived packaging balances, negative-balance prevention, and transactional `packaging_stock_movement.created` audit logging. No packaging lots, purchase list, production behavior, recipes, clients, orders, import/export, frontend UI, launcher behavior, or cloud/mobile/auth scope was added.
@@ -18,7 +20,7 @@ Previously implemented PR9 ingredient lots foundation. The backend now has an `i
 Previously implemented PR8 first-run onboarding skeleton. The backend stores onboarding state as typed JSON in the existing `app_settings` table, exposes thin `/api/onboarding` endpoints, and records minimal audit events for starting, completing a step, and completing onboarding or skipping/closing the checklist. The frontend Dashboard shows a warm Russian welcome/checklist experience and graceful backend-unavailable fallback.
 
 ## Current repo state
-PR13 adds backend packaging/tare stock accounting through immutable packaging stock movements and derived balances. PR12 adds backend transaction safety for existing write services without schema or API changes. No migrations, frontend code, or launcher code changed. Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, packaging stock movement endpoints, and onboarding endpoints. Frontend remains a branded local-first shell with onboarding, placeholders, and the PR15 read-only inventory overview. No frontend write flows exist yet. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
+PR13 adds backend packaging/tare stock accounting through immutable packaging stock movements and derived balances. PR12 adds backend transaction safety for existing write services without schema or API changes. No backend migrations or launcher code changed for PR16. Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, packaging stock movement endpoints, and onboarding endpoints. Frontend remains a branded local-first shell with onboarding, placeholders, the PR15 read-only inventory overview, and the PR16 component directory write UI for basic ingredients only. No ingredient lot, stock movement, packaging write, recipe, client, order, production, import/export, purchase, or alert frontend flows exist yet. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
 
 ## Important decisions
 - Repo: `cosmetic-workshop-os`
@@ -38,7 +40,7 @@ PR13 adds backend packaging/tare stock accounting through immutable packaging st
 - Frontend onboarding fetches `/api/onboarding`; if the frontend is served separately without the backend proxy/runtime, it intentionally falls back to a non-technical unavailable state.
 
 ## Next recommended task
-Proceed to the next roadmap-scoped task after PR15 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
+Proceed to the next roadmap-scoped task after PR16 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
 
 ## Commands to rerun during handoff
 - `git status --short`
@@ -129,3 +131,11 @@ Proceed to the next roadmap-scoped task after PR15 review/merge. Do not add FEFO
 - Frontend reads only existing PR14 endpoints: `/api/inventory/overview`, `/api/inventory/ingredient-lot-balances`, and `/api/inventory/packaging-balances`.
 - UI shows overview cards, ingredient lot balance table, packaging balance table, and loading/empty/error states.
 - PR15 intentionally excludes write actions/forms, backend changes, migrations, new tables, alerts engine, purchase suggestions, production, recipes, clients, orders, imports/exports, cloud, mobile, OCR, auth, and roles.
+
+
+## PR16 notes
+- Ingredient UI route: `/ingredients` (navigation label `Компоненты`).
+- Frontend ingredient API usage: `GET /api/ingredients`, `POST /api/ingredients`, `PUT /api/ingredients/{ingredient_id}`, `POST /api/ingredients/{ingredient_id}/deactivate`.
+- The backend remains unchanged; no migrations or new tables were added.
+- Deactivation is soft: the UI calls the existing deactivate endpoint after a confirmation and refreshes the active ingredient list.
+- PR16 intentionally excludes ingredient lots UI, stock movement UI, packaging write UI, recipes, clients, orders, production, purchase list, alerts, imports/exports, cloud, mobile, OCR, auth, and roles.
