@@ -22,7 +22,7 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-PR1 app shell is implemented: backend health endpoint, frontend shell, Russian navigation placeholders and minimal build/test commands.
+PR2 database foundation is implemented: backend health endpoints remain stable, SQLite infrastructure tables and migration helpers exist, and the frontend shell remains unchanged.
 
 ## Developer commands
 
@@ -31,7 +31,7 @@ make setup          # install backend/frontend development dependencies when reg
 make dev            # print backend/frontend development startup commands
 make test           # run backend tests
 make build          # build the frontend shell
-make smoke          # print the PR1 smoke checklist
+make smoke          # print the current smoke checklist
 ```
 
 Direct commands:
@@ -43,6 +43,14 @@ cd frontend && npm run dev    # builds the shell, then serves dist on http://127
 ```
 
 Frontend dependency note: `frontend/package.json` declares `typescript` as a dev dependency because the build script runs `tsc`; run `cd frontend && npm install` when registry access is available.
+
+
+Backend database foundation notes:
+
+- Local development uses SQLite. If `COSMETIC_WORKSHOP_DB_PATH` is unset, the backend uses repository-root `.local/cosmetic_workshop.sqlite`, which is gitignored and intended only for local development.
+- Tests should set `COSMETIC_WORKSHOP_DB_PATH` or pass a temporary database path through backend helpers.
+- Technical endpoints added in PR2: `GET /api/database/status` and `GET /api/settings`. They do not run migrations implicitly; initialize the database explicitly before reading settings.
+- Only infrastructure tables are created in PR2: `app_settings`, `audit_logs`, and migration metadata. Business tables remain future roadmap scope.
 
 Backend dependency note: the PR1 backend runtime is FastAPI only; install backend dependencies with `python3 -m pip install -e "backend[test]"` before running backend tests or local API startup.
 
