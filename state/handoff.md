@@ -1,14 +1,16 @@
 # Handoff
 
 ## Last completed work
-Implemented PR10 stock movements foundation. The backend now has a `stock_movements` migration, immutable movement domain validation, repository/service/API operations for create/read/list/list-by-lot/balance, negative-balance prevention, and a minimal `stock_movement.created` audit event. Current lot quantity is derived from movement history and no `remaining_quantity` or stored balance was added to ingredient lots. PR10 hotfix follow-up keeps those table guards in `backend/app/tests/table_guards.py` so future-table policy remains test-only; `stock_movements` is current and future business tables remain forbidden.
+Implemented PR11 packaging foundation. The backend now has a `packaging_items` migration, packaging item domain validation, repository/service/API operations for create/read/list/update/deactivate, and minimal `packaging_item.created`, `packaging_item.updated`, and `packaging_item.deactivated` audit events. Packaging remains a directory only: no packaging stock movements, balances, lots, `remaining_quantity`, `current_quantity`, production consumption, purchase suggestions, or frontend UI were added.
+
+Previously implemented PR10 stock movements foundation. The backend now has a `stock_movements` migration, immutable movement domain validation, repository/service/API operations for create/read/list/list-by-lot/balance, negative-balance prevention, and a minimal `stock_movement.created` audit event. Current lot quantity is derived from movement history and no `remaining_quantity` or stored balance was added to ingredient lots. PR10 hotfix follow-up keeps those table guards in `backend/app/tests/table_guards.py` so future-table policy remains test-only; `stock_movements` is current and future business tables remain forbidden.
 
 Previously implemented PR9 ingredient lots foundation. The backend now has an `ingredient_lots` migration, lot domain validation, repository/service/API operations for create/read/list/update/deactivate, and minimal audit events for lot creation, update, and deactivation. Lots belong to existing active ingredients and carry batch metadata such as lot code, supplier, purchase/expiration dates, unit, optional Decimal-backed costs, optional density, and notes.
 
 Previously implemented PR8 first-run onboarding skeleton. The backend stores onboarding state as typed JSON in the existing `app_settings` table, exposes thin `/api/onboarding` endpoints, and records minimal audit events for starting, completing a step, and completing onboarding or skipping/closing the checklist. The frontend Dashboard shows a warm Russian welcome/checklist experience and graceful backend-unavailable fallback.
 
 ## Current repo state
-Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, and onboarding endpoints. Frontend remains a branded static shell with onboarding and placeholder empty states only. No real recipe/client/order/stock movement/production/import/export/backup UI flows were implemented.
+Minimal local-first foundation exists. Backend exposes stable health payloads, technical database/settings endpoints, ingredients endpoints, ingredient lot endpoints, stock movement endpoints, packaging item endpoints, and onboarding endpoints. Frontend remains a branded static shell with onboarding and placeholder empty states only. No real recipe/client/order/packaging stock/production/import/export/backup UI flows were implemented.
 
 ## Important decisions
 - Repo: `cosmetic-workshop-os`
@@ -16,6 +18,7 @@ Minimal local-first foundation exists. Backend exposes stable health payloads, t
 - MVP remains local-first and API-first.
 - SQLite is used for the persistence foundation.
 - Ingredient lots remain batch metadata; stock accounting is now represented by immutable stock movements connected to lots.
+- PR11 does not add packaging stock movements, packaging lots, packaging balances, quantity columns, production consumption, recipes, orders, clients, imports, purchase suggestions, or frontend UI.
 - PR10 does not add `remaining_quantity`, materialized balances, FEFO allocation, production write-off, recipes, orders, packaging inventory, packaging movements, or frontend inventory UI.
 - Lot creation/update requires an existing active ingredient. Missing ingredients return not found at API level; inactive ingredients return conflict.
 - Lot density is optional and never assumed. Costs and density reject floats and are stored as Decimal strings.
@@ -27,13 +30,14 @@ Minimal local-first foundation exists. Backend exposes stable health payloads, t
 - Frontend onboarding fetches `/api/onboarding`; if the frontend is served separately without the backend proxy/runtime, it intentionally falls back to a non-technical unavailable state.
 
 ## Next recommended task
-Proceed to the next roadmap-scoped task after PR10 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
+Proceed to the next roadmap-scoped task after PR11 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
 
 ## Commands to rerun during handoff
 - `git status --short`
 - `git branch --show-current`
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')`
 - `python3 -m pytest backend/app/tests/test_domain_primitives.py launcher/tests`
+- `cd backend && python3 -m pytest app/tests/test_packaging_items.py`
 - `cd backend && python3 -m pytest app/tests/test_stock_movements.py`
 - `cd backend && python3 -m pytest app/tests/test_ingredient_lots.py`
 - `cd backend && python3 -m pytest`
@@ -64,3 +68,16 @@ Proceed to the next roadmap-scoped task after PR10 review/merge. Do not add FEFO
 - Movement type controls direction: receipts/manual in are `in`; manual out/write-off/return to supplier are `out`.
 - Outgoing movements are rejected when they would make the derived lot balance negative.
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
+
+
+## PR11 notes
+- Packaging item endpoints:
+  - `POST /api/packaging-items`
+  - `GET /api/packaging-items`
+  - `GET /api/packaging-items/{packaging_item_id}`
+  - `PUT /api/packaging-items/{packaging_item_id}`
+  - `POST /api/packaging-items/{packaging_item_id}/deactivate`
+- Packaging units are pieces-only (`pcs`). Percent, grams, milliliters, and arbitrary units are rejected for the item stock unit.
+- Capacity is optional; when present it must be a positive Decimal string/integer/Decimal with unit `ml` or `g`. Missing capacity is accepted and does not imply ml equals grams.
+- Unit cost is optional, Decimal-backed, and non-negative. Floats are rejected for capacity and cost.
+- PR11 intentionally excludes packaging stock movement tables, derived balances, lots, purchase planning, production write-off, and frontend UI.

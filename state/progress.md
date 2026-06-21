@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR10 - Stock movements foundation
+PR11 - Packaging foundation
 
 ## Done
 - Architecture draft
@@ -52,16 +52,22 @@ PR10 - Stock movements foundation
 - PR10 repository/service/API foundation for create, read, list, list by lot, derived lot balance, negative-balance prevention, and minimal `stock_movement.created` audit events
 - PR10 hotfix: test-only allowed/forbidden table guards now treat `stock_movements` as current and keep future business tables forbidden
 
+- PR11 `packaging_items` migration for cosmetic workshop packaging/tare definitions with no packaging stock movements, packaging balances, lots, or stored quantity columns
+- PR11 backend packaging item domain validation for stable MVP kind codes, pieces-only unit, optional positive Decimal capacity in ml/g, optional non-negative Decimal unit cost, no floats, and normalized names/text fields
+- PR11 repository/service/API foundation for create, read, list active, full PUT update, and deactivate packaging items, plus minimal packaging audit events
+- PR11 table guard update treats `packaging_items` as current while recipe/client/order/production/import/backup future tables remain forbidden
+
 ## In progress
-- PR10 hotfix follow-up commit and PR update
+- PR11 packaging foundation implementation and PR update
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- Continue with the next roadmap-scoped task after PR10 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR11 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
 
 ## Important notes
+- PR11 intentionally does not add packaging stock movements, packaging lots, packaging balances, `remaining_quantity`, `current_quantity`, purchase suggestions, production consumption, or frontend packaging UI.
 - PR10 intentionally does not add `remaining_quantity`, materialized balance tables, production write-off logic, FEFO allocation, packaging movements, or frontend inventory UI.
 - Stock movement balances are derived by summing immutable movement rows for a lot; corrections should be represented by new movements rather than editing/deleting existing rows.
 - PR9 intentionally does not add `remaining_quantity`, stock movement tables, production write-off logic, FEFO allocation, or frontend inventory UI.
