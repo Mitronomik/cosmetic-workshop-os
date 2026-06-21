@@ -96,3 +96,5 @@ PR16 - Ingredient catalog UI foundation
 - PR16 ingredient/component directory UI foundation: added a `/ingredients`/`Компоненты` frontend screen that consumes existing ingredient endpoints for active-list, create, full update, and soft deactivation. It includes loading, empty, and error states and intentionally adds no lots, stock movements, packaging write flows, recipes, clients, orders, production, purchase list, alerts, migrations, or new tables.
 
 - PR16 follow-up aligned frontend ingredient category options with backend IngredientCategory codes and labels, and clears stale ingredient form errors after successful saves/deactivation.
+
+- PR16 follow-up aligned frontend ingredient unit options with backend UnitCode values, including percent (`%`).
