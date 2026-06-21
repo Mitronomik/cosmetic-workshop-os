@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR8 - First-run onboarding skeleton
+PR9 - Ingredient lots foundation
 
 ## Done
 - Architecture draft
@@ -44,19 +44,23 @@ PR8 - First-run onboarding skeleton
 - PR8 thin onboarding API for read/start/complete-step/complete/skip/reset with minimal audit events for started, step completed, and completed
 - PR8 frontend first-run welcome/checklist skeleton in Russian with graceful backend-unavailable fallback and small empty-state text for Recipes, Clients, and Stock
 - PR8 follow-up separates true completion from skip/close behavior so skipped onboarding does not falsely mark all checklist steps complete
+- PR9 `ingredient_lots` migration with ingredient relationship, cost/shelf-life/supplier/density metadata, and no stock movement or remaining balance fields
+- PR9 backend ingredient lot domain validation using existing UnitCode, Decimal money quantization, and Density primitives with missing density/costs allowed
+- PR9 repository/service/API foundation for create, read, list active, list by ingredient, full PUT update, and deactivate ingredient lots, plus minimal lot audit events
 
 ## In progress
-- PR8 validation, smoke, commit, and PR creation
+- PR9 validation, smoke, commit, and PR creation
 
 ## Blocked
-- none
+- Full pytest-based checks were blocked in this Codex environment because backend test dependencies could not be installed; registry access returned 403 during dependency installation.
 
 ## Next
-- Continue with the next roadmap-scoped task after PR8 review/merge. Real ingredient UI, ingredient lots, stock movements, packaging, recipes, clients, orders, production, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR9 review/merge. Stock movements, remaining balances, FEFO allocation, packaging, recipes, clients, orders, production, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
 
 ## Important notes
-- PR8 intentionally reuses `app_settings` for onboarding state and does not add an `onboarding_state` table or any future business tables.
-- PR8 onboarding checklist steps are placeholders only; marking a step complete does not create ingredients, recipes, clients, orders, stock movements, backups, or exports. Skipping closes the checklist while preserving only the steps actually completed.
-- User-mode startup and backup-before-migration behavior remain unchanged from PR3-PR4/PR7.
-- Read/status GET endpoints do not apply migrations or create user data directories implicitly.
-- Tests and smoke use temporary directories and should not write real user data.
+- PR9 intentionally does not add `remaining_quantity`, stock movement tables, production write-off logic, FEFO allocation, or frontend inventory UI.
+- Ingredient lot `unit` is restricted to grams, milliliters, or pieces; percent is rejected as a lot stock unit.
+- Lot creation/update rejects missing and inactive ingredients; inactive lots are hidden from active list endpoints.
+- Missing lot density is accepted and no density fallback is assumed.
+- Costs and density are Decimal-backed and stored as strings in SQLite.
+- Tests and smoke use temporary directories/databases and should not write real user data.

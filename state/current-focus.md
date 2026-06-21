@@ -1,12 +1,12 @@
 # Current Focus
 
-Current task: PR8 - First-run onboarding skeleton.
+Current task: PR9 - Ingredient lots foundation.
 
 ## Allowed scope
-Minimal persisted onboarding state, thin onboarding API, warm Russian first-run welcome/checklist UI, small placeholder empty states, onboarding tests, frontend build validation, smoke notes, and state documentation updates.
+Backend-only ingredient lot/batch foundation: `ingredient_lots` migration, lot domain validation, repository/service/API CRUD-style basics, deactivation, minimal audit events, backend tests, smoke notes, and state documentation updates.
 
 ## Do not touch
-Real ingredient UI/forms, ingredient lots, stock movements, packaging inventory, recipes, recipe versions, clients, orders, production, imports, exports, backup UI/restore UI, final packaging, Electron, Docker, cloud/mobile access, OCR, auth, roles, or new business tables.
+Frontend inventory UI, stock movements, remaining balances, FEFO allocation, production write-off/readiness/confirmation, recipes, clients, orders, packaging inventory, purchases, imports/exports, launcher runtime changes, Docker, cloud/mobile access, OCR, auth, or roles.
 
 ## Acceptance
-Onboarding state is represented cleanly through existing infrastructure, onboarding API can read/start/complete steps/complete/reset, frontend renders a human-friendly local workspace onboarding skeleton and degrades gracefully when backend is unavailable, no forbidden future business tables are added, checks/smoke are reported, and state files are updated.
+Ingredient lots belong to existing active ingredients, invalid ingredient/date/cost/unit/density inputs are rejected, missing density and missing costs are accepted, Decimal-backed density/costs are stored as text, no stock balance or movement behavior is added, forbidden future tables are absent, checks/smoke are reported, and state files are updated.
