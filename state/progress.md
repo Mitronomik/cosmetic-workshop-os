@@ -50,10 +50,10 @@ PR10 - Stock movements foundation
 - PR10 `stock_movements` migration for immutable ingredient-lot movements with no stored lot balance or `remaining_quantity` columns
 - PR10 backend stock movement domain validation for Decimal quantities, allowed stock units, direction/type consistency, no floats, no percent units, and whole-number pieces
 - PR10 repository/service/API foundation for create, read, list, list by lot, derived lot balance, negative-balance prevention, and minimal `stock_movement.created` audit events
-- PR10 hotfix: shared allowed/forbidden table guards now treat `stock_movements` as current and keep future business tables forbidden
+- PR10 hotfix: test-only allowed/forbidden table guards now treat `stock_movements` as current and keep future business tables forbidden
 
 ## In progress
-- PR10 hotfix commit and PR creation
+- PR10 hotfix follow-up commit and PR update
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.

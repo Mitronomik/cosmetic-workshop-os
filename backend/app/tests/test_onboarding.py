@@ -3,7 +3,7 @@ import sqlite3
 
 from app.db.config import DATABASE_PATH_ENV, DatabaseConfig
 from app.main import create_app
-from app.repositories.database import FORBIDDEN_FUTURE_TABLES
+from app.tests.table_guards import FORBIDDEN_FUTURE_TABLES
 from app.services.database import initialize_database
 from app.services.onboarding import ONBOARDING_SETTING_KEY, ONBOARDING_STEPS, OnboardingService
 

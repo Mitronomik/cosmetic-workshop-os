@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 
 from app.db.config import DatabaseConfig
-from app.repositories.database import ALLOWED_CURRENT_TABLES, FORBIDDEN_FUTURE_TABLES
+from app.tests.table_guards import assert_no_forbidden_future_tables, assert_only_current_tables
 from app.services.database import initialize_database
 from app.domain.conversions import milliliters_to_grams
 from app.domain.decimal_utils import (
@@ -140,5 +140,5 @@ def test_domain_primitives_do_not_add_unrelated_business_tables(tmp_path):
 
     tables = table_names(config.path)
 
-    assert tables <= ALLOWED_CURRENT_TABLES
-    assert not FORBIDDEN_FUTURE_TABLES & tables
+    assert_only_current_tables(tables)
+    assert_no_forbidden_future_tables(tables)

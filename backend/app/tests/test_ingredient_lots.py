@@ -14,14 +14,13 @@ from app.repositories.ingredient_lots import (
     IngredientLotInactiveIngredientError,
     IngredientLotIngredientMissingError,
 )
-from app.repositories.database import ALLOWED_CURRENT_TABLES, FORBIDDEN_FUTURE_TABLES
+from app.tests.table_guards import (
+    assert_no_forbidden_future_tables,
+    assert_only_current_tables,
+)
 from app.services.database import initialize_database
 from app.services.ingredient_lots import IngredientLotService
 from app.services.ingredients import IngredientService
-
-ALLOWED_TABLES = ALLOWED_CURRENT_TABLES
-FORBIDDEN_TABLES = FORBIDDEN_FUTURE_TABLES
-
 
 def table_names(database_path):
     with sqlite3.connect(database_path) as connection:
@@ -46,8 +45,8 @@ def test_migration_creates_only_allowed_ingredient_lots_table(tmp_path):
     tables = table_names(config.path)
 
     assert {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots"} <= tables
-    assert tables <= ALLOWED_TABLES
-    assert not FORBIDDEN_TABLES & tables
+    assert_only_current_tables(tables)
+    assert_no_forbidden_future_tables(tables)
 
 
 def test_create_lot_for_existing_active_ingredient_accepts_missing_density_and_costs(tmp_path):
