@@ -20,6 +20,7 @@ PR1 - App shell implemented
 - Minimal frontend shell with Russian navigation placeholders and dashboard placeholder
 - Minimal project commands for PR1 test/build/dev guidance
 - PR1 follow-up: frontend `typescript` devDependency declared and `npm run dev` now builds before serving `dist`
+- PR1 follow-up: temporary backend ASGI fallback removed; FastAPI is now the only backend runtime path
 
 ## In progress
 - none

@@ -44,6 +44,8 @@ cd frontend && npm run dev    # builds the shell, then serves dist on http://127
 
 Frontend dependency note: `frontend/package.json` declares `typescript` as a dev dependency because the build script runs `tsc`; run `cd frontend && npm install` when registry access is available.
 
+Backend dependency note: the PR1 backend runtime is FastAPI only; install backend dependencies with `python3 -m pip install -e "backend[test]"` before running backend tests or local API startup.
+
 Backend health endpoint shape:
 
 ```json

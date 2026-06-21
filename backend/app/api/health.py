@@ -1,7 +1,8 @@
-from importlib.util import find_spec
-from typing import Any
+from fastapi import APIRouter
 
 from app.schemas.health import HealthResponse
+
+router = APIRouter(tags=["health"])
 
 
 def health_payload() -> dict[str, str]:
@@ -14,14 +15,6 @@ def health_payload() -> dict[str, str]:
     }
 
 
+@router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(**health_payload())
-
-
-if find_spec("fastapi"):
-    from fastapi import APIRouter
-
-    router: Any = APIRouter(tags=["health"])
-    router.get("/health", response_model=HealthResponse)(health)
-else:
-    router = None
