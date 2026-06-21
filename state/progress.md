@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR4 - Backup-before-migration foundation implemented
+PR5 - Domain primitives, units and Decimal foundation implemented
 
 ## Done
 - Architecture draft
@@ -34,6 +34,12 @@ PR4 - Backup-before-migration foundation implemented
 - PR4 backend backup service for copying existing SQLite databases into user-data `backups/` without modifying or overwriting the source
 - PR4 user-mode startup backup-before-migration guard for existing databases with pending migrations
 - PR4 tests for missing-source failures, copy fidelity, non-overwrite filenames, explicit backup directory creation, startup backup behavior, brand-new startup behavior, ordinary read endpoint safety, and no business tables
+- PR5 backend-only Decimal parsing and quantization helpers for grams, milliliters, percentages, money, counts, and density
+- PR5 MVP unit primitives for grams, milliliters, percent, and pieces with canonical codes and Russian labels
+- PR5 lightweight measurement value objects for weight, volume, percentage, money, quantity/count, and density
+- PR5 density conversion foundation that converts ml to grams only with an explicit density and returns a missing-density warning otherwise
+- PR5 validation issue/error primitives for invalid decimals, float rejection, negative quantities, percentage bounds, and missing/invalid density
+- PR5 tests for Decimal utilities, units, measurement validation, density conversion, missing-density warnings, and no business tables
 
 ## In progress
 - none
@@ -42,7 +48,7 @@ PR4 - Backup-before-migration foundation implemented
 - none
 
 ## Next
-- Continue with the next roadmap-scoped foundation task after PR4 review/merge. Do not add business tables or business CRUD until explicitly scoped.
+- Continue with the next roadmap-scoped task after PR5 review/merge. Business tables and CRUD remain out of scope until explicitly requested.
 
 ## Important notes
 - PR4 intentionally keeps backup-before-migration tied to explicit user-mode startup; development mode behavior remains simple/test-friendly.
@@ -52,3 +58,5 @@ PR4 - Backup-before-migration foundation implemented
 - Read/status GET endpoints do not apply migrations or create user data directories implicitly.
 - Tests and smoke use temporary directories and should not write real user data.
 - Dependency installation and backend tests may fail in environments where Python package registry access is blocked; rerun after installing backend dependencies from an available registry/cache.
+
+- PR5 intentionally adds no migrations, routes, frontend code, or business entities.

@@ -1,12 +1,12 @@
 # Current Focus
 
-Current task: PR1 - App shell.
+Current task: PR5 - Domain primitives, units and Decimal foundation.
 
 ## Allowed scope
-Backend health endpoint, frontend shell, basic navigation, shared project setup needed for the shell.
+Backend-only Decimal helpers, unit definitions, measurement value objects, validation issues/results, and density conversion primitives.
 
 ## Do not touch
-Database models, migrations beyond PR1 scope, inventory, recipes, clients, orders, production, imports, exports, packaging, cloud, mobile, OCR.
+Business entities, database tables, migrations, API endpoints, frontend UI, inventory, recipes, clients, orders, production, imports, exports, cloud, mobile, OCR, auth or roles.
 
 ## Acceptance
-Backend health endpoint exists, frontend shell renders main navigation, basic startup/build checks are documented.
+Decimal/unit/measurement/conversion primitives exist, tests cover scoped behavior, no business tables or migrations are added, and state handoff is updated.
