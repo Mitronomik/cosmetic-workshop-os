@@ -39,7 +39,10 @@ Direct commands:
 ```bash
 cd backend && python3 -m pytest
 cd frontend && npm run build
+cd frontend && npm run dev    # builds the shell, then serves dist on http://127.0.0.1:5173
 ```
+
+Frontend dependency note: `frontend/package.json` declares `typescript` as a dev dependency because the build script runs `tsc`; run `cd frontend && npm install` when registry access is available.
 
 Backend health endpoint shape:
 

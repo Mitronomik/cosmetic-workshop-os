@@ -19,6 +19,7 @@ PR1 - App shell implemented
 - Backend health endpoint tests
 - Minimal frontend shell with Russian navigation placeholders and dashboard placeholder
 - Minimal project commands for PR1 test/build/dev guidance
+- PR1 follow-up: frontend `typescript` devDependency declared and `npm run dev` now builds before serving `dist`
 
 ## In progress
 - none
@@ -31,4 +32,4 @@ PR1 - App shell implemented
 
 ## Important notes
 - PR1 intentionally does not add database models, migrations, domain business logic, inventory, recipes, clients, orders, production, imports, exports, backup implementation, cloud, mobile, OCR, auth or roles.
-- The frontend uses a dependency-free TypeScript shell in this PR so build checks can run in the current environment where package registry access is blocked; future PRs may switch to the documented React/Vite stack when dependencies are available.
+- The frontend uses a dependency-free TypeScript shell in this PR so build checks can run in the current environment where package registry access is blocked; `typescript` is now declared in `frontend/package.json` for clean-clone reproducibility when dependencies can be installed. Future PRs may switch to the documented React/Vite stack when dependencies are available.
