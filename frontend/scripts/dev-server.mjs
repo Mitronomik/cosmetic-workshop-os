@@ -13,6 +13,12 @@ createServer(async (request, response) => {
     response.writeHead(200, { 'content-type': types[extname(path)] ?? 'application/octet-stream' });
     response.end(body);
   } catch {
+    if (!extname(path)) {
+      const body = await readFile(join(root, 'index.html'));
+      response.writeHead(200, { 'content-type': types['.html'] });
+      response.end(body);
+      return;
+    }
     response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     response.end('Страница не найдена');
   }
