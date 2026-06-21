@@ -89,3 +89,5 @@ PR13 - Packaging stock movements foundation
 - Missing lot density is accepted and no density fallback is assumed.
 - Costs and density are Decimal-backed and stored as strings in SQLite.
 - Tests and smoke use temporary directories/databases and should not write real user data.
+
+- PR14 backend inventory read models: added read-only ingredient lot balance, packaging balance, and inventory overview DTO/service/repository/API layers. Balances are derived from immutable stock movement history; no stored balance fields, migrations, tables, frontend UI, alerts, purchase list, production, recipes, clients, or orders were added.
