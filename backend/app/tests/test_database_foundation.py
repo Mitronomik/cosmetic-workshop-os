@@ -1,4 +1,5 @@
 import sqlite3
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +17,15 @@ from app.repositories.database import ALLOWED_INFRASTRUCTURE_TABLES, DatabaseRep
 from app.repositories.settings import SettingsNotInitializedError
 from app.services.database import database_status, initialize_database
 from app.services.settings import read_app_settings
+
+from app.db.paths import (
+    USER_DATA_DIR_ENV,
+    create_user_data_directories,
+    default_user_data_base_dir,
+    resolve_development_database_path,
+    resolve_user_data_paths,
+)
+from app.services.startup import initialize_startup, startup_database_config
 
 
 def table_names(database_path):
@@ -198,3 +208,124 @@ def test_database_status_endpoint_reads_explicitly_initialized_test_database(mon
     assert body["required_tables_present"] is True
     assert "app_settings" in body["tables"]
     assert "audit_logs" in body["tables"]
+
+
+def test_development_database_path_remains_stable(monkeypatch):
+    monkeypatch.delenv(DATABASE_PATH_ENV, raising=False)
+
+    assert resolve_development_database_path() == REPOSITORY_ROOT / ".local" / "cosmetic_workshop.sqlite"
+    assert get_database_config().path == resolve_development_database_path()
+
+
+def test_user_data_default_path_uses_documents_folder_without_creating_it(monkeypatch, tmp_path):
+    monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+    fake_home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+
+    paths = resolve_user_data_paths()
+
+    assert paths.base_dir == fake_home / "Documents" / "Мастерская косметолога"
+    assert paths.data_dir == paths.base_dir / "data"
+    assert paths.database_path == paths.data_dir / "cosmetic_workshop.sqlite"
+    assert paths.backups_dir == paths.base_dir / "backups"
+    assert paths.exports_dir == paths.base_dir / "exports"
+    assert paths.attachments_dir == paths.base_dir / "attachments"
+    assert paths.logs_dir == paths.base_dir / "logs"
+    assert not paths.base_dir.exists()
+
+
+def test_user_data_directory_env_override(monkeypatch, tmp_path):
+    override_dir = tmp_path / "custom-user-data"
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(override_dir))
+
+    paths = resolve_user_data_paths()
+
+    assert paths.base_dir == override_dir
+    assert paths.database_path == override_dir / "data" / "cosmetic_workshop.sqlite"
+    assert not override_dir.exists()
+
+
+def test_database_path_env_override_takes_precedence_for_development_config(monkeypatch, tmp_path):
+    override_path = tmp_path / "explicit-db.sqlite"
+    user_data_dir = tmp_path / "user-data"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(override_path))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+
+    config = startup_database_config("development")
+
+    assert config.path == override_path
+    assert not override_path.exists()
+    assert not user_data_dir.exists()
+
+
+def test_user_mode_database_path_uses_user_data_directory(monkeypatch, tmp_path):
+    override_path = tmp_path / "explicit-db.sqlite"
+    user_data_dir = tmp_path / "user-data"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(override_path))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+
+    config = startup_database_config("user")
+
+    assert config.path == user_data_dir / "data" / "cosmetic_workshop.sqlite"
+    assert not config.path.exists()
+
+
+def test_default_user_data_base_dir_is_cross_platform_documents_folder(tmp_path):
+    assert default_user_data_base_dir(tmp_path, "Darwin") == tmp_path / "Documents" / "Мастерская косметолога"
+    assert default_user_data_base_dir(tmp_path, "Windows") == tmp_path / "Documents" / "Мастерская косметолога"
+    assert default_user_data_base_dir(tmp_path, "Linux") == tmp_path / "Documents" / "Мастерская косметолога"
+
+
+def test_directory_creation_helper_creates_expected_user_data_folders(tmp_path):
+    paths = resolve_user_data_paths(tmp_path / "Мастерская косметолога")
+
+    create_user_data_directories(paths)
+
+    assert all(directory.is_dir() for directory in paths.required_directories)
+    assert not paths.database_path.exists()
+
+
+def test_explicit_user_startup_initialization_creates_directories_and_applies_migrations(monkeypatch, tmp_path):
+    user_data_dir = tmp_path / "user-data"
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+    monkeypatch.delenv(DATABASE_PATH_ENV, raising=False)
+
+    result = initialize_startup("user")
+
+    assert result.mode == "user"
+    assert result.user_data_paths is not None
+    assert result.database_path == user_data_dir / "data" / "cosmetic_workshop.sqlite"
+    assert result.applied_migrations == expected_migration_ids()
+    assert all(directory.is_dir() for directory in result.user_data_paths.required_directories)
+    assert table_names(result.database_path) <= ALLOWED_INFRASTRUCTURE_TABLES
+
+
+def test_explicit_development_startup_initialization_respects_database_path_override(monkeypatch, tmp_path):
+    database_path = tmp_path / "development.sqlite"
+    user_data_dir = tmp_path / "unused-user-data"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+
+    result = initialize_startup("development")
+
+    assert result.mode == "development"
+    assert result.user_data_paths is None
+    assert result.database_path == database_path
+    assert result.applied_migrations == expected_migration_ids()
+    assert not user_data_dir.exists()
+    assert table_names(database_path) <= ALLOWED_INFRASTRUCTURE_TABLES
+
+
+def test_status_endpoint_still_does_not_apply_migrations_when_user_data_env_exists(monkeypatch, tmp_path):
+    database_path = tmp_path / "api-status.sqlite"
+    user_data_dir = tmp_path / "user-data"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+    client = TestClient(create_app())
+
+    response = client.get("/api/database/status")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "not_initialized"
+    assert not database_path.exists()
+    assert not user_data_dir.exists()

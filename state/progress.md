@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR2 - Database, migrations, settings and audit foundation implemented
+PR3 - User data directory and explicit startup initialization implemented
 
 ## Done
 - Architecture draft
@@ -27,6 +27,10 @@ PR2 - Database, migrations, settings and audit foundation implemented
 - PR2 migration helper and initial infrastructure migration for `app_settings` and `audit_logs` only
 - PR2 technical API endpoints for database status and app settings with no hidden migration side effects
 - PR2 tests for temporary database initialization, idempotent migrations, stable path behavior, explicit initialization, infrastructure table presence, endpoint behavior, and no business table creation
+- PR3 user data directory resolver for `~/Documents/Мастерская косметолога/` with `data`, `backups`, `exports`, `attachments`, and `logs` paths
+- PR3 optional `COSMETIC_WORKSHOP_USER_DATA_DIR` override for user-mode data directory resolution
+- PR3 explicit startup initialization service that creates user data directories and applies migrations only when called
+- PR3 tests/smoke coverage for development fallback, env overrides, directory creation, explicit startup initialization, no hidden endpoint migrations, and no business tables
 
 ## In progress
 - none
@@ -35,11 +39,11 @@ PR2 - Database, migrations, settings and audit foundation implemented
 - none
 
 ## Next
-- Continue with the next roadmap-scoped foundation task after PR2 review/merge. Do not add business tables or business CRUD until explicitly scoped.
+- Continue with the next roadmap-scoped foundation task after PR3 review/merge. Do not add business tables or business CRUD until explicitly scoped.
 
 ## Important notes
-- PR2 intentionally creates only infrastructure tables: `app_settings`, `audit_logs`, and migration metadata.
-- The default development SQLite path is repository-root `.local/cosmetic_workshop.sqlite`; this is gitignored and is not the final user data directory behavior.
-- Read/status GET endpoints do not apply migrations implicitly; initialization remains explicit.
-- Tests use temporary SQLite paths and should not write real user data.
+- PR3 intentionally does not change normal development database behavior: default development SQLite path remains repository-root `.local/cosmetic_workshop.sqlite` and `COSMETIC_WORKSHOP_DB_PATH` still works.
+- User-mode data paths are resolved separately and default to `~/Documents/Мастерская косметолога/`, but directories/database are created only by explicit helper/startup calls.
+- Read/status GET endpoints do not apply migrations or create user data directories implicitly.
+- Tests and smoke use temporary directories and should not write real user data.
 - Dependency installation and backend tests may fail in environments where Python package registry access is blocked; rerun after installing backend dependencies from an available registry/cache.
