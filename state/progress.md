@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-Ready for PR1 - App shell
+PR1 - App shell implemented
 
 ## Done
 - Architecture draft
@@ -15,6 +15,10 @@ Ready for PR1 - App shell
 - Repository starter structure and documentation placement
 - Documentation structure review against project contracts
 - Nested `AGENTS.md` contracts expanded for backend, frontend, launcher, docs, ADRs, state, help and scripts
+- Minimal backend app shell with `/api/health` and `/health`
+- Backend health endpoint tests
+- Minimal frontend shell with Russian navigation placeholders and dashboard placeholder
+- Minimal project commands for PR1 test/build/dev guidance
 
 ## In progress
 - none
@@ -23,8 +27,8 @@ Ready for PR1 - App shell
 - none
 
 ## Next
-- PR1 - App shell
+- Continue with the next roadmap step after PR1 review/merge. Do not add database models or migrations until scoped.
 
 ## Important notes
-- Application code is not implemented yet.
-- Next PR should stay limited to the backend/frontend shell described in `docs/roadmap.md` PR1.
+- PR1 intentionally does not add database models, migrations, domain business logic, inventory, recipes, clients, orders, production, imports, exports, backup implementation, cloud, mobile, OCR, auth or roles.
+- The frontend uses a dependency-free TypeScript shell in this PR so build checks can run in the current environment where package registry access is blocked; future PRs may switch to the documented React/Vite stack when dependencies are available.

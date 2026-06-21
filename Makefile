@@ -1,17 +1,25 @@
+.PHONY: setup dev test build test-backend build-frontend package-macos smoke
+
 setup:
-	@echo "TODO: implement setup in a future PR"
+	python3 -m pip install -e "backend[test]"
+	cd frontend && npm install
 
 dev:
-	@echo "TODO: implement dev start in a future PR"
+	@echo "Start backend: cd backend && python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
+	@echo "Start frontend in another terminal: cd frontend && npm run dev"
 
-test:
-	@echo "TODO: implement tests in a future PR"
+test: test-backend
 
-build:
-	@echo "TODO: implement build in a future PR"
+test-backend:
+	cd backend && python3 -m pytest
+
+build: build-frontend
+
+build-frontend:
+	cd frontend && npm run build
 
 package-macos:
 	@echo "TODO: implement macOS packaging in a future PR"
 
 smoke:
-	@echo "TODO: implement smoke checks in a future PR"
+	@echo "Run PR1 smoke manually: backend /api/health, frontend build, navigation placeholders."
