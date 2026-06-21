@@ -1,7 +1,9 @@
 # Handoff
 
 ## Last completed work
-Implemented PR6 ingredients foundation. The backend now has an `ingredients` table migration, ingredient category/unit/name/density domain validation, create/read/list/update/deactivate repository and service methods, thin `/api/ingredients` endpoints with full update exposed as PUT, not partial PATCH, and minimal ingredient audit events.
+Applied PR6 hotfix for database foundation tests after ingredients migration. Updated `test_database_foundation.py` so startup/database assertions use the PR6 allowed table set and keep forbidden future business tables excluded.
+
+Previously implemented PR6 ingredients foundation. The backend now has an `ingredients` table migration, ingredient category/unit/name/density domain validation, create/read/list/update/deactivate repository and service methods, thin `/api/ingredients` endpoints with full update exposed as PUT, not partial PATCH, and minimal ingredient audit events.
 
 ## Current repo state
 Minimal local-first foundation exists. Backend exposes stable health payloads plus technical database/settings endpoints from previous PRs. Frontend remains the branded static shell with no new business UI. No ingredient lots, stock movements, packaging, recipes, clients, orders, production, imports, exports, backup UI/restore, cloud, mobile, OCR, auth or roles were implemented.
@@ -25,7 +27,7 @@ Minimal local-first foundation exists. Backend exposes stable health payloads pl
 - `make test` has the same dependency limitation because it runs full backend tests.
 
 ## Next recommended task
-Proceed to the next roadmap-scoped task after PR6 review/merge. Do not add IngredientLot, StockMovement, packaging, recipes, clients, orders, production, imports, frontend UI, or purchase logic until explicitly scoped by the next task.
+Proceed to the next roadmap-scoped task after PR6 hotfix review/merge. Do not add IngredientLot, StockMovement, packaging, recipes, clients, orders, production, imports, frontend UI, or purchase logic until explicitly scoped by the next task.
 
 ## Commands run
 - `git status --short`
@@ -39,6 +41,7 @@ Proceed to the next roadmap-scoped task after PR6 review/merge. Do not add Ingre
 - `make test`
 - `make build`
 - `git diff --name-only`
+- PR6 hotfix reran required checks; backend pytest remains blocked by missing FastAPI and dependency installation remains blocked by registry/proxy 403.
 
 ## Tests status
 Python syntax compilation passed. Scoped domain primitive tests passed before PR6 and should remain independent of FastAPI. PR6 non-API smoke can be run against a temporary SQLite database without real user data. Full backend pytest and `make test` are blocked by the environment because FastAPI is not installed and dependency installation is blocked by registry/proxy 403 responses; this is not caused by PR6 assertions.

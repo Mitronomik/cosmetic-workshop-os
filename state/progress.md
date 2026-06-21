@@ -1,7 +1,7 @@
 # Progress
 
 ## Current phase
-PR6 - Ingredients foundation implemented
+PR6 hotfix - Database foundation tests updated for ingredients migration
 
 ## Done
 - Architecture draft
@@ -44,6 +44,7 @@ PR6 - Ingredients foundation implemented
 - PR6 backend ingredient domain category/unit/name/density validation using existing Decimal/Density primitives with missing density allowed
 - PR6 repository/service/API foundation for create, read, list active, full PUT update, and deactivate ingredients, plus minimal ingredient audit events
 - PR6 tests/smoke coverage for migration scope, infrastructure continuity, valid/invalid ingredient inputs, missing/non-positive/float density, active listing, deactivation, and API behavior where dependencies are available
+- PR6 hotfix updated database foundation tests to expect all current migration ids and allow only the PR6 `ingredients` table alongside infrastructure tables while keeping future business tables forbidden.
 
 ## In progress
 - none
@@ -52,7 +53,7 @@ PR6 - Ingredients foundation implemented
 - none
 
 ## Next
-- Continue with the next roadmap-scoped task after PR6 review/merge. Stock lots, stock movements, recipes, clients, orders, production, imports, and frontend UI remain out of scope until explicitly requested.
+- Continue with the next roadmap-scoped task after PR6 hotfix review/merge. Stock lots, stock movements, recipes, clients, orders, production, imports, and frontend UI remain out of scope until explicitly requested.
 
 ## Important notes
 - PR4 intentionally keeps backup-before-migration tied to explicit user-mode startup; development mode behavior remains simple/test-friendly.
