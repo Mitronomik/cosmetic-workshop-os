@@ -15,6 +15,7 @@ from app.db.migrations import apply_migrations, current_migrations, expected_mig
 from app.main import create_app
 from app.repositories.database import ALLOWED_INFRASTRUCTURE_TABLES, DatabaseRepository
 from app.repositories.settings import SettingsNotInitializedError
+from app.services.backup import BackupSourceMissingError, backup_sqlite_database
 from app.services.database import database_status, initialize_database
 from app.services.settings import read_app_settings
 
@@ -355,3 +356,108 @@ def test_initialize_startup_rejects_unsupported_mode_without_side_effects(monkey
 
     assert not database_path.exists()
     assert not user_data_dir.exists()
+
+
+def test_backup_fails_clearly_when_source_database_is_missing(tmp_path):
+    source = tmp_path / "missing.sqlite"
+    backup_dir = tmp_path / "backups"
+
+    with pytest.raises(BackupSourceMissingError, match="SQLite database file does not exist"):
+        backup_sqlite_database(source, backup_dir, reason="before_migration")
+
+    assert not backup_dir.exists()
+
+
+def test_backup_creates_copy_with_matching_file_content(tmp_path):
+    source = tmp_path / "source.sqlite"
+    backup_dir = tmp_path / "backups"
+    source.write_bytes(b"sqlite bytes for backup test")
+
+    result = backup_sqlite_database(source, backup_dir, reason="before_migration")
+
+    assert result.source_path == source
+    assert result.reason == "before_migration"
+    assert result.backup_path.parent == backup_dir
+    assert result.size_bytes == source.stat().st_size
+    assert result.backup_path.read_bytes() == source.read_bytes()
+    assert source.read_bytes() == b"sqlite bytes for backup test"
+
+
+def test_backup_filename_does_not_overwrite_existing_backup(tmp_path):
+    source = tmp_path / "source.sqlite"
+    backup_dir = tmp_path / "backups"
+    source.write_bytes(b"first")
+
+    first = backup_sqlite_database(source, backup_dir, reason="manual")
+    source.write_bytes(b"second")
+    second = backup_sqlite_database(source, backup_dir, reason="manual")
+
+    assert first.backup_path != second.backup_path
+    assert first.backup_path.read_bytes() == b"first"
+    assert second.backup_path.read_bytes() == b"second"
+
+
+def test_backup_directory_is_created_only_through_explicit_backup_call(tmp_path):
+    source = tmp_path / "source.sqlite"
+    backup_dir = tmp_path / "backups"
+    source.write_bytes(b"database")
+
+    assert not backup_dir.exists()
+
+    backup_sqlite_database(source, backup_dir, reason="manual")
+
+    assert backup_dir.is_dir()
+
+
+def test_user_mode_startup_creates_backup_before_migration_for_existing_database(monkeypatch, tmp_path):
+    user_data_dir = tmp_path / "user-data"
+    database_path = user_data_dir / "data" / "cosmetic_workshop.sqlite"
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+    monkeypatch.delenv(DATABASE_PATH_ENV, raising=False)
+    database_path.parent.mkdir(parents=True)
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("CREATE TABLE legacy_marker (value TEXT NOT NULL)")
+        connection.execute("INSERT INTO legacy_marker (value) VALUES ('before migration')")
+
+    result = initialize_startup("user")
+
+    assert result.backup is not None
+    assert result.backup.reason == "before_migration"
+    assert result.backup.backup_path.parent == user_data_dir / "backups"
+    with sqlite3.connect(result.backup.backup_path) as backup_connection:
+        marker = backup_connection.execute("SELECT value FROM legacy_marker").fetchone()[0]
+        backup_tables = table_names(result.backup.backup_path)
+    assert marker == "before migration"
+    assert "app_settings" not in backup_tables
+    assert result.applied_migrations == expected_migration_ids()
+    assert table_names(database_path) <= (ALLOWED_INFRASTRUCTURE_TABLES | {"legacy_marker"})
+
+
+def test_brand_new_user_mode_startup_does_not_create_unnecessary_backup(monkeypatch, tmp_path):
+    user_data_dir = tmp_path / "user-data"
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+    monkeypatch.delenv(DATABASE_PATH_ENV, raising=False)
+
+    result = initialize_startup("user")
+
+    assert result.backup is None
+    assert result.applied_migrations == expected_migration_ids()
+    assert (user_data_dir / "backups").is_dir()
+    assert list((user_data_dir / "backups").iterdir()) == []
+
+
+def test_ordinary_status_and_settings_reads_do_not_create_backups(monkeypatch, tmp_path):
+    database_path = tmp_path / "api-status.sqlite"
+    user_data_dir = tmp_path / "user-data"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+    client = TestClient(create_app())
+
+    status_response = client.get("/api/database/status")
+    settings_response = client.get("/api/settings")
+
+    assert status_response.status_code == 200
+    assert settings_response.status_code == 409
+    assert not database_path.exists()
+    assert not user_data_dir.exists()
+    assert not (user_data_dir / "backups").exists()
