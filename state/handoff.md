@@ -110,3 +110,13 @@ Proceed to the next roadmap-scoped task after PR13 review/merge. Do not add FEFO
 - Movement creation and audit logging are transactional; simulated audit failure rolls back the movement and leaves derived balance unchanged.
 - PR13 intentionally excludes packaging lots, purchase lists, production write-off/readiness, reservations, frontend UI, recipes, clients, orders, imports, exports, cloud, mobile, OCR, auth, and roles.
 - PR13 follow-up: `packaging_item_id` validation is now packaging-specific and no longer reuses ingredient lot validators/messages.
+
+## PR14 notes
+- Inventory read endpoints:
+  - `GET /api/inventory/overview`
+  - `GET /api/inventory/ingredient-lot-balances`
+  - `GET /api/inventory/packaging-balances`
+- Ingredient lot balances are derived from `stock_movements` and include simple expiration flags with a 30-day default expiring-soon window.
+- Packaging balances are derived from `packaging_stock_movements` and remain pieces-only.
+- Inventory overview reports counts only; it does not sum incompatible units or create alerts/purchase suggestions.
+- PR14 intentionally adds no migrations, tables, stored `current_quantity`/`remaining_quantity`, frontend UI, alerts engine, purchase list, recipes, clients, orders, production, import/export, cloud, mobile, OCR, auth, or roles.
