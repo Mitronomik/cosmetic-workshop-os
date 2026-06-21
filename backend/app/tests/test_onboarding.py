@@ -66,10 +66,12 @@ def test_onboarding_start_step_and_complete_are_persisted_in_app_settings(tmp_pa
     assert reloaded.completed_steps == ONBOARDING_STEPS
     with sqlite3.connect(config.path) as connection:
         row = connection.execute("SELECT value, value_type FROM app_settings WHERE key = ?", (ONBOARDING_SETTING_KEY,)).fetchone()
-        audit_actions = [row[0] for row in connection.execute("SELECT action FROM audit_logs ORDER BY id")]
+        audit_rows = connection.execute("SELECT action, summary FROM audit_logs ORDER BY id").fetchall()
+    audit_actions = [row[0] for row in audit_rows]
     assert row[1] == "json"
     assert json.loads(row[0])["is_completed"] is True
     assert audit_actions == ["onboarding.started", "onboarding.step_completed", "onboarding.completed"]
+    assert audit_rows[-1][1] == "Первичная настройка завершена пользователем."
 
 
 def test_skip_default_state_closes_checklist_without_completing_all_steps(tmp_path):

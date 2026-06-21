@@ -125,7 +125,7 @@ class OnboardingService:
             action="onboarding.completed",
             entity_type="onboarding",
             entity_id=None,
-            summary="Первичная настройка завершена или пропущена пользователем.",
+            summary="Первичная настройка завершена пользователем.",
         )
         return next_state
 
