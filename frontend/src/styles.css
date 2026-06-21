@@ -42,3 +42,17 @@ h1 { color: #2e211f; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; margi
   .topbar { align-items: flex-start; flex-direction: column; }
   .status { white-space: normal; }
 }
+.onboarding-card { margin-bottom: 22px; }
+.onboarding-note { background: #fff8eb; border: 1px solid #efd8b8; border-radius: 16px; color: #65534d; font-size: 16px; line-height: 1.55; margin: 18px 0; padding: 14px 16px; }
+.inline-message { color: #28683a !important; font-weight: 800; margin-bottom: 10px !important; }
+.checklist { display: grid; gap: 10px; list-style: none; margin: 20px 0; padding: 0; }
+.checklist li { align-items: flex-start; background: #fffaf6; border: 1px solid #edddd3; border-radius: 16px; display: flex; gap: 12px; padding: 13px 14px; }
+.checklist li.current { border-color: #d39a7a; box-shadow: inset 4px 0 0 #d39a7a; }
+.checklist li.done { background: #edf7ed; border-color: #c6dfc7; }
+.checklist li > span { align-items: center; background: #6e4a43; border-radius: 999px; color: #fffaf7; display: inline-flex; flex: 0 0 26px; font-weight: 900; height: 26px; justify-content: center; }
+.checklist strong { color: #3b2925; display: block; font-size: 16px; margin-bottom: 3px; }
+.checklist small { color: #6f5a52; display: block; font-size: 14px; line-height: 1.45; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.primary-action, .secondary-action { border-radius: 14px; cursor: pointer; font-weight: 800; padding: 12px 16px; }
+.primary-action { background: #6e4a43; border: 1px solid #6e4a43; color: #fffaf7; }
+.secondary-action { background: #fffaf6; border: 1px solid #d9bbaa; color: #5d4039; }

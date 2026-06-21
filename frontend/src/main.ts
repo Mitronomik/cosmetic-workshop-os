@@ -1,8 +1,30 @@
 type HealthStatus = 'checking' | 'online' | 'offline';
+type OnboardingStatus = 'loading' | 'ready' | 'unavailable';
+
+type OnboardingState = {
+  has_started: boolean;
+  is_completed: boolean;
+  current_step: string;
+  completed_steps: string[];
+  available_steps: string[];
+};
 
 const navigationItems = ['Главная','Рецепты','Клиенты','Заказы','Запасы','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
+const stepLabels: Record<string, string> = {
+  welcome: 'Познакомиться с рабочим пространством',
+  data_location: 'Понять, где хранятся локальные данные',
+  first_ingredient: 'Подготовить первый компонент',
+  first_recipe: 'Подготовить первый рецепт',
+  first_client: 'Подготовить первую карточку клиента',
+  first_order: 'Подготовить первый заказ',
+  first_backup: 'Запланировать первую резервную копию',
+};
+
 let activeSection = 'Главная';
 let healthStatus: HealthStatus = 'checking';
+let onboardingStatus: OnboardingStatus = 'loading';
+let onboardingState: OnboardingState | null = null;
+let onboardingMessage = '';
 
 function render() {
   const root = document.getElementById('root');
@@ -31,6 +53,10 @@ function render() {
         ${activeSection === 'Главная' ? dashboardPlaceholder() : sectionPlaceholder(activeSection)}
       </main>
     </div>`;
+  bindEvents(root);
+}
+
+function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLImageElement>('.brand-mark img')?.addEventListener('error', (event) => {
     const logo = event.currentTarget as HTMLImageElement;
     logo.hidden = true;
@@ -38,15 +64,84 @@ function render() {
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => { activeSection = button.dataset.section ?? 'Главная'; render(); });
   });
+  root.querySelector<HTMLButtonElement>('[data-action="start-onboarding"]')?.addEventListener('click', () => updateOnboarding('/api/onboarding/start'));
+  root.querySelector<HTMLButtonElement>('[data-action="complete-step"]')?.addEventListener('click', (event) => {
+    const step = (event.currentTarget as HTMLButtonElement).dataset.step;
+    if (step) updateOnboarding('/api/onboarding/complete-step', { step });
+  });
+  root.querySelector<HTMLButtonElement>('[data-action="skip-onboarding"]')?.addEventListener('click', () => updateOnboarding('/api/onboarding/skip'));
 }
 
 function dashboardPlaceholder() {
-  return `<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Мастерская косметолога</h2><p>Здесь будет спокойная рабочая панель: активные заказы, предупреждения, закупки, производство, onboarding и резервные копии.</p><p class="next-step">Следующий шаг разработки: постепенно подключать данные и функции только в отдельных roadmap-PR.</p></section>`;
+  return `
+    ${onboardingCard()}
+    <section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Первые рабочие разделы появятся постепенно</h2><p>Здесь будет спокойная рабочая панель: активные заказы, предупреждения, закупки, производство и резервные копии.</p><p class="next-step">Начните с компонентов, затем рецептов, клиентов и заказов. Каждый раздел будет подключаться отдельным безопасным шагом.</p></section>`;
+}
+
+function onboardingCard() {
+  if (onboardingStatus === 'loading') {
+    return `<section class="card onboarding-card"><p class="card-kicker">Первый запуск</p><h2>Готовим рабочее пространство…</h2><p>Проверяем состояние первичной настройки.</p></section>`;
+  }
+  if (onboardingStatus === 'unavailable') {
+    return `<section class="card onboarding-card"><p class="card-kicker">Первый запуск</p><h2>Добро пожаловать в Мастерскую косметолога</h2><p>Это локальная рабочая система. Даже если локальный API сейчас недоступен, вы можете осмотреть разделы приложения.</p><p class="next-step">Когда приложение будет запущено полностью, здесь появится чек-лист первичной настройки.</p></section>`;
+  }
+  if (onboardingState?.is_completed) {
+    return `<section class="card onboarding-card"><p class="card-kicker">Первичная настройка</p><h2>Чек-лист первичной настройки закрыт</h2><p>Вы сможете вернуться к заполнению компонентов, рецептов, клиентов и заказов постепенно.</p></section>`;
+  }
+  const currentStep = onboardingState?.current_step ?? 'welcome';
+  const started = onboardingState?.has_started ?? false;
+  return `<section class="card onboarding-card"><p class="card-kicker">Первый запуск</p><h2>Добро пожаловать в Мастерскую косметолога</h2><p>Это локальная рабочая система для вашей косметической мастерской. Данные хранятся на этом компьютере, отдельно от кода приложения.</p><div class="onboarding-note"><strong>Что важно:</strong> регулярно делайте резервные копии, а компоненты, рецепты, клиентов и заказы заполняйте постепенно.</div>${onboardingMessage ? `<p class="inline-message">${onboardingMessage}</p>` : ''}<ol class="checklist">${(onboardingState?.available_steps ?? Object.keys(stepLabels)).map((step) => checklistItem(step, currentStep)).join('')}</ol><div class="actions">${started ? `<button class="primary-action" type="button" data-action="complete-step" data-step="${currentStep}">Отметить текущий шаг</button>` : '<button class="primary-action" type="button" data-action="start-onboarding">Начать настройку</button>'}<button class="secondary-action" type="button" data-action="skip-onboarding">Пропустить пока</button></div></section>`;
+}
+
+function checklistItem(step: string, currentStep: string) {
+  const isDone = onboardingState?.completed_steps.includes(step);
+  const isCurrent = step === currentStep && !isDone;
+  const marker = isDone ? '✓' : isCurrent ? '•' : '○';
+  return `<li class="${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}"><span>${marker}</span><div><strong>${stepLabels[step] ?? step}</strong><small>${stepHint(step)}</small></div></li>`;
+}
+
+function stepHint(step: string) {
+  const hints: Record<string, string> = {
+    welcome: 'Коротко понять назначение системы.',
+    data_location: 'Данные остаются на этом компьютере; будущие резервные копии помогут защитить работу.',
+    first_ingredient: 'Позже здесь появится добавление компонентов и плотностей.',
+    first_recipe: 'Рецепты будут храниться версиями, без скрытого изменения истории.',
+    first_client: 'Клиентские данные будут заполняться аккуратно и понятно.',
+    first_order: 'Заказы и производство появятся отдельным roadmap-шагом.',
+    first_backup: 'Резервные копии — обязательная привычка для локальной системы.',
+  };
+  return hints[step] ?? 'Шаг будет уточнен позже.';
 }
 
 function sectionPlaceholder(title: string) {
-  return `<section class="card"><p class="card-kicker">Раздел приложения</p><h2>${title}</h2><p>Этот раздел подготовлен как понятная навигационная заглушка. Формы и бизнес-функции будут добавляться в отдельных PR.</p><p class="next-step">Следующее действие: дождаться реализации соответствующего roadmap-шага.</p></section>`;
+  const emptyStates: Record<string, string> = {
+    Рецепты: 'Рецепты появятся здесь позже. Пока можно завершить первичную настройку на главной странице.',
+    Клиенты: 'Клиенты появятся здесь позже. В будущих шагах здесь будут карточки клиентов и индивидуальные формулы.',
+    Запасы: 'Сначала добавьте первый компонент. Полный учет партий и остатков появится отдельными PR.',
+  };
+  return `<section class="card"><p class="card-kicker">Раздел приложения</p><h2>${title}</h2><p>${emptyStates[title] ?? 'Этот раздел подготовлен как понятная навигационная заглушка. Формы и бизнес-функции будут добавляться в отдельных PR.'}</p><p class="next-step">Следующее действие: дождаться реализации соответствующего roadmap-шага.</p></section>`;
+}
+
+function loadOnboarding() {
+  fetch('/api/onboarding')
+    .then((response) => {
+      if (!response.ok) throw new Error('Onboarding is unavailable');
+      return response.json() as Promise<OnboardingState>;
+    })
+    .then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = ''; render(); })
+    .catch(() => { onboardingStatus = 'unavailable'; render(); });
+}
+
+function updateOnboarding(url: string, body?: Record<string, string>) {
+  fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined })
+    .then((response) => {
+      if (!response.ok) throw new Error('Onboarding update failed');
+      return response.json() as Promise<OnboardingState>;
+    })
+    .then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); })
+    .catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); });
 }
 
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
+loadOnboarding();

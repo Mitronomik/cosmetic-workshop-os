@@ -1,12 +1,12 @@
 # Current Focus
 
-Current task: PR7 - Local runtime launcher MVP.
+Current task: PR8 - First-run onboarding skeleton.
 
 ## Allowed scope
-Minimal launcher/runtime foundation under `launcher/`, safe runtime configuration, explicit backend startup initialization in user mode, local backend process launch helper, optional browser opening, launcher tests, and related developer/user documentation.
+Minimal persisted onboarding state, thin onboarding API, warm Russian first-run welcome/checklist UI, small placeholder empty states, onboarding tests, frontend build validation, smoke notes, and state documentation updates.
 
 ## Do not touch
-Final macOS `.app`/`.dmg`, installers, Electron, Docker, auto-update, cloud/mobile access, business UI, recipes, clients, orders, production, import/export features, new business tables, or migrations.
+Real ingredient UI/forms, ingredient lots, stock movements, packaging inventory, recipes, recipe versions, clients, orders, production, imports, exports, backup UI/restore UI, final packaging, Electron, Docker, cloud/mobile access, OCR, auth, roles, or new business tables.
 
 ## Acceptance
-Launcher MVP exists with localhost-only defaults, user data override works in tests, user-mode startup is explicit, backup-before-migration remains active through existing startup, no real user Documents directory is touched by tests, no new business tables are added, docs/state are updated, and checks/smoke are reported.
+Onboarding state is represented cleanly through existing infrastructure, onboarding API can read/start/complete steps/complete/reset, frontend renders a human-friendly local workspace onboarding skeleton and degrades gracefully when backend is unavailable, no forbidden future business tables are added, checks/smoke are reported, and state files are updated.
