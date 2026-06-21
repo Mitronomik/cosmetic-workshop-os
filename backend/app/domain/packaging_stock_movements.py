@@ -4,7 +4,6 @@ from enum import StrEnum
 
 from app.domain.decimal_utils import quantize_count
 from app.domain.errors import DomainIssue, DomainIssueCode, DomainValidationError
-from app.domain.ingredient_lots import parse_positive_ingredient_id
 from app.domain.packaging_items import normalize_optional_text, parse_packaging_unit
 from app.domain.units import UnitCode
 
@@ -29,6 +28,20 @@ PACKAGING_MOVEMENT_TYPE_DIRECTIONS = {
     PackagingStockMovementType.WRITE_OFF: PackagingMovementDirection.OUT,
     PackagingStockMovementType.RETURN_TO_SUPPLIER: PackagingMovementDirection.OUT,
 }
+
+
+def parse_positive_packaging_item_id(value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise DomainValidationError(
+            DomainIssue(
+                code=DomainIssueCode.REQUIRED_FIELD,
+                message="Нужно выбрать существующую тару или упаковку.",
+                field="packaging_item_id",
+                value=str(value),
+                next_action="Выберите активную тару или упаковку из справочника тары.",
+            )
+        )
+    return value
 
 
 def parse_packaging_movement_type(value: PackagingStockMovementType | str) -> PackagingStockMovementType:
@@ -65,7 +78,7 @@ class PackagingStockMovementDraft:
 
     @classmethod
     def create(cls, *, packaging_item_id: int, movement_type: PackagingStockMovementType | str, quantity: Decimal | int | str, unit: UnitCode | str, occurred_at: str | None = None, reason: str | None = "", source: str | None = "manual", notes: str | None = "") -> "PackagingStockMovementDraft":
-        item_id = parse_positive_ingredient_id(packaging_item_id)
+        item_id = parse_positive_packaging_item_id(packaging_item_id)
         parsed_type = parse_packaging_movement_type(movement_type)
         parsed_unit = parse_packaging_unit(unit)
         return cls(

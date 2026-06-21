@@ -109,3 +109,4 @@ Proceed to the next roadmap-scoped task after PR13 review/merge. Do not add FEFO
 - Outgoing packaging movements are rejected when they would make the movement-derived packaging item balance negative.
 - Movement creation and audit logging are transactional; simulated audit failure rolls back the movement and leaves derived balance unchanged.
 - PR13 intentionally excludes packaging lots, purchase lists, production write-off/readiness, reservations, frontend UI, recipes, clients, orders, imports, exports, cloud, mobile, OCR, auth, and roles.
+- PR13 follow-up: `packaging_item_id` validation is now packaging-specific and no longer reuses ingredient lot validators/messages.

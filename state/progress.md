@@ -66,6 +66,7 @@ PR13 - Packaging stock movements foundation
 - PR13 backend packaging stock movement domain validation for positive integer pieces only, stable MVP movement types, no floats, no fractional pieces, no percent/ml/g/arbitrary movement units, and active packaging item requirements.
 - PR13 repository/service/API foundation for create, read, list, list-by-packaging-item, and movement-derived packaging item balance, plus negative-balance prevention.
 - PR13 transactional `packaging_stock_movement.created` audit event so audit failure rolls back movement creation and leaves derived balance unchanged.
+- PR13 follow-up replaced the packaging stock movement `packaging_item_id` validator with packaging-specific validation messages so invalid tare selection no longer references ingredients/components.
 
 ## In progress
 - PR13 validation and PR update

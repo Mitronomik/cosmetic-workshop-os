@@ -90,10 +90,18 @@ def test_movement_types_affect_balance_by_direction(tmp_path, movement_type, exp
     assert service.calculate_packaging_item_quantity(item.id) == expected
 
 
-@pytest.mark.parametrize("item_id", [0, -1, ""])
-def test_reject_empty_or_invalid_packaging_item_id(item_id):
-    with pytest.raises(DomainValidationError):
+@pytest.mark.parametrize("item_id", [0, -1, "", True, None])
+def test_reject_empty_or_invalid_packaging_item_id_uses_packaging_message(item_id):
+    with pytest.raises(DomainValidationError) as exc:
         PackagingStockMovementDraft.create(packaging_item_id=item_id, movement_type="receipt", quantity="1", unit="pcs")
+    assert exc.value.issue.code == DomainIssueCode.REQUIRED_FIELD
+    assert exc.value.issue.field == "packaging_item_id"
+    assert "тар" in exc.value.issue.message.lower() or "упаков" in exc.value.issue.message.lower()
+    assert "тар" in exc.value.issue.next_action.lower() or "упаков" in exc.value.issue.next_action.lower()
+    assert "ингредиент" not in exc.value.issue.message.lower()
+    assert "компонент" not in exc.value.issue.message.lower()
+    assert "ингредиент" not in exc.value.issue.next_action.lower()
+    assert "компонент" not in exc.value.issue.next_action.lower()
 
 
 def test_reject_missing_and_inactive_packaging_item(tmp_path):
