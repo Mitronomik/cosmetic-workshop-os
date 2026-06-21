@@ -13,7 +13,7 @@ from app.db.config import (
 )
 from app.db.migrations import apply_migrations, current_migrations, expected_migration_ids
 from app.main import create_app
-from app.repositories.database import ALLOWED_CURRENT_TABLES, DatabaseRepository
+from app.repositories.database import DatabaseRepository
 from app.repositories.settings import SettingsNotInitializedError
 from app.services.backup import BackupSourceMissingError, backup_sqlite_database
 from app.services.database import database_status, initialize_database
@@ -27,28 +27,11 @@ from app.db.paths import (
     resolve_user_data_paths,
 )
 from app.services.startup import initialize_startup, startup_database_config
-
-FORBIDDEN_PR6_BUSINESS_TABLES = {
-    "stock_movements",
-    "packaging_items",
-    "recipes",
-    "recipe_versions",
-    "recipe_ingredients",
-    "client_recipes",
-    "client_recipe_ingredients",
-    "clients",
-    "client_wishes",
-    "client_feedback",
-    "orders",
-    "production_batches",
-    "import_sources",
-    "import_drafts",
-    "backup_records",
-}
-
-
-def assert_no_forbidden_pr6_business_tables(tables):
-    assert not FORBIDDEN_PR6_BUSINESS_TABLES & tables
+from app.tests.table_guards import (
+    CURRENT_ALLOWED_TABLES,
+    assert_no_forbidden_future_tables,
+    assert_only_current_tables,
+)
 
 
 def table_names(database_path):
@@ -128,8 +111,8 @@ def test_database_contains_only_allowed_current_tables(tmp_path):
 
     tables = table_names(config.path)
 
-    assert tables <= ALLOWED_CURRENT_TABLES
-    assert_no_forbidden_pr6_business_tables(tables)
+    assert_only_current_tables(tables)
+    assert_no_forbidden_future_tables(tables)
 
 
 def test_settings_read_returns_seeded_app_configuration_after_explicit_init(tmp_path):
@@ -306,8 +289,8 @@ def test_explicit_user_startup_initialization_creates_directories_and_applies_mi
     assert result.applied_migrations == expected_migration_ids()
     assert all(directory.is_dir() for directory in result.user_data_paths.required_directories)
     tables = table_names(result.database_path)
-    assert tables <= ALLOWED_CURRENT_TABLES
-    assert_no_forbidden_pr6_business_tables(tables)
+    assert_only_current_tables(tables)
+    assert_no_forbidden_future_tables(tables)
 
 
 def test_explicit_development_startup_initialization_respects_database_path_override(monkeypatch, tmp_path):
@@ -324,8 +307,8 @@ def test_explicit_development_startup_initialization_respects_database_path_over
     assert result.applied_migrations == expected_migration_ids()
     assert not user_data_dir.exists()
     tables = table_names(database_path)
-    assert tables <= ALLOWED_CURRENT_TABLES
-    assert_no_forbidden_pr6_business_tables(tables)
+    assert_only_current_tables(tables)
+    assert_no_forbidden_future_tables(tables)
 
 
 def test_status_endpoint_still_does_not_apply_migrations_when_user_data_env_exists(monkeypatch, tmp_path):
@@ -442,8 +425,8 @@ def test_user_mode_startup_creates_backup_before_migration_for_existing_database
     assert "app_settings" not in backup_tables
     assert result.applied_migrations == expected_migration_ids()
     tables = table_names(database_path)
-    assert tables <= (ALLOWED_CURRENT_TABLES | {"legacy_marker"})
-    assert_no_forbidden_pr6_business_tables(tables)
+    assert tables <= (CURRENT_ALLOWED_TABLES | {"legacy_marker"})
+    assert_no_forbidden_future_tables(tables)
 
 
 def test_brand_new_user_mode_startup_does_not_create_unnecessary_backup(monkeypatch, tmp_path):
