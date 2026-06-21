@@ -1,12 +1,12 @@
 # Current Focus
 
-Current task: PR0 - Project documentation contract.
+Current task: PR1 - App shell.
 
 ## Allowed scope
-Documentation, project memory files, state files, review files, starter directories.
+Backend health endpoint, frontend shell, basic navigation, shared project setup needed for the shell.
 
 ## Do not touch
-Backend implementation, frontend implementation, database models, migrations, inventory, recipes, orders, production, cloud, mobile, OCR.
+Database models, migrations beyond PR1 scope, inventory, recipes, clients, orders, production, imports, exports, packaging, cloud, mobile, OCR.
 
 ## Acceptance
-Starter docs exist, project structure exists, no application code implemented yet.
+Backend health endpoint exists, frontend shell renders main navigation, basic startup/build checks are documented.

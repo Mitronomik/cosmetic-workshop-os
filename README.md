@@ -15,6 +15,7 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 - `docs/codex-project-structure.md` - repository memory structure
 - `docs/codex-prompting-rules.md` - Codex Web prompt rules
 - `docs/pr-testing-and-smoke-rules.md` - testing and smoke rules
+- `docs/import-format.md` - CSV/XLSX import format contract
 - `state/current-focus.md` - current task
 - `state/progress.md` - current progress
 - `state/handoff.md` - cross-session handoff
