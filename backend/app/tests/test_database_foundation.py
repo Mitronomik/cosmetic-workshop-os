@@ -13,7 +13,7 @@ from app.db.config import (
 )
 from app.db.migrations import apply_migrations, current_migrations, expected_migration_ids
 from app.main import create_app
-from app.repositories.database import ALLOWED_PR6_TABLES, DatabaseRepository
+from app.repositories.database import ALLOWED_CURRENT_TABLES, DatabaseRepository
 from app.repositories.settings import SettingsNotInitializedError
 from app.services.backup import BackupSourceMissingError, backup_sqlite_database
 from app.services.database import database_status, initialize_database
@@ -122,13 +122,13 @@ def test_migrations_apply_to_temporary_sqlite_database(tmp_path):
     assert current_migrations(config) == set(expected_migration_ids())
 
 
-def test_database_contains_only_allowed_pr6_tables(tmp_path):
+def test_database_contains_only_allowed_current_tables(tmp_path):
     config = DatabaseConfig(path=tmp_path / "scope-test.sqlite")
     initialize_database(config)
 
     tables = table_names(config.path)
 
-    assert tables <= ALLOWED_PR6_TABLES
+    assert tables <= ALLOWED_CURRENT_TABLES
     assert_no_forbidden_pr6_business_tables(tables)
 
 
@@ -306,7 +306,7 @@ def test_explicit_user_startup_initialization_creates_directories_and_applies_mi
     assert result.applied_migrations == expected_migration_ids()
     assert all(directory.is_dir() for directory in result.user_data_paths.required_directories)
     tables = table_names(result.database_path)
-    assert tables <= ALLOWED_PR6_TABLES
+    assert tables <= ALLOWED_CURRENT_TABLES
     assert_no_forbidden_pr6_business_tables(tables)
 
 
@@ -324,7 +324,7 @@ def test_explicit_development_startup_initialization_respects_database_path_over
     assert result.applied_migrations == expected_migration_ids()
     assert not user_data_dir.exists()
     tables = table_names(database_path)
-    assert tables <= ALLOWED_PR6_TABLES
+    assert tables <= ALLOWED_CURRENT_TABLES
     assert_no_forbidden_pr6_business_tables(tables)
 
 
@@ -442,7 +442,7 @@ def test_user_mode_startup_creates_backup_before_migration_for_existing_database
     assert "app_settings" not in backup_tables
     assert result.applied_migrations == expected_migration_ids()
     tables = table_names(database_path)
-    assert tables <= (ALLOWED_PR6_TABLES | {"legacy_marker"})
+    assert tables <= (ALLOWED_CURRENT_TABLES | {"legacy_marker"})
     assert_no_forbidden_pr6_business_tables(tables)
 
 

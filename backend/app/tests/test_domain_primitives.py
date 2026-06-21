@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 
 from app.db.config import DatabaseConfig
-from app.repositories.database import ALLOWED_PR6_TABLES
+from app.repositories.database import ALLOWED_CURRENT_TABLES
 from app.services.database import initialize_database
 from app.domain.conversions import milliliters_to_grams
 from app.domain.decimal_utils import (
@@ -140,7 +140,7 @@ def test_domain_primitives_do_not_add_unrelated_business_tables(tmp_path):
 
     tables = table_names(config.path)
 
-    assert tables <= ALLOWED_PR6_TABLES
+    assert tables <= ALLOWED_CURRENT_TABLES
     assert not {
         "recipes",
         "recipe_versions",
