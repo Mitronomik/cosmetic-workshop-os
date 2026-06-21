@@ -14,7 +14,7 @@ FORBIDDEN_TABLES = {
     "client_wishes", "client_feedback", "orders", "production_batches", "import_sources",
     "import_drafts", "backup_records",
 }
-ALLOWED_TABLES = {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots", "stock_movements", "packaging_items", "sqlite_sequence"}
+ALLOWED_TABLES = {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots", "stock_movements", "packaging_items", "packaging_stock_movements", "sqlite_sequence"}
 
 
 def table_names(database_path: Path) -> set[str]:

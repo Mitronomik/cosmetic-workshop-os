@@ -6,6 +6,7 @@ CURRENT_ALLOWED_TABLES = {
     "ingredient_lots",
     "stock_movements",
     "packaging_items",
+    "packaging_stock_movements",
     "sqlite_sequence",
 }
 

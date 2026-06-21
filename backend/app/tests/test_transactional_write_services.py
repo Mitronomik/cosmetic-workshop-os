@@ -9,12 +9,14 @@ from app.domain.ingredient_lots import IngredientLotDraft
 from app.domain.ingredients import IngredientDraft
 from app.domain.packaging_items import PackagingItemDraft
 from app.domain.stock_movements import StockMovementDraft
+from app.domain.packaging_stock_movements import PackagingStockMovementDraft
 from app.domain.units import UnitCode
 from app.services.database import initialize_database
 from app.services.ingredient_lots import IngredientLotService
 from app.services.ingredients import IngredientService
 from app.services.onboarding import ONBOARDING_SETTING_KEY, OnboardingService, OnboardingStepError
 from app.services.packaging_items import PackagingItemService
+from app.services.packaging_stock_movements import PackagingStockMovementInsufficientBalanceError, PackagingStockMovementService
 from app.services.stock_movements import StockMovementInsufficientBalanceError, StockMovementService
 from app.tests.table_guards import assert_no_forbidden_future_tables, assert_only_current_tables
 
@@ -166,6 +168,43 @@ def test_packaging_validation_failure_writes_no_audit(tmp_path):
     assert scalar(config, "SELECT count(*) FROM audit_logs") == 0
 
 
+def test_successful_packaging_stock_movement_create_writes_movement_and_audit(tmp_path):
+    config = initialized_config(tmp_path)
+    item = PackagingItemService(config).create_packaging_item(PackagingItemDraft.create(name="Demo Jar", kind="jar"))
+    movement = PackagingStockMovementService(config).create_movement(
+        PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type="receipt", quantity="10", unit="pcs")
+    )
+    assert movement.id > 0
+    assert scalar(config, "SELECT count(*) FROM packaging_stock_movements") == 1
+    assert scalar(config, "SELECT count(*) FROM audit_logs WHERE action = 'packaging_stock_movement.created'") == 1
+
+
+def test_audit_failure_rolls_back_packaging_stock_movement_and_balance(tmp_path):
+    config = initialized_config(tmp_path)
+    item = PackagingItemService(config).create_packaging_item(PackagingItemDraft.create(name="Demo Jar", kind="jar"))
+    service = PackagingStockMovementService(config)
+    service.create_movement(PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type="receipt", quantity="10", unit="pcs"))
+    before_balance = service.calculate_packaging_item_quantity(item.id)
+    before_count = scalar(config, "SELECT count(*) FROM packaging_stock_movements")
+    service.audit = FailingAuditRepository()
+    with pytest.raises(RuntimeError):
+        service.create_movement(PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type="write_off", quantity="2", unit="pcs"))
+    assert scalar(config, "SELECT count(*) FROM packaging_stock_movements") == before_count
+    assert service.calculate_packaging_item_quantity(item.id) == before_balance == Decimal("10")
+
+
+def test_negative_outgoing_packaging_stock_movement_writes_no_movement_or_audit(tmp_path):
+    config = initialized_config(tmp_path)
+    item = PackagingItemService(config).create_packaging_item(PackagingItemDraft.create(name="Demo Jar", kind="jar"))
+    before_audit_count = scalar(config, "SELECT count(*) FROM audit_logs")
+    with pytest.raises(PackagingStockMovementInsufficientBalanceError):
+        PackagingStockMovementService(config).create_movement(
+            PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type="write_off", quantity="1", unit="pcs")
+        )
+    assert scalar(config, "SELECT count(*) FROM packaging_stock_movements") == 0
+    assert scalar(config, "SELECT count(*) FROM audit_logs") == before_audit_count
+
+
 def test_audit_failure_rolls_back_onboarding_start(tmp_path):
     config = initialized_config(tmp_path)
     service = OnboardingService(config)
@@ -188,4 +227,4 @@ def test_no_new_business_tables_or_migrations_for_transaction_foundation(tmp_pat
     tables = table_names(config)
     assert_only_current_tables(tables)
     assert_no_forbidden_future_tables(tables)
-    assert scalar(config, "SELECT count(*) FROM schema_migrations") == 5
+    assert scalar(config, "SELECT count(*) FROM schema_migrations") == 6
