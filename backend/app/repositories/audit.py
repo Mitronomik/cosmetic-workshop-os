@@ -1,4 +1,6 @@
 import json
+import sqlite3
+from contextlib import nullcontext
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
@@ -17,8 +19,9 @@ class AuditLogRepository:
         summary: str,
         actor_type: str = "system",
         metadata: dict[str, object] | None = None,
+        connection: sqlite3.Connection | None = None,
     ) -> None:
-        with session(self.config) as connection:
+        with _connection_scope(self.config, connection) as connection:
             connection.execute(
                 """
                 INSERT INTO audit_logs (actor_type, action, entity_type, entity_id, summary, metadata_json)
@@ -26,3 +29,7 @@ class AuditLogRepository:
                 """,
                 (actor_type, action, entity_type, entity_id, summary, json.dumps(metadata or {}, ensure_ascii=False)),
             )
+
+
+def _connection_scope(config: DatabaseConfig, connection: sqlite3.Connection | None):
+    return nullcontext(connection) if connection is not None else session(config)

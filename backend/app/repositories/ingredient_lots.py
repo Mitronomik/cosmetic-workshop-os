@@ -1,4 +1,6 @@
+from contextlib import nullcontext
 from decimal import Decimal
+import sqlite3
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
@@ -24,8 +26,8 @@ class IngredientLotRepository:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config or get_database_config()
 
-    def create(self, draft: IngredientLotDraft) -> IngredientLot:
-        with session(self.config) as connection:
+    def create(self, draft: IngredientLotDraft, *, connection: sqlite3.Connection | None = None) -> IngredientLot:
+        with _connection_scope(self.config, connection) as connection:
             _ensure_active_ingredient(connection, draft.ingredient_id)
             cursor = connection.execute(
                 """
@@ -77,8 +79,8 @@ class IngredientLotRepository:
             ).fetchall()
         return [_row_to_lot(row) for row in rows]
 
-    def update_basic(self, lot_id: int, draft: IngredientLotDraft) -> IngredientLot:
-        with session(self.config) as connection:
+    def update_basic(self, lot_id: int, draft: IngredientLotDraft, *, connection: sqlite3.Connection | None = None) -> IngredientLot:
+        with _connection_scope(self.config, connection) as connection:
             _ensure_active_ingredient(connection, draft.ingredient_id)
             cursor = connection.execute(
                 """
@@ -107,8 +109,8 @@ class IngredientLotRepository:
             row = connection.execute("SELECT * FROM ingredient_lots WHERE id = ?", (lot_id,)).fetchone()
         return _row_to_lot(row)
 
-    def deactivate(self, lot_id: int) -> IngredientLot:
-        with session(self.config) as connection:
+    def deactivate(self, lot_id: int, *, connection: sqlite3.Connection | None = None) -> IngredientLot:
+        with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 "UPDATE ingredient_lots SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (lot_id,),
@@ -156,3 +158,7 @@ def _row_to_lot(row) -> IngredientLot:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+def _connection_scope(config: DatabaseConfig, connection: sqlite3.Connection | None):
+    return nullcontext(connection) if connection is not None else session(config)

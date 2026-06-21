@@ -1,4 +1,6 @@
+from contextlib import nullcontext
 from decimal import Decimal
+import sqlite3
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
@@ -31,8 +33,8 @@ class StockMovementRepository:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config or get_database_config()
 
-    def create(self, draft: StockMovementDraft) -> StockMovement:
-        with session(self.config) as connection:
+    def create(self, draft: StockMovementDraft, *, connection: sqlite3.Connection | None = None) -> StockMovement:
+        with _connection_scope(self.config, connection) as connection:
             lot = _get_active_lot(connection, draft.ingredient_lot_id)
             if lot["unit"] != draft.unit.value:
                 raise StockMovementLotUnitMismatchError("Movement unit must match ingredient lot unit.")
@@ -135,3 +137,7 @@ def _row_to_movement(row) -> StockMovement:
         correction_of_movement_id=row["correction_of_movement_id"],
         created_at=row["created_at"],
     )
+
+
+def _connection_scope(config: DatabaseConfig, connection: sqlite3.Connection | None):
+    return nullcontext(connection) if connection is not None else session(config)

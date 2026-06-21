@@ -5,6 +5,8 @@ import json
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
+from app.db.transactions import transaction
+import sqlite3
 from app.models.onboarding import OnboardingState
 from app.repositories.audit import AuditLogRepository
 
@@ -48,14 +50,16 @@ class OnboardingService:
             created_at=created_at,
             updated_at=now,
         )
-        self._save_state(next_state)
-        self.audit.create_log(
-            action="onboarding.started",
-            entity_type="onboarding",
-            entity_id=None,
-            summary="Пользователь начал первичную настройку.",
-            metadata={"current_step": next_state.current_step},
-        )
+        with transaction(self.config) as connection:
+            self._save_state(next_state, connection=connection)
+            self.audit.create_log(
+                action="onboarding.started",
+                entity_type="onboarding",
+                entity_id=None,
+                summary="Пользователь начал первичную настройку.",
+                metadata={"current_step": next_state.current_step},
+                connection=connection,
+            )
         return next_state
 
     def complete_step(self, step: str) -> OnboardingState:
@@ -76,14 +80,16 @@ class OnboardingService:
             created_at=state.created_at or now,
             updated_at=now,
         )
-        self._save_state(next_state)
-        self.audit.create_log(
-            action="onboarding.step_completed",
-            entity_type="onboarding",
-            entity_id=step,
-            summary="Шаг первичной настройки отмечен выполненным.",
-            metadata={"step": step, "next_step": current_step},
-        )
+        with transaction(self.config) as connection:
+            self._save_state(next_state, connection=connection)
+            self.audit.create_log(
+                action="onboarding.step_completed",
+                entity_type="onboarding",
+                entity_id=step,
+                summary="Шаг первичной настройки отмечен выполненным.",
+                metadata={"step": step, "next_step": current_step},
+                connection=connection,
+            )
         return next_state
 
     def skip(self) -> OnboardingState:
@@ -98,14 +104,16 @@ class OnboardingService:
             created_at=state.created_at or now,
             updated_at=now,
         )
-        self._save_state(next_state)
-        self.audit.create_log(
-            action="onboarding.skipped",
-            entity_type="onboarding",
-            entity_id=None,
-            summary="Пользователь закрыл чек-лист первичной настройки без отметки всех шагов.",
-            metadata={"current_step": next_state.current_step, "completed_steps": list(next_state.completed_steps)},
-        )
+        with transaction(self.config) as connection:
+            self._save_state(next_state, connection=connection)
+            self.audit.create_log(
+                action="onboarding.skipped",
+                entity_type="onboarding",
+                entity_id=None,
+                summary="Пользователь закрыл чек-лист первичной настройки без отметки всех шагов.",
+                metadata={"current_step": next_state.current_step, "completed_steps": list(next_state.completed_steps)},
+                connection=connection,
+            )
         return next_state
 
     def complete(self) -> OnboardingState:
@@ -120,13 +128,15 @@ class OnboardingService:
             created_at=state.created_at or now,
             updated_at=now,
         )
-        self._save_state(next_state)
-        self.audit.create_log(
-            action="onboarding.completed",
-            entity_type="onboarding",
-            entity_id=None,
-            summary="Первичная настройка завершена пользователем.",
-        )
+        with transaction(self.config) as connection:
+            self._save_state(next_state, connection=connection)
+            self.audit.create_log(
+                action="onboarding.completed",
+                entity_type="onboarding",
+                entity_id=None,
+                summary="Первичная настройка завершена пользователем.",
+                connection=connection,
+            )
         return next_state
 
     def reset(self) -> OnboardingState:
@@ -139,11 +149,17 @@ class OnboardingService:
             row = connection.execute("SELECT value FROM app_settings WHERE key = ?", (ONBOARDING_SETTING_KEY,)).fetchone()
         return None if row is None else row["value"]
 
-    def _save_state(self, state: OnboardingState) -> None:
+    def _save_state(self, state: OnboardingState, *, connection: sqlite3.Connection | None = None) -> None:
         payload = json.dumps(_state_to_payload(state), ensure_ascii=False)
-        with session(self.config) as connection:
-            connection.execute(
-                """
+        if connection is None:
+            with session(self.config) as managed_connection:
+                self._write_state_payload(payload, managed_connection)
+            return
+        self._write_state_payload(payload, connection)
+
+    def _write_state_payload(self, payload: str, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
                 INSERT INTO app_settings (key, value, value_type, description)
                 VALUES (?, ?, 'json', 'First-run onboarding state for the local workspace.')
                 ON CONFLICT(key) DO UPDATE SET
@@ -152,8 +168,8 @@ class OnboardingService:
                     description = excluded.description,
                     updated_at = CURRENT_TIMESTAMP
                 """,
-                (ONBOARDING_SETTING_KEY, payload),
-            )
+            (ONBOARDING_SETTING_KEY, payload),
+        )
 
     def _default_state(self) -> OnboardingState:
         return OnboardingState(False, False, ONBOARDING_STEPS[0], (), (), None, None)
