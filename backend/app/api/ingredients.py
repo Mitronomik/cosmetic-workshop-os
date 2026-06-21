@@ -40,7 +40,7 @@ def get_ingredient(ingredient_id: int) -> IngredientResponse:
     return _ingredient_response(ingredient)
 
 
-@router.patch("/{ingredient_id}", response_model=IngredientResponse)
+@router.put("/{ingredient_id}", response_model=IngredientResponse)
 def update_ingredient(ingredient_id: int, payload: IngredientUpdateRequest) -> IngredientResponse:
     try:
         ingredient = IngredientService().update_ingredient(ingredient_id, _draft_from_payload(payload))

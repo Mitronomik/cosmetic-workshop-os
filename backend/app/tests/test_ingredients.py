@@ -164,6 +164,19 @@ def test_ingredients_api_create_read_list_and_deactivate(monkeypatch, tmp_path):
     assert client.get(f"/api/ingredients/{ingredient_id}").json()["name"] == "Масло ши"
     assert len(client.get("/api/ingredients").json()["ingredients"]) == 1
 
+    update_response = client.put(
+        f"/api/ingredients/{ingredient_id}",
+        json={"name": "Масло ши раф.", "category": "butter", "default_unit": "g", "density_g_per_ml": None},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == "Масло ши раф."
+
+    patch_response = client.patch(
+        f"/api/ingredients/{ingredient_id}",
+        json={"name": "partial"},
+    )
+    assert patch_response.status_code == 405
+
     deactivate_response = client.post(f"/api/ingredients/{ingredient_id}/deactivate")
     assert deactivate_response.status_code == 200
     assert deactivate_response.json()["is_active"] is False

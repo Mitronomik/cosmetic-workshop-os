@@ -1,7 +1,7 @@
 # Handoff
 
 ## Last completed work
-Implemented PR6 ingredients foundation. The backend now has an `ingredients` table migration, ingredient category/unit/name/density domain validation, create/read/list/update/deactivate repository and service methods, thin `/api/ingredients` endpoints, and minimal ingredient audit events.
+Implemented PR6 ingredients foundation. The backend now has an `ingredients` table migration, ingredient category/unit/name/density domain validation, create/read/list/update/deactivate repository and service methods, thin `/api/ingredients` endpoints with full update exposed as PUT, not partial PATCH, and minimal ingredient audit events.
 
 ## Current repo state
 Minimal local-first foundation exists. Backend exposes stable health payloads plus technical database/settings endpoints from previous PRs. Frontend remains the branded static shell with no new business UI. No ingredient lots, stock movements, packaging, recipes, clients, orders, production, imports, exports, backup UI/restore, cloud, mobile, OCR, auth or roles were implemented.
@@ -12,7 +12,7 @@ Minimal local-first foundation exists. Backend exposes stable health payloads pl
 - MVP remains local-first and API-first.
 - SQLite is used for the persistence foundation.
 - PR5 adds backend-only domain primitives under `backend/app/domain/`.
-- PR6 adds only the `ingredients` business table; forbidden future business tables remain absent.
+- PR6 adds only the `ingredients` business table; forbidden future business tables remain absent. Full ingredient update is `PUT /api/ingredients/{id}`; PATCH is intentionally not exposed.
 - Critical numeric parsing rejects floats/bools and expects strings, integers, or `Decimal` to avoid accidental binary-float calculations.
 - Quantization rules are explicit: grams/ml to 0.001, percentages/money to 0.01, density to 0.0001 g/ml, using `ROUND_HALF_UP`; counts must already be whole numbers and fractional pieces/items raise validation instead of rounding.
 - Density conversion uses `grams = ml * density`; it does not assume `1 ml = 1 g` when density is missing.
