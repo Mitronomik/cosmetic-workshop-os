@@ -116,3 +116,10 @@ PR16 - Ingredient catalog UI foundation
 - Added frontend API usage for `GET/POST/PUT /api/ingredient-lots` and `POST /api/ingredient-lots/{lot_id}/deactivate`, plus existing `GET /api/ingredients` for active component selection.
 - Added ingredient lot loading, empty, error, create, edit, and soft-deactivate UI states with Russian user-facing labels and expiration status labels.
 - Preserved stock boundary: no quantity/current balance input, no stock movement form, no frontend balance calculation, no migrations, and no backend changes.
+
+## PR21 — Ingredient stock movement UI foundation
+- Added `Движения склада` navigation and `/stock-movements` route in the frontend shell.
+- Added frontend API usage for existing ingredient stock movement endpoints: `POST /api/stock-movements`, `GET /api/ingredient-lots/{lot_id}/movements`, and `GET /api/ingredient-lots/{lot_id}/balance`, plus existing ingredient/lot lists for human-readable lot selection.
+- Added lot selection, backend-derived read-only current balance, create movement form, movement history table, and loading/empty/error states.
+- Preserved append-only stock accounting: no edit/delete movement UI, no manual current balance field, no frontend balance derivation, no backend changes, no migrations, and no new tables.
+- PR21 intentionally excludes packaging stock movement UI, production, purchase list, alerts, recipe/client/order changes, import/export, cloud, mobile, OCR, auth, and roles.

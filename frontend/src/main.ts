@@ -4,9 +4,11 @@ type InventoryStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientLotsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type RecipesStatus = 'idle' | 'loading' | 'ready' | 'error';
+type StockMovementsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type CalculationStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientFormMode = 'create' | 'edit';
 type IngredientLotFormMode = 'create' | 'edit';
+type StockMovementLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 type OnboardingState = {
   has_started: boolean;
@@ -109,6 +111,12 @@ type IngredientLotFormState = { id: number | null; ingredient_id: string; lot_co
 
 type IngredientLotsState = { lots: IngredientLot[]; ingredients: Ingredient[]; formMode: IngredientLotFormMode; form: IngredientLotFormState };
 
+type StockMovement = { id: number; ingredient_lot_id: number; ingredient_id: number; movement_type: string; quantity: string; unit: string; direction: string; reason: string; occurred_at: string; note: string; reference_type: string | null; reference_id: string | null; source: string; correction_of_movement_id: number | null; created_at: string };
+type IngredientLotBalanceResponse = { ingredient_lot_id: number; quantity: string };
+type StockMovementFormState = { ingredient_lot_id: string; movement_type: string; quantity: string; unit: string; occurred_at: string; reason: string; source: string; note: string };
+type StockMovementsState = { lots: IngredientLot[]; ingredients: Ingredient[]; selectedLotId: number | null; balance: IngredientLotBalanceResponse | null; movements: StockMovement[]; form: StockMovementFormState; detailStatus: StockMovementLoadStatus };
+type StockMovementPayload = { ingredient_lot_id: number; movement_type: string; quantity: string; unit: string; occurred_at: string | null; reason: string; source: string; note: string };
+
 type IngredientsState = {
   items: Ingredient[];
   formMode: IngredientFormMode;
@@ -177,7 +185,7 @@ type RecipesState = {
 };
 
 
-const navigationItems = ['Главная','Компоненты','Партии','Рецепты','Клиенты','Заказы','Склад','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
+const navigationItems = ['Главная','Компоненты','Партии','Движения склада','Рецепты','Клиенты','Заказы','Склад','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
 const stepLabels: Record<string, string> = {
   welcome: 'Познакомиться с рабочим пространством',
   data_location: 'Понять, где хранятся локальные данные',
@@ -204,6 +212,10 @@ let ingredientLotsStatus: IngredientLotsStatus = 'idle';
 let ingredientLotsState: IngredientLotsState = { lots: [], ingredients: [], formMode: 'create', form: emptyIngredientLotForm() };
 let ingredientLotsError = '';
 let ingredientLotsMessage = '';
+let stockMovementsStatus: StockMovementsStatus = 'idle';
+let stockMovementsState: StockMovementsState = { lots: [], ingredients: [], selectedLotId: null, balance: null, movements: [], form: emptyStockMovementForm(), detailStatus: 'idle' };
+let stockMovementsError = '';
+let stockMovementsMessage = '';
 let recipesStatus: RecipesStatus = 'idle';
 let recipesError = '';
 let recipesMessage = '';
@@ -215,6 +227,7 @@ function sectionFromLocation() {
   if (window.location.pathname === '/inventory') return 'Склад';
   if (window.location.pathname === '/ingredients') return 'Компоненты';
   if (window.location.pathname === '/ingredient-lots') return 'Партии';
+  if (window.location.pathname === '/stock-movements') return 'Движения склада';
   if (window.location.pathname === '/recipes') return 'Рецепты';
   return 'Главная';
 }
@@ -237,7 +250,7 @@ function render() {
           <div><p class="eyebrow">Рабочее пространство</p><h1>${activeSection}</h1></div>
           <span class="status ${healthStatus}">${healthLabel}</span>
         </header>
-        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Партии' ? ingredientLotsPage() : activeSection === 'Рецепты' ? recipesPage() : sectionPlaceholder(activeSection)}
+        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Партии' ? ingredientLotsPage() : activeSection === 'Движения склада' ? stockMovementsPage() : activeSection === 'Рецепты' ? recipesPage() : sectionPlaceholder(activeSection)}
       </main>
     </div>`;
   bindEvents(root);
@@ -248,10 +261,11 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       activeSection = button.dataset.section ?? 'Главная';
-      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Партии' ? '/ingredient-lots' : activeSection === 'Рецепты' ? '/recipes' : '/');
+      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Партии' ? '/ingredient-lots' : activeSection === 'Движения склада' ? '/stock-movements' : activeSection === 'Рецепты' ? '/recipes' : '/');
       if (activeSection === 'Склад') loadInventory();
       if (activeSection === 'Компоненты') loadIngredients();
       if (activeSection === 'Партии') loadIngredientLots();
+      if (activeSection === 'Движения склада') loadStockMovements();
       if (activeSection === 'Рецепты') loadRecipes();
       render();
     });
@@ -273,6 +287,9 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient-lot"]').forEach((button) => button.addEventListener('click', () => startEditIngredientLot(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient-lot"]').forEach((button) => button.addEventListener('click', () => deactivateIngredientLot(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="ingredient-lot"]')?.addEventListener('submit', submitIngredientLotForm);
+  root.querySelector<HTMLButtonElement>('[data-action="reload-stock-movements"]')?.addEventListener('click', () => loadStockMovements(true));
+  root.querySelector<HTMLSelectElement>('[data-action="select-stock-lot"]')?.addEventListener('change', (event) => selectStockMovementLot(Number((event.currentTarget as HTMLSelectElement).value)));
+  root.querySelector<HTMLFormElement>('[data-form="stock-movement"]')?.addEventListener('submit', submitStockMovementForm);
   root.querySelector<HTMLButtonElement>('[data-action="reload-recipes"]')?.addEventListener('click', () => loadRecipes(true));
   root.querySelector<HTMLFormElement>('[data-form="recipe-template"]')?.addEventListener('submit', submitRecipeTemplateForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-version"]')?.addEventListener('submit', submitRecipeVersionForm);
@@ -321,6 +338,40 @@ function ingredientLotForm() {
 function ingredientLotList() {
   if (ingredientLotsState.lots.length === 0) return `<section class="card empty-card"><h2>Пока нет партий компонентов</h2><p>Создайте партию, чтобы указать поставщика, срок годности и цену закупки.</p><p class="next-step">Остаток считается по движениям склада. Чтобы добавить количество, используйте движение склада — это будет отдельный шаг.</p></section>`;
   return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Партии компонентов</h2><div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Партия</th><th>Поставщик</th><th>Ед. учета</th><th>Цена за единицу</th><th>Плотность</th><th>Дата покупки</th><th>Срок годности</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${ingredientLotsState.lots.map((lot) => `<tr><td><strong>${escapeHtml(lotIngredientName(lot.ingredient_id))}</strong></td><td>${escapeHtml(lot.lot_code || 'Без номера')}<small>${escapeHtml(lot.notes || '')}</small></td><td>${escapeHtml(lot.supplier_name || 'Не указан')}</td><td>${unitLabel(lot.unit)}</td><td>${lot.unit_cost ? escapeHtml(lot.unit_cost) : 'Не указана'}</td><td>${lot.density_g_per_ml ? `${escapeHtml(lot.density_g_per_ml)} г/мл` : 'Не указана'}</td><td>${formatDate(lot.purchased_at)}</td><td>${formatDate(lot.expires_at)}</td><td><span class="pill ${lotStatusClass(lot)}">${lotStatusLabel(lot)}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient-lot" data-id="${lot.id}">Изменить</button>${lot.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient-lot" data-id="${lot.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div><p class="next-step">Остаток партии не редактируется в этой таблице: он будет считаться по движениям склада.</p></section>`;
+}
+
+
+function stockMovementsPage() {
+  if (stockMovementsStatus === 'idle' || stockMovementsStatus === 'loading') return `<section class="card"><p class="card-kicker">Движения склада</p><h2>Загружаем движения…</h2><p>Получаем партии компонентов и историю движений из локального API.</p></section>`;
+  if (stockMovementsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Движения склада</p><h2>Не удалось загрузить движения склада</h2><p>${stockMovementsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-stock-movements">Повторить загрузку</button></section>`;
+  if (stockMovementsState.lots.length === 0) return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения склада</p><h2>История движений компонентов</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements">Обновить</button></section><section class="card empty-card"><h2>Пока нет партий для движений</h2><p>Сначала создайте компонент и партию. После этого можно будет добавить приход или списание.</p><p class="next-step">Текущий остаток нельзя ввести вручную: он появится после первого движения склада.</p></section></div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения склада</p><h2>Движения склада</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements">Обновить</button></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
+}
+
+function stockLotSelector() {
+  const selected = stockMovementsState.selectedLotId;
+  return `<section class="card form-card"><p class="card-kicker">Партия</p><h2>Выберите партию компонента</h2><div class="form-grid"><label class="full-span">Партия<select data-action="select-stock-lot"><option value="">Выберите партию</option>${stockMovementsState.lots.map((lot) => `<option value="${lot.id}" ${lot.id === selected ? 'selected' : ''}>${escapeHtml(stockLotLabel(lot))}</option>`).join('')}</select></label></div>${stockMovementsState.detailStatus === 'loading' ? '<p class="next-step">Загружаем текущий остаток и историю выбранной партии…</p>' : ''}${stockBalanceCard()}</section>`;
+}
+
+function stockBalanceCard() {
+  if (!stockMovementsState.selectedLotId) return `<p class="next-step">Выберите партию, чтобы увидеть backend-derived остаток и историю движений.</p>`;
+  if (stockMovementsState.detailStatus === 'error') return `<p class="next-step error-message">Не удалось получить остаток или историю партии. Попробуйте обновить раздел.</p>`;
+  if (!stockMovementsState.balance) return '';
+  const lot = selectedStockLot();
+  return `<div class="balance-card" aria-label="Текущий остаток"><span>Текущий остаток</span><strong>${escapeHtml(stockMovementsState.balance.quantity)} ${unitLabel(lot?.unit ?? '')}</strong><small>Остаток считается по истории движений.</small></div>`;
+}
+
+function stockMovementForm() {
+  const lot = selectedStockLot();
+  if (!lot) return '';
+  const form = stockMovementsState.form;
+  return `<section class="card form-card"><p class="card-kicker">Новое движение</p><h2>Добавить движение по выбранной партии</h2><p class="next-step">Для списаний и возвратов backend проверит, что остаток партии не станет отрицательным. История движений не редактируется и не удаляется.</p><form data-form="stock-movement" class="ingredient-form"><div class="form-grid"><label>Партия<input value="${escapeHtml(stockLotLabel(lot))}" readonly /></label><label>Тип движения<select name="movement_type">${movementTypeOptions(form.movement_type)}</select></label><label>Количество<input name="quantity" required inputmode="decimal" value="${escapeHtml(form.quantity)}" placeholder="Например, 100 или 12.500" /></label><label>Единица<input name="unit" value="${unitLabel(lot.unit)}" readonly /></label><label>Дата движения<input name="occurred_at" type="datetime-local" value="${escapeHtml(form.occurred_at)}" /></label><label>Источник<select name="source"><option value="manual" ${form.source === 'manual' ? 'selected' : ''}>Вручную</option><option value="import" ${form.source === 'import' ? 'selected' : ''}>Импорт</option><option value="system" ${form.source === 'system' ? 'selected' : ''}>Система</option></select></label><label class="full-span">Причина<input name="reason" maxlength="240" value="${escapeHtml(form.reason)}" placeholder="Например, закупка, списание просрочки" /></label><label class="full-span">Заметки<textarea name="note" rows="3" maxlength="1200" placeholder="Необязательно">${escapeHtml(form.note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit">Создать движение</button></div></form></section>`;
+}
+
+function stockMovementHistory() {
+  if (!stockMovementsState.selectedLotId) return '';
+  if (stockMovementsState.movements.length === 0) return `<section class="card empty-card"><h2>Движений по партии пока нет</h2><p>Создайте приход, чтобы зафиксировать начальный остаток партии. Текущий остаток останется расчетным.</p></section>`;
+  return `<section class="card data-card"><p class="card-kicker">История</p><h2>Движения выбранной партии</h2><div class="table-wrap"><table><thead><tr><th>Дата</th><th>Тип движения</th><th>Количество</th><th>Ед.</th><th>Причина</th><th>Источник</th><th>Заметки</th></tr></thead><tbody>${stockMovementsState.movements.map((movement) => `<tr><td>${formatDateTime(movement.occurred_at)}</td><td>${movementTypeLabel(movement.movement_type)}</td><td>${escapeHtml(movement.quantity)}</td><td>${unitLabel(movement.unit)}</td><td>${escapeHtml(movement.reason || 'Не указана')}</td><td>${sourceLabel(movement.source)}</td><td>${escapeHtml(movement.note || 'Без заметок')}</td></tr>`).join('')}</tbody></table></div><p class="next-step">Это журнал склада: старые движения не редактируются и не удаляются.</p></section>`;
 }
 
 function inventoryPage() {
@@ -435,11 +486,41 @@ function createRecipeVersion(templateId: number, payload: ReturnType<typeof reci
 function getRecipeVersionDetail(versionId: number) { return apiGet<RecipeVersionDetail>(`/api/recipe-versions/${versionId}`); }
 function getRecipeCalculation(versionId: number, value?: string, unit?: string) { const params = new URLSearchParams(); if (value) { params.set('target_batch_size_value', value); params.set('target_batch_size_unit', unit || 'g'); } const query = params.toString(); return apiGet<RecipeCalculationResult>(`/api/recipe-versions/${versionId}/calculation${query ? `?${query}` : ''}`); }
 
+function getStockMovementsByLot(lotId: number) { return apiGet<{ movements: StockMovement[] }>(`/api/ingredient-lots/${lotId}/movements`); }
+function getIngredientLotBalance(lotId: number) { return apiGet<IngredientLotBalanceResponse>(`/api/ingredient-lots/${lotId}/balance`); }
+function createStockMovement(payload: StockMovementPayload) { return apiSend<StockMovement>('/api/stock-movements', 'POST', payload); }
+
 function getInventoryOverview() { return apiGet<InventoryOverview>('/api/inventory/overview'); }
 function getIngredientLotBalances() { return apiGet<{ ingredient_lot_balances: IngredientLotBalance[] }>('/api/inventory/ingredient-lot-balances'); }
 function getPackagingBalances() { return apiGet<{ packaging_balances: PackagingBalance[] }>('/api/inventory/packaging-balances'); }
 
 
+
+function emptyStockMovementForm(): StockMovementFormState { return { ingredient_lot_id: '', movement_type: 'receipt', quantity: '', unit: '', occurred_at: '', reason: '', source: 'manual', note: '' }; }
+function selectedStockLot() { return stockMovementsState.lots.find((lot) => lot.id === stockMovementsState.selectedLotId) ?? null; }
+function stockLotLabel(lot: IngredientLot) { return `${lotIngredientNameForStock(lot.ingredient_id)} - ${lot.lot_code || 'без номера'} - ${lot.supplier_name || 'поставщик не указан'} - ${unitLabel(lot.unit)}`; }
+function lotIngredientNameForStock(id: number) { return stockMovementsState.ingredients.find((item) => item.id === id)?.name ?? ingredientLotsState.ingredients.find((item) => item.id === id)?.name ?? 'Компонент'; }
+function movementTypeLabel(type: string) { return ({ receipt: 'Приход', manual_adjustment_in: 'Корректировка +', manual_adjustment_out: 'Корректировка -', write_off: 'Списание', return_to_supplier: 'Возврат поставщику' } as Record<string,string>)[type] ?? escapeHtml(type); }
+function movementTypeOptions(selected: string) { return ['receipt','manual_adjustment_in','manual_adjustment_out','write_off','return_to_supplier'].map((type) => `<option value="${type}" ${type === selected ? 'selected' : ''}>${movementTypeLabel(type)}</option>`).join(''); }
+function sourceLabel(source: string) { return ({ manual: 'Вручную', import: 'Импорт', system: 'Система' } as Record<string,string>)[source] ?? escapeHtml(source); }
+function stockMovementPayloadFromForm(form: HTMLFormElement): StockMovementPayload { const data = new FormData(form); const lot = selectedStockLot(); return { ingredient_lot_id: lot?.id ?? 0, movement_type: String(data.get('movement_type') ?? 'receipt'), quantity: String(data.get('quantity') ?? '').trim(), unit: lot?.unit ?? '', occurred_at: String(data.get('occurred_at') ?? '').trim() || null, reason: String(data.get('reason') ?? '').trim(), source: String(data.get('source') ?? 'manual'), note: String(data.get('note') ?? '').trim() }; }
+function saveStockMovementFormFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="stock-movement"]'); if (!form) return; const payload = stockMovementPayloadFromForm(form); stockMovementsState.form = { ingredient_lot_id: String(payload.ingredient_lot_id), movement_type: payload.movement_type, quantity: payload.quantity, unit: payload.unit, occurred_at: payload.occurred_at ?? '', reason: payload.reason, source: payload.source, note: payload.note }; }
+
+function loadStockMovements(force = false) {
+  if (!force && (stockMovementsStatus === 'loading' || stockMovementsStatus === 'ready')) return;
+  stockMovementsStatus = 'loading'; stockMovementsError = ''; render();
+  Promise.all([getIngredientLots(), getIngredients()]).then(([lots, ingredients]) => {
+    stockMovementsState.lots = lots.lots.filter((lot) => lot.is_active);
+    stockMovementsState.ingredients = ingredients.ingredients;
+    stockMovementsStatus = 'ready';
+    if (!stockMovementsState.selectedLotId && stockMovementsState.lots.length > 0) stockMovementsState.selectedLotId = stockMovementsState.lots[0].id;
+    render();
+    if (stockMovementsState.selectedLotId) loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
+  }).catch(() => { stockMovementsStatus = 'error'; stockMovementsError = 'Не получилось получить партии компонентов из локального API.'; render(); });
+}
+function selectStockMovementLot(lotId: number) { saveStockMovementFormFromDom(); stockMovementsState.selectedLotId = lotId || null; stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: lotId ? String(lotId) : '' }; stockMovementsMessage = ''; stockMovementsError = ''; render(); if (lotId) loadSelectedStockMovementLot(lotId); }
+function loadSelectedStockMovementLot(lotId: number) { stockMovementsState.detailStatus = 'loading'; stockMovementsState.balance = null; stockMovementsState.movements = []; render(); Promise.all([getIngredientLotBalance(lotId), getStockMovementsByLot(lotId)]).then(([balance, movements]) => { stockMovementsState.balance = balance; stockMovementsState.movements = movements.movements; stockMovementsState.detailStatus = 'ready'; render(); }).catch(() => { stockMovementsState.detailStatus = 'error'; stockMovementsError = 'Не удалось загрузить остаток или историю выбранной партии.'; render(); }); }
+function submitStockMovementForm(event: SubmitEvent) { event.preventDefault(); const payload = stockMovementPayloadFromForm(event.currentTarget as HTMLFormElement); if (!payload.ingredient_lot_id) return; createStockMovement(payload).then(() => { stockMovementsMessage = 'Движение создано. Текущий остаток пересчитан backend по истории.'; stockMovementsError = ''; stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: String(payload.ingredient_lot_id) }; loadSelectedStockMovementLot(payload.ingredient_lot_id); }).catch(() => { stockMovementsMessage = ''; stockMovementsError = 'Не удалось создать движение. Проверьте количество, единицу партии и что списание не делает остаток отрицательным.'; render(); }); }
 
 function loadRecipes(force = false) {
   if (!force && (recipesStatus === 'loading' || recipesStatus === 'ready')) return;
@@ -505,11 +586,12 @@ function loadInventory(force = false) {
 function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!response.ok) throw new Error('Onboarding is unavailable'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = ''; render(); }).catch(() => { onboardingStatus = 'unavailable'; render(); }); }
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
-window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Партии') loadIngredientLots(); if (activeSection === 'Рецепты') loadRecipes(); render(); });
+window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Партии') loadIngredientLots(); if (activeSection === 'Движения склада') loadStockMovements(); if (activeSection === 'Рецепты') loadRecipes(); render(); });
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
 if (activeSection === 'Склад') loadInventory();
 if (activeSection === 'Компоненты') loadIngredients();
 if (activeSection === 'Партии') loadIngredientLots();
+if (activeSection === 'Движения склада') loadStockMovements();
 if (activeSection === 'Рецепты') loadRecipes();

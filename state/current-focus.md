@@ -1,26 +1,7 @@
 # Current Focus
 
-## PR18 — Recipe version calculation service
+PR21 — Ingredient stock movement UI foundation is implemented.
 
-PR18 adds a backend-only, read-only recipe version calculation service.
+This slice adds the frontend `Движения склада` screen for ingredient lot stock movements only. The UI selects an ingredient lot, reads the backend-derived lot balance, lists append-only movement history, and creates new movements through the existing stock movement API.
 
-Implemented scope:
-- load a recipe version with its template name and ingredient rows in deterministic position/id order;
-- calculate fixed `g`, `ml`, and `pcs` lines without proportional scaling;
-- calculate percent lines from an explicit `g`/`ml` target batch size or from the version's stored `g`/`ml` target batch size;
-- report Decimal-backed `percent_total` and human-readable issues for missing, unsupported `pcs`, or below/above 100% percent totals;
-- expose `GET /api/recipe-versions/{version_id}/calculation` with optional `target_batch_size_value` and `target_batch_size_unit` query parameters.
-
-Intentional non-scope:
-- no migrations, tables, stored calculation results, cost/tax/margin calculation, stock readiness, production, client recipes, orders, import/export, or frontend UI.
-
-## PR19 current focus
-- Added the first recipe UI foundation at `/recipes` with Russian labels for recipe templates, recipe versions, ingredient lines, version detail, and backend-driven calculation display.
-- The frontend uses existing recipe template/version endpoints and the PR18 calculation endpoint; recipe amounts are not calculated in the browser.
-- Historical recipe versions remain view-only in this PR: no edit/delete/status mutation UI was added.
-- No client recipes, clients, orders, production, stock readiness, cost/tax/margin, migrations, or new tables were added.
-
-## PR20 — Ingredient lots UI foundation
-- Added a scoped frontend foundation for `Партии` at `/ingredient-lots` to list, create, edit, and softly deactivate ingredient lots through existing backend APIs.
-- The lot UI treats lots as purchased batch metadata only: component, lot code, supplier, purchase/expiration dates, unit, costs, density, and notes.
-- No stock movement UI, manual balance editing, stored balances, migrations, new tables, production, purchase list, alerts, recipes, clients, or orders were added.
+Out of scope remains unchanged: no movement editing/deleting, no manual current balance input, no stored balances, no packaging stock movement UI, no production, no purchase list, no alerts, no new backend tables, and no migrations.
