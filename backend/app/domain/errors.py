@@ -15,6 +15,8 @@ class DomainIssueCode(StrEnum):
     REQUIRED_FIELD = "required_field"
     INVALID_CATEGORY = "invalid_category"
     INVALID_UNIT = "invalid_unit"
+    INVALID_EMAIL = "invalid_email"
+    INVALID_DATE = "invalid_date"
 
 
 @dataclass(frozen=True)

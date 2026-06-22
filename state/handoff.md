@@ -193,3 +193,15 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
   - `POST /api/stock-movements` for creating an append-only movement.
 - Movement types shown in Russian: receipt, manual adjustment in/out, write-off, and return to supplier.
 - The UI intentionally has no movement edit/delete actions, no editable current balance/remaining quantity field, no frontend-derived balance calculation, no packaging movement UI, no production, no purchase list, no alerts, no backend changes, no migrations, and no new tables.
+
+## PR22 notes
+- Client endpoints:
+  - `POST /api/clients`
+  - `GET /api/clients` with optional `include_inactive`
+  - `GET /api/clients/{client_id}`
+  - `PUT /api/clients/{client_id}`
+  - `POST /api/clients/{client_id}/deactivate`
+- Client records are backend-only for PR22 and store normalized full name/contact/address/birthday/notes plus `is_active` timestamps.
+- Client writes and audit events are transactional; simulated audit failures roll back create, update, and deactivate operations.
+- PR22 intentionally excludes client UI, client recipes, client wishes/feedback, orders, production, imports/exports, backup changes, cloud, mobile, OCR, auth, and roles.
+- Future PR23 can build client-specific recipe foundations on top of the `Client` model without adding client data to recipe notes.
