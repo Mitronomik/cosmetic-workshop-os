@@ -44,6 +44,28 @@ cd frontend && npm run dev    # builds the shell, then serves dist on http://127
 
 Frontend dependency note: `frontend/package.json` declares `typescript` as a dev dependency because the build script runs `tsc`; run `cd frontend && npm install` when registry access is available.
 
+Frontend local API proxy for development/smoke only:
+
+```bash
+# Terminal 1
+export COSMETIC_WORKSHOP_DB_PATH="/path/to/.local/smoke.sqlite"
+python3 - <<'PY'
+from app.services.startup import initialize_startup
+result = initialize_startup("development")
+print("DB:", result.database_path)
+print("Applied migrations:", result.applied_migrations)
+PY
+cd backend
+python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
+
+# Terminal 2
+cd frontend
+COSMETIC_WORKSHOP_API_PROXY_TARGET=http://127.0.0.1:8010 npm run dev
+```
+
+Then open `http://127.0.0.1:5173/packaging-items`. During `npm run dev`, frontend requests whose path starts with `/api/` are proxied to `COSMETIC_WORKSHOP_API_PROXY_TARGET`; if the variable is not set, the dev server uses `http://127.0.0.1:8000`. This proxy is only for developer smoke testing and does not change the client runtime/deployment contract.
+
+
 
 Backend database foundation notes:
 
