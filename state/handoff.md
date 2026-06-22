@@ -231,3 +231,11 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - «Компоненты» now consumes only ingredient catalog endpoints: `GET /api/catalog/categories?scope=ingredient`, `GET /api/catalog/tags?scope=ingredient`, `PUT /api/ingredients/{ingredient_id}/catalog-category`, and `PUT /api/ingredients/{ingredient_id}/catalog-tags`.
 - Ingredient list responses include current `catalog_category_id` and `catalog_tag_ids` for UI state. This is read support only; PR24 schema is unchanged and no migrations were added.
 - UI wording keeps the system enum separate as «Системный тип» and presents catalog metadata as «Моя группа» and «Метки». Packaging and recipe catalog UI remain follow-ups.
+
+## PR26 handoff notes
+- PR26 adds inline creation of ingredient catalog groups/tags in the existing `Компоненты` UI.
+- Frontend calls `POST /api/catalog/categories` and `POST /api/catalog/tags` with ingredient scope internally, then reloads ingredient categories/tags for immediate assignment.
+- Scope, slug, color, hierarchy, sorting, and technical catalog administration are not exposed in the UI.
+- Catalog categories/tags remain ingredient-scoped organization metadata; the system `IngredientCategory` remains intact.
+- Packaging and recipe catalog UI are still future follow-ups.
+- No migrations, new tables, production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
