@@ -103,3 +103,10 @@ PR16 - Ingredient catalog UI foundation
 - PR17 backend recipe model foundation: added `RecipeTemplate -> RecipeVersion -> RecipeIngredient` tables, domain validation, service/repository/API endpoints, and transactional audit events for create/deactivate operations. No calculation service, percent-sum validation, recipe UI, clients, orders, or production were added.
 
 - PR18 backend recipe version calculation service: added a read-only calculation service and API endpoint for recipe versions. Fixed `g`/`ml`/`pcs` recipe lines are returned unchanged, percent lines calculate from an explicit or stored `g`/`ml` target batch size, percent totals are reported with warning/error issues, and calculation reads do not create audit logs or mutate recipe rows. No migrations, new tables, cost calculation, stock readiness, production, client recipes, orders, import/export, or frontend UI were added.
+
+## PR19 — Recipe UI foundation
+- Added `Рецепты` navigation and `/recipes` route in the branded frontend shell.
+- Added frontend recipe API usage for listing/creating recipe templates, opening templates, listing/creating versions, opening version details, and requesting backend calculation results.
+- Added recipe workspace UI with empty/loading/error states, template creation, version creation with ingredient lines populated from active ingredients, version detail, and Russian calculation panels for backend lines/issues/totals.
+- Preserved historical-version safety: existing recipe versions are not edited, deleted, or mutated from the UI.
+- No backend migrations, tables, client recipes, orders, production, cost calculation, stock readiness, import/export, cloud, mobile, OCR, auth, or roles were added.

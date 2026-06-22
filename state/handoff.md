@@ -159,3 +159,16 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - `percent_total` is reported; totals below 100% produce a warning issue, totals above 100% produce an error issue, and missing target size for percent lines makes `can_calculate=false`.
 - Calculation is read-only: it does not write audit logs, mutate recipe rows, reserve/consume stock, select lots, calculate costs/tax/margin, or create production/client/order/import/export records.
 - No migrations or new tables were added for PR18.
+
+## PR19 notes
+- Recipe UI route: `/recipes` (navigation label `Рецепты`).
+- Frontend recipe API usage:
+  - `GET/POST /api/recipe-templates`
+  - `GET /api/recipe-templates/{template_id}`
+  - `GET/POST /api/recipe-templates/{template_id}/versions`
+  - `GET /api/recipe-versions/{version_id}`
+  - `GET /api/recipe-versions/{version_id}/calculation`
+  - `GET /api/ingredients` for the ingredient dropdown in version lines.
+- The calculation panel displays backend-provided lines, percent total, totals by unit, and issues; frontend does not derive recipe amounts.
+- Existing versions are view-only. The UI supports creating new templates and new versions only.
+- PR19 intentionally excludes historical version editing/deletion, client recipes, clients, orders, production, stock readiness, cost/tax/margin, alerts, purchase suggestions, import/export, migrations, and new tables.

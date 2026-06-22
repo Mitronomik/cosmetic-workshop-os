@@ -2,6 +2,8 @@ type HealthStatus = 'checking' | 'online' | 'offline';
 type OnboardingStatus = 'loading' | 'ready' | 'unavailable';
 type InventoryStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientsStatus = 'idle' | 'loading' | 'ready' | 'error';
+type RecipesStatus = 'idle' | 'loading' | 'ready' | 'error';
+type CalculationStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientFormMode = 'create' | 'edit';
 
 type OnboardingState = {
@@ -99,6 +101,68 @@ type IngredientsState = {
   form: IngredientFormState;
 };
 
+type RecipeTemplate = {
+  id: number;
+  name: string;
+  product_type: string;
+  description: string;
+  notes: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type RecipeVersion = {
+  id: number;
+  recipe_template_id: number;
+  version_number: number;
+  status: string;
+  title: string;
+  target_batch_size_value: string | null;
+  target_batch_size_unit: string | null;
+  notes: string;
+  change_note: string;
+  created_from_version_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type RecipeIngredientLine = {
+  id: number;
+  recipe_version_id: number;
+  ingredient_id: number;
+  position: number;
+  phase: string;
+  amount_value: string;
+  amount_unit: string;
+  notes: string;
+  created_at: string;
+};
+
+type RecipeVersionDetail = { version: RecipeVersion; ingredients: RecipeIngredientLine[] };
+type RecipeTemplatePayload = Pick<RecipeTemplate, 'name' | 'product_type' | 'description' | 'notes'>;
+type RecipeLineForm = { ingredient_id: string; amount_value: string; amount_unit: string; phase: string; notes: string };
+type RecipeVersionForm = { title: string; status: string; target_batch_size_value: string; target_batch_size_unit: string; notes: string; change_note: string; ingredients: RecipeLineForm[] };
+
+type RecipeCalculationIssue = { severity: string; code: string; field: string | null; message: string; next_action: string | null };
+type RecipeCalculationLine = { recipe_ingredient_id: number; position: number; phase: string; ingredient_id: number; ingredient_name: string; source_amount_value: string; source_amount_unit: string; calculated_amount_value: string | null; calculated_amount_unit: string | null; calculation_note: string };
+type RecipeCalculationTotal = { unit: string; total_value: string };
+type RecipeCalculationResult = { recipe_version_id: number; recipe_template_id: number; recipe_name: string; version_number: number; status: string; target_batch_size_value: string | null; target_batch_size_unit: string | null; percent_total: string; can_calculate: boolean; issues: RecipeCalculationIssue[]; lines: RecipeCalculationLine[]; totals_by_unit: RecipeCalculationTotal[]; generated_at: string };
+
+type RecipesState = {
+  templates: RecipeTemplate[];
+  selectedTemplate: RecipeTemplate | null;
+  versions: RecipeVersion[];
+  selectedVersionDetail: RecipeVersionDetail | null;
+  ingredients: Ingredient[];
+  templateForm: RecipeTemplatePayload;
+  versionForm: RecipeVersionForm;
+  calculation: RecipeCalculationResult | null;
+  calculationTargetValue: string;
+  calculationTargetUnit: string;
+};
+
+
 const navigationItems = ['Главная','Компоненты','Рецепты','Клиенты','Заказы','Склад','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
 const stepLabels: Record<string, string> = {
   welcome: 'Познакомиться с рабочим пространством',
@@ -122,10 +186,17 @@ let ingredientsStatus: IngredientsStatus = 'idle';
 let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm() };
 let ingredientsError = '';
 let ingredientsMessage = '';
+let recipesStatus: RecipesStatus = 'idle';
+let recipesError = '';
+let recipesMessage = '';
+let calculationStatus: CalculationStatus = 'idle';
+let calculationError = '';
+let recipesState: RecipesState = { templates: [], selectedTemplate: null, versions: [], selectedVersionDetail: null, ingredients: [], templateForm: emptyRecipeTemplateForm(), versionForm: emptyRecipeVersionForm(), calculation: null, calculationTargetValue: '', calculationTargetUnit: 'g' };
 
 function sectionFromLocation() {
   if (window.location.pathname === '/inventory') return 'Склад';
   if (window.location.pathname === '/ingredients') return 'Компоненты';
+  if (window.location.pathname === '/recipes') return 'Рецепты';
   return 'Главная';
 }
 
@@ -147,7 +218,7 @@ function render() {
           <div><p class="eyebrow">Рабочее пространство</p><h1>${activeSection}</h1></div>
           <span class="status ${healthStatus}">${healthLabel}</span>
         </header>
-        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : sectionPlaceholder(activeSection)}
+        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Рецепты' ? recipesPage() : sectionPlaceholder(activeSection)}
       </main>
     </div>`;
   bindEvents(root);
@@ -158,9 +229,10 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       activeSection = button.dataset.section ?? 'Главная';
-      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : '/');
+      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Рецепты' ? '/recipes' : '/');
       if (activeSection === 'Склад') loadInventory();
       if (activeSection === 'Компоненты') loadIngredients();
+      if (activeSection === 'Рецепты') loadRecipes();
       render();
     });
   });
@@ -176,6 +248,14 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient"]').forEach((button) => button.addEventListener('click', () => startEditIngredient(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient"]').forEach((button) => button.addEventListener('click', () => deactivateIngredient(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="ingredient"]')?.addEventListener('submit', submitIngredientForm);
+  root.querySelector<HTMLButtonElement>('[data-action="reload-recipes"]')?.addEventListener('click', () => loadRecipes(true));
+  root.querySelector<HTMLFormElement>('[data-form="recipe-template"]')?.addEventListener('submit', submitRecipeTemplateForm);
+  root.querySelector<HTMLFormElement>('[data-form="recipe-version"]')?.addEventListener('submit', submitRecipeVersionForm);
+  root.querySelector<HTMLFormElement>('[data-form="recipe-calculation"]')?.addEventListener('submit', submitCalculationForm);
+  root.querySelectorAll<HTMLButtonElement>('[data-action="open-recipe"]').forEach((button) => button.addEventListener('click', () => openRecipeTemplate(Number(button.dataset.id))));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="open-version"]').forEach((button) => button.addEventListener('click', () => openRecipeVersion(Number(button.dataset.id))));
+  root.querySelector<HTMLButtonElement>('[data-action="add-recipe-line"]')?.addEventListener('click', addRecipeLine);
+  root.querySelectorAll<HTMLButtonElement>('[data-action="remove-recipe-line"]').forEach((button) => button.addEventListener('click', () => removeRecipeLine(Number(button.dataset.index))));
 }
 
 function dashboardPlaceholder() {
@@ -247,11 +327,42 @@ function stepHint(step: string) { return ({ welcome: 'Коротко понят�
 function sectionPlaceholder(title: string) { const emptyStates: Record<string, string> = { Рецепты: 'Рецепты появятся здесь позже. Пока можно завершить первичную настройку на главной странице.', Клиенты: 'Клиенты появятся здесь позже. В будущих шагах здесь будут карточки клиентов и индивидуальные формулы.', Запасы: 'Складской обзор теперь доступен в разделе «Склад». Формы добавления компонентов и движений появятся отдельными PR.' }; return `<section class="card"><p class="card-kicker">Раздел приложения</p><h2>${title}</h2><p>${emptyStates[title] ?? 'Этот раздел подготовлен как понятная навигационная заглушка. Формы и бизнес-функции будут добавляться в отдельных PR.'}</p><p class="next-step">Следующее действие: дождаться реализации соответствующего roadmap-шага.</p></section>`; }
 
 
+function recipesPage() {
+  if (recipesStatus === 'idle' || recipesStatus === 'loading') return `<section class="card"><p class="card-kicker">Рецепты</p><h2>Загружаем рецепты…</h2><p>Получаем шаблоны рецептов, версии и компоненты из локального API.</p></section>`;
+  if (recipesStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Рецепты</p><h2>Не удалось загрузить рецепты</h2><p>${recipesError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-recipes">Повторить загрузку</button></section>`;
+  return `<div class="recipes-layout"><section class="card recipes-intro"><div><p class="card-kicker">Рецепты</p><h2>Рабочее пространство рецептов</h2><p>Создавайте базовые рецепты и новые версии состава. Уже созданные версии здесь только просматриваются и рассчитываются — история не редактируется.</p></div><button class="secondary-action" type="button" data-action="reload-recipes">Обновить</button></section>${recipesMessage ? `<p class="page-message">${recipesMessage}</p>` : ''}${recipesError ? `<p class="page-message error-message">${recipesError}</p>` : ''}<div class="recipe-columns"><div>${recipeTemplateForm()}${recipeTemplateList()}</div><div>${recipeDetailPanel()}</div></div></div>`;
+}
+function recipeTemplateForm() { const f = recipesState.templateForm; return `<section class="card form-card"><p class="card-kicker">Новый рецепт</p><h2>Создать рецепт</h2><form data-form="recipe-template" class="ingredient-form"><div class="form-grid"><label>Название рецепта<input name="name" required maxlength="160" value="${escapeHtml(f.name)}" placeholder="Например, базовый дневной крем" /></label><label>Тип продукта<input name="product_type" maxlength="120" value="${escapeHtml(f.product_type)}" placeholder="Крем, гель, тоник…" /></label><label class="full-span">Описание<textarea name="description" rows="3" maxlength="1200">${escapeHtml(f.description)}</textarea></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200">${escapeHtml(f.notes)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit">Создать рецепт</button></div></form></section>`; }
+function recipeTemplateList() { if (recipesState.templates.length === 0) return `<section class="card empty-card"><h2>Пока нет рецептов</h2><p>Пока нет рецептов. Создайте первый рецепт, чтобы хранить составы и версии.</p><p class="next-step">Следующее действие: заполните форму «Создать рецепт».</p></section>`; return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Рецепты</h2><div class="recipe-list">${recipesState.templates.map((t)=>`<article class="recipe-list-item ${recipesState.selectedTemplate?.id===t.id?'selected':''}"><div><strong>${escapeHtml(t.name)}</strong><small>${escapeHtml(t.product_type || 'Тип продукта не указан')} · <span class="pill ${t.is_active?'success':'muted'}">${t.is_active?'Активен':'Неактивен'}</span></small></div><button class="secondary-action compact" type="button" data-action="open-recipe" data-id="${t.id}">Открыть</button></article>`).join('')}</div></section>`; }
+function recipeDetailPanel() { const template = recipesState.selectedTemplate; if (!template) return `<section class="card empty-card"><h2>Выберите рецепт</h2><p>Откройте рецепт из списка, чтобы увидеть версии, состав и расчет.</p><p class="next-step">Исторические версии не редактируются: для изменений создается новая версия.</p></section>`; return `<div class="recipe-detail-stack"><section class="card"><p class="card-kicker">Рецепт</p><h2>${escapeHtml(template.name)}</h2><p><strong>Тип:</strong> ${escapeHtml(template.product_type || 'не указан')}</p><p>${escapeHtml(template.description || 'Описание пока не заполнено.')}</p>${template.notes ? `<p class="next-step">${escapeHtml(template.notes)}</p>` : ''}<span class="pill ${template.is_active?'success':'muted'}">${template.is_active?'Активен':'Неактивен'}</span></section>${recipeVersionsList()}${recipeVersionForm()}${recipeVersionDetailPanel()}</div>`; }
+function recipeVersionsList() { if (recipesState.versions.length === 0) return `<section class="card empty-card"><h2>Версий пока нет</h2><p>Создайте первую версию, чтобы сохранить состав рецепта.</p></section>`; return `<section class="card data-card"><p class="card-kicker">Версии</p><h2>Версии рецепта</h2><div class="table-wrap"><table><thead><tr><th>Версия</th><th>Статус</th><th>Заголовок</th><th>Партия</th><th>Создана</th><th>Действие</th></tr></thead><tbody>${recipesState.versions.map((v)=>`<tr><td>№${v.version_number}</td><td><span class="pill ${versionStatusClass(v.status)}">${versionStatusLabel(v.status)}</span></td><td>${escapeHtml(v.title || 'Без заголовка')}</td><td>${batchLabel(v.target_batch_size_value, v.target_batch_size_unit)}</td><td>${formatDateTime(v.created_at)}</td><td><button class="secondary-action compact" type="button" data-action="open-version" data-id="${v.id}">Открыть</button></td></tr>`).join('')}</tbody></table></div></section>`; }
+function recipeVersionForm() { const f=recipesState.versionForm; return `<section class="card form-card"><p class="card-kicker">Новая версия</p><h2>Создать версию</h2><form data-form="recipe-version" class="ingredient-form"><div class="form-grid"><label>Заголовок версии<input name="title" maxlength="160" value="${escapeHtml(f.title)}" placeholder="Например, v1 с ниацинамидом" /></label><label>Статус<select name="status">${['draft','active','archived'].map((x)=>`<option value="${x}" ${f.status===x?'selected':''}>${versionStatusLabel(x)}</option>`).join('')}</select></label><label>Размер партии<input name="target_batch_size_value" inputmode="decimal" value="${escapeHtml(f.target_batch_size_value)}" placeholder="Например, 100" /></label><label>Единица партии<select name="target_batch_size_unit">${['g','ml','pcs'].map((x)=>`<option value="${x}" ${f.target_batch_size_unit===x?'selected':''}>${unitLabel(x)}</option>`).join('')}</select></label><label class="full-span">Заметки<textarea name="notes" rows="2">${escapeHtml(f.notes)}</textarea></label><label class="full-span">Что изменилось<textarea name="change_note" rows="2">${escapeHtml(f.change_note)}</textarea></label></div><h3>Состав</h3><div class="recipe-lines">${f.ingredients.map(recipeLineForm).join('')}</div><div class="actions"><button class="secondary-action" type="button" data-action="add-recipe-line">Добавить строку</button><button class="primary-action" type="submit">Создать версию</button></div></form></section>`; }
+function recipeLineForm(line: RecipeLineForm, index: number) { return `<fieldset class="recipe-line"><legend>Строка ${index+1}</legend><label>Компонент<select name="ingredient_id_${index}" required><option value="">Выберите компонент</option>${recipesState.ingredients.map((i)=>`<option value="${i.id}" ${line.ingredient_id===String(i.id)?'selected':''}>${escapeHtml(i.name)}</option>`).join('')}</select></label><label>Количество<input name="amount_value_${index}" required inputmode="decimal" value="${escapeHtml(line.amount_value)}" placeholder="Например, 5" /></label><label>Единица<select name="amount_unit_${index}">${['g','ml','percent','pcs'].map((u)=>`<option value="${u}" ${line.amount_unit===u?'selected':''}>${unitLabel(u)}</option>`).join('')}</select></label><label>Фаза<input name="phase_${index}" value="${escapeHtml(line.phase)}" placeholder="Водная фаза" /></label><label class="full-span">Заметки<input name="notes_${index}" value="${escapeHtml(line.notes)}" placeholder="Необязательно" /></label>${recipesState.versionForm.ingredients.length>1?`<button class="secondary-action compact danger-action" type="button" data-action="remove-recipe-line" data-index="${index}">Убрать строку</button>`:''}</fieldset>`; }
+function recipeVersionDetailPanel() { const d=recipesState.selectedVersionDetail; if (!d) return ''; const v=d.version; return `<section class="card data-card"><p class="card-kicker">Состав</p><h2>Версия №${v.version_number}</h2><p><strong>${escapeHtml(v.title || 'Без заголовка')}</strong> · ${versionStatusLabel(v.status)} · ${batchLabel(v.target_batch_size_value, v.target_batch_size_unit)}</p>${d.ingredients.length===0?'<p>В этой версии пока нет строк состава.</p>':`<div class="table-wrap"><table><thead><tr><th>№</th><th>Компонент</th><th>Количество</th><th>Фаза</th><th>Заметки</th></tr></thead><tbody>${d.ingredients.slice().sort((a,b)=>a.position-b.position).map((line)=>`<tr><td>${line.position}</td><td>${escapeHtml(ingredientName(line.ingredient_id))}</td><td>${escapeHtml(line.amount_value)} ${unitLabel(line.amount_unit)}</td><td>${escapeHtml(line.phase || 'Не указана')}</td><td>${escapeHtml(line.notes || 'Без заметок')}</td></tr>`).join('')}</tbody></table></div>`}${calculationPanel()}</section>`; }
+function calculationPanel() { const c=recipesState.calculation; return `<div class="calculation-panel"><h3>Расчет</h3><form data-form="recipe-calculation" class="inline-form"><label>Целевой размер партии<input name="target_batch_size_value" inputmode="decimal" value="${escapeHtml(recipesState.calculationTargetValue)}" placeholder="Оставьте пустым для размера версии" /></label><label>Единица<select name="target_batch_size_unit"><option value="g" ${recipesState.calculationTargetUnit==='g'?'selected':''}>г</option><option value="ml" ${recipesState.calculationTargetUnit==='ml'?'selected':''}>мл</option></select></label><button class="primary-action" type="submit">Рассчитать</button></form>${calculationStatus==='loading'?'<p>Считаем на backend…</p>':''}${calculationError?`<p class="page-message error-message">${calculationError}</p>`:''}${c?calculationResult(c):'<p class="next-step">Нажмите «Рассчитать», чтобы получить строки, итоги и предупреждения из backend.</p>'}</div>`; }
+function calculationResult(c: RecipeCalculationResult) { return `<div class="calculation-result"><p><strong>Можно рассчитать:</strong> ${c.can_calculate?'да':'нет'} · <strong>Сумма процентов:</strong> ${escapeHtml(c.percent_total)}%</p>${c.issues.length?`<h4>${c.issues.some((i)=>i.severity==='error')?'Нужно исправить':'Предупреждения'}</h4><ul class="issue-list">${c.issues.map((i)=>`<li class="${i.severity==='error'?'danger-text':'warning-text'}">${escapeHtml(i.message)}${i.next_action?` <small>${escapeHtml(i.next_action)}</small>`:''}</li>`).join('')}</ul>`:''}<h4>Состав</h4>${c.lines.length?`<div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Исходно</th><th>Рассчитано</th><th>Фаза</th><th>Комментарий</th></tr></thead><tbody>${c.lines.map((l)=>`<tr><td>${escapeHtml(l.ingredient_name)}</td><td>${escapeHtml(l.source_amount_value)} ${unitLabel(l.source_amount_unit)}</td><td>${l.calculated_amount_value?`${escapeHtml(l.calculated_amount_value)} ${unitLabel(l.calculated_amount_unit || '')}`:'—'}</td><td>${escapeHtml(l.phase || 'Не указана')}</td><td>${escapeHtml(l.calculation_note || '')}</td></tr>`).join('')}</tbody></table></div>`:'<p>Backend не вернул расчетных строк.</p>'}<h4>Итого по единицам</h4>${c.totals_by_unit.length?`<ul>${c.totals_by_unit.map((t)=>`<li>${escapeHtml(t.total_value)} ${unitLabel(t.unit)}</li>`).join('')}</ul>`:'<p>Итоги пока не рассчитаны.</p>'}</div>`; }
+
 function emptyIngredientForm(): IngredientFormState { return { id: null, name: '', category: 'other', default_unit: 'g', density_g_per_ml: null, notes: '', inci_name: '', supplier_hint: '', allergen_note: '', usage_note: '' }; }
 function categoryLabel(category: string) { return ({ oil: 'Масло', butter: 'Баттер', wax: 'Воск', emulsifier: 'Эмульгатор', humectant: 'Увлажнитель', active: 'Актив', preservative: 'Консервант', fragrance: 'Отдушка', essential_oil: 'Эфирное масло', colorant: 'Краситель', water_phase: 'Водная фаза', additive: 'Добавка', other: 'Другое' } as Record<string, string>)[category] ?? category; }
 function categoryOptions(current: string) { return ['oil','butter','wax','emulsifier','humectant','active','preservative','fragrance','essential_oil','colorant','water_phase','additive','other'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${categoryLabel(value)}</option>`).join(''); }
 function unitOptions(current: string) { return ['g','ml','percent','pcs'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
 function ingredientPayloadFromForm(form: HTMLFormElement): IngredientPayload { const data = new FormData(form); const density = String(data.get('density_g_per_ml') ?? '').trim(); return { name: String(data.get('name') ?? '').trim(), category: String(data.get('category') ?? 'other'), default_unit: String(data.get('default_unit') ?? 'g'), density_g_per_ml: density || null, notes: String(data.get('notes') ?? '').trim(), inci_name: String(data.get('inci_name') ?? '').trim(), supplier_hint: String(data.get('supplier_hint') ?? '').trim(), allergen_note: String(data.get('allergen_note') ?? '').trim(), usage_note: String(data.get('usage_note') ?? '').trim() }; }
+
+function emptyRecipeTemplateForm(): RecipeTemplatePayload { return { name: '', product_type: '', description: '', notes: '' }; }
+function emptyRecipeLine(): RecipeLineForm { return { ingredient_id: '', amount_value: '', amount_unit: 'percent', phase: '', notes: '' }; }
+function emptyRecipeVersionForm(): RecipeVersionForm { return { title: '', status: 'draft', target_batch_size_value: '', target_batch_size_unit: 'g', notes: '', change_note: '', ingredients: [emptyRecipeLine()] }; }
+function versionStatusLabel(status: string) { return ({ draft: 'Черновик', active: 'Активная', archived: 'Архивная' } as Record<string,string>)[status] ?? status; }
+function versionStatusClass(status: string) { return status === 'active' ? 'success' : status === 'archived' ? 'muted' : 'warning'; }
+function batchLabel(value: string | null, unit: string | null) { return value && unit ? `${escapeHtml(value)} ${unitLabel(unit)}` : 'Не указан'; }
+function formatDateTime(value: string) { return value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : 'Не указана'; }
+function ingredientName(id: number) { return recipesState.ingredients.find((i)=>i.id===id)?.name ?? 'Компонент'; }
+function addRecipeLine() { saveVersionFormFromDom(); recipesState.versionForm.ingredients.push(emptyRecipeLine()); render(); }
+function removeRecipeLine(index: number) { saveVersionFormFromDom(); recipesState.versionForm.ingredients.splice(index, 1); if (recipesState.versionForm.ingredients.length === 0) recipesState.versionForm.ingredients.push(emptyRecipeLine()); render(); }
+function saveVersionFormFromDom() { const form=document.querySelector<HTMLFormElement>('[data-form="recipe-version"]'); if (!form) return; recipesState.versionForm = recipeVersionFormFromForm(form); }
+function recipeTemplatePayloadFromForm(form: HTMLFormElement): RecipeTemplatePayload { const data = new FormData(form); return { name: String(data.get('name') ?? '').trim(), product_type: String(data.get('product_type') ?? '').trim(), description: String(data.get('description') ?? '').trim(), notes: String(data.get('notes') ?? '').trim() }; }
+function recipeVersionFormFromForm(form: HTMLFormElement): RecipeVersionForm { const data = new FormData(form); const ingredients = recipesState.versionForm.ingredients.map((_, index) => ({ ingredient_id: String(data.get(`ingredient_id_${index}`) ?? ''), amount_value: String(data.get(`amount_value_${index}`) ?? '').trim(), amount_unit: String(data.get(`amount_unit_${index}`) ?? 'percent'), phase: String(data.get(`phase_${index}`) ?? '').trim(), notes: String(data.get(`notes_${index}`) ?? '').trim() })); return { title: String(data.get('title') ?? '').trim(), status: String(data.get('status') ?? 'draft'), target_batch_size_value: String(data.get('target_batch_size_value') ?? '').trim(), target_batch_size_unit: String(data.get('target_batch_size_unit') ?? 'g'), notes: String(data.get('notes') ?? '').trim(), change_note: String(data.get('change_note') ?? '').trim(), ingredients }; }
+function recipeVersionPayload(form: RecipeVersionForm) { return { title: form.title, status: form.status, target_batch_size_value: form.target_batch_size_value || null, target_batch_size_unit: form.target_batch_size_value ? form.target_batch_size_unit : null, notes: form.notes, change_note: form.change_note, ingredients: form.ingredients.filter((line)=>line.ingredient_id && line.amount_value).map((line, index)=>({ ingredient_id: Number(line.ingredient_id), position: index + 1, phase: line.phase, amount_value: line.amount_value, amount_unit: line.amount_unit, notes: line.notes })) }; }
+
 function startEditIngredient(id: number) { const item = ingredientsState.items.find((ingredient) => ingredient.id === id); if (!item) return; ingredientsState.formMode = 'edit'; ingredientsState.form = { id: item.id, name: item.name, category: item.category, default_unit: item.default_unit, density_g_per_ml: item.density_g_per_ml, notes: item.notes, inci_name: item.inci_name, supplier_hint: item.supplier_hint, allergen_note: item.allergen_note, usage_note: item.usage_note }; ingredientsMessage = ''; render(); }
 
 function apiGet<T>(url: string): Promise<T> { return fetch(url).then((response) => { if (!response.ok) throw new Error('API request failed'); return response.json() as Promise<T>; }); }
@@ -260,10 +371,36 @@ function getIngredients() { return apiGet<{ ingredients: Ingredient[] }>('/api/i
 function createIngredient(payload: IngredientPayload) { return apiSend<Ingredient>('/api/ingredients', 'POST', payload); }
 function updateIngredient(id: number, payload: IngredientPayload) { return apiSend<Ingredient>(`/api/ingredients/${id}`, 'PUT', payload); }
 function deactivateIngredientRequest(id: number) { return apiSend<Ingredient>(`/api/ingredients/${id}/deactivate`, 'POST'); }
+
+function getRecipeTemplates() { return apiGet<{ recipe_templates: RecipeTemplate[] }>('/api/recipe-templates'); }
+function createRecipeTemplate(payload: RecipeTemplatePayload) { return apiSend<RecipeTemplate>('/api/recipe-templates', 'POST', payload); }
+function getRecipeTemplate(id: number) { return apiGet<RecipeTemplate>(`/api/recipe-templates/${id}`); }
+function getRecipeVersions(templateId: number) { return apiGet<{ recipe_versions: RecipeVersion[] }>(`/api/recipe-templates/${templateId}/versions`); }
+function createRecipeVersion(templateId: number, payload: ReturnType<typeof recipeVersionPayload>) { return apiSend<RecipeVersionDetail>(`/api/recipe-templates/${templateId}/versions`, 'POST', payload); }
+function getRecipeVersionDetail(versionId: number) { return apiGet<RecipeVersionDetail>(`/api/recipe-versions/${versionId}`); }
+function getRecipeCalculation(versionId: number, value?: string, unit?: string) { const params = new URLSearchParams(); if (value) { params.set('target_batch_size_value', value); params.set('target_batch_size_unit', unit || 'g'); } const query = params.toString(); return apiGet<RecipeCalculationResult>(`/api/recipe-versions/${versionId}/calculation${query ? `?${query}` : ''}`); }
+
 function getInventoryOverview() { return apiGet<InventoryOverview>('/api/inventory/overview'); }
 function getIngredientLotBalances() { return apiGet<{ ingredient_lot_balances: IngredientLotBalance[] }>('/api/inventory/ingredient-lot-balances'); }
 function getPackagingBalances() { return apiGet<{ packaging_balances: PackagingBalance[] }>('/api/inventory/packaging-balances'); }
 
+
+
+function loadRecipes(force = false) {
+  if (!force && (recipesStatus === 'loading' || recipesStatus === 'ready')) return;
+  recipesStatus = 'loading'; recipesError = ''; render();
+  Promise.all([getRecipeTemplates(), getIngredients()])
+    .then(([templates, ingredients]) => { recipesState.templates = templates.recipe_templates; recipesState.ingredients = ingredients.ingredients.filter((i)=>i.is_active); recipesStatus = 'ready'; render(); })
+    .catch(() => { recipesStatus = 'error'; recipesError = 'Не получилось получить рецепты из локального API.'; render(); });
+}
+function openRecipeTemplate(id: number) {
+  recipesError = ''; recipesMessage = '';
+  Promise.all([getRecipeTemplate(id), getRecipeVersions(id)]).then(([template, versions]) => { recipesState.selectedTemplate = template; recipesState.versions = versions.recipe_versions; recipesState.selectedVersionDetail = null; recipesState.calculation = null; calculationStatus = 'idle'; render(); }).catch(() => { recipesError = 'Не удалось открыть рецепт. Попробуйте обновить страницу.'; render(); });
+}
+function openRecipeVersion(id: number) { recipesError = ''; calculationError = ''; getRecipeVersionDetail(id).then((detail)=>{ recipesState.selectedVersionDetail = detail; recipesState.calculation = null; recipesState.calculationTargetValue = detail.version.target_batch_size_value ?? ''; recipesState.calculationTargetUnit = detail.version.target_batch_size_unit === 'ml' ? 'ml' : 'g'; calculationStatus = 'idle'; render(); }).catch(()=>{ recipesError = 'Не удалось открыть версию рецепта.'; render(); }); }
+function submitRecipeTemplateForm(event: SubmitEvent) { event.preventDefault(); const payload = recipeTemplatePayloadFromForm(event.currentTarget as HTMLFormElement); createRecipeTemplate(payload).then((template)=>{ recipesMessage = 'Рецепт создан.'; recipesError = ''; recipesState.templateForm = emptyRecipeTemplateForm(); return getRecipeTemplates().then((response)=>({template, response})); }).then(({template, response})=>{ recipesState.templates = response.recipe_templates; recipesStatus = 'ready'; openRecipeTemplate(template.id); }).catch(()=>{ recipesMessage = ''; recipesError = 'Не удалось создать рецепт. Проверьте название и попробуйте еще раз.'; recipesStatus = 'ready'; render(); }); }
+function submitRecipeVersionForm(event: SubmitEvent) { event.preventDefault(); if (!recipesState.selectedTemplate) return; const form = recipeVersionFormFromForm(event.currentTarget as HTMLFormElement); recipesState.versionForm = form; createRecipeVersion(recipesState.selectedTemplate.id, recipeVersionPayload(form)).then((detail)=>{ recipesMessage = 'Новая версия рецепта создана. Исторические версии не изменялись.'; recipesError = ''; recipesState.versionForm = emptyRecipeVersionForm(); recipesState.selectedVersionDetail = detail; return getRecipeVersions(recipesState.selectedTemplate!.id); }).then((response)=>{ recipesState.versions = response.recipe_versions; recipesState.calculation = null; calculationStatus = 'idle'; render(); }).catch(()=>{ recipesMessage = ''; recipesError = 'Не удалось создать версию. Проверьте строки состава и попробуйте еще раз.'; render(); }); }
+function submitCalculationForm(event: SubmitEvent) { event.preventDefault(); const detail = recipesState.selectedVersionDetail; if (!detail) return; const data = new FormData(event.currentTarget as HTMLFormElement); const value = String(data.get('target_batch_size_value') ?? '').trim(); const unit = String(data.get('target_batch_size_unit') ?? 'g'); recipesState.calculationTargetValue = value; recipesState.calculationTargetUnit = unit; calculationStatus = 'loading'; calculationError = ''; render(); getRecipeCalculation(detail.version.id, value, unit).then((result)=>{ recipesState.calculation = result; calculationStatus = 'ready'; render(); }).catch(()=>{ calculationStatus = 'error'; calculationError = 'Не удалось выполнить расчет. Проверьте размер партии и попробуйте еще раз.'; render(); }); }
 
 function loadIngredients(force = false) {
   if (!force && (ingredientsStatus === 'loading' || ingredientsStatus === 'ready')) return;
@@ -293,9 +430,10 @@ function loadInventory(force = false) {
 function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!response.ok) throw new Error('Onboarding is unavailable'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = ''; render(); }).catch(() => { onboardingStatus = 'unavailable'; render(); }); }
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
-window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); render(); });
+window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Рецепты') loadRecipes(); render(); });
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
 if (activeSection === 'Склад') loadInventory();
 if (activeSection === 'Компоненты') loadIngredients();
+if (activeSection === 'Рецепты') loadRecipes();
