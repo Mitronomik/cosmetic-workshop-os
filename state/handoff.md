@@ -172,3 +172,14 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - The calculation panel displays backend-provided lines, percent total, totals by unit, and issues; frontend does not derive recipe amounts.
 - Existing versions are view-only. The UI supports creating new templates and new versions only.
 - PR19 intentionally excludes historical version editing/deletion, client recipes, clients, orders, production, stock readiness, cost/tax/margin, alerts, purchase suggestions, import/export, migrations, and new tables.
+
+## PR20 notes
+- Ingredient lot UI route: `/ingredient-lots` (navigation label `Партии`).
+- Frontend ingredient lot API usage:
+  - `GET /api/ingredient-lots`
+  - `POST /api/ingredient-lots`
+  - `PUT /api/ingredient-lots/{lot_id}`
+  - `POST /api/ingredient-lots/{lot_id}/deactivate`
+  - `GET /api/ingredients` for active component dropdown options.
+- The UI intentionally edits only lot metadata and explains that quantity is added through separate stock movements.
+- No stock movement UI, manual lot balance fields, frontend balance derivation, backend migrations, new tables, production, purchase list, alerts, client/order UI, cloud, mobile, OCR, auth, or roles were added.

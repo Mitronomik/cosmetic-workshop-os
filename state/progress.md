@@ -110,3 +110,9 @@ PR16 - Ingredient catalog UI foundation
 - Added recipe workspace UI with empty/loading/error states, template creation, version creation with ingredient lines populated from active ingredients, version detail, and Russian calculation panels for backend lines/issues/totals.
 - Preserved historical-version safety: existing recipe versions are not edited, deleted, or mutated from the UI.
 - No backend migrations, tables, client recipes, orders, production, cost calculation, stock readiness, import/export, cloud, mobile, OCR, auth, or roles were added.
+
+## PR20 — Ingredient lots UI foundation
+- Added `Партии` navigation and `/ingredient-lots` route in the frontend shell.
+- Added frontend API usage for `GET/POST/PUT /api/ingredient-lots` and `POST /api/ingredient-lots/{lot_id}/deactivate`, plus existing `GET /api/ingredients` for active component selection.
+- Added ingredient lot loading, empty, error, create, edit, and soft-deactivate UI states with Russian user-facing labels and expiration status labels.
+- Preserved stock boundary: no quantity/current balance input, no stock movement form, no frontend balance calculation, no migrations, and no backend changes.
