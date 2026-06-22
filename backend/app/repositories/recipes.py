@@ -76,6 +76,31 @@ class RecipeRepository:
             rows = c.execute("SELECT * FROM recipe_ingredients WHERE recipe_version_id=? ORDER BY position, id", (version_id,)).fetchall()
         return RecipeVersionDetail(version=_version(row), ingredients=[_ingredient(r) for r in rows])
 
+    def get_version_calculation_source(self, version_id: int):
+        with session(self.config) as c:
+            version_row = c.execute(
+                """
+                SELECT rv.*, rt.name AS recipe_name
+                FROM recipe_versions rv
+                JOIN recipe_templates rt ON rt.id = rv.recipe_template_id
+                WHERE rv.id=?
+                """,
+                (version_id,),
+            ).fetchone()
+            if version_row is None:
+                raise RecipeVersionNotFoundError(f"Recipe version {version_id} was not found.")
+            line_rows = c.execute(
+                """
+                SELECT ri.*, i.name AS ingredient_name
+                FROM recipe_ingredients ri
+                JOIN ingredients i ON i.id = ri.ingredient_id
+                WHERE ri.recipe_version_id=?
+                ORDER BY ri.position, ri.id
+                """,
+                (version_id,),
+            ).fetchall()
+        return version_row, line_rows
+
 
 def _template(r):
     return RecipeTemplate(r["id"], r["name"], r["product_type"], r["description"], r["notes"], bool(r["is_active"]), r["created_at"], r["updated_at"])

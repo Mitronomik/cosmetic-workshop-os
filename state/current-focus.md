@@ -1,12 +1,15 @@
 # Current Focus
 
-Current task: PR17 - Recipe models backend foundation.
+## PR18 — Recipe version calculation service
 
-## Allowed scope
-Backend-only recipe model foundation: `recipe_templates`, `recipe_versions`, and `recipe_ingredients` migration; domain validation; repository/service/API basics; transactional audit events for recipe template create/deactivate and recipe version create; backend tests; smoke notes; and state documentation updates.
+PR18 adds a backend-only, read-only recipe version calculation service.
 
-## Do not touch
-Frontend recipe UI, recipe calculation service, percent-sum validation, recipe cost calculation, client recipes, clients, orders, production, stock reservation/write-off, purchase suggestions, alerts engine, imports/exports, launcher behavior changes, final app packaging/installers, Docker, cloud/mobile access, OCR, auth, or roles.
+Implemented scope:
+- load a recipe version with its template name and ingredient rows in deterministic position/id order;
+- calculate fixed `g`, `ml`, and `pcs` lines without proportional scaling;
+- calculate percent lines from an explicit `g`/`ml` target batch size or from the version's stored `g`/`ml` target batch size;
+- report Decimal-backed `percent_total` and human-readable issues for missing, unsupported `pcs`, or below/above 100% percent totals;
+- expose `GET /api/recipe-versions/{version_id}/calculation` with optional `target_batch_size_value` and `target_batch_size_unit` query parameters.
 
-## Acceptance
-Recipe templates can be created/read/listed/deactivated, recipe versions can be created for active templates, version numbers increment per template, version detail returns ingredient lines, ingredient lines reference existing active ingredients, invalid ingredient lines roll back version creation, audit failures roll back create/deactivate operations, test-only table guards allow only the new recipe tables, and no calculation service, recipe UI, clients, orders, or production are added.
+Intentional non-scope:
+- no migrations, tables, stored calculation results, cost/tax/margin calculation, stock readiness, production, client recipes, orders, import/export, or frontend UI.

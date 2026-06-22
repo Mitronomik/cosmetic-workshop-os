@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.domain.errors import DomainValidationError
 from app.domain.recipes import RecipeIngredientDraft, RecipeTemplateDraft, RecipeVersionDraft
@@ -6,6 +6,7 @@ from app.models.recipe import RecipeIngredient, RecipeTemplate, RecipeVersion, R
 from app.repositories.ingredients import IngredientNotFoundError
 from app.repositories.recipes import RecipeTemplateNotFoundError, RecipeVersionNotFoundError
 from app.schemas.recipes import *
+from app.services.recipe_calculations import RecipeCalculationService
 from app.services.recipes import RecipeIngredientInactiveError, RecipeService, RecipeTemplateInactiveError
 
 router = APIRouter(tags=["recipes"])
@@ -46,6 +47,26 @@ def create_version(template_id: int, payload: RecipeVersionCreateRequest):
 def list_versions(template_id: int):
     return RecipeVersionsResponse(recipe_versions=[_version(v) for v in RecipeService().list_versions_for_template(template_id)])
 
+
+@router.get("/recipe-versions/{version_id}/calculation", response_model=RecipeCalculationResultResponse)
+def calculate_recipe_version(
+    version_id: int,
+    target_batch_size_value: str | None = Query(default=None),
+    target_batch_size_unit: UnitCode | None = Query(default=None),
+):
+    try:
+        return _calculation(
+            RecipeCalculationService().calculate_version(
+                version_id,
+                target_batch_size_value=target_batch_size_value,
+                target_batch_size_unit=target_batch_size_unit,
+            )
+        )
+    except DomainValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
+    except RecipeVersionNotFoundError as exc:
+        raise HTTPException(404, detail="Recipe version was not found.") from exc
+
 @router.get("/recipe-versions/{version_id}", response_model=RecipeVersionDetailResponse)
 def get_version_detail(version_id: int):
     try: return _detail(RecipeService().get_version_detail(version_id))
@@ -62,3 +83,21 @@ def _ingredient(i: RecipeIngredient):
 
 def _detail(d: RecipeVersionDetail):
     return RecipeVersionDetailResponse(version=_version(d.version), ingredients=[_ingredient(i) for i in d.ingredients])
+
+
+def _calculation(result):
+    return RecipeCalculationResultResponse(
+        recipe_version_id=result.recipe_version_id,
+        recipe_template_id=result.recipe_template_id,
+        recipe_name=result.recipe_name,
+        version_number=result.version_number,
+        status=result.status,
+        target_batch_size_value=None if result.target_batch_size_value is None else str(result.target_batch_size_value),
+        target_batch_size_unit=result.target_batch_size_unit,
+        percent_total=str(result.percent_total),
+        can_calculate=result.can_calculate,
+        issues=[RecipeCalculationIssueResponse(**issue.__dict__) for issue in result.issues],
+        lines=[RecipeCalculationLineResponse(**{**line.__dict__, "source_amount_value": str(line.source_amount_value), "calculated_amount_value": None if line.calculated_amount_value is None else str(line.calculated_amount_value)}) for line in result.lines],
+        totals_by_unit=[RecipeCalculationTotalResponse(unit=total.unit, total_value=str(total.total_value)) for total in result.totals_by_unit],
+        generated_at=result.generated_at,
+    )

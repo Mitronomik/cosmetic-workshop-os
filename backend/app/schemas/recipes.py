@@ -97,3 +97,45 @@ class RecipeVersionsResponse(BaseModel):
 class RecipeVersionDetailResponse(BaseModel):
     version: RecipeVersionResponse
     ingredients: list[RecipeIngredientResponse]
+
+
+class RecipeCalculationIssueResponse(BaseModel):
+    severity: str
+    code: str
+    field: str | None = None
+    message: str
+    next_action: str | None = None
+
+
+class RecipeCalculationLineResponse(BaseModel):
+    recipe_ingredient_id: int
+    position: int
+    phase: str
+    ingredient_id: int
+    ingredient_name: str
+    source_amount_value: str
+    source_amount_unit: UnitCode
+    calculated_amount_value: str | None
+    calculated_amount_unit: UnitCode | None
+    calculation_note: str
+
+
+class RecipeCalculationTotalResponse(BaseModel):
+    unit: UnitCode
+    total_value: str
+
+
+class RecipeCalculationResultResponse(BaseModel):
+    recipe_version_id: int
+    recipe_template_id: int
+    recipe_name: str
+    version_number: int
+    status: str
+    target_batch_size_value: str | None
+    target_batch_size_unit: UnitCode | None
+    percent_total: str
+    can_calculate: bool
+    issues: list[RecipeCalculationIssueResponse]
+    lines: list[RecipeCalculationLineResponse]
+    totals_by_unit: list[RecipeCalculationTotalResponse]
+    generated_at: str
