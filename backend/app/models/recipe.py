@@ -21,6 +21,8 @@ class RecipeTemplate:
     is_active: bool
     created_at: str
     updated_at: str
+    catalog_category_id: int | None = None
+    catalog_tag_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)

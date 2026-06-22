@@ -1,5 +1,5 @@
 from decimal import Decimal
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.units import UnitCode
 from app.models.recipe import RecipeVersionStatus
@@ -21,6 +21,8 @@ class RecipeTemplateResponse(BaseModel):
     is_active: bool
     created_at: str
     updated_at: str
+    catalog_category_id: int | None = None
+    catalog_tag_ids: list[int] = Field(default_factory=list)
 
 
 class RecipeTemplatesResponse(BaseModel):

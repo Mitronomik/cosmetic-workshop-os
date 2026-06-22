@@ -21,25 +21,29 @@ class RecipeRepository:
         with _scope(self.config, connection) as c:
             cur = c.execute("INSERT INTO recipe_templates (name, product_type, description, notes) VALUES (?, ?, ?, ?)", (draft.name, draft.product_type, draft.description, draft.notes))
             row = c.execute("SELECT * FROM recipe_templates WHERE id=?", (cur.lastrowid,)).fetchone()
-        return _template(row)
+            tag_ids = _template_tag_ids(c, row["id"])
+        return _template(row, tag_ids)
 
     def get_template(self, template_id: int, *, connection: sqlite3.Connection | None = None) -> RecipeTemplate:
         with _scope(self.config, connection) as c:
             row = c.execute("SELECT * FROM recipe_templates WHERE id=?", (template_id,)).fetchone()
+            tag_ids = () if row is None else _template_tag_ids(c, row["id"])
         if row is None: raise RecipeTemplateNotFoundError(f"Recipe template {template_id} was not found.")
-        return _template(row)
+        return _template(row, tag_ids)
 
     def list_templates(self) -> list[RecipeTemplate]:
         with session(self.config) as c:
             rows = c.execute("SELECT * FROM recipe_templates ORDER BY is_active DESC, name, id").fetchall()
-        return [_template(r) for r in rows]
+            tags_by_template = _template_tag_ids_by_template(c, [r["id"] for r in rows])
+        return [_template(r, tags_by_template.get(r["id"], ())) for r in rows]
 
     def deactivate_template(self, template_id: int, *, connection: sqlite3.Connection | None = None) -> RecipeTemplate:
         with _scope(self.config, connection) as c:
             cur = c.execute("UPDATE recipe_templates SET is_active=0, updated_at=CURRENT_TIMESTAMP WHERE id=?", (template_id,))
             if cur.rowcount == 0: raise RecipeTemplateNotFoundError(f"Recipe template {template_id} was not found.")
             row = c.execute("SELECT * FROM recipe_templates WHERE id=?", (template_id,)).fetchone()
-        return _template(row)
+            tag_ids = _template_tag_ids(c, row["id"])
+        return _template(row, tag_ids)
 
     def next_version_number(self, template_id: int, *, connection: sqlite3.Connection | None = None) -> int:
         with _scope(self.config, connection) as c:
@@ -102,8 +106,30 @@ class RecipeRepository:
         return version_row, line_rows
 
 
-def _template(r):
-    return RecipeTemplate(r["id"], r["name"], r["product_type"], r["description"], r["notes"], bool(r["is_active"]), r["created_at"], r["updated_at"])
+def _template(r, tag_ids=()):
+    return RecipeTemplate(r["id"], r["name"], r["product_type"], r["description"], r["notes"], bool(r["is_active"]), r["created_at"], r["updated_at"], r["catalog_category_id"], tuple(tag_ids))
+
+
+def _template_tag_ids(c: sqlite3.Connection, template_id: int) -> tuple[int, ...]:
+    rows = c.execute(
+        "SELECT tag_id FROM recipe_template_catalog_tags WHERE recipe_template_id=? ORDER BY tag_id",
+        (template_id,),
+    ).fetchall()
+    return tuple(int(r["tag_id"]) for r in rows)
+
+
+def _template_tag_ids_by_template(c: sqlite3.Connection, template_ids: list[int]) -> dict[int, tuple[int, ...]]:
+    if not template_ids:
+        return {}
+    placeholders = ",".join("?" for _ in template_ids)
+    rows = c.execute(
+        f"SELECT recipe_template_id, tag_id FROM recipe_template_catalog_tags WHERE recipe_template_id IN ({placeholders}) ORDER BY recipe_template_id, tag_id",
+        template_ids,
+    ).fetchall()
+    result: dict[int, list[int]] = {template_id: [] for template_id in template_ids}
+    for row in rows:
+        result[int(row["recipe_template_id"])].append(int(row["tag_id"]))
+    return {template_id: tuple(tag_ids) for template_id, tag_ids in result.items()}
 
 def _version(r):
     return RecipeVersion(r["id"], r["recipe_template_id"], r["version_number"], RecipeVersionStatus(r["status"]), r["title"], None if r["target_batch_size_value"] is None else Decimal(r["target_batch_size_value"]), None if r["target_batch_size_unit"] is None else UnitCode(r["target_batch_size_unit"]), r["notes"], r["change_note"], r["created_from_version_id"], r["created_at"], r["updated_at"])
