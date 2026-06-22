@@ -123,3 +123,11 @@ PR16 - Ingredient catalog UI foundation
 - Added lot selection, backend-derived read-only current balance, create movement form, movement history table, and loading/empty/error states.
 - Preserved append-only stock accounting: no edit/delete movement UI, no manual current balance field, no frontend balance derivation, no backend changes, no migrations, and no new tables.
 - PR21 intentionally excludes packaging stock movement UI, production, purchase list, alerts, recipe/client/order changes, import/export, cloud, mobile, OCR, auth, and roles.
+
+## PR22 — Clients backend foundation
+- Added `clients` migration with contact, address, birthday, note, active-status, and timestamp fields.
+- Added client validation for required normalized full name, normalized optional strings, email shape, optional non-future birthday, and soft deactivation.
+- Added backend client create/read/list/full-update/deactivate service and `/api/clients` endpoints with transactional `client.created`, `client.updated`, and `client.deactivated` audit logging.
+- Updated test-only table guards so `clients` is current while future client recipe, wishes/feedback, order, production, import, and backup tables remain forbidden.
+- Added backend tests for table scope, client behavior, validation, transactional rollback on audit failure, and API endpoint coverage when the local TestClient dependency set is available.
+- No frontend application code or client UI was added.
