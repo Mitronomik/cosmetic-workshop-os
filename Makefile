@@ -1,7 +1,11 @@
-.PHONY: setup dev run-local test build test-backend build-frontend package-macos smoke
+.PHONY: setup setup-backend setup-frontend dev run-local test build test-backend build-frontend package-macos smoke
 
-setup:
+setup: setup-backend setup-frontend
+
+setup-backend:
 	python3 -m pip install -e "backend[test]"
+
+setup-frontend:
 	cd frontend && npm install
 
 dev:
@@ -13,8 +17,8 @@ run-local:
 
 test: test-backend
 
-test-backend:
-	python3 -m pytest
+test-backend: setup-backend
+	python3 -m pytest backend/app/tests launcher/tests
 
 build: build-frontend
 
