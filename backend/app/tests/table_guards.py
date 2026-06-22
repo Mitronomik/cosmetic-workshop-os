@@ -7,13 +7,14 @@ CURRENT_ALLOWED_TABLES = {
     "stock_movements",
     "packaging_items",
     "packaging_stock_movements",
+    "recipe_templates",
+    "recipe_versions",
+    "recipe_ingredients",
     "sqlite_sequence",
 }
 
 FORBIDDEN_FUTURE_TABLES = {
     "recipes",
-    "recipe_versions",
-    "recipe_ingredients",
     "client_recipes",
     "client_recipe_ingredients",
     "clients",

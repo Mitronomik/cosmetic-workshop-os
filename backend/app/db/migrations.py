@@ -10,6 +10,7 @@ MIGRATION_MODULES = [
     "app.migrations.versions.0004_stock_movements",
     "app.migrations.versions.0005_packaging_items",
     "app.migrations.versions.0006_packaging_stock_movements",
+    "app.migrations.versions.0007_recipes",
 ]
 MIGRATION_TABLE = "schema_migrations"
 

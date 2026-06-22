@@ -98,3 +98,6 @@ PR16 - Ingredient catalog UI foundation
 - PR16 follow-up aligned frontend ingredient category options with backend IngredientCategory codes and labels, and clears stale ingredient form errors after successful saves/deactivation.
 
 - PR16 follow-up aligned frontend ingredient unit options with backend UnitCode values, including percent (`%`).
+
+
+- PR17 backend recipe model foundation: added `RecipeTemplate -> RecipeVersion -> RecipeIngredient` tables, domain validation, service/repository/API endpoints, and transactional audit events for create/deactivate operations. No calculation service, percent-sum validation, recipe UI, clients, orders, or production were added.

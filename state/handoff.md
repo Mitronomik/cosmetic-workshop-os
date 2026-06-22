@@ -40,7 +40,7 @@ PR13 adds backend packaging/tare stock accounting through immutable packaging st
 - Frontend onboarding fetches `/api/onboarding`; if the frontend is served separately without the backend proxy/runtime, it intentionally falls back to a non-technical unavailable state.
 
 ## Next recommended task
-Proceed to the next roadmap-scoped task after PR16 review/merge. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
+PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> RecipeVersion -> RecipeIngredient. Proceed to PR17 review/merge, then the next roadmap-scoped task. Do not add FEFO allocation, automatic production write-off, packaging inventory/movements, recipes, clients, orders, production, imports, exports, backup UI, restore UI, cloud, mobile, OCR, auth or roles until explicitly scoped by the next task.
 
 ## Commands to rerun during handoff
 - `git status --short`
@@ -143,3 +143,10 @@ Proceed to the next roadmap-scoped task after PR16 review/merge. Do not add FEFO
 - PR16 follow-up aligned frontend ingredient category options with backend IngredientCategory codes and labels, and clears stale ingredient form errors after successful saves/deactivation.
 
 - PR16 follow-up aligned frontend ingredient unit options with backend UnitCode values, including percent (`%`).
+
+
+## PR17 notes
+- Recipe endpoints: `POST/GET /api/recipe-templates`, `GET /api/recipe-templates/{template_id}`, `POST /api/recipe-templates/{template_id}/deactivate`, `POST/GET /api/recipe-templates/{template_id}/versions`, `GET /api/recipe-versions/{version_id}`.
+- Recipe data model is `RecipeTemplate -> RecipeVersion -> RecipeIngredient`; version numbers are generated per template.
+- Recipe version creation with ingredient lines is transactional and audited.
+- PR17 intentionally excludes recipe calculations, percent-sum validation, recipe UI, client recipes, clients, orders, production, stock reservation/write-off, imports, cloud, mobile, OCR, auth, and roles.
