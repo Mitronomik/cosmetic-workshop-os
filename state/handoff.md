@@ -213,3 +213,11 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Client recipe detail reads persisted snapshot rows, not live `recipe_ingredients`, so later source recipe/version changes do not silently mutate existing client formulas.
 - `client_recipe.created` and `client_recipe.deactivated` audit events are written transactionally with the business writes.
 - PR23 intentionally adds no frontend UI, orders, production behavior, stock reservation/write-off, imports/exports, cloud, mobile, OCR, auth, or roles.
+
+## PR24 — Catalog categories and tags backend foundation
+- Added backend-only user-managed catalog categories and tags scoped to ingredients/components, packaging/tare, and recipe templates.
+- Existing system classifications remain intact: `IngredientCategory`, `PackagingKind`, and `recipe_templates.product_type` are not removed, replaced, or reinterpreted.
+- Catalog categories/tags are additional organization metadata with nullable category assignment and separate scoped tag bindings.
+- Writes are service-layer transactional with audit actions for create/update/archive and assignment updates.
+- Full frontend catalog UI remains a follow-up; no technical admin panel was added.
+- No production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.

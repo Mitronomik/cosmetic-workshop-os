@@ -17,7 +17,9 @@ class PackagingItemRepository:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config or get_database_config()
 
-    def create(self, draft: PackagingItemDraft, *, connection: sqlite3.Connection | None = None) -> PackagingItem:
+    def create(
+        self, draft: PackagingItemDraft, *, connection: sqlite3.Connection | None = None
+    ) -> PackagingItem:
         with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 """
@@ -28,22 +30,46 @@ class PackagingItemRepository:
                 """,
                 _draft_values(draft),
             )
-            row = connection.execute("SELECT * FROM packaging_items WHERE id = ?", (cursor.lastrowid,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM packaging_items WHERE id = ?", (cursor.lastrowid,)
+            ).fetchone()
         return _row_to_packaging_item(row)
 
     def get_by_id(self, packaging_item_id: int) -> PackagingItem:
         with session(self.config) as connection:
-            row = connection.execute("SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)
+            ).fetchone()
         if row is None:
-            raise PackagingItemNotFoundError(f"Packaging item {packaging_item_id} was not found.")
+            raise PackagingItemNotFoundError(
+                f"Packaging item {packaging_item_id} was not found."
+            )
+        return _row_to_packaging_item(row)
+
+    def get_by_id_for_update(
+        self, item_id: int, *, connection: sqlite3.Connection
+    ) -> object:
+        row = connection.execute(
+            "SELECT * FROM packaging_items WHERE id = ?", (item_id,)
+        ).fetchone()
+        if row is None:
+            raise PackagingItemNotFoundError(f"Item {item_id} was not found.")
         return _row_to_packaging_item(row)
 
     def list_active(self) -> list[PackagingItem]:
         with session(self.config) as connection:
-            rows = connection.execute("SELECT * FROM packaging_items WHERE is_active = 1 ORDER BY name, id").fetchall()
+            rows = connection.execute(
+                "SELECT * FROM packaging_items WHERE is_active = 1 ORDER BY name, id"
+            ).fetchall()
         return [_row_to_packaging_item(row) for row in rows]
 
-    def update_basic(self, packaging_item_id: int, draft: PackagingItemDraft, *, connection: sqlite3.Connection | None = None) -> PackagingItem:
+    def update_basic(
+        self,
+        packaging_item_id: int,
+        draft: PackagingItemDraft,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> PackagingItem:
         with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 """
@@ -55,19 +81,29 @@ class PackagingItemRepository:
                 (*_draft_values(draft), packaging_item_id),
             )
             if cursor.rowcount == 0:
-                raise PackagingItemNotFoundError(f"Packaging item {packaging_item_id} was not found.")
-            row = connection.execute("SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)).fetchone()
+                raise PackagingItemNotFoundError(
+                    f"Packaging item {packaging_item_id} was not found."
+                )
+            row = connection.execute(
+                "SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)
+            ).fetchone()
         return _row_to_packaging_item(row)
 
-    def deactivate(self, packaging_item_id: int, *, connection: sqlite3.Connection | None = None) -> PackagingItem:
+    def deactivate(
+        self, packaging_item_id: int, *, connection: sqlite3.Connection | None = None
+    ) -> PackagingItem:
         with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 "UPDATE packaging_items SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (packaging_item_id,),
             )
             if cursor.rowcount == 0:
-                raise PackagingItemNotFoundError(f"Packaging item {packaging_item_id} was not found.")
-            row = connection.execute("SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)).fetchone()
+                raise PackagingItemNotFoundError(
+                    f"Packaging item {packaging_item_id} was not found."
+                )
+            row = connection.execute(
+                "SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)
+            ).fetchone()
         return _row_to_packaging_item(row)
 
 
@@ -91,8 +127,12 @@ def _row_to_packaging_item(row) -> PackagingItem:
         name=row["name"],
         kind=PackagingKind(row["kind"]),
         unit=UnitCode(row["unit"]),
-        capacity_value=None if row["capacity_value"] is None else Decimal(row["capacity_value"]),
-        capacity_unit=None if row["capacity_unit"] is None else UnitCode(row["capacity_unit"]),
+        capacity_value=(
+            None if row["capacity_value"] is None else Decimal(row["capacity_value"])
+        ),
+        capacity_unit=(
+            None if row["capacity_unit"] is None else UnitCode(row["capacity_unit"])
+        ),
         material=row["material"],
         supplier_hint=row["supplier_hint"],
         unit_cost=None if row["unit_cost"] is None else Decimal(row["unit_cost"]),

@@ -13,6 +13,11 @@ CURRENT_ALLOWED_TABLES = {
     "clients",
     "client_recipes",
     "client_recipe_ingredients",
+    "catalog_categories",
+    "catalog_tags",
+    "ingredient_catalog_tags",
+    "packaging_item_catalog_tags",
+    "recipe_template_catalog_tags",
     "sqlite_sequence",
 }
 

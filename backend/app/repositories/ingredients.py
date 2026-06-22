@@ -18,7 +18,9 @@ class IngredientRepository:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config or get_database_config()
 
-    def create(self, draft: IngredientDraft, *, connection: sqlite3.Connection | None = None) -> Ingredient:
+    def create(
+        self, draft: IngredientDraft, *, connection: sqlite3.Connection | None = None
+    ) -> Ingredient:
         with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 """
@@ -40,14 +42,28 @@ class IngredientRepository:
                     draft.usage_note,
                 ),
             )
-            row = connection.execute("SELECT * FROM ingredients WHERE id = ?", (cursor.lastrowid,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM ingredients WHERE id = ?", (cursor.lastrowid,)
+            ).fetchone()
         return _row_to_ingredient(row)
 
     def get_by_id(self, ingredient_id: int) -> Ingredient:
         with session(self.config) as connection:
-            row = connection.execute("SELECT * FROM ingredients WHERE id = ?", (ingredient_id,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM ingredients WHERE id = ?", (ingredient_id,)
+            ).fetchone()
         if row is None:
             raise IngredientNotFoundError(f"Ingredient {ingredient_id} was not found.")
+        return _row_to_ingredient(row)
+
+    def get_by_id_for_update(
+        self, item_id: int, *, connection: sqlite3.Connection
+    ) -> object:
+        row = connection.execute(
+            "SELECT * FROM ingredients WHERE id = ?", (item_id,)
+        ).fetchone()
+        if row is None:
+            raise IngredientNotFoundError(f"Item {item_id} was not found.")
         return _row_to_ingredient(row)
 
     def list_active(self) -> list[Ingredient]:
@@ -57,7 +73,13 @@ class IngredientRepository:
             ).fetchall()
         return [_row_to_ingredient(row) for row in rows]
 
-    def update_basic(self, ingredient_id: int, draft: IngredientDraft, *, connection: sqlite3.Connection | None = None) -> Ingredient:
+    def update_basic(
+        self,
+        ingredient_id: int,
+        draft: IngredientDraft,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> Ingredient:
         with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 """
@@ -81,19 +103,29 @@ class IngredientRepository:
                 ),
             )
             if cursor.rowcount == 0:
-                raise IngredientNotFoundError(f"Ingredient {ingredient_id} was not found.")
-            row = connection.execute("SELECT * FROM ingredients WHERE id = ?", (ingredient_id,)).fetchone()
+                raise IngredientNotFoundError(
+                    f"Ingredient {ingredient_id} was not found."
+                )
+            row = connection.execute(
+                "SELECT * FROM ingredients WHERE id = ?", (ingredient_id,)
+            ).fetchone()
         return _row_to_ingredient(row)
 
-    def deactivate(self, ingredient_id: int, *, connection: sqlite3.Connection | None = None) -> Ingredient:
+    def deactivate(
+        self, ingredient_id: int, *, connection: sqlite3.Connection | None = None
+    ) -> Ingredient:
         with _connection_scope(self.config, connection) as connection:
             cursor = connection.execute(
                 "UPDATE ingredients SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                 (ingredient_id,),
             )
             if cursor.rowcount == 0:
-                raise IngredientNotFoundError(f"Ingredient {ingredient_id} was not found.")
-            row = connection.execute("SELECT * FROM ingredients WHERE id = ?", (ingredient_id,)).fetchone()
+                raise IngredientNotFoundError(
+                    f"Ingredient {ingredient_id} was not found."
+                )
+            row = connection.execute(
+                "SELECT * FROM ingredients WHERE id = ?", (ingredient_id,)
+            ).fetchone()
         return _row_to_ingredient(row)
 
 
@@ -107,7 +139,11 @@ def _row_to_ingredient(row) -> Ingredient:
         name=row["name"],
         category=IngredientCategory(row["category"]),
         default_unit=UnitCode(row["default_unit"]),
-        density_g_per_ml=None if row["density_g_per_ml"] is None else Decimal(row["density_g_per_ml"]),
+        density_g_per_ml=(
+            None
+            if row["density_g_per_ml"] is None
+            else Decimal(row["density_g_per_ml"])
+        ),
         is_active=bool(row["is_active"]),
         notes=row["notes"],
         inci_name=row["inci_name"],

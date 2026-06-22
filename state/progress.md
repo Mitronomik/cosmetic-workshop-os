@@ -138,3 +138,11 @@ PR16 - Ingredient catalog UI foundation
 - Client recipe details read snapshot rows from `client_recipe_ingredients`, not live source `recipe_ingredients`, preserving historical individual formulas when base recipes change later.
 - Added backend create/read/list/list-by-client/deactivate behavior with transactional `client_recipe.created` and `client_recipe.deactivated` audit events.
 - No client recipe UI, orders, production, stock reservation/write-off, imports/exports, cloud, mobile, OCR, auth, or roles were added.
+
+## PR24 — Catalog categories and tags backend foundation
+- Added backend-only user-managed catalog categories and tags scoped to ingredients/components, packaging/tare, and recipe templates.
+- Existing system classifications remain intact: `IngredientCategory`, `PackagingKind`, and `recipe_templates.product_type` are not removed, replaced, or reinterpreted.
+- Catalog categories/tags are additional organization metadata with nullable category assignment and separate scoped tag bindings.
+- Writes are service-layer transactional with audit actions for create/update/archive and assignment updates.
+- Full frontend catalog UI remains a follow-up; no technical admin panel was added.
+- No production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
