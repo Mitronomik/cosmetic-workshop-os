@@ -1,4 +1,4 @@
-.PHONY: setup setup-backend setup-frontend dev run-local test build test-backend build-frontend package-macos smoke
+.PHONY: setup setup-backend setup-frontend check-backend-test-deps dev run-local test build test-backend test-backend-with-setup build-frontend package-macos smoke
 
 setup: setup-backend setup-frontend
 
@@ -7,6 +7,9 @@ setup-backend:
 
 setup-frontend:
 	cd frontend && npm install
+
+check-backend-test-deps:
+	python3 -c "import pytest; from fastapi.testclient import TestClient; version = tuple(int(part) for part in pytest.__version__.split('.')[:2]); assert (8, 0) <= version < (9, 0), f'pytest {pytest.__version__} is outside pytest>=8,<9'; print(f'backend test dependencies OK: pytest {pytest.__version__}, TestClient {TestClient.__name__}')"
 
 dev:
 	@echo "Start backend: cd backend && python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
@@ -17,8 +20,10 @@ run-local:
 
 test: test-backend
 
-test-backend: setup-backend
+test-backend:
 	python3 -m pytest backend/app/tests launcher/tests
+
+test-backend-with-setup: setup-backend test-backend
 
 build: build-frontend
 
