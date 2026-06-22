@@ -156,3 +156,10 @@ PR16 - Ingredient catalog UI foundation
 - Added UI support on «Компоненты» for loading ingredient-scoped catalog categories and tags, showing «Системный тип», «Моя группа», and «Метки» in the component list, and assigning a selected component's category/tags through the existing ingredient assignment endpoints.
 - Added minimal ingredient response enrichment for `catalog_category_id` and ingredient tag ids so the frontend can show current assignment state without adding migrations or new tables.
 - Catalog categories/tags remain user organization metadata; `IngredientCategory` remains the system classification. Packaging/recipe catalog UI, catalog admin screens, deletion, migrations, production, orders, import/export, cloud, mobile, OCR, auth, and roles were not added.
+
+## PR26 — Ingredient catalog inline create UI
+- Added simple Russian inline controls on the `Компоненты` screen to create ingredient catalog groups and tags via the existing PR24 catalog endpoints.
+- New categories/tags are created automatically as ingredient-scoped organization metadata and reload into the UI after creation.
+- The system `IngredientCategory` semantics remain intact; grouping metadata is not used as business logic for stock, recipes, or production.
+- Packaging and recipe catalog UI remain follow-ups.
+- No migrations, new tables, production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.

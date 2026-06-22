@@ -15,3 +15,8 @@ Scope intentionally excludes production, orders, FEFO, stock write-off, alerts, 
 - PR25 adds ingredient-facing catalog organization controls on the existing «Компоненты» screen: ingredient-scoped catalog categories load as «Моя группа», ingredient-scoped catalog tags load as «Метки», and assignments use the ingredient assignment endpoints.
 - The existing `IngredientCategory` system category remains intact as «Системный тип» and catalog categories/tags remain organization metadata only.
 - Packaging and recipe catalog UI remain follow-ups; no migrations, production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
+
+## PR26 note
+- PR26 implements inline creation of ingredient catalog groups and tags from the `Компоненты` screen only.
+- Catalog groups/tags remain ingredient-scoped organization metadata; the system `IngredientCategory` field remains intact.
+- Packaging and recipe catalog UI remain follow-ups; no migrations, production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
