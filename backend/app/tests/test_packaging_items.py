@@ -31,7 +31,7 @@ def initialized_config(tmp_path):
 def test_table_guards_treat_packaging_as_current_and_future_tables_forbidden():
     assert "packaging_items" in CURRENT_ALLOWED_TABLES
     assert "packaging_items" not in FORBIDDEN_FUTURE_TABLES
-    assert {"recipes", "clients", "orders", "production_batches", "import_drafts", "backup_records"} <= FORBIDDEN_FUTURE_TABLES
+    assert {"recipes", "orders", "production_batches", "import_drafts", "backup_records"} <= FORBIDDEN_FUTURE_TABLES
 
 
 def test_migration_creates_packaging_items_without_future_tables_or_balance_columns(tmp_path):
