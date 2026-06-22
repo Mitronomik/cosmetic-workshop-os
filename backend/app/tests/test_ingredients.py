@@ -176,3 +176,30 @@ def test_ingredients_api_rejects_invalid_input(monkeypatch, tmp_path):
     )
 
     assert response.status_code == 422
+
+
+def test_ingredient_list_includes_catalog_assignment_ids(tmp_path):
+    from app.domain.catalog import CatalogCategoryDraft, CatalogTagDraft
+    from app.services.catalog import CatalogService
+
+    config = initialized_config(tmp_path)
+    ingredient = IngredientService(config).create_ingredient(
+        IngredientDraft.create(name="Масло авокадо", category="oil", default_unit="g")
+    )
+    catalog = CatalogService(config)
+    category = catalog.create_category(
+        CatalogCategoryDraft.create(scope="ingredient", name="Масла", slug="oils")
+    )
+    tag = catalog.create_tag(
+        CatalogTagDraft.create(scope="ingredient", name="Лицо", slug="face")
+    )
+
+    catalog.assign_category("ingredient", ingredient.id, category.id)
+    catalog.replace_tags("ingredient", ingredient.id, [tag.id])
+
+    listed = IngredientService(config).list_active_ingredients()[0]
+    loaded = IngredientService(config).get_ingredient(ingredient.id)
+    assert listed.catalog_category_id == category.id
+    assert listed.catalog_tag_ids == (tag.id,)
+    assert loaded.catalog_category_id == category.id
+    assert loaded.catalog_tag_ids == (tag.id,)

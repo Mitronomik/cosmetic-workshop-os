@@ -52,9 +52,10 @@ class IngredientRepository:
             row = connection.execute(
                 "SELECT * FROM ingredients WHERE id = ?", (ingredient_id,)
             ).fetchone()
-        if row is None:
-            raise IngredientNotFoundError(f"Ingredient {ingredient_id} was not found.")
-        return _row_to_ingredient(row)
+            if row is None:
+                raise IngredientNotFoundError(f"Ingredient {ingredient_id} was not found.")
+            tag_ids = _ingredient_tag_ids(connection, [ingredient_id]).get(ingredient_id, ())
+        return _row_to_ingredient(row, tag_ids)
 
     def get_by_id_for_update(
         self, item_id: int, *, connection: sqlite3.Connection
@@ -71,7 +72,8 @@ class IngredientRepository:
             rows = connection.execute(
                 "SELECT * FROM ingredients WHERE is_active = 1 ORDER BY name, id"
             ).fetchall()
-        return [_row_to_ingredient(row) for row in rows]
+            tag_map = _ingredient_tag_ids(connection, [row["id"] for row in rows])
+        return [_row_to_ingredient(row, tag_map.get(row["id"], ())) for row in rows]
 
     def update_basic(
         self,
@@ -133,7 +135,21 @@ def _density_to_storage(density: Density | None) -> str | None:
     return None if density is None else str(density.grams_per_milliliter)
 
 
-def _row_to_ingredient(row) -> Ingredient:
+def _ingredient_tag_ids(connection: sqlite3.Connection, ingredient_ids: list[int]) -> dict[int, tuple[int, ...]]:
+    if not ingredient_ids:
+        return {}
+    placeholders = ",".join("?" for _ in ingredient_ids)
+    rows = connection.execute(
+        f"SELECT ingredient_id, tag_id FROM ingredient_catalog_tags WHERE ingredient_id IN ({placeholders}) ORDER BY ingredient_id, tag_id",
+        ingredient_ids,
+    ).fetchall()
+    result: dict[int, list[int]] = {}
+    for row in rows:
+        result.setdefault(row["ingredient_id"], []).append(row["tag_id"])
+    return {ingredient_id: tuple(tag_ids) for ingredient_id, tag_ids in result.items()}
+
+
+def _row_to_ingredient(row, catalog_tag_ids: tuple[int, ...] = ()) -> Ingredient:
     return Ingredient(
         id=row["id"],
         name=row["name"],
@@ -152,6 +168,8 @@ def _row_to_ingredient(row) -> Ingredient:
         usage_note=row["usage_note"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        catalog_category_id=row["catalog_category_id"],
+        catalog_tag_ids=catalog_tag_ids,
     )
 
 

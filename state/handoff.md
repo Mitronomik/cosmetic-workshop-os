@@ -226,3 +226,8 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Catalog category/tag `scope` must remain immutable after creation to avoid corrupting existing scoped assignments.
 - Missing catalog records and missing ingredient/packaging/recipe assignment targets are handled as controlled API 404 responses.
 - No schema changes, migrations, frontend UI, DTO enrichment, production/orders/import/export/cloud/mobile/OCR/auth/roles were added in the follow-up.
+
+## PR25 notes
+- «Компоненты» now consumes only ingredient catalog endpoints: `GET /api/catalog/categories?scope=ingredient`, `GET /api/catalog/tags?scope=ingredient`, `PUT /api/ingredients/{ingredient_id}/catalog-category`, and `PUT /api/ingredients/{ingredient_id}/catalog-tags`.
+- Ingredient list responses include current `catalog_category_id` and `catalog_tag_ids` for UI state. This is read support only; PR24 schema is unchanged and no migrations were added.
+- UI wording keeps the system enum separate as «Системный тип» and presents catalog metadata as «Моя группа» and «Метки». Packaging and recipe catalog UI remain follow-ups.

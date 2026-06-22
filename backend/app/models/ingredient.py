@@ -20,3 +20,5 @@ class Ingredient:
     usage_note: str
     created_at: str
     updated_at: str
+    catalog_category_id: int | None = None
+    catalog_tag_ids: tuple[int, ...] = ()

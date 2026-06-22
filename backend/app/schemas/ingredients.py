@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.ingredients import IngredientCategory
 from app.domain.units import UnitCode
@@ -45,6 +45,8 @@ class IngredientResponse(BaseModel):
     usage_note: str
     created_at: str
     updated_at: str
+    catalog_category_id: int | None = None
+    catalog_tag_ids: list[int] = Field(default_factory=list)
 
 
 class IngredientsResponse(BaseModel):
