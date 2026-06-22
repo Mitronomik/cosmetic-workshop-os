@@ -206,3 +206,57 @@ def test_recipe_api_endpoint_functions(monkeypatch, tmp_path):
     with pytest.raises(Exception):
         api_create_version(tid, RecipeVersionCreateRequest(ingredients=[RecipeIngredientCreateRequest(position=1, amount_value="10", amount_unit="percent")]))
     assert api_deactivate_template(tid).is_active is False
+
+
+def test_recipe_template_response_includes_default_catalog_assignment_fields(monkeypatch, tmp_path):
+    from app.db.config import DATABASE_PATH_ENV
+    from app.api.recipes import create_template as api_create_template, get_template as api_get_template, list_templates as api_list_templates
+    from app.schemas.recipes import RecipeTemplateCreateRequest
+
+    database_path = tmp_path / "api-recipe-catalog-defaults.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    initialize_database(DatabaseConfig(path=database_path))
+
+    created = api_create_template(RecipeTemplateCreateRequest(name="Cream"))
+
+    assert created.catalog_category_id is None
+    assert created.catalog_tag_ids == []
+    assert api_get_template(created.id).catalog_category_id is None
+    assert api_get_template(created.id).catalog_tag_ids == []
+    listed = api_list_templates().recipe_templates[0]
+    assert listed.catalog_category_id is None
+    assert listed.catalog_tag_ids == []
+
+
+def test_recipe_template_catalog_assignments_are_visible_after_reload_and_deactivate(monkeypatch, tmp_path):
+    from app.api import catalog_assignments
+    from app.api.recipes import create_template as api_create_template, get_template as api_get_template, list_templates as api_list_templates, deactivate_template as api_deactivate_template
+    from app.db.config import DATABASE_PATH_ENV
+    from app.domain.catalog import CatalogCategoryDraft, CatalogTagDraft
+    from app.schemas.catalog import CatalogCategoryAssignmentRequest, CatalogTagsAssignmentRequest
+    from app.schemas.recipes import RecipeTemplateCreateRequest
+    from app.services.catalog import CatalogService
+
+    database_path = tmp_path / "api-recipe-catalog-reload.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    initialize_database(DatabaseConfig(path=database_path))
+
+    created = api_create_template(RecipeTemplateCreateRequest(name="Cream"))
+    catalog = CatalogService()
+    category = catalog.create_category(CatalogCategoryDraft.create(scope="recipe", name="Creams", slug="creams"))
+    tag_1 = catalog.create_tag(CatalogTagDraft.create(scope="recipe", name="Dry", slug="dry"))
+    tag_2 = catalog.create_tag(CatalogTagDraft.create(scope="recipe", name="Face", slug="face"))
+
+    catalog_assignments.recipe_category(created.id, CatalogCategoryAssignmentRequest(catalog_category_id=category.id))
+    catalog_assignments.recipe_tags(created.id, CatalogTagsAssignmentRequest(tag_ids=[tag_2.id, tag_1.id, tag_1.id]))
+
+    listed = api_list_templates().recipe_templates[0]
+    loaded = api_get_template(created.id)
+    deactivated = api_deactivate_template(created.id)
+
+    assert listed.catalog_category_id == category.id
+    assert loaded.catalog_category_id == category.id
+    assert deactivated.catalog_category_id == category.id
+    assert listed.catalog_tag_ids == [tag_1.id, tag_2.id]
+    assert loaded.catalog_tag_ids == [tag_1.id, tag_2.id]
+    assert deactivated.catalog_tag_ids == [tag_1.id, tag_2.id]
