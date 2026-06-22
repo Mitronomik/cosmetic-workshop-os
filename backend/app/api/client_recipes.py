@@ -1,0 +1,77 @@
+from fastapi import APIRouter, HTTPException, status
+
+from app.domain.client_recipes import ClientRecipeDraft
+from app.domain.errors import DomainValidationError
+from app.models.client_recipe import ClientRecipe, ClientRecipeDetail, ClientRecipeIngredient
+from app.repositories.client_recipes import ClientRecipeNotFoundError
+from app.repositories.clients import ClientNotFoundError
+from app.repositories.ingredients import IngredientNotFoundError
+from app.repositories.recipes import RecipeVersionNotFoundError
+from app.schemas.client_recipes import ClientRecipeCreateRequest, ClientRecipeDetailResponse, ClientRecipeIngredientResponse, ClientRecipeResponse, ClientRecipesResponse
+from app.services.client_recipes import ClientInactiveError, ClientRecipeIngredientInactiveError, ClientRecipeService, SourceRecipeVersionEmptyError
+
+router = APIRouter(tags=["client-recipes"])
+
+
+@router.post("/client-recipes", response_model=ClientRecipeDetailResponse, status_code=status.HTTP_201_CREATED)
+def create_client_recipe(payload: ClientRecipeCreateRequest):
+    try:
+        draft = ClientRecipeDraft.create(**payload.model_dump())
+        return _detail(ClientRecipeService().create_from_recipe_version(draft))
+    except DomainValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
+    except ClientNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client was not found.") from exc
+    except RecipeVersionNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Source recipe version was not found.") from exc
+    except IngredientNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Ingredient was not found.") from exc
+    except (ClientInactiveError, SourceRecipeVersionEmptyError, ClientRecipeIngredientInactiveError) as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+
+@router.get("/client-recipes", response_model=ClientRecipesResponse)
+def list_client_recipes(include_inactive: bool = True):
+    return ClientRecipesResponse(client_recipes=[_recipe(r) for r in ClientRecipeService().list_recipes(include_inactive=include_inactive)])
+
+
+@router.get("/client-recipes/{client_recipe_id}", response_model=ClientRecipeDetailResponse)
+def get_client_recipe(client_recipe_id: int):
+    try:
+        return _detail(ClientRecipeService().get_detail(client_recipe_id))
+    except DomainValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
+    except ClientRecipeNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client recipe was not found.") from exc
+
+
+@router.get("/clients/{client_id}/recipes", response_model=ClientRecipesResponse)
+def list_client_recipes_for_client(client_id: int, include_inactive: bool = True):
+    try:
+        return ClientRecipesResponse(client_recipes=[_recipe(r) for r in ClientRecipeService().list_for_client(client_id, include_inactive=include_inactive)])
+    except DomainValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
+    except ClientNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client was not found.") from exc
+
+
+@router.post("/client-recipes/{client_recipe_id}/deactivate", response_model=ClientRecipeResponse)
+def deactivate_client_recipe(client_recipe_id: int):
+    try:
+        return _recipe(ClientRecipeService().deactivate(client_recipe_id))
+    except DomainValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
+    except ClientRecipeNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client recipe was not found.") from exc
+
+
+def _recipe(recipe: ClientRecipe) -> ClientRecipeResponse:
+    return ClientRecipeResponse(**{**recipe.__dict__, "target_batch_size_value": None if recipe.target_batch_size_value is None else str(recipe.target_batch_size_value)})
+
+
+def _ingredient(ingredient: ClientRecipeIngredient) -> ClientRecipeIngredientResponse:
+    return ClientRecipeIngredientResponse(**{**ingredient.__dict__, "amount_value": str(ingredient.amount_value)})
+
+
+def _detail(detail: ClientRecipeDetail) -> ClientRecipeDetailResponse:
+    return ClientRecipeDetailResponse(client_recipe=_recipe(detail.client_recipe), ingredients=[_ingredient(i) for i in detail.ingredients])

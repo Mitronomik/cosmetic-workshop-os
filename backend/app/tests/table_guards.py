@@ -11,13 +11,13 @@ CURRENT_ALLOWED_TABLES = {
     "recipe_versions",
     "recipe_ingredients",
     "clients",
+    "client_recipes",
+    "client_recipe_ingredients",
     "sqlite_sequence",
 }
 
 FORBIDDEN_FUTURE_TABLES = {
     "recipes",
-    "client_recipes",
-    "client_recipe_ingredients",
     "client_wishes",
     "client_feedback",
     "orders",

@@ -1,12 +1,5 @@
-# Current Focus
+# Current focus
 
-PR21 — Ingredient stock movement UI foundation is implemented.
+PR23 is implemented: backend client recipe foundation for individual client formulas. Client recipes are first-class persisted entities linked to clients and source recipe versions, with their own `client_recipe_ingredients` snapshot lines so later base recipe changes do not silently mutate the client formula.
 
-This slice adds the frontend `Движения склада` screen for ingredient lot stock movements only. The UI selects an ingredient lot, reads the backend-derived lot balance, lists append-only movement history, and creates new movements through the existing stock movement API.
-
-Out of scope remains unchanged: no movement editing/deleting, no manual current balance input, no stored balances, no packaging stock movement UI, no production, no purchase list, no alerts, no new backend tables, and no migrations.
-
-## PR22 — Clients backend foundation
-- Added backend-only client directory foundation: `clients` table, domain validation, repository/service/API layers, and transactional audit events.
-- No client UI, client recipes, wishes/feedback, orders, production, import/export, cloud, mobile, OCR, auth, or roles were added.
-- `Client` is now ready as the backend dependency for future client-specific recipes.
+Scope intentionally excludes frontend client recipe UI, orders, production, stock reservation/write-off, cost/tax/margin, imports, cloud, mobile, OCR, auth, and roles.
