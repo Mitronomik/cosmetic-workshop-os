@@ -13,3 +13,9 @@ Implemented scope:
 
 Intentional non-scope:
 - no migrations, tables, stored calculation results, cost/tax/margin calculation, stock readiness, production, client recipes, orders, import/export, or frontend UI.
+
+## PR19 current focus
+- Added the first recipe UI foundation at `/recipes` with Russian labels for recipe templates, recipe versions, ingredient lines, version detail, and backend-driven calculation display.
+- The frontend uses existing recipe template/version endpoints and the PR18 calculation endpoint; recipe amounts are not calculated in the browser.
+- Historical recipe versions remain view-only in this PR: no edit/delete/status mutation UI was added.
+- No client recipes, clients, orders, production, stock readiness, cost/tax/margin, migrations, or new tables were added.
