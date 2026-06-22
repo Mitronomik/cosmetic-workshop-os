@@ -7,9 +7,11 @@ type CatalogCreateKind = 'category' | 'tag';
 type IngredientLotsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type RecipesStatus = 'idle' | 'loading' | 'ready' | 'error';
 type StockMovementsStatus = 'idle' | 'loading' | 'ready' | 'error';
+type PackagingItemsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type CalculationStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientFormMode = 'create' | 'edit';
 type IngredientLotFormMode = 'create' | 'edit';
+type PackagingItemFormMode = 'create' | 'edit';
 type StockMovementLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 type OnboardingState = {
@@ -113,6 +115,38 @@ type IngredientLot = {
 type IngredientLotPayload = {
   ingredient_id: number; lot_code: string; supplier_name: string; purchased_at: string | null; expires_at: string | null; unit: string; unit_cost: string | null; total_cost: string | null; density_g_per_ml: string | null; notes: string;
 };
+
+type PackagingItem = {
+  id: number;
+  name: string;
+  kind: string;
+  unit: string;
+  capacity_value: string | null;
+  capacity_unit: string | null;
+  material: string;
+  supplier_hint: string;
+  unit_cost: string | null;
+  notes: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type PackagingItemPayload = {
+  name: string;
+  kind: string;
+  unit: string;
+  capacity_value: string | null;
+  capacity_unit: string | null;
+  material: string;
+  supplier_hint: string;
+  unit_cost: string | null;
+  notes: string;
+};
+
+type PackagingItemFormState = PackagingItemPayload & { id: number | null };
+type PackagingItemsState = { items: PackagingItem[]; formMode: PackagingItemFormMode; form: PackagingItemFormState };
+
 
 type IngredientLotFormState = { id: number | null; ingredient_id: string; lot_code: string; supplier_name: string; purchased_at: string; expires_at: string; unit: string; unit_cost: string; total_cost: string; density_g_per_ml: string; notes: string };
 
@@ -227,6 +261,10 @@ let stockMovementsStatus: StockMovementsStatus = 'idle';
 let stockMovementsState: StockMovementsState = { lots: [], ingredients: [], selectedLotId: null, balance: null, movements: [], form: emptyStockMovementForm(), detailStatus: 'idle' };
 let stockMovementsError = '';
 let stockMovementsMessage = '';
+let packagingItemsStatus: PackagingItemsStatus = 'idle';
+let packagingItemsState: PackagingItemsState = { items: [], formMode: 'create', form: emptyPackagingItemForm() };
+let packagingItemsError = '';
+let packagingItemsMessage = '';
 let recipesStatus: RecipesStatus = 'idle';
 let recipesError = '';
 let recipesMessage = '';
@@ -240,6 +278,7 @@ function sectionFromLocation() {
   if (window.location.pathname === '/ingredient-lots') return 'Партии';
   if (window.location.pathname === '/stock-movements') return 'Движения склада';
   if (window.location.pathname === '/recipes') return 'Рецепты';
+  if (window.location.pathname === '/packaging-items') return 'Тара';
   return 'Главная';
 }
 
@@ -261,7 +300,7 @@ function render() {
           <div><p class="eyebrow">Рабочее пространство</p><h1>${activeSection}</h1></div>
           <span class="status ${healthStatus}">${healthLabel}</span>
         </header>
-        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Партии' ? ingredientLotsPage() : activeSection === 'Движения склада' ? stockMovementsPage() : activeSection === 'Рецепты' ? recipesPage() : sectionPlaceholder(activeSection)}
+        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Партии' ? ingredientLotsPage() : activeSection === 'Движения склада' ? stockMovementsPage() : activeSection === 'Рецепты' ? recipesPage() : activeSection === 'Тара' ? packagingItemsPage() : sectionPlaceholder(activeSection)}
       </main>
     </div>`;
   bindEvents(root);
@@ -272,12 +311,13 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       activeSection = button.dataset.section ?? 'Главная';
-      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Партии' ? '/ingredient-lots' : activeSection === 'Движения склада' ? '/stock-movements' : activeSection === 'Рецепты' ? '/recipes' : '/');
+      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Партии' ? '/ingredient-lots' : activeSection === 'Движения склада' ? '/stock-movements' : activeSection === 'Рецепты' ? '/recipes' : activeSection === 'Тара' ? '/packaging-items' : '/');
       if (activeSection === 'Склад') loadInventory();
       if (activeSection === 'Компоненты') loadIngredients();
       if (activeSection === 'Партии') loadIngredientLots();
       if (activeSection === 'Движения склада') loadStockMovements();
       if (activeSection === 'Рецепты') loadRecipes();
+      if (activeSection === 'Тара') loadPackagingItems();
       render();
     });
   });
@@ -306,6 +346,11 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLSelectElement>('[data-action="select-stock-lot"]')?.addEventListener('change', (event) => selectStockMovementLot(Number((event.currentTarget as HTMLSelectElement).value)));
   root.querySelector<HTMLFormElement>('[data-form="stock-movement"]')?.addEventListener('submit', submitStockMovementForm);
   root.querySelector<HTMLButtonElement>('[data-action="reload-recipes"]')?.addEventListener('click', () => loadRecipes(true));
+  root.querySelector<HTMLButtonElement>('[data-action="reload-packaging-items"]')?.addEventListener('click', () => loadPackagingItems(true));
+  root.querySelector<HTMLButtonElement>('[data-action="new-packaging-item"]')?.addEventListener('click', () => { packagingItemsState.formMode = 'create'; packagingItemsState.form = emptyPackagingItemForm(); packagingItemsMessage = ''; packagingItemsError = ''; render(); });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="edit-packaging-item"]').forEach((button) => button.addEventListener('click', () => startEditPackagingItem(Number(button.dataset.id))));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-packaging-item"]').forEach((button) => button.addEventListener('click', () => deactivatePackagingItem(Number(button.dataset.id))));
+  root.querySelector<HTMLFormElement>('[data-form="packaging-item"]')?.addEventListener('submit', submitPackagingItemForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-template"]')?.addEventListener('submit', submitRecipeTemplateForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-version"]')?.addEventListener('submit', submitRecipeVersionForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-calculation"]')?.addEventListener('submit', submitCalculationForm);
@@ -348,6 +393,24 @@ function ingredientCatalogCreateControls() {
 function ingredientList() {
   if (ingredientsState.items.length === 0) return `<section class="card empty-card"><h2>Компонентов пока нет</h2><p>Добавьте первый компонент, чтобы потом учитывать партии и остатки на складе.</p><p class="next-step">Следующее действие: заполните название, единицу учета и при необходимости плотность, затем нажмите «Создать компонент».</p></section>`;
   return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Компоненты</h2><div class="table-wrap"><table><thead><tr><th>Название</th><th>Системный тип</th><th>Ед. учета</th><th>Моя группа</th><th>Метки</th><th>Плотность</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${ingredientsState.items.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${item.supplier_hint ? escapeHtml(item.supplier_hint) : 'Поставщик не указан'}</small></td><td>${escapeHtml(categoryLabel(item.category))}</td><td>${unitLabel(item.default_unit)}</td><td>${escapeHtml(ingredientCatalogCategoryLabel(item))}</td><td>${ingredientTagChips(item)}</td><td>${item.density_g_per_ml ? `${escapeHtml(item.density_g_per_ml)} г/мл` : 'Не указана'}</td><td><span class="pill ${item.is_active ? 'success' : 'muted'}">${item.is_active ? 'Активен' : 'Неактивен'}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient" data-id="${item.id}">Изменить</button>${item.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient" data-id="${item.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div></section>`;
+}
+
+
+function packagingItemsPage() {
+  if (packagingItemsStatus === 'idle' || packagingItemsStatus === 'loading') return `<section class="card"><p class="card-kicker">Тара</p><h2>Загружаем тару…</h2><p>Получаем справочник тары из локального API.</p></section>`;
+  if (packagingItemsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Тара</p><h2>Не удалось загрузить тару</h2><p>${packagingItemsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-packaging-items">Повторить загрузку</button></section>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Тара</p><h2>Справочник тары</h2><p>Добавляйте баночки, флаконы, крышки, этикетки и коробки. Остатки меняются через движения склада, а не здесь.</p><p class="next-step">Этот раздел описывает саму тару. Остатки и списания будут отдельными складскими операциями.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-packaging-items">Обновить список</button><button class="secondary-action" type="button" data-action="new-packaging-item">Очистить форму</button></div></section>${packagingItemsMessage ? `<p class="page-message">${packagingItemsMessage}</p>` : ''}${packagingItemsError ? `<p class="page-message error-message">${packagingItemsError}</p>` : ''}${packagingItemForm()}${packagingItemsList()}</div>`;
+}
+
+function packagingItemForm() {
+  const form = packagingItemsState.form;
+  const isEdit = packagingItemsState.formMode === 'edit';
+  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить тару' : 'Добавить тару'}</h2><form data-form="packaging-item" class="ingredient-form"><div class="form-grid"><label>Название<input name="name" required maxlength="160" value="${escapeHtml(form.name)}" placeholder="Например, баночка 30 мл" /></label><label>Тип тары<select name="kind">${packagingKindOptions(form.kind)}</select></label><label>Единица учета<select name="unit">${packagingUnitOptions(form.unit)}</select></label><label>Объем<input name="capacity_value" inputmode="decimal" value="${escapeHtml(form.capacity_value ?? '')}" placeholder="Например, 30" /></label><label>Единица объема<select name="capacity_unit"><option value="" ${form.capacity_unit ? '' : 'selected'}>Не указана</option>${capacityUnitOptions(form.capacity_unit ?? '')}</select></label><label>Материал<input name="material" maxlength="120" value="${escapeHtml(form.material)}" placeholder="Стекло, пластик, бумага…" /></label><label>Поставщик<input name="supplier_hint" maxlength="160" value="${escapeHtml(form.supplier_hint)}" placeholder="Необязательно" /></label><label>Цена за единицу<input name="unit_cost" inputmode="decimal" value="${escapeHtml(form.unit_cost ?? '')}" placeholder="Например, 12.50" /></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки о таре">${escapeHtml(form.notes)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить изменения' : 'Создать тару'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="new-packaging-item">Отменить редактирование</button>' : ''}</div><p class="next-step">Остатки, приход и списания не меняются в этой форме — для них будут отдельные складские операции.</p></form></section>`;
+}
+
+function packagingItemsList() {
+  if (packagingItemsState.items.length === 0) return `<section class="card empty-card"><h2>Тара пока не добавлена</h2><p>Тара пока не добавлена. Создайте первую баночку, флакон или этикетку.</p><p class="next-step">Следующее действие: заполните форму «Добавить тару» и нажмите «Создать тару».</p></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Тара и расходники</h2><div class="table-wrap"><table><thead><tr><th>Название</th><th>Тип</th><th>Ед. учета</th><th>Объем</th><th>Материал</th><th>Поставщик</th><th>Цена</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${packagingItemsState.items.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${item.notes ? escapeHtml(item.notes) : 'Без заметок'}</small></td><td>${packagingKindLabel(item.kind)}</td><td>${unitLabel(item.unit)}</td><td>${packagingItemCapacityLabel(item)}</td><td>${escapeHtml(item.material || 'Не указан')}</td><td>${escapeHtml(item.supplier_hint || 'Не указан')}</td><td>${item.unit_cost ? escapeHtml(item.unit_cost) : 'Не указана'}</td><td><span class="pill ${item.is_active ? 'success' : 'muted'}">${item.is_active ? 'Активна' : 'Неактивна'}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-packaging-item" data-id="${item.id}">Изменить</button>${item.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-packaging-item" data-id="${item.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div><p class="next-step">Здесь редактируется только карточка тары. Остатки не вводятся и не пересчитываются на этой странице.</p></section>`;
 }
 
 function ingredientLotsPage() {
@@ -464,6 +527,15 @@ function recipeVersionDetailPanel() { const d=recipesState.selectedVersionDetail
 function calculationPanel() { const c=recipesState.calculation; return `<div class="calculation-panel"><h3>Расчет</h3><form data-form="recipe-calculation" class="inline-form"><label>Целевой размер партии<input name="target_batch_size_value" inputmode="decimal" value="${escapeHtml(recipesState.calculationTargetValue)}" placeholder="Оставьте пустым для размера версии" /></label><label>Единица<select name="target_batch_size_unit"><option value="g" ${recipesState.calculationTargetUnit==='g'?'selected':''}>г</option><option value="ml" ${recipesState.calculationTargetUnit==='ml'?'selected':''}>мл</option></select></label><button class="primary-action" type="submit">Рассчитать</button></form>${calculationStatus==='loading'?'<p>Считаем на backend…</p>':''}${calculationError?`<p class="page-message error-message">${calculationError}</p>`:''}${c?calculationResult(c):'<p class="next-step">Нажмите «Рассчитать», чтобы получить строки, итоги и предупреждения из backend.</p>'}</div>`; }
 function calculationResult(c: RecipeCalculationResult) { return `<div class="calculation-result"><p><strong>Можно рассчитать:</strong> ${c.can_calculate?'да':'нет'} · <strong>Сумма процентов:</strong> ${escapeHtml(c.percent_total)}%</p>${c.issues.length?`<h4>${c.issues.some((i)=>i.severity==='error')?'Нужно исправить':'Предупреждения'}</h4><ul class="issue-list">${c.issues.map((i)=>`<li class="${i.severity==='error'?'danger-text':'warning-text'}">${escapeHtml(i.message)}${i.next_action?` <small>${escapeHtml(i.next_action)}</small>`:''}</li>`).join('')}</ul>`:''}<h4>Состав</h4>${c.lines.length?`<div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Исходно</th><th>Рассчитано</th><th>Фаза</th><th>Комментарий</th></tr></thead><tbody>${c.lines.map((l)=>`<tr><td>${escapeHtml(l.ingredient_name)}</td><td>${escapeHtml(l.source_amount_value)} ${unitLabel(l.source_amount_unit)}</td><td>${l.calculated_amount_value?`${escapeHtml(l.calculated_amount_value)} ${unitLabel(l.calculated_amount_unit || '')}`:'—'}</td><td>${escapeHtml(l.phase || 'Не указана')}</td><td>${escapeHtml(l.calculation_note || '')}</td></tr>`).join('')}</tbody></table></div>`:'<p>Backend не вернул расчетных строк.</p>'}<h4>Итого по единицам</h4>${c.totals_by_unit.length?`<ul>${c.totals_by_unit.map((t)=>`<li>${escapeHtml(t.total_value)} ${unitLabel(t.unit)}</li>`).join('')}</ul>`:'<p>Итоги пока не рассчитаны.</p>'}</div>`; }
 
+
+function emptyPackagingItemForm(): PackagingItemFormState { return { id: null, name: '', kind: 'jar', unit: 'pcs', capacity_value: null, capacity_unit: null, material: '', supplier_hint: '', unit_cost: null, notes: '' }; }
+function packagingKindLabel(kind: string) { return ({ jar: 'Баночка', bottle: 'Флакон', tube: 'Туба', pump: 'Помпа', cap: 'Крышка', dropper: 'Пипетка', label: 'Этикетка', box: 'Коробка', bag: 'Пакет', other: 'Другое' } as Record<string, string>)[kind] ?? escapeHtml(kind); }
+function packagingKindOptions(current: string) { return ['jar','bottle','tube','pump','cap','dropper','label','box','bag','other'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${packagingKindLabel(value)}</option>`).join(''); }
+function packagingUnitOptions(current: string) { return ['pcs'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
+function capacityUnitOptions(current: string) { return ['ml','g'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
+function packagingItemCapacityLabel(item: PackagingItem) { return item.capacity_value && item.capacity_unit ? `${escapeHtml(item.capacity_value)} ${unitLabel(item.capacity_unit)}` : 'Не указан'; }
+function packagingItemPayloadFromForm(form: HTMLFormElement): PackagingItemPayload { const data = new FormData(form); const nullable = (name: string) => { const value = String(data.get(name) ?? '').trim(); return value || null; }; return { name: String(data.get('name') ?? '').trim(), kind: String(data.get('kind') ?? 'other'), unit: String(data.get('unit') ?? 'pcs'), capacity_value: nullable('capacity_value'), capacity_unit: nullable('capacity_unit'), material: String(data.get('material') ?? '').trim(), supplier_hint: String(data.get('supplier_hint') ?? '').trim(), unit_cost: nullable('unit_cost'), notes: String(data.get('notes') ?? '').trim() }; }
+
 function emptyIngredientLotForm(): IngredientLotFormState { return { id: null, ingredient_id: '', lot_code: '', supplier_name: '', purchased_at: '', expires_at: '', unit: 'g', unit_cost: '', total_cost: '', density_g_per_ml: '', notes: '' }; }
 function lotUnitOptions(current: string) { return ['g','ml','pcs'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
 function lotIngredientName(id: number) { return ingredientLotsState.ingredients.find((ingredient) => ingredient.id === id)?.name ?? 'Компонент'; }
@@ -513,6 +585,10 @@ function getIngredientLots() { return apiGet<{ lots: IngredientLot[] }>('/api/in
 function createIngredientLot(payload: IngredientLotPayload) { return apiSend<IngredientLot>('/api/ingredient-lots', 'POST', payload); }
 function updateIngredientLot(id: number, payload: IngredientLotPayload) { return apiSend<IngredientLot>(`/api/ingredient-lots/${id}`, 'PUT', payload); }
 function deactivateIngredientLotRequest(id: number) { return apiSend<IngredientLot>(`/api/ingredient-lots/${id}/deactivate`, 'POST'); }
+function getPackagingItems() { return apiGet<{ packaging_items: PackagingItem[] }>('/api/packaging-items'); }
+function createPackagingItem(payload: PackagingItemPayload) { return apiSend<PackagingItem>('/api/packaging-items', 'POST', payload); }
+function updatePackagingItem(id: number, payload: PackagingItemPayload) { return apiSend<PackagingItem>(`/api/packaging-items/${id}`, 'PUT', payload); }
+function deactivatePackagingItemRequest(id: number) { return apiSend<PackagingItem>(`/api/packaging-items/${id}/deactivate`, 'POST'); }
 
 function getRecipeTemplates() { return apiGet<{ recipe_templates: RecipeTemplate[] }>('/api/recipe-templates'); }
 function createRecipeTemplate(payload: RecipeTemplatePayload) { return apiSend<RecipeTemplate>('/api/recipe-templates', 'POST', payload); }
@@ -573,6 +649,25 @@ function openRecipeVersion(id: number) { recipesError = ''; calculationError = '
 function submitRecipeTemplateForm(event: SubmitEvent) { event.preventDefault(); const payload = recipeTemplatePayloadFromForm(event.currentTarget as HTMLFormElement); createRecipeTemplate(payload).then((template)=>{ recipesMessage = 'Рецепт создан.'; recipesError = ''; recipesState.templateForm = emptyRecipeTemplateForm(); return getRecipeTemplates().then((response)=>({template, response})); }).then(({template, response})=>{ recipesState.templates = response.recipe_templates; recipesStatus = 'ready'; openRecipeTemplate(template.id); }).catch(()=>{ recipesMessage = ''; recipesError = 'Не удалось создать рецепт. Проверьте название и попробуйте еще раз.'; recipesStatus = 'ready'; render(); }); }
 function submitRecipeVersionForm(event: SubmitEvent) { event.preventDefault(); if (!recipesState.selectedTemplate) return; const form = recipeVersionFormFromForm(event.currentTarget as HTMLFormElement); recipesState.versionForm = form; createRecipeVersion(recipesState.selectedTemplate.id, recipeVersionPayload(form)).then((detail)=>{ recipesMessage = 'Новая версия рецепта создана. Исторические версии не изменялись.'; recipesError = ''; recipesState.versionForm = emptyRecipeVersionForm(); recipesState.selectedVersionDetail = detail; return getRecipeVersions(recipesState.selectedTemplate!.id); }).then((response)=>{ recipesState.versions = response.recipe_versions; recipesState.calculation = null; calculationStatus = 'idle'; render(); }).catch(()=>{ recipesMessage = ''; recipesError = 'Не удалось создать версию. Проверьте строки состава и попробуйте еще раз.'; render(); }); }
 function submitCalculationForm(event: SubmitEvent) { event.preventDefault(); const detail = recipesState.selectedVersionDetail; if (!detail) return; const data = new FormData(event.currentTarget as HTMLFormElement); const value = String(data.get('target_batch_size_value') ?? '').trim(); const unit = String(data.get('target_batch_size_unit') ?? 'g'); recipesState.calculationTargetValue = value; recipesState.calculationTargetUnit = unit; calculationStatus = 'loading'; calculationError = ''; render(); getRecipeCalculation(detail.version.id, value, unit).then((result)=>{ recipesState.calculation = result; calculationStatus = 'ready'; render(); }).catch(()=>{ calculationStatus = 'error'; calculationError = 'Не удалось выполнить расчет. Проверьте размер партии и попробуйте еще раз.'; render(); }); }
+
+
+function loadPackagingItems(force = false) {
+  if (!force && (packagingItemsStatus === 'loading' || packagingItemsStatus === 'ready')) return;
+  packagingItemsStatus = 'loading'; packagingItemsError = ''; render();
+  getPackagingItems().then((response) => { packagingItemsState.items = response.packaging_items; packagingItemsStatus = 'ready'; render(); }).catch(() => { packagingItemsStatus = 'error'; packagingItemsError = 'Не получилось получить справочник тары из локального API.'; render(); });
+}
+function startEditPackagingItem(id: number) { const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === id); if (!item) return; packagingItemsState.formMode = 'edit'; packagingItemsState.form = { id: item.id, name: item.name, kind: item.kind, unit: item.unit, capacity_value: item.capacity_value, capacity_unit: item.capacity_unit, material: item.material, supplier_hint: item.supplier_hint, unit_cost: item.unit_cost, notes: item.notes }; packagingItemsMessage = ''; packagingItemsError = ''; render(); }
+function submitPackagingItemForm(event: SubmitEvent) {
+  event.preventDefault();
+  const payload = packagingItemPayloadFromForm(event.currentTarget as HTMLFormElement);
+  const request = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id ? updatePackagingItem(packagingItemsState.form.id, payload) : createPackagingItem(payload);
+  request.then(() => { packagingItemsMessage = packagingItemsState.formMode === 'edit' ? 'Тара сохранена. Остатки не изменялись.' : 'Тара создана. Остатки добавляются отдельными складскими операциями.'; packagingItemsError = ''; packagingItemsState.formMode = 'create'; packagingItemsState.form = emptyPackagingItemForm(); return getPackagingItems(); }).then((response) => { packagingItemsState.items = response.packaging_items; packagingItemsStatus = 'ready'; render(); }).catch(() => { packagingItemsMessage = ''; packagingItemsError = 'Не удалось сохранить тару. Проверьте название, тип, единицы и числовые поля.'; packagingItemsStatus = 'ready'; render(); });
+}
+function deactivatePackagingItem(id: number) {
+  const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === id);
+  if (!item || !window.confirm(`Деактивировать тару «${item.name}»? Она не будет удалена из истории.`)) return;
+  deactivatePackagingItemRequest(id).then(() => { packagingItemsMessage = 'Тара деактивирована. История и остатки склада не изменялись.'; packagingItemsError = ''; return getPackagingItems(); }).then((response) => { packagingItemsState.items = response.packaging_items; packagingItemsStatus = 'ready'; render(); }).catch(() => { packagingItemsMessage = ''; packagingItemsError = 'Не удалось деактивировать тару. Попробуйте еще раз.'; packagingItemsStatus = 'ready'; render(); });
+}
 
 function loadIngredientLots(force = false) {
   if (!force && (ingredientLotsStatus === 'loading' || ingredientLotsStatus === 'ready')) return;
@@ -650,7 +745,7 @@ function loadInventory(force = false) {
 function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!response.ok) throw new Error('Onboarding is unavailable'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = ''; render(); }).catch(() => { onboardingStatus = 'unavailable'; render(); }); }
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
-window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Партии') loadIngredientLots(); if (activeSection === 'Движения склада') loadStockMovements(); if (activeSection === 'Рецепты') loadRecipes(); render(); });
+window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Партии') loadIngredientLots(); if (activeSection === 'Движения склада') loadStockMovements(); if (activeSection === 'Рецепты') loadRecipes(); if (activeSection === 'Тара') loadPackagingItems(); render(); });
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
@@ -659,3 +754,4 @@ if (activeSection === 'Компоненты') loadIngredients();
 if (activeSection === 'Партии') loadIngredientLots();
 if (activeSection === 'Движения склада') loadStockMovements();
 if (activeSection === 'Рецепты') loadRecipes();
+if (activeSection === 'Тара') loadPackagingItems();
