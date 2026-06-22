@@ -115,6 +115,32 @@ def test_target_validation_rejects_invalid_values(tmp_path, value, unit):
         calculate(c, detail, target_batch_size_value=value, target_batch_size_unit=unit)
 
 
+def test_fixed_only_recipe_with_stored_pcs_target_calculates_fixed_lines(tmp_path):
+    c = config(tmp_path)
+    detail = recipe_with_lines(c, [{"amount": "3", "unit": "g"}], target_value="2", target_unit="pcs")
+    result = calculate(c, detail)
+    assert result.can_calculate is True
+    assert result.target_batch_size_value is None
+    assert result.target_batch_size_unit is None
+    assert result.lines[0].calculated_amount_value == result.lines[0].source_amount_value
+    assert result.lines[0].calculated_amount_unit == "g"
+    assert any(i.severity == "warning" and i.code == "unsupported_target_batch_unit" for i in result.issues)
+
+
+def test_percent_recipe_with_stored_pcs_target_returns_issue_not_exception(tmp_path):
+    c = config(tmp_path)
+    detail = recipe_with_lines(c, [{"amount": "10", "unit": "percent"}], target_value="2", target_unit="pcs")
+    result = calculate(c, detail)
+    assert result.can_calculate is False
+    assert result.target_batch_size_value is None
+    assert result.target_batch_size_unit is None
+    assert result.lines[0].calculated_amount_value is None
+    issue = next(i for i in result.issues if i.code == "unsupported_target_batch_unit")
+    assert issue.severity == "error"
+    assert issue.field == "target_batch_size_unit"
+    assert "граммах или миллилитрах" in issue.message
+
+
 def test_stored_target_used_and_explicit_target_overrides(tmp_path):
     c = config(tmp_path)
     detail = recipe_with_lines(c, [{"amount": "10", "unit": "percent"}], target_value="200", target_unit="g")
@@ -152,6 +178,9 @@ def test_api_calculation_query_missing_version_validation_and_read_only(monkeypa
     with pytest.raises(HTTPException) as invalid:
         api_calculate_recipe_version(detail.version.id, target_batch_size_value="0", target_batch_size_unit="g")
     assert invalid.value.status_code == 422
+    with pytest.raises(HTTPException) as explicit_pcs:
+        api_calculate_recipe_version(detail.version.id, target_batch_size_value="1", target_batch_size_unit="pcs")
+    assert explicit_pcs.value.status_code == 422
     assert scalar(c, "SELECT count(*) FROM audit_logs") == before_audit
     assert rows(c, "SELECT * FROM recipe_versions") == before_versions
     assert rows(c, "SELECT * FROM recipe_ingredients") == before_lines

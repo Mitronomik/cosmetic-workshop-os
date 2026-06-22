@@ -153,9 +153,9 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 
 ## PR18 notes
 - Calculation endpoint: `GET /api/recipe-versions/{version_id}/calculation`.
-- Optional query parameters: `target_batch_size_value` and `target_batch_size_unit` (`g` or `ml`).
-- Fixed recipe ingredient lines in `g`, `ml`, and `pcs` remain fixed and are not proportionally scaled in PR18.
-- Percent lines require a target batch size and calculate into the target unit without assuming `1 ml = 1 g`.
+- Optional query parameters: `target_batch_size_value` and `target_batch_size_unit` (`g` or `ml`); explicit `pcs` query targets are rejected for PR18 calculation.
+- Fixed recipe ingredient lines in `g`, `ml`, and `pcs` remain fixed and are not proportionally scaled in PR18; a stored `pcs` target on a fixed-only recipe is reported as a non-blocking limitation rather than failing the read.
+- Percent lines require a target batch size in `g` or `ml` and calculate into the target unit without assuming `1 ml = 1 g`; a stored `pcs` target returns an `unsupported_target_batch_unit` issue.
 - `percent_total` is reported; totals below 100% produce a warning issue, totals above 100% produce an error issue, and missing target size for percent lines makes `can_calculate=false`.
 - Calculation is read-only: it does not write audit logs, mutate recipe rows, reserve/consume stock, select lots, calculate costs/tax/margin, or create production/client/order/import/export records.
 - No migrations or new tables were added for PR18.

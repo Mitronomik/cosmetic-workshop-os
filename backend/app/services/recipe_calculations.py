@@ -31,19 +31,20 @@ class RecipeCalculationService:
         target_batch_size_unit: UnitCode | str | None = None,
     ) -> RecipeCalculationResult:
         version_row, line_rows = self.repository.get_version_calculation_source(version_id)
+        issues: list[RecipeCalculationIssue] = []
+        percent_total = sum((Decimal(row["amount_value"]) for row in line_rows if row["amount_unit"] == UnitCode.PERCENT.value), Decimal("0"))
+        percent_total = quantize_percentage(percent_total, field="percent_total")
+        has_percent_lines = any(row["amount_unit"] == UnitCode.PERCENT.value for row in line_rows)
         target_value, target_unit = self._target_from_input_or_version(
             explicit_value=target_batch_size_value,
             explicit_unit=target_batch_size_unit,
             stored_value=version_row["target_batch_size_value"],
             stored_unit=version_row["target_batch_size_unit"],
+            has_percent_lines=has_percent_lines,
+            issues=issues,
         )
 
-        issues: list[RecipeCalculationIssue] = []
-        percent_total = sum((Decimal(row["amount_value"]) for row in line_rows if row["amount_unit"] == UnitCode.PERCENT.value), Decimal("0"))
-        percent_total = quantize_percentage(percent_total, field="percent_total")
-        has_percent_lines = any(row["amount_unit"] == UnitCode.PERCENT.value for row in line_rows)
-
-        if has_percent_lines and target_value is None:
+        if has_percent_lines and target_value is None and not any(issue.code == "unsupported_target_batch_unit" for issue in issues):
             issues.append(_issue("error", "missing_target_batch_size", "target_batch_size_value", "Для строк в процентах нужен размер партии.", "Укажите размер партии в граммах или миллилитрах."))
         if has_percent_lines:
             if percent_total < Decimal("100.00"):
@@ -92,13 +93,24 @@ class RecipeCalculationService:
             generated_at=datetime.now(timezone.utc).isoformat(),
         )
 
-    def _target_from_input_or_version(self, *, explicit_value, explicit_unit, stored_value, stored_unit):
+    def _target_from_input_or_version(self, *, explicit_value, explicit_unit, stored_value, stored_unit, has_percent_lines: bool, issues: list[RecipeCalculationIssue]):
         if explicit_value is not None or explicit_unit is not None:
             if explicit_value is None or explicit_unit is None:
                 raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "Размер партии и единица измерения должны быть указаны вместе.", "target_batch_size_value", None, "Укажите размер партии и единицу: g или ml."))
             return _parse_calculation_target(explicit_value, explicit_unit)
         if stored_value is None and stored_unit is None:
             return None, None
+
+        try:
+            stored_unit_code = UnitCode(stored_unit)
+        except ValueError:
+            stored_unit_code = None
+        if stored_unit_code not in CALCULATION_TARGET_UNITS:
+            severity = "error" if has_percent_lines else "warning"
+            message = "Строки в процентах требуют размер партии в граммах или миллилитрах." if has_percent_lines else "Размер партии в штуках не используется для расчета фиксированных строк в PR18."
+            issues.append(_issue(severity, "unsupported_target_batch_unit", "target_batch_size_unit", message, "Укажите размер партии в g или ml для расчета процентных строк."))
+            return None, None
+
         return _parse_calculation_target(stored_value, stored_unit)
 
 
