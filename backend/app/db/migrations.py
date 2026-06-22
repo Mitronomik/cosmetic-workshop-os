@@ -13,6 +13,7 @@ MIGRATION_MODULES = [
     "app.migrations.versions.0007_recipes",
     "app.migrations.versions.0008_clients",
     "app.migrations.versions.0009_client_recipes",
+    "app.migrations.versions.0010_catalog",
 ]
 MIGRATION_TABLE = "schema_migrations"
 

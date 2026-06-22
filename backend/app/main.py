@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.catalog import router as catalog_router
+from app.api.catalog_assignments import router as catalog_assignments_router
 from app.api.client_recipes import router as client_recipes_router
 from app.api.clients import router as clients_router
 from app.api.database import router as database_router
@@ -44,6 +46,8 @@ def create_app() -> FastAPI:
     app.include_router(packaging_stock_movements_router, prefix="/api")
     app.include_router(inventory_router, prefix="/api")
     app.include_router(recipes_router, prefix="/api")
+    app.include_router(catalog_router, prefix="/api")
+    app.include_router(catalog_assignments_router, prefix="/api")
     app.include_router(clients_router, prefix="/api")
     app.include_router(client_recipes_router, prefix="/api")
     app.include_router(onboarding_router, prefix="/api")
