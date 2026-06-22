@@ -40,11 +40,12 @@ class PackagingItemRepository:
             row = connection.execute(
                 "SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)
             ).fetchone()
+            tag_ids = _packaging_item_tag_ids(connection, [packaging_item_id]).get(packaging_item_id, ())
         if row is None:
             raise PackagingItemNotFoundError(
                 f"Packaging item {packaging_item_id} was not found."
             )
-        return _row_to_packaging_item(row)
+        return _row_to_packaging_item(row, tag_ids)
 
     def get_by_id_for_update(
         self, item_id: int, *, connection: sqlite3.Connection
@@ -61,7 +62,8 @@ class PackagingItemRepository:
             rows = connection.execute(
                 "SELECT * FROM packaging_items WHERE is_active = 1 ORDER BY name, id"
             ).fetchall()
-        return [_row_to_packaging_item(row) for row in rows]
+            tag_map = _packaging_item_tag_ids(connection, [row["id"] for row in rows])
+        return [_row_to_packaging_item(row, tag_map.get(row["id"], ())) for row in rows]
 
     def update_basic(
         self,
@@ -87,7 +89,8 @@ class PackagingItemRepository:
             row = connection.execute(
                 "SELECT * FROM packaging_items WHERE id = ?", (packaging_item_id,)
             ).fetchone()
-        return _row_to_packaging_item(row)
+            tag_ids = _packaging_item_tag_ids(connection, [packaging_item_id]).get(packaging_item_id, ())
+        return _row_to_packaging_item(row, tag_ids)
 
     def deactivate(
         self, packaging_item_id: int, *, connection: sqlite3.Connection | None = None
@@ -121,7 +124,21 @@ def _draft_values(draft: PackagingItemDraft) -> tuple:
     )
 
 
-def _row_to_packaging_item(row) -> PackagingItem:
+def _packaging_item_tag_ids(connection: sqlite3.Connection, packaging_item_ids: list[int]) -> dict[int, tuple[int, ...]]:
+    if not packaging_item_ids:
+        return {}
+    placeholders = ",".join("?" for _ in packaging_item_ids)
+    rows = connection.execute(
+        f"SELECT packaging_item_id, tag_id FROM packaging_item_catalog_tags WHERE packaging_item_id IN ({placeholders}) ORDER BY packaging_item_id, tag_id",
+        packaging_item_ids,
+    ).fetchall()
+    result: dict[int, list[int]] = {}
+    for row in rows:
+        result.setdefault(row["packaging_item_id"], []).append(row["tag_id"])
+    return {packaging_item_id: tuple(tag_ids) for packaging_item_id, tag_ids in result.items()}
+
+
+def _row_to_packaging_item(row, catalog_tag_ids: tuple[int, ...] = ()) -> PackagingItem:
     return PackagingItem(
         id=row["id"],
         name=row["name"],
@@ -140,6 +157,8 @@ def _row_to_packaging_item(row) -> PackagingItem:
         is_active=bool(row["is_active"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        catalog_category_id=row["catalog_category_id"],
+        catalog_tag_ids=catalog_tag_ids,
     )
 
 

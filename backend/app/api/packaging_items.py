@@ -73,4 +73,6 @@ def _response(item: PackagingItem) -> PackagingItemResponse:
         is_active=item.is_active,
         created_at=item.created_at,
         updated_at=item.updated_at,
+        catalog_category_id=item.catalog_category_id,
+        catalog_tag_ids=list(item.catalog_tag_ids),
     )

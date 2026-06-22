@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.packaging_items import PackagingKind
 from app.domain.units import UnitCode
@@ -45,6 +45,8 @@ class PackagingItemResponse(BaseModel):
     is_active: bool
     created_at: str
     updated_at: str
+    catalog_category_id: int | None = None
+    catalog_tag_ids: list[int] = Field(default_factory=list)
 
 
 class PackagingItemsResponse(BaseModel):

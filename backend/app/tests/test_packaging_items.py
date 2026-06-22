@@ -151,3 +151,44 @@ def test_packaging_item_api_route_functions_create_read_list_update_deactivate_a
     deactivated = deactivate_packaging_item(created.id)
     assert deactivated.is_active is False
     assert list_active_packaging_items().packaging_items == []
+
+
+def test_packaging_item_api_responses_include_catalog_assignments(monkeypatch, tmp_path):
+    from app.api.catalog_assignments import packaging_category, packaging_tags
+    from app.api.packaging_items import create_packaging_item, get_packaging_item, list_active_packaging_items, update_packaging_item
+    from app.domain.catalog import CatalogCategoryDraft, CatalogTagDraft
+    from app.schemas.catalog import CatalogCategoryAssignmentRequest, CatalogTagsAssignmentRequest
+    from app.schemas.packaging_items import PackagingItemCreateRequest, PackagingItemUpdateRequest
+    from app.services.catalog import CatalogService
+
+    database_path = tmp_path / "api-packaging-catalog.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    config = DatabaseConfig(path=database_path)
+    initialize_database(config)
+
+    created = create_packaging_item(PackagingItemCreateRequest(name="Баночка 30 мл", kind="jar"))
+    assert created.catalog_category_id is None
+    assert created.catalog_tag_ids == []
+
+    catalog = CatalogService(config)
+    category = catalog.create_category(CatalogCategoryDraft.create(scope="packaging", name="Баночки"))
+    tag_one = catalog.create_tag(CatalogTagDraft.create(scope="packaging", name="Для кремов"))
+    tag_two = catalog.create_tag(CatalogTagDraft.create(scope="packaging", name="Стекло"))
+
+    packaging_category(created.id, CatalogCategoryAssignmentRequest(catalog_category_id=category.id))
+    packaging_tags(created.id, CatalogTagsAssignmentRequest(tag_ids=[tag_two.id, tag_one.id, tag_one.id]))
+
+    listed = list_active_packaging_items().packaging_items[0]
+    loaded = get_packaging_item(created.id)
+    assert listed.catalog_category_id == category.id
+    assert listed.catalog_tag_ids == [tag_one.id, tag_two.id]
+    assert loaded.catalog_category_id == category.id
+    assert loaded.catalog_tag_ids == [tag_one.id, tag_two.id]
+
+    updated = update_packaging_item(
+        created.id,
+        PackagingItemUpdateRequest(name="Флакон 50 мл", kind="bottle", capacity_value="50", capacity_unit="ml"),
+    )
+    assert updated.name == "Флакон 50 мл"
+    assert updated.catalog_category_id == category.id
+    assert updated.catalog_tag_ids == [tag_one.id, tag_two.id]
