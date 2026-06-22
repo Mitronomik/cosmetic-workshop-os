@@ -56,6 +56,8 @@ def create_category(p: CatalogCategoryCreateRequest):
         )
     except DomainValidationError as exc:
         _err(exc)
+    except CatalogCategoryNotFoundError as exc:
+        raise HTTPException(404, "Category was not found.") from exc
     except CatalogDuplicateSlugError as exc:
         raise HTTPException(409, "Category slug already exists in this scope.") from exc
 
@@ -91,6 +93,8 @@ def update_category(category_id: int, p: CatalogCategoryUpdateRequest):
         )
     except DomainValidationError as exc:
         _err(exc)
+    except CatalogCategoryNotFoundError as exc:
+        raise HTTPException(404, "Category was not found.") from exc
     except CatalogDuplicateSlugError as exc:
         raise HTTPException(409, "Category slug already exists in this scope.") from exc
 
@@ -113,6 +117,8 @@ def create_tag(p: CatalogTagCreateRequest):
         )
     except DomainValidationError as exc:
         _err(exc)
+    except CatalogTagNotFoundError as exc:
+        raise HTTPException(404, "Tag was not found.") from exc
     except CatalogDuplicateSlugError as exc:
         raise HTTPException(409, "Tag slug already exists in this scope.") from exc
 
@@ -145,6 +151,8 @@ def update_tag(tag_id: int, p: CatalogTagUpdateRequest):
         )
     except DomainValidationError as exc:
         _err(exc)
+    except CatalogTagNotFoundError as exc:
+        raise HTTPException(404, "Tag was not found.") from exc
     except CatalogDuplicateSlugError as exc:
         raise HTTPException(409, "Tag slug already exists in this scope.") from exc
 

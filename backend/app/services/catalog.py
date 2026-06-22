@@ -1,8 +1,7 @@
 from app.db.config import DatabaseConfig
 from app.db.transactions import transaction
-from app.domain.catalog import CatalogCategoryDraft, CatalogTagDraft, parse_scope
+from app.domain.catalog import parse_scope
 from app.domain.errors import DomainIssue, DomainIssueCode, DomainValidationError
-from app.models.catalog import CatalogScope
 from app.repositories.audit import AuditLogRepository
 from app.repositories.catalog import CatalogRepository
 from app.repositories.ingredients import IngredientRepository
@@ -68,6 +67,10 @@ class CatalogService:
 
     def update_category(self, id, draft):
         with transaction(self.config) as c:
+            existing = self.repo.get_category(id, connection=c)
+            self._validate_immutable_scope(
+                existing.scope, draft.scope, entity_label="категории"
+            )
             self._validate_parent(draft, c)
             obj = self.repo.update_category(id, draft, connection=c)
             self.audit.create_log(
@@ -114,6 +117,10 @@ class CatalogService:
 
     def update_tag(self, id, draft):
         with transaction(self.config) as c:
+            existing = self.repo.get_tag(id, connection=c)
+            self._validate_immutable_scope(
+                existing.scope, draft.scope, entity_label="тега"
+            )
             obj = self.repo.update_tag(id, draft, connection=c)
             self.audit.create_log(
                 action="catalog_tag.updated",
@@ -139,7 +146,7 @@ class CatalogService:
         return obj
 
     def assign_category(self, kind, item_id, category_id):
-        table, _, _, repo_cls, entity, action, _ = _ASSIGN[kind]
+        table, _, _, _, entity, action, _ = _ASSIGN[kind]
         scope = parse_scope(kind)
         with transaction(self.config) as c:
             self._ensure_item(kind, item_id, c)
@@ -191,6 +198,20 @@ class CatalogService:
                 summary="Catalog tags updated",
                 metadata={"tag_ids": unique},
                 connection=c,
+            )
+
+    def _validate_immutable_scope(
+        self, existing_scope, draft_scope, *, entity_label: str
+    ):
+        if existing_scope != draft_scope:
+            raise DomainValidationError(
+                DomainIssue(
+                    DomainIssueCode.INVALID_CATEGORY,
+                    f"Область каталога для {entity_label} нельзя изменить после создания.",
+                    "scope",
+                    draft_scope.value,
+                    "Создайте новую категорию или тег в нужном разделе.",
+                )
             )
 
     def _validate_parent(self, draft, connection):

@@ -146,3 +146,8 @@ PR16 - Ingredient catalog UI foundation
 - Writes are service-layer transactional with audit actions for create/update/archive and assignment updates.
 - Full frontend catalog UI remains a follow-up; no technical admin panel was added.
 - No production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
+
+## PR24 follow-up — Catalog scope immutability and controlled errors
+- Catalog category and tag scopes are now immutable after creation; updates may change names/slugs/sort/color/parent metadata only within the original scope.
+- Catalog assignment routes now convert missing catalog records and missing assignment targets into controlled HTTP 404 responses instead of uncaught errors.
+- Added regression tests for immutable scopes, assigned record scope-change prevention, and controlled missing-record assignment errors.

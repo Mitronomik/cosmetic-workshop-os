@@ -53,9 +53,8 @@ class CatalogRepository:
                 raise ValueError("System category cannot be edited.")
             try:
                 cur = c.execute(
-                    "UPDATE catalog_categories SET scope=?, parent_id=?, name=?, slug=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    "UPDATE catalog_categories SET parent_id=?, name=?, slug=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
                     (
-                        draft.scope.value,
                         draft.parent_id,
                         draft.name,
                         draft.slug,
@@ -130,8 +129,8 @@ class CatalogRepository:
                 raise CatalogTagNotFoundError()
             try:
                 c.execute(
-                    "UPDATE catalog_tags SET scope=?, name=?, slug=?, color=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
-                    (draft.scope.value, draft.name, draft.slug, draft.color, id),
+                    "UPDATE catalog_tags SET name=?, slug=?, color=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (draft.name, draft.slug, draft.color, id),
                 )
             except sqlite3.IntegrityError as e:
                 raise CatalogDuplicateSlugError("Duplicate tag slug.") from e

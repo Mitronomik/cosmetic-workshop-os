@@ -243,3 +243,161 @@ def test_audit_failure_rolls_back_category_tag_and_assignment(tmp_path):
         scalar(c, "SELECT catalog_category_id FROM ingredients WHERE id=?", (item.id,))
         is None
     )
+
+
+def test_category_scope_is_immutable_after_create(tmp_path):
+    c = cfg(tmp_path)
+    s = CatalogService(c)
+    cat = s.create_category(
+        CatalogCategoryDraft.create(scope="ingredient", name="Oils", slug="oils")
+    )
+
+    updated = s.update_category(
+        cat.id,
+        CatalogCategoryDraft.create(
+            scope="ingredient", name="Active oils", slug="active-oils"
+        ),
+    )
+    assert updated.scope.value == "ingredient"
+    assert updated.slug == "active-oils"
+
+    with pytest.raises(DomainValidationError) as exc:
+        s.update_category(
+            cat.id,
+            CatalogCategoryDraft.create(scope="packaging", name="Jars", slug="jars"),
+        )
+    assert exc.value.issue.code.value == "invalid_category"
+    assert exc.value.issue.field == "scope"
+
+
+def test_tag_scope_is_immutable_after_create(tmp_path):
+    c = cfg(tmp_path)
+    s = CatalogService(c)
+    tag = s.create_tag(
+        CatalogTagDraft.create(scope="ingredient", name="Cold", slug="cold")
+    )
+
+    updated = s.update_tag(
+        tag.id,
+        CatalogTagDraft.create(scope="ingredient", name="Fresh", slug="fresh"),
+    )
+    assert updated.scope.value == "ingredient"
+    assert updated.slug == "fresh"
+
+    with pytest.raises(DomainValidationError) as exc:
+        s.update_tag(
+            tag.id,
+            CatalogTagDraft.create(scope="packaging", name="Glass", slug="glass"),
+        )
+    assert exc.value.issue.code.value == "invalid_category"
+    assert exc.value.issue.field == "scope"
+
+
+def test_assigned_category_cannot_be_changed_to_another_scope(tmp_path):
+    c = cfg(tmp_path)
+    s = CatalogService(c)
+    item = ingredient(c)
+    cat = s.create_category(
+        CatalogCategoryDraft.create(scope="ingredient", name="Oils", slug="oils")
+    )
+    s.assign_category("ingredient", item.id, cat.id)
+
+    with pytest.raises(DomainValidationError):
+        s.update_category(
+            cat.id,
+            CatalogCategoryDraft.create(scope="packaging", name="Jars", slug="jars"),
+        )
+    assert (
+        scalar(c, "SELECT catalog_category_id FROM ingredients WHERE id=?", (item.id,))
+        == cat.id
+    )
+
+
+def test_assigned_tag_cannot_be_changed_to_another_scope(tmp_path):
+    c = cfg(tmp_path)
+    s = CatalogService(c)
+    item = ingredient(c)
+    tag = s.create_tag(
+        CatalogTagDraft.create(scope="ingredient", name="Cold", slug="cold")
+    )
+    s.replace_tags("ingredient", item.id, [tag.id])
+
+    with pytest.raises(DomainValidationError):
+        s.update_tag(
+            tag.id,
+            CatalogTagDraft.create(scope="packaging", name="Glass", slug="glass"),
+        )
+    with sqlite3.connect(c.path) as con:
+        assert (
+            con.execute(
+                "SELECT tag_id FROM ingredient_catalog_tags WHERE ingredient_id=?",
+                (item.id,),
+            ).fetchone()[0]
+            == tag.id
+        )
+
+
+def test_missing_assignment_records_raise_controlled_not_found(tmp_path):
+    from app.repositories.catalog import (
+        CatalogCategoryNotFoundError,
+        CatalogTagNotFoundError,
+    )
+
+    c = cfg(tmp_path)
+    s = CatalogService(c)
+    item = ingredient(c)
+
+    with pytest.raises(CatalogCategoryNotFoundError):
+        s.assign_category("ingredient", item.id, 999)
+    with pytest.raises(CatalogTagNotFoundError):
+        s.replace_tags("ingredient", item.id, [999])
+
+
+def test_missing_assignment_targets_raise_controlled_not_found(tmp_path):
+    from app.repositories.ingredients import IngredientNotFoundError
+    from app.repositories.packaging_items import PackagingItemNotFoundError
+    from app.repositories.recipes import RecipeTemplateNotFoundError
+
+    c = cfg(tmp_path)
+    s = CatalogService(c)
+    ingredient_tag = s.create_tag(
+        CatalogTagDraft.create(scope="ingredient", name="A", slug="a")
+    )
+    packaging_cat = s.create_category(
+        CatalogCategoryDraft.create(scope="packaging", name="P", slug="p")
+    )
+    recipe_cat = s.create_category(
+        CatalogCategoryDraft.create(scope="recipe", name="R", slug="r")
+    )
+
+    with pytest.raises(IngredientNotFoundError):
+        s.replace_tags("ingredient", 999, [ingredient_tag.id])
+    with pytest.raises(PackagingItemNotFoundError):
+        s.assign_category("packaging", 999, packaging_cat.id)
+    with pytest.raises(RecipeTemplateNotFoundError):
+        s.assign_category("recipe", 999, recipe_cat.id)
+
+
+def test_assignment_api_converts_missing_records_to_http_errors(tmp_path, monkeypatch):
+    from fastapi import HTTPException
+    from app.api import catalog_assignments
+    from app.repositories.catalog import (
+        CatalogCategoryNotFoundError,
+        CatalogTagNotFoundError,
+    )
+    from app.repositories.ingredients import IngredientNotFoundError
+    from app.repositories.packaging_items import PackagingItemNotFoundError
+    from app.repositories.recipes import RecipeTemplateNotFoundError
+
+    cases = [
+        (CatalogCategoryNotFoundError(), "Catalog record was not found."),
+        (CatalogTagNotFoundError(), "Catalog record was not found."),
+        (IngredientNotFoundError("missing"), "Assignment target was not found."),
+        (PackagingItemNotFoundError("missing"), "Assignment target was not found."),
+        (RecipeTemplateNotFoundError("missing"), "Assignment target was not found."),
+    ]
+    for exc, detail in cases:
+        with pytest.raises(HTTPException) as caught:
+            catalog_assignments._wrap(lambda exc=exc: (_ for _ in ()).throw(exc))
+        assert caught.value.status_code == 404
+        assert caught.value.detail == detail

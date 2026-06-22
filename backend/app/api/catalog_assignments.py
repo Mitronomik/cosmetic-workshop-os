@@ -1,5 +1,12 @@
 from fastapi import APIRouter, HTTPException, status
 from app.domain.errors import DomainValidationError
+from app.repositories.catalog import (
+    CatalogCategoryNotFoundError,
+    CatalogTagNotFoundError,
+)
+from app.repositories.ingredients import IngredientNotFoundError
+from app.repositories.packaging_items import PackagingItemNotFoundError
+from app.repositories.recipes import RecipeTemplateNotFoundError
 from app.schemas.catalog import (
     AssignmentResponse,
     CatalogCategoryAssignmentRequest,
@@ -17,6 +24,18 @@ def _wrap(fn):
     except DomainValidationError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__
+        ) from exc
+    except (CatalogCategoryNotFoundError, CatalogTagNotFoundError) as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Catalog record was not found."
+        ) from exc
+    except (
+        IngredientNotFoundError,
+        PackagingItemNotFoundError,
+        RecipeTemplateNotFoundError,
+    ) as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Assignment target was not found."
         ) from exc
 
 

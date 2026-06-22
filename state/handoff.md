@@ -221,3 +221,8 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Writes are service-layer transactional with audit actions for create/update/archive and assignment updates.
 - Full frontend catalog UI remains a follow-up; no technical admin panel was added.
 - No production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
+
+## PR24 follow-up notes
+- Catalog category/tag `scope` must remain immutable after creation to avoid corrupting existing scoped assignments.
+- Missing catalog records and missing ingredient/packaging/recipe assignment targets are handled as controlled API 404 responses.
+- No schema changes, migrations, frontend UI, DTO enrichment, production/orders/import/export/cloud/mobile/OCR/auth/roles were added in the follow-up.
