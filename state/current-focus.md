@@ -19,3 +19,8 @@ Intentional non-scope:
 - The frontend uses existing recipe template/version endpoints and the PR18 calculation endpoint; recipe amounts are not calculated in the browser.
 - Historical recipe versions remain view-only in this PR: no edit/delete/status mutation UI was added.
 - No client recipes, clients, orders, production, stock readiness, cost/tax/margin, migrations, or new tables were added.
+
+## PR20 — Ingredient lots UI foundation
+- Added a scoped frontend foundation for `Партии` at `/ingredient-lots` to list, create, edit, and softly deactivate ingredient lots through existing backend APIs.
+- The lot UI treats lots as purchased batch metadata only: component, lot code, supplier, purchase/expiration dates, unit, costs, density, and notes.
+- No stock movement UI, manual balance editing, stored balances, migrations, new tables, production, purchase list, alerts, recipes, clients, or orders were added.

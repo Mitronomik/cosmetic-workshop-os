@@ -2,9 +2,11 @@ type HealthStatus = 'checking' | 'online' | 'offline';
 type OnboardingStatus = 'loading' | 'ready' | 'unavailable';
 type InventoryStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientsStatus = 'idle' | 'loading' | 'ready' | 'error';
+type IngredientLotsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type RecipesStatus = 'idle' | 'loading' | 'ready' | 'error';
 type CalculationStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientFormMode = 'create' | 'edit';
+type IngredientLotFormMode = 'create' | 'edit';
 
 type OnboardingState = {
   has_started: boolean;
@@ -95,6 +97,18 @@ type IngredientPayload = {
 
 type IngredientFormState = IngredientPayload & { id: number | null };
 
+type IngredientLot = {
+  id: number; ingredient_id: number; lot_code: string; supplier_name: string; purchased_at: string | null; expires_at: string | null; unit: string; unit_cost: string | null; total_cost: string | null; density_g_per_ml: string | null; notes: string; is_active: boolean; created_at: string; updated_at: string;
+};
+
+type IngredientLotPayload = {
+  ingredient_id: number; lot_code: string; supplier_name: string; purchased_at: string | null; expires_at: string | null; unit: string; unit_cost: string | null; total_cost: string | null; density_g_per_ml: string | null; notes: string;
+};
+
+type IngredientLotFormState = { id: number | null; ingredient_id: string; lot_code: string; supplier_name: string; purchased_at: string; expires_at: string; unit: string; unit_cost: string; total_cost: string; density_g_per_ml: string; notes: string };
+
+type IngredientLotsState = { lots: IngredientLot[]; ingredients: Ingredient[]; formMode: IngredientLotFormMode; form: IngredientLotFormState };
+
 type IngredientsState = {
   items: Ingredient[];
   formMode: IngredientFormMode;
@@ -163,7 +177,7 @@ type RecipesState = {
 };
 
 
-const navigationItems = ['Главная','Компоненты','Рецепты','Клиенты','Заказы','Склад','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
+const navigationItems = ['Главная','Компоненты','Партии','Рецепты','Клиенты','Заказы','Склад','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
 const stepLabels: Record<string, string> = {
   welcome: 'Познакомиться с рабочим пространством',
   data_location: 'Понять, где хранятся локальные данные',
@@ -186,6 +200,10 @@ let ingredientsStatus: IngredientsStatus = 'idle';
 let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm() };
 let ingredientsError = '';
 let ingredientsMessage = '';
+let ingredientLotsStatus: IngredientLotsStatus = 'idle';
+let ingredientLotsState: IngredientLotsState = { lots: [], ingredients: [], formMode: 'create', form: emptyIngredientLotForm() };
+let ingredientLotsError = '';
+let ingredientLotsMessage = '';
 let recipesStatus: RecipesStatus = 'idle';
 let recipesError = '';
 let recipesMessage = '';
@@ -196,6 +214,7 @@ let recipesState: RecipesState = { templates: [], selectedTemplate: null, versio
 function sectionFromLocation() {
   if (window.location.pathname === '/inventory') return 'Склад';
   if (window.location.pathname === '/ingredients') return 'Компоненты';
+  if (window.location.pathname === '/ingredient-lots') return 'Партии';
   if (window.location.pathname === '/recipes') return 'Рецепты';
   return 'Главная';
 }
@@ -218,7 +237,7 @@ function render() {
           <div><p class="eyebrow">Рабочее пространство</p><h1>${activeSection}</h1></div>
           <span class="status ${healthStatus}">${healthLabel}</span>
         </header>
-        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Рецепты' ? recipesPage() : sectionPlaceholder(activeSection)}
+        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Партии' ? ingredientLotsPage() : activeSection === 'Рецепты' ? recipesPage() : sectionPlaceholder(activeSection)}
       </main>
     </div>`;
   bindEvents(root);
@@ -229,9 +248,10 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       activeSection = button.dataset.section ?? 'Главная';
-      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Рецепты' ? '/recipes' : '/');
+      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Партии' ? '/ingredient-lots' : activeSection === 'Рецепты' ? '/recipes' : '/');
       if (activeSection === 'Склад') loadInventory();
       if (activeSection === 'Компоненты') loadIngredients();
+      if (activeSection === 'Партии') loadIngredientLots();
       if (activeSection === 'Рецепты') loadRecipes();
       render();
     });
@@ -248,6 +268,11 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient"]').forEach((button) => button.addEventListener('click', () => startEditIngredient(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient"]').forEach((button) => button.addEventListener('click', () => deactivateIngredient(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="ingredient"]')?.addEventListener('submit', submitIngredientForm);
+  root.querySelector<HTMLButtonElement>('[data-action="reload-ingredient-lots"]')?.addEventListener('click', () => loadIngredientLots(true));
+  root.querySelector<HTMLButtonElement>('[data-action="new-ingredient-lot"]')?.addEventListener('click', () => { ingredientLotsState.formMode = 'create'; ingredientLotsState.form = emptyIngredientLotForm(); ingredientLotsMessage = ''; ingredientLotsError = ''; render(); });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient-lot"]').forEach((button) => button.addEventListener('click', () => startEditIngredientLot(Number(button.dataset.id))));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient-lot"]').forEach((button) => button.addEventListener('click', () => deactivateIngredientLot(Number(button.dataset.id))));
+  root.querySelector<HTMLFormElement>('[data-form="ingredient-lot"]')?.addEventListener('submit', submitIngredientLotForm);
   root.querySelector<HTMLButtonElement>('[data-action="reload-recipes"]')?.addEventListener('click', () => loadRecipes(true));
   root.querySelector<HTMLFormElement>('[data-form="recipe-template"]')?.addEventListener('submit', submitRecipeTemplateForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-version"]')?.addEventListener('submit', submitRecipeVersionForm);
@@ -278,6 +303,24 @@ function ingredientForm() {
 function ingredientList() {
   if (ingredientsState.items.length === 0) return `<section class="card empty-card"><h2>Компонентов пока нет</h2><p>Добавьте первый компонент, чтобы потом учитывать партии и остатки на складе.</p><p class="next-step">Следующее действие: заполните название, единицу учета и при необходимости плотность, затем нажмите «Создать компонент».</p></section>`;
   return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Компоненты</h2><div class="table-wrap"><table><thead><tr><th>Название</th><th>Ед. учета</th><th>Плотность</th><th>Статус</th><th>Заметки</th><th>Действия</th></tr></thead><tbody>${ingredientsState.items.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(categoryLabel(item.category))}${item.supplier_hint ? ` · ${escapeHtml(item.supplier_hint)}` : ''}</small></td><td>${unitLabel(item.default_unit)}</td><td>${item.density_g_per_ml ? `${escapeHtml(item.density_g_per_ml)} г/мл` : 'Не указана'}</td><td><span class="pill ${item.is_active ? 'success' : 'muted'}">${item.is_active ? 'Активен' : 'Неактивен'}</span></td><td>${escapeHtml(item.notes || 'Без заметок')}</td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient" data-id="${item.id}">Изменить</button>${item.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient" data-id="${item.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div></section>`;
+}
+
+function ingredientLotsPage() {
+  if (ingredientLotsStatus === 'idle' || ingredientLotsStatus === 'loading') return `<section class="card"><p class="card-kicker">Партии компонентов</p><h2>Загружаем партии…</h2><p>Получаем партии компонентов из локального API.</p></section>`;
+  if (ingredientLotsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Партии компонентов</p><h2>Не удалось загрузить партии</h2><p>${ingredientLotsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredient-lots">Повторить загрузку</button></section>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Партии компонентов</p><h2>Партии закупленных компонентов</h2><p>Здесь хранится паспорт партии: компонент, поставщик, срок годности, цена и единица учета. Остаток не редактируется здесь и считается отдельными движениями склада.</p></div><button class="secondary-action" type="button" data-action="new-ingredient-lot">Очистить форму</button></section>${ingredientLotsMessage ? `<p class="page-message">${ingredientLotsMessage}</p>` : ''}${ingredientLotsError ? `<p class="page-message error-message">${ingredientLotsError}</p>` : ''}${ingredientLotForm()}${ingredientLotList()}</div>`;
+}
+
+function ingredientLotForm() {
+  const form = ingredientLotsState.form;
+  const isEdit = ingredientLotsState.formMode === 'edit';
+  const hasIngredients = ingredientLotsState.ingredients.length > 0;
+  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить партию' : 'Создать партию компонента'}</h2><p class="next-step">Количество партии добавляется отдельным движением склада. Здесь хранится информация о партии: поставщик, срок годности, цена и единица учета.</p><form data-form="ingredient-lot" class="ingredient-form"><div class="form-grid"><label>Компонент<select name="ingredient_id" required ${hasIngredients ? '' : 'disabled'}><option value="">Выберите компонент</option>${ingredientLotsState.ingredients.map((item) => `<option value="${item.id}" ${String(item.id) === form.ingredient_id ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></label><label>Код партии<input name="lot_code" maxlength="120" value="${escapeHtml(form.lot_code)}" placeholder="Например, LOT-2026-01" /></label><label>Поставщик<input name="supplier_name" maxlength="160" value="${escapeHtml(form.supplier_name)}" placeholder="Необязательно" /></label><label>Единица учета<select name="unit">${lotUnitOptions(form.unit)}</select></label><label>Цена за единицу<input name="unit_cost" inputmode="decimal" value="${escapeHtml(form.unit_cost)}" placeholder="Например, 12.50" /></label><label>Общая стоимость<input name="total_cost" inputmode="decimal" value="${escapeHtml(form.total_cost)}" placeholder="Необязательно" /></label><label>Плотность<input name="density_g_per_ml" inputmode="decimal" value="${escapeHtml(form.density_g_per_ml)}" placeholder="Например, 0.950" /></label><label>Дата покупки<input name="purchased_at" type="date" value="${escapeHtml(form.purchased_at)}" /></label><label>Срок годности<input name="expires_at" type="date" value="${escapeHtml(form.expires_at)}" /></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки о партии">${escapeHtml(form.notes)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" ${hasIngredients ? '' : 'disabled'}>${isEdit ? 'Сохранить изменения' : 'Создать партию'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="new-ingredient-lot">Отменить редактирование</button>' : ''}</div>${hasIngredients ? '' : '<p class="next-step">Сначала создайте активный компонент в разделе «Компоненты», затем вернитесь к партиям.</p>'}</form></section>`;
+}
+
+function ingredientLotList() {
+  if (ingredientLotsState.lots.length === 0) return `<section class="card empty-card"><h2>Пока нет партий компонентов</h2><p>Создайте партию, чтобы указать поставщика, срок годности и цену закупки.</p><p class="next-step">Остаток считается по движениям склада. Чтобы добавить количество, используйте движение склада — это будет отдельный шаг.</p></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Партии компонентов</h2><div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Партия</th><th>Поставщик</th><th>Ед. учета</th><th>Цена за единицу</th><th>Плотность</th><th>Дата покупки</th><th>Срок годности</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${ingredientLotsState.lots.map((lot) => `<tr><td><strong>${escapeHtml(lotIngredientName(lot.ingredient_id))}</strong></td><td>${escapeHtml(lot.lot_code || 'Без номера')}<small>${escapeHtml(lot.notes || '')}</small></td><td>${escapeHtml(lot.supplier_name || 'Не указан')}</td><td>${unitLabel(lot.unit)}</td><td>${lot.unit_cost ? escapeHtml(lot.unit_cost) : 'Не указана'}</td><td>${lot.density_g_per_ml ? `${escapeHtml(lot.density_g_per_ml)} г/мл` : 'Не указана'}</td><td>${formatDate(lot.purchased_at)}</td><td>${formatDate(lot.expires_at)}</td><td><span class="pill ${lotStatusClass(lot)}">${lotStatusLabel(lot)}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient-lot" data-id="${lot.id}">Изменить</button>${lot.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient-lot" data-id="${lot.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div><p class="next-step">Остаток партии не редактируется в этой таблице: он будет считаться по движениям склада.</p></section>`;
 }
 
 function inventoryPage() {
@@ -342,6 +385,14 @@ function recipeVersionDetailPanel() { const d=recipesState.selectedVersionDetail
 function calculationPanel() { const c=recipesState.calculation; return `<div class="calculation-panel"><h3>Расчет</h3><form data-form="recipe-calculation" class="inline-form"><label>Целевой размер партии<input name="target_batch_size_value" inputmode="decimal" value="${escapeHtml(recipesState.calculationTargetValue)}" placeholder="Оставьте пустым для размера версии" /></label><label>Единица<select name="target_batch_size_unit"><option value="g" ${recipesState.calculationTargetUnit==='g'?'selected':''}>г</option><option value="ml" ${recipesState.calculationTargetUnit==='ml'?'selected':''}>мл</option></select></label><button class="primary-action" type="submit">Рассчитать</button></form>${calculationStatus==='loading'?'<p>Считаем на backend…</p>':''}${calculationError?`<p class="page-message error-message">${calculationError}</p>`:''}${c?calculationResult(c):'<p class="next-step">Нажмите «Рассчитать», чтобы получить строки, итоги и предупреждения из backend.</p>'}</div>`; }
 function calculationResult(c: RecipeCalculationResult) { return `<div class="calculation-result"><p><strong>Можно рассчитать:</strong> ${c.can_calculate?'да':'нет'} · <strong>Сумма процентов:</strong> ${escapeHtml(c.percent_total)}%</p>${c.issues.length?`<h4>${c.issues.some((i)=>i.severity==='error')?'Нужно исправить':'Предупреждения'}</h4><ul class="issue-list">${c.issues.map((i)=>`<li class="${i.severity==='error'?'danger-text':'warning-text'}">${escapeHtml(i.message)}${i.next_action?` <small>${escapeHtml(i.next_action)}</small>`:''}</li>`).join('')}</ul>`:''}<h4>Состав</h4>${c.lines.length?`<div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Исходно</th><th>Рассчитано</th><th>Фаза</th><th>Комментарий</th></tr></thead><tbody>${c.lines.map((l)=>`<tr><td>${escapeHtml(l.ingredient_name)}</td><td>${escapeHtml(l.source_amount_value)} ${unitLabel(l.source_amount_unit)}</td><td>${l.calculated_amount_value?`${escapeHtml(l.calculated_amount_value)} ${unitLabel(l.calculated_amount_unit || '')}`:'—'}</td><td>${escapeHtml(l.phase || 'Не указана')}</td><td>${escapeHtml(l.calculation_note || '')}</td></tr>`).join('')}</tbody></table></div>`:'<p>Backend не вернул расчетных строк.</p>'}<h4>Итого по единицам</h4>${c.totals_by_unit.length?`<ul>${c.totals_by_unit.map((t)=>`<li>${escapeHtml(t.total_value)} ${unitLabel(t.unit)}</li>`).join('')}</ul>`:'<p>Итоги пока не рассчитаны.</p>'}</div>`; }
 
+function emptyIngredientLotForm(): IngredientLotFormState { return { id: null, ingredient_id: '', lot_code: '', supplier_name: '', purchased_at: '', expires_at: '', unit: 'g', unit_cost: '', total_cost: '', density_g_per_ml: '', notes: '' }; }
+function lotUnitOptions(current: string) { return ['g','ml','pcs'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
+function lotIngredientName(id: number) { return ingredientLotsState.ingredients.find((ingredient) => ingredient.id === id)?.name ?? 'Компонент'; }
+function lotStatusLabel(lot: IngredientLot) { if (!lot.is_active) return 'Неактивна'; const status = expirationStatus(lot.expires_at); return status ?? 'Активна'; }
+function lotStatusClass(lot: IngredientLot) { if (!lot.is_active) return 'muted'; const status = expirationStatus(lot.expires_at); if (status === 'Просрочена') return 'danger'; if (status === 'Скоро истекает') return 'warning'; if (status === 'Без срока годности') return 'muted'; return 'success'; }
+function expirationStatus(value: string | null) { if (!value) return 'Без срока годности'; const today = new Date(); today.setHours(0, 0, 0, 0); const expires = new Date(`${value}T00:00:00`); const days = Math.ceil((expires.getTime() - today.getTime()) / 86400000); if (days < 0) return 'Просрочена'; if (days <= 30) return 'Скоро истекает'; return null; }
+function ingredientLotPayloadFromForm(form: HTMLFormElement): IngredientLotPayload { const data = new FormData(form); const nullable = (name: string) => { const value = String(data.get(name) ?? '').trim(); return value || null; }; return { ingredient_id: Number(data.get('ingredient_id')), lot_code: String(data.get('lot_code') ?? '').trim(), supplier_name: String(data.get('supplier_name') ?? '').trim(), purchased_at: nullable('purchased_at'), expires_at: nullable('expires_at'), unit: String(data.get('unit') ?? 'g'), unit_cost: nullable('unit_cost'), total_cost: nullable('total_cost'), density_g_per_ml: nullable('density_g_per_ml'), notes: String(data.get('notes') ?? '').trim() }; }
+
 function emptyIngredientForm(): IngredientFormState { return { id: null, name: '', category: 'other', default_unit: 'g', density_g_per_ml: null, notes: '', inci_name: '', supplier_hint: '', allergen_note: '', usage_note: '' }; }
 function categoryLabel(category: string) { return ({ oil: 'Масло', butter: 'Баттер', wax: 'Воск', emulsifier: 'Эмульгатор', humectant: 'Увлажнитель', active: 'Актив', preservative: 'Консервант', fragrance: 'Отдушка', essential_oil: 'Эфирное масло', colorant: 'Краситель', water_phase: 'Водная фаза', additive: 'Добавка', other: 'Другое' } as Record<string, string>)[category] ?? category; }
 function categoryOptions(current: string) { return ['oil','butter','wax','emulsifier','humectant','active','preservative','fragrance','essential_oil','colorant','water_phase','additive','other'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${categoryLabel(value)}</option>`).join(''); }
@@ -371,6 +422,10 @@ function getIngredients() { return apiGet<{ ingredients: Ingredient[] }>('/api/i
 function createIngredient(payload: IngredientPayload) { return apiSend<Ingredient>('/api/ingredients', 'POST', payload); }
 function updateIngredient(id: number, payload: IngredientPayload) { return apiSend<Ingredient>(`/api/ingredients/${id}`, 'PUT', payload); }
 function deactivateIngredientRequest(id: number) { return apiSend<Ingredient>(`/api/ingredients/${id}/deactivate`, 'POST'); }
+function getIngredientLots() { return apiGet<{ lots: IngredientLot[] }>('/api/ingredient-lots'); }
+function createIngredientLot(payload: IngredientLotPayload) { return apiSend<IngredientLot>('/api/ingredient-lots', 'POST', payload); }
+function updateIngredientLot(id: number, payload: IngredientLotPayload) { return apiSend<IngredientLot>(`/api/ingredient-lots/${id}`, 'PUT', payload); }
+function deactivateIngredientLotRequest(id: number) { return apiSend<IngredientLot>(`/api/ingredient-lots/${id}/deactivate`, 'POST'); }
 
 function getRecipeTemplates() { return apiGet<{ recipe_templates: RecipeTemplate[] }>('/api/recipe-templates'); }
 function createRecipeTemplate(payload: RecipeTemplatePayload) { return apiSend<RecipeTemplate>('/api/recipe-templates', 'POST', payload); }
@@ -402,6 +457,26 @@ function submitRecipeTemplateForm(event: SubmitEvent) { event.preventDefault(); 
 function submitRecipeVersionForm(event: SubmitEvent) { event.preventDefault(); if (!recipesState.selectedTemplate) return; const form = recipeVersionFormFromForm(event.currentTarget as HTMLFormElement); recipesState.versionForm = form; createRecipeVersion(recipesState.selectedTemplate.id, recipeVersionPayload(form)).then((detail)=>{ recipesMessage = 'Новая версия рецепта создана. Исторические версии не изменялись.'; recipesError = ''; recipesState.versionForm = emptyRecipeVersionForm(); recipesState.selectedVersionDetail = detail; return getRecipeVersions(recipesState.selectedTemplate!.id); }).then((response)=>{ recipesState.versions = response.recipe_versions; recipesState.calculation = null; calculationStatus = 'idle'; render(); }).catch(()=>{ recipesMessage = ''; recipesError = 'Не удалось создать версию. Проверьте строки состава и попробуйте еще раз.'; render(); }); }
 function submitCalculationForm(event: SubmitEvent) { event.preventDefault(); const detail = recipesState.selectedVersionDetail; if (!detail) return; const data = new FormData(event.currentTarget as HTMLFormElement); const value = String(data.get('target_batch_size_value') ?? '').trim(); const unit = String(data.get('target_batch_size_unit') ?? 'g'); recipesState.calculationTargetValue = value; recipesState.calculationTargetUnit = unit; calculationStatus = 'loading'; calculationError = ''; render(); getRecipeCalculation(detail.version.id, value, unit).then((result)=>{ recipesState.calculation = result; calculationStatus = 'ready'; render(); }).catch(()=>{ calculationStatus = 'error'; calculationError = 'Не удалось выполнить расчет. Проверьте размер партии и попробуйте еще раз.'; render(); }); }
 
+function loadIngredientLots(force = false) {
+  if (!force && (ingredientLotsStatus === 'loading' || ingredientLotsStatus === 'ready')) return;
+  ingredientLotsStatus = 'loading'; ingredientLotsError = ''; render();
+  Promise.all([getIngredientLots(), getIngredients()])
+    .then(([lots, ingredients]) => { ingredientLotsState.lots = lots.lots; ingredientLotsState.ingredients = ingredients.ingredients.filter((i)=>i.is_active); ingredientLotsStatus = 'ready'; render(); })
+    .catch(() => { ingredientLotsStatus = 'error'; ingredientLotsError = 'Не получилось получить партии компонентов из локального API.'; render(); });
+}
+function startEditIngredientLot(id: number) { const lot = ingredientLotsState.lots.find((item) => item.id === id); if (!lot) return; ingredientLotsState.formMode = 'edit'; ingredientLotsState.form = { id: lot.id, ingredient_id: String(lot.ingredient_id), lot_code: lot.lot_code, supplier_name: lot.supplier_name, purchased_at: lot.purchased_at ?? '', expires_at: lot.expires_at ?? '', unit: lot.unit, unit_cost: lot.unit_cost ?? '', total_cost: lot.total_cost ?? '', density_g_per_ml: lot.density_g_per_ml ?? '', notes: lot.notes }; ingredientLotsMessage = ''; render(); }
+function submitIngredientLotForm(event: SubmitEvent) {
+  event.preventDefault();
+  const payload = ingredientLotPayloadFromForm(event.currentTarget as HTMLFormElement);
+  const request = ingredientLotsState.formMode === 'edit' && ingredientLotsState.form.id ? updateIngredientLot(ingredientLotsState.form.id, payload) : createIngredientLot(payload);
+  request.then(() => { ingredientLotsMessage = ingredientLotsState.formMode === 'edit' ? 'Партия сохранена. Остаток не изменялся.' : 'Партия создана. Количество добавляется отдельным движением склада.'; ingredientLotsError = ''; ingredientLotsState.formMode = 'create'; ingredientLotsState.form = emptyIngredientLotForm(); return getIngredientLots(); }).then((response) => { ingredientLotsState.lots = response.lots; ingredientLotsStatus = 'ready'; render(); }).catch(() => { ingredientLotsMessage = ''; ingredientLotsError = 'Не удалось сохранить партию. Проверьте обязательные поля и попробуйте еще раз.'; ingredientLotsStatus = 'ready'; render(); });
+}
+function deactivateIngredientLot(id: number) {
+  const lot = ingredientLotsState.lots.find((item) => item.id === id);
+  if (!lot || !window.confirm(`Деактивировать партию «${lot.lot_code || lotIngredientName(lot.ingredient_id)}»? Она не будет удалена из истории.`)) return;
+  deactivateIngredientLotRequest(id).then(() => { ingredientLotsMessage = 'Партия деактивирована. История склада не изменялась.'; ingredientLotsError = ''; return getIngredientLots(); }).then((response) => { ingredientLotsState.lots = response.lots; ingredientLotsStatus = 'ready'; render(); }).catch(() => { ingredientLotsMessage = ''; ingredientLotsError = 'Не удалось деактивировать партию. Попробуйте еще раз.'; ingredientLotsStatus = 'ready'; render(); });
+}
+
 function loadIngredients(force = false) {
   if (!force && (ingredientsStatus === 'loading' || ingredientsStatus === 'ready')) return;
   ingredientsStatus = 'loading'; ingredientsError = ''; render();
@@ -430,10 +505,11 @@ function loadInventory(force = false) {
 function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!response.ok) throw new Error('Onboarding is unavailable'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = ''; render(); }).catch(() => { onboardingStatus = 'unavailable'; render(); }); }
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
-window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Рецепты') loadRecipes(); render(); });
+window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Партии') loadIngredientLots(); if (activeSection === 'Рецепты') loadRecipes(); render(); });
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
 if (activeSection === 'Склад') loadInventory();
 if (activeSection === 'Компоненты') loadIngredients();
+if (activeSection === 'Партии') loadIngredientLots();
 if (activeSection === 'Рецепты') loadRecipes();
