@@ -183,3 +183,13 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
   - `GET /api/ingredients` for active component dropdown options.
 - The UI intentionally edits only lot metadata and explains that quantity is added through separate stock movements.
 - No stock movement UI, manual lot balance fields, frontend balance derivation, backend migrations, new tables, production, purchase list, alerts, client/order UI, cloud, mobile, OCR, auth, or roles were added.
+
+## PR21 notes
+- Stock movement UI route: `/stock-movements` (navigation label `Движения склада`).
+- Frontend ingredient stock movement API usage:
+  - `GET /api/ingredient-lots` and `GET /api/ingredients` for lot selection labels;
+  - `GET /api/ingredient-lots/{lot_id}/balance` for backend-derived read-only current balance;
+  - `GET /api/ingredient-lots/{lot_id}/movements` for selected lot movement history;
+  - `POST /api/stock-movements` for creating an append-only movement.
+- Movement types shown in Russian: receipt, manual adjustment in/out, write-off, and return to supplier.
+- The UI intentionally has no movement edit/delete actions, no editable current balance/remaining quantity field, no frontend-derived balance calculation, no packaging movement UI, no production, no purchase list, no alerts, no backend changes, no migrations, and no new tables.
