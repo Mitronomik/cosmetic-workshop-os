@@ -89,4 +89,6 @@ def _ingredient_response(ingredient: Ingredient) -> IngredientResponse:
         usage_note=ingredient.usage_note,
         created_at=ingredient.created_at,
         updated_at=ingredient.updated_at,
+        catalog_category_id=ingredient.catalog_category_id,
+        catalog_tag_ids=list(ingredient.catalog_tag_ids),
     )

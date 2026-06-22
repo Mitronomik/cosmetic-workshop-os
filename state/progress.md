@@ -151,3 +151,8 @@ PR16 - Ingredient catalog UI foundation
 - Catalog category and tag scopes are now immutable after creation; updates may change names/slugs/sort/color/parent metadata only within the original scope.
 - Catalog assignment routes now convert missing catalog records and missing assignment targets into controlled HTTP 404 responses instead of uncaught errors.
 - Added regression tests for immutable scopes, assigned record scope-change prevention, and controlled missing-record assignment errors.
+
+## PR25 — Ingredient catalog category selector and tag chips UI
+- Added UI support on «Компоненты» for loading ingredient-scoped catalog categories and tags, showing «Системный тип», «Моя группа», and «Метки» in the component list, and assigning a selected component's category/tags through the existing ingredient assignment endpoints.
+- Added minimal ingredient response enrichment for `catalog_category_id` and ingredient tag ids so the frontend can show current assignment state without adding migrations or new tables.
+- Catalog categories/tags remain user organization metadata; `IngredientCategory` remains the system classification. Packaging/recipe catalog UI, catalog admin screens, deletion, migrations, production, orders, import/export, cloud, mobile, OCR, auth, and roles were not added.

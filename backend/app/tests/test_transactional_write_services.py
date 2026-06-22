@@ -227,4 +227,4 @@ def test_no_new_business_tables_or_migrations_for_transaction_foundation(tmp_pat
     tables = table_names(config)
     assert_only_current_tables(tables)
     assert_no_forbidden_future_tables(tables)
-    assert scalar(config, "SELECT count(*) FROM schema_migrations") == 9
+    assert scalar(config, "SELECT count(*) FROM schema_migrations") == 10
