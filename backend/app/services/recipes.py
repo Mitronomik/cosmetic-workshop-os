@@ -43,6 +43,18 @@ class RecipeService:
             template = self.repository.get_template(template_id, connection=connection)
             if not template.is_active:
                 raise RecipeTemplateInactiveError("Recipe template is inactive.")
+            if draft.created_from_version_id is not None:
+                source_version = self.repository.get_version(draft.created_from_version_id, connection=connection)
+                if source_version.recipe_template_id != template_id:
+                    raise DomainValidationError(
+                        DomainIssue(
+                            code=DomainIssueCode.REQUIRED_FIELD,
+                            message="Исходная версия должна относиться к этому же рецепту.",
+                            field="created_from_version_id",
+                            value=str(draft.created_from_version_id),
+                            next_action="Выберите версию этого же рецепта или оставьте поле пустым.",
+                        )
+                    )
             for line in draft.ingredients:
                 try:
                     ingredient = self.ingredients.get_by_id(line.ingredient_id)

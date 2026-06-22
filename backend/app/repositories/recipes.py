@@ -58,8 +58,8 @@ class RecipeRepository:
             row = c.execute("SELECT * FROM recipe_ingredients WHERE id=?", (cur.lastrowid,)).fetchone()
         return _ingredient(row)
 
-    def get_version(self, version_id: int) -> RecipeVersion:
-        with session(self.config) as c:
+    def get_version(self, version_id: int, *, connection: sqlite3.Connection | None = None) -> RecipeVersion:
+        with _scope(self.config, connection) as c:
             row = c.execute("SELECT * FROM recipe_versions WHERE id=?", (version_id,)).fetchone()
         if row is None: raise RecipeVersionNotFoundError(f"Recipe version {version_id} was not found.")
         return _version(row)

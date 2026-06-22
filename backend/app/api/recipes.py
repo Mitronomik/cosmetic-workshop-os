@@ -38,6 +38,7 @@ def create_version(template_id: int, payload: RecipeVersionCreateRequest):
         return _detail(RecipeService().create_version(template_id, draft))
     except DomainValidationError as exc: raise HTTPException(422, detail=exc.issue.__dict__) from exc
     except RecipeTemplateNotFoundError as exc: raise HTTPException(404, detail="Recipe template was not found.") from exc
+    except RecipeVersionNotFoundError as exc: raise HTTPException(404, detail="Source recipe version was not found.") from exc
     except IngredientNotFoundError as exc: raise HTTPException(404, detail="Ingredient was not found.") from exc
     except (RecipeTemplateInactiveError, RecipeIngredientInactiveError) as exc: raise HTTPException(409, detail=str(exc)) from exc
 

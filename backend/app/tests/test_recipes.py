@@ -92,6 +92,57 @@ def test_invalid_template_and_inactive_template_rejected(tmp_path):
     with pytest.raises(RecipeTemplateInactiveError):
         service.create_version(t.id, RecipeVersionDraft.create(ingredients=[line(ing.id)]))
 
+def test_created_from_version_same_template_succeeds(tmp_path):
+    c = config(tmp_path)
+    ing = ingredient(c)
+    t = template(c)
+    service = RecipeService(c)
+    v1 = service.create_version(t.id, RecipeVersionDraft.create(ingredients=[line(ing.id)]))
+    v2 = service.create_version(
+        t.id,
+        RecipeVersionDraft.create(created_from_version_id=v1.version.id, ingredients=[line(ing.id)]),
+    )
+    assert v2.version.version_number == 2
+    assert v2.version.created_from_version_id == v1.version.id
+    assert scalar(c, "SELECT count(*) FROM audit_logs WHERE action='recipe_version.created'") == 2
+
+
+def test_created_from_version_non_existing_rejected_without_version_or_audit(tmp_path):
+    c = config(tmp_path)
+    ing = ingredient(c)
+    t = template(c)
+    before_audit = scalar(c, "SELECT count(*) FROM audit_logs")
+    with pytest.raises(LookupError):
+        RecipeService(c).create_version(
+            t.id,
+            RecipeVersionDraft.create(created_from_version_id=999, ingredients=[line(ing.id)]),
+        )
+    assert scalar(c, "SELECT count(*) FROM recipe_versions") == 0
+    assert scalar(c, "SELECT count(*) FROM recipe_ingredients") == 0
+    assert scalar(c, "SELECT count(*) FROM audit_logs") == before_audit
+
+
+def test_created_from_version_cross_template_rejected_without_version_or_audit(tmp_path):
+    c = config(tmp_path)
+    ing = ingredient(c)
+    t1 = template(c)
+    t2 = RecipeService(c).create_template(RecipeTemplateDraft.create(name="Second recipe"))
+    service = RecipeService(c)
+    source = service.create_version(t1.id, RecipeVersionDraft.create(ingredients=[line(ing.id)]))
+    before_versions = scalar(c, "SELECT count(*) FROM recipe_versions")
+    before_lines = scalar(c, "SELECT count(*) FROM recipe_ingredients")
+    before_audit = scalar(c, "SELECT count(*) FROM audit_logs")
+    with pytest.raises(DomainValidationError) as exc:
+        service.create_version(
+            t2.id,
+            RecipeVersionDraft.create(created_from_version_id=source.version.id, ingredients=[line(ing.id)]),
+        )
+    assert exc.value.issue.field == "created_from_version_id"
+    assert exc.value.issue.message == "Исходная версия должна относиться к этому же рецепту."
+    assert scalar(c, "SELECT count(*) FROM recipe_versions") == before_versions
+    assert scalar(c, "SELECT count(*) FROM recipe_ingredients") == before_lines
+    assert scalar(c, "SELECT count(*) FROM audit_logs") == before_audit
+
 def test_ingredient_line_validation_and_active_ingredient_requirement(tmp_path):
     c = config(tmp_path)
     ing1 = ingredient(c, "Oil A")
