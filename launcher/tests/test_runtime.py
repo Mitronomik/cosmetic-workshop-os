@@ -9,12 +9,11 @@ from launcher import runtime
 from launcher.runtime import RuntimeLaunchError, initialize_backend_startup
 
 FORBIDDEN_TABLES = {
-    "recipes", "recipe_versions",
-    "recipe_ingredients", "client_recipes", "client_recipe_ingredients", "clients",
+    "recipes", "client_recipes", "client_recipe_ingredients", "clients",
     "client_wishes", "client_feedback", "orders", "production_batches", "import_sources",
     "import_drafts", "backup_records",
 }
-ALLOWED_TABLES = {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots", "stock_movements", "packaging_items", "packaging_stock_movements", "sqlite_sequence"}
+ALLOWED_TABLES = {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots", "stock_movements", "packaging_items", "packaging_stock_movements", "recipe_templates", "recipe_versions", "recipe_ingredients", "sqlite_sequence"}
 
 
 def table_names(database_path: Path) -> set[str]:

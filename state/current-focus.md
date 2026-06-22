@@ -1,12 +1,12 @@
 # Current Focus
 
-Current task: PR13 - Packaging stock movements foundation.
+Current task: PR17 - Recipe models backend foundation.
 
 ## Allowed scope
-Backend-only packaging/tare stock movement foundation: `packaging_stock_movements` migration, pieces-only movement validation, repository/service/API basics, movement-derived packaging balance, negative-balance prevention, transactional audit event, backend tests, smoke notes, and state documentation updates.
+Backend-only recipe model foundation: `recipe_templates`, `recipe_versions`, and `recipe_ingredients` migration; domain validation; repository/service/API basics; transactional audit events for recipe template create/deactivate and recipe version create; backend tests; smoke notes; and state documentation updates.
 
 ## Do not touch
-Frontend packaging UI, packaging lots, packaging purchase list, packaging reservations, recipes, production, clients, orders, purchase suggestions, imports/exports, launcher runtime changes, final app packaging/installers, Docker, cloud/mobile access, OCR, auth, or roles.
+Frontend recipe UI, recipe calculation service, percent-sum validation, recipe cost calculation, client recipes, clients, orders, production, stock reservation/write-off, purchase suggestions, alerts engine, imports/exports, launcher behavior changes, final app packaging/installers, Docker, cloud/mobile access, OCR, auth, or roles.
 
 ## Acceptance
-Packaging stock movements can be created/read/listed, packaging item balance is derived from immutable movement rows, incoming movements increase balance, outgoing movements decrease balance, outgoing movements cannot make balance negative, movement creation and `packaging_stock_movement.created` audit event are transactional, quantities are positive integer pieces only, floats/fractional pieces/percent/ml/g/arbitrary units are rejected, and no `current_quantity`, `remaining_quantity`, packaging lots, production, purchase list, or frontend UI are added.
+Recipe templates can be created/read/listed/deactivated, recipe versions can be created for active templates, version numbers increment per template, version detail returns ingredient lines, ingredient lines reference existing active ingredients, invalid ingredient lines roll back version creation, audit failures roll back create/deactivate operations, test-only table guards allow only the new recipe tables, and no calculation service, recipe UI, clients, orders, or production are added.
