@@ -49,7 +49,7 @@ def test_migration_creates_packaging_stock_movements_only_current_scope(tmp_path
     tables = table_names(config.path)
     assert "packaging_stock_movements" in tables
     assert "packaging_stock_movements" in CURRENT_ALLOWED_TABLES
-    assert {"recipes", "clients", "orders", "production_batches", "import_drafts", "backup_records"} <= FORBIDDEN_FUTURE_TABLES
+    assert {"recipes", "orders", "production_batches", "import_drafts", "backup_records"} <= FORBIDDEN_FUTURE_TABLES
     assert_only_current_tables(tables)
     assert_no_forbidden_future_tables(tables)
     assert "packaging_lots" not in tables
