@@ -131,3 +131,10 @@ PR16 - Ingredient catalog UI foundation
 - Updated test-only table guards so `clients` is current while future client recipe, wishes/feedback, order, production, import, and backup tables remain forbidden.
 - Added backend tests for table scope, client behavior, validation, transactional rollback on audit failure, and API endpoint coverage when the local TestClient dependency set is available.
 - No frontend application code or client UI was added.
+
+## PR23 — Client recipes backend foundation
+- Added `client_recipes` and `client_recipe_ingredients` as backend persistence for first-class individual client formulas.
+- Client recipes link to an active client and an existing source recipe version; source recipe ingredient lines are snapshotted into independent client recipe ingredient rows at creation time.
+- Client recipe details read snapshot rows from `client_recipe_ingredients`, not live source `recipe_ingredients`, preserving historical individual formulas when base recipes change later.
+- Added backend create/read/list/list-by-client/deactivate behavior with transactional `client_recipe.created` and `client_recipe.deactivated` audit events.
+- No client recipe UI, orders, production, stock reservation/write-off, imports/exports, cloud, mobile, OCR, auth, or roles were added.

@@ -205,3 +205,11 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Client writes and audit events are transactional; simulated audit failures roll back create, update, and deactivate operations.
 - PR22 intentionally excludes client UI, client recipes, client wishes/feedback, orders, production, imports/exports, backup changes, cloud, mobile, OCR, auth, and roles.
 - Future PR23 can build client-specific recipe foundations on top of the `Client` model without adding client data to recipe notes.
+
+## PR23 notes
+- PR23 adds backend client recipe foundation with `client_recipes` and `client_recipe_ingredients` tables.
+- Client recipes are first-class entities linked to clients and source recipe versions, not notes on clients and not live views over base recipes.
+- Creating a client recipe from a source recipe version snapshots source ingredient lines into `client_recipe_ingredients` rows.
+- Client recipe detail reads persisted snapshot rows, not live `recipe_ingredients`, so later source recipe/version changes do not silently mutate existing client formulas.
+- `client_recipe.created` and `client_recipe.deactivated` audit events are written transactionally with the business writes.
+- PR23 intentionally adds no frontend UI, orders, production behavior, stock reservation/write-off, imports/exports, cloud, mobile, OCR, auth, or roles.
