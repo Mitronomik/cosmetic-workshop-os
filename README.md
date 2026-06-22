@@ -49,6 +49,12 @@ Frontend local API proxy for development/smoke only:
 ```bash
 # Terminal 1
 export COSMETIC_WORKSHOP_DB_PATH="/path/to/.local/smoke.sqlite"
+python3 - <<'PY'
+from app.services.startup import initialize_startup
+result = initialize_startup("development")
+print("DB:", result.database_path)
+print("Applied migrations:", result.applied_migrations)
+PY
 cd backend
 python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 
