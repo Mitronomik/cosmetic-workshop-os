@@ -10,9 +10,11 @@ type StockMovementsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type PackagingItemsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type CalculationStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientFormMode = 'create' | 'edit';
+type ClientFormMode = 'create' | 'edit';
 type IngredientLotFormMode = 'create' | 'edit';
 type PackagingItemFormMode = 'create' | 'edit';
 type StockMovementLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+type ClientsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 type OnboardingState = {
   has_started: boolean;
@@ -72,6 +74,11 @@ type InventoryState = {
   ingredientLots: IngredientLotBalance[];
   packagingItems: PackagingBalance[];
 };
+
+type Client = { id: number; full_name: string; phone: string; email: string; address: string; birthday: string | null; skin_notes: string; allergy_notes: string; preference_notes: string; contraindication_notes: string; notes: string; is_active: boolean; created_at: string; updated_at: string };
+type ClientPayload = Pick<Client, 'full_name' | 'phone' | 'email' | 'address' | 'birthday' | 'skin_notes' | 'allergy_notes' | 'preference_notes' | 'contraindication_notes' | 'notes'>;
+type ClientFormState = ClientPayload & { id: number | null };
+type ClientsState = { items: Client[]; formMode: ClientFormMode; form: ClientFormState; includeInactive: boolean };
 
 type Ingredient = {
   id: number;
@@ -257,6 +264,10 @@ let onboardingMessage = '';
 let inventoryStatus: InventoryStatus = 'idle';
 let inventoryState: InventoryState = { overview: null, ingredientLots: [], packagingItems: [] };
 let inventoryError = '';
+let clientsStatus: ClientsStatus = 'idle';
+let clientsState: ClientsState = { items: [], formMode: 'create', form: emptyClientForm(), includeInactive: false };
+let clientsError = '';
+let clientsMessage = '';
 let ingredientsStatus: IngredientsStatus = 'idle';
 let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null };
 let ingredientsError = '';
@@ -286,6 +297,7 @@ function sectionFromLocation() {
   if (window.location.pathname === '/ingredient-lots') return 'Партии';
   if (window.location.pathname === '/stock-movements') return 'Движения склада';
   if (window.location.pathname === '/recipes') return 'Рецепты';
+  if (window.location.pathname === '/clients') return 'Клиенты';
   if (window.location.pathname === '/packaging-items') return 'Тара';
   return 'Главная';
 }
@@ -308,7 +320,7 @@ function render() {
           <div><p class="eyebrow">Рабочее пространство</p><h1>${activeSection}</h1></div>
           <span class="status ${healthStatus}">${healthLabel}</span>
         </header>
-        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Партии' ? ingredientLotsPage() : activeSection === 'Движения склада' ? stockMovementsPage() : activeSection === 'Рецепты' ? recipesPage() : activeSection === 'Тара' ? packagingItemsPage() : sectionPlaceholder(activeSection)}
+        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Партии' ? ingredientLotsPage() : activeSection === 'Движения склада' ? stockMovementsPage() : activeSection === 'Рецепты' ? recipesPage() : activeSection === 'Клиенты' ? clientsPage() : activeSection === 'Тара' ? packagingItemsPage() : sectionPlaceholder(activeSection)}
       </main>
     </div>`;
   bindEvents(root);
@@ -319,12 +331,13 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       activeSection = button.dataset.section ?? 'Главная';
-      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Партии' ? '/ingredient-lots' : activeSection === 'Движения склада' ? '/stock-movements' : activeSection === 'Рецепты' ? '/recipes' : activeSection === 'Тара' ? '/packaging-items' : '/');
+      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Партии' ? '/ingredient-lots' : activeSection === 'Движения склада' ? '/stock-movements' : activeSection === 'Рецепты' ? '/recipes' : activeSection === 'Клиенты' ? '/clients' : activeSection === 'Тара' ? '/packaging-items' : '/');
       if (activeSection === 'Склад') loadInventory();
       if (activeSection === 'Компоненты') loadIngredients();
       if (activeSection === 'Партии') loadIngredientLots();
       if (activeSection === 'Движения склада') loadStockMovements();
       if (activeSection === 'Рецепты') loadRecipes();
+      if (activeSection === 'Клиенты') loadClients();
       if (activeSection === 'Тара') loadPackagingItems();
       render();
     });
@@ -354,6 +367,12 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLSelectElement>('[data-action="select-stock-lot"]')?.addEventListener('change', (event) => selectStockMovementLot(Number((event.currentTarget as HTMLSelectElement).value)));
   root.querySelector<HTMLFormElement>('[data-form="stock-movement"]')?.addEventListener('submit', submitStockMovementForm);
   root.querySelector<HTMLButtonElement>('[data-action="reload-recipes"]')?.addEventListener('click', () => loadRecipes(true));
+  root.querySelector<HTMLButtonElement>('[data-action="reload-clients"]')?.addEventListener('click', () => loadClients(true));
+  root.querySelector<HTMLButtonElement>('[data-action="new-client"]')?.addEventListener('click', () => { clientsState.formMode = 'create'; clientsState.form = emptyClientForm(); clientsMessage = ''; clientsError = ''; render(); });
+  root.querySelector<HTMLInputElement>('[data-action="toggle-archived-clients"]')?.addEventListener('change', (event) => { clientsState.includeInactive = (event.currentTarget as HTMLInputElement).checked; loadClients(true); });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="edit-client"]').forEach((button) => button.addEventListener('click', () => startEditClient(Number(button.dataset.id))));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client"]').forEach((button) => button.addEventListener('click', () => deactivateClient(Number(button.dataset.id))));
+  root.querySelector<HTMLFormElement>('[data-form="client"]')?.addEventListener('submit', submitClientForm);
   root.querySelector<HTMLButtonElement>('[data-action="reload-packaging-items"]')?.addEventListener('click', () => loadPackagingItems(true));
   root.querySelector<HTMLButtonElement>('[data-action="new-packaging-item"]')?.addEventListener('click', () => { packagingItemsState.formMode = 'create'; packagingItemsState.form = emptyPackagingItemForm(); packagingItemsMessage = ''; packagingItemsError = ''; render(); });
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-packaging-item"]').forEach((button) => button.addEventListener('click', () => startEditPackagingItem(Number(button.dataset.id))));
@@ -380,6 +399,24 @@ function dashboardPlaceholder() {
   return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Первые рабочие разделы появятся постепенно</h2><p>Здесь будет спокойная рабочая панель: активные заказы, предупреждения, закупки, производство и резервные копии.</p><p class="next-step">Начните с компонентов, затем рецептов, клиентов и заказов. Каждый раздел будет подключаться отдельным безопасным шагом.</p></section>`;
 }
 
+
+
+function clientsPage() {
+  if (clientsStatus === 'idle' || clientsStatus === 'loading') return `<section class="card"><p class="card-kicker">Клиенты</p><h2>Загружаем клиентов…</h2><p>Получаем карточки клиентов из локального API.</p></section>`;
+  if (clientsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Клиенты</p><h2>Не удалось загрузить клиентов</h2><p>${clientsError || 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'}</p><p class="next-step">Проверьте, что локальное приложение запущено, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-clients">Повторить загрузку</button></section>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Клиенты</p><h2>Клиенты</h2><p>Карточки клиентов, пожелания, ограничения и заметки для индивидуальных рецептов.</p><p class="next-step">Аллергии, предпочтения и противопоказания помогут позже безопасно создавать индивидуальные рецепты клиента.</p></div><div class="actions"><label><input type="checkbox" data-action="toggle-archived-clients" ${clientsState.includeInactive ? 'checked' : ''} /> Показывать архив</label><button class="secondary-action" type="button" data-action="new-client">Очистить форму</button></div></section>${clientsMessage ? `<p class="page-message">${clientsMessage}</p>` : ''}${clientsError ? `<p class="page-message error-message">${clientsError}</p>` : ''}${clientForm()}${clientList()}</div>`;
+}
+
+function clientForm() {
+  const form = clientsState.form;
+  const isEdit = clientsState.formMode === 'edit';
+  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить карточку клиента' : 'Создать клиента'}</h2><form data-form="client" class="ingredient-form"><div class="form-grid"><label>ФИО клиента<input name="full_name" required maxlength="200" value="${escapeHtml(form.full_name)}" placeholder="Например, Анна Иванова" /></label><label>Телефон<input name="phone" maxlength="80" value="${escapeHtml(form.phone)}" placeholder="+7 ..." /></label><label>Email<input name="email" type="email" maxlength="160" value="${escapeHtml(form.email)}" placeholder="Необязательно" /></label><label>Дата рождения<input name="birthday" type="date" value="${escapeHtml(form.birthday ?? '')}" /></label><label class="full-span">Адрес<input name="address" maxlength="300" value="${escapeHtml(form.address)}" placeholder="Необязательно" /></label><label class="full-span">Особенности кожи<textarea name="skin_notes" rows="2" maxlength="1200" placeholder="Например, чувствительная кожа">${escapeHtml(form.skin_notes)}</textarea></label><label class="full-span">Аллергии<textarea name="allergy_notes" rows="2" maxlength="1200" placeholder="Что важно учитывать в составах">${escapeHtml(form.allergy_notes)}</textarea></label><label class="full-span">Предпочтения<textarea name="preference_notes" rows="2" maxlength="1200" placeholder="Текстуры, ароматы, упаковка">${escapeHtml(form.preference_notes)}</textarea></label><label class="full-span">Противопоказания<textarea name="contraindication_notes" rows="2" maxlength="1200" placeholder="Ограничения, которые нельзя забыть">${escapeHtml(form.contraindication_notes)}</textarea></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1600" placeholder="Рабочие заметки по клиенту">${escapeHtml(form.notes)}</textarea></label></div><p class="next-step">Аллергии, предпочтения и противопоказания помогут позже безопасно создавать индивидуальные рецепты клиента.</p><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить карточку' : 'Создать клиента'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="new-client">Отменить редактирование</button>' : ''}</div></form></section>`;
+}
+
+function clientList() {
+  if (clientsState.items.length === 0) return `<section class="card empty-card"><h2>Пока нет клиентов</h2><p>Пока нет клиентов. Добавьте первого клиента, чтобы хранить пожелания, ограничения и заметки для будущих индивидуальных рецептов.</p><p class="next-step">Заполните ФИО и любые известные ограничения, затем нажмите «Создать клиента».</p></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>${clientsState.includeInactive ? 'Все клиенты' : 'Активные клиенты'}</h2><div class="table-wrap"><table><thead><tr><th>Клиент</th><th>Контакты</th><th>Важные заметки</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${clientsState.items.map((client) => `<tr><td><strong>${escapeHtml(client.full_name)}</strong><small>${client.birthday ? `Дата рождения: ${formatDate(client.birthday)}` : 'Дата рождения не указана'}</small></td><td>${client.phone ? escapeHtml(client.phone) : 'Телефон не указан'}<small>${client.email ? escapeHtml(client.email) : 'Email не указан'}</small></td><td>${clientNotesSummary(client)}</td><td><span class="pill ${client.is_active ? 'success' : 'muted'}">${client.is_active ? 'Активен' : 'Архив'}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-client" data-id="${client.id}">Изменить</button>${client.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="archive-client" data-id="${client.id}">Архивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div><p class="next-step">Архивирование не удаляет карточку клиента, а скрывает ее из активного списка.</p></section>`;
+}
 
 function ingredientsPage() {
   if (ingredientsStatus === 'idle' || ingredientsStatus === 'loading') return `<section class="card"><p class="card-kicker">Компоненты</p><h2>Загружаем компоненты…</h2><p>Получаем справочник компонентов из локального API.</p></section>`;
@@ -585,6 +622,15 @@ function lotStatusClass(lot: IngredientLot) { if (!lot.is_active) return 'muted'
 function expirationStatus(value: string | null) { if (!value) return 'Без срока годности'; const today = new Date(); today.setHours(0, 0, 0, 0); const expires = new Date(`${value}T00:00:00`); const days = Math.ceil((expires.getTime() - today.getTime()) / 86400000); if (days < 0) return 'Просрочена'; if (days <= 30) return 'Скоро истекает'; return null; }
 function ingredientLotPayloadFromForm(form: HTMLFormElement): IngredientLotPayload { const data = new FormData(form); const nullable = (name: string) => { const value = String(data.get(name) ?? '').trim(); return value || null; }; return { ingredient_id: Number(data.get('ingredient_id')), lot_code: String(data.get('lot_code') ?? '').trim(), supplier_name: String(data.get('supplier_name') ?? '').trim(), purchased_at: nullable('purchased_at'), expires_at: nullable('expires_at'), unit: String(data.get('unit') ?? 'g'), unit_cost: nullable('unit_cost'), total_cost: nullable('total_cost'), density_g_per_ml: nullable('density_g_per_ml'), notes: String(data.get('notes') ?? '').trim() }; }
 
+
+function emptyClientForm(): ClientFormState { return { id: null, full_name: '', phone: '', email: '', address: '', birthday: null, skin_notes: '', allergy_notes: '', preference_notes: '', contraindication_notes: '', notes: '' }; }
+function clientPayloadFromForm(form: HTMLFormElement): ClientPayload { const data = new FormData(form); const birthday = String(data.get('birthday') ?? '').trim(); return { full_name: String(data.get('full_name') ?? '').trim(), phone: String(data.get('phone') ?? '').trim(), email: String(data.get('email') ?? '').trim(), address: String(data.get('address') ?? '').trim(), birthday: birthday || null, skin_notes: String(data.get('skin_notes') ?? '').trim(), allergy_notes: String(data.get('allergy_notes') ?? '').trim(), preference_notes: String(data.get('preference_notes') ?? '').trim(), contraindication_notes: String(data.get('contraindication_notes') ?? '').trim(), notes: String(data.get('notes') ?? '').trim() }; }
+function clientNotesSummary(client: Client) { const rows = [['Аллергии', client.allergy_notes], ['Предпочтения', client.preference_notes], ['Противопоказания', client.contraindication_notes]].filter(([, value]) => value); return rows.length ? `<ul>${rows.map(([label, value]) => `<li><strong>${label}:</strong> ${escapeHtml(value)}</li>`).join('')}</ul>` : 'Важные ограничения пока не указаны'; }
+function loadClients(force = false) { if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return; clientsStatus = 'loading'; clientsError = ''; render(); getClients(clientsState.includeInactive).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; render(); }).catch(() => { clientsStatus = 'error'; clientsError = 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'; render(); }); }
+function startEditClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; render(); }
+function submitClientForm(event: SubmitEvent) { event.preventDefault(); const payload = clientPayloadFromForm(event.currentTarget as HTMLFormElement); if (!payload.full_name) { clientsMessage = ''; clientsError = 'Укажите ФИО клиента, например «Анна Иванова».'; render(); return; } const isEdit = clientsState.formMode === 'edit' && clientsState.form.id; const request = isEdit ? updateClient(clientsState.form.id!, payload) : createClient(payload); request.then((client) => { clientsMessage = isEdit ? 'Карточка клиента обновлена.' : 'Клиент создан.'; clientsError = ''; clientsState.formMode = isEdit ? 'edit' : 'create'; clientsState.form = isEdit ? { ...payload, id: client.id } : emptyClientForm(); return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось сохранить клиента. Проверьте ФИО и контактные поля, затем попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
+function deactivateClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return; deactivateClientRequest(id).then(() => { clientsMessage = 'Клиент архивирован.'; clientsError = ''; return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; if (clientsState.form.id === id) { clientsState.formMode = 'create'; clientsState.form = emptyClientForm(); } render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
+
 function emptyIngredientForm(): IngredientFormState { return { id: null, name: '', category: 'other', default_unit: 'g', density_g_per_ml: null, notes: '', inci_name: '', supplier_hint: '', allergen_note: '', usage_note: '' }; }
 function ingredientCatalogCategoryLabel(item: Ingredient) { return ingredientsState.catalogCategories.find((category) => category.id === item.catalog_category_id)?.name ?? 'Не выбрана'; }
 function ingredientTagChips(item: Ingredient) { const tags = item.catalog_tag_ids.map((id) => ingredientsState.catalogTags.find((tag) => tag.id === id)).filter((tag): tag is CatalogTag => Boolean(tag)); return tags.length ? `<div class="tag-list">${tags.map((tag) => `<span class="tag-chip readonly">${escapeHtml(tag.name)}</span>`).join('')}</div>` : 'Нет меток'; }
@@ -614,6 +660,10 @@ function startEditIngredient(id: number) { const item = ingredientsState.items.f
 
 function apiGet<T>(url: string): Promise<T> { return fetch(url).then((response) => { if (!response.ok) throw new Error('API request failed'); return response.json() as Promise<T>; }); }
 function apiSend<T>(url: string, method: 'POST' | 'PUT', body?: unknown): Promise<T> { return fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('API request failed'); return response.json() as Promise<T>; }); }
+function getClients(includeInactive = false) { return apiGet<{ clients: Client[] }>(`/api/clients${includeInactive ? '?include_inactive=true' : ''}`); }
+function createClient(payload: ClientPayload) { return apiSend<Client>('/api/clients', 'POST', payload); }
+function updateClient(id: number, payload: ClientPayload) { return apiSend<Client>(`/api/clients/${id}`, 'PUT', payload); }
+function deactivateClientRequest(id: number) { return apiSend<Client>(`/api/clients/${id}/deactivate`, 'POST'); }
 function getIngredients() { return apiGet<{ ingredients: Ingredient[] }>('/api/ingredients'); }
 function getIngredientCatalogCategories() { return apiGet<{ categories: CatalogCategory[] }>('/api/catalog/categories?scope=ingredient'); }
 function getIngredientCatalogTags() { return apiGet<{ tags: CatalogTag[] }>('/api/catalog/tags?scope=ingredient'); }
@@ -811,7 +861,7 @@ function loadInventory(force = false) {
 function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!response.ok) throw new Error('Onboarding is unavailable'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = ''; render(); }).catch(() => { onboardingStatus = 'unavailable'; render(); }); }
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
-window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Партии') loadIngredientLots(); if (activeSection === 'Движения склада') loadStockMovements(); if (activeSection === 'Рецепты') loadRecipes(); if (activeSection === 'Тара') loadPackagingItems(); render(); });
+window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Партии') loadIngredientLots(); if (activeSection === 'Движения склада') loadStockMovements(); if (activeSection === 'Рецепты') loadRecipes(); if (activeSection === 'Клиенты') loadClients(); if (activeSection === 'Тара') loadPackagingItems(); render(); });
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
@@ -820,4 +870,5 @@ if (activeSection === 'Компоненты') loadIngredients();
 if (activeSection === 'Партии') loadIngredientLots();
 if (activeSection === 'Движения склада') loadStockMovements();
 if (activeSection === 'Рецепты') loadRecipes();
+if (activeSection === 'Клиенты') loadClients();
 if (activeSection === 'Тара') loadPackagingItems();
