@@ -64,5 +64,13 @@ class CatalogTagsAssignmentRequest(BaseModel):
     tag_ids: list[int]
 
 
-class AssignmentResponse(BaseModel):
-    ok: bool = True
+class CatalogCategoryAssignmentResponse(BaseModel):
+    entity_type: str
+    entity_id: int
+    catalog_category_id: int | None
+
+
+class CatalogTagsAssignmentResponse(BaseModel):
+    entity_type: str
+    entity_id: int
+    tag_ids: list[int]

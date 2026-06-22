@@ -401,3 +401,188 @@ def test_assignment_api_converts_missing_records_to_http_errors(tmp_path, monkey
             catalog_assignments._wrap(lambda exc=exc: (_ for _ in ()).throw(exc))
         assert caught.value.status_code == 404
         assert caught.value.detail == detail
+
+
+def _audit_actions(c):
+    with sqlite3.connect(c.path) as con:
+        return [
+            row[0]
+            for row in con.execute("SELECT action FROM audit_logs ORDER BY id")
+        ]
+
+
+def test_assignment_api_returns_explicit_ingredient_responses(tmp_path, monkeypatch):
+    from app.api import catalog_assignments
+    from app.db.config import DATABASE_PATH_ENV
+    from app.schemas.catalog import (
+        CatalogCategoryAssignmentRequest,
+        CatalogTagsAssignmentRequest,
+    )
+
+    c = cfg(tmp_path)
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(c.path))
+    s = CatalogService(c)
+    item = ingredient(c)
+    category = s.create_category(
+        CatalogCategoryDraft.create(scope="ingredient", name="Oils", slug="oils")
+    )
+    tag_1 = s.create_tag(CatalogTagDraft.create(scope="ingredient", name="A", slug="a"))
+    tag_2 = s.create_tag(CatalogTagDraft.create(scope="ingredient", name="B", slug="b"))
+
+    response = catalog_assignments.ingredient_category(
+        item.id, CatalogCategoryAssignmentRequest(catalog_category_id=category.id)
+    )
+    assert response.model_dump() == {
+        "entity_type": "ingredient",
+        "entity_id": item.id,
+        "catalog_category_id": category.id,
+    }
+
+    response = catalog_assignments.ingredient_tags(
+        item.id, CatalogTagsAssignmentRequest(tag_ids=[tag_2.id, tag_1.id, tag_1.id])
+    )
+    assert response.model_dump() == {
+        "entity_type": "ingredient",
+        "entity_id": item.id,
+        "tag_ids": [tag_1.id, tag_2.id],
+    }
+    assert _audit_actions(c)[-2:] == [
+        "ingredient.catalog_category.assigned",
+        "ingredient.catalog_tags.updated",
+    ]
+
+
+def test_assignment_api_returns_explicit_packaging_responses(tmp_path, monkeypatch):
+    from app.api import catalog_assignments
+    from app.db.config import DATABASE_PATH_ENV
+    from app.schemas.catalog import (
+        CatalogCategoryAssignmentRequest,
+        CatalogTagsAssignmentRequest,
+    )
+
+    c = cfg(tmp_path)
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(c.path))
+    s = CatalogService(c)
+    item = packaging(c)
+    category = s.create_category(
+        CatalogCategoryDraft.create(scope="packaging", name="Jars", slug="jars")
+    )
+    tag = s.create_tag(
+        CatalogTagDraft.create(scope="packaging", name="Glass", slug="glass")
+    )
+
+    response = catalog_assignments.packaging_category(
+        item.id, CatalogCategoryAssignmentRequest(catalog_category_id=category.id)
+    )
+    assert response.model_dump() == {
+        "entity_type": "packaging_item",
+        "entity_id": item.id,
+        "catalog_category_id": category.id,
+    }
+
+    response = catalog_assignments.packaging_tags(
+        item.id, CatalogTagsAssignmentRequest(tag_ids=[tag.id])
+    )
+    assert response.model_dump() == {
+        "entity_type": "packaging_item",
+        "entity_id": item.id,
+        "tag_ids": [tag.id],
+    }
+    assert _audit_actions(c)[-2:] == [
+        "packaging_item.catalog_category.assigned",
+        "packaging_item.catalog_tags.updated",
+    ]
+
+
+def test_assignment_api_returns_explicit_recipe_template_responses(
+    tmp_path, monkeypatch
+):
+    from app.api import catalog_assignments
+    from app.db.config import DATABASE_PATH_ENV
+    from app.schemas.catalog import (
+        CatalogCategoryAssignmentRequest,
+        CatalogTagsAssignmentRequest,
+    )
+
+    c = cfg(tmp_path)
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(c.path))
+    s = CatalogService(c)
+    item = recipe(c)
+    category = s.create_category(
+        CatalogCategoryDraft.create(scope="recipe", name="Creams", slug="creams")
+    )
+    tag = s.create_tag(CatalogTagDraft.create(scope="recipe", name="Face", slug="face"))
+
+    response = catalog_assignments.recipe_category(
+        item.id, CatalogCategoryAssignmentRequest(catalog_category_id=category.id)
+    )
+    assert response.model_dump() == {
+        "entity_type": "recipe_template",
+        "entity_id": item.id,
+        "catalog_category_id": category.id,
+    }
+
+    response = catalog_assignments.recipe_tags(
+        item.id, CatalogTagsAssignmentRequest(tag_ids=[tag.id])
+    )
+    assert response.model_dump() == {
+        "entity_type": "recipe_template",
+        "entity_id": item.id,
+        "tag_ids": [tag.id],
+    }
+    assert _audit_actions(c)[-2:] == [
+        "recipe_template.catalog_category.assigned",
+        "recipe_template.catalog_tags.updated",
+    ]
+
+
+def test_assignment_api_cross_scope_and_inactive_rejections_remain(
+    tmp_path, monkeypatch
+):
+    from fastapi import HTTPException
+
+    from app.api import catalog_assignments
+    from app.db.config import DATABASE_PATH_ENV
+    from app.schemas.catalog import (
+        CatalogCategoryAssignmentRequest,
+        CatalogTagsAssignmentRequest,
+    )
+
+    c = cfg(tmp_path)
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(c.path))
+    s = CatalogService(c)
+    item = ingredient(c)
+    packaging_category = s.create_category(
+        CatalogCategoryDraft.create(scope="packaging", name="Jars", slug="jars")
+    )
+    inactive_category = s.create_category(
+        CatalogCategoryDraft.create(scope="ingredient", name="Old", slug="old")
+    )
+    inactive_tag = s.create_tag(
+        CatalogTagDraft.create(scope="ingredient", name="Archived", slug="archived")
+    )
+    s.archive_category(inactive_category.id)
+    s.archive_tag(inactive_tag.id)
+
+    with pytest.raises(HTTPException) as cross_scope:
+        catalog_assignments.ingredient_category(
+            item.id,
+            CatalogCategoryAssignmentRequest(catalog_category_id=packaging_category.id),
+        )
+    assert cross_scope.value.status_code == 422
+    assert cross_scope.value.detail["field"] == "catalog_category_id"
+
+    with pytest.raises(HTTPException) as inactive_category_response:
+        catalog_assignments.ingredient_category(
+            item.id,
+            CatalogCategoryAssignmentRequest(catalog_category_id=inactive_category.id),
+        )
+    assert inactive_category_response.value.status_code == 422
+    assert inactive_category_response.value.detail["field"] == "catalog_category_id"
+
+    with pytest.raises(HTTPException) as inactive_tag_response:
+        catalog_assignments.ingredient_tags(
+            item.id, CatalogTagsAssignmentRequest(tag_ids=[inactive_tag.id])
+        )
+    assert inactive_tag_response.value.status_code == 422
+    assert inactive_tag_response.value.detail["field"] == "tag_ids"
