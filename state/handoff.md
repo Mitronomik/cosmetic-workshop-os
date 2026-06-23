@@ -239,3 +239,8 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Catalog categories/tags remain ingredient-scoped organization metadata; the system `IngredientCategory` remains intact.
 - Packaging and recipe catalog UI are still future follow-ups.
 - No migrations, new tables, production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
+
+## 2026-06-23 — Handoff: PR1 recipe builder ingredient selection
+- PR fixes stale recipe builder ingredient options: active components created in «Компоненты» are now available in the recipe constructor after section return/refresh and after component create/update/deactivate.
+- Empty active-component state now tells the user to create an active component or refresh/check archive status. Unsaved version form input is preserved during option refresh.
+- Builder-first recipe creation remains a later UX stabilization PR; catalog/menu redesign remains out of scope.

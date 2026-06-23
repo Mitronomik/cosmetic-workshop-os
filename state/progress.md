@@ -163,3 +163,8 @@ PR16 - Ingredient catalog UI foundation
 - The system `IngredientCategory` semantics remain intact; grouping metadata is not used as business logic for stock, recipes, or production.
 - Packaging and recipe catalog UI remain follow-ups.
 - No migrations, new tables, production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
+
+## 2026-06-23 — PR1 UX stabilization: recipe builder ingredient selection
+- Fixed stale active component options in the recipe version constructor: active components created in «Компоненты» are refreshed for recipe lines without restarting the app.
+- The recipe constructor now explains the empty active-component state and offers an explicit component-list refresh; unsaved version form input is preserved while component options refresh.
+- Builder-first recipe creation remains a later UX stabilization PR. Catalog/menu/groups/tags redesign remains out of scope.
