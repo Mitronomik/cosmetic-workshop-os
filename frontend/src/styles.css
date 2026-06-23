@@ -17,10 +17,15 @@ button { font: inherit; }
 .brand-copy { min-width: 0; }
 .brand-kicker { color: #e8bfa9; font-size: 12px; font-weight: 700; letter-spacing: .08em; margin: 0 0 5px; text-transform: uppercase; }
 .brand-name { color: #fffaf7; font-size: 19px; font-weight: 800; line-height: 1.16; margin: 0; }
-.navigation { display: grid; gap: 7px; }
+.navigation { display: grid; gap: 18px; }
+.nav-group { display: grid; gap: 7px; min-width: 0; }
+.nav-group-title { color: #e8bfa9; font-size: 11px; font-weight: 900; letter-spacing: .11em; line-height: 1.2; margin: 0 0 1px; padding: 0 10px; text-transform: uppercase; }
+.nav-group-items { display: grid; gap: 6px; min-width: 0; }
 .nav-item { border: 1px solid transparent; border-radius: 14px; background: transparent; color: #f7ebe4; cursor: pointer; padding: 11px 13px; text-align: left; transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease; }
 .nav-item:hover { background: rgba(255, 248, 241, .09); border-color: rgba(232, 191, 169, .2); }
 .nav-item.active { background: #6e4a43; border-color: rgba(232, 191, 169, .42); box-shadow: inset 3px 0 0 #d39a7a; color: #fffaf7; font-weight: 700; }
+.nav-item.placeholder { color: rgba(247, 235, 228, .68); }
+.nav-item.placeholder.active { color: #fffaf7; }
 .content { padding: 34px clamp(18px, 4vw, 44px); }
 .topbar { align-items: center; display: flex; gap: 20px; justify-content: space-between; margin-bottom: 30px; }
 .eyebrow, .card-kicker { color: #9b7466; font-size: 13px; font-weight: 800; letter-spacing: .07em; margin: 0 0 8px; text-transform: uppercase; }
@@ -37,7 +42,7 @@ h1 { color: #2e211f; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; margi
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { box-shadow: none; padding: 18px; }
   .brand { margin-bottom: 18px; }
-  .navigation { grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); }
+  .navigation { gap: 14px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .content { padding-top: 26px; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .status { white-space: normal; }

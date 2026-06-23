@@ -244,3 +244,9 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - PR fixes stale recipe builder ingredient options: active components created in «Компоненты» are now available in the recipe constructor after section return/refresh and after component create/update/deactivate.
 - Empty active-component state now tells the user to create an active component or refresh/check archive status. Unsaved version form input is preserved during option refresh.
 - Builder-first recipe creation remains a later UX stabilization PR; catalog/menu redesign remains out of scope.
+
+## 2026-06-23 — Handoff: PR2 grouped sidebar navigation
+- PR2 regrouped sidebar navigation into user-facing sections while preserving existing implemented route URLs and screens.
+- User-facing stock labels were clarified: ingredient lots are shown as «Приходы и партии» and stock movements as «Движения сырья».
+- This was frontend/state documentation only: no backend/domain/API/migration changes were made.
+- Later UX stabilization PRs still need to address recipe catalog, groups/tags UX, builder-first recipe creation, and inventory flow cleanup.
