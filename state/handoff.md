@@ -250,3 +250,9 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - User-facing stock labels were clarified: ingredient lots are shown as «Приходы и партии» and stock movements as «Движения сырья».
 - This was frontend/state documentation only: no backend/domain/API/migration changes were made.
 - Later UX stabilization PRs still need to address recipe catalog, groups/tags UX, builder-first recipe creation, and inventory flow cleanup.
+
+## 2026-06-23 — Handoff: PR2 honest navigation status update
+- PR2 was amended so the sidebar is collapsible and organized by concrete product areas, not the previous broad «Создание» group.
+- Planned modules are explicitly marked «скоро» and open distinct honest placeholder pages instead of the generic overview.
+- Home now includes a compact «Работает сейчас» / «Скоро» readiness note for non-technical users.
+- This remains frontend/state docs only; recipe catalog, groups/tags UX, builder-first recipe creation, and inventory flow cleanup are still later UX stabilization PRs.

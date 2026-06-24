@@ -256,36 +256,37 @@ type RecipesState = {
 
 
 type NavigationSection = 'Главная' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Готовность' | 'Производство' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Помощь';
-type NavigationItem = { label: string; section: NavigationSection; path: string; status?: 'ready' | 'placeholder' };
+type NavigationStatus = 'ready' | 'empty' | 'planned';
+type NavigationItem = { label: string; section: NavigationSection; path: string; status: NavigationStatus };
 type NavigationGroup = { title: string; items: NavigationItem[] };
 
 const navigationGroups: NavigationGroup[] = [
   { title: 'Главная', items: [{ label: 'Обзор', section: 'Главная', path: '/', status: 'ready' }] },
-  { title: 'Создание', items: [
-    { label: 'Рецепты', section: 'Рецепты', path: '/recipes', status: 'ready' },
-    { label: 'Индивидуальные рецепты', section: 'Индивидуальные рецепты', path: '/client-recipes', status: 'ready' },
-    { label: 'Клиенты', section: 'Клиенты', path: '/clients', status: 'ready' },
-    { label: 'Заказы', section: 'Заказы', path: '/#orders', status: 'placeholder' },
+  { title: 'Рецепты', items: [
+    { label: 'Рецепты', section: 'Рецепты', path: '/recipes', status: 'empty' },
+    { label: 'Индивидуальные рецепты', section: 'Индивидуальные рецепты', path: '/client-recipes', status: 'empty' },
+  ] },
+  { title: 'Клиенты', items: [
+    { label: 'Клиенты', section: 'Клиенты', path: '/clients', status: 'empty' },
+    { label: 'Заказы', section: 'Заказы', path: '/#orders', status: 'planned' },
   ] },
   { title: 'Склад', items: [
     { label: 'Обзор склада', section: 'Склад', path: '/inventory', status: 'ready' },
-    { label: 'Компоненты', section: 'Компоненты', path: '/ingredients', status: 'ready' },
-    { label: 'Приходы и партии', section: 'Партии', path: '/ingredient-lots', status: 'ready' },
-    { label: 'Движения сырья', section: 'Движения сырья', path: '/stock-movements', status: 'ready' },
-    { label: 'Тара', section: 'Тара', path: '/packaging-items', status: 'ready' },
-    { label: 'Закупки', section: 'Закупки', path: '/#purchases', status: 'placeholder' },
+    { label: 'Компоненты', section: 'Компоненты', path: '/ingredients', status: 'empty' },
+    { label: 'Приходы и партии', section: 'Партии', path: '/ingredient-lots', status: 'empty' },
+    { label: 'Движения сырья', section: 'Движения сырья', path: '/stock-movements', status: 'empty' },
+    { label: 'Тара', section: 'Тара', path: '/packaging-items', status: 'empty' },
+    { label: 'Закупки', section: 'Закупки', path: '/#purchases', status: 'planned' },
   ] },
   { title: 'Производство', items: [
-    { label: 'Готовность', section: 'Готовность', path: '/#production-readiness', status: 'placeholder' },
-    { label: 'Производство', section: 'Производство', path: '/#production', status: 'placeholder' },
+    { label: 'Готовность', section: 'Готовность', path: '/#production-readiness', status: 'planned' },
+    { label: 'Производство', section: 'Производство', path: '/#production', status: 'planned' },
   ] },
-  { title: 'Данные', items: [
-    { label: 'Импорт', section: 'Импорт', path: '/#import', status: 'placeholder' },
-    { label: 'Отчеты', section: 'Отчеты', path: '/#reports', status: 'placeholder' },
-  ] },
-  { title: 'Настройки и помощь', items: [
-    { label: 'Настройки', section: 'Настройки', path: '/#settings', status: 'placeholder' },
-    { label: 'Помощь', section: 'Помощь', path: '/#help', status: 'placeholder' },
+  { title: 'Данные и настройки', items: [
+    { label: 'Импорт', section: 'Импорт', path: '/#import', status: 'planned' },
+    { label: 'Отчеты', section: 'Отчеты', path: '/#reports', status: 'planned' },
+    { label: 'Настройки', section: 'Настройки', path: '/#settings', status: 'planned' },
+    { label: 'Помощь', section: 'Помощь', path: '/#help', status: 'planned' },
   ] },
 ];
 const stepLabels: Record<string, string> = {
@@ -299,6 +300,7 @@ const stepLabels: Record<string, string> = {
 };
 
 let activeSection: NavigationSection = sectionFromLocation();
+const collapsedNavigationGroups = new Set<string>(navigationGroups.map((group) => group.title));
 let healthStatus: HealthStatus = 'checking';
 let onboardingStatus: OnboardingStatus = 'loading';
 let onboardingState: OnboardingState | null = null;
@@ -390,11 +392,28 @@ function renderActivePage(section: NavigationSection) {
   if (section === 'Клиенты') return clientsPage();
   if (section === 'Индивидуальные рецепты') return clientRecipesPage();
   if (section === 'Тара') return packagingItemsPage();
-  return sectionPlaceholder(labelForSection(section));
+  return plannedSectionPlaceholder(section);
+}
+
+function activeGroupTitle() {
+  return navigationGroups.find((group) => group.items.some((item) => item.section === activeSection))?.title ?? 'Главная';
+}
+
+function isNavigationGroupExpanded(group: NavigationGroup) {
+  return group.title === activeGroupTitle() || !collapsedNavigationGroups.has(group.title);
+}
+
+function navigationItemMarkup(item: NavigationItem) {
+  const statusLabel = item.status === 'planned' ? '<span class="nav-badge">скоро</span>' : '';
+  return `<button class="nav-item ${item.section === activeSection ? 'active' : ''} status-${item.status}" type="button" data-section="${item.section}"><span>${escapeHtml(item.label)}</span>${statusLabel}</button>`;
 }
 
 function navigationMarkup() {
-  return navigationGroups.map((group) => `<section class="nav-group" aria-label="${escapeHtml(group.title)}"><h2 class="nav-group-title">${escapeHtml(group.title)}</h2><div class="nav-group-items">${group.items.map((item) => `<button class="nav-item ${item.section === activeSection ? 'active' : ''} ${item.status === 'placeholder' ? 'placeholder' : ''}" type="button" data-section="${item.section}">${escapeHtml(item.label)}</button>`).join('')}</div></section>`).join('');
+  return navigationGroups.map((group) => {
+    const isExpanded = isNavigationGroupExpanded(group);
+    const isActiveGroup = group.title === activeGroupTitle();
+    return `<section class="nav-group ${isActiveGroup ? 'active-group' : ''}" aria-label="${escapeHtml(group.title)}"><button class="nav-group-toggle" type="button" data-nav-group="${escapeHtml(group.title)}" aria-expanded="${isExpanded}"><span>${escapeHtml(group.title)}</span><span aria-hidden="true">${isExpanded ? '−' : '+'}</span></button>${isExpanded ? `<div class="nav-group-items">${group.items.map(navigationItemMarkup).join('')}</div>` : ''}</section>`;
+  }).join('');
 }
 
 function render() {
@@ -423,6 +442,14 @@ function render() {
 
 function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLImageElement>('.brand-mark img')?.addEventListener('error', (event) => { (event.currentTarget as HTMLImageElement).hidden = true; });
+  root.querySelectorAll<HTMLButtonElement>('.nav-group-toggle').forEach((button) => {
+    button.addEventListener('click', () => {
+      const groupTitle = button.dataset.navGroup;
+      if (!groupTitle || groupTitle === activeGroupTitle()) return;
+      if (collapsedNavigationGroups.has(groupTitle)) collapsedNavigationGroups.delete(groupTitle); else collapsedNavigationGroups.add(groupTitle);
+      render();
+    });
+  });
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
       activeSection = (button.dataset.section as NavigationSection | undefined) ?? 'Главная';
@@ -492,7 +519,7 @@ function bindEvents(root: HTMLElement) {
 }
 
 function dashboardPlaceholder() {
-  return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Первые рабочие разделы появятся постепенно</h2><p>Здесь будет спокойная рабочая панель: активные заказы, предупреждения, закупки, производство и резервные копии.</p><p class="next-step">Начните с компонентов, затем рецептов, клиентов и заказов. Каждый раздел будет подключаться отдельным безопасным шагом.</p></section>`;
+  return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Что уже можно открыть</h2><div class="readiness-grid"><div><h3>Работает сейчас</h3><ul><li>Рецепты</li><li>Индивидуальные рецепты</li><li>Клиенты</li><li>Компоненты</li><li>Складской обзор</li><li>Тара</li></ul></div><div><h3>Скоро</h3><ul><li>Заказы</li><li>Производство</li><li>Закупки</li><li>Импорт</li><li>Отчеты</li></ul></div></div></section>`;
 }
 
 
@@ -689,7 +716,20 @@ function onboardingCard() {
 }
 function checklistItem(step: string, currentStep: string) { const isDone = onboardingState?.completed_steps.includes(step); const isCurrent = step === currentStep && !isDone; const marker = isDone ? '✓' : isCurrent ? '•' : '○'; return `<li class="${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}"><span>${marker}</span><div><strong>${stepLabels[step] ?? step}</strong><small>${stepHint(step)}</small></div></li>`; }
 function stepHint(step: string) { return ({ welcome: 'Коротко понять назначение системы.', data_location: 'Данные остаются на этом компьютере; будущие резервные копии помогут защитить работу.', first_ingredient: 'Позже здесь появится добавление компонентов и плотностей.', first_recipe: 'Рецепты будут храниться версиями, без скрытого изменения истории.', first_client: 'Клиентские данные будут заполняться аккуратно и понятно.', first_order: 'Заказы и производство появятся отдельным roadmap-шагом.', first_backup: 'Резервные копии — обязательная привычка для локальной системы.' } as Record<string, string>)[step] ?? 'Шаг будет уточнен позже.'; }
-function sectionPlaceholder(title: string) { const emptyStates: Record<string, string> = { Заказы: 'Заказы появятся отдельным шагом: здесь будут карточки заказов, статусы и связь с рецептом клиента.', Закупки: 'Закупки появятся после предупреждений и рекомендаций: здесь будет список того, что нужно докупить.', Готовность: 'Проверка готовности производства появится позже: система покажет наличие сырья, тары, предупреждения и стоимость до подтверждения.', Производство: 'Производство появится отдельным безопасным шагом с подтверждением перед списанием склада.', Импорт: 'Импорт будет работать через черновик, проверку строк и ручное подтверждение перед записью данных.', Отчеты: 'Отчеты появятся позже и помогут смотреть затраты, продажи, закупки и историю работы.', Настройки: 'Настройки будут собирать пользовательские параметры мастерской без технической панели.', Помощь: 'Помощь будет объяснять ежедневные сценарии простым языком.' }; return `<section class="card"><p class="card-kicker">Раздел приложения</p><h2>${escapeHtml(title)}</h2><p>${emptyStates[title] ?? 'Этот раздел подготовлен как понятная навигационная заглушка. Формы и бизнес-функции будут добавляться в отдельных PR.'}</p><p class="next-step">Следующее действие: дождаться реализации соответствующего roadmap-шага.</p></section>`; }
+function plannedSectionPlaceholder(section: NavigationSection) {
+  const copy: Record<string, { title: string; now: string }> = {
+    Заказы: { title: 'Заказы', now: 'Пока можно вести клиентов, рецепты и индивидуальные рецепты; заказы будут подключены отдельным безопасным шагом.' },
+    Закупки: { title: 'Закупки', now: 'Пока можно заполнить компоненты, приходы и партии, тару и складские движения; рекомендации закупок появятся позже.' },
+    Готовность: { title: 'Готовность производства', now: 'Пока можно проверить рецепты, компоненты, партии и тару вручную в складских разделах.' },
+    Производство: { title: 'Производство', now: 'Пока можно подготовить рецепты, клиентов, компоненты, партии и тару; подтверждение производства и списание склада появятся позже.' },
+    Импорт: { title: 'Импорт данных', now: 'Пока данные нужно добавлять через готовые формы компонентов, партий, тары, рецептов и клиентов.' },
+    Отчеты: { title: 'Отчеты', now: 'Пока можно смотреть текущие списки и складской обзор; сводные отчеты появятся отдельным модулем.' },
+    Настройки: { title: 'Настройки', now: 'Пока используются базовые локальные настройки приложения; пользовательский экран настроек появится позже.' },
+    Помощь: { title: 'Помощь', now: 'Пока ориентируйтесь на понятные подсказки внутри рабочих разделов; отдельная справка появится позже.' },
+  };
+  const item = copy[section] ?? { title: labelForSection(section), now: 'Пока используйте готовые рабочие разделы из бокового меню.' };
+  return `<section class="card planned-card"><p class="card-kicker">Запланированный модуль</p><h2>${escapeHtml(item.title)}</h2><p>Этот модуль запланирован, но еще не доступен в текущем MVP-срезе.</p><p class="next-step">Что можно сделать сейчас: ${escapeHtml(item.now)}</p></section>`;
+}
 
 
 function recipesPage() {

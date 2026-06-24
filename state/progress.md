@@ -174,3 +174,10 @@ PR16 - Ingredient catalog UI foundation
 - Existing implemented routes and screens remain intact, including `/inventory`, `/ingredients`, `/ingredient-lots`, `/stock-movements`, `/recipes`, `/clients`, `/client-recipes`, and `/packaging-items`.
 - No backend, domain logic, API, migration, or data model changes were made.
 - Recipe catalog, groups/tags UX, builder-first recipe creation, and inventory flow cleanup remain later UX stabilization PRs.
+
+## 2026-06-23 — PR2 update: honest navigation status UX
+- Refined PR2 sidebar groups to «Главная», «Рецепты», «Клиенты», «Склад», «Производство», and «Данные и настройки»; removed broad «Создание» grouping.
+- Added frontend-only collapsible navigation groups; the active group stays expanded so the current screen remains visible during route and Back/Forward navigation.
+- Added explicit module statuses in navigation: ready/empty/planned, with planned modules marked by a visible «скоро» badge and distinct planned-module placeholder pages.
+- Added a compact home-page readiness note listing what works now and what is coming soon.
+- No backend, domain logic, API, migration, or data model changes were made.
