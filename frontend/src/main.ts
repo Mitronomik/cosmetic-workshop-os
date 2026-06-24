@@ -255,7 +255,40 @@ type RecipesState = {
 };
 
 
-const navigationItems = ['Главная','Компоненты','Партии','Движения склада','Рецепты','Клиенты','Индивидуальные рецепты','Заказы','Склад','Тара','Закупки','Производство','Импорт','Отчеты','Настройки','Помощь'];
+type NavigationSection = 'Главная' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Готовность' | 'Производство' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Помощь';
+type NavigationStatus = 'ready' | 'empty' | 'planned';
+type NavigationItem = { label: string; section: NavigationSection; path: string; status: NavigationStatus };
+type NavigationGroup = { title: string; items: NavigationItem[] };
+
+const navigationGroups: NavigationGroup[] = [
+  { title: 'Главная', items: [{ label: 'Обзор', section: 'Главная', path: '/', status: 'ready' }] },
+  { title: 'Рецепты', items: [
+    { label: 'Рецепты', section: 'Рецепты', path: '/recipes', status: 'empty' },
+    { label: 'Индивидуальные рецепты', section: 'Индивидуальные рецепты', path: '/client-recipes', status: 'empty' },
+  ] },
+  { title: 'Клиенты', items: [
+    { label: 'Клиенты', section: 'Клиенты', path: '/clients', status: 'empty' },
+    { label: 'Заказы', section: 'Заказы', path: '/#orders', status: 'planned' },
+  ] },
+  { title: 'Склад', items: [
+    { label: 'Обзор склада', section: 'Склад', path: '/inventory', status: 'ready' },
+    { label: 'Компоненты', section: 'Компоненты', path: '/ingredients', status: 'empty' },
+    { label: 'Приходы и партии', section: 'Партии', path: '/ingredient-lots', status: 'empty' },
+    { label: 'Движения сырья', section: 'Движения сырья', path: '/stock-movements', status: 'empty' },
+    { label: 'Тара', section: 'Тара', path: '/packaging-items', status: 'empty' },
+    { label: 'Закупки', section: 'Закупки', path: '/#purchases', status: 'planned' },
+  ] },
+  { title: 'Производство', items: [
+    { label: 'Готовность', section: 'Готовность', path: '/#production-readiness', status: 'planned' },
+    { label: 'Производство', section: 'Производство', path: '/#production', status: 'planned' },
+  ] },
+  { title: 'Данные и настройки', items: [
+    { label: 'Импорт', section: 'Импорт', path: '/#import', status: 'planned' },
+    { label: 'Отчеты', section: 'Отчеты', path: '/#reports', status: 'planned' },
+    { label: 'Настройки', section: 'Настройки', path: '/#settings', status: 'planned' },
+    { label: 'Помощь', section: 'Помощь', path: '/#help', status: 'planned' },
+  ] },
+];
 const stepLabels: Record<string, string> = {
   welcome: 'Познакомиться с рабочим пространством',
   data_location: 'Понять, где хранятся локальные данные',
@@ -266,7 +299,8 @@ const stepLabels: Record<string, string> = {
   first_backup: 'Запланировать первую резервную копию',
 };
 
-let activeSection = sectionFromLocation();
+let activeSection: NavigationSection = sectionFromLocation();
+const collapsedNavigationGroups = new Set<string>(navigationGroups.map((group) => group.title));
 let healthStatus: HealthStatus = 'checking';
 let onboardingStatus: OnboardingStatus = 'loading';
 let onboardingState: OnboardingState | null = null;
@@ -305,16 +339,81 @@ let calculationStatus: CalculationStatus = 'idle';
 let calculationError = '';
 let recipesState: RecipesState = { templates: [], selectedTemplate: null, versions: [], selectedVersionDetail: null, versionDetailStatus: 'idle', ingredients: [], templateForm: emptyRecipeTemplateForm(), versionForm: emptyRecipeVersionForm(), calculation: null, calculationTargetValue: '', calculationTargetUnit: 'g', catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null };
 
-function sectionFromLocation() {
-  if (window.location.pathname === '/inventory') return 'Склад';
-  if (window.location.pathname === '/ingredients') return 'Компоненты';
-  if (window.location.pathname === '/ingredient-lots') return 'Партии';
-  if (window.location.pathname === '/stock-movements') return 'Движения склада';
-  if (window.location.pathname === '/recipes') return 'Рецепты';
-  if (window.location.pathname === '/clients') return 'Клиенты';
-  if (window.location.pathname === '/client-recipes') return 'Индивидуальные рецепты';
-  if (window.location.pathname === '/packaging-items') return 'Тара';
-  return 'Главная';
+function sectionFromLocation(): NavigationSection {
+  const routes: Record<string, NavigationSection> = {
+    '/inventory': 'Склад',
+    '/ingredients': 'Компоненты',
+    '/ingredient-lots': 'Партии',
+    '/stock-movements': 'Движения сырья',
+    '/recipes': 'Рецепты',
+    '/clients': 'Клиенты',
+    '/client-recipes': 'Индивидуальные рецепты',
+    '/packaging-items': 'Тара',
+  };
+  const placeholderRoutes: Record<string, NavigationSection> = {
+    '#orders': 'Заказы',
+    '#purchases': 'Закупки',
+    '#production-readiness': 'Готовность',
+    '#production': 'Производство',
+    '#import': 'Импорт',
+    '#reports': 'Отчеты',
+    '#settings': 'Настройки',
+    '#help': 'Помощь',
+  };
+  return routes[window.location.pathname] ?? placeholderRoutes[window.location.hash] ?? 'Главная';
+}
+
+function pathForSection(section: NavigationSection): string {
+  return navigationGroups.flatMap((group) => group.items).find((item) => item.section === section)?.path ?? '/';
+}
+
+function labelForSection(section: NavigationSection): string {
+  return navigationGroups.flatMap((group) => group.items).find((item) => item.section === section)?.label ?? section;
+}
+
+function loadSectionData(section: NavigationSection) {
+  if (section === 'Склад') loadInventory();
+  if (section === 'Компоненты') loadIngredients();
+  if (section === 'Партии') loadIngredientLots();
+  if (section === 'Движения сырья') loadStockMovements();
+  if (section === 'Рецепты') loadRecipes();
+  if (section === 'Клиенты') loadClients();
+  if (section === 'Индивидуальные рецепты') loadClientRecipes();
+  if (section === 'Тара') loadPackagingItems();
+}
+
+function renderActivePage(section: NavigationSection) {
+  if (section === 'Главная') return dashboardPlaceholder();
+  if (section === 'Склад') return inventoryPage();
+  if (section === 'Компоненты') return ingredientsPage();
+  if (section === 'Партии') return ingredientLotsPage();
+  if (section === 'Движения сырья') return stockMovementsPage();
+  if (section === 'Рецепты') return recipesPage();
+  if (section === 'Клиенты') return clientsPage();
+  if (section === 'Индивидуальные рецепты') return clientRecipesPage();
+  if (section === 'Тара') return packagingItemsPage();
+  return plannedSectionPlaceholder(section);
+}
+
+function activeGroupTitle() {
+  return navigationGroups.find((group) => group.items.some((item) => item.section === activeSection))?.title ?? 'Главная';
+}
+
+function isNavigationGroupExpanded(group: NavigationGroup) {
+  return group.title === activeGroupTitle() || !collapsedNavigationGroups.has(group.title);
+}
+
+function navigationItemMarkup(item: NavigationItem) {
+  const statusLabel = item.status === 'planned' ? '<span class="nav-badge">скоро</span>' : '';
+  return `<button class="nav-item ${item.section === activeSection ? 'active' : ''} status-${item.status}" type="button" data-section="${item.section}"><span>${escapeHtml(item.label)}</span>${statusLabel}</button>`;
+}
+
+function navigationMarkup() {
+  return navigationGroups.map((group) => {
+    const isExpanded = isNavigationGroupExpanded(group);
+    const isActiveGroup = group.title === activeGroupTitle();
+    return `<section class="nav-group ${isActiveGroup ? 'active-group' : ''}" aria-label="${escapeHtml(group.title)}"><button class="nav-group-toggle" type="button" data-nav-group="${escapeHtml(group.title)}" aria-expanded="${isExpanded}"><span>${escapeHtml(group.title)}</span><span aria-hidden="true">${isExpanded ? '−' : '+'}</span></button>${isExpanded ? `<div class="nav-group-items">${group.items.map(navigationItemMarkup).join('')}</div>` : ''}</section>`;
+  }).join('');
 }
 
 function render() {
@@ -328,14 +427,14 @@ function render() {
           <div class="brand-mark" aria-hidden="true"><span class="brand-fallback">МК</span><img src="/brand/mch-logo.png" alt="" /></div>
           <div class="brand-copy"><p class="brand-kicker">Локальная система</p><p class="brand-name">Мастерская косметолога</p></div>
         </div>
-        <nav class="navigation">${navigationItems.map((item) => `<button class="nav-item ${item === activeSection ? 'active' : ''}" type="button" data-section="${item}">${item}</button>`).join('')}</nav>
+        <nav class="navigation">${navigationMarkup()}</nav>
       </aside>
       <main class="content">
         <header class="topbar">
-          <div><p class="eyebrow">Рабочее пространство</p><h1>${activeSection}</h1></div>
+          <div><p class="eyebrow">Рабочее пространство</p><h1>${labelForSection(activeSection)}</h1></div>
           <span class="status ${healthStatus}">${healthLabel}</span>
         </header>
-        ${activeSection === 'Главная' ? dashboardPlaceholder() : activeSection === 'Склад' ? inventoryPage() : activeSection === 'Компоненты' ? ingredientsPage() : activeSection === 'Партии' ? ingredientLotsPage() : activeSection === 'Движения склада' ? stockMovementsPage() : activeSection === 'Рецепты' ? recipesPage() : activeSection === 'Клиенты' ? clientsPage() : activeSection === 'Индивидуальные рецепты' ? clientRecipesPage() : activeSection === 'Тара' ? packagingItemsPage() : sectionPlaceholder(activeSection)}
+        ${renderActivePage(activeSection)}
       </main>
     </div>`;
   bindEvents(root);
@@ -343,18 +442,19 @@ function render() {
 
 function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLImageElement>('.brand-mark img')?.addEventListener('error', (event) => { (event.currentTarget as HTMLImageElement).hidden = true; });
+  root.querySelectorAll<HTMLButtonElement>('.nav-group-toggle').forEach((button) => {
+    button.addEventListener('click', () => {
+      const groupTitle = button.dataset.navGroup;
+      if (!groupTitle || groupTitle === activeGroupTitle()) return;
+      if (collapsedNavigationGroups.has(groupTitle)) collapsedNavigationGroups.delete(groupTitle); else collapsedNavigationGroups.add(groupTitle);
+      render();
+    });
+  });
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
-      activeSection = button.dataset.section ?? 'Главная';
-      window.history.pushState({}, '', activeSection === 'Склад' ? '/inventory' : activeSection === 'Компоненты' ? '/ingredients' : activeSection === 'Партии' ? '/ingredient-lots' : activeSection === 'Движения склада' ? '/stock-movements' : activeSection === 'Рецепты' ? '/recipes' : activeSection === 'Клиенты' ? '/clients' : activeSection === 'Индивидуальные рецепты' ? '/client-recipes' : activeSection === 'Тара' ? '/packaging-items' : '/');
-      if (activeSection === 'Склад') loadInventory();
-      if (activeSection === 'Компоненты') loadIngredients();
-      if (activeSection === 'Партии') loadIngredientLots();
-      if (activeSection === 'Движения склада') loadStockMovements();
-      if (activeSection === 'Рецепты') loadRecipes();
-      if (activeSection === 'Клиенты') loadClients();
-      if (activeSection === 'Индивидуальные рецепты') loadClientRecipes();
-      if (activeSection === 'Тара') loadPackagingItems();
+      activeSection = (button.dataset.section as NavigationSection | undefined) ?? 'Главная';
+      window.history.pushState({}, '', pathForSection(activeSection));
+      loadSectionData(activeSection);
       render();
     });
   });
@@ -419,7 +519,7 @@ function bindEvents(root: HTMLElement) {
 }
 
 function dashboardPlaceholder() {
-  return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Первые рабочие разделы появятся постепенно</h2><p>Здесь будет спокойная рабочая панель: активные заказы, предупреждения, закупки, производство и резервные копии.</p><p class="next-step">Начните с компонентов, затем рецептов, клиентов и заказов. Каждый раздел будет подключаться отдельным безопасным шагом.</p></section>`;
+  return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Что уже можно открыть</h2><div class="readiness-grid"><div><h3>Работает сейчас</h3><ul><li>Рецепты</li><li>Индивидуальные рецепты</li><li>Клиенты</li><li>Компоненты</li><li>Складской обзор</li><li>Тара</li></ul></div><div><h3>Скоро</h3><ul><li>Заказы</li><li>Производство</li><li>Закупки</li><li>Импорт</li><li>Отчеты</li></ul></div></div></section>`;
 }
 
 
@@ -454,7 +554,7 @@ function clientList() {
 function ingredientsPage() {
   if (ingredientsStatus === 'idle' || ingredientsStatus === 'loading') return `<section class="card"><p class="card-kicker">Компоненты</p><h2>Загружаем компоненты…</h2><p>Получаем справочник компонентов из локального API.</p></section>`;
   if (ingredientsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Компоненты</p><h2>Не удалось загрузить компоненты</h2><p>${ingredientsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredients">Повторить загрузку</button></section>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Компоненты</p><h2>Справочник компонентов</h2><p>Добавляйте базовые записи компонентов, чтобы позже учитывать партии, остатки и рецептуры. Партии и движения склада в этом разделе не меняются.</p><p class="next-step">Системный тип используется программой. Моя группа и метки нужны для удобной организации каталога.</p></div><button class="secondary-action" type="button" data-action="new-ingredient">Очистить форму</button></section>${ingredientsMessage ? `<p class="page-message">${ingredientsMessage}</p>` : ''}${ingredientsError ? `<p class="page-message error-message">${ingredientsError}</p>` : ''}${ingredientForm()}${ingredientCatalogPanel()}${ingredientList()}</div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Компоненты</p><h2>Справочник компонентов</h2><p>Добавляйте базовые записи компонентов, чтобы позже учитывать партии, остатки и рецептуры. Приходы, партии и движения сырья в этом разделе не меняются.</p><p class="next-step">Системный тип используется программой. Моя группа и метки нужны для удобной организации каталога.</p></div><button class="secondary-action" type="button" data-action="new-ingredient">Очистить форму</button></section>${ingredientsMessage ? `<p class="page-message">${ingredientsMessage}</p>` : ''}${ingredientsError ? `<p class="page-message error-message">${ingredientsError}</p>` : ''}${ingredientForm()}${ingredientCatalogPanel()}${ingredientList()}</div>`;
 }
 
 function ingredientForm() {
@@ -485,7 +585,7 @@ function ingredientList() {
 function packagingItemsPage() {
   if (packagingItemsStatus === 'idle' || packagingItemsStatus === 'loading') return `<section class="card"><p class="card-kicker">Тара</p><h2>Загружаем тару…</h2><p>Получаем справочник тары из локального API.</p></section>`;
   if (packagingItemsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Тара</p><h2>Не удалось загрузить тару</h2><p>${packagingItemsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-packaging-items">Повторить загрузку</button></section>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Тара</p><h2>Справочник тары</h2><p>Добавляйте баночки, флаконы, крышки, этикетки и коробки. Остатки меняются через движения склада, а не здесь.</p><p class="next-step">Этот раздел описывает саму тару. Остатки и списания будут отдельными складскими операциями.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-packaging-items">Обновить список</button><button class="secondary-action" type="button" data-action="new-packaging-item">Очистить форму</button></div></section>${packagingItemsMessage ? `<p class="page-message">${packagingItemsMessage}</p>` : ''}${packagingItemsError ? `<p class="page-message error-message">${packagingItemsError}</p>` : ''}${packagingItemForm()}${packagingCatalogPanel()}${packagingItemsList()}</div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Тара</p><h2>Справочник тары</h2><p>Добавляйте баночки, флаконы, крышки, этикетки и коробки. Остатки меняются через складские операции, а не здесь.</p><p class="next-step">Этот раздел описывает саму тару. Остатки и списания будут отдельными складскими операциями.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-packaging-items">Обновить список</button><button class="secondary-action" type="button" data-action="new-packaging-item">Очистить форму</button></div></section>${packagingItemsMessage ? `<p class="page-message">${packagingItemsMessage}</p>` : ''}${packagingItemsError ? `<p class="page-message error-message">${packagingItemsError}</p>` : ''}${packagingItemForm()}${packagingCatalogPanel()}${packagingItemsList()}</div>`;
 }
 
 function packagingItemForm() {
@@ -521,29 +621,29 @@ function packagingItemsList() {
 }
 
 function ingredientLotsPage() {
-  if (ingredientLotsStatus === 'idle' || ingredientLotsStatus === 'loading') return `<section class="card"><p class="card-kicker">Партии компонентов</p><h2>Загружаем партии…</h2><p>Получаем партии компонентов из локального API.</p></section>`;
-  if (ingredientLotsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Партии компонентов</p><h2>Не удалось загрузить партии</h2><p>${ingredientLotsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredient-lots">Повторить загрузку</button></section>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Партии компонентов</p><h2>Партии закупленных компонентов</h2><p>Здесь хранится паспорт партии: компонент, поставщик, срок годности, цена и единица учета. Остаток не редактируется здесь и считается отдельными движениями склада.</p></div><button class="secondary-action" type="button" data-action="new-ingredient-lot">Очистить форму</button></section>${ingredientLotsMessage ? `<p class="page-message">${ingredientLotsMessage}</p>` : ''}${ingredientLotsError ? `<p class="page-message error-message">${ingredientLotsError}</p>` : ''}${ingredientLotForm()}${ingredientLotList()}</div>`;
+  if (ingredientLotsStatus === 'idle' || ingredientLotsStatus === 'loading') return `<section class="card"><p class="card-kicker">Приходы и партии</p><h2>Загружаем приходы и партии…</h2><p>Получаем партии компонентов из локального API.</p></section>`;
+  if (ingredientLotsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Приходы и партии</p><h2>Не удалось загрузить приходы и партии</h2><p>${ingredientLotsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredient-lots">Повторить загрузку</button></section>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Приходы и партии</p><h2>Приходы и партии сырья</h2><p>Здесь хранится паспорт партии: компонент, поставщик, срок годности, цена и единица учета. Остаток не редактируется здесь и считается отдельными движениями сырья.</p></div><button class="secondary-action" type="button" data-action="new-ingredient-lot">Очистить форму</button></section>${ingredientLotsMessage ? `<p class="page-message">${ingredientLotsMessage}</p>` : ''}${ingredientLotsError ? `<p class="page-message error-message">${ingredientLotsError}</p>` : ''}${ingredientLotForm()}${ingredientLotList()}</div>`;
 }
 
 function ingredientLotForm() {
   const form = ingredientLotsState.form;
   const isEdit = ingredientLotsState.formMode === 'edit';
   const hasIngredients = ingredientLotsState.ingredients.length > 0;
-  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить партию' : 'Создать партию компонента'}</h2><p class="next-step">Количество партии добавляется отдельным движением склада. Здесь хранится информация о партии: поставщик, срок годности, цена и единица учета.</p><form data-form="ingredient-lot" class="ingredient-form"><div class="form-grid"><label>Компонент<select name="ingredient_id" required ${hasIngredients ? '' : 'disabled'}><option value="">Выберите компонент</option>${ingredientLotsState.ingredients.map((item) => `<option value="${item.id}" ${String(item.id) === form.ingredient_id ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></label><label>Код партии<input name="lot_code" maxlength="120" value="${escapeHtml(form.lot_code)}" placeholder="Например, LOT-2026-01" /></label><label>Поставщик<input name="supplier_name" maxlength="160" value="${escapeHtml(form.supplier_name)}" placeholder="Необязательно" /></label><label>Единица учета<select name="unit">${lotUnitOptions(form.unit)}</select></label><label>Цена за единицу<input name="unit_cost" inputmode="decimal" value="${escapeHtml(form.unit_cost)}" placeholder="Например, 12.50" /></label><label>Общая стоимость<input name="total_cost" inputmode="decimal" value="${escapeHtml(form.total_cost)}" placeholder="Необязательно" /></label><label>Плотность<input name="density_g_per_ml" inputmode="decimal" value="${escapeHtml(form.density_g_per_ml)}" placeholder="Например, 0.950" /></label><label>Дата покупки<input name="purchased_at" type="date" value="${escapeHtml(form.purchased_at)}" /></label><label>Срок годности<input name="expires_at" type="date" value="${escapeHtml(form.expires_at)}" /></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки о партии">${escapeHtml(form.notes)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" ${hasIngredients ? '' : 'disabled'}>${isEdit ? 'Сохранить изменения' : 'Создать партию'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="new-ingredient-lot">Отменить редактирование</button>' : ''}</div>${hasIngredients ? '' : '<p class="next-step">Сначала создайте активный компонент в разделе «Компоненты», затем вернитесь к партиям.</p>'}</form></section>`;
+  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить партию' : 'Создать партию компонента'}</h2><p class="next-step">Количество партии добавляется отдельным движением сырья. Здесь хранится информация о партии: поставщик, срок годности, цена и единица учета.</p><form data-form="ingredient-lot" class="ingredient-form"><div class="form-grid"><label>Компонент<select name="ingredient_id" required ${hasIngredients ? '' : 'disabled'}><option value="">Выберите компонент</option>${ingredientLotsState.ingredients.map((item) => `<option value="${item.id}" ${String(item.id) === form.ingredient_id ? 'selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}</select></label><label>Код партии<input name="lot_code" maxlength="120" value="${escapeHtml(form.lot_code)}" placeholder="Например, LOT-2026-01" /></label><label>Поставщик<input name="supplier_name" maxlength="160" value="${escapeHtml(form.supplier_name)}" placeholder="Необязательно" /></label><label>Единица учета<select name="unit">${lotUnitOptions(form.unit)}</select></label><label>Цена за единицу<input name="unit_cost" inputmode="decimal" value="${escapeHtml(form.unit_cost)}" placeholder="Например, 12.50" /></label><label>Общая стоимость<input name="total_cost" inputmode="decimal" value="${escapeHtml(form.total_cost)}" placeholder="Необязательно" /></label><label>Плотность<input name="density_g_per_ml" inputmode="decimal" value="${escapeHtml(form.density_g_per_ml)}" placeholder="Например, 0.950" /></label><label>Дата покупки<input name="purchased_at" type="date" value="${escapeHtml(form.purchased_at)}" /></label><label>Срок годности<input name="expires_at" type="date" value="${escapeHtml(form.expires_at)}" /></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки о партии">${escapeHtml(form.notes)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" ${hasIngredients ? '' : 'disabled'}>${isEdit ? 'Сохранить изменения' : 'Создать партию'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="new-ingredient-lot">Отменить редактирование</button>' : ''}</div>${hasIngredients ? '' : '<p class="next-step">Сначала создайте активный компонент в разделе «Компоненты», затем вернитесь к партиям.</p>'}</form></section>`;
 }
 
 function ingredientLotList() {
   if (ingredientLotsState.lots.length === 0) return `<section class="card empty-card"><h2>Пока нет партий компонентов</h2><p>Создайте партию, чтобы указать поставщика, срок годности и цену закупки.</p><p class="next-step">Остаток считается по движениям склада. Чтобы добавить количество, используйте движение склада — это будет отдельный шаг.</p></section>`;
-  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Партии компонентов</h2><div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Партия</th><th>Поставщик</th><th>Ед. учета</th><th>Цена за единицу</th><th>Плотность</th><th>Дата покупки</th><th>Срок годности</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${ingredientLotsState.lots.map((lot) => `<tr><td><strong>${escapeHtml(lotIngredientName(lot.ingredient_id))}</strong></td><td>${escapeHtml(lot.lot_code || 'Без номера')}<small>${escapeHtml(lot.notes || '')}</small></td><td>${escapeHtml(lot.supplier_name || 'Не указан')}</td><td>${unitLabel(lot.unit)}</td><td>${lot.unit_cost ? escapeHtml(lot.unit_cost) : 'Не указана'}</td><td>${lot.density_g_per_ml ? `${escapeHtml(lot.density_g_per_ml)} г/мл` : 'Не указана'}</td><td>${formatDate(lot.purchased_at)}</td><td>${formatDate(lot.expires_at)}</td><td><span class="pill ${lotStatusClass(lot)}">${lotStatusLabel(lot)}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient-lot" data-id="${lot.id}">Изменить</button>${lot.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient-lot" data-id="${lot.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div><p class="next-step">Остаток партии не редактируется в этой таблице: он будет считаться по движениям склада.</p></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Приходы и партии</h2><div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Партия</th><th>Поставщик</th><th>Ед. учета</th><th>Цена за единицу</th><th>Плотность</th><th>Дата покупки</th><th>Срок годности</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${ingredientLotsState.lots.map((lot) => `<tr><td><strong>${escapeHtml(lotIngredientName(lot.ingredient_id))}</strong></td><td>${escapeHtml(lot.lot_code || 'Без номера')}<small>${escapeHtml(lot.notes || '')}</small></td><td>${escapeHtml(lot.supplier_name || 'Не указан')}</td><td>${unitLabel(lot.unit)}</td><td>${lot.unit_cost ? escapeHtml(lot.unit_cost) : 'Не указана'}</td><td>${lot.density_g_per_ml ? `${escapeHtml(lot.density_g_per_ml)} г/мл` : 'Не указана'}</td><td>${formatDate(lot.purchased_at)}</td><td>${formatDate(lot.expires_at)}</td><td><span class="pill ${lotStatusClass(lot)}">${lotStatusLabel(lot)}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient-lot" data-id="${lot.id}">Изменить</button>${lot.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient-lot" data-id="${lot.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div><p class="next-step">Остаток партии не редактируется в этой таблице: он будет считаться по движениям склада.</p></section>`;
 }
 
 
 function stockMovementsPage() {
-  if (stockMovementsStatus === 'idle' || stockMovementsStatus === 'loading') return `<section class="card"><p class="card-kicker">Движения склада</p><h2>Загружаем движения…</h2><p>Получаем партии компонентов и историю движений из локального API.</p></section>`;
-  if (stockMovementsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Движения склада</p><h2>Не удалось загрузить движения склада</h2><p>${stockMovementsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-stock-movements">Повторить загрузку</button></section>`;
-  if (stockMovementsState.lots.length === 0) return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения склада</p><h2>История движений компонентов</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements">Обновить</button></section><section class="card empty-card"><h2>Пока нет партий для движений</h2><p>Сначала создайте компонент и партию. После этого можно будет добавить приход или списание.</p><p class="next-step">Текущий остаток нельзя ввести вручную: он появится после первого движения склада.</p></section></div>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения склада</p><h2>Движения склада</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements">Обновить</button></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
+  if (stockMovementsStatus === 'idle' || stockMovementsStatus === 'loading') return `<section class="card"><p class="card-kicker">Движения сырья</p><h2>Загружаем движения…</h2><p>Получаем партии компонентов и историю движений из локального API.</p></section>`;
+  if (stockMovementsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Движения сырья</p><h2>Не удалось загрузить движения сырья</h2><p>${stockMovementsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-stock-movements">Повторить загрузку</button></section>`;
+  if (stockMovementsState.lots.length === 0) return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>История движений компонентов</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements">Обновить</button></section><section class="card empty-card"><h2>Пока нет партий для движений</h2><p>Сначала создайте компонент и партию. После этого можно будет добавить приход или списание.</p><p class="next-step">Текущий остаток нельзя ввести вручную: он появится после первого движения сырья.</p></section></div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>Движения сырья</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements">Обновить</button></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
 }
 
 function stockLotSelector() {
@@ -581,14 +681,14 @@ function inventoryPage() {
 
 function overviewCards(overview: InventoryOverview) {
   const cards: [string, number][] = [
-    ['Партии компонентов', overview.ingredient_lots_total], ['Есть остаток', overview.ingredient_lots_with_positive_balance], ['Нулевой остаток', overview.ingredient_lots_zero_balance], ['Просрочено', overview.ingredient_lots_expired], ['Скоро истекает', overview.ingredient_lots_expiring_soon], ['Тара', overview.packaging_items_total], ['Тара в наличии', overview.packaging_items_with_positive_balance], ['Тара без остатка', overview.packaging_items_zero_balance],
+    ['Приходы и партии', overview.ingredient_lots_total], ['Есть остаток', overview.ingredient_lots_with_positive_balance], ['Нулевой остаток', overview.ingredient_lots_zero_balance], ['Просрочено', overview.ingredient_lots_expired], ['Скоро истекает', overview.ingredient_lots_expiring_soon], ['Тара', overview.packaging_items_total], ['Тара в наличии', overview.packaging_items_with_positive_balance], ['Тара без остатка', overview.packaging_items_zero_balance],
   ];
   return `<section class="overview-grid" aria-label="Сводка склада">${cards.map(([label, value]) => `<article class="metric-card"><span>${label}</span><strong>${value}</strong></article>`).join('')}</section>`;
 }
 
 function ingredientLotsTable(rows: IngredientLotBalance[]) {
-  if (rows.length === 0) return emptyCard('Партии компонентов не найдены', 'Когда будут добавлены компоненты, партии и движения склада, остатки появятся в этой таблице.');
-  return `<section class="card data-card"><p class="card-kicker">Компоненты</p><h2>Партии в учете</h2><div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Партия</th><th>Поставщик</th><th>Остаток</th><th>Ед.</th><th>Срок годности</th><th>Статус</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.ingredient_name)}</td><td>${escapeHtml(row.lot_code || 'Без номера')}</td><td>${escapeHtml(row.supplier || 'Не указан')}</td><td>${escapeHtml(row.balance_quantity)}</td><td>${unitLabel(row.unit)}</td><td>${formatDate(row.expiration_date)}</td><td><span class="pill ${ingredientStatusClass(row)}">${ingredientStatus(row)}</span></td></tr>`).join('')}</tbody></table></div></section>`;
+  if (rows.length === 0) return emptyCard('Приходы и партии не найдены', 'Когда будут добавлены компоненты, партии и движения сырья, остатки появятся в этой таблице.');
+  return `<section class="card data-card"><p class="card-kicker">Компоненты</p><h2>Приходы и партии в учете</h2><div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Партия</th><th>Поставщик</th><th>Остаток</th><th>Ед.</th><th>Срок годности</th><th>Статус</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.ingredient_name)}</td><td>${escapeHtml(row.lot_code || 'Без номера')}</td><td>${escapeHtml(row.supplier || 'Не указан')}</td><td>${escapeHtml(row.balance_quantity)}</td><td>${unitLabel(row.unit)}</td><td>${formatDate(row.expiration_date)}</td><td><span class="pill ${ingredientStatusClass(row)}">${ingredientStatus(row)}</span></td></tr>`).join('')}</tbody></table></div></section>`;
 }
 
 function packagingTable(rows: PackagingBalance[]) {
@@ -616,7 +716,20 @@ function onboardingCard() {
 }
 function checklistItem(step: string, currentStep: string) { const isDone = onboardingState?.completed_steps.includes(step); const isCurrent = step === currentStep && !isDone; const marker = isDone ? '✓' : isCurrent ? '•' : '○'; return `<li class="${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}"><span>${marker}</span><div><strong>${stepLabels[step] ?? step}</strong><small>${stepHint(step)}</small></div></li>`; }
 function stepHint(step: string) { return ({ welcome: 'Коротко понять назначение системы.', data_location: 'Данные остаются на этом компьютере; будущие резервные копии помогут защитить работу.', first_ingredient: 'Позже здесь появится добавление компонентов и плотностей.', first_recipe: 'Рецепты будут храниться версиями, без скрытого изменения истории.', first_client: 'Клиентские данные будут заполняться аккуратно и понятно.', first_order: 'Заказы и производство появятся отдельным roadmap-шагом.', first_backup: 'Резервные копии — обязательная привычка для локальной системы.' } as Record<string, string>)[step] ?? 'Шаг будет уточнен позже.'; }
-function sectionPlaceholder(title: string) { const emptyStates: Record<string, string> = { Рецепты: 'Рецепты появятся здесь позже. Пока можно завершить первичную настройку на главной странице.', Клиенты: 'Клиенты появятся здесь позже. В будущих шагах здесь будут карточки клиентов и индивидуальные формулы.', Запасы: 'Складской обзор теперь доступен в разделе «Склад». Формы добавления компонентов и движений появятся отдельными PR.' }; return `<section class="card"><p class="card-kicker">Раздел приложения</p><h2>${title}</h2><p>${emptyStates[title] ?? 'Этот раздел подготовлен как понятная навигационная заглушка. Формы и бизнес-функции будут добавляться в отдельных PR.'}</p><p class="next-step">Следующее действие: дождаться реализации соответствующего roadmap-шага.</p></section>`; }
+function plannedSectionPlaceholder(section: NavigationSection) {
+  const copy: Record<string, { title: string; now: string }> = {
+    Заказы: { title: 'Заказы', now: 'Пока можно вести клиентов, рецепты и индивидуальные рецепты; заказы будут подключены отдельным безопасным шагом.' },
+    Закупки: { title: 'Закупки', now: 'Пока можно заполнить компоненты, приходы и партии, тару и складские движения; рекомендации закупок появятся позже.' },
+    Готовность: { title: 'Готовность производства', now: 'Пока можно проверить рецепты, компоненты, партии и тару вручную в складских разделах.' },
+    Производство: { title: 'Производство', now: 'Пока можно подготовить рецепты, клиентов, компоненты, партии и тару; подтверждение производства и списание склада появятся позже.' },
+    Импорт: { title: 'Импорт данных', now: 'Пока данные нужно добавлять через готовые формы компонентов, партий, тары, рецептов и клиентов.' },
+    Отчеты: { title: 'Отчеты', now: 'Пока можно смотреть текущие списки и складской обзор; сводные отчеты появятся отдельным модулем.' },
+    Настройки: { title: 'Настройки', now: 'Пока используются базовые локальные настройки приложения; пользовательский экран настроек появится позже.' },
+    Помощь: { title: 'Помощь', now: 'Пока ориентируйтесь на понятные подсказки внутри рабочих разделов; отдельная справка появится позже.' },
+  };
+  const item = copy[section] ?? { title: labelForSection(section), now: 'Пока используйте готовые рабочие разделы из бокового меню.' };
+  return `<section class="card planned-card"><p class="card-kicker">Запланированный модуль</p><h2>${escapeHtml(item.title)}</h2><p>Этот модуль запланирован, но еще не доступен в текущем MVP-срезе.</p><p class="next-step">Что можно сделать сейчас: ${escapeHtml(item.now)}</p></section>`;
+}
 
 
 function recipesPage() {
@@ -870,7 +983,7 @@ function submitIngredientLotForm(event: SubmitEvent) {
   event.preventDefault();
   const payload = ingredientLotPayloadFromForm(event.currentTarget as HTMLFormElement);
   const request = ingredientLotsState.formMode === 'edit' && ingredientLotsState.form.id ? updateIngredientLot(ingredientLotsState.form.id, payload) : createIngredientLot(payload);
-  request.then(() => { ingredientLotsMessage = ingredientLotsState.formMode === 'edit' ? 'Партия сохранена. Остаток не изменялся.' : 'Партия создана. Количество добавляется отдельным движением склада.'; ingredientLotsError = ''; ingredientLotsState.formMode = 'create'; ingredientLotsState.form = emptyIngredientLotForm(); return getIngredientLots(); }).then((response) => { ingredientLotsState.lots = response.lots; ingredientLotsStatus = 'ready'; render(); }).catch(() => { ingredientLotsMessage = ''; ingredientLotsError = 'Не удалось сохранить партию. Проверьте обязательные поля и попробуйте еще раз.'; ingredientLotsStatus = 'ready'; render(); });
+  request.then(() => { ingredientLotsMessage = ingredientLotsState.formMode === 'edit' ? 'Партия сохранена. Остаток не изменялся.' : 'Партия создана. Количество добавляется отдельным движением сырья.'; ingredientLotsError = ''; ingredientLotsState.formMode = 'create'; ingredientLotsState.form = emptyIngredientLotForm(); return getIngredientLots(); }).then((response) => { ingredientLotsState.lots = response.lots; ingredientLotsStatus = 'ready'; render(); }).catch(() => { ingredientLotsMessage = ''; ingredientLotsError = 'Не удалось сохранить партию. Проверьте обязательные поля и попробуйте еще раз.'; ingredientLotsStatus = 'ready'; render(); });
 }
 function deactivateIngredientLot(id: number) {
   const lot = ingredientLotsState.lots.find((item) => item.id === id);
@@ -934,15 +1047,8 @@ function loadInventory(force = false) {
 function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!response.ok) throw new Error('Onboarding is unavailable'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = ''; render(); }).catch(() => { onboardingStatus = 'unavailable'; render(); }); }
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
-window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); if (activeSection === 'Склад') loadInventory(); if (activeSection === 'Компоненты') loadIngredients(); if (activeSection === 'Партии') loadIngredientLots(); if (activeSection === 'Движения склада') loadStockMovements(); if (activeSection === 'Рецепты') loadRecipes(); if (activeSection === 'Клиенты') loadClients(); if (activeSection === 'Индивидуальные рецепты') loadClientRecipes(); if (activeSection === 'Тара') loadPackagingItems(); render(); });
+window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); loadSectionData(activeSection); render(); });
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
-if (activeSection === 'Склад') loadInventory();
-if (activeSection === 'Компоненты') loadIngredients();
-if (activeSection === 'Партии') loadIngredientLots();
-if (activeSection === 'Движения склада') loadStockMovements();
-if (activeSection === 'Рецепты') loadRecipes();
-if (activeSection === 'Клиенты') loadClients();
-if (activeSection === 'Индивидуальные рецепты') loadClientRecipes();
-if (activeSection === 'Тара') loadPackagingItems();
+loadSectionData(activeSection);

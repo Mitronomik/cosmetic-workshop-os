@@ -17,10 +17,16 @@ button { font: inherit; }
 .brand-copy { min-width: 0; }
 .brand-kicker { color: #e8bfa9; font-size: 12px; font-weight: 700; letter-spacing: .08em; margin: 0 0 5px; text-transform: uppercase; }
 .brand-name { color: #fffaf7; font-size: 19px; font-weight: 800; line-height: 1.16; margin: 0; }
-.navigation { display: grid; gap: 7px; }
-.nav-item { border: 1px solid transparent; border-radius: 14px; background: transparent; color: #f7ebe4; cursor: pointer; padding: 11px 13px; text-align: left; transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease; }
+.navigation { display: grid; gap: 10px; }
+.nav-group { border: 1px solid rgba(232, 191, 169, .14); border-radius: 16px; display: grid; gap: 7px; min-width: 0; padding: 6px; }
+.nav-group.active-group { background: rgba(255, 248, 241, .06); border-color: rgba(232, 191, 169, .28); }
+.nav-group-toggle { align-items: center; background: transparent; border: 0; color: #e8bfa9; cursor: pointer; display: flex; font-size: 11px; font-weight: 900; justify-content: space-between; letter-spacing: .11em; line-height: 1.2; margin: 0; padding: 7px 8px; text-align: left; text-transform: uppercase; width: 100%; }
+.nav-group-items { display: grid; gap: 6px; min-width: 0; }
+.nav-item { align-items: center; border: 1px solid transparent; border-radius: 14px; background: transparent; color: #f7ebe4; cursor: pointer; display: flex; gap: 8px; justify-content: space-between; padding: 11px 13px; text-align: left; transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease; width: 100%; }
 .nav-item:hover { background: rgba(255, 248, 241, .09); border-color: rgba(232, 191, 169, .2); }
 .nav-item.active { background: #6e4a43; border-color: rgba(232, 191, 169, .42); box-shadow: inset 3px 0 0 #d39a7a; color: #fffaf7; font-weight: 700; }
+.nav-item.status-planned { color: #f1d6c6; }
+.nav-badge { background: rgba(247, 223, 206, .16); border: 1px solid rgba(247, 223, 206, .32); border-radius: 999px; color: #f7dfce; flex: 0 0 auto; font-size: 11px; font-weight: 900; letter-spacing: .03em; padding: 3px 7px; text-transform: lowercase; }
 .content { padding: 34px clamp(18px, 4vw, 44px); }
 .topbar { align-items: center; display: flex; gap: 20px; justify-content: space-between; margin-bottom: 30px; }
 .eyebrow, .card-kicker { color: #9b7466; font-size: 13px; font-weight: 800; letter-spacing: .07em; margin: 0 0 8px; text-transform: uppercase; }
@@ -28,6 +34,10 @@ h1 { color: #2e211f; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; margi
 .card { background: rgba(255, 253, 250, .92); border: 1px solid #ead6ca; border-radius: 28px; box-shadow: 0 22px 60px rgba(82, 54, 47, .1); max-width: 880px; padding: clamp(22px, 4vw, 34px); }
 .card h2 { color: #3b2925; font-size: clamp(24px, 3vw, 32px); margin: 0 0 12px; }
 .card p { color: #65534d; font-size: 18px; line-height: 1.62; }
+.readiness-grid { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+.readiness-grid > div { background: #fff8f1; border: 1px solid #ecd4c7; border-radius: 18px; padding: 16px; }
+.readiness-grid h3 { color: #3b2925; font-size: 17px; margin: 0 0 10px; }
+.readiness-grid ul { color: #65534d; line-height: 1.55; margin: 0; padding-left: 20px; }
 .next-step { background: #f8ebe3; border: 1px solid #ecd4c7; border-radius: 16px; padding: 14px 16px; }
 .status { border-radius: 999px; border: 1px solid transparent; font-size: 14px; font-weight: 800; padding: 10px 14px; white-space: nowrap; }
 .status.checking { background: #fff3d4; border-color: #efd593; color: #7a5b18; }
@@ -37,7 +47,8 @@ h1 { color: #2e211f; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; margi
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { box-shadow: none; padding: 18px; }
   .brand { margin-bottom: 18px; }
-  .navigation { grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); }
+  .navigation { gap: 14px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .readiness-grid { grid-template-columns: 1fr; }
   .content { padding-top: 26px; }
   .topbar { align-items: flex-start; flex-direction: column; }
   .status { white-space: normal; }
