@@ -181,3 +181,8 @@ PR16 - Ingredient catalog UI foundation
 - Added explicit module statuses in navigation: ready/empty/planned, with planned modules marked by a visible «скоро» badge and distinct planned-module placeholder pages.
 - Added a compact home-page readiness note listing what works now and what is coming soon.
 - No backend, domain logic, API, migration, or data model changes were made.
+
+## 2026-06-24 — PR3 UX stabilization: shared searchable catalog controls
+- Introduced shared frontend helpers for searchable catalog group and tag controls with inline creation support, selected-tag chips, and limited default tag lists to avoid an unlimited chip wall.
+- First applied scope: «Компоненты» catalog assignment; the same shared pattern was also safely applied to «Тара» because existing packaging catalog endpoints and UI were already present.
+- No backend, domain model, API contract, migration, recipe catalog redesign, or builder-first recipe creation changes were made.
