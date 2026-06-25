@@ -194,3 +194,4 @@ PR16 - Ingredient catalog UI foundation
 - Lightweight generic catalog filter helpers were introduced for future reuse by Packaging, Recipes, Clients, and Client Recipes.
 - Group/tag assignment from PR46 remains unchanged and still appears when editing a selected component.
 - Packaging, recipes, clients, and client recipes catalog/list UX remain later PRs.
+- PR #47 pre-merge fix: `/ingredients` now renders filters first, then the create/edit form and PR46 group/tag assignment area, then compact filtered results so create/edit actions appear near the top even with large catalogs.

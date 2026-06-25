@@ -270,3 +270,4 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Added small reusable catalog filtering helpers in the frontend for future catalog pages.
 - PR46 assignment UX remains unchanged: group/tag assignment controls are still available after selecting a component with `Изменить`, including searchable assignment inputs and `Без группы`.
 - Later PRs should apply similar browse-first catalog/list UX to Packaging, Recipes, Clients, and Client Recipes without broadening this PR.
+- PR #47 pre-merge fix: create/edit and component group/tag assignment now render immediately below the filter toolbar and above filtered results, so `Создать компонент` and `Изменить` are visible near the top for large catalogs.
