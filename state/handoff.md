@@ -257,8 +257,9 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Home now includes a compact «Работает сейчас» / «Скоро» readiness note for non-technical users.
 - This remains frontend/state docs only; recipe catalog, groups/tags UX, builder-first recipe creation, and inventory flow cleanup are still later UX stabilization PRs.
 
-## 2026-06-24 — Handoff: PR3 shared searchable catalog controls
-- PR3 adds shared `frontend/src/main.ts` catalog picker helpers for group search, tag search, selected tag chips, show-more behavior, and inline group/tag creation controls.
+## 2026-06-24 — Handoff: Frontend stabilization PR3 / GitHub PR #46 shared searchable catalog controls
+- Frontend stabilization PR3 / GitHub PR #46 adds shared `frontend/src/main.ts` catalog picker helpers for group search, tag search, selected tag chips, show-more behavior, and inline group/tag creation controls.
 - Applied to «Склад -> Компоненты» first and also to «Склад -> Тара» using the existing catalog assignment endpoints.
 - Large tag sets now render a small default subset with search/show-more instead of an unlimited chip wall; «Без группы» remains available.
 - No backend/domain/API/migration changes were made. Recipe catalog UX and builder-first recipe creation remain later stabilization PRs.
+- PR #46 fix before merge: ingredient and packaging tag toggles now preserve hidden selected tags when search is active, and searchable catalog inputs restore focus/caret after filtering renders.

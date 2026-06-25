@@ -477,9 +477,9 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-category"]')?.addEventListener('submit', submitIngredientCatalogCategoryForm);
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-tag"]')?.addEventListener('submit', submitIngredientCatalogTagForm);
   root.querySelector<HTMLSelectElement>('[data-action="assign-ingredient-category"]')?.addEventListener('change', (event) => assignIngredientCategory(Number((event.currentTarget as HTMLSelectElement).dataset.id), (event.currentTarget as HTMLSelectElement).value));
-  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-ingredient-tag"]').forEach((input) => input.addEventListener('change', () => assignIngredientTags(Number(input.dataset.ingredientId))));
-  root.querySelector<HTMLInputElement>('[data-action="search-ingredient-category"]')?.addEventListener('input', (event) => { ingredientCatalogControls.categorySearch = (event.currentTarget as HTMLInputElement).value; render(); });
-  root.querySelector<HTMLInputElement>('[data-action="search-ingredient-tags"]')?.addEventListener('input', (event) => { ingredientCatalogControls.tagSearch = (event.currentTarget as HTMLInputElement).value; render(); });
+  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-ingredient-tag"]').forEach((input) => input.addEventListener('change', () => assignIngredientTags(Number(input.dataset.ingredientId), Number(input.value), input.checked)));
+  root.querySelector<HTMLInputElement>('[data-action="search-ingredient-category"]')?.addEventListener('input', (event) => updateCatalogSearch(ingredientCatalogControls, 'categorySearch', event.currentTarget as HTMLInputElement));
+  root.querySelector<HTMLInputElement>('[data-action="search-ingredient-tags"]')?.addEventListener('input', (event) => updateCatalogSearch(ingredientCatalogControls, 'tagSearch', event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-ingredient-tags"]')?.addEventListener('click', () => { ingredientCatalogControls.showAllTags = !ingredientCatalogControls.showAllTags; render(); });
   root.querySelector<HTMLButtonElement>('[data-action="reload-ingredient-lots"]')?.addEventListener('click', () => loadIngredientLots(true));
   root.querySelector<HTMLButtonElement>('[data-action="new-ingredient-lot"]')?.addEventListener('click', () => { ingredientLotsState.formMode = 'create'; ingredientLotsState.form = emptyIngredientLotForm(); ingredientLotsMessage = ''; ingredientLotsError = ''; render(); });
@@ -511,9 +511,9 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLFormElement>('[data-form="packaging-catalog-category"]')?.addEventListener('submit', submitPackagingCatalogCategoryForm);
   root.querySelector<HTMLFormElement>('[data-form="packaging-catalog-tag"]')?.addEventListener('submit', submitPackagingCatalogTagForm);
   root.querySelector<HTMLSelectElement>('[data-action="assign-packaging-category"]')?.addEventListener('change', (event) => assignPackagingCategory(Number((event.currentTarget as HTMLSelectElement).dataset.id), (event.currentTarget as HTMLSelectElement).value));
-  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-packaging-tag"]').forEach((input) => input.addEventListener('change', () => assignPackagingTags(Number(input.dataset.packagingItemId))));
-  root.querySelector<HTMLInputElement>('[data-action="search-packaging-category"]')?.addEventListener('input', (event) => { packagingCatalogControls.categorySearch = (event.currentTarget as HTMLInputElement).value; render(); });
-  root.querySelector<HTMLInputElement>('[data-action="search-packaging-tags"]')?.addEventListener('input', (event) => { packagingCatalogControls.tagSearch = (event.currentTarget as HTMLInputElement).value; render(); });
+  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-packaging-tag"]').forEach((input) => input.addEventListener('change', () => assignPackagingTags(Number(input.dataset.packagingItemId), Number(input.value), input.checked)));
+  root.querySelector<HTMLInputElement>('[data-action="search-packaging-category"]')?.addEventListener('input', (event) => updateCatalogSearch(packagingCatalogControls, 'categorySearch', event.currentTarget as HTMLInputElement));
+  root.querySelector<HTMLInputElement>('[data-action="search-packaging-tags"]')?.addEventListener('input', (event) => updateCatalogSearch(packagingCatalogControls, 'tagSearch', event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-packaging-tags"]')?.addEventListener('click', () => { packagingCatalogControls.showAllTags = !packagingCatalogControls.showAllTags; render(); });
   root.querySelector<HTMLFormElement>('[data-form="recipe-template"]')?.addEventListener('submit', submitRecipeTemplateForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-version"]')?.addEventListener('submit', submitRecipeVersionForm);
@@ -533,6 +533,25 @@ function catalogOptions(items: CatalogOption[], search: string) {
   const normalized = search.trim().toLocaleLowerCase('ru-RU');
   if (!normalized) return items;
   return items.filter((item) => item.name.toLocaleLowerCase('ru-RU').includes(normalized));
+}
+
+function updateCatalogSearch(state: CatalogControlState, field: 'categorySearch' | 'tagSearch', input: HTMLInputElement) {
+  const action = input.dataset.action;
+  const cursor = input.selectionStart ?? input.value.length;
+  state[field] = input.value;
+  render();
+  if (!action) return;
+  const nextInput = document.querySelector<HTMLInputElement>(`[data-action="${action}"]`);
+  if (!nextInput) return;
+  nextInput.focus();
+  const nextCursor = Math.min(cursor, nextInput.value.length);
+  nextInput.setSelectionRange(nextCursor, nextCursor);
+}
+
+function nextCatalogTagIds(currentIds: number[], tagId: number, checked: boolean) {
+  const ids = new Set(currentIds);
+  if (checked) ids.add(tagId); else ids.delete(tagId);
+  return Array.from(ids);
 }
 
 function visibleTagOptions(items: CatalogOption[], selectedIds: number[], state: CatalogControlState, limit = 10) {
@@ -1007,7 +1026,7 @@ function reloadPackagingCatalogData() { return Promise.all([getPackagingItems(),
 function submitPackagingCatalogCategoryForm(event: SubmitEvent) { event.preventDefault(); const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) return; packagingItemsState.catalogCreating = 'category'; packagingItemsError = ''; render(); createPackagingCatalogCategory(name).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Группа тары создана.'; packagingItemsState.catalogCreating = null; render(); }).catch(() => { packagingItemsState.catalogCreating = null; packagingItemsError = 'Не удалось создать группу тары. Проверьте название и попробуйте еще раз.'; render(); }); }
 function submitPackagingCatalogTagForm(event: SubmitEvent) { event.preventDefault(); const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) return; packagingItemsState.catalogCreating = 'tag'; packagingItemsError = ''; render(); createPackagingCatalogTag(name).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метка тары создана.'; packagingItemsState.catalogCreating = null; render(); }).catch(() => { packagingItemsState.catalogCreating = null; packagingItemsError = 'Не удалось создать метку тары. Проверьте название и попробуйте еще раз.'; render(); }); }
 function assignPackagingCategory(packagingItemId: number, value: string) { packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render(); updatePackagingCatalogCategory(packagingItemId, value ? Number(value) : null).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Группа тары сохранена.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsError = 'Не удалось сохранить группу тары. Попробуйте обновить страницу.'; render(); }); }
-function assignPackagingTags(packagingItemId: number) { const tagIds = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-action="toggle-packaging-tag"][data-packaging-item-id="${packagingItemId}"]:checked`)).map((input) => Number(input.value)); packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render(); updatePackagingCatalogTags(packagingItemId, tagIds).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метки тары сохранены.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsError = 'Не удалось сохранить метки тары. Попробуйте обновить страницу.'; render(); }); }
+function assignPackagingTags(packagingItemId: number, tagId: number, checked: boolean) { const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemId); if (!item || !tagId) return; const tagIds = nextCatalogTagIds(item.catalog_tag_ids, tagId, checked); packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render(); updatePackagingCatalogTags(packagingItemId, tagIds).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метки тары сохранены.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsError = 'Не удалось сохранить метки тары. Попробуйте обновить страницу.'; render(); }); }
 
 function loadIngredientLots(force = false) {
   if (!force && (ingredientLotsStatus === 'loading' || ingredientLotsStatus === 'ready')) return;
@@ -1062,9 +1081,11 @@ function assignIngredientCategory(ingredientId: number, value: string) {
   ingredientsState.catalogSaving = 'saving'; ingredientsError = ''; render();
   updateIngredientCatalogCategory(ingredientId, value ? Number(value) : null).then(() => { ingredientsMessage = 'Моя группа компонента сохранена.'; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; ingredientsState.catalogSaving = 'idle'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogSaving = 'idle'; ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить мою группу. Проверьте, что группа активна, и попробуйте еще раз.'; render(); });
 }
-function assignIngredientTags(ingredientId: number) {
-  if (!ingredientId) return;
-  const tagIds = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-action="toggle-ingredient-tag"][data-ingredient-id="${ingredientId}"]:checked`)).map((input) => Number(input.value));
+function assignIngredientTags(ingredientId: number, tagId: number, checked: boolean) {
+  if (!ingredientId || !tagId) return;
+  const item = ingredientsState.items.find((ingredient) => ingredient.id === ingredientId);
+  if (!item) return;
+  const tagIds = nextCatalogTagIds(item.catalog_tag_ids, tagId, checked);
   ingredientsState.catalogSaving = 'saving'; ingredientsError = ''; render();
   updateIngredientCatalogTags(ingredientId, tagIds).then(() => { ingredientsMessage = 'Метки компонента сохранены.'; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; ingredientsState.catalogSaving = 'idle'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogSaving = 'idle'; ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить метки. Проверьте, что метки активны, и попробуйте еще раз.'; render(); });
 }
