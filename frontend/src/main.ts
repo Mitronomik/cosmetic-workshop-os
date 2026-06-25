@@ -660,12 +660,6 @@ function packagingCatalogPanel() {
   return `<section class="card form-card"><p class="card-kicker">Организация каталога тары</p><h2>Группа и метки</h2><p>${helperCopy}</p><div class="catalog-classification">${catalogCategoryPicker({ itemId: item.id, selectedId: item.catalog_category_id, categories: packagingItemsState.catalogCategories, state: packagingCatalogControls, disabled: packagingItemsState.catalogSaving === 'saving', action: 'assign-packaging-category', searchAction: 'search-packaging-category' })}${catalogTagPicker({ itemId: item.id, selectedIds: item.catalog_tag_ids, tags: packagingItemsState.catalogTags, state: packagingCatalogControls, disabled: packagingItemsState.catalogSaving === 'saving', toggleAction: 'toggle-packaging-tag', itemDataName: 'packaging-item-id', searchAction: 'search-packaging-tags', showMoreAction: 'toggle-packaging-tags' })}</div>${createControls}<p class="next-step">Выбранная группа и метки сохраняются сразу. Они помогают найти тару, но не меняют системный тип.</p></section>`;
 }
 
-function packagingAvailableCatalogLists() {
-  const categories = packagingItemsState.catalogCategories.length === 0 ? '<p class="empty-hint">Группы пока не созданы.</p>' : `<div class="tag-picker">${packagingItemsState.catalogCategories.map((category) => `<span class="tag-chip">${escapeHtml(category.name)}</span>`).join('')}</div>`;
-  const tags = packagingItemsState.catalogTags.length === 0 ? '<p class="empty-hint">Метки пока не созданы.</p>' : `<div class="tag-picker">${packagingItemsState.catalogTags.map((tag) => `<span class="tag-chip">${escapeHtml(tag.name)}</span>`).join('')}</div>`;
-  return `<div class="catalog-classification"><div><strong>Доступные группы</strong>${categories}</div><div><strong>Доступные метки</strong>${tags}</div></div>`;
-}
-
 function packagingCatalogCreateControls() {
   const categoryDisabled = packagingItemsState.catalogCreating === 'category' || packagingItemsState.catalogSaving === 'saving';
   const tagDisabled = packagingItemsState.catalogCreating === 'tag' || packagingItemsState.catalogSaving === 'saving';
