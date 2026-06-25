@@ -136,9 +136,14 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
 .catalog-helper-card { max-width: none; }
 .catalog-classification { display: grid; gap: 18px; }
 .catalog-classification label { color: #5d4039; display: grid; font-size: 14px; font-weight: 900; gap: 7px; }
-.catalog-classification select { background: #fffaf6; border: 1px solid #d9bbaa; border-radius: 14px; color: #3b2925; font: inherit; font-weight: 500; padding: 11px 12px; width: min(100%, 420px); }
+.catalog-classification select, .catalog-picker input[type="search"] { background: #fffaf6; border: 1px solid #d9bbaa; border-radius: 14px; color: #3b2925; font: inherit; font-weight: 500; padding: 11px 12px; width: min(100%, 420px); }
 .empty-hint { color: #7b6259 !important; font-size: 15px !important; margin: 8px 0 0 !important; }
+.catalog-picker { background: #fff8f1; border: 1px solid #ecd4c7; border-radius: 20px; display: grid; gap: 12px; padding: 16px; }
+.catalog-picker-heading { align-items: baseline; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+.catalog-picker-heading strong { color: #3b2925; font-size: 17px; }
+.catalog-picker-heading span { color: #7b6259; font-size: 14px; font-weight: 800; }
 .tag-picker, .tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.selected-tags { margin-bottom: 4px; }
 .tag-chip { align-items: center; background: #fffaf6; border: 1px solid #d9bbaa; border-radius: 999px; color: #5d4039; cursor: pointer; display: inline-flex; font-size: 13px; font-weight: 900; gap: 6px; padding: 7px 11px; }
 .tag-chip.selected, .tag-chip.readonly { background: #f8ebe3; border-color: #d39a7a; color: #6e4a43; }
 .tag-chip input { accent-color: #6e4a43; }

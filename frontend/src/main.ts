@@ -4,6 +4,8 @@ type InventoryStatus = 'idle' | 'loading' | 'ready' | 'error';
 type IngredientsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type CatalogSavingStatus = 'idle' | 'saving';
 type CatalogCreateKind = 'category' | 'tag';
+type CatalogOption = { id: number; name: string };
+type CatalogControlState = { categorySearch: string; tagSearch: string; showAllTags: boolean };
 type IngredientLotsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type RecipesStatus = 'idle' | 'loading' | 'ready' | 'error';
 type StockMovementsStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -338,6 +340,8 @@ let recipesMessage = '';
 let calculationStatus: CalculationStatus = 'idle';
 let calculationError = '';
 let recipesState: RecipesState = { templates: [], selectedTemplate: null, versions: [], selectedVersionDetail: null, versionDetailStatus: 'idle', ingredients: [], templateForm: emptyRecipeTemplateForm(), versionForm: emptyRecipeVersionForm(), calculation: null, calculationTargetValue: '', calculationTargetUnit: 'g', catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null };
+let ingredientCatalogControls: CatalogControlState = { categorySearch: '', tagSearch: '', showAllTags: false };
+let packagingCatalogControls: CatalogControlState = { categorySearch: '', tagSearch: '', showAllTags: false };
 
 function sectionFromLocation(): NavigationSection {
   const routes: Record<string, NavigationSection> = {
@@ -473,7 +477,10 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-category"]')?.addEventListener('submit', submitIngredientCatalogCategoryForm);
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-tag"]')?.addEventListener('submit', submitIngredientCatalogTagForm);
   root.querySelector<HTMLSelectElement>('[data-action="assign-ingredient-category"]')?.addEventListener('change', (event) => assignIngredientCategory(Number((event.currentTarget as HTMLSelectElement).dataset.id), (event.currentTarget as HTMLSelectElement).value));
-  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-ingredient-tag"]').forEach((input) => input.addEventListener('change', () => assignIngredientTags(Number(input.dataset.ingredientId))));
+  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-ingredient-tag"]').forEach((input) => input.addEventListener('change', () => assignIngredientTags(Number(input.dataset.ingredientId), Number(input.value), input.checked)));
+  root.querySelector<HTMLInputElement>('[data-action="search-ingredient-category"]')?.addEventListener('input', (event) => updateCatalogSearch(ingredientCatalogControls, 'categorySearch', event.currentTarget as HTMLInputElement));
+  root.querySelector<HTMLInputElement>('[data-action="search-ingredient-tags"]')?.addEventListener('input', (event) => updateCatalogSearch(ingredientCatalogControls, 'tagSearch', event.currentTarget as HTMLInputElement));
+  root.querySelector<HTMLButtonElement>('[data-action="toggle-ingredient-tags"]')?.addEventListener('click', () => { ingredientCatalogControls.showAllTags = !ingredientCatalogControls.showAllTags; render(); });
   root.querySelector<HTMLButtonElement>('[data-action="reload-ingredient-lots"]')?.addEventListener('click', () => loadIngredientLots(true));
   root.querySelector<HTMLButtonElement>('[data-action="new-ingredient-lot"]')?.addEventListener('click', () => { ingredientLotsState.formMode = 'create'; ingredientLotsState.form = emptyIngredientLotForm(); ingredientLotsMessage = ''; ingredientLotsError = ''; render(); });
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient-lot"]').forEach((button) => button.addEventListener('click', () => startEditIngredientLot(Number(button.dataset.id))));
@@ -504,7 +511,10 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLFormElement>('[data-form="packaging-catalog-category"]')?.addEventListener('submit', submitPackagingCatalogCategoryForm);
   root.querySelector<HTMLFormElement>('[data-form="packaging-catalog-tag"]')?.addEventListener('submit', submitPackagingCatalogTagForm);
   root.querySelector<HTMLSelectElement>('[data-action="assign-packaging-category"]')?.addEventListener('change', (event) => assignPackagingCategory(Number((event.currentTarget as HTMLSelectElement).dataset.id), (event.currentTarget as HTMLSelectElement).value));
-  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-packaging-tag"]').forEach((input) => input.addEventListener('change', () => assignPackagingTags(Number(input.dataset.packagingItemId))));
+  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-packaging-tag"]').forEach((input) => input.addEventListener('change', () => assignPackagingTags(Number(input.dataset.packagingItemId), Number(input.value), input.checked)));
+  root.querySelector<HTMLInputElement>('[data-action="search-packaging-category"]')?.addEventListener('input', (event) => updateCatalogSearch(packagingCatalogControls, 'categorySearch', event.currentTarget as HTMLInputElement));
+  root.querySelector<HTMLInputElement>('[data-action="search-packaging-tags"]')?.addEventListener('input', (event) => updateCatalogSearch(packagingCatalogControls, 'tagSearch', event.currentTarget as HTMLInputElement));
+  root.querySelector<HTMLButtonElement>('[data-action="toggle-packaging-tags"]')?.addEventListener('click', () => { packagingCatalogControls.showAllTags = !packagingCatalogControls.showAllTags; render(); });
   root.querySelector<HTMLFormElement>('[data-form="recipe-template"]')?.addEventListener('submit', submitRecipeTemplateForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-version"]')?.addEventListener('submit', submitRecipeVersionForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-calculation"]')?.addEventListener('submit', submitCalculationForm);
@@ -516,6 +526,54 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-version"]').forEach((button) => button.addEventListener('click', () => openRecipeVersion(Number(button.dataset.id))));
   root.querySelector<HTMLButtonElement>('[data-action="add-recipe-line"]')?.addEventListener('click', addRecipeLine);
   root.querySelectorAll<HTMLButtonElement>('[data-action="remove-recipe-line"]').forEach((button) => button.addEventListener('click', () => removeRecipeLine(Number(button.dataset.index))));
+}
+
+
+function catalogOptions(items: CatalogOption[], search: string) {
+  const normalized = search.trim().toLocaleLowerCase('ru-RU');
+  if (!normalized) return items;
+  return items.filter((item) => item.name.toLocaleLowerCase('ru-RU').includes(normalized));
+}
+
+function updateCatalogSearch(state: CatalogControlState, field: 'categorySearch' | 'tagSearch', input: HTMLInputElement) {
+  const action = input.dataset.action;
+  const cursor = input.selectionStart ?? input.value.length;
+  state[field] = input.value;
+  render();
+  if (!action) return;
+  const nextInput = document.querySelector<HTMLInputElement>(`[data-action="${action}"]`);
+  if (!nextInput) return;
+  nextInput.focus();
+  const nextCursor = Math.min(cursor, nextInput.value.length);
+  nextInput.setSelectionRange(nextCursor, nextCursor);
+}
+
+function nextCatalogTagIds(currentIds: number[], tagId: number, checked: boolean) {
+  const ids = new Set(currentIds);
+  if (checked) ids.add(tagId); else ids.delete(tagId);
+  return Array.from(ids);
+}
+
+function visibleTagOptions(items: CatalogOption[], selectedIds: number[], state: CatalogControlState, limit = 10) {
+  const filtered = catalogOptions(items, state.tagSearch);
+  if (state.showAllTags || state.tagSearch.trim() || filtered.length <= limit) return filtered;
+  const selected = filtered.filter((tag) => selectedIds.includes(tag.id));
+  const selectedSet = new Set(selected.map((tag) => tag.id));
+  return [...selected, ...filtered.filter((tag) => !selectedSet.has(tag.id)).slice(0, Math.max(limit - selected.length, 0))];
+}
+
+function catalogCategoryPicker(params: { itemId: number; selectedId: number | null; categories: CatalogOption[]; state: CatalogControlState; disabled: boolean; action: string; searchAction: string }) {
+  const filtered = catalogOptions(params.categories, params.state.categorySearch);
+  const selected = params.categories.find((category) => category.id === params.selectedId);
+  return `<div class="catalog-picker"><div class="catalog-picker-heading"><strong>Группа</strong><span>${selected ? escapeHtml(selected.name) : 'Без группы'}</span></div><p class="empty-hint">Группа помогает разложить записи по рабочим пространствам.</p><label>Найти группу<input data-action="${params.searchAction}" type="search" value="${escapeHtml(params.state.categorySearch)}" placeholder="Начните вводить название группы" ${params.disabled ? 'disabled' : ''} /></label><label>Выбрать группу<select data-action="${params.action}" data-id="${params.itemId}" ${params.disabled ? 'disabled' : ''}><option value="">Без группы</option>${filtered.map((category) => `<option value="${category.id}" ${category.id === params.selectedId ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}${selected && !filtered.some((category) => category.id === selected.id) ? `<option value="${selected.id}" selected>${escapeHtml(selected.name)}</option>` : ''}</select></label>${params.categories.length === 0 ? '<p class="empty-hint">Группы пока не созданы. Создайте первую группу ниже.</p>' : filtered.length === 0 ? '<p class="empty-hint">По этому поиску групп нет. Можно создать новую группу ниже.</p>' : ''}</div>`;
+}
+
+function catalogTagPicker(params: { itemId: number; selectedIds: number[]; tags: CatalogOption[]; state: CatalogControlState; disabled: boolean; toggleAction: string; itemDataName: string; searchAction: string; showMoreAction: string }) {
+  const visible = visibleTagOptions(params.tags, params.selectedIds, params.state);
+  const selected = params.tags.filter((tag) => params.selectedIds.includes(tag.id));
+  const selectedChips = selected.length ? `<div class="tag-list selected-tags">${selected.map((tag) => `<span class="tag-chip selected readonly">${escapeHtml(tag.name)}</span>`).join('')}</div>` : '<p class="empty-hint">Метки еще не выбраны.</p>';
+  const hiddenCount = Math.max(catalogOptions(params.tags, params.state.tagSearch).length - visible.length, 0);
+  return `<div class="catalog-picker"><div class="catalog-picker-heading"><strong>Метки</strong><span>Можно выбрать несколько меток.</span></div><p class="empty-hint">Метки помогают быстро фильтровать и находить записи.</p><div><strong>Выбранные метки</strong>${selectedChips}</div><label>Найти метку<input data-action="${params.searchAction}" type="search" value="${escapeHtml(params.state.tagSearch)}" placeholder="Начните вводить название метки" ${params.disabled ? 'disabled' : ''} /></label>${params.tags.length === 0 ? '<p class="empty-hint">Метки пока не созданы. Создайте первую метку ниже.</p>' : visible.length === 0 ? '<p class="empty-hint">По этому поиску меток нет. Можно создать новую метку ниже.</p>' : `<div class="tag-picker limited-tags">${visible.map((tag) => `<label class="tag-chip ${params.selectedIds.includes(tag.id) ? 'selected' : ''}"><input type="checkbox" data-action="${params.toggleAction}" data-${params.itemDataName}="${params.itemId}" value="${tag.id}" ${params.selectedIds.includes(tag.id) ? 'checked' : ''} ${params.disabled ? 'disabled' : ''} />${escapeHtml(tag.name)}</label>`).join('')}</div>`}${hiddenCount > 0 ? `<button class="secondary-action compact" type="button" data-action="${params.showMoreAction}">Показать еще ${hiddenCount}</button>` : params.state.showAllTags && !params.state.tagSearch.trim() && params.tags.length > 10 ? `<button class="secondary-action compact" type="button" data-action="${params.showMoreAction}">Свернуть список меток</button>` : ''}</div>`;
 }
 
 function dashboardPlaceholder() {
@@ -566,8 +624,8 @@ function ingredientForm() {
 function ingredientCatalogPanel() {
   const item = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) : null;
   const createControls = ingredientCatalogCreateControls();
-  if (!item) return `<section class="card catalog-helper-card"><p class="card-kicker">Моя организация каталога</p><h2>Моя группа и метки</h2><p>Группы и метки помогают вам навести порядок в компонентах. Они не заменяют системный тип компонента.</p><p>Выберите компонент в списке через «Изменить», чтобы назначить ему свою группу и несколько меток.</p>${createControls}<p class="next-step">Системный тип остается отдельным полем и используется программой для расчетов и справочников.</p></section>`;
-  return `<section class="card form-card"><p class="card-kicker">Каталог компонента</p><h2>${escapeHtml(item.name)}</h2><p>Группы и метки помогают вам навести порядок в компонентах. Они не заменяют системный тип компонента.</p><div class="catalog-classification"><label>Моя группа<select data-action="assign-ingredient-category" data-id="${item.id}" ${ingredientsState.catalogSaving === 'saving' ? 'disabled' : ''}><option value="">Без моей группы</option>${ingredientsState.catalogCategories.map((category) => `<option value="${category.id}" ${category.id === item.catalog_category_id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}</select></label>${ingredientsState.catalogCategories.length === 0 ? '<p class="empty-hint">Группы пока не созданы. Создайте первую группу ниже.</p>' : ''}<div><strong>Метки</strong>${ingredientsState.catalogTags.length === 0 ? '<p class="empty-hint">Метки пока не созданы. Создайте первую метку ниже.</p>' : `<div class="tag-picker">${ingredientsState.catalogTags.map((tag) => `<label class="tag-chip ${item.catalog_tag_ids.includes(tag.id) ? 'selected' : ''}"><input type="checkbox" data-action="toggle-ingredient-tag" data-ingredient-id="${item.id}" value="${tag.id}" ${item.catalog_tag_ids.includes(tag.id) ? 'checked' : ''} ${ingredientsState.catalogSaving === 'saving' ? 'disabled' : ''} />${escapeHtml(tag.name)}</label>`).join('')}</div>`}</div></div>${createControls}<p class="next-step">Выбранная группа и метки сохраняются сразу. Они помогают найти компонент, но не меняют системный тип.</p></section>`;
+  if (!item) return `<section class="card catalog-helper-card"><p class="card-kicker">Моя организация каталога</p><h2>Группа и метки</h2><p>Группа помогает разложить записи по рабочим пространствам. Метки помогают быстро фильтровать и находить записи.</p><p>Выберите компонент в списке через «Изменить», чтобы назначить ему группу и несколько меток.</p>${createControls}<p class="next-step">Системный тип остается отдельным полем и используется программой для расчетов и справочников.</p></section>`;
+  return `<section class="card form-card"><p class="card-kicker">Каталог компонента</p><h2>${escapeHtml(item.name)}</h2><p>Группа и метки помогают вам навести порядок в компонентах. Они не заменяют системный тип компонента.</p><div class="catalog-classification">${catalogCategoryPicker({ itemId: item.id, selectedId: item.catalog_category_id, categories: ingredientsState.catalogCategories, state: ingredientCatalogControls, disabled: ingredientsState.catalogSaving === 'saving', action: 'assign-ingredient-category', searchAction: 'search-ingredient-category' })}${catalogTagPicker({ itemId: item.id, selectedIds: item.catalog_tag_ids, tags: ingredientsState.catalogTags, state: ingredientCatalogControls, disabled: ingredientsState.catalogSaving === 'saving', toggleAction: 'toggle-ingredient-tag', itemDataName: 'ingredient-id', searchAction: 'search-ingredient-tags', showMoreAction: 'toggle-ingredient-tags' })}</div>${createControls}<p class="next-step">Выбранная группа и метки сохраняются сразу. Они помогают найти компонент, но не меняют системный тип.</p></section>`;
 }
 
 function ingredientCatalogCreateControls() {
@@ -597,16 +655,9 @@ function packagingItemForm() {
 function packagingCatalogPanel() {
   const item = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) : null;
   const createControls = packagingCatalogCreateControls();
-  const availableCatalog = packagingAvailableCatalogLists();
-  const helperCopy = 'Тип тары - системный тип для учета. Моя группа и метки - ваш способ навести порядок в каталоге.';
-  if (!item) return `<section class="card catalog-helper-card"><p class="card-kicker">Организация каталога тары</p><h2>Моя группа и метки</h2><p>${helperCopy}</p><p>Созданные группы и метки появятся здесь. Чтобы назначить их конкретной таре, нажмите «Изменить» у нужной тары.</p>${availableCatalog}${createControls}<p class="next-step">Созданные группы и метки появляются здесь сразу. Они не добавляются в выпадающий список «Тип тары».</p></section>`;
-  return `<section class="card form-card"><p class="card-kicker">Организация каталога тары</p><h2>Моя группа и метки</h2><p>${helperCopy}</p>${availableCatalog}<div class="catalog-classification"><label>Моя группа<select data-action="assign-packaging-category" data-id="${item.id}" ${packagingItemsState.catalogSaving === 'saving' ? 'disabled' : ''}><option value="">Без моей группы</option>${packagingItemsState.catalogCategories.map((category) => `<option value="${category.id}" ${category.id === item.catalog_category_id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}</select></label>${packagingItemsState.catalogCategories.length === 0 ? '<p class="empty-hint">Группы пока не созданы. Создайте первую группу ниже.</p>' : ''}<div><strong>Метки</strong>${packagingItemsState.catalogTags.length === 0 ? '<p class="empty-hint">Метки пока не созданы. Создайте первую метку ниже.</p>' : `<div class="tag-picker">${packagingItemsState.catalogTags.map((tag) => `<label class="tag-chip ${item.catalog_tag_ids.includes(tag.id) ? 'selected' : ''}"><input type="checkbox" data-action="toggle-packaging-tag" data-packaging-item-id="${item.id}" value="${tag.id}" ${item.catalog_tag_ids.includes(tag.id) ? 'checked' : ''} ${packagingItemsState.catalogSaving === 'saving' ? 'disabled' : ''} />${escapeHtml(tag.name)}</label>`).join('')}</div>`}</div></div>${createControls}<p class="next-step">Выбранная группа и метки сохраняются сразу. Они помогают найти тару, но не меняют системный тип.</p></section>`;
-}
-
-function packagingAvailableCatalogLists() {
-  const categories = packagingItemsState.catalogCategories.length === 0 ? '<p class="empty-hint">Группы пока не созданы.</p>' : `<div class="tag-picker">${packagingItemsState.catalogCategories.map((category) => `<span class="tag-chip">${escapeHtml(category.name)}</span>`).join('')}</div>`;
-  const tags = packagingItemsState.catalogTags.length === 0 ? '<p class="empty-hint">Метки пока не созданы.</p>' : `<div class="tag-picker">${packagingItemsState.catalogTags.map((tag) => `<span class="tag-chip">${escapeHtml(tag.name)}</span>`).join('')}</div>`;
-  return `<div class="catalog-classification"><div><strong>Доступные группы</strong>${categories}</div><div><strong>Доступные метки</strong>${tags}</div></div>`;
+  const helperCopy = 'Тип тары — системный тип для учета. Группа и метки — ваш способ навести порядок в каталоге.';
+  if (!item) return `<section class="card catalog-helper-card"><p class="card-kicker">Организация каталога тары</p><h2>Группа и метки</h2><p>${helperCopy}</p><p>Группа помогает разложить записи по рабочим пространствам. Метки помогают быстро фильтровать и находить записи.</p><p>Чтобы назначить их конкретной таре, нажмите «Изменить» у нужной тары.</p>${createControls}<p class="next-step">Созданные группы и метки появляются здесь сразу. Они не добавляются в выпадающий список «Тип тары».</p></section>`;
+  return `<section class="card form-card"><p class="card-kicker">Организация каталога тары</p><h2>Группа и метки</h2><p>${helperCopy}</p><div class="catalog-classification">${catalogCategoryPicker({ itemId: item.id, selectedId: item.catalog_category_id, categories: packagingItemsState.catalogCategories, state: packagingCatalogControls, disabled: packagingItemsState.catalogSaving === 'saving', action: 'assign-packaging-category', searchAction: 'search-packaging-category' })}${catalogTagPicker({ itemId: item.id, selectedIds: item.catalog_tag_ids, tags: packagingItemsState.catalogTags, state: packagingCatalogControls, disabled: packagingItemsState.catalogSaving === 'saving', toggleAction: 'toggle-packaging-tag', itemDataName: 'packaging-item-id', searchAction: 'search-packaging-tags', showMoreAction: 'toggle-packaging-tags' })}</div>${createControls}<p class="next-step">Выбранная группа и метки сохраняются сразу. Они помогают найти тару, но не меняют системный тип.</p></section>`;
 }
 
 function packagingCatalogCreateControls() {
@@ -969,7 +1020,7 @@ function reloadPackagingCatalogData() { return Promise.all([getPackagingItems(),
 function submitPackagingCatalogCategoryForm(event: SubmitEvent) { event.preventDefault(); const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) return; packagingItemsState.catalogCreating = 'category'; packagingItemsError = ''; render(); createPackagingCatalogCategory(name).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Группа тары создана.'; packagingItemsState.catalogCreating = null; render(); }).catch(() => { packagingItemsState.catalogCreating = null; packagingItemsError = 'Не удалось создать группу тары. Проверьте название и попробуйте еще раз.'; render(); }); }
 function submitPackagingCatalogTagForm(event: SubmitEvent) { event.preventDefault(); const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) return; packagingItemsState.catalogCreating = 'tag'; packagingItemsError = ''; render(); createPackagingCatalogTag(name).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метка тары создана.'; packagingItemsState.catalogCreating = null; render(); }).catch(() => { packagingItemsState.catalogCreating = null; packagingItemsError = 'Не удалось создать метку тары. Проверьте название и попробуйте еще раз.'; render(); }); }
 function assignPackagingCategory(packagingItemId: number, value: string) { packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render(); updatePackagingCatalogCategory(packagingItemId, value ? Number(value) : null).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Группа тары сохранена.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsError = 'Не удалось сохранить группу тары. Попробуйте обновить страницу.'; render(); }); }
-function assignPackagingTags(packagingItemId: number) { const tagIds = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-action="toggle-packaging-tag"][data-packaging-item-id="${packagingItemId}"]:checked`)).map((input) => Number(input.value)); packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render(); updatePackagingCatalogTags(packagingItemId, tagIds).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метки тары сохранены.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsError = 'Не удалось сохранить метки тары. Попробуйте обновить страницу.'; render(); }); }
+function assignPackagingTags(packagingItemId: number, tagId: number, checked: boolean) { const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemId); if (!item || !tagId) return; const tagIds = nextCatalogTagIds(item.catalog_tag_ids, tagId, checked); packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render(); updatePackagingCatalogTags(packagingItemId, tagIds).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метки тары сохранены.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsError = 'Не удалось сохранить метки тары. Попробуйте обновить страницу.'; render(); }); }
 
 function loadIngredientLots(force = false) {
   if (!force && (ingredientLotsStatus === 'loading' || ingredientLotsStatus === 'ready')) return;
@@ -1024,9 +1075,11 @@ function assignIngredientCategory(ingredientId: number, value: string) {
   ingredientsState.catalogSaving = 'saving'; ingredientsError = ''; render();
   updateIngredientCatalogCategory(ingredientId, value ? Number(value) : null).then(() => { ingredientsMessage = 'Моя группа компонента сохранена.'; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; ingredientsState.catalogSaving = 'idle'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogSaving = 'idle'; ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить мою группу. Проверьте, что группа активна, и попробуйте еще раз.'; render(); });
 }
-function assignIngredientTags(ingredientId: number) {
-  if (!ingredientId) return;
-  const tagIds = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-action="toggle-ingredient-tag"][data-ingredient-id="${ingredientId}"]:checked`)).map((input) => Number(input.value));
+function assignIngredientTags(ingredientId: number, tagId: number, checked: boolean) {
+  if (!ingredientId || !tagId) return;
+  const item = ingredientsState.items.find((ingredient) => ingredient.id === ingredientId);
+  if (!item) return;
+  const tagIds = nextCatalogTagIds(item.catalog_tag_ids, tagId, checked);
   ingredientsState.catalogSaving = 'saving'; ingredientsError = ''; render();
   updateIngredientCatalogTags(ingredientId, tagIds).then(() => { ingredientsMessage = 'Метки компонента сохранены.'; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; ingredientsState.catalogSaving = 'idle'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogSaving = 'idle'; ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить метки. Проверьте, что метки активны, и попробуйте еще раз.'; render(); });
 }
