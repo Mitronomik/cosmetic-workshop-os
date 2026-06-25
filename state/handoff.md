@@ -263,3 +263,10 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Large tag sets now render a small default subset with search/show-more instead of an unlimited chip wall; «Без группы» remains available.
 - No backend/domain/API/migration changes were made. Recipe catalog UX and builder-first recipe creation remain later stabilization PRs.
 - PR #46 fix before merge: ingredient and packaging tag toggles now preserve hidden selected tags when search is active, and searchable catalog inputs restore focus/caret after filtering renders.
+
+## Frontend stabilization PR4 / GitHub PR #47: component catalog browser and filters
+- Components (`/ingredients`) now starts with a catalog browser: text search, group filter including `Без группы`, multi-tag filters, system type filter, status filter, active filter chips, reset, and compact results.
+- Filtering is intentionally frontend-only over the loaded local component list for the MVP; no backend filtering/search/pagination endpoints were added.
+- Added small reusable catalog filtering helpers in the frontend for future catalog pages.
+- PR46 assignment UX remains unchanged: group/tag assignment controls are still available after selecting a component with `Изменить`, including searchable assignment inputs and `Без группы`.
+- Later PRs should apply similar browse-first catalog/list UX to Packaging, Recipes, Clients, and Client Recipes without broadening this PR.

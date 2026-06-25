@@ -187,3 +187,10 @@ PR16 - Ingredient catalog UI foundation
 - First applied scope: «Компоненты» catalog assignment; the same shared pattern was also safely applied to «Тара» because existing packaging catalog endpoints and UI were already present.
 - No backend, domain model, API contract, migration, recipe catalog redesign, or builder-first recipe creation changes were made.
 - PR #46 fix before merge: tag assignment now derives the payload from the item's current assigned tag ids plus the explicit toggled tag, so selected tags hidden by search are preserved; catalog search re-renders restore focus/caret for ingredient and packaging controls.
+
+## Frontend stabilization PR4 / GitHub PR #47: component catalog browser and filters
+- Components page now has browse-first catalog-level search and filters near the top of `/ingredients`.
+- Filtering works over the loaded local frontend state for the local-first MVP; no backend search, pagination, domain, or migration changes were introduced.
+- Lightweight generic catalog filter helpers were introduced for future reuse by Packaging, Recipes, Clients, and Client Recipes.
+- Group/tag assignment from PR46 remains unchanged and still appears when editing a selected component.
+- Packaging, recipes, clients, and client recipes catalog/list UX remain later PRs.

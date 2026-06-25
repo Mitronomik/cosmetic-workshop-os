@@ -6,6 +6,8 @@ type CatalogSavingStatus = 'idle' | 'saving';
 type CatalogCreateKind = 'category' | 'tag';
 type CatalogOption = { id: number; name: string };
 type CatalogControlState = { categorySearch: string; tagSearch: string; showAllTags: boolean };
+type CatalogStatusFilter = 'active' | 'archived' | 'all';
+type CatalogBrowserFilters = { search: string; categoryId: number | 'none' | ''; tagIds: number[]; systemType: string; status: CatalogStatusFilter };
 type IngredientLotsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type RecipesStatus = 'idle' | 'loading' | 'ready' | 'error';
 type StockMovementsStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -186,6 +188,8 @@ type IngredientsState = {
   catalogTags: CatalogTag[];
   catalogSaving: CatalogSavingStatus;
   catalogCreating: CatalogCreateKind | null;
+  showCreateForm: boolean;
+  filters: CatalogBrowserFilters;
 };
 
 type RecipeTemplate = {
@@ -319,7 +323,7 @@ let clientRecipesError = '';
 let clientRecipesMessage = '';
 let clientRecipesState: ClientRecipesState = { items: [], clients: [], templates: [], versions: [], selectedTemplateId: null, selectedDetail: null, form: emptyClientRecipeForm(), includeInactive: false, detailStatus: 'idle' };
 let ingredientsStatus: IngredientsStatus = 'idle';
-let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null };
+let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, showCreateForm: false, filters: emptyCatalogBrowserFilters() };
 let ingredientsError = '';
 let ingredientsMessage = '';
 let ingredientLotsStatus: IngredientLotsStatus = 'idle';
@@ -470,7 +474,7 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLButtonElement>('[data-action="skip-onboarding"]')?.addEventListener('click', () => updateOnboarding('/api/onboarding/skip'));
   root.querySelector<HTMLButtonElement>('[data-action="reload-inventory"]')?.addEventListener('click', () => loadInventory(true));
   root.querySelector<HTMLButtonElement>('[data-action="reload-ingredients"]')?.addEventListener('click', () => loadIngredients(true));
-  root.querySelector<HTMLButtonElement>('[data-action="new-ingredient"]')?.addEventListener('click', () => { ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsMessage = ''; ingredientsError = ''; render(); });
+  root.querySelector<HTMLButtonElement>('[data-action="new-ingredient"]')?.addEventListener('click', () => { ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsState.showCreateForm = true; ingredientsMessage = ''; ingredientsError = ''; render(); });
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient"]').forEach((button) => button.addEventListener('click', () => startEditIngredient(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient"]').forEach((button) => button.addEventListener('click', () => deactivateIngredient(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="ingredient"]')?.addEventListener('submit', submitIngredientForm);
@@ -478,6 +482,13 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-tag"]')?.addEventListener('submit', submitIngredientCatalogTagForm);
   root.querySelector<HTMLSelectElement>('[data-action="assign-ingredient-category"]')?.addEventListener('change', (event) => assignIngredientCategory(Number((event.currentTarget as HTMLSelectElement).dataset.id), (event.currentTarget as HTMLSelectElement).value));
   root.querySelectorAll<HTMLInputElement>('[data-action="toggle-ingredient-tag"]').forEach((input) => input.addEventListener('change', () => assignIngredientTags(Number(input.dataset.ingredientId), Number(input.value), input.checked)));
+  root.querySelector<HTMLInputElement>('[data-action="filter-ingredients-search"]')?.addEventListener('input', (event) => updateIngredientFilterSearch(event.currentTarget as HTMLInputElement));
+  root.querySelector<HTMLSelectElement>('[data-action="filter-ingredients-category"]')?.addEventListener('change', (event) => { ingredientsState.filters.categoryId = catalogCategoryFilterValue((event.currentTarget as HTMLSelectElement).value); render(); });
+  root.querySelector<HTMLSelectElement>('[data-action="filter-ingredients-system"]')?.addEventListener('change', (event) => { ingredientsState.filters.systemType = (event.currentTarget as HTMLSelectElement).value; render(); });
+  root.querySelector<HTMLSelectElement>('[data-action="filter-ingredients-status"]')?.addEventListener('change', (event) => { ingredientsState.filters.status = (event.currentTarget as HTMLSelectElement).value as CatalogStatusFilter; render(); });
+  root.querySelector<HTMLSelectElement>('[data-action="add-ingredient-tag-filter"]')?.addEventListener('change', (event) => addIngredientTagFilter((event.currentTarget as HTMLSelectElement).value));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="remove-ingredient-tag-filter"]').forEach((button) => button.addEventListener('click', () => removeIngredientTagFilter(Number(button.dataset.id))));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="reset-ingredient-filters"]').forEach((button) => button.addEventListener('click', () => { ingredientsState.filters = emptyCatalogBrowserFilters(); render(); }));
   root.querySelector<HTMLInputElement>('[data-action="search-ingredient-category"]')?.addEventListener('input', (event) => updateCatalogSearch(ingredientCatalogControls, 'categorySearch', event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLInputElement>('[data-action="search-ingredient-tags"]')?.addEventListener('input', (event) => updateCatalogSearch(ingredientCatalogControls, 'tagSearch', event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-ingredient-tags"]')?.addEventListener('click', () => { ingredientCatalogControls.showAllTags = !ingredientCatalogControls.showAllTags; render(); });
@@ -535,6 +546,17 @@ function catalogOptions(items: CatalogOption[], search: string) {
   return items.filter((item) => item.name.toLocaleLowerCase('ru-RU').includes(normalized));
 }
 
+function updateIngredientFilterSearch(input: HTMLInputElement) {
+  const cursor = input.selectionStart ?? input.value.length;
+  ingredientsState.filters.search = input.value;
+  render();
+  const nextInput = document.querySelector<HTMLInputElement>('[data-action="filter-ingredients-search"]');
+  if (!nextInput) return;
+  nextInput.focus();
+  const nextCursor = Math.min(cursor, nextInput.value.length);
+  nextInput.setSelectionRange(nextCursor, nextCursor);
+}
+
 function updateCatalogSearch(state: CatalogControlState, field: 'categorySearch' | 'tagSearch', input: HTMLInputElement) {
   const action = input.dataset.action;
   const cursor = input.selectionStart ?? input.value.length;
@@ -546,6 +568,20 @@ function updateCatalogSearch(state: CatalogControlState, field: 'categorySearch'
   nextInput.focus();
   const nextCursor = Math.min(cursor, nextInput.value.length);
   nextInput.setSelectionRange(nextCursor, nextCursor);
+}
+
+
+function emptyCatalogBrowserFilters(): CatalogBrowserFilters { return { search: '', categoryId: '', tagIds: [], systemType: '', status: 'active' }; }
+function normalizeSearchText(value: string): string { return value.toLocaleLowerCase('ru-RU').trim(); }
+function textMatchesSearch(searchableText: string, search: string): boolean { const normalized = normalizeSearchText(search); return !normalized || normalizeSearchText(searchableText).includes(normalized); }
+function itemMatchesSelectedTags(itemTagIds: number[], selectedTagIds: number[]): boolean { return selectedTagIds.length === 0 || selectedTagIds.every((id) => itemTagIds.includes(id)); }
+function itemMatchesCatalogCategory(itemCategoryId: number | null, categoryFilter: number | 'none' | ''): boolean { if (categoryFilter === '') return true; if (categoryFilter === 'none') return itemCategoryId === null; return itemCategoryId === categoryFilter; }
+function filterCatalogItems<T>(items: T[], filters: CatalogBrowserFilters, selectors: { getSearchText: (item: T) => string; getCatalogCategoryId: (item: T) => number | null; getCatalogTagIds: (item: T) => number[]; getSystemType: (item: T) => string; getIsActive: (item: T) => boolean; }): T[] {
+  return items.filter((item) => textMatchesSearch(selectors.getSearchText(item), filters.search)
+    && itemMatchesCatalogCategory(selectors.getCatalogCategoryId(item), filters.categoryId)
+    && itemMatchesSelectedTags(selectors.getCatalogTagIds(item), filters.tagIds)
+    && (!filters.systemType || selectors.getSystemType(item) === filters.systemType)
+    && (filters.status === 'all' || selectors.getIsActive(item) === (filters.status === 'active')));
 }
 
 function nextCatalogTagIds(currentIds: number[], tagId: number, checked: boolean) {
@@ -612,12 +648,35 @@ function clientList() {
 function ingredientsPage() {
   if (ingredientsStatus === 'idle' || ingredientsStatus === 'loading') return `<section class="card"><p class="card-kicker">Компоненты</p><h2>Загружаем компоненты…</h2><p>Получаем справочник компонентов из локального API.</p></section>`;
   if (ingredientsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Компоненты</p><h2>Не удалось загрузить компоненты</h2><p>${ingredientsError || 'Локальный API временно недоступен.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredients">Повторить загрузку</button></section>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Компоненты</p><h2>Справочник компонентов</h2><p>Добавляйте базовые записи компонентов, чтобы позже учитывать партии, остатки и рецептуры. Приходы, партии и движения сырья в этом разделе не меняются.</p><p class="next-step">Системный тип используется программой. Моя группа и метки нужны для удобной организации каталога.</p></div><button class="secondary-action" type="button" data-action="new-ingredient">Очистить форму</button></section>${ingredientsMessage ? `<p class="page-message">${ingredientsMessage}</p>` : ''}${ingredientsError ? `<p class="page-message error-message">${ingredientsError}</p>` : ''}${ingredientForm()}${ingredientCatalogPanel()}${ingredientList()}</div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Каталог компонентов</p><h2>Компоненты</h2><p>Сначала найдите существующий компонент по названию, группе, меткам, системному типу или статусу. Создание и редактирование доступны ниже, чтобы каталог оставался главным рабочим местом.</p><p class="next-step">Системный тип используется программой. Группа и метки — ваш способ организовать компоненты для поиска.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-ingredients">Обновить список</button><button class="primary-action" type="button" data-action="new-ingredient">Создать компонент</button></div></section>${ingredientsMessage ? `<p class="page-message">${ingredientsMessage}</p>` : ''}${ingredientsError ? `<p class="page-message error-message">${ingredientsError}</p>` : ''}${ingredientCatalogBrowser()}${ingredientForm()}${ingredientCatalogPanel()}</div>`;
 }
+
+function ingredientCatalogBrowser() {
+  const filtered = filteredIngredients();
+  return `${ingredientCatalogToolbar(filtered.length)}${ingredientList(filtered)}`;
+}
+
+function ingredientCatalogToolbar(resultCount: number) {
+  const f = ingredientsState.filters;
+  const categoryOptionsHtml = [`<option value="" ${f.categoryId === '' ? 'selected' : ''}>Все группы</option>`, `<option value="none" ${f.categoryId === 'none' ? 'selected' : ''}>Без группы</option>`, ...ingredientsState.catalogCategories.map((category) => `<option value="${category.id}" ${f.categoryId === category.id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`)].join('');
+  const availableTags = ingredientsState.catalogTags.filter((tag) => !f.tagIds.includes(tag.id));
+  const activeTagChips = f.tagIds.map((id) => ingredientsState.catalogTags.find((tag) => tag.id === id)).filter((tag): tag is CatalogTag => Boolean(tag)).map((tag) => `<span class="tag-chip selected">${escapeHtml(tag.name)} <button type="button" data-action="remove-ingredient-tag-filter" data-id="${tag.id}" aria-label="Убрать метку ${escapeHtml(tag.name)}">×</button></span>`).join('');
+  const activeFilters = ingredientActiveFilterChips();
+  return `<section class="card data-card catalog-browser"><p class="card-kicker">Каталог компонентов</p><h2>Найти компонент</h2><div class="catalog-toolbar"><label class="full-span">Поиск<input type="search" data-action="filter-ingredients-search" value="${escapeHtml(f.search)}" placeholder="Название, поставщик, INCI, заметки, применение или ограничения" /></label><label>Группа<select data-action="filter-ingredients-category">${categoryOptionsHtml}</select></label><label>Метки<select data-action="add-ingredient-tag-filter"><option value="">Все метки</option>${availableTags.map((tag) => `<option value="${tag.id}">${escapeHtml(tag.name)}</option>`).join('')}</select></label><label>Системный тип<select data-action="filter-ingredients-system"><option value="" ${f.systemType === '' ? 'selected' : ''}>Все типы</option>${ingredientSystemCategories().map((value) => `<option value="${value}" ${f.systemType === value ? 'selected' : ''}>${escapeHtml(categoryLabel(value))}</option>`).join('')}</select></label><label>Статус<select data-action="filter-ingredients-status"><option value="active" ${f.status === 'active' ? 'selected' : ''}>Активные</option><option value="archived" ${f.status === 'archived' ? 'selected' : ''}>Архив</option><option value="all" ${f.status === 'all' ? 'selected' : ''}>Все</option></select></label></div>${activeTagChips ? `<div class="active-filter-row"><strong>Метки:</strong>${activeTagChips}</div>` : ''}${activeFilters ? `<div class="active-filter-row"><strong>Активные фильтры:</strong>${activeFilters}</div>` : ''}<div class="catalog-summary"><span>Показаны компоненты: ${resultCount} из ${ingredientsState.items.length}</span><button class="secondary-action compact" type="button" data-action="reset-ingredient-filters">Сбросить фильтры</button></div></section>`;
+}
+
+function ingredientList(items: Ingredient[]) {
+  if (ingredientsState.items.length === 0) return `<section class="card empty-card"><h2>Компонентов пока нет</h2><p>Добавьте первый компонент, чтобы потом учитывать партии и остатки на складе.</p><p class="next-step">Нажмите «Создать компонент», заполните название, единицу учета и при необходимости плотность, затем сохраните запись.</p></section>`;
+  if (items.length === 0) return `<section class="card empty-card"><h2>По этим фильтрам компонентов не найдено.</h2><p>Попробуйте убрать часть условий поиска или вернуться к полному каталогу.</p><button class="secondary-action" type="button" data-action="reset-ingredient-filters">Сбросить фильтры</button></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Результаты каталога</p><h2>Компоненты</h2><div class="table-wrap"><table class="compact-catalog-table"><thead><tr><th>Название</th><th>Системный тип</th><th>Ед. учета</th><th>Группа</th><th>Метки</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${items.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${item.supplier_hint ? escapeHtml(item.supplier_hint) : 'Поставщик не указан'}</small></td><td>${escapeHtml(categoryLabel(item.category))}</td><td>${unitLabel(item.default_unit)}</td><td>${escapeHtml(ingredientCatalogCategoryLabel(item))}</td><td>${ingredientTagChips(item)}</td><td><span class="pill ${item.is_active ? 'success' : 'muted'}">${item.is_active ? 'Активен' : 'Архив'}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient" data-id="${item.id}">Изменить</button>${item.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient" data-id="${item.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div></section>`;
+}
+
+
 
 function ingredientForm() {
   const form = ingredientsState.form;
   const isEdit = ingredientsState.formMode === 'edit';
+  if (!isEdit && !ingredientsState.showCreateForm) return `<section class="card form-card collapsed-create-card"><div><p class="card-kicker">Создание</p><h2>Создать новый компонент</h2><p>Форма создания скрыта, чтобы каталог оставался первым рабочим экраном.</p></div><button class="primary-action" type="button" data-action="new-ingredient">Создать компонент</button></section>`;
   return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить компонент' : 'Создать компонент'}</h2><form data-form="ingredient" class="ingredient-form"><div class="form-grid"><label>Название<input name="name" required maxlength="160" value="${escapeHtml(form.name)}" placeholder="Например, масло ши" /></label><label>Категория<select name="category">${categoryOptions(form.category)}</select></label><label>Единица учета<select name="default_unit">${unitOptions(form.default_unit)}</select></label><label>Плотность<input name="density_g_per_ml" inputmode="decimal" value="${escapeHtml(form.density_g_per_ml ?? '')}" placeholder="Например, 0.950" /></label><label>Поставщик<input name="supplier_hint" maxlength="160" value="${escapeHtml(form.supplier_hint)}" placeholder="Необязательно" /></label><label>INCI<input name="inci_name" maxlength="240" value="${escapeHtml(form.inci_name)}" placeholder="Необязательно" /></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки">${escapeHtml(form.notes)}</textarea></label><label class="full-span">Ограничения и аллергены<textarea name="allergen_note" rows="2" maxlength="800" placeholder="Необязательно">${escapeHtml(form.allergen_note)}</textarea></label><label class="full-span">Применение<textarea name="usage_note" rows="2" maxlength="800" placeholder="Необязательно">${escapeHtml(form.usage_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить изменения' : 'Создать компонент'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="new-ingredient">Отменить редактирование</button>' : ''}</div></form></section>`;
 }
 
@@ -633,12 +692,6 @@ function ingredientCatalogCreateControls() {
   const tagDisabled = ingredientsState.catalogCreating === 'tag' || ingredientsState.catalogSaving === 'saving';
   return `<div class="catalog-create-grid"><form data-form="ingredient-catalog-category" class="catalog-create-form"><h3>Добавить группу</h3><label>Название группы<input name="name" required maxlength="160" placeholder="Например, Масла" ${categoryDisabled ? 'disabled' : ''} /></label><button class="secondary-action" type="submit" ${categoryDisabled ? 'disabled' : ''}>${ingredientsState.catalogCreating === 'category' ? 'Создаем…' : 'Создать группу'}</button></form><form data-form="ingredient-catalog-tag" class="catalog-create-form"><h3>Добавить метку</h3><label>Название метки<input name="name" required maxlength="160" placeholder="Например, Для лица" ${tagDisabled ? 'disabled' : ''} /></label><button class="secondary-action" type="submit" ${tagDisabled ? 'disabled' : ''}>${ingredientsState.catalogCreating === 'tag' ? 'Создаем…' : 'Создать метку'}</button></form></div>`;
 }
-
-function ingredientList() {
-  if (ingredientsState.items.length === 0) return `<section class="card empty-card"><h2>Компонентов пока нет</h2><p>Добавьте первый компонент, чтобы потом учитывать партии и остатки на складе.</p><p class="next-step">Следующее действие: заполните название, единицу учета и при необходимости плотность, затем нажмите «Создать компонент».</p></section>`;
-  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Компоненты</h2><div class="table-wrap"><table><thead><tr><th>Название</th><th>Системный тип</th><th>Ед. учета</th><th>Моя группа</th><th>Метки</th><th>Плотность</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${ingredientsState.items.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${item.supplier_hint ? escapeHtml(item.supplier_hint) : 'Поставщик не указан'}</small></td><td>${escapeHtml(categoryLabel(item.category))}</td><td>${unitLabel(item.default_unit)}</td><td>${escapeHtml(ingredientCatalogCategoryLabel(item))}</td><td>${ingredientTagChips(item)}</td><td>${item.density_g_per_ml ? `${escapeHtml(item.density_g_per_ml)} г/мл` : 'Не указана'}</td><td><span class="pill ${item.is_active ? 'success' : 'muted'}">${item.is_active ? 'Активен' : 'Неактивен'}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient" data-id="${item.id}">Изменить</button>${item.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient" data-id="${item.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div></section>`;
-}
-
 
 function packagingItemsPage() {
   if (packagingItemsStatus === 'idle' || packagingItemsStatus === 'loading') return `<section class="card"><p class="card-kicker">Тара</p><h2>Загружаем тару…</h2><p>Получаем справочник тары из локального API.</p></section>`;
@@ -842,11 +895,29 @@ function startEditClient(id: number) { const client = clientsState.items.find((i
 function submitClientForm(event: SubmitEvent) { event.preventDefault(); const payload = clientPayloadFromForm(event.currentTarget as HTMLFormElement); if (!payload.full_name) { clientsMessage = ''; clientsError = 'Укажите ФИО клиента, например «Анна Иванова».'; render(); return; } const isEdit = clientsState.formMode === 'edit' && clientsState.form.id; const request = isEdit ? updateClient(clientsState.form.id!, payload) : createClient(payload); request.then((client) => { clientsMessage = isEdit ? 'Карточка клиента обновлена.' : 'Клиент создан.'; clientsError = ''; clientsState.formMode = isEdit ? 'edit' : 'create'; clientsState.form = isEdit ? { ...payload, id: client.id } : emptyClientForm(); return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось сохранить клиента. Проверьте ФИО и контактные поля, затем попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
 function deactivateClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return; deactivateClientRequest(id).then(() => { clientsMessage = 'Клиент архивирован.'; clientsError = ''; return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; if (clientsState.form.id === id) { clientsState.formMode = 'create'; clientsState.form = emptyClientForm(); } render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
 
+
+function ingredientSystemCategories() { return ['oil','butter','wax','emulsifier','humectant','active','preservative','fragrance','essential_oil','colorant','water_phase','additive','other']; }
+function filteredIngredients() { return filterCatalogItems(ingredientsState.items, ingredientsState.filters, { getSearchText: ingredientSearchText, getCatalogCategoryId: (item) => item.catalog_category_id, getCatalogTagIds: (item) => item.catalog_tag_ids, getSystemType: (item) => item.category, getIsActive: (item) => item.is_active }); }
+function ingredientSearchText(item: Ingredient) { return [item.name, item.supplier_hint, item.inci_name, item.notes, item.usage_note, item.allergen_note].join(' '); }
+function catalogCategoryFilterValue(value: string): number | 'none' | '' { if (!value) return ''; if (value === 'none') return 'none'; return Number(value); }
+function addIngredientTagFilter(value: string) { const id = Number(value); if (!id || ingredientsState.filters.tagIds.includes(id)) return; ingredientsState.filters.tagIds = [...ingredientsState.filters.tagIds, id]; render(); }
+function removeIngredientTagFilter(id: number) { ingredientsState.filters.tagIds = ingredientsState.filters.tagIds.filter((tagId) => tagId !== id); render(); }
+function ingredientActiveFilterChips() {
+  const f = ingredientsState.filters;
+  const chips: string[] = [];
+  if (f.search.trim()) chips.push(`<span class="tag-chip readonly">Поиск: ${escapeHtml(f.search.trim())}</span>`);
+  if (f.categoryId === 'none') chips.push('<span class="tag-chip readonly">Группа: Без группы</span>');
+  if (typeof f.categoryId === 'number') chips.push(`<span class="tag-chip readonly">Группа: ${escapeHtml(ingredientsState.catalogCategories.find((category) => category.id === f.categoryId)?.name ?? 'Выбранная группа')}</span>`);
+  if (f.systemType) chips.push(`<span class="tag-chip readonly">Системный тип: ${escapeHtml(categoryLabel(f.systemType))}</span>`);
+  if (f.status !== 'active') chips.push(`<span class="tag-chip readonly">Статус: ${f.status === 'archived' ? 'Архив' : 'Все'}</span>`);
+  return chips.join('');
+}
+
 function emptyIngredientForm(): IngredientFormState { return { id: null, name: '', category: 'other', default_unit: 'g', density_g_per_ml: null, notes: '', inci_name: '', supplier_hint: '', allergen_note: '', usage_note: '' }; }
 function ingredientCatalogCategoryLabel(item: Ingredient) { return ingredientsState.catalogCategories.find((category) => category.id === item.catalog_category_id)?.name ?? 'Не выбрана'; }
 function ingredientTagChips(item: Ingredient) { const tags = item.catalog_tag_ids.map((id) => ingredientsState.catalogTags.find((tag) => tag.id === id)).filter((tag): tag is CatalogTag => Boolean(tag)); return tags.length ? `<div class="tag-list">${tags.map((tag) => `<span class="tag-chip readonly">${escapeHtml(tag.name)}</span>`).join('')}</div>` : 'Нет меток'; }
 function categoryLabel(category: string) { return ({ oil: 'Масло', butter: 'Баттер', wax: 'Воск', emulsifier: 'Эмульгатор', humectant: 'Увлажнитель', active: 'Актив', preservative: 'Консервант', fragrance: 'Отдушка', essential_oil: 'Эфирное масло', colorant: 'Краситель', water_phase: 'Водная фаза', additive: 'Добавка', other: 'Другое' } as Record<string, string>)[category] ?? category; }
-function categoryOptions(current: string) { return ['oil','butter','wax','emulsifier','humectant','active','preservative','fragrance','essential_oil','colorant','water_phase','additive','other'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${categoryLabel(value)}</option>`).join(''); }
+function categoryOptions(current: string) { return ingredientSystemCategories().map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${categoryLabel(value)}</option>`).join(''); }
 function unitOptions(current: string) { return ['g','ml','percent','pcs'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
 function ingredientPayloadFromForm(form: HTMLFormElement): IngredientPayload { const data = new FormData(form); const density = String(data.get('density_g_per_ml') ?? '').trim(); return { name: String(data.get('name') ?? '').trim(), category: String(data.get('category') ?? 'other'), default_unit: String(data.get('default_unit') ?? 'g'), density_g_per_ml: density || null, notes: String(data.get('notes') ?? '').trim(), inci_name: String(data.get('inci_name') ?? '').trim(), supplier_hint: String(data.get('supplier_hint') ?? '').trim(), allergen_note: String(data.get('allergen_note') ?? '').trim(), usage_note: String(data.get('usage_note') ?? '').trim() }; }
 
@@ -872,7 +943,7 @@ function recipeTemplatePayloadFromForm(form: HTMLFormElement): RecipeTemplatePay
 function recipeVersionFormFromForm(form: HTMLFormElement): RecipeVersionForm { const data = new FormData(form); const ingredients = recipesState.versionForm.ingredients.map((_, index) => ({ ingredient_id: String(data.get(`ingredient_id_${index}`) ?? ''), position: String(data.get(`position_${index}`) ?? index + 1).trim(), phase: String(data.get(`phase_${index}`) ?? '').trim(), amount_value: String(data.get(`amount_value_${index}`) ?? '').trim(), amount_unit: String(data.get(`amount_unit_${index}`) ?? 'percent'), notes: String(data.get(`notes_${index}`) ?? '').trim() })); return { title: String(data.get('title') ?? '').trim(), status: String(data.get('status') ?? 'draft'), target_batch_size_value: String(data.get('target_batch_size_value') ?? '').trim(), target_batch_size_unit: String(data.get('target_batch_size_unit') ?? 'g'), notes: String(data.get('notes') ?? '').trim(), change_note: String(data.get('change_note') ?? '').trim(), ingredients }; }
 function recipeVersionPayload(form: RecipeVersionForm) { return { title: form.title, status: form.status, target_batch_size_value: form.target_batch_size_value || null, target_batch_size_unit: form.target_batch_size_value ? form.target_batch_size_unit : null, notes: form.notes, change_note: form.change_note, created_from_version_id: recipesState.selectedVersionDetail?.version.id ?? null, ingredients: form.ingredients.map((line, index)=>({ ingredient_id: Number(line.ingredient_id), position: Number(line.position || index + 1), phase: line.phase, amount_value: line.amount_value, amount_unit: line.amount_unit, notes: line.notes })) }; }
 
-function startEditIngredient(id: number) { const item = ingredientsState.items.find((ingredient) => ingredient.id === id); if (!item) return; ingredientsState.formMode = 'edit'; ingredientsState.form = { id: item.id, name: item.name, category: item.category, default_unit: item.default_unit, density_g_per_ml: item.density_g_per_ml, notes: item.notes, inci_name: item.inci_name, supplier_hint: item.supplier_hint, allergen_note: item.allergen_note, usage_note: item.usage_note }; ingredientsMessage = ''; render(); }
+function startEditIngredient(id: number) { const item = ingredientsState.items.find((ingredient) => ingredient.id === id); if (!item) return; ingredientsState.formMode = 'edit'; ingredientsState.showCreateForm = false; ingredientsState.form = { id: item.id, name: item.name, category: item.category, default_unit: item.default_unit, density_g_per_ml: item.density_g_per_ml, notes: item.notes, inci_name: item.inci_name, supplier_hint: item.supplier_hint, allergen_note: item.allergen_note, usage_note: item.usage_note }; ingredientsMessage = ''; render(); }
 
 function apiGet<T>(url: string): Promise<T> { return fetch(url).then((response) => { if (!response.ok) throw new Error('API request failed'); return response.json() as Promise<T>; }); }
 function apiErrorMessage(payload: unknown) { if (typeof payload === 'string') return payload; if (payload && typeof payload === 'object' && 'detail' in payload) { const detail = (payload as { detail?: unknown }).detail; if (typeof detail === 'string') return detail; if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message?: unknown }).message ?? 'API request failed'); } return 'API request failed'; }
