@@ -195,3 +195,4 @@ PR16 - Ingredient catalog UI foundation
 - Group/tag assignment from PR46 remains unchanged and still appears when editing a selected component.
 - Packaging, recipes, clients, and client recipes catalog/list UX remain later PRs.
 - PR #47 pre-merge fix: `/ingredients` now renders filters first, then the create/edit form and PR46 group/tag assignment area, then compact filtered results so create/edit actions appear near the top even with large catalogs.
+- PR #47 final cleanup: default browse mode now renders filters directly followed by compact results, create/edit appears near the top only when active, cancel edit returns to browse mode without opening a blank create form, and search/group/system/status filters have individual clear actions; no backend/domain/API/migration changes.
