@@ -168,3 +168,4 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
 .collapsed-create-card p { margin-bottom: 0; }
 @media (max-width: 980px) { .catalog-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .catalog-toolbar, .collapsed-create-card { display: grid; grid-template-columns: 1fr; } }
+.catalog-results-summary { color: #6f5a52 !important; font-size: 15px !important; font-weight: 900; margin: 0 0 14px !important; }
