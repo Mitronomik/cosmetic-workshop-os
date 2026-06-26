@@ -204,3 +204,9 @@ PR16 - Ingredient catalog UI foundation
 - Components and Packaging group/tag assignment now uses an explicit local draft and `Применить изменения`; accidental group clicks or tag toggles no longer save immediately.
 - Hidden selected tags remain preserved because tag changes update the full draft tag id set, not the visible checkbox DOM.
 - Applied only to frontend Components and Packaging assignment UX; no backend/domain/API/migration changes.
+
+## Frontend stabilization PR6 / GitHub PR #49: packaging catalog browser and filters
+- Packaging page now has catalog-level search and filters for group, tags, packaging type, and status.
+- Packaging filtering works over the loaded local frontend state for the MVP; no backend search, pagination, API, domain, or migration changes were added.
+- PR48 staged assignment remains unchanged: group/tag edits stay as a draft until `Применить изменения`, with reset/discard behavior preserved.
+- Recipes, clients, and client recipes catalog/list UX remain later PRs.

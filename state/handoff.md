@@ -280,3 +280,9 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Group/tag assignment now uses explicit draft + `Применить изменения`; accidental clicks no longer save immediately.
 - Hidden selected tags remain preserved while tag search filters visible options.
 - Applied to Components and Packaging only; no backend/domain/API/migration changes.
+
+## Frontend stabilization PR6 / GitHub PR #49: packaging catalog browser and filters
+- Packaging page now has catalog-level search and filters for group, tags, packaging type, and status.
+- Packaging filtering works over the loaded local frontend state for the MVP; no backend search, pagination, API, domain, or migration changes were added.
+- PR48 staged assignment remains unchanged: group/tag edits stay as a draft until `Применить изменения`, with reset/discard behavior preserved.
+- Recipes, clients, and client recipes catalog/list UX remain later PRs.
