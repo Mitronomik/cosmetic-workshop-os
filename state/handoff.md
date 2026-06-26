@@ -274,3 +274,9 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - PR #47 final cleanup: default `/ingredients` browse mode shows filters then compact results, create/edit appears above results only when active, cancel edit is separate from create and returns to browse mode, and search/group/system/status chips can be cleared individually; no backend/domain/API/migration changes.
 - PR #47 manual-smoke fix: every `Создать компонент` button opens create mode, the page scrolls/focuses the component name input, create mode can be collapsed with `Вернуться к каталогу`, and filtered component rows are clearly labeled `Найденные компоненты`; no backend/domain/API/migration changes.
 - PR #47 assignment-picker fix: Ingredients and Packaging assignment panels now use one searchable clickable group option list, keep `Без группы`, highlight the selected group, and show a friendly no-match state while preserving inline group creation; no backend/domain/API/migration changes.
+
+## PR48 — Staged catalog assignment apply
+- Frontend stabilization PR5 / GitHub PR #48: staged apply for catalog assignment.
+- Group/tag assignment now uses explicit draft + `Применить изменения`; accidental clicks no longer save immediately.
+- Hidden selected tags remain preserved while tag search filters visible options.
+- Applied to Components and Packaging only; no backend/domain/API/migration changes.
