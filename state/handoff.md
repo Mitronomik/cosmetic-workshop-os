@@ -263,3 +263,14 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Large tag sets now render a small default subset with search/show-more instead of an unlimited chip wall; «Без группы» remains available.
 - No backend/domain/API/migration changes were made. Recipe catalog UX and builder-first recipe creation remain later stabilization PRs.
 - PR #46 fix before merge: ingredient and packaging tag toggles now preserve hidden selected tags when search is active, and searchable catalog inputs restore focus/caret after filtering renders.
+
+## Frontend stabilization PR4 / GitHub PR #47: component catalog browser and filters
+- Components (`/ingredients`) now starts with a catalog browser: text search, group filter including `Без группы`, multi-tag filters, system type filter, status filter, active filter chips, reset, and compact results.
+- Filtering is intentionally frontend-only over the loaded local component list for the MVP; no backend filtering/search/pagination endpoints were added.
+- Added small reusable catalog filtering helpers in the frontend for future catalog pages.
+- PR46 assignment UX remains unchanged: group/tag assignment controls are still available after selecting a component with `Изменить`, including searchable assignment inputs and `Без группы`.
+- Later PRs should apply similar browse-first catalog/list UX to Packaging, Recipes, Clients, and Client Recipes without broadening this PR.
+- PR #47 pre-merge fix: create/edit and component group/tag assignment now render immediately below the filter toolbar and above filtered results, so `Создать компонент` and `Изменить` are visible near the top for large catalogs.
+- PR #47 final cleanup: default `/ingredients` browse mode shows filters then compact results, create/edit appears above results only when active, cancel edit is separate from create and returns to browse mode, and search/group/system/status chips can be cleared individually; no backend/domain/API/migration changes.
+- PR #47 manual-smoke fix: every `Создать компонент` button opens create mode, the page scrolls/focuses the component name input, create mode can be collapsed with `Вернуться к каталогу`, and filtered component rows are clearly labeled `Найденные компоненты`; no backend/domain/API/migration changes.
+- PR #47 assignment-picker fix: Ingredients and Packaging assignment panels now use one searchable clickable group option list, keep `Без группы`, highlight the selected group, and show a friendly no-match state while preserving inline group creation; no backend/domain/API/migration changes.

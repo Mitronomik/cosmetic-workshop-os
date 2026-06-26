@@ -187,3 +187,14 @@ PR16 - Ingredient catalog UI foundation
 - First applied scope: «Компоненты» catalog assignment; the same shared pattern was also safely applied to «Тара» because existing packaging catalog endpoints and UI were already present.
 - No backend, domain model, API contract, migration, recipe catalog redesign, or builder-first recipe creation changes were made.
 - PR #46 fix before merge: tag assignment now derives the payload from the item's current assigned tag ids plus the explicit toggled tag, so selected tags hidden by search are preserved; catalog search re-renders restore focus/caret for ingredient and packaging controls.
+
+## Frontend stabilization PR4 / GitHub PR #47: component catalog browser and filters
+- Components page now has browse-first catalog-level search and filters near the top of `/ingredients`.
+- Filtering works over the loaded local frontend state for the local-first MVP; no backend search, pagination, domain, or migration changes were introduced.
+- Lightweight generic catalog filter helpers were introduced for future reuse by Packaging, Recipes, Clients, and Client Recipes.
+- Group/tag assignment from PR46 remains unchanged and still appears when editing a selected component.
+- Packaging, recipes, clients, and client recipes catalog/list UX remain later PRs.
+- PR #47 pre-merge fix: `/ingredients` now renders filters first, then the create/edit form and PR46 group/tag assignment area, then compact filtered results so create/edit actions appear near the top even with large catalogs.
+- PR #47 final cleanup: default browse mode now renders filters directly followed by compact results, create/edit appears near the top only when active, cancel edit returns to browse mode without opening a blank create form, and search/group/system/status filters have individual clear actions; no backend/domain/API/migration changes.
+- PR #47 manual-smoke fix: all `Создать компонент` buttons now use the same create action, opening the form scrolls/focuses the name field, create mode has a separate `Вернуться к каталогу` collapse action, and component results are labeled as `Найденные компоненты`; no backend/domain/API/migration changes.
+- PR #47 assignment-picker fix: the shared group assignment picker now uses one searchable list of clickable options with highlighted current selection and `Без группы`; the fake search-plus-select pattern was removed for Ingredients and Packaging assignment panels without backend/domain/API/migration changes.
