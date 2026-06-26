@@ -6,6 +6,7 @@ type CatalogSavingStatus = 'idle' | 'saving';
 type CatalogCreateKind = 'category' | 'tag';
 type CatalogOption = { id: number; name: string };
 type CatalogControlState = { categorySearch: string; tagSearch: string; showAllTags: boolean };
+type AssignmentDraft = { itemId: number | null; catalogCategoryId: number | null; catalogTagIds: number[] };
 type CatalogStatusFilter = 'active' | 'archived' | 'all';
 type CatalogBrowserFilters = { search: string; categoryId: number | 'none' | ''; tagIds: number[]; systemType: string; status: CatalogStatusFilter };
 type IngredientLotsStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -167,7 +168,7 @@ type PackagingItemPayload = {
 };
 
 type PackagingItemFormState = PackagingItemPayload & { id: number | null };
-type PackagingItemsState = { items: PackagingItem[]; formMode: PackagingItemFormMode; form: PackagingItemFormState; catalogCategories: CatalogCategory[]; catalogTags: CatalogTag[]; catalogSaving: CatalogSavingStatus; catalogCreating: CatalogCreateKind | null };
+type PackagingItemsState = { items: PackagingItem[]; formMode: PackagingItemFormMode; form: PackagingItemFormState; catalogCategories: CatalogCategory[]; catalogTags: CatalogTag[]; catalogSaving: CatalogSavingStatus; catalogCreating: CatalogCreateKind | null; assignmentDraft: AssignmentDraft };
 
 
 type IngredientLotFormState = { id: number | null; ingredient_id: string; lot_code: string; supplier_name: string; purchased_at: string; expires_at: string; unit: string; unit_cost: string; total_cost: string; density_g_per_ml: string; notes: string };
@@ -190,6 +191,7 @@ type IngredientsState = {
   catalogCreating: CatalogCreateKind | null;
   showCreateForm: boolean;
   filters: CatalogBrowserFilters;
+  assignmentDraft: AssignmentDraft;
 };
 
 type RecipeTemplate = {
@@ -323,7 +325,7 @@ let clientRecipesError = '';
 let clientRecipesMessage = '';
 let clientRecipesState: ClientRecipesState = { items: [], clients: [], templates: [], versions: [], selectedTemplateId: null, selectedDetail: null, form: emptyClientRecipeForm(), includeInactive: false, detailStatus: 'idle' };
 let ingredientsStatus: IngredientsStatus = 'idle';
-let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, showCreateForm: false, filters: emptyCatalogBrowserFilters() };
+let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, showCreateForm: false, filters: emptyCatalogBrowserFilters(), assignmentDraft: emptyAssignmentDraft() };
 let ingredientsError = '';
 let ingredientsMessage = '';
 let ingredientLotsStatus: IngredientLotsStatus = 'idle';
@@ -335,7 +337,7 @@ let stockMovementsState: StockMovementsState = { lots: [], ingredients: [], sele
 let stockMovementsError = '';
 let stockMovementsMessage = '';
 let packagingItemsStatus: PackagingItemsStatus = 'idle';
-let packagingItemsState: PackagingItemsState = { items: [], formMode: 'create', form: emptyPackagingItemForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null };
+let packagingItemsState: PackagingItemsState = { items: [], formMode: 'create', form: emptyPackagingItemForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, assignmentDraft: emptyAssignmentDraft() };
 let packagingItemsError = '';
 let packagingItemsMessage = '';
 let recipesStatus: RecipesStatus = 'idle';
@@ -476,14 +478,16 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLButtonElement>('[data-action="reload-ingredients"]')?.addEventListener('click', () => loadIngredients(true));
   root.querySelectorAll<HTMLButtonElement>('[data-action="new-ingredient"]').forEach((button) => button.addEventListener('click', openIngredientCreateForm));
   root.querySelector<HTMLButtonElement>('[data-action="hide-ingredient-create-form"]')?.addEventListener('click', hideIngredientCreateForm);
-  root.querySelector<HTMLButtonElement>('[data-action="cancel-ingredient-edit"]')?.addEventListener('click', () => { ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsState.showCreateForm = false; ingredientsMessage = ''; ingredientsError = ''; render(); });
+  root.querySelector<HTMLButtonElement>('[data-action="cancel-ingredient-edit"]')?.addEventListener('click', cancelIngredientEdit);
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient"]').forEach((button) => button.addEventListener('click', () => startEditIngredient(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient"]').forEach((button) => button.addEventListener('click', () => deactivateIngredient(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="ingredient"]')?.addEventListener('submit', submitIngredientForm);
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-category"]')?.addEventListener('submit', submitIngredientCatalogCategoryForm);
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-tag"]')?.addEventListener('submit', submitIngredientCatalogTagForm);
-  root.querySelectorAll<HTMLButtonElement>('[data-action="assign-ingredient-category"]').forEach((button) => button.addEventListener('click', () => assignIngredientCategory(Number(button.dataset.id), button.dataset.value ?? '')));
-  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-ingredient-tag"]').forEach((input) => input.addEventListener('change', () => assignIngredientTags(Number(input.dataset.ingredientId), Number(input.value), input.checked)));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="assign-ingredient-category"]').forEach((button) => button.addEventListener('click', () => updateIngredientDraftCategory(Number(button.dataset.id), button.dataset.value ?? '')));
+  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-ingredient-tag"]').forEach((input) => input.addEventListener('change', () => updateIngredientDraftTag(Number(input.dataset.ingredientId), Number(input.value), input.checked)));
+  root.querySelector<HTMLButtonElement>('[data-action="apply-ingredient-assignment"]')?.addEventListener('click', applyIngredientAssignmentDraft);
+  root.querySelector<HTMLButtonElement>('[data-action="reset-ingredient-assignment"]')?.addEventListener('click', resetIngredientAssignmentDraft);
   root.querySelector<HTMLInputElement>('[data-action="filter-ingredients-search"]')?.addEventListener('input', (event) => updateIngredientFilterSearch(event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLSelectElement>('[data-action="filter-ingredients-category"]')?.addEventListener('change', (event) => { ingredientsState.filters.categoryId = catalogCategoryFilterValue((event.currentTarget as HTMLSelectElement).value); render(); });
   root.querySelector<HTMLSelectElement>('[data-action="filter-ingredients-system"]')?.addEventListener('change', (event) => { ingredientsState.filters.systemType = (event.currentTarget as HTMLSelectElement).value; render(); });
@@ -518,14 +522,16 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-client-recipe"]').forEach((button) => button.addEventListener('click', () => openClientRecipe(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client-recipe"]').forEach((button) => button.addEventListener('click', () => deactivateClientRecipe(Number(button.dataset.id))));
   root.querySelector<HTMLButtonElement>('[data-action="reload-packaging-items"]')?.addEventListener('click', () => loadPackagingItems(true));
-  root.querySelector<HTMLButtonElement>('[data-action="new-packaging-item"]')?.addEventListener('click', () => { packagingItemsState.formMode = 'create'; packagingItemsState.form = emptyPackagingItemForm(); packagingItemsMessage = ''; packagingItemsError = ''; render(); });
+  root.querySelector<HTMLButtonElement>('[data-action="new-packaging-item"]')?.addEventListener('click', resetPackagingItemForm);
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-packaging-item"]').forEach((button) => button.addEventListener('click', () => startEditPackagingItem(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-packaging-item"]').forEach((button) => button.addEventListener('click', () => deactivatePackagingItem(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="packaging-item"]')?.addEventListener('submit', submitPackagingItemForm);
   root.querySelector<HTMLFormElement>('[data-form="packaging-catalog-category"]')?.addEventListener('submit', submitPackagingCatalogCategoryForm);
   root.querySelector<HTMLFormElement>('[data-form="packaging-catalog-tag"]')?.addEventListener('submit', submitPackagingCatalogTagForm);
-  root.querySelectorAll<HTMLButtonElement>('[data-action="assign-packaging-category"]').forEach((button) => button.addEventListener('click', () => assignPackagingCategory(Number(button.dataset.id), button.dataset.value ?? '')));
-  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-packaging-tag"]').forEach((input) => input.addEventListener('change', () => assignPackagingTags(Number(input.dataset.packagingItemId), Number(input.value), input.checked)));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="assign-packaging-category"]').forEach((button) => button.addEventListener('click', () => updatePackagingDraftCategory(Number(button.dataset.id), button.dataset.value ?? '')));
+  root.querySelectorAll<HTMLInputElement>('[data-action="toggle-packaging-tag"]').forEach((input) => input.addEventListener('change', () => updatePackagingDraftTag(Number(input.dataset.packagingItemId), Number(input.value), input.checked)));
+  root.querySelector<HTMLButtonElement>('[data-action="apply-packaging-assignment"]')?.addEventListener('click', applyPackagingAssignmentDraft);
+  root.querySelector<HTMLButtonElement>('[data-action="reset-packaging-assignment"]')?.addEventListener('click', resetPackagingAssignmentDraft);
   root.querySelector<HTMLInputElement>('[data-action="search-packaging-category"]')?.addEventListener('input', (event) => updateCatalogSearch(packagingCatalogControls, 'categorySearch', event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLInputElement>('[data-action="search-packaging-tags"]')?.addEventListener('input', (event) => updateCatalogSearch(packagingCatalogControls, 'tagSearch', event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-packaging-tags"]')?.addEventListener('click', () => { packagingCatalogControls.showAllTags = !packagingCatalogControls.showAllTags; render(); });
@@ -551,8 +557,11 @@ function catalogOptions(items: CatalogOption[], search: string) {
 
 
 function openIngredientCreateForm() {
+  const current = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) ?? null : null;
+  if (!confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, ingredientsState.assignmentDraft))) return;
   ingredientsState.formMode = 'create';
   ingredientsState.form = emptyIngredientForm();
+  ingredientsState.assignmentDraft = emptyAssignmentDraft();
   ingredientsState.showCreateForm = true;
   ingredientsMessage = '';
   ingredientsError = '';
@@ -563,6 +572,7 @@ function openIngredientCreateForm() {
 function hideIngredientCreateForm() {
   ingredientsState.formMode = 'create';
   ingredientsState.form = emptyIngredientForm();
+  ingredientsState.assignmentDraft = emptyAssignmentDraft();
   ingredientsState.showCreateForm = false;
   ingredientsMessage = '';
   ingredientsError = '';
@@ -620,6 +630,15 @@ function nextCatalogTagIds(currentIds: number[], tagId: number, checked: boolean
   if (checked) ids.add(tagId); else ids.delete(tagId);
   return Array.from(ids);
 }
+
+function emptyAssignmentDraft(): AssignmentDraft { return { itemId: null, catalogCategoryId: null, catalogTagIds: [] }; }
+function assignmentDraftFromItem(item: { id: number; catalog_category_id: number | null; catalog_tag_ids: number[] }): AssignmentDraft { return { itemId: item.id, catalogCategoryId: item.catalog_category_id, catalogTagIds: [...item.catalog_tag_ids] }; }
+function sameNumberSet(left: number[], right: number[]) { if (left.length !== right.length) return false; const ids = new Set(left); return right.every((id) => ids.has(id)); }
+function assignmentDraftIsDirty(item: { catalog_category_id: number | null; catalog_tag_ids: number[] } | null, draft: AssignmentDraft) { return item !== null && (draft.catalogCategoryId !== item.catalog_category_id || !sameNumberSet(draft.catalogTagIds, item.catalog_tag_ids)); }
+function updateDraftCategory(draft: AssignmentDraft, value: string) { draft.catalogCategoryId = value ? Number(value) : null; }
+function updateDraftTag(draft: AssignmentDraft, tagId: number, checked: boolean) { draft.catalogTagIds = nextCatalogTagIds(draft.catalogTagIds, tagId, checked); }
+function resetAssignmentDraft(item: { id: number; catalog_category_id: number | null; catalog_tag_ids: number[] } | null) { return item ? assignmentDraftFromItem(item) : emptyAssignmentDraft(); }
+function confirmDiscardDirtyAssignment(isDirty: boolean) { return !isDirty || window.confirm('Есть несохранённые изменения группы или меток. Перейти без сохранения?'); }
 
 function visibleTagOptions(items: CatalogOption[], selectedIds: number[], state: CatalogControlState, limit = 10) {
   const filtered = catalogOptions(items, state.tagSearch);
@@ -719,7 +738,10 @@ function ingredientCatalogPanel() {
   const item = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) : null;
   const createControls = ingredientCatalogCreateControls();
   if (!item) return `<section class="card catalog-helper-card"><p class="card-kicker">Моя организация каталога</p><h2>Группа и метки</h2><p>Группа помогает разложить записи по рабочим пространствам. Метки помогают быстро фильтровать и находить записи.</p><p>Выберите компонент в списке через «Изменить», чтобы назначить ему группу и несколько меток.</p>${createControls}<p class="next-step">Системный тип остается отдельным полем и используется программой для расчетов и справочников.</p></section>`;
-  return `<section class="card form-card"><p class="card-kicker">Каталог компонента</p><h2>${escapeHtml(item.name)}</h2><p>Группа и метки помогают вам навести порядок в компонентах. Они не заменяют системный тип компонента.</p><div class="catalog-classification">${catalogCategoryPicker({ itemId: item.id, selectedId: item.catalog_category_id, categories: ingredientsState.catalogCategories, state: ingredientCatalogControls, disabled: ingredientsState.catalogSaving === 'saving', action: 'assign-ingredient-category', searchAction: 'search-ingredient-category' })}${catalogTagPicker({ itemId: item.id, selectedIds: item.catalog_tag_ids, tags: ingredientsState.catalogTags, state: ingredientCatalogControls, disabled: ingredientsState.catalogSaving === 'saving', toggleAction: 'toggle-ingredient-tag', itemDataName: 'ingredient-id', searchAction: 'search-ingredient-tags', showMoreAction: 'toggle-ingredient-tags' })}</div>${createControls}<p class="next-step">Выбранная группа и метки сохраняются сразу. Они помогают найти компонент, но не меняют системный тип.</p></section>`;
+  const draft = ingredientsState.assignmentDraft.itemId === item.id ? ingredientsState.assignmentDraft : assignmentDraftFromItem(item);
+  const isDirty = assignmentDraftIsDirty(item, draft);
+  const draftNotice = isDirty ? '<p class="page-message">Есть несохранённые изменения</p>' : '';
+  return `<section class="card form-card"><p class="card-kicker">Каталог компонента</p><h2>${escapeHtml(item.name)}</h2><p>Группа и метки помогают вам навести порядок в компонентах. Они не заменяют системный тип компонента.</p><div class="catalog-classification">${catalogCategoryPicker({ itemId: item.id, selectedId: draft.catalogCategoryId, categories: ingredientsState.catalogCategories, state: ingredientCatalogControls, disabled: ingredientsState.catalogSaving === 'saving', action: 'assign-ingredient-category', searchAction: 'search-ingredient-category' })}${catalogTagPicker({ itemId: item.id, selectedIds: draft.catalogTagIds, tags: ingredientsState.catalogTags, state: ingredientCatalogControls, disabled: ingredientsState.catalogSaving === 'saving', toggleAction: 'toggle-ingredient-tag', itemDataName: 'ingredient-id', searchAction: 'search-ingredient-tags', showMoreAction: 'toggle-ingredient-tags' })}</div>${draftNotice}<div class="actions"><button class="primary-action" type="button" data-action="apply-ingredient-assignment" ${!isDirty || ingredientsState.catalogSaving === 'saving' ? 'disabled' : ''}>${ingredientsState.catalogSaving === 'saving' ? 'Сохраняем…' : 'Применить изменения'}</button><button class="secondary-action" type="button" data-action="reset-ingredient-assignment" ${!isDirty || ingredientsState.catalogSaving === 'saving' ? 'disabled' : ''}>Сбросить</button></div>${createControls}<p class="next-step">Группа и метки изменяются как черновик. Нажмите «Применить изменения», чтобы сохранить их.</p></section>`;
 }
 
 function ingredientCatalogCreateControls() {
@@ -745,7 +767,10 @@ function packagingCatalogPanel() {
   const createControls = packagingCatalogCreateControls();
   const helperCopy = 'Тип тары — системный тип для учета. Группа и метки — ваш способ навести порядок в каталоге.';
   if (!item) return `<section class="card catalog-helper-card"><p class="card-kicker">Организация каталога тары</p><h2>Группа и метки</h2><p>${helperCopy}</p><p>Группа помогает разложить записи по рабочим пространствам. Метки помогают быстро фильтровать и находить записи.</p><p>Чтобы назначить их конкретной таре, нажмите «Изменить» у нужной тары.</p>${createControls}<p class="next-step">Созданные группы и метки появляются здесь сразу. Они не добавляются в выпадающий список «Тип тары».</p></section>`;
-  return `<section class="card form-card"><p class="card-kicker">Организация каталога тары</p><h2>Группа и метки</h2><p>${helperCopy}</p><div class="catalog-classification">${catalogCategoryPicker({ itemId: item.id, selectedId: item.catalog_category_id, categories: packagingItemsState.catalogCategories, state: packagingCatalogControls, disabled: packagingItemsState.catalogSaving === 'saving', action: 'assign-packaging-category', searchAction: 'search-packaging-category' })}${catalogTagPicker({ itemId: item.id, selectedIds: item.catalog_tag_ids, tags: packagingItemsState.catalogTags, state: packagingCatalogControls, disabled: packagingItemsState.catalogSaving === 'saving', toggleAction: 'toggle-packaging-tag', itemDataName: 'packaging-item-id', searchAction: 'search-packaging-tags', showMoreAction: 'toggle-packaging-tags' })}</div>${createControls}<p class="next-step">Выбранная группа и метки сохраняются сразу. Они помогают найти тару, но не меняют системный тип.</p></section>`;
+  const draft = packagingItemsState.assignmentDraft.itemId === item.id ? packagingItemsState.assignmentDraft : assignmentDraftFromItem(item);
+  const isDirty = assignmentDraftIsDirty(item, draft);
+  const draftNotice = isDirty ? '<p class="page-message">Есть несохранённые изменения</p>' : '';
+  return `<section class="card form-card"><p class="card-kicker">Организация каталога тары</p><h2>Группа и метки</h2><p>${helperCopy}</p><div class="catalog-classification">${catalogCategoryPicker({ itemId: item.id, selectedId: draft.catalogCategoryId, categories: packagingItemsState.catalogCategories, state: packagingCatalogControls, disabled: packagingItemsState.catalogSaving === 'saving', action: 'assign-packaging-category', searchAction: 'search-packaging-category' })}${catalogTagPicker({ itemId: item.id, selectedIds: draft.catalogTagIds, tags: packagingItemsState.catalogTags, state: packagingCatalogControls, disabled: packagingItemsState.catalogSaving === 'saving', toggleAction: 'toggle-packaging-tag', itemDataName: 'packaging-item-id', searchAction: 'search-packaging-tags', showMoreAction: 'toggle-packaging-tags' })}</div>${draftNotice}<div class="actions"><button class="primary-action" type="button" data-action="apply-packaging-assignment" ${!isDirty || packagingItemsState.catalogSaving === 'saving' ? 'disabled' : ''}>${packagingItemsState.catalogSaving === 'saving' ? 'Сохраняем…' : 'Применить изменения'}</button><button class="secondary-action" type="button" data-action="reset-packaging-assignment" ${!isDirty || packagingItemsState.catalogSaving === 'saving' ? 'disabled' : ''}>Сбросить</button></div>${createControls}<p class="next-step">Группа и метки изменяются как черновик. Нажмите «Применить изменения», чтобы сохранить их.</p></section>`;
 }
 
 function packagingCatalogCreateControls() {
@@ -986,7 +1011,17 @@ function recipeTemplatePayloadFromForm(form: HTMLFormElement): RecipeTemplatePay
 function recipeVersionFormFromForm(form: HTMLFormElement): RecipeVersionForm { const data = new FormData(form); const ingredients = recipesState.versionForm.ingredients.map((_, index) => ({ ingredient_id: String(data.get(`ingredient_id_${index}`) ?? ''), position: String(data.get(`position_${index}`) ?? index + 1).trim(), phase: String(data.get(`phase_${index}`) ?? '').trim(), amount_value: String(data.get(`amount_value_${index}`) ?? '').trim(), amount_unit: String(data.get(`amount_unit_${index}`) ?? 'percent'), notes: String(data.get(`notes_${index}`) ?? '').trim() })); return { title: String(data.get('title') ?? '').trim(), status: String(data.get('status') ?? 'draft'), target_batch_size_value: String(data.get('target_batch_size_value') ?? '').trim(), target_batch_size_unit: String(data.get('target_batch_size_unit') ?? 'g'), notes: String(data.get('notes') ?? '').trim(), change_note: String(data.get('change_note') ?? '').trim(), ingredients }; }
 function recipeVersionPayload(form: RecipeVersionForm) { return { title: form.title, status: form.status, target_batch_size_value: form.target_batch_size_value || null, target_batch_size_unit: form.target_batch_size_value ? form.target_batch_size_unit : null, notes: form.notes, change_note: form.change_note, created_from_version_id: recipesState.selectedVersionDetail?.version.id ?? null, ingredients: form.ingredients.map((line, index)=>({ ingredient_id: Number(line.ingredient_id), position: Number(line.position || index + 1), phase: line.phase, amount_value: line.amount_value, amount_unit: line.amount_unit, notes: line.notes })) }; }
 
-function startEditIngredient(id: number) { const item = ingredientsState.items.find((ingredient) => ingredient.id === id); if (!item) return; ingredientsState.formMode = 'edit'; ingredientsState.showCreateForm = false; ingredientsState.form = { id: item.id, name: item.name, category: item.category, default_unit: item.default_unit, density_g_per_ml: item.density_g_per_ml, notes: item.notes, inci_name: item.inci_name, supplier_hint: item.supplier_hint, allergen_note: item.allergen_note, usage_note: item.usage_note }; ingredientsMessage = ''; render(); }
+function startEditIngredient(id: number) {
+  const item = ingredientsState.items.find((ingredient) => ingredient.id === id);
+  const current = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) ?? null : null;
+  if (!item || !confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, ingredientsState.assignmentDraft))) return;
+  ingredientsState.formMode = 'edit'; ingredientsState.showCreateForm = false; ingredientsState.form = { id: item.id, name: item.name, category: item.category, default_unit: item.default_unit, density_g_per_ml: item.density_g_per_ml, notes: item.notes, inci_name: item.inci_name, supplier_hint: item.supplier_hint, allergen_note: item.allergen_note, usage_note: item.usage_note }; ingredientsState.assignmentDraft = assignmentDraftFromItem(item); ingredientsMessage = ''; render();
+}
+function cancelIngredientEdit() {
+  const current = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) ?? null : null;
+  if (!confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, ingredientsState.assignmentDraft))) return;
+  ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsState.assignmentDraft = emptyAssignmentDraft(); ingredientsState.showCreateForm = false; ingredientsMessage = ''; ingredientsError = ''; render();
+}
 
 function apiGet<T>(url: string): Promise<T> { return fetch(url).then((response) => { if (!response.ok) throw new Error('API request failed'); return response.json() as Promise<T>; }); }
 function apiErrorMessage(payload: unknown) { if (typeof payload === 'string') return payload; if (payload && typeof payload === 'object' && 'detail' in payload) { const detail = (payload as { detail?: unknown }).detail; if (typeof detail === 'string') return detail; if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message?: unknown }).message ?? 'API request failed'); } return 'API request failed'; }
@@ -1117,7 +1152,17 @@ function loadPackagingItems(force = false) {
   packagingItemsStatus = 'loading'; packagingItemsError = ''; render();
   Promise.all([getPackagingItems(), getPackagingCatalogCategories(), getPackagingCatalogTags()]).then(([response, categories, tags]) => { packagingItemsState.items = response.packaging_items; packagingItemsState.catalogCategories = categories.categories; packagingItemsState.catalogTags = tags.tags; packagingItemsStatus = 'ready'; render(); }).catch(() => { packagingItemsStatus = 'error'; packagingItemsError = 'Не получилось получить справочник тары из локального API.'; render(); });
 }
-function startEditPackagingItem(id: number) { const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === id); if (!item) return; packagingItemsState.formMode = 'edit'; packagingItemsState.form = { id: item.id, name: item.name, kind: item.kind, unit: item.unit, capacity_value: item.capacity_value, capacity_unit: item.capacity_unit, material: item.material, supplier_hint: item.supplier_hint, unit_cost: item.unit_cost, notes: item.notes }; packagingItemsMessage = ''; packagingItemsError = ''; render(); }
+function startEditPackagingItem(id: number) {
+  const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === id);
+  const current = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null;
+  if (!item || !confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, packagingItemsState.assignmentDraft))) return;
+  packagingItemsState.formMode = 'edit'; packagingItemsState.form = { id: item.id, name: item.name, kind: item.kind, unit: item.unit, capacity_value: item.capacity_value, capacity_unit: item.capacity_unit, material: item.material, supplier_hint: item.supplier_hint, unit_cost: item.unit_cost, notes: item.notes }; packagingItemsState.assignmentDraft = assignmentDraftFromItem(item); packagingItemsMessage = ''; packagingItemsError = ''; render();
+}
+function resetPackagingItemForm() {
+  const current = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null;
+  if (!confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, packagingItemsState.assignmentDraft))) return;
+  packagingItemsState.formMode = 'create'; packagingItemsState.form = emptyPackagingItemForm(); packagingItemsState.assignmentDraft = emptyAssignmentDraft(); packagingItemsMessage = ''; packagingItemsError = ''; render();
+}
 function submitPackagingItemForm(event: SubmitEvent) {
   event.preventDefault();
   const payload = packagingItemPayloadFromForm(event.currentTarget as HTMLFormElement);
@@ -1133,8 +1178,19 @@ function deactivatePackagingItem(id: number) {
 function reloadPackagingCatalogData() { return Promise.all([getPackagingItems(), getPackagingCatalogCategories(), getPackagingCatalogTags()]).then(([items, categories, tags]) => { packagingItemsState.items = items.packaging_items; packagingItemsState.catalogCategories = categories.categories; packagingItemsState.catalogTags = tags.tags; packagingItemsStatus = 'ready'; }); }
 function submitPackagingCatalogCategoryForm(event: SubmitEvent) { event.preventDefault(); const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) return; packagingItemsState.catalogCreating = 'category'; packagingItemsError = ''; render(); createPackagingCatalogCategory(name).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Группа тары создана.'; packagingItemsState.catalogCreating = null; render(); }).catch(() => { packagingItemsState.catalogCreating = null; packagingItemsError = 'Не удалось создать группу тары. Проверьте название и попробуйте еще раз.'; render(); }); }
 function submitPackagingCatalogTagForm(event: SubmitEvent) { event.preventDefault(); const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) return; packagingItemsState.catalogCreating = 'tag'; packagingItemsError = ''; render(); createPackagingCatalogTag(name).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метка тары создана.'; packagingItemsState.catalogCreating = null; render(); }).catch(() => { packagingItemsState.catalogCreating = null; packagingItemsError = 'Не удалось создать метку тары. Проверьте название и попробуйте еще раз.'; render(); }); }
-function assignPackagingCategory(packagingItemId: number, value: string) { packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render(); updatePackagingCatalogCategory(packagingItemId, value ? Number(value) : null).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Группа тары сохранена.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsError = 'Не удалось сохранить группу тары. Попробуйте обновить страницу.'; render(); }); }
-function assignPackagingTags(packagingItemId: number, tagId: number, checked: boolean) { const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemId); if (!item || !tagId) return; const tagIds = nextCatalogTagIds(item.catalog_tag_ids, tagId, checked); packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render(); updatePackagingCatalogTags(packagingItemId, tagIds).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метки тары сохранены.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsError = 'Не удалось сохранить метки тары. Попробуйте обновить страницу.'; render(); }); }
+function updatePackagingDraftCategory(packagingItemId: number, value: string) { if (packagingItemsState.assignmentDraft.itemId !== packagingItemId) return; updateDraftCategory(packagingItemsState.assignmentDraft, value); packagingItemsMessage = ''; render(); }
+function updatePackagingDraftTag(packagingItemId: number, tagId: number, checked: boolean) { if (packagingItemsState.assignmentDraft.itemId !== packagingItemId || !tagId) return; updateDraftTag(packagingItemsState.assignmentDraft, tagId, checked); packagingItemsMessage = ''; render(); }
+function resetPackagingAssignmentDraft() { const item = packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null; packagingItemsState.assignmentDraft = resetAssignmentDraft(item); packagingItemsMessage = ''; render(); }
+function applyPackagingAssignmentDraft() {
+  const item = packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null;
+  const draft = packagingItemsState.assignmentDraft;
+  if (!item || !draft.itemId || !assignmentDraftIsDirty(item, draft)) return;
+  packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render();
+  const request = (draft.catalogCategoryId !== item.catalog_category_id ? updatePackagingCatalogCategory(item.id, draft.catalogCategoryId) : Promise.resolve() as Promise<unknown>)
+    .then(() => (!sameNumberSet(draft.catalogTagIds, item.catalog_tag_ids) ? updatePackagingCatalogTags(item.id, draft.catalogTagIds) : Promise.resolve() as Promise<unknown>))
+    .then(() => reloadPackagingCatalogData());
+  request.then(() => { const saved = packagingItemsState.items.find((packagingItem) => packagingItem.id === item.id) ?? null; packagingItemsState.assignmentDraft = resetAssignmentDraft(saved); packagingItemsMessage = 'Группа и метки тары сохранены.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsMessage = ''; packagingItemsError = 'Не удалось сохранить группу или метки тары. Проверьте данные и попробуйте еще раз.'; render(); });
+}
 
 function loadIngredientLots(force = false) {
   if (!force && (ingredientLotsStatus === 'loading' || ingredientLotsStatus === 'ready')) return;
@@ -1184,18 +1240,18 @@ function submitIngredientCatalogTagForm(event: SubmitEvent) {
   ingredientsState.catalogCreating = 'tag'; ingredientsError = ''; render();
   createIngredientCatalogTag(name).then(() => Promise.all([getIngredientCatalogTags(), getIngredients()])).then(([tags, response]) => { ingredientsState.catalogTags = tags.tags; ingredientsState.items = response.ingredients; ingredientsState.catalogCreating = null; ingredientsMessage = 'Метка создана и доступна для компонентов.'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogCreating = null; ingredientsMessage = ''; ingredientsError = 'Не удалось создать метку. Проверьте название и попробуйте еще раз.'; render(); });
 }
-function assignIngredientCategory(ingredientId: number, value: string) {
-  if (!ingredientId) return;
+function updateIngredientDraftCategory(ingredientId: number, value: string) { if (ingredientsState.assignmentDraft.itemId !== ingredientId) return; updateDraftCategory(ingredientsState.assignmentDraft, value); ingredientsMessage = ''; render(); }
+function updateIngredientDraftTag(ingredientId: number, tagId: number, checked: boolean) { if (ingredientsState.assignmentDraft.itemId !== ingredientId || !tagId) return; updateDraftTag(ingredientsState.assignmentDraft, tagId, checked); ingredientsMessage = ''; render(); }
+function resetIngredientAssignmentDraft() { const item = ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) ?? null : null; ingredientsState.assignmentDraft = resetAssignmentDraft(item); ingredientsMessage = ''; render(); }
+function applyIngredientAssignmentDraft() {
+  const item = ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) ?? null : null;
+  const draft = ingredientsState.assignmentDraft;
+  if (!item || !draft.itemId || !assignmentDraftIsDirty(item, draft)) return;
   ingredientsState.catalogSaving = 'saving'; ingredientsError = ''; render();
-  updateIngredientCatalogCategory(ingredientId, value ? Number(value) : null).then(() => { ingredientsMessage = 'Моя группа компонента сохранена.'; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; ingredientsState.catalogSaving = 'idle'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogSaving = 'idle'; ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить мою группу. Проверьте, что группа активна, и попробуйте еще раз.'; render(); });
-}
-function assignIngredientTags(ingredientId: number, tagId: number, checked: boolean) {
-  if (!ingredientId || !tagId) return;
-  const item = ingredientsState.items.find((ingredient) => ingredient.id === ingredientId);
-  if (!item) return;
-  const tagIds = nextCatalogTagIds(item.catalog_tag_ids, tagId, checked);
-  ingredientsState.catalogSaving = 'saving'; ingredientsError = ''; render();
-  updateIngredientCatalogTags(ingredientId, tagIds).then(() => { ingredientsMessage = 'Метки компонента сохранены.'; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; ingredientsState.catalogSaving = 'idle'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogSaving = 'idle'; ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить метки. Проверьте, что метки активны, и попробуйте еще раз.'; render(); });
+  const request = (draft.catalogCategoryId !== item.catalog_category_id ? updateIngredientCatalogCategory(item.id, draft.catalogCategoryId) : Promise.resolve() as Promise<unknown>)
+    .then(() => (!sameNumberSet(draft.catalogTagIds, item.catalog_tag_ids) ? updateIngredientCatalogTags(item.id, draft.catalogTagIds) : Promise.resolve() as Promise<unknown>))
+    .then(() => getIngredients());
+  request.then((response) => { ingredientsState.items = response.ingredients; const saved = response.ingredients.find((ingredient) => ingredient.id === item.id) ?? null; ingredientsState.assignmentDraft = resetAssignmentDraft(saved); ingredientsMessage = 'Группа и метки компонента сохранены.'; ingredientsState.catalogSaving = 'idle'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogSaving = 'idle'; ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить группу или метки. Проверьте данные и попробуйте еще раз.'; render(); });
 }
 
 function deactivateIngredient(id: number) {

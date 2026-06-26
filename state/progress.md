@@ -198,3 +198,9 @@ PR16 - Ingredient catalog UI foundation
 - PR #47 final cleanup: default browse mode now renders filters directly followed by compact results, create/edit appears near the top only when active, cancel edit returns to browse mode without opening a blank create form, and search/group/system/status filters have individual clear actions; no backend/domain/API/migration changes.
 - PR #47 manual-smoke fix: all `Создать компонент` buttons now use the same create action, opening the form scrolls/focuses the name field, create mode has a separate `Вернуться к каталогу` collapse action, and component results are labeled as `Найденные компоненты`; no backend/domain/API/migration changes.
 - PR #47 assignment-picker fix: the shared group assignment picker now uses one searchable list of clickable options with highlighted current selection and `Без группы`; the fake search-plus-select pattern was removed for Ingredients and Packaging assignment panels without backend/domain/API/migration changes.
+
+## PR48 — Staged catalog assignment apply
+- Frontend stabilization PR5 / GitHub PR #48: staged apply for catalog assignment.
+- Components and Packaging group/tag assignment now uses an explicit local draft and `Применить изменения`; accidental group clicks or tag toggles no longer save immediately.
+- Hidden selected tags remain preserved because tag changes update the full draft tag id set, not the visible checkbox DOM.
+- Applied only to frontend Components and Packaging assignment UX; no backend/domain/API/migration changes.
