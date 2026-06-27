@@ -286,3 +286,9 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Packaging filtering works over the loaded local frontend state for the MVP; no backend search, pagination, API, domain, or migration changes were added.
 - PR48 staged assignment remains unchanged: group/tag edits stay as a draft until `Применить изменения`, with reset/discard behavior preserved.
 - Recipes, clients, and client recipes catalog/list UX remain later PRs.
+
+## Frontend stabilization PR7 / GitHub PR #50: browse-first workspaces for recipes, clients, and client recipes
+- Applied the browse-first list/workspace discipline to Recipes, Clients, and Client Recipes so the catalog/list remains the default workspace.
+- Added local frontend search/filter controls and visible active filter chips over already loaded frontend state only.
+- Create/edit/detail panels are now explicitly opened and can be closed back to the catalog/list without resetting filters.
+- No backend/API/domain/migration changes; recipe builder, production, orders, import, backup, Components, and Packaging remain unchanged.
