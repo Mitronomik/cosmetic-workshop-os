@@ -210,3 +210,10 @@ PR16 - Ingredient catalog UI foundation
 - Packaging filtering works over the loaded local frontend state for the MVP; no backend search, pagination, API, domain, or migration changes were added.
 - PR48 staged assignment remains unchanged: group/tag edits stay as a draft until `Применить изменения`, with reset/discard behavior preserved.
 - Recipes, clients, and client recipes catalog/list UX remain later PRs.
+
+## Frontend stabilization PR7 / PR50 replacement: recipes browse-first workspace
+- Recipes now follow the browse-first workspace pattern used by Components and Packaging: the catalog search/filter area and compact list appear before create/edit/detail workspaces.
+- Search/filtering works over loaded frontend recipe state for MVP: name, product type, description, notes, catalog group/tag text, and truthful active/inactive status already returned by the API.
+- Create/edit/detail workspaces no longer dominate the first screen; create and opened recipe detail are explicit modes with clear return/close actions.
+- No backend/API/domain/migration changes were made.
+- Clients and Client Recipes remain separate later PRs.
