@@ -164,6 +164,7 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
 .active-filter-row strong, .catalog-summary span { color: #5d4039; font-size: 14px; font-weight: 900; }
 .tag-chip button { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; font-weight: 900; padding: 0 0 0 4px; }
 .compact-catalog-table td { vertical-align: middle; }
+.catalog-row-selected { background: #fff7ed; box-shadow: inset 4px 0 0 #d39a7a; }
 .collapsed-create-card { align-items: center; display: flex; gap: 18px; justify-content: space-between; }
 .collapsed-create-card p { margin-bottom: 0; }
 @media (max-width: 980px) { .catalog-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
