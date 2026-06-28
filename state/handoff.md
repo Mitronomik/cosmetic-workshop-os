@@ -293,3 +293,11 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Create mode is collapsed by default and opens via `open-recipe-create`; recipe detail closes via `close-recipe-detail`; filter reset/clear use separate actions.
 - No backend/API/domain/migration files changed.
 - Clients and Client Recipes were intentionally left unchanged for separate later PRs.
+
+## Frontend stabilization PR8: clients browse-first workspace
+
+- Clients page was updated to browse-first UX only, without changing backend/API/domain/migrations.
+- Search filters the currently loaded client state by visible client fields such as name, phone, email, notes, allergies, preferences, and contraindications.
+- Status filter defaults to `Активные`; selecting `Архив` or `Все` sets `includeInactive=true` and reloads clients before local filtering so archive counts/results are truthful.
+- Create and edit are opened intentionally near the top and can be closed without resetting filters; the edited row is highlighted and marked `Редактируется`.
+- Client Recipes were intentionally not redesigned in this PR.
