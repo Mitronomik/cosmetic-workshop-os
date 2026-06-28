@@ -217,3 +217,11 @@ PR16 - Ingredient catalog UI foundation
 - Create/edit/detail workspaces no longer dominate the first screen; create and opened recipe detail are explicit modes with clear return/close actions.
 - No backend/API/domain/migration changes were made.
 - Clients and Client Recipes remain separate later PRs.
+
+## Frontend stabilization PR8: clients browse-first workspace
+
+- Clients now follow the browse-first workspace pattern: intro, messages, search/status toolbar, optional create/edit workspace, compact list, and a collapsed create helper.
+- Client search/filtering works over the loaded frontend client state and keeps the list visible instead of showing a long always-open form first.
+- Status filtering uses the existing `includeInactive` API behavior: `Архив` and `Все` switch to inactive-inclusive loading before local filtering.
+- Create/edit workspaces are explicit and closable; edit highlights the active row with the existing selected-row style.
+- No backend/API/domain/migration changes were made. Client Recipes remain a separate later PR.
