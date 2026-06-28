@@ -225,3 +225,12 @@ PR16 - Ingredient catalog UI foundation
 - Status filtering uses the existing `includeInactive` API behavior: `Архив` and `Все` switch to inactive-inclusive loading before local filtering.
 - Create/edit workspaces are explicit and closable; edit highlights the active row with the existing selected-row style.
 - No backend/API/domain/migration changes were made. Client Recipes remain a separate later PR.
+
+## Frontend stabilization PR9: client recipes browse-first workspace
+
+- Client Recipes now follow the browse-first workspace pattern: intro, messages, search/filter toolbar, optional create/detail workspace, compact list, and collapsed create helper.
+- Search and filtering work over loaded frontend client recipe state, including title, status, client name, personalization, allergy, preference, contraindication, and note text.
+- Status filtering correctly loads inactive client recipes when `Архив` or `Все` is selected through existing `includeInactive` behavior, then filters locally over the loaded set.
+- Base recipe/template filtering was intentionally not added because complete source recipe/template data is not loaded for every client recipe in this workspace.
+- Create/detail workspaces no longer dominate the first screen; both are explicitly opened and closable without resetting filters.
+- No backend/API/domain/migration changes.

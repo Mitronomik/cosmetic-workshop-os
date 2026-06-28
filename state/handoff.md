@@ -301,3 +301,11 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Status filter defaults to `Активные`; selecting `Архив` or `Все` sets `includeInactive=true` and reloads clients before local filtering so archive counts/results are truthful.
 - Create and edit are opened intentionally near the top and can be closed without resetting filters; the edited row is highlighted and marked `Редактируется`.
 - Client Recipes were intentionally not redesigned in this PR.
+
+## Frontend stabilization PR9: client recipes browse-first workspace
+
+- Client Recipes now use a browse-first workspace with a top search/filter toolbar, compact list, explicit create workspace, explicit detail workspace, selected-row highlighting, and collapsed create helper.
+- Search/filtering is local to the loaded frontend client recipe state; source base recipe/template filtering was intentionally avoided because the available version state is not a complete global recipe map.
+- Status filter defaults to `Активные`; choosing `Архив` or `Все` sets `includeInactive=true`, reloads via the existing client recipe API, and then filters locally so archived results are truthful.
+- Client lookup for labels/filter options is loaded with inactive clients included for this workspace so archived recipes can still show reliable client names.
+- No backend/API/domain/migration files were changed.
