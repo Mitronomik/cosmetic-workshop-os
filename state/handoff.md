@@ -317,3 +317,14 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Repeated create clicks while the form is already open remain idempotent and preserve the draft.
 - The saved-version select now shows contextual guidance for no base recipe, loading versions, no saved versions, and available versions.
 - Full editing of copied ClientRecipe composition is still intentionally deferred to a later PR if backend support is not present.
+
+## PR54: ClientRecipe composition update API
+
+- ClientRecipe already had copied composition creation from saved RecipeVersion lines.
+- This PR adds safe backend/API update for the copied ClientRecipe composition.
+- New endpoint: `PUT /api/client-recipes/{client_recipe_id}/ingredients`, full-replacing the target recipe's copied ingredient lines and returning the existing ClientRecipe detail response shape.
+- Updates affect only `client_recipe_ingredients` for the target ClientRecipe.
+- Source RecipeVersion and RecipeVersionIngredient rows are not mutated, and other ClientRecipes remain unchanged.
+- The update is transactional and audited; audit failure rolls back the composition replacement.
+- Archived/inactive ClientRecipes cannot be edited; inactive ingredients may only remain if they are unchanged existing copied lines.
+- Full frontend editor remains a later PR.

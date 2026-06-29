@@ -1,9 +1,9 @@
 from app.db.config import DatabaseConfig
 from app.db.transactions import transaction
-from app.domain.client_recipes import ClientRecipeDraft, ClientRecipeIngredientDraft
+from app.domain.client_recipes import ClientRecipeDraft, ClientRecipeIngredientDraft, ClientRecipeIngredientUpdateDraft, validate_client_recipe_update_lines
 from app.domain.errors import DomainIssue, DomainIssueCode, DomainValidationError
 from app.domain.recipes import require_positive_id
-from app.models.client_recipe import ClientRecipe, ClientRecipeDetail
+from app.models.client_recipe import ClientRecipe, ClientRecipeDetail, ClientRecipeStatus
 from app.repositories.audit import AuditLogRepository
 from app.repositories.client_recipes import ClientRecipeNotFoundError, ClientRecipeRepository
 from app.repositories.clients import ClientNotFoundError, ClientRepository
@@ -20,6 +20,14 @@ class SourceRecipeVersionEmptyError(ValueError):
 
 
 class ClientRecipeIngredientInactiveError(ValueError):
+    pass
+
+
+class ClientRecipeArchivedError(ValueError):
+    pass
+
+
+class ClientRecipeIngredientLineOwnershipError(ValueError):
     pass
 
 
@@ -64,6 +72,54 @@ class ClientRecipeService:
         self.clients.get_by_id(client_id)
         return self.repository.list_for_client(client_id, include_inactive=include_inactive)
 
+
+    def update_composition(self, client_recipe_id: int, lines: list[ClientRecipeIngredientUpdateDraft]) -> ClientRecipeDetail:
+        client_recipe_id = require_positive_id(client_recipe_id, field="client_recipe_id", label="Индивидуальный рецепт")
+        validate_client_recipe_update_lines(lines)
+        detail = self.repository.get_detail(client_recipe_id)
+        if not detail.client_recipe.is_active or detail.client_recipe.status == ClientRecipeStatus.ARCHIVED:
+            raise ClientRecipeArchivedError("Archived client recipe composition cannot be edited.")
+
+        existing_by_id = {line.id: line for line in detail.ingredients}
+        replacement_drafts: list[ClientRecipeIngredientDraft] = []
+        for line in lines:
+            existing_line = None
+            if line.id is not None:
+                existing_line = existing_by_id.get(line.id)
+                if existing_line is None:
+                    raise ClientRecipeIngredientLineOwnershipError("Client recipe ingredient line does not belong to this client recipe.")
+            ingredient = self.ingredients.get_by_id(line.ingredient_id)
+            keeps_existing_ingredient = existing_line is not None and existing_line.ingredient_id == line.ingredient_id
+            if not ingredient.is_active and not keeps_existing_ingredient:
+                raise ClientRecipeIngredientInactiveError("Ingredient is inactive.")
+            source_recipe_ingredient_id = existing_line.source_recipe_ingredient_id if keeps_existing_ingredient else None
+            replacement_drafts.append(
+                ClientRecipeIngredientDraft.create(
+                    ingredient_id=line.ingredient_id,
+                    source_recipe_ingredient_id=source_recipe_ingredient_id,
+                    position=line.position,
+                    phase=line.phase,
+                    amount_value=line.amount_value,
+                    amount_unit=line.amount_unit,
+                    personalization_note=line.personalization_note,
+                    notes=line.notes,
+                )
+            )
+
+        old_signature = [(line.ingredient_id, str(line.amount_value), line.amount_unit.value, line.position, line.phase, line.personalization_note, line.notes) for line in detail.ingredients]
+        new_signature = [(line.ingredient_id, str(line.amount_value), line.amount_unit.value, line.position, line.phase, line.personalization_note, line.notes) for line in replacement_drafts]
+        with transaction(self.config) as connection:
+            self.repository.replace_ingredient_lines(client_recipe_id, replacement_drafts, connection=connection)
+            self.audit.create_log(
+                action="client_recipe.composition_updated",
+                entity_type="client_recipe",
+                entity_id=str(client_recipe_id),
+                summary=f"Client recipe composition updated: {detail.client_recipe.title}",
+                metadata={"line_count": len(replacement_drafts), "changed": old_signature != new_signature},
+                connection=connection,
+            )
+        return self.repository.get_detail(client_recipe_id)
+
     def deactivate(self, client_recipe_id: int) -> ClientRecipe:
         client_recipe_id = require_positive_id(client_recipe_id, field="client_recipe_id", label="Индивидуальный рецепт")
         with transaction(self.config) as connection:
@@ -72,4 +128,4 @@ class ClientRecipeService:
         return client_recipe
 
 
-__all__ = ["ClientRecipeService", "ClientRecipeNotFoundError", "ClientNotFoundError", "RecipeVersionNotFoundError", "IngredientNotFoundError", "ClientInactiveError", "SourceRecipeVersionEmptyError", "ClientRecipeIngredientInactiveError"]
+__all__ = ["ClientRecipeService", "ClientRecipeNotFoundError", "ClientNotFoundError", "RecipeVersionNotFoundError", "IngredientNotFoundError", "ClientInactiveError", "SourceRecipeVersionEmptyError", "ClientRecipeIngredientInactiveError", "ClientRecipeArchivedError", "ClientRecipeIngredientLineOwnershipError"]

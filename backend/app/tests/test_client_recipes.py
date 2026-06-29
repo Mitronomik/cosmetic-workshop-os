@@ -225,7 +225,131 @@ def test_client_recipe_api(monkeypatch, tmp_path):
     assert len(response.json()["ingredients"]) == 2
     assert api.get("/api/client-recipes").json()["client_recipes"][0]["id"] == recipe_id
     assert api.get(f"/api/clients/{client.id}/recipes").json()["client_recipes"][0]["id"] == recipe_id
-    assert api.get(f"/api/client-recipes/{recipe_id}").json()["ingredients"][0]["position"] == 1
+    current_lines = api.get(f"/api/client-recipes/{recipe_id}").json()["ingredients"]
+    assert current_lines[0]["position"] == 1
+    update_response = api.put(
+        f"/api/client-recipes/{recipe_id}/ingredients",
+        json={
+            "ingredients": [
+                {"id": current_lines[0]["id"], "ingredient_id": current_lines[0]["ingredient_id"], "position": 1, "phase": current_lines[0]["phase"], "amount_value": "70", "amount_unit": current_lines[0]["amount_unit"], "personalization_note": "API adjusted", "notes": current_lines[0]["notes"]},
+                {"id": current_lines[1]["id"], "ingredient_id": current_lines[1]["ingredient_id"], "position": 2, "phase": current_lines[1]["phase"], "amount_value": "30", "amount_unit": current_lines[1]["amount_unit"], "personalization_note": "", "notes": current_lines[1]["notes"]},
+            ]
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["ingredients"][0]["amount_value"] == "70.00"
+    invalid_response = api.put(f"/api/client-recipes/{recipe_id}/ingredients", json={"ingredients": []})
+    assert invalid_response.status_code == 422
     assert api.post(f"/api/client-recipes/{recipe_id}/deactivate").json()["is_active"] is False
     assert api.get("/api/client-recipes/999").status_code == 404
     assert api.post("/api/client-recipes", json={**payload, "source_recipe_version_id": 999}).status_code == 404
+
+
+def update_line(line, **overrides):
+    values = {
+        "id": line.id,
+        "ingredient_id": line.ingredient_id,
+        "position": line.position,
+        "phase": line.phase,
+        "amount_value": str(line.amount_value),
+        "amount_unit": line.amount_unit,
+        "personalization_note": line.personalization_note,
+        "notes": line.notes,
+    }
+    values.update(overrides)
+    from app.domain.client_recipes import ClientRecipeIngredientUpdateDraft
+    return ClientRecipeIngredientUpdateDraft.create(**values)
+
+
+def test_update_composition_changes_only_target_client_recipe_and_preserves_source(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    first = service.create_from_recipe_version(draft(client.id, version.version.id, title="First"))
+    second = service.create_from_recipe_version(draft(client.id, version.version.id, title="Second"))
+
+    updated = service.update_composition(first.client_recipe.id, [
+        update_line(first.ingredients[0], amount_value="75", personalization_note="Adjusted for client", notes="updated water"),
+        update_line(first.ingredients[1], amount_value="25", position=2),
+    ])
+
+    assert [(i.position, str(i.amount_value), i.personalization_note, i.notes) for i in updated.ingredients] == [
+        (1, "75.00", "Adjusted for client", "updated water"),
+        (2, "25.00", "", "source oil"),
+    ]
+    source = RecipeService(c).get_version_detail(version.version.id)
+    assert [(str(i.amount_value), i.notes) for i in source.ingredients] == [("80.00", "source water"), ("20.00", "source oil")]
+    reread_second = service.get_detail(second.client_recipe.id)
+    assert [(str(i.amount_value), i.notes) for i in reread_second.ingredients] == [("80.00", "source water"), ("20.00", "source oil")]
+    assert scalar(c, "SELECT count(*) FROM audit_logs WHERE action='client_recipe.composition_updated'") == 1
+
+
+@pytest.mark.parametrize("bad_lines", [
+    lambda lines: [update_line(lines[0], position=1), update_line(lines[1], position=1)],
+    lambda lines: [update_line(lines[0], amount_value="0")],
+    lambda lines: [update_line(lines[0], amount_value="-1")],
+    lambda lines: [],
+])
+def test_update_composition_validation_failures_keep_existing_lines(tmp_path, bad_lines):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    detail = service.create_from_recipe_version(draft(client.id, version.version.id))
+    before = [(i.id, str(i.amount_value), i.position) for i in service.get_detail(detail.client_recipe.id).ingredients]
+    with pytest.raises(DomainValidationError):
+        service.update_composition(detail.client_recipe.id, bad_lines(detail.ingredients))
+    after = [(i.id, str(i.amount_value), i.position) for i in service.get_detail(detail.client_recipe.id).ingredients]
+    assert after == before
+
+
+def test_update_composition_missing_and_inactive_ingredient_rules(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    detail = service.create_from_recipe_version(draft(client.id, version.version.id))
+    before = [(i.ingredient_id, str(i.amount_value)) for i in detail.ingredients]
+
+    with pytest.raises(Exception) as missing:
+        service.update_composition(detail.client_recipe.id, [update_line(detail.ingredients[0], ingredient_id=999)])
+    assert "not found" in str(missing.value).lower()
+    assert [(i.ingredient_id, str(i.amount_value)) for i in service.get_detail(detail.client_recipe.id).ingredients] == before
+
+    archived = IngredientService(c).deactivate_ingredient(detail.ingredients[0].ingredient_id)
+    assert archived.is_active is False
+    unchanged_existing = service.update_composition(detail.client_recipe.id, [update_line(detail.ingredients[0], amount_value="79"), update_line(detail.ingredients[1], amount_value="21")])
+    assert unchanged_existing.ingredients[0].source_recipe_ingredient_id == detail.ingredients[0].source_recipe_ingredient_id
+
+    new_ingredient = IngredientService(c).create_ingredient(IngredientDraft.create(name="Archived additive", category="active", default_unit="g"))
+    IngredientService(c).deactivate_ingredient(new_ingredient.id)
+    with pytest.raises(Exception) as inactive:
+        service.update_composition(detail.client_recipe.id, [update_line(unchanged_existing.ingredients[0], ingredient_id=new_ingredient.id)])
+    assert "inactive" in str(inactive.value).lower()
+
+
+def test_update_composition_rejects_archived_recipe_and_foreign_line_id(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    first = service.create_from_recipe_version(draft(client.id, version.version.id, title="First"))
+    second = service.create_from_recipe_version(draft(client.id, version.version.id, title="Second"))
+
+    with pytest.raises(Exception) as foreign:
+        service.update_composition(first.client_recipe.id, [update_line(second.ingredients[0])])
+    assert "does not belong" in str(foreign.value)
+
+    service.deactivate(first.client_recipe.id)
+    with pytest.raises(Exception) as archived:
+        service.update_composition(first.client_recipe.id, [update_line(first.ingredients[0])])
+    assert "archived" in str(archived.value).lower()
+
+
+def test_update_composition_audit_failure_rolls_back(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    detail = service.create_from_recipe_version(draft(client.id, version.version.id))
+    service.audit = FailingAuditRepository()
+    with pytest.raises(RuntimeError):
+        service.update_composition(detail.client_recipe.id, [update_line(detail.ingredients[0], amount_value="70")])
+    reread = service.get_detail(detail.client_recipe.id)
+    assert [(str(i.amount_value), i.notes) for i in reread.ingredients] == [("80.00", "source water"), ("20.00", "source oil")]

@@ -70,3 +70,34 @@ class ClientRecipeIngredientDraft:
             raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "Позиция строки индивидуального рецепта должна быть положительным целым числом.", "position", str(position), "Укажите порядок строки: 1, 2, 3…"))
         unit = parse_unit(amount_unit, field="amount_unit", allowed=ALLOWED_RECIPE_AMOUNT_UNITS)
         return cls(require_positive_id(ingredient_id, field="ingredient_id", label="Компонент"), source_recipe_ingredient_id, position, normalize_optional_text(phase), positive_amount(amount_value, unit, field="amount_value"), unit, normalize_optional_text(personalization_note), normalize_optional_text(notes))
+
+
+@dataclass(frozen=True)
+class ClientRecipeIngredientUpdateDraft:
+    id: int | None
+    ingredient_id: int
+    position: int
+    phase: str
+    amount_value: Decimal
+    amount_unit: UnitCode
+    personalization_note: str = ""
+    notes: str = ""
+
+    @classmethod
+    def create(cls, *, id: int | None = None, ingredient_id: int | None, position: int, phase: str = "", amount_value: Decimal | int | str = "", amount_unit: UnitCode | str = UnitCode.GRAM, personalization_note: str | None = "", notes: str | None = "") -> "ClientRecipeIngredientUpdateDraft":
+        if id is not None:
+            id = require_positive_id(id, field="id", label="Строка индивидуального рецепта")
+        if not isinstance(position, int) or isinstance(position, bool) or position <= 0:
+            raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "Позиция строки индивидуального рецепта должна быть положительным целым числом.", "position", str(position), "Укажите порядок строки: 1, 2, 3…"))
+        unit = parse_unit(amount_unit, field="amount_unit", allowed=ALLOWED_RECIPE_AMOUNT_UNITS)
+        return cls(id, require_positive_id(ingredient_id, field="ingredient_id", label="Компонент"), position, normalize_optional_text(phase), positive_amount(amount_value, unit, field="amount_value"), unit, normalize_optional_text(personalization_note), normalize_optional_text(notes))
+
+
+def validate_client_recipe_update_lines(lines: list[ClientRecipeIngredientUpdateDraft]) -> None:
+    if not lines:
+        raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "В индивидуальном рецепте должна быть хотя бы одна строка состава.", "ingredients", "[]", "Добавьте минимум один компонент."))
+    seen_positions: set[int] = set()
+    for line in lines:
+        if line.position in seen_positions:
+            raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "Позиции строк индивидуального рецепта не должны повторяться.", "position", str(line.position), "Назначьте каждой строке уникальный порядок."))
+        seen_positions.add(line.position)
