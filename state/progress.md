@@ -252,3 +252,10 @@ PR16 - Ingredient catalog UI foundation
 - Update validation covers line ids, positive ingredient ids, unique positions, positive precise amounts, allowed units, inactive ingredient replacement, and archived ClientRecipe edits.
 - The replace operation is transactional and audited with `client_recipe.composition_updated`.
 - No frontend composition editor was implemented; that remains a later PR.
+
+## PR54 follow-up: inactive ClientRecipe line safety
+
+- Tightened ClientRecipe composition updates so inactive existing ingredient lines may only remain if their copied line data is unchanged.
+- Inactive existing lines may still be omitted from a full-replace payload to remove them.
+- Added duplicate existing line id validation for composition update payloads.
+- Source RecipeVersion rows, other ClientRecipes, and frontend UI remain unchanged.

@@ -90,8 +90,17 @@ class ClientRecipeService:
                     raise ClientRecipeIngredientLineOwnershipError("Client recipe ingredient line does not belong to this client recipe.")
             ingredient = self.ingredients.get_by_id(line.ingredient_id)
             keeps_existing_ingredient = existing_line is not None and existing_line.ingredient_id == line.ingredient_id
-            if not ingredient.is_active and not keeps_existing_ingredient:
-                raise ClientRecipeIngredientInactiveError("Ingredient is inactive.")
+            keeps_existing_line_unchanged = (
+                keeps_existing_ingredient
+                and existing_line.position == line.position
+                and existing_line.phase == line.phase
+                and existing_line.amount_value == line.amount_value
+                and existing_line.amount_unit == line.amount_unit
+                and existing_line.personalization_note == line.personalization_note
+                and existing_line.notes == line.notes
+            )
+            if not ingredient.is_active and not keeps_existing_line_unchanged:
+                raise ClientRecipeIngredientInactiveError("Inactive ingredient lines can only remain unchanged or be removed.")
             source_recipe_ingredient_id = existing_line.source_recipe_ingredient_id if keeps_existing_ingredient else None
             replacement_drafts.append(
                 ClientRecipeIngredientDraft.create(

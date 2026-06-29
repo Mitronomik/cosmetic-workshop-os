@@ -316,14 +316,58 @@ def test_update_composition_missing_and_inactive_ingredient_rules(tmp_path):
 
     archived = IngredientService(c).deactivate_ingredient(detail.ingredients[0].ingredient_id)
     assert archived.is_active is False
-    unchanged_existing = service.update_composition(detail.client_recipe.id, [update_line(detail.ingredients[0], amount_value="79"), update_line(detail.ingredients[1], amount_value="21")])
+    unchanged_existing = service.update_composition(detail.client_recipe.id, [update_line(detail.ingredients[0]), update_line(detail.ingredients[1], amount_value="21")])
     assert unchanged_existing.ingredients[0].source_recipe_ingredient_id == detail.ingredients[0].source_recipe_ingredient_id
+
+    with pytest.raises(Exception) as changed_inactive:
+        service.update_composition(detail.client_recipe.id, [update_line(unchanged_existing.ingredients[0], amount_value="79"), update_line(unchanged_existing.ingredients[1])])
+    assert "inactive" in str(changed_inactive.value).lower()
+
+    removed_inactive = service.update_composition(detail.client_recipe.id, [update_line(unchanged_existing.ingredients[1])])
+    assert [line.ingredient_id for line in removed_inactive.ingredients] == [unchanged_existing.ingredients[1].ingredient_id]
 
     new_ingredient = IngredientService(c).create_ingredient(IngredientDraft.create(name="Archived additive", category="active", default_unit="g"))
     IngredientService(c).deactivate_ingredient(new_ingredient.id)
     with pytest.raises(Exception) as inactive:
-        service.update_composition(detail.client_recipe.id, [update_line(unchanged_existing.ingredients[0], ingredient_id=new_ingredient.id)])
+        service.update_composition(removed_inactive.client_recipe.id, [update_line(removed_inactive.ingredients[0], ingredient_id=new_ingredient.id)])
     assert "inactive" in str(inactive.value).lower()
+
+
+@pytest.mark.parametrize("mutation", [
+    {"phase": "changed phase"},
+    {"amount_unit": "g"},
+    {"position": 3},
+    {"notes": "changed notes"},
+    {"personalization_note": "changed personalization"},
+])
+def test_update_composition_rejects_inactive_existing_line_metadata_changes(tmp_path, mutation):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    detail = service.create_from_recipe_version(draft(client.id, version.version.id))
+    IngredientService(c).deactivate_ingredient(detail.ingredients[0].ingredient_id)
+    before = [(i.ingredient_id, str(i.amount_value), i.amount_unit.value, i.position, i.phase, i.personalization_note, i.notes) for i in detail.ingredients]
+
+    with pytest.raises(Exception) as inactive:
+        service.update_composition(detail.client_recipe.id, [update_line(detail.ingredients[0], **mutation), update_line(detail.ingredients[1])])
+
+    assert "inactive" in str(inactive.value).lower()
+    reread = service.get_detail(detail.client_recipe.id)
+    assert [(i.ingredient_id, str(i.amount_value), i.amount_unit.value, i.position, i.phase, i.personalization_note, i.notes) for i in reread.ingredients] == before
+
+
+def test_update_composition_rejects_duplicate_existing_line_ids(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    detail = service.create_from_recipe_version(draft(client.id, version.version.id))
+    before = [(i.id, str(i.amount_value), i.position) for i in detail.ingredients]
+
+    with pytest.raises(DomainValidationError):
+        service.update_composition(detail.client_recipe.id, [update_line(detail.ingredients[0]), update_line(detail.ingredients[0], position=2, amount_value="20")])
+
+    after = [(i.id, str(i.amount_value), i.position) for i in service.get_detail(detail.client_recipe.id).ingredients]
+    assert after == before
 
 
 def test_update_composition_rejects_archived_recipe_and_foreign_line_id(tmp_path):

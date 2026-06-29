@@ -97,7 +97,12 @@ def validate_client_recipe_update_lines(lines: list[ClientRecipeIngredientUpdate
     if not lines:
         raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "В индивидуальном рецепте должна быть хотя бы одна строка состава.", "ingredients", "[]", "Добавьте минимум один компонент."))
     seen_positions: set[int] = set()
+    seen_ids: set[int] = set()
     for line in lines:
+        if line.id is not None:
+            if line.id in seen_ids:
+                raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "Одна и та же строка индивидуального рецепта не должна повторяться в составе.", "id", str(line.id), "Оставьте каждую существующую строку в списке только один раз."))
+            seen_ids.add(line.id)
         if line.position in seen_positions:
             raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "Позиции строк индивидуального рецепта не должны повторяться.", "position", str(line.position), "Назначьте каждой строке уникальный порядок."))
         seen_positions.add(line.position)
