@@ -27,6 +27,30 @@ class ClientRecipeCreateRequest(BaseModel):
         return value
 
 
+class ClientRecipeIngredientUpdateRequest(BaseModel):
+    id: int | None = None
+    ingredient_id: int | None = None
+    position: int
+    phase: str = ""
+    amount_value: Decimal | int | str
+    amount_unit: UnitCode
+    personalization_note: str = ""
+    notes: str = ""
+    model_config = ConfigDict(use_enum_values=False, extra="forbid")
+
+    @field_validator("amount_value", mode="before")
+    @classmethod
+    def reject_float_amount(cls, value):
+        if isinstance(value, float):
+            raise ValueError("amount_value must be sent as a string, integer, or Decimal; float is not allowed.")
+        return value
+
+
+class ClientRecipeIngredientsUpdateRequest(BaseModel):
+    ingredients: list[ClientRecipeIngredientUpdateRequest]
+    model_config = ConfigDict(extra="forbid")
+
+
 class ClientRecipeResponse(BaseModel):
     id: int
     client_id: int

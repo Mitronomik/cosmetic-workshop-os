@@ -1,14 +1,14 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.domain.client_recipes import ClientRecipeDraft
+from app.domain.client_recipes import ClientRecipeDraft, ClientRecipeIngredientUpdateDraft
 from app.domain.errors import DomainValidationError
 from app.models.client_recipe import ClientRecipe, ClientRecipeDetail, ClientRecipeIngredient
 from app.repositories.client_recipes import ClientRecipeNotFoundError
 from app.repositories.clients import ClientNotFoundError
 from app.repositories.ingredients import IngredientNotFoundError
 from app.repositories.recipes import RecipeVersionNotFoundError
-from app.schemas.client_recipes import ClientRecipeCreateRequest, ClientRecipeDetailResponse, ClientRecipeIngredientResponse, ClientRecipeResponse, ClientRecipesResponse
-from app.services.client_recipes import ClientInactiveError, ClientRecipeIngredientInactiveError, ClientRecipeService, SourceRecipeVersionEmptyError
+from app.schemas.client_recipes import ClientRecipeCreateRequest, ClientRecipeDetailResponse, ClientRecipeIngredientResponse, ClientRecipeIngredientsUpdateRequest, ClientRecipeResponse, ClientRecipesResponse
+from app.services.client_recipes import ClientInactiveError, ClientRecipeArchivedError, ClientRecipeIngredientInactiveError, ClientRecipeIngredientLineOwnershipError, ClientRecipeService, SourceRecipeVersionEmptyError
 
 router = APIRouter(tags=["client-recipes"])
 
@@ -43,6 +43,23 @@ def get_client_recipe(client_recipe_id: int):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
     except ClientRecipeNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client recipe was not found.") from exc
+
+
+@router.put("/client-recipes/{client_recipe_id}/ingredients", response_model=ClientRecipeDetailResponse)
+def update_client_recipe_ingredients(client_recipe_id: int, payload: ClientRecipeIngredientsUpdateRequest):
+    try:
+        drafts = [ClientRecipeIngredientUpdateDraft.create(**line.model_dump()) for line in payload.ingredients]
+        return _detail(ClientRecipeService().update_composition(client_recipe_id, drafts))
+    except DomainValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
+    except ClientRecipeNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client recipe was not found.") from exc
+    except IngredientNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Ingredient was not found.") from exc
+    except (ClientRecipeArchivedError, ClientRecipeIngredientInactiveError) as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ClientRecipeIngredientLineOwnershipError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 @router.get("/clients/{client_id}/recipes", response_model=ClientRecipesResponse)

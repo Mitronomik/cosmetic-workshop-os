@@ -49,6 +49,32 @@ class ClientRecipeRepository:
             rows = c.execute("SELECT * FROM client_recipe_ingredients WHERE client_recipe_id=? ORDER BY position, id", (client_recipe_id,)).fetchall()
         return ClientRecipeDetail(client_recipe=_recipe(row), ingredients=[_ingredient(r) for r in rows])
 
+
+    def list_ingredient_lines(self, client_recipe_id: int, *, connection: sqlite3.Connection | None = None) -> list[ClientRecipeIngredient]:
+        with _scope(self.config, connection) as c:
+            rows = c.execute("SELECT * FROM client_recipe_ingredients WHERE client_recipe_id=? ORDER BY position, id", (client_recipe_id,)).fetchall()
+        return [_ingredient(r) for r in rows]
+
+    def replace_ingredient_lines(self, client_recipe_id: int, drafts: list[ClientRecipeIngredientDraft], *, connection: sqlite3.Connection | None = None) -> list[ClientRecipeIngredient]:
+        with _scope(self.config, connection) as c:
+            exists = c.execute("SELECT id FROM client_recipes WHERE id=?", (client_recipe_id,)).fetchone()
+            if exists is None:
+                raise ClientRecipeNotFoundError(f"Client recipe {client_recipe_id} was not found.")
+            c.execute("DELETE FROM client_recipe_ingredients WHERE client_recipe_id=?", (client_recipe_id,))
+            inserted: list[ClientRecipeIngredient] = []
+            for draft in drafts:
+                cur = c.execute(
+                    """
+                    INSERT INTO client_recipe_ingredients (client_recipe_id, ingredient_id, source_recipe_ingredient_id, position, phase, amount_value, amount_unit, personalization_note, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (client_recipe_id, draft.ingredient_id, draft.source_recipe_ingredient_id, draft.position, draft.phase, str(draft.amount_value), draft.amount_unit.value, draft.personalization_note, draft.notes),
+                )
+                row = c.execute("SELECT * FROM client_recipe_ingredients WHERE id=?", (cur.lastrowid,)).fetchone()
+                inserted.append(_ingredient(row))
+            c.execute("UPDATE client_recipes SET updated_at=CURRENT_TIMESTAMP WHERE id=?", (client_recipe_id,))
+        return inserted
+
     def list_recipes(self, *, include_inactive: bool = True) -> list[ClientRecipe]:
         with session(self.config) as c:
             if include_inactive:
