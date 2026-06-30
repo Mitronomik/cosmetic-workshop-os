@@ -25,6 +25,7 @@ CURRENT_ALLOWED_TABLES = {
     "production_batch_ingredients",
     "production_batch_packaging",
     "alerts",
+    "purchase_suggestions",
     "sqlite_sequence",
 }
 

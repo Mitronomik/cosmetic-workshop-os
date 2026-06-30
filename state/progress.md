@@ -376,3 +376,11 @@ After PR61 — preparing production readiness foundation
 - Updated dashboard copy to list Alerts as available.
 - No backend behavior, migrations, alert rules, purchase suggestions, notifications, scheduler, polling, or dashboard analytics were added.
 - Next recommended PR: purchase suggestions backend foundation.
+
+## PR69 — Purchase suggestions backend foundation
+- Added `purchase_suggestions` persistence with generated-key uniqueness and table guard coverage.
+- Added backend domain/model/schema/repository/service/API layers for purchase suggestions.
+- Added deterministic explicit generation for low ingredient stock, low packaging stock, insufficient order ingredients, and insufficient order packaging.
+- Added manual suggestion creation, limited open-suggestion updates, mark purchased, and dismiss endpoints.
+- Preserved read-only safety: generation and mark-purchased do not mutate stock movements, packaging movements, ingredient lots, orders, production batches, alerts, clients, recipes, ingredients, or packaging items.
+- Updated `docs/api.md`, `state/current-focus.md`, and `state/handoff.md` for PR69.

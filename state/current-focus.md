@@ -1,5 +1,5 @@
 # Current Focus
 
-PR68 is complete: frontend Alerts workspace.
+PR69 — Purchase suggestions backend foundation is implemented in this working tree.
 
-Next allowed work should be purchase suggestions backend foundation if explicitly requested. Keep automatic notifications/schedulers, polling, dashboard analytics, procurement automation, stock/order/production mutations outside alert resolve/dismiss, import/export, backup UI, cloud, mobile, auth/roles, and advanced analytics out of scope unless explicitly requested.
+Next allowed task after review/merge: add a frontend workspace for purchase suggestions, or continue with the next roadmap-scoped slice explicitly requested by the human. Do not add supplier integration, online ordering, schedulers, polling, notifications, import/export, cloud, auth, or analytics without a new explicit task.
