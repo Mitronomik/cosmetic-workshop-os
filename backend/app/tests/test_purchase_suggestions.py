@@ -90,6 +90,44 @@ def test_low_stock_and_order_shortages_generate_suggestions_and_quantities(tmp_p
     assert keys[f"insufficient_for_order:packaging:{packaging.id}:order:{order.id}"].recommended_quantity == "1"
 
 
+def test_invalid_zero_and_negative_minimum_stock_values_are_ignored(tmp_path):
+    c = config(tmp_path)
+    _, ingredient, _, packaging, _ = seed_ready(c, lot_qty="60", packaging_qty="2")
+    invalid_values = ("not-a-number", "", "0", "-5")
+
+    for value in invalid_values:
+        with sqlite3.connect(c.path) as con:
+            con.execute("UPDATE purchase_suggestions SET status='archived' WHERE status='open'")
+            con.execute("UPDATE ingredients SET minimum_stock=? WHERE id=?", (value, ingredient.id))
+            con.execute("UPDATE packaging_items SET minimum_stock=? WHERE id=?", (value, packaging.id))
+
+        result = PurchaseSuggestionGenerationService(c).regenerate_suggestions()
+
+        assert result.created_count == 0
+        assert not PurchaseSuggestionRepository(c).list_suggestions(
+            status="open",
+            reason="below_minimum_stock",
+        )
+
+
+def test_valid_minimum_stock_still_generates_below_minimum_suggestions(tmp_path):
+    c = config(tmp_path)
+    _, ingredient, _, packaging, _ = seed_ready(c, lot_qty="10", packaging_qty="2")
+    set_thresholds(c, ingredient.id, packaging.id, ingredient_min="15", packaging_min="3")
+
+    PurchaseSuggestionGenerationService(c).regenerate_suggestions()
+    suggestions = {
+        (suggestion.item_type, suggestion.item_id): suggestion
+        for suggestion in PurchaseSuggestionRepository(c).list_suggestions(
+            status="open",
+            reason="below_minimum_stock",
+        )
+    }
+
+    assert suggestions[("ingredient", ingredient.id)].recommended_quantity == "5"
+    assert suggestions[("packaging", packaging.id)].recommended_quantity == "1"
+
+
 def test_terminal_orders_do_not_create_order_based_suggestions(tmp_path):
     c = config(tmp_path)
     for status in ("produced", "delivered", "cancelled", "archived"):
@@ -183,7 +221,12 @@ def test_manual_api_smoke(tmp_path, monkeypatch):
     open_rows = client.get("/api/purchase-suggestions").json()["purchase_suggestions"]
     assert open_rows
     sid = open_rows[0]["id"]
+    stock_count_before = scalar(c, "SELECT COUNT(*) FROM stock_movements")
+    packaging_stock_count_before = scalar(c, "SELECT COUNT(*) FROM packaging_stock_movements")
+    lot_count_before = scalar(c, "SELECT COUNT(*) FROM ingredient_lots")
     assert client.post(f"/api/purchase-suggestions/{sid}/mark-purchased").json()["status"] == "purchased"
     assert all(row["id"] != sid for row in client.get("/api/purchase-suggestions").json()["purchase_suggestions"])
     assert any(row["id"] == sid for row in client.get("/api/purchase-suggestions?status=all").json()["purchase_suggestions"])
-    assert scalar(c, "SELECT COUNT(*) FROM stock_movements WHERE movement_type='receipt'") == 1
+    assert scalar(c, "SELECT COUNT(*) FROM stock_movements") == stock_count_before
+    assert scalar(c, "SELECT COUNT(*) FROM packaging_stock_movements") == packaging_stock_count_before
+    assert scalar(c, "SELECT COUNT(*) FROM ingredient_lots") == lot_count_before

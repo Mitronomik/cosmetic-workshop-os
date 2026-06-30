@@ -58,7 +58,9 @@ class PurchaseSuggestionGenerationService:
         result=[]
         for row in rows:
             available = balances.get(row["id"], Decimal("0"))
-            minimum = Decimal(row["minimum_stock"])
+            minimum = _optional_positive_decimal(row["minimum_stock"])
+            if minimum is None:
+                continue
             if available < minimum:
                 missing = minimum - available
                 unit = units.get(row["id"], row["default_unit"])
@@ -76,7 +78,10 @@ class PurchaseSuggestionGenerationService:
             rows = c.execute("SELECT id, name, unit, minimum_stock FROM packaging_items WHERE is_active=1 AND minimum_stock IS NOT NULL ORDER BY id").fetchall()
         result=[]
         for row in rows:
-            available = balances.get(row["id"], Decimal("0")); minimum = Decimal(row["minimum_stock"])
+            available = balances.get(row["id"], Decimal("0"))
+            minimum = _optional_positive_decimal(row["minimum_stock"])
+            if minimum is None:
+                continue
             if available < minimum:
                 missing = minimum - available
                 result.append(PurchaseSuggestionCandidate(
@@ -157,6 +162,14 @@ def _positive_quantity(value) -> Decimal:
     if qty <= 0:
         raise PurchaseSuggestionValidationError("Количество должно быть больше нуля.")
     return qty
+
+
+def _optional_positive_decimal(value) -> Decimal | None:
+    try:
+        parsed = Decimal(str(value))
+    except Exception:
+        return None
+    return parsed if parsed > 0 else None
 
 
 def _unit(value: str) -> str:
