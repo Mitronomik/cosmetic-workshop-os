@@ -911,6 +911,7 @@ function dismissPurchaseSuggestionFromCard(id: number) { purchaseSuggestionsStat
 
 function loadDashboard(force = false) {
   if (!force && (dashboardState.status === 'loading' || dashboardState.status === 'ready')) return;
+  const hadDataBeforeLoad = dashboardHasData();
   dashboardState.status = 'loading';
   dashboardState.error = '';
   dashboardState.message = '';
@@ -935,19 +936,28 @@ function loadDashboard(force = false) {
     render();
   }).catch(() => {
     dashboardState.status = 'error';
-    dashboardState.error = 'Не удалось загрузить обзор мастерской. Проверьте, что локальное приложение запущено, и попробуйте снова.';
+    dashboardState.error = hadDataBeforeLoad ? 'Не удалось обновить обзор. Показываем последние загруженные данные.' : 'Не удалось загрузить обзор мастерской. Проверьте, что локальное приложение запущено, и попробуйте снова.';
+    dashboardState.message = '';
     render();
   });
 }
 
 function dashboardPage() {
-  const activeOrders = dashboardActiveOrders();
+  const canShowOverview = dashboardCanShowOverview();
+  const activeOrders = canShowOverview ? dashboardActiveOrders() : [];
   const waitingOrders = activeOrders.filter((order) => order.status === 'waiting_for_materials');
   const readyOrders = activeOrders.filter((order) => order.status === 'ready_to_produce');
-  const recentBatches = dashboardState.productionBatches.slice(0, 3);
-  return `<div class="dashboard-layout"><section class="card data-card dashboard-hero"><div><p class="card-kicker">Сегодня в мастерской</p><h2>Сегодня в мастерской</h2><p>Короткий обзор того, что требует внимания: заказы, алерты, закупки и последние партии.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-dashboard">Обновить обзор</button></div></section>${onboardingCard()}${dashboardState.status === 'error' ? dashboardErrorCard() : ''}${dashboardState.message ? `<p class="page-message">${escapeHtml(dashboardState.message)}</p>` : ''}${dashboardState.status === 'loading' ? '<section class="card"><p>Загружаем обзор мастерской…</p></section>' : ''}${dashboardState.status !== 'error' ? `${dashboardPriorityCards(activeOrders, waitingOrders, readyOrders, recentBatches)}${dashboardNextActions(waitingOrders, readyOrders)}<div class="dashboard-columns">${dashboardOrdersBlock(activeOrders)}${dashboardAlertsBlock()}${dashboardPurchaseBlock()}${dashboardProductionBlock(recentBatches)}${dashboardQuickActions()}${dashboardBackupReminder()}</div>` : ''}</div>`;
+  const recentBatches = canShowOverview ? dashboardState.productionBatches.slice(0, 3) : [];
+  return `<div class="dashboard-layout">${dashboardHeader()}${onboardingCard()}${dashboardState.status === 'loading' && !canShowOverview ? dashboardLoadingCard() : ''}${dashboardState.status === 'error' && !canShowOverview ? dashboardErrorCard() : ''}${dashboardState.status === 'error' && canShowOverview ? dashboardSoftErrorMessage() : ''}${dashboardState.status === 'loading' && canShowOverview ? dashboardRefreshingMessage() : ''}${dashboardState.message ? dashboardMessage() : ''}${canShowOverview ? `${dashboardPriorityCards(activeOrders, waitingOrders, readyOrders, recentBatches)}${dashboardNextActions(waitingOrders, readyOrders)}<div class="dashboard-columns">${dashboardOrdersBlock(activeOrders)}${dashboardAlertsBlock()}${dashboardPurchaseBlock()}${dashboardProductionBlock(recentBatches)}${dashboardQuickActions()}${dashboardBackupReminder()}</div>` : ''}</div>`;
 }
 
+function dashboardHeader() { const isLoading = dashboardState.status === 'loading'; return `<section class="card data-card dashboard-hero"><div><p class="card-kicker">Сегодня в мастерской</p><h2>Сегодня в мастерской</h2><p>Короткий обзор того, что требует внимания: заказы, алерты, закупки и последние партии.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-dashboard" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить обзор'}</button></div></section>`; }
+function dashboardHasData() { return dashboardState.orders.length > 0 || dashboardState.clients.length > 0 || dashboardState.alerts.length > 0 || dashboardState.purchaseSuggestions.length > 0 || dashboardState.productionBatches.length > 0; }
+function dashboardCanShowOverview() { return dashboardState.status === 'ready' || (dashboardState.status === 'loading' && dashboardHasData()) || (dashboardState.status === 'error' && dashboardHasData()); }
+function dashboardLoadingCard() { return '<section class="card"><p>Загружаем обзор мастерской…</p></section>'; }
+function dashboardMessage() { return `<p class="page-message">${escapeHtml(dashboardState.message)}</p>`; }
+function dashboardRefreshingMessage() { return '<p class="page-message">Обновляем обзор…</p>'; }
+function dashboardSoftErrorMessage() { return `<p class="page-message error-message">${escapeHtml(dashboardState.error || 'Не удалось обновить обзор. Показываем последние загруженные данные.')}</p>`; }
 function dashboardErrorCard() { return `<section class="card error-card"><h2>Не удалось загрузить обзор мастерской</h2><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-dashboard">Повторить</button></div></section>`; }
 function dashboardActiveOrders() { return dashboardState.orders.filter((order) => order.is_active && !['cancelled', 'archived', 'delivered'].includes(order.status)); }
 function dashboardPriorityCards(activeOrders: Order[], waitingOrders: Order[], readyOrders: Order[], recentBatches: ProductionBatchListItem[]) { const cards = [['Активные заказы', activeOrders.length], ['Ждут материалов', waitingOrders.length], ['Готовы к производству', readyOrders.length], ['Открытые алерты', dashboardState.alerts.length], ['Купить', dashboardState.purchaseSuggestions.length], ['Последние партии', recentBatches.length]]; return `<section class="overview-grid">${cards.map(([label, value]) => `<div class="metric-card"><span>${escapeHtml(String(label))}</span><strong>${value}</strong></div>`).join('')}</section>`; }

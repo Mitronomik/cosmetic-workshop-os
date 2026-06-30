@@ -13,6 +13,7 @@ Dashboard frontend now includes:
 - `/` route with “Сегодня в мастерской” operational overview;
 - onboarding checklist preserved on the dashboard;
 - frontend-only aggregation over existing APIs/helpers for orders, clients, open alerts, open purchase suggestions, and production batches;
+- production-safe loading behavior: the first load shows only the loading state until real dashboard data arrives, manual refresh keeps the previous snapshot visible, and failed refreshes show a soft stale-data message;
 - priority cards for active orders, orders waiting for materials, orders ready to produce, open alerts, open purchase suggestions, and recent production;
 - “Что сделать сегодня” guidance based on existing alert severity, order statuses, and open purchase suggestions;
 - active orders, alerts, purchase suggestions, and recent production sections with compact card rows and empty states;
@@ -23,7 +24,7 @@ Dashboard frontend now includes:
 
 - PR71 is frontend-only and does not add a `GET /api/dashboard` endpoint.
 - No backend behavior, migrations, analytics, charts, scheduler, polling, notifications, backup/export implementation, import/export, supplier/procurement automation, stock movement creation, IngredientLot creation, packaging inbound movement, order mutation, production mutation, alert mutation, or purchase suggestion mutation were added.
-- Dashboard refresh only reloads existing GET data.
+- Dashboard refresh only reloads existing GET data and keeps previously loaded data visible while a manual refresh is in progress.
 - Dashboard does not call alert regeneration, purchase suggestion regeneration, production readiness checks, production confirmation, backup, import, or export endpoints.
 - Dashboard does not calculate inventory shortages, production readiness, purchase suggestions, tax, margin, or stock write-off.
 
@@ -48,22 +49,15 @@ Next recommended PR: Backup/export UI foundation or Backup/export backend/fronte
 
 ## Manual smoke
 
-Browser smoke was not run in this non-interactive terminal session. Recommended manual smoke checklist for PR71:
+Browser smoke was not run in this non-interactive terminal session. Recommended manual smoke checklist for PR71 follow-up:
 
 1. Start backend and frontend.
-2. Open `/`.
-3. Confirm dashboard loads without crash.
-4. Confirm onboarding checklist is still visible.
-5. Confirm priority cards render.
-6. Confirm active orders block renders empty state or real orders.
-7. Confirm alerts block renders empty state or open alerts.
-8. Confirm purchase suggestions block renders empty state or open suggestions.
-9. Confirm recent production block renders empty state or recent batches.
-10. Click “Обновить обзор” and confirm it reloads dashboard GET data only.
-11. Confirm dashboard does not regenerate alerts.
-12. Confirm dashboard does not regenerate purchase suggestions.
-13. Confirm dashboard does not run production readiness checks.
-14. Confirm dashboard does not mutate orders, stock, alerts, purchase suggestions, production, lots, or packaging.
-15. Click quick actions and confirm navigation works for `/orders`, `/alerts`, `/purchase-suggestions`, `/production`, `/ingredients`, `/ingredient-lots`, and `/packaging-items`.
-16. Confirm backup reminder does not pretend backup/export is implemented.
-17. Refresh page and confirm dashboard loads again.
+2. Open `/` with backend running.
+3. Confirm first load shows “Загружаем обзор мастерской…” before dashboard data and does not show fake zero metric cards.
+4. Confirm dashboard overview appears after data loads.
+5. Click “Обновить обзор”.
+6. Confirm previous data remains visible while reloading and the reload button shows “Обновляем…”.
+7. Stop backend or simulate failed reload.
+8. Confirm previous data remains visible with the soft message: “Не удалось обновить обзор. Показываем последние загруженные данные.”
+9. Confirm no alert/purchase regeneration occurs.
+10. Confirm no readiness/production/backup/import actions occur.

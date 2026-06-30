@@ -398,5 +398,6 @@ After PR61 — preparing production readiness foundation
 - Dashboard uses existing APIs and frontend aggregation for orders, clients, open alerts, open purchase suggestions, and recent production batches.
 - Added onboarding, priority cards, “Что сделать сегодня” guidance, active orders, alerts, purchase suggestions, recent production, quick actions, and backup reminder blocks.
 - Dashboard reload only repeats existing GET data; it does not regenerate alerts or purchase suggestions and does not run production readiness checks.
+- Follow-up hardened dashboard loading so initial load does not show fake empty metrics, manual reload keeps stale data visible, and failed refresh shows a soft stale-data message.
 - No backend endpoint, migration, analytics, scheduler, polling, notifications, backup/export, import/export, stock/order/production mutations, or procurement automation were added.
 - Next recommended PR: Backup/export UI foundation or Backup/export backend/frontend foundation depending on existing backup/export state.
