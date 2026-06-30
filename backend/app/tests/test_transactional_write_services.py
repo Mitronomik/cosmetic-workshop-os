@@ -4,6 +4,7 @@ import sqlite3
 import pytest
 
 from app.db.config import DatabaseConfig
+from app.db.migrations import expected_migration_ids
 from app.domain.errors import DomainValidationError
 from app.domain.ingredient_lots import IngredientLotDraft
 from app.domain.ingredients import IngredientDraft
@@ -227,4 +228,6 @@ def test_no_new_business_tables_or_migrations_for_transaction_foundation(tmp_pat
     tables = table_names(config)
     assert_only_current_tables(tables)
     assert_no_forbidden_future_tables(tables)
-    assert scalar(config, "SELECT count(*) FROM schema_migrations") == 10
+    expected = expected_migration_ids()
+    assert "0011_client_wishes_feedback" in expected
+    assert scalar(config, "SELECT count(*) FROM schema_migrations") == len(expected)
