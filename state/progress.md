@@ -340,3 +340,9 @@ After PR61 — preparing production readiness foundation
 - Displayed readiness summary, blocking issues, warnings, ingredient requirements, backend-selected FEFO lots, packaging availability, and optional estimates.
 - Null tax/margin/cost values are shown as `Не рассчитано`; the frontend does not invent tax settings or calculate margin itself.
 - Preserved production boundary: no production confirmation, no stock write-off, no packaging write-off, no lot reservation, no production batches, and no order lifecycle mutation.
+
+## PR64 — Production confirmation backend foundation
+- Added transactional backend production confirmation through `POST /api/orders/{order_id}/produce`.
+- Added `production_batches`, `production_batch_ingredients`, and `production_batch_packaging` tables for historical production snapshots.
+- Production confirmation now requires `confirm=true`, reuses backend Production Readiness, rejects lifecycle/readiness conflicts, writes off ingredient lots and packaging through movement records, marks the order `produced`, sets `produced_at`, and writes a safe audit log in the same transaction.
+- Tax, margin, and margin percent remain null; no hidden tax rate or frontend production UI was added.

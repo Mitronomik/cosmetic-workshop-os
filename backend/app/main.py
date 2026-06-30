@@ -16,6 +16,7 @@ from app.api.orders import router as orders_router
 from app.api.packaging_items import router as packaging_items_router
 from app.api.packaging_stock_movements import router as packaging_stock_movements_router
 from app.api.production_readiness import router as production_readiness_router
+from app.api.production_confirmation import router as production_confirmation_router
 from app.api.recipes import router as recipes_router
 from app.api.settings import router as settings_router
 from app.api.stock_movements import router as stock_movements_router
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(client_wishes_feedback_router, prefix="/api")
     app.include_router(orders_router, prefix="/api")
     app.include_router(production_readiness_router, prefix="/api")
+    app.include_router(production_confirmation_router, prefix="/api")
     app.include_router(onboarding_router, prefix="/api")
     return app
 

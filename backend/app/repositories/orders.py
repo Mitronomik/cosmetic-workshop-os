@@ -69,6 +69,14 @@ class OrderRepository:
             row=c.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
         return _order(row)
 
+    def mark_produced(self, order_id: int, *, connection: sqlite3.Connection | None = None) -> Order:
+        with _scope(self.config, connection) as c:
+            cur = c.execute("UPDATE orders SET status='produced', produced_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?", (order_id,))
+            if cur.rowcount == 0:
+                raise OrderNotFoundError(f"Order {order_id} was not found.")
+            row = c.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone()
+        return _order(row)
+
 
 def _values(d: OrderDraft):
     return (d.client_id, d.recipe_version_id, d.client_recipe_id, d.product_name, str(d.target_batch_size_value), d.target_batch_size_unit.value, d.packaging_item_id, None if d.packaging_quantity is None else str(d.packaging_quantity), d.status.value, None if d.sale_price is None else str(d.sale_price), d.ordered_at, d.planned_production_at, d.produced_at, d.delivered_at, d.notes)

@@ -1,19 +1,18 @@
 # Current Focus
 
-## Status
+PR64 is ready for review: backend production confirmation is implemented.
 
-PR63 — Production readiness UI is implemented and ready for review.
+Implemented scope:
 
-## Completed in PR63
+- `POST /api/orders/{order_id}/produce` with explicit `confirm=true` requirement.
+- Transactional production batch persistence and ingredient/package stock write-off.
+- Readiness re-check before writes.
+- Lifecycle guards for cancelled, archived/inactive, delivered, already produced, and already batched orders.
+- Historical snapshots for ingredient lots and packaging.
+- API documentation and backend tests for production confirmation.
 
-- Added a read-only `Проверить изготовление` action in the Orders detail view for active orders.
-- The frontend calls the existing PR62 endpoint: `POST /api/orders/{order_id}/check-production-readiness`.
-- The Orders workspace displays readiness summary, blocking issues, warnings, ingredient needs, FEFO-selected lots, packaging availability, and optional cost/tax/margin estimates from the backend response.
-- The UI clearly states that the check does not write off stock, reserve lots, create production batches, or change order status.
-- Cancelled, archived, or inactive orders do not expose the readiness action and show a safe read-only message.
+Next recommended task:
 
-## Next recommended task
+- Add the frontend production confirmation UI as a separate scoped PR, using the existing read-only readiness panel and the new backend confirmation endpoint.
 
-Next roadmap step: production confirmation backend foundation as a separate scoped PR.
-
-The next PR may add `ProductionBatch` persistence, explicit user confirmation, transactional ingredient/packaging stock write-off, order lifecycle transition, and audit logging only if requested. Keep alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.
+Keep alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, roles, partial production, production undo/reversal, and lot override UI out of scope unless explicitly requested.
