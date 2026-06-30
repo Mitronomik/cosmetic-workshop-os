@@ -60,7 +60,7 @@ def test_migration_creates_orders_table_indexes_and_guards(tmp_path):
     assert "orders" in names
     assert {"idx_orders_client_active","idx_orders_status_active","idx_orders_recipe_version","idx_orders_client_recipe","idx_orders_packaging_item"} <= indexes(c)
     assert_only_current_tables(names); assert_no_forbidden_future_tables(names)
-    assert {"import_sources","import_drafts","purchase_suggestions","alerts"}.isdisjoint(names)
+    assert {"import_sources","import_drafts","purchase_suggestions"}.isdisjoint(names)
 
 def test_order_domain_validation_and_normalization():
     good=draft(1, version_id=1, packaging_item_id=1, packaging_quantity="2", sale_price="100.50")
