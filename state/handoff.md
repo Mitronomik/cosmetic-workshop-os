@@ -48,4 +48,4 @@ Next recommended PR: Dashboard operational overview.
 
 ## Manual smoke
 
-Browser smoke was not run in this non-interactive terminal session. Recommended manual smoke: open `/purchase-suggestions`, confirm default open filter, regenerate explicitly, filter/search, add manual ingredient/packaging suggestions, edit open suggestions, mark one purchased, verify it disappears from default open list, switch to all, and verify closed suggestions are non-actionable.
+Browser smoke was not run in this non-interactive terminal session. Recommended manual smoke: open `/purchase-suggestions`, confirm default open filter, regenerate explicitly, filter/search, add manual ingredient/packaging suggestions, switch manual item type and verify quantity/notes/custom unit are preserved while selected item resets, edit open suggestions, mark one purchased, verify it disappears from default open list, switch to all, and verify closed suggestions are non-actionable.
