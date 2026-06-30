@@ -96,7 +96,6 @@ def test_enough_stock_fefo_costs_and_read_only_guarantee(tmp_path):
     assert result.estimated_tax is None and result.estimated_margin is None
     assert any(issue.code == "tax_rate_missing" for issue in result.warnings)
     assert snapshot(c, order.id) == before
-    assert "production_batches" not in table_names(c)
     assert_no_forbidden_future_tables(table_names(c))
 
 

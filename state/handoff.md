@@ -2,43 +2,46 @@
 
 ## Last completed work
 
-PR63 is complete: the Orders frontend now exposes the existing read-only Production Readiness check to the user.
+PR64 is complete: backend production confirmation foundation has been added.
 
-## Current repo state after PR63
+## Current repo state after PR64
 
-Completed foundations include local-first backend/API persistence, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, Orders backend/UI foundations, backend Production Readiness foundation, and Orders readiness UI.
+Completed foundations include local-first backend/API persistence, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, Orders backend/UI foundations, backend Production Readiness, Orders readiness UI, and backend Production Confirmation.
 
-Production readiness now includes:
+Production confirmation now includes:
 
-- `POST /api/orders/{order_id}/check-production-readiness` on the backend;
-- a `Проверить изготовление` button in active order details;
-- frontend in-memory readiness state per order;
-- human-readable summary for ready/warning/blocked results;
-- blocking issue and warning sections using backend messages;
-- ingredient requirement table with required, available, missing, fulfillment status, and backend-selected FEFO lots;
-- packaging availability table or a clear no-packaging-needed message;
-- optional estimated cost, tax, and margin display, with null values shown as `Не рассчитано`;
-- safety copy that the check does not write off stock, reserve lots, create production batches, or mutate order status.
-
-The readiness UI intentionally does not calculate ingredient availability, select lots, calculate tax/margin, create stock movements, create packaging movements, create production batches, reserve lots, or mutate order lifecycle state.
+- `POST /api/orders/{order_id}/produce`;
+- explicit `confirm=true` request validation;
+- transactional `ProductionConfirmationService`;
+- readiness re-check through `ProductionReadinessService` before any write;
+- `ProductionBatch`, `ProductionBatchIngredient`, and `ProductionBatchPackaging` persistence;
+- historical snapshots of selected ingredient lots and packaging costs/names;
+- ingredient lot write-offs through `stock_movements`;
+- packaging write-offs through `packaging_stock_movements`;
+- order status transition to `produced` with `produced_at` set;
+- safe audit entry for production confirmation;
+- rollback on failures so no partial batch, movement, or order status update remains.
 
 ## Important decisions
 
 - MVP remains local-first and API-first.
-- Frontend displays backend readiness results and does not duplicate production-readiness business logic.
-- Readiness remains a read-only workflow; production confirmation is still a future explicit step.
-- Tax/margin remain backend-owned. The frontend shows `Не рассчитано` for null estimates and relies on backend warnings for the reason.
+- Production confirmation logic lives in backend services, not frontend.
+- Production readiness remains read-only.
+- Production confirmation does not introduce hidden tax assumptions: tax, margin, and margin percent remain null.
+- Existing stock movement trace fields are used for ingredient production write-offs (`reference_type=production_batch`, `reference_id=<batch id>`); packaging write-offs currently store trace context in movement notes because the existing packaging movement schema has no reference fields.
+- No frontend production confirmation UI was added.
 
 ## Known testing limitations
 
-- Manual browser smoke was not run in this non-interactive environment.
-- FastAPI `TestClient` tests may skip automatically if the installed Starlette/httpx combination is unavailable in the environment.
+- FastAPI TestClient tests skip automatically in production confirmation/readiness/order tests when the installed Starlette/httpx combination is unavailable.
+- Existing `test_stock_movements.py` still imports TestClient inside the test and fails in this environment because `httpx` is not installed; this pre-existing environment limitation was not changed in PR64.
+- Manual browser smoke was not run because this PR is backend-only and the environment is non-interactive.
 
 ## Next recommended task
 
-Production confirmation backend foundation as a new scoped PR: add explicit confirmation, `ProductionBatch` persistence, transactional ingredient/packaging stock write-off, order lifecycle transition, and audit logging only if requested.
+Frontend production confirmation UI as a new scoped PR: add an explicit confirmation action in Orders that calls `POST /api/orders/{order_id}/produce`, refreshes the order/readiness state, and clearly explains that stock will be written off only after confirmation.
 
-Keep alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.
+Keep alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, roles, partial production, production undo/reversal, and manual lot override UI out of scope unless explicitly requested.
 
 ## Commands to rerun during handoff
 
@@ -47,5 +50,7 @@ Keep alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobi
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')`
 - `python3 -m pytest backend/app/tests/test_orders.py -q`
 - `python3 -m pytest backend/app/tests/test_production_readiness.py -q`
-- `npm --prefix frontend run build`
+- `python3 -m pytest backend/app/tests/test_production_confirmation.py -q`
+- `python3 -m pytest backend/app/tests/test_stock_movements.py -q`
+- `python3 -m pytest backend/app/tests/test_packaging_stock_movements.py -q`
 - `git diff --check`

@@ -21,12 +21,14 @@ CURRENT_ALLOWED_TABLES = {
     "client_wishes",
     "client_feedback",
     "orders",
+    "production_batches",
+    "production_batch_ingredients",
+    "production_batch_packaging",
     "sqlite_sequence",
 }
 
 FORBIDDEN_FUTURE_TABLES = {
     "recipes",
-    "production_batches",
     "import_sources",
     "import_drafts",
     "backup_records",

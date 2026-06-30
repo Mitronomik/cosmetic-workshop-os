@@ -40,7 +40,62 @@ Read-only boundary:
 
 - The endpoint does not create `stock_movements`.
 - The endpoint does not create `packaging_stock_movements`.
-- The endpoint does not create production batch tables or rows.
+- The endpoint does not create production batch rows.
 - The endpoint does not mutate order status, `produced_at`, `delivered_at`, recipe versions, client recipes, ingredient lots, or packaging items.
 
 Current limitations: this foundation does not confirm production, reserve stock, write off ingredients or packaging, generate alerts, generate purchase suggestions, change order lifecycle status, or add frontend UI.
+
+## Production confirmation
+
+### `POST /api/orders/{order_id}/produce`
+
+Confirms actual production for an order. This endpoint is intentionally separate from the read-only readiness check and requires an explicit confirmation payload:
+
+```json
+{
+  "confirm": true,
+  "notes": "optional production note"
+}
+```
+
+Safety rules:
+
+- `confirm` must be exactly `true`; missing or false confirmation returns `422` with a human-readable message.
+- The backend re-runs `ProductionReadinessService.check_order(order_id)` before writing anything.
+- Blocking readiness issues return `409`; the operation does not create a production batch and does not write off stock.
+- Cancelled, archived/inactive, delivered, already produced orders, and orders that already have a production batch return `409`.
+- The operation is transactional: production batch snapshot rows, ingredient write-off movements, packaging write-off movements, order status update, and audit log are committed together or rolled back together.
+- The endpoint does not use a hidden default tax rate. `tax`, `margin`, and `margin_percent` remain `null` until explicit tax snapshot infrastructure exists.
+
+Successful response contains the historical production snapshot:
+
+```json
+{
+  "id": 1,
+  "order_id": 10,
+  "recipe_version_id": 5,
+  "client_recipe_id": null,
+  "final_batch_value": "50.000",
+  "final_batch_unit": "g",
+  "component_cost": "100.00",
+  "packaging_cost": "10.00",
+  "other_cost": "0.00",
+  "total_cost": "110.00",
+  "sale_price": "200.00",
+  "tax": null,
+  "margin": null,
+  "margin_percent": null,
+  "produced_at": "2026-06-30T...",
+  "notes": "",
+  "created_at": "2026-06-30T...",
+  "ingredients": [],
+  "packaging": []
+}
+```
+
+Error mapping:
+
+- `404` — order or linked recipe record was not found.
+- `409` — order lifecycle conflict, existing production batch, or readiness blockers.
+- `422` — invalid request body or missing explicit confirmation.
+- `500` — unexpected server error only.
