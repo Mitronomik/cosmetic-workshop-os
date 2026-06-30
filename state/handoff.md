@@ -366,3 +366,11 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - `resolved_at` is set for `resolved` and cleared for `open`/`planned`; archived wishes reject generic status changes with HTTP 409.
 - `status=archived` through `PUT /status` is rejected so archiving continues to use `POST /api/client-wishes/{wish_id}/archive`.
 - No feedback update/delete, restore endpoint, frontend UI, or unrelated domain changes were added.
+
+## PR58: Client wishes and feedback UI
+- Client card editing view now displays two working sections: `Пожелания клиента` and `Обратная связь`.
+- Wishes load from `/api/clients/{client_id}/wishes`, can be created, status-updated only to `open`/`planned`/`resolved`, and archived through `POST /api/client-wishes/{wish_id}/archive`.
+- Archived wishes remain historical, are hidden unless `Показать архивные` is enabled, are read-only in the UI, and have no restore action in this PR.
+- Feedback loads from `/api/clients/{client_id}/feedback`, can be created, and remains append-only with no edit/delete controls.
+- Optional ClientRecipe linking is implemented for wishes and feedback by loading existing client recipes with `include_inactive=true` and filtering to the selected client; the selector includes archived recipes when available and does not mutate ClientRecipe data.
+- Backend/domain/migrations were not changed. Orders, production, stock movements, purchasing, import/export, backup/restore, cloud, auth, roles, and AI recommendations were not added.

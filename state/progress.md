@@ -289,3 +289,10 @@ PR16 - Ingredient catalog UI foundation
 - Fixed ClientWish status transitions so moving from `resolved` back to `open` or `planned` clears `resolved_at`.
 - Generic status updates no longer archive wishes or restore archived wishes; archive remains explicit through `POST /client-wishes/{wish_id}/archive`.
 - Feedback remains append-only and no ClientRecipe, RecipeVersion, inventory, production, or frontend behavior was changed.
+
+## PR58: Client wishes and feedback UI
+- Added frontend-only client-card sections for `Пожелания клиента` and `Обратная связь` using the existing PR57 backend endpoints.
+- Wishes can be created, moved only between `open`, `planned`, and `resolved`, and archived through the explicit archive endpoint; archived wishes are hidden by default, visible through `Показать архивные`, read-only, and not restorable in this PR.
+- Feedback can be created and viewed as append-only history; no edit/delete UI was added.
+- ClientRecipe linking is implemented in both create forms by loading existing client recipes, including archived recipes when available, and sending only the selected `client_recipe_id` without mutating ClientRecipe composition.
+- Backend/domain/migrations were not changed. Orders, production, stock, import/export, backup/restore, cloud, auth, and AI recommendations were not added.
