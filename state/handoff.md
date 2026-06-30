@@ -2,64 +2,38 @@
 
 ## Last completed work
 
-PR58 is complete: the frontend client card now includes `Пожелания клиента` and `Обратная связь` sections backed by the existing PR57 client-wish and feedback API. Wishes can be created, moved between active statuses, and explicitly archived; archived wishes are hidden by default and read-only when shown. Feedback can be created and viewed as append-only history with no edit/delete UI.
+PR60 is complete: the backend Orders foundation persists customer orders and exposes API routes to create, read, list, update, cancel, and archive orders.
 
-PR58 follow-up fixes preserve open wish and feedback form drafts during background client-card refreshes and when saving the main client details, including typed text, ClientRecipe selector values, dates, ratings, and follow-up checkbox state. Wish title maxlength is aligned with backend validation.
+## Current repo state after PR60
 
-## Current repo state after PR58
+Completed foundations include local-first backend/API persistence, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, and now orders.
 
-Completed foundations include:
+Orders connect an active client to exactly one recipe source (`RecipeVersion` or same-client active `ClientRecipe`) with optional active packaging, target batch size, optional sale price, dates, notes, lifecycle status, archive/cancel semantics, and transactional audit logging.
 
-- Local-first project foundation with a backend API boundary and branded frontend shell.
-- SQLite persistence, migration helpers, startup initialization, user data directory resolution, and backup-before-migration foundation.
-- Onboarding state/API and first-run checklist UI.
-- Ingredient/component backend and UI.
-- Ingredient lot backend and UI.
-- Immutable ingredient stock movements with derived balances and UI.
-- Packaging item backend and UI.
-- Immutable packaging stock movements with derived balances.
-- Inventory read model and read-only inventory UI.
-- Recipe templates, recipe versions, recipe ingredients, and read-only recipe calculation.
-- Recipe UI for creating templates/versions and viewing backend calculation results.
-- Catalog groups/tags backend plus browse-first/search/filter UX for components, packaging, recipes, clients, and client recipes where implemented.
-- Clients backend and browse-first client UI.
-- ClientRecipe backend and UI as a first-class individual formula entity copied from saved RecipeVersion composition.
-- ClientRecipe composition update API and frontend composition editor that mutate only copied ClientRecipe rows, not source RecipeVersion rows.
-- ClientRecipe restore workflow for archived ClientRecipes.
-- Client wishes and append-only feedback backend.
-- Client wishes and append-only feedback UI inside the client card, including draft-preservation fixes.
-
-Backend exposes local API routes for health/settings/database status/onboarding, ingredients, ingredient lots, ingredient stock movements, packaging items, packaging stock movements, inventory reads, recipes/calculation, catalog categories/tags/assignments, clients, client recipes, ClientRecipe composition updates/restores, client wishes, and client feedback.
-
-Orders, production readiness/confirmation, automatic stock write-off, production batches, alerts, purchase suggestions, import/export flows, backup/restore UI, cloud sync, mobile app/view, OCR, auth, and roles are not implemented and remain out of scope until explicitly requested.
+Orders intentionally do not create stock movements, packaging stock movements, production batches, readiness calculations, alerts, purchase suggestions, import/export records, or frontend UI.
 
 ## Important decisions
 
-- Repo: `cosmetic-workshop-os`.
-- Product: `Мастерская косметолога`.
 - MVP remains local-first and API-first.
-- User data must live outside the repository/code bundle.
-- SQLite is the current persistence foundation.
-- Stock changes are represented through immutable movements; balances are derived from movement history.
-- Recipe history is protected through `RecipeTemplate -> RecipeVersion`.
-- `ClientRecipe` is first-class and stores copied composition rows independent of source RecipeVersion rows.
-- Client wish/feedback links to ClientRecipe are historical/context links and do not mutate formulas, inventory, orders, or production.
-- Sensitive client notes/wishes/feedback must not be logged verbatim in debug output or audit summaries.
+- Orders are historical bridge records and must not mutate `RecipeVersion`, `ClientRecipe`, copied composition rows, inventory movements, or production data.
+- Decimal-backed quantities and money are stored as strings.
+- Order writes are service-level transactions; audit failure rolls back the order write.
+- Sensitive client notes are not copied into order audit summaries.
 
 ## Known testing limitations
 
-- In this Codex environment, full FastAPI/Starlette `TestClient` test runs can be blocked if backend test dependencies are not installed. A prior attempt to install `backend[test]` was blocked by registry/proxy 403 while fetching build dependencies.
-- Frontend onboarding fetches `/api/onboarding`; if the frontend is served separately without the backend proxy/runtime, it intentionally falls back to a non-technical unavailable state.
+- FastAPI `TestClient` tests may be skipped if the installed Starlette/httpx combination is unavailable in the environment.
 
 ## Next recommended task
 
-Orders backend foundation.
+Orders UI foundation.
 
-Keep the next PR narrow: add only the backend/domain/data-model/API foundation needed for orders. Do not add production readiness, production confirmation, automatic stock write-off, production batches, alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, or roles unless the task explicitly scopes them.
+Keep the next PR narrow: add only frontend/API-client UX needed to browse and manage orders through the existing backend. Production readiness, production confirmation, automatic stock write-off, production batches, alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles remain out of scope unless explicitly requested.
 
 ## Commands to rerun during handoff
 
 - `git status --short`
 - `git branch --show-current`
-- Documentation-only state sync: `git diff -- README.md state/current-focus.md state/progress.md state/handoff.md docs/api.md`
-- For implementation PRs after this handoff, rerun the relevant backend/frontend tests for the touched area.
+- `python3 -m py_compile $(find backend/app launcher -name '*.py')`
+- `python3 -m pytest backend/app/tests/test_orders.py`
+- `python3 -m pytest backend/app/tests launcher/tests`
