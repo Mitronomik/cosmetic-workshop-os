@@ -1,5 +1,18 @@
-# Current focus
+# Current Focus
 
-PR60 / Roadmap PR13 — Orders backend foundation is implemented.
+## Status
 
-The repository is ready for the next narrow roadmap step: Orders UI foundation, followed later by production readiness backend. Do not add production confirmation, stock write-off, production batches, alerts, purchase suggestions, import/export, cloud, mobile, OCR, auth, or roles unless explicitly scoped.
+PR61 — Orders UI foundation is implemented and ready for review.
+
+## Completed in PR61
+
+- Added the frontend `Заказы` navigation entry and `/orders` route.
+- Added Orders list, search/status filters, empty/loading/error states, create form, detail view, safe edit flow, cancel action, and archive action.
+- Integrated the UI with the existing PR60 Orders backend endpoints only.
+- Kept production readiness, production confirmation, stock write-off, production batches, cost/tax/margin calculation, alerts, purchase suggestions, import/export, and backup/restore UI out of scope.
+
+## Next recommended task
+
+Next roadmap step: production readiness foundation for orders, as a separate scoped PR.
+
+The next PR should still avoid production confirmation and automatic stock write-off unless explicitly requested.
