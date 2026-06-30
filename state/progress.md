@@ -326,3 +326,10 @@ After PR61 — preparing production readiness foundation
 - Integrated with existing PR60 Orders endpoints: `POST /api/orders`, `GET /api/orders`, `PUT /api/orders/{order_id}`, `POST /api/orders/{order_id}/cancel`, and `POST /api/orders/{order_id}/archive`.
 - Create/update payloads are built from safe order fields only and do not send `status`, `produced_at`, or `delivered_at`.
 - The UI displays future production statuses read-only but intentionally adds no production readiness, production confirmation, stock write-off, production batches, cost/tax/margin calculation, alerts, purchase suggestions, import/export, cloud, mobile, OCR, auth, or roles.
+
+## PR62 — Production readiness backend foundation
+- Added backend-only Production Readiness foundation for orders.
+- Added `POST /api/orders/{order_id}/check-production-readiness` returning structured readiness results with blocking issues, warnings, ingredient requirements, FEFO lot selections, packaging availability, and optional cost/tax/margin estimates.
+- Readiness checks current ingredient lot and packaging balances through existing inventory read logic and preserves the production boundary: no stock write-off, no packaging write-off, no production batches, and no order lifecycle mutation.
+- Added targeted backend tests for enough stock, missing/insufficient ingredients, FEFO selection, expired/soon-expiring lots, missing density, missing packaging, cancelled/archived rejection, API behavior, and read-only guarantees.
+- No frontend UI, production confirmation, alerts, purchase suggestions, import/export, cloud, mobile, OCR, auth, or roles were added.

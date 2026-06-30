@@ -2,17 +2,18 @@
 
 ## Status
 
-PR61 — Orders UI foundation is implemented and ready for review.
+PR62 — Production readiness backend foundation is implemented and ready for review.
 
-## Completed in PR61
+## Completed in PR62
 
-- Added the frontend `Заказы` navigation entry and `/orders` route.
-- Added Orders list, search/status filters, empty/loading/error states, create form, detail view, safe edit flow, cancel action, and archive action.
-- Integrated the UI with the existing PR60 Orders backend endpoints only.
-- Kept production readiness, production confirmation, stock write-off, production batches, cost/tax/margin calculation, alerts, purchase suggestions, import/export, and backup/restore UI out of scope.
+- Added backend Production Readiness service and schemas for order checks.
+- Added `POST /api/orders/{order_id}/check-production-readiness`.
+- Checks exact order recipe source (`RecipeVersion` or copied `ClientRecipe` composition), ingredient lot availability, FEFO candidate lots, packaging balance, expired/soon-expiring lots, density/conversion warnings, and optional cost/tax/margin estimates.
+- Preserved read-only production boundary: no stock movements, no packaging movements, no production batches, and no order lifecycle mutation.
+- Updated API docs and backend tests for readiness behavior.
 
 ## Next recommended task
 
-Next roadmap step: production readiness foundation for orders, as a separate scoped PR.
+Next roadmap step: production confirmation foundation as a separate scoped PR.
 
-The next PR should still avoid production confirmation and automatic stock write-off unless explicitly requested.
+The next PR may add `ProductionBatch` and explicit stock/packaging write-off only if requested. Keep alerts, purchase suggestions, frontend production UI, import/export, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.
