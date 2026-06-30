@@ -47,17 +47,27 @@ class ClientWishRepository:
         return _wish(row)
 
     def update_status(self, wish_id: int, status: ClientWishStatus, *, connection: sqlite3.Connection | None = None) -> ClientWish:
-        is_active = 0 if status == ClientWishStatus.ARCHIVED else 1
-        resolved_sql = ", resolved_at=CURRENT_TIMESTAMP" if status == ClientWishStatus.RESOLVED else ""
+        if status == ClientWishStatus.RESOLVED:
+            resolved_value_sql = "CURRENT_TIMESTAMP"
+        else:
+            resolved_value_sql = "NULL"
         with _scope(self.config, connection) as c:
-            cur = c.execute(f"UPDATE client_wishes SET status=?, is_active=?, updated_at=CURRENT_TIMESTAMP{resolved_sql} WHERE id=?", (status.value, is_active, wish_id))
+            cur = c.execute(
+                f"UPDATE client_wishes SET status=?, is_active=1, updated_at=CURRENT_TIMESTAMP, resolved_at={resolved_value_sql} WHERE id=?",
+                (status.value, wish_id),
+            )
             if cur.rowcount == 0:
                 raise ClientWishNotFoundError(f"Client wish {wish_id} was not found.")
             row = c.execute("SELECT * FROM client_wishes WHERE id=?", (wish_id,)).fetchone()
         return _wish(row)
 
     def archive(self, wish_id: int, *, connection: sqlite3.Connection | None = None) -> ClientWish:
-        return self.update_status(wish_id, ClientWishStatus.ARCHIVED, connection=connection)
+        with _scope(self.config, connection) as c:
+            cur = c.execute("UPDATE client_wishes SET status='archived', is_active=0, updated_at=CURRENT_TIMESTAMP WHERE id=?", (wish_id,))
+            if cur.rowcount == 0:
+                raise ClientWishNotFoundError(f"Client wish {wish_id} was not found.")
+            row = c.execute("SELECT * FROM client_wishes WHERE id=?", (wish_id,)).fetchone()
+        return _wish(row)
 
 
 class ClientFeedbackRepository:

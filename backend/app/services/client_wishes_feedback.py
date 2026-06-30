@@ -17,6 +17,10 @@ class ClientRecipeClientMismatchError(ValueError):
     pass
 
 
+class ClientWishArchivedStatusChangeError(ValueError):
+    pass
+
+
 class ClientWishService:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config
@@ -45,6 +49,10 @@ class ClientWishService:
         wish_id = require_positive_id(wish_id, field="wish_id", label="Пожелание")
         with transaction(self.config) as connection:
             before = self.repository.get(wish_id, connection=connection)
+            if update.status == ClientWishStatus.ARCHIVED:
+                raise ClientWishArchivedStatusChangeError("Use the archive action to archive a client wish.")
+            if not before.is_active or before.status == ClientWishStatus.ARCHIVED:
+                raise ClientWishArchivedStatusChangeError("Archived client wishes cannot be changed through status update.")
             wish = self.repository.update_status(wish_id, update.status, connection=connection)
             self.audit.create_log(action="client_wish.status_changed", entity_type="client_wish", entity_id=str(wish.id), summary=f"Client wish status changed: {wish.title}", metadata={"client_id": wish.client_id, "client_recipe_id": wish.client_recipe_id, "old_status": before.status.value, "new_status": wish.status.value}, connection=connection)
         return wish
@@ -100,4 +108,4 @@ class ClientFeedbackService:
                 raise ClientRecipeClientMismatchError("Client recipe belongs to another client.")
 
 
-__all__ = ["ClientWishService", "ClientFeedbackService", "ClientWishNotFoundError", "ClientFeedbackNotFoundError", "ClientNotFoundError", "ClientRecipeNotFoundError", "ClientWishFeedbackClientInactiveError", "ClientRecipeClientMismatchError"]
+__all__ = ["ClientWishService", "ClientFeedbackService", "ClientWishNotFoundError", "ClientFeedbackNotFoundError", "ClientNotFoundError", "ClientRecipeNotFoundError", "ClientWishFeedbackClientInactiveError", "ClientRecipeClientMismatchError", "ClientWishArchivedStatusChangeError"]

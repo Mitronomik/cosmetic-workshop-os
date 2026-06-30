@@ -15,7 +15,7 @@ from app.domain.recipes import RecipeIngredientDraft, RecipeTemplateDraft, Recip
 from app.main import create_app
 from app.repositories.client_recipes import ClientRecipeNotFoundError
 from app.services.client_recipes import ClientRecipeService
-from app.services.client_wishes_feedback import ClientFeedbackService, ClientRecipeClientMismatchError, ClientWishFeedbackClientInactiveError, ClientWishService
+from app.services.client_wishes_feedback import ClientFeedbackService, ClientRecipeClientMismatchError, ClientWishArchivedStatusChangeError, ClientWishFeedbackClientInactiveError, ClientWishService
 from app.services.clients import ClientService
 from app.services.database import initialize_database
 from app.services.ingredients import IngredientService
@@ -113,22 +113,38 @@ def test_wish_status_archive_filters_and_audit_rollbacks(tmp_path):
     assert service.update_status(wish.id, ClientWishStatusUpdate.create(status="planned")).status.value == "planned"
     resolved = service.update_status(wish.id, ClientWishStatusUpdate.create(status="resolved"))
     assert resolved.resolved_at is not None
+    reopened = service.update_status(wish.id, ClientWishStatusUpdate.create(status="open"))
+    assert reopened.status.value == "open" and reopened.resolved_at is None
+    resolved_again = service.update_status(wish.id, ClientWishStatusUpdate.create(status="resolved"))
+    assert resolved_again.resolved_at is not None
+    planned = service.update_status(wish.id, ClientWishStatusUpdate.create(status="planned"))
+    assert planned.status.value == "planned" and planned.resolved_at is None
+    with pytest.raises(ClientWishArchivedStatusChangeError):
+        service.update_status(wish.id, ClientWishStatusUpdate.create(status="archived"))
     archived = service.archive(wish.id)
     assert archived.status.value == "archived" and archived.is_active is False
     assert service.list_for_client(client.id, include_inactive=False) == []
     assert [w.id for w in service.list_for_client(client.id, include_inactive=True)] == [wish.id]
     with pytest.raises(DomainValidationError):
         ClientWishStatusUpdate.create(status="bad")
+    for status in ("open", "planned", "resolved"):
+        with pytest.raises(ClientWishArchivedStatusChangeError):
+            service.update_status(wish.id, ClientWishStatusUpdate.create(status=status))
+    assert service.get(wish.id).status.value == "archived"
 
     service.audit = FailingAuditRepository()
     with pytest.raises(RuntimeError):
         service.create(wish_draft(client.id, title="Rollback create"))
     assert scalar(c, "SELECT count(*) FROM client_wishes WHERE title='Rollback create'") == 0
+
+    active = ClientWishService(c).create(wish_draft(client.id, title="Active audit rollback"))
+    service.audit = FailingAuditRepository()
     with pytest.raises(RuntimeError):
-        service.update_status(wish.id, ClientWishStatusUpdate.create(status="open"))
-    assert service.get(wish.id).status.value == "archived"
+        service.update_status(active.id, ClientWishStatusUpdate.create(status="planned"))
+    assert ClientWishService(c).get(active.id).status.value == "open"
     with pytest.raises(RuntimeError):
-        service.archive(wish.id)
+        service.archive(active.id)
+    assert ClientWishService(c).get(active.id).is_active is True
 
 
 def test_feedback_create_list_get_validation_and_inactive_client(tmp_path):
@@ -183,7 +199,9 @@ def test_api_endpoints_and_feedback_append_only(monkeypatch, tmp_path):
     assert api.get(f"/api/clients/{client.id}/wishes").json()["wishes"][0]["id"] == wish_id
     assert api.get(f"/api/client-wishes/{wish_id}").status_code == 200
     assert api.put(f"/api/client-wishes/{wish_id}/status", json={"status": "resolved"}).json()["resolved_at"] is not None
+    assert api.put(f"/api/client-wishes/{wish_id}/status", json={"status": "archived"}).status_code == 409
     assert api.post(f"/api/client-wishes/{wish_id}/archive").json()["is_active"] is False
+    assert api.put(f"/api/client-wishes/{wish_id}/status", json={"status": "open"}).status_code == 409
     assert api.post(f"/api/clients/{client.id}/wishes", json={**wish_payload, "client_recipe_id": 999}).status_code == 404
     assert api.post("/api/clients/999/wishes", json=wish_payload).status_code == 404
     assert api.post(f"/api/clients/{client.id}/wishes", json={**wish_payload, "category": "bad"}).status_code == 422

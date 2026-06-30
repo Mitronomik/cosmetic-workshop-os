@@ -7,7 +7,7 @@ from app.repositories.client_recipes import ClientRecipeNotFoundError
 from app.repositories.client_wishes_feedback import ClientFeedbackNotFoundError, ClientWishNotFoundError
 from app.repositories.clients import ClientNotFoundError
 from app.schemas.client_wishes_feedback import ClientFeedbackCreateRequest, ClientFeedbackListResponse, ClientFeedbackResponse, ClientWishCreateRequest, ClientWishesResponse, ClientWishResponse, ClientWishStatusUpdateRequest
-from app.services.client_wishes_feedback import ClientFeedbackService, ClientRecipeClientMismatchError, ClientWishFeedbackClientInactiveError, ClientWishService
+from app.services.client_wishes_feedback import ClientFeedbackService, ClientRecipeClientMismatchError, ClientWishArchivedStatusChangeError, ClientWishFeedbackClientInactiveError, ClientWishService
 
 router = APIRouter(tags=["client-wishes-feedback"])
 
@@ -53,6 +53,8 @@ def update_client_wish_status(wish_id: int, payload: ClientWishStatusUpdateReque
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
     except ClientWishNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client wish was not found.") from exc
+    except ClientWishArchivedStatusChangeError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 @router.post("/client-wishes/{wish_id}/archive", response_model=ClientWishResponse)

@@ -360,3 +360,9 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Optional ClientRecipe links are validated to belong to the same client; archived ClientRecipes are allowed as historical context.
 - Creating for inactive clients is rejected; linked RecipeVersion, ClientRecipe composition, stock, production, and orders are untouched.
 - Frontend UI remains out of scope for this PR and should be added later.
+
+## PR57 follow-up: ClientWish status lifecycle
+- `PUT /api/client-wishes/{wish_id}/status` now only supports active-wish transitions among `open`, `planned`, and `resolved`.
+- `resolved_at` is set for `resolved` and cleared for `open`/`planned`; archived wishes reject generic status changes with HTTP 409.
+- `status=archived` through `PUT /status` is rejected so archiving continues to use `POST /api/client-wishes/{wish_id}/archive`.
+- No feedback update/delete, restore endpoint, frontend UI, or unrelated domain changes were added.

@@ -284,3 +284,8 @@ PR16 - Ingredient catalog UI foundation
 - Creating wishes or feedback for inactive clients is rejected.
 - Source RecipeVersion, ClientRecipe composition, stock, production, and orders are not mutated.
 - Frontend UI will be added in a later PR.
+
+## PR57 follow-up: ClientWish status lifecycle
+- Fixed ClientWish status transitions so moving from `resolved` back to `open` or `planned` clears `resolved_at`.
+- Generic status updates no longer archive wishes or restore archived wishes; archive remains explicit through `POST /client-wishes/{wish_id}/archive`.
+- Feedback remains append-only and no ClientRecipe, RecipeVersion, inventory, production, or frontend behavior was changed.
