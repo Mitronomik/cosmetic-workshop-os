@@ -1,12 +1,12 @@
 # Progress
 
 ## Current phase
-After PR58 — preparing Orders backend foundation
+After PR61 — preparing production readiness foundation
 
 ## Current next step
-- Orders backend foundation is the next recommended roadmap-scoped implementation PR.
-- PR58 client wishes and append-only feedback UI, plus draft-preservation follow-up fixes, are complete.
-- Production, alerts, purchase suggestions, import/export, backup/restore UI, final packaging, cloud, mobile, OCR, auth, and roles remain out of scope until explicitly requested.
+- Orders backend and Orders UI foundations are complete.
+- Production readiness foundation is the next recommended roadmap-scoped implementation PR.
+- Production confirmation, automatic stock write-off, production batches, alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles remain out of scope until explicitly requested.
 
 ## Done
 - Architecture draft
