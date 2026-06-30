@@ -34,9 +34,39 @@ class ProductionBatchPackagingResponse(BaseModel):
     created_at: str
 
 
+class ProductionBatchListItemResponse(BaseModel):
+    id: int
+    order_id: int
+    product_name: str
+    client_id: int
+    client_name: str | None
+    recipe_version_id: int | None
+    client_recipe_id: int | None
+    final_batch_value: str
+    final_batch_unit: str
+    total_cost: str | None
+    sale_price: str | None
+    tax: str | None
+    margin: str | None
+    margin_percent: str | None
+    produced_at: str
+    ingredient_line_count: int
+    packaging_line_count: int
+    notes: str
+
+
+class ProductionBatchListResponse(BaseModel):
+    production_batches: list[ProductionBatchListItemResponse]
+    limit: int
+    offset: int
+
+
 class ProductionBatchDetailResponse(BaseModel):
     id: int
     order_id: int
+    product_name: str | None = None
+    client_id: int | None = None
+    client_name: str | None = None
     recipe_version_id: int | None
     client_recipe_id: int | None
     final_batch_value: str

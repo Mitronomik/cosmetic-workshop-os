@@ -1,17 +1,13 @@
 # Current Focus
 
-PR65 is ready for review: frontend production confirmation UI is implemented in the Orders workspace.
+PR66 — Production history read UI and production batch detail page is implemented and ready for review.
 
-Implemented scope:
+Scope completed:
 
-- Orders detail now shows production confirmation only after backend readiness allows production.
-- The `Изготовить` action opens an inline second-confirmation panel with optional production notes.
-- Confirmation calls `POST /api/orders/{order_id}/produce` with `confirm=true` and displays the returned production batch summary.
-- Orders are refreshed from the backend after successful production so the status becomes `produced` from the source of truth.
-- Production actions are hidden for cancelled, archived/inactive, delivered, and already produced orders.
+- read-only production batch list/detail/by-order API endpoints;
+- real `Производство` frontend page for historical produced batches;
+- read-only production batch detail panel with cost snapshot, ingredient lot snapshots, packaging snapshots, notes, and safety copy;
+- Orders integration for produced/delivered orders to locate/open their production batch;
+- API and state documentation updates.
 
-Next recommended task:
-
-- Production history read UI and production batch detail page.
-
-Keep alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, roles, partial production, production undo/reversal, and lot override UI out of scope unless explicitly requested.
+Out of scope remains unchanged: production reversal/undo, partial production, lot override, reservations, alerts, purchase suggestions, imports/exports, backup/restore UI, cloud, mobile, OCR, auth/roles, and advanced analytics.

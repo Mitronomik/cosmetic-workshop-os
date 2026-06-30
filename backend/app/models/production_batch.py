@@ -56,7 +56,32 @@ class ProductionBatch:
 
 
 @dataclass(frozen=True)
+class ProductionBatchListItem:
+    id: int
+    order_id: int
+    product_name: str
+    client_id: int
+    client_name: str | None
+    recipe_version_id: int | None
+    client_recipe_id: int | None
+    final_batch_value: Decimal
+    final_batch_unit: UnitCode
+    total_cost: Decimal | None
+    sale_price: Decimal | None
+    tax: Decimal | None
+    margin: Decimal | None
+    margin_percent: Decimal | None
+    produced_at: str
+    ingredient_line_count: int
+    packaging_line_count: int
+    notes: str
+
+
+@dataclass(frozen=True)
 class ProductionBatchDetail:
     batch: ProductionBatch
     ingredients: list[ProductionBatchIngredient]
     packaging: list[ProductionBatchPackaging]
+    product_name: str | None = None
+    client_id: int | None = None
+    client_name: str | None = None
