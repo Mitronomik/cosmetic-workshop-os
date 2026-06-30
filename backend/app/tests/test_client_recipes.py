@@ -397,3 +397,123 @@ def test_update_composition_audit_failure_rolls_back(tmp_path):
         service.update_composition(detail.client_recipe.id, [update_line(detail.ingredients[0], amount_value="70")])
     reread = service.get_detail(detail.client_recipe.id)
     assert [(str(i.amount_value), i.notes) for i in reread.ingredients] == [("80.00", "source water"), ("20.00", "source oil")]
+
+def client_recipe_line_signature(detail):
+    return [(line.ingredient_id, line.source_recipe_ingredient_id, line.position, line.phase, str(line.amount_value), line.amount_unit.value, line.personalization_note, line.notes) for line in detail.ingredients]
+
+
+def test_restore_archived_client_recipe_returns_draft_and_keeps_detail_lines(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    created = service.create_from_recipe_version(draft(client.id, version.version.id))
+    service.deactivate(created.client_recipe.id)
+
+    restored = service.restore(created.client_recipe.id)
+    detail = service.get_detail(created.client_recipe.id)
+
+    assert restored.is_active is True
+    assert restored.status.value == "draft"
+    assert detail.client_recipe.is_active is True
+    assert client_recipe_line_signature(detail) == client_recipe_line_signature(created)
+
+
+def test_restore_does_not_mutate_copied_composition(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    created = service.create_from_recipe_version(draft(client.id, version.version.id))
+    before = client_recipe_line_signature(created)
+
+    service.deactivate(created.client_recipe.id)
+    service.restore(created.client_recipe.id)
+
+    assert client_recipe_line_signature(service.get_detail(created.client_recipe.id)) == before
+
+
+def test_restore_does_not_mutate_source_recipe_version(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    created = service.create_from_recipe_version(draft(client.id, version.version.id))
+    source_before = [(line.id, line.ingredient_id, line.position, line.phase, str(line.amount_value), line.amount_unit.value, line.notes) for line in RecipeService(c).get_version_detail(version.version.id).ingredients]
+
+    service.deactivate(created.client_recipe.id)
+    service.restore(created.client_recipe.id)
+
+    source_after = [(line.id, line.ingredient_id, line.position, line.phase, str(line.amount_value), line.amount_unit.value, line.notes) for line in RecipeService(c).get_version_detail(version.version.id).ingredients]
+    assert source_after == source_before
+
+
+def test_restore_does_not_mutate_another_client_recipe(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    first = service.create_from_recipe_version(draft(client.id, version.version.id, title="First"))
+    second = service.create_from_recipe_version(draft(client.id, version.version.id, title="Second"))
+    second_before = client_recipe_line_signature(second)
+
+    service.deactivate(first.client_recipe.id)
+    service.restore(first.client_recipe.id)
+
+    assert client_recipe_line_signature(service.get_detail(second.client_recipe.id)) == second_before
+    assert service.get_detail(second.client_recipe.id).client_recipe.is_active is True
+
+
+def test_restore_rejected_when_linked_client_is_inactive_and_recipe_stays_archived(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    created = service.create_from_recipe_version(draft(client.id, version.version.id))
+    ClientService(c).deactivate_client(client.id)
+    service.deactivate(created.client_recipe.id)
+
+    from app.services.client_recipes import ClientRecipeRestoreClientInactiveError
+    with pytest.raises(ClientRecipeRestoreClientInactiveError):
+        service.restore(created.client_recipe.id)
+
+    reread = service.get_detail(created.client_recipe.id).client_recipe
+    assert reread.is_active is False
+    assert reread.status.value == "archived"
+
+
+def test_restore_writes_audit_and_audit_failure_rolls_back(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    created = service.create_from_recipe_version(draft(client.id, version.version.id))
+    service.deactivate(created.client_recipe.id)
+    service.restore(created.client_recipe.id)
+    assert scalar(c, "SELECT count(*) FROM audit_logs WHERE action='client_recipe.restored'") == 1
+
+    service.deactivate(created.client_recipe.id)
+    service.audit = FailingAuditRepository()
+    with pytest.raises(RuntimeError):
+        service.restore(created.client_recipe.id)
+    reread = service.get_detail(created.client_recipe.id).client_recipe
+    assert reread.is_active is False
+    assert reread.status.value == "archived"
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_client_recipe_restore_api(monkeypatch, tmp_path):
+    db = tmp_path / "api-client-recipe-restore.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db))
+    c = DatabaseConfig(path=db)
+    initialize_database(c)
+    client, version = seed_source(c)
+    api = TestClient(create_app())
+    created = ClientRecipeService(c).create_from_recipe_version(draft(client.id, version.version.id)).client_recipe
+    ClientRecipeService(c).deactivate(created.id)
+
+    response = api.post(f"/api/client-recipes/{created.id}/restore")
+    assert response.status_code == 200
+    assert response.json()["is_active"] is True
+    assert response.json()["status"] == "draft"
+    assert api.post("/api/client-recipes/999/restore").status_code == 404
+
+    inactive_client, inactive_version = seed_source(c)
+    inactive_recipe = ClientRecipeService(c).create_from_recipe_version(draft(inactive_client.id, inactive_version.version.id)).client_recipe
+    ClientService(c).deactivate_client(inactive_client.id)
+    ClientRecipeService(c).deactivate(inactive_recipe.id)
+    assert api.post(f"/api/client-recipes/{inactive_recipe.id}/restore").status_code == 409

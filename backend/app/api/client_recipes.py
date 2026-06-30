@@ -8,7 +8,7 @@ from app.repositories.clients import ClientNotFoundError
 from app.repositories.ingredients import IngredientNotFoundError
 from app.repositories.recipes import RecipeVersionNotFoundError
 from app.schemas.client_recipes import ClientRecipeCreateRequest, ClientRecipeDetailResponse, ClientRecipeIngredientResponse, ClientRecipeIngredientsUpdateRequest, ClientRecipeResponse, ClientRecipesResponse
-from app.services.client_recipes import ClientInactiveError, ClientRecipeArchivedError, ClientRecipeIngredientInactiveError, ClientRecipeIngredientLineOwnershipError, ClientRecipeService, SourceRecipeVersionEmptyError
+from app.services.client_recipes import ClientInactiveError, ClientRecipeArchivedError, ClientRecipeIngredientInactiveError, ClientRecipeIngredientLineOwnershipError, ClientRecipeRestoreClientInactiveError, ClientRecipeService, SourceRecipeVersionEmptyError
 
 router = APIRouter(tags=["client-recipes"])
 
@@ -80,6 +80,18 @@ def deactivate_client_recipe(client_recipe_id: int):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
     except ClientRecipeNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client recipe was not found.") from exc
+
+
+@router.post("/client-recipes/{client_recipe_id}/restore", response_model=ClientRecipeResponse)
+def restore_client_recipe(client_recipe_id: int):
+    try:
+        return _recipe(ClientRecipeService().restore(client_recipe_id))
+    except DomainValidationError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
+    except ClientRecipeNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Client recipe was not found.") from exc
+    except ClientRecipeRestoreClientInactiveError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
 
 def _recipe(recipe: ClientRecipe) -> ClientRecipeResponse:

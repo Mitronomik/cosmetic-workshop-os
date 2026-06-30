@@ -344,3 +344,10 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Archived/inactive ClientRecipes remain read-only.
 - Inactive/unavailable ingredient lines are protected in the editor: leave unchanged or remove.
 - This PR does not add production, stock deduction, cost calculation, or backend changes.
+
+## PR56: Restore archived ClientRecipe
+- Archived ClientRecipes can now be restored to the active working list from the list or detail card using «Вернуть из архива».
+- Backend endpoint: `POST /api/client-recipes/{client_recipe_id}/restore` returns the existing ClientRecipe response shape.
+- Restore sets status back to `draft`, preserves copied composition, and is rejected if the linked client is archived/inactive.
+- Source RecipeVersion and other ClientRecipes are not mutated; the operation is audited transactionally.
+- This PR does not add global restore for clients, ingredients, packaging, recipe templates, or recipe versions.
