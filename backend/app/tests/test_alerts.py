@@ -8,6 +8,7 @@ except RuntimeError:
     TestClient = None
 
 from app.db.config import DATABASE_PATH_ENV, DatabaseConfig
+from app.domain.alerts import AlertCandidate
 from app.main import create_app
 from app.repositories.alerts import AlertNotFoundError, AlertRepository
 from app.services.alerts import AlertGenerationService
@@ -125,6 +126,88 @@ def test_regeneration_read_only_for_business_tables(tmp_path):
     assert scalar(c, "SELECT expires_at FROM ingredient_lots WHERE id=?", (lot.id,)) == lot_before
 
 
+def create_alert(repo, key, type="low_ingredient_stock"):
+    alert, _, _ = repo.upsert_open_candidate(
+        AlertCandidate(
+            alert_key=key,
+            type=type,
+            severity="warning",
+            message=f"Alert {key}",
+            related_entity_type="ingredient",
+            related_entity_id=1,
+            recommended_action="Проверьте предупреждение.",
+        )
+    )
+    return alert
+
+
+def test_terminal_status_transitions_preserve_existing_terminal_state(tmp_path):
+    c = config(tmp_path)
+    repo = AlertRepository(c)
+    resolved = create_alert(repo, "low_ingredient_stock:ingredient:101")
+    dismissed = create_alert(repo, "low_packaging_stock:packaging:202", "low_packaging_stock")
+
+    resolved_once = repo.resolve_alert(resolved.id)
+    resolved_twice = repo.resolve_alert(resolved.id)
+    resolved_after_dismiss_attempt = repo.dismiss_alert(resolved.id)
+    dismissed_once = repo.dismiss_alert(dismissed.id)
+    dismissed_twice = repo.dismiss_alert(dismissed.id)
+    dismissed_after_resolve_attempt = repo.resolve_alert(dismissed.id)
+
+    assert resolved_once.status == "resolved"
+    assert resolved_twice == resolved_once
+    assert resolved_after_dismiss_attempt == resolved_once
+    assert resolved_twice.status == "resolved"
+    assert resolved_after_dismiss_attempt.status == "resolved"
+    assert resolved_after_dismiss_attempt.resolved_at is not None
+    assert resolved_after_dismiss_attempt.dismissed_at is None
+    assert dismissed_once.status == "dismissed"
+    assert dismissed_twice == dismissed_once
+    assert dismissed_after_resolve_attempt == dismissed_once
+    assert dismissed_twice.status == "dismissed"
+    assert dismissed_after_resolve_attempt.status == "dismissed"
+    assert dismissed_after_resolve_attempt.dismissed_at is not None
+    assert dismissed_after_resolve_attempt.resolved_at is None
+
+
+def test_stale_resolution_is_scoped_to_managed_types(tmp_path):
+    c = config(tmp_path)
+    repo = AlertRepository(c)
+    active_managed = create_alert(repo, "low_ingredient_stock:ingredient:1")
+    stale_managed = create_alert(repo, "low_ingredient_stock:ingredient:2")
+    unmanaged = create_alert(repo, "low_packaging_stock:packaging:3", "low_packaging_stock")
+    resolved_terminal = repo.resolve_alert(create_alert(repo, "low_ingredient_stock:ingredient:4").id)
+    dismissed_terminal = repo.dismiss_alert(create_alert(repo, "low_ingredient_stock:ingredient:5").id)
+
+    changed = repo.mark_open_alerts_resolved_if_not_in_keys(
+        {active_managed.alert_key},
+        {"low_ingredient_stock"},
+    )
+
+    assert changed == 1
+    assert repo.get_alert(active_managed.id).status == "open"
+    assert repo.get_alert(stale_managed.id).status == "resolved"
+    assert repo.get_alert(unmanaged.id).status == "open"
+    assert repo.get_alert(resolved_terminal.id).status == "resolved"
+    assert repo.get_alert(dismissed_terminal.id).status == "dismissed"
+
+
+def test_stale_resolution_with_empty_active_keys_resolves_only_managed_open_alerts(tmp_path):
+    c = config(tmp_path)
+    repo = AlertRepository(c)
+    managed = create_alert(repo, "ingredient_expired:ingredient_lot:1", "ingredient_expired")
+    unmanaged = create_alert(repo, "low_packaging_stock:packaging:9", "low_packaging_stock")
+    dismissed_managed = repo.dismiss_alert(create_alert(repo, "ingredient_expired:ingredient_lot:2", "ingredient_expired").id)
+
+    changed = repo.mark_open_alerts_resolved_if_not_in_keys(set(), {"ingredient_expired"})
+
+    assert changed == 1
+    assert repo.get_alert(managed.id).status == "resolved"
+    assert repo.get_alert(unmanaged.id).status == "open"
+    assert repo.get_alert(dismissed_managed.id).status == "dismissed"
+    assert repo.get_alert(dismissed_managed.id).resolved_at is None
+
+
 def test_repository_status_transitions_and_not_found(tmp_path):
     c = config(tmp_path)
     _, ingredient, _, packaging, _ = seed_ready(c, lot_qty="10")
@@ -132,10 +215,17 @@ def test_repository_status_transitions_and_not_found(tmp_path):
     AlertGenerationService(c).regenerate_alerts()
     repo = AlertRepository(c)
     alert = repo.list_alerts()[0]
+    resolved = repo.resolve_alert(alert.id)
+    assert resolved.status == "resolved"
     assert repo.resolve_alert(alert.id).status == "resolved"
-    assert repo.resolve_alert(alert.id).status == "resolved"
+    assert repo.dismiss_alert(alert.id).status == "resolved"
+    assert repo.get_alert(alert.id).dismissed_at is None
     second = repo.list_alerts(status="open")[0]
+    dismissed = repo.dismiss_alert(second.id)
+    assert dismissed.status == "dismissed"
     assert repo.dismiss_alert(second.id).status == "dismissed"
+    assert repo.resolve_alert(second.id).status == "dismissed"
+    assert repo.get_alert(second.id).resolved_at is None
     with pytest.raises(AlertNotFoundError):
         repo.resolve_alert(999999)
 

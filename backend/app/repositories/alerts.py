@@ -55,18 +55,27 @@ class AlertRepository:
     def _set_status(self, alert_id: int, status: str, *, connection=None) -> Alert:
         col = "resolved_at" if status == "resolved" else "dismissed_at"
         with _scope(self.config, connection) as c:
-            if c.execute("SELECT 1 FROM alerts WHERE id=?", (alert_id,)).fetchone() is None:
-                raise AlertNotFoundError(f"Alert {alert_id} was not found.")
-            c.execute(f"UPDATE alerts SET status=?, {col}=COALESCE({col}, CURRENT_TIMESTAMP), updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, alert_id))
+            current = self.get_alert(alert_id, connection=c)
+            if current.status != "open":
+                return current
+            c.execute(f"UPDATE alerts SET status=?, {col}=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, alert_id))
             return self.get_alert(alert_id, connection=c)
 
-    def mark_open_alerts_resolved_if_not_in_keys(self, active_keys: set[str], *, connection: sqlite3.Connection | None = None) -> int:
+    def mark_open_alerts_resolved_if_not_in_keys(self, active_keys: set[str], managed_types: set[str], *, connection: sqlite3.Connection | None = None) -> int:
+        if not managed_types:
+            return 0
         with _scope(self.config, connection) as c:
+            type_placeholders = ','.join('?' for _ in managed_types)
+            params = list(managed_types)
+            key_clause = ""
             if active_keys:
-                placeholders=','.join('?' for _ in active_keys)
-                cur=c.execute(f"UPDATE alerts SET status='resolved', resolved_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE status='open' AND alert_key NOT IN ({placeholders})", tuple(active_keys))
-            else:
-                cur=c.execute("UPDATE alerts SET status='resolved', resolved_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE status='open'")
+                key_placeholders = ','.join('?' for _ in active_keys)
+                key_clause = f" AND alert_key NOT IN ({key_placeholders})"
+                params.extend(active_keys)
+            cur = c.execute(
+                f"UPDATE alerts SET status='resolved', resolved_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE status='open' AND type IN ({type_placeholders}){key_clause}",
+                tuple(params),
+            )
             return cur.rowcount
 
     def count_open(self, *, connection: sqlite3.Connection | None = None) -> int:

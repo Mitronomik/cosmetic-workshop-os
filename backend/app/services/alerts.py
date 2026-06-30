@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from app.db.config import DatabaseConfig
 from app.db.connection import session
-from app.domain.alerts import AlertCandidate, AlertGenerationResult
+from app.domain.alerts import ALERT_TYPES, AlertCandidate, AlertGenerationResult
 from app.models.order import OrderStatus
 from app.repositories.alerts import AlertRepository
 from app.repositories.orders import OrderRepository
@@ -32,7 +32,7 @@ class AlertGenerationService:
                 _, was_created, was_updated = self.alerts.upsert_open_candidate(candidate, connection=connection)
                 created += int(was_created)
                 updated += int(was_updated)
-            resolved = self.alerts.mark_open_alerts_resolved_if_not_in_keys(active_keys, connection=connection)
+            resolved = self.alerts.mark_open_alerts_resolved_if_not_in_keys(active_keys, ALERT_TYPES, connection=connection)
             open_count = self.alerts.count_open(connection=connection)
         return AlertGenerationResult(created, updated, resolved, open_count)
 
