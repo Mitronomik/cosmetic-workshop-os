@@ -135,6 +135,11 @@ class ProductionReadinessService:
                     line_warnings.append(conversion_issue); warnings.append(conversion_issue); continue
                 lot_candidates.append((lot, converted))
             selected=[]; remaining=None; available=Decimal("0")
+            lot_units = {UnitCode(candidate[0].unit) for candidate in lot_candidates}
+            if len(lot_units) > 1:
+                blocking.append(_issue("mixed_lot_units_not_supported", "blocking", "Для одного компонента найдены партии в разных единицах. Пока нельзя надежно подобрать партии автоматически.", "unit", "ingredient", ingredient_id))
+                result.append(ProductionReadinessIngredientLine(ingredient_id=ingredient_id, ingredient_name=name, required_quantity=str(required), required_unit=unit.value, available_quantity="0", missing_quantity=str(required), can_fulfill=False, selected_lots=[], warnings=line_warnings))
+                continue
             if lot_candidates:
                 required_in_lot_unit = lot_candidates[0][1]
                 remaining = required_in_lot_unit
@@ -212,11 +217,11 @@ class ProductionReadinessService:
             warnings.append(_issue("cost_data_missing", "warning", "Не хватает цен партий или тары для полной оценки себестоимости.", None, "order", order_id))
             return None, None, None
         total = quantize_money(ingredient_cost + packaging_cost, field="estimated_cost")
-        tax = None if sale_price is None else quantize_money(sale_price * Decimal("0.06"), field="estimated_tax")
-        margin = None if sale_price is None else quantize_money(sale_price - total - tax, field="estimated_margin")
         if sale_price is None:
             warnings.append(_issue("sale_price_missing", "warning", "В заказе нет цены продажи, поэтому налог и маржа не рассчитаны.", "sale_price", "order", order_id))
-        return str(total), None if tax is None else str(tax), None if margin is None else str(margin)
+        else:
+            warnings.append(_issue("tax_rate_missing", "warning", "Налоговая ставка пока не настроена, поэтому налог и маржа не рассчитаны.", "tax_rate", "order", order_id))
+        return str(total), None, None
 
 
 def _issue(code, severity, message, field=None, entity_type=None, entity_id=None):

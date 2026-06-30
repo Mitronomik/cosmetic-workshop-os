@@ -90,9 +90,11 @@ def test_enough_stock_fefo_costs_and_read_only_guarantee(tmp_path):
     result = ProductionReadinessService(c).check_order(order.id)
 
     assert result.can_produce is True
-    assert result.status == "ready"
+    assert result.status == "warning"
     assert [lot.lot_code for lot in result.ingredients[0].selected_lots] == ["earlier", "later"]
-    assert result.estimated_cost == "110.00" and result.estimated_tax == "12.00" and result.estimated_margin == "78.00"
+    assert result.estimated_cost == "110.00"
+    assert result.estimated_tax is None and result.estimated_margin is None
+    assert any(issue.code == "tax_rate_missing" for issue in result.warnings)
     assert snapshot(c, order.id) == before
     assert "production_batches" not in table_names(c)
     assert_no_forbidden_future_tables(table_names(c))
@@ -117,6 +119,22 @@ def test_insufficient_ingredient_returns_missing_quantity(tmp_path):
     assert result.can_produce is False
     assert any(issue.code == "ingredient_stock_insufficient" for issue in result.blocking_issues)
     assert result.ingredients[0].missing_quantity == "40.000"
+
+
+def test_mixed_lot_units_block_automatic_selection_without_mutation(tmp_path):
+    c = config(tmp_path)
+    _, ingredient, _, packaging, order = seed_base(c, ingredient_density="0.8")
+    add_lot(c, ingredient.id, "30", code="grams", unit="g")
+    add_lot(c, ingredient.id, "30", code="milliliters", unit="ml", density="0.8")
+    add_packaging(c, packaging.id, "1")
+    before = snapshot(c, order.id)
+
+    result = ProductionReadinessService(c).check_order(order.id)
+
+    assert result.can_produce is False
+    assert any(issue.code == "mixed_lot_units_not_supported" for issue in result.blocking_issues)
+    assert result.ingredients[0].selected_lots == []
+    assert snapshot(c, order.id) == before
 
 
 def test_expired_and_expiring_lot_warnings(tmp_path):

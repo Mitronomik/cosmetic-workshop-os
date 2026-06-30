@@ -29,7 +29,7 @@ The readiness endpoint intentionally does not create stock movements, packaging 
 - Readiness is a read-only backend/domain use case, not production confirmation.
 - FEFO uses current derived lot balances from immutable movement rows.
 - Cost estimates are opportunistic: missing unit costs return null estimates and explicit warnings rather than adding accounting scope.
-- Tax estimate currently uses the existing MVP default assumption of 6% when sale price is available; no new settings were added.
+- Tax and margin estimates are not calculated until an explicit tax setting/snapshot exists; no hidden default tax rate is used.
 
 ## Known testing limitations
 

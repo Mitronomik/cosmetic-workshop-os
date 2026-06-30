@@ -45,7 +45,7 @@ def test_migration_table_scope_and_guards(tmp_path):
     assert "recipe_ingredients" in CURRENT_ALLOWED_TABLES
     assert_no_forbidden_future_tables(names)
     assert_only_current_tables(names)
-    assert {"orders", "production_batches", "import_sources", "import_drafts"}.isdisjoint(names)
+    assert {"production_batches", "import_sources", "import_drafts"}.isdisjoint(names)
     assert "client_recipes" in CURRENT_ALLOWED_TABLES
 
 def test_template_create_get_list_deactivate_and_empty_name(tmp_path):

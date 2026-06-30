@@ -34,7 +34,7 @@ Response summary:
 - `blocking_issues` and `warnings` with stable `code`, severity, human-readable `message`, optional `field`, `entity_type`, and `entity_id`;
 - ingredient requirement lines with required quantity, available quantity, missing quantity, FEFO-selected lots, and line warnings;
 - packaging availability lines when the order has selected packaging;
-- optional `estimated_cost`, `estimated_tax`, and `estimated_margin` when existing unit costs and sale price support the estimate.
+- optional `estimated_cost` when existing unit costs support it; `estimated_tax` and `estimated_margin` stay `null` until explicit tax settings/snapshots exist.
 
 Read-only boundary:
 
