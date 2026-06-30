@@ -384,3 +384,11 @@ After PR61 — preparing production readiness foundation
 - Added manual suggestion creation, limited open-suggestion updates, mark purchased, and dismiss endpoints.
 - Preserved read-only safety: generation and mark-purchased do not mutate stock movements, packaging movements, ingredient lots, orders, production batches, alerts, clients, recipes, ingredients, or packaging items.
 - Updated `docs/api.md`, `state/current-focus.md`, and `state/handoff.md` for PR69.
+
+## PR70 — Purchase Suggestions UI
+- Added a frontend `/purchase-suggestions` workspace for purchase suggestions that consumes the PR69 backend endpoints.
+- The «Закупки» navigation item now opens the real workspace instead of the old `/#purchases` placeholder.
+- Added Russian, card-based purchase suggestion UI with status/reason/item-type/search filters, explicit regeneration, generation summary, manual suggestion creation, safe edit of quantity/unit/notes, mark purchased, and dismiss actions.
+- Added visible safety copy that «Куплено» closes the recommendation but does not create IngredientLot records, packaging inbound movements, stock movements, order changes, or production changes.
+- Updated dashboard copy to list «Закупки» as working now; no dashboard widgets were added.
+- No backend behavior, migrations, supplier integration, online ordering, real procurement, stock mutation, order mutation, production mutation, scheduler, polling, notifications, import/export, or backup UI were added.
