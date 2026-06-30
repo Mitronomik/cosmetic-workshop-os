@@ -1,12 +1,12 @@
 # Progress
 
 ## Current phase
-After PR58 — preparing Orders backend foundation
+After PR61 — preparing production readiness foundation
 
 ## Current next step
-- Orders backend foundation is the next recommended roadmap-scoped implementation PR.
-- PR58 client wishes and append-only feedback UI, plus draft-preservation follow-up fixes, are complete.
-- Production, alerts, purchase suggestions, import/export, backup/restore UI, final packaging, cloud, mobile, OCR, auth, and roles remain out of scope until explicitly requested.
+- Orders backend and Orders UI foundations are complete.
+- Production readiness foundation is the next recommended roadmap-scoped implementation PR.
+- Production confirmation, automatic stock write-off, production batches, alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles remain out of scope until explicitly requested.
 
 ## Done
 - Architecture draft
@@ -319,3 +319,10 @@ After PR58 — preparing Orders backend foundation
 - Orders now connect an active client to exactly one recipe source: either a `RecipeVersion` or a same-client active `ClientRecipe`; optional packaging is validated for active state on new writes.
 - Order create/update/cancel/archive writes are audited with rollback on audit failure and do not mutate recipes, client recipes, stock movements, packaging movements, or production data.
 - No frontend UI, production readiness, production confirmation, automatic stock write-off, alerts, purchase suggestions, import/export, cloud, mobile, OCR, auth, or roles were added.
+
+## PR61 — Orders UI foundation
+- Added `Заказы` navigation and `/orders` route in the frontend shell.
+- Added a human-friendly Orders workspace with list, search/status filters, empty/loading/error states, create order form, detail view, safe edit flow, cancel action, and archive action.
+- Integrated with existing PR60 Orders endpoints: `POST /api/orders`, `GET /api/orders`, `PUT /api/orders/{order_id}`, `POST /api/orders/{order_id}/cancel`, and `POST /api/orders/{order_id}/archive`.
+- Create/update payloads are built from safe order fields only and do not send `status`, `produced_at`, or `delivered_at`.
+- The UI displays future production statuses read-only but intentionally adds no production readiness, production confirmation, stock write-off, production batches, cost/tax/margin calculation, alerts, purchase suggestions, import/export, cloud, mobile, OCR, auth, or roles.
