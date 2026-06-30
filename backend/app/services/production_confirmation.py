@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from app.db.config import DatabaseConfig
 from app.db.transactions import transaction
+from app.domain.decimal_utils import quantize_money
 from app.domain.packaging_stock_movements import PackagingStockMovementDraft, PackagingStockMovementType
 from app.domain.stock_movements import StockMovementDraft, StockMovementType
 from app.domain.units import UnitCode
@@ -27,6 +28,10 @@ class ProductionConfirmationReadinessError(ValueError):
     pass
 
 
+class ProductionConfirmationStaleStateError(ProductionConfirmationLifecycleError):
+    pass
+
+
 class ProductionConfirmationService:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config
@@ -42,6 +47,7 @@ class ProductionConfirmationService:
             raise ProductionConfirmationRequiredError("Для изготовления нужно явно передать confirm=true.")
         order = self.orders.get_by_id(order_id)
         self._validate_lifecycle(order)
+        readiness_order_snapshot = self._critical_order_snapshot(order)
         readiness = self.readiness.check_order(order_id)
         if not readiness.can_produce or readiness.blocking_issues:
             messages = "; ".join(issue.message for issue in readiness.blocking_issues) or "Заказ пока нельзя изготовить. Сначала устраните блокирующие замечания проверки."
@@ -50,6 +56,8 @@ class ProductionConfirmationService:
         with transaction(self.config) as connection:
             locked_order = self.orders.get_by_id(order_id, connection=connection)
             self._validate_lifecycle(locked_order)
+            if self._critical_order_snapshot(locked_order) != readiness_order_snapshot:
+                raise ProductionConfirmationStaleStateError("Order changed before production confirmation. Run readiness check again.")
             if self.batches.exists_for_order(order_id, connection=connection):
                 raise ProductionConfirmationLifecycleError("Заказ уже изготовлен: производственная партия уже существует.")
             component_cost = Decimal("0")
@@ -58,9 +66,9 @@ class ProductionConfirmationService:
             for line in readiness.ingredients:
                 for selected in line.selected_lots:
                     lot = connection.execute("SELECT lot_code, unit_cost, expires_at FROM ingredient_lots WHERE id=?", (selected.lot_id,)).fetchone()
-                    unit_cost = None if lot is None or lot["unit_cost"] is None else Decimal(lot["unit_cost"])
+                    unit_cost = None if lot is None or lot["unit_cost"] is None else quantize_money(lot["unit_cost"], field="unit_cost_snapshot")
                     qty = Decimal(selected.selected_quantity)
-                    line_cost = None if unit_cost is None else unit_cost * qty
+                    line_cost = None if unit_cost is None else quantize_money(unit_cost * qty, field="ingredient_total_cost_snapshot")
                     if line_cost is None:
                         component_cost_known = False
                     else:
@@ -71,18 +79,18 @@ class ProductionConfirmationService:
             packaging_rows=[]
             for line in readiness.packaging:
                 item = connection.execute("SELECT name, unit, unit_cost FROM packaging_items WHERE id=?", (line.packaging_item_id,)).fetchone()
-                unit_cost = None if item is None or item["unit_cost"] is None else Decimal(item["unit_cost"])
+                unit_cost = None if item is None or item["unit_cost"] is None else quantize_money(item["unit_cost"], field="unit_cost_snapshot")
                 qty = Decimal(line.required_quantity)
-                line_cost = None if unit_cost is None else unit_cost * qty
+                line_cost = None if unit_cost is None else quantize_money(unit_cost * qty, field="packaging_total_cost_snapshot")
                 if line_cost is None:
                     packaging_cost_known = False
                 else:
                     packaging_cost += line_cost
                 packaging_rows.append((line, item, unit_cost, line_cost))
             other_cost = Decimal("0.00")
-            component_cost_snapshot = component_cost if component_cost_known else None
-            packaging_cost_snapshot = packaging_cost if packaging_cost_known else None
-            total_cost = component_cost + packaging_cost + other_cost if component_cost_known and packaging_cost_known else None
+            component_cost_snapshot = quantize_money(component_cost, field="component_cost") if component_cost_known else None
+            packaging_cost_snapshot = quantize_money(packaging_cost, field="packaging_cost") if packaging_cost_known else None
+            total_cost = quantize_money(component_cost + packaging_cost + other_cost, field="total_cost") if component_cost_known and packaging_cost_known else None
             batch = self.batches.create_batch(connection=connection, order_id=locked_order.id, recipe_version_id=locked_order.recipe_version_id, client_recipe_id=locked_order.client_recipe_id, final_batch_value=locked_order.target_batch_size_value, final_batch_unit=locked_order.target_batch_size_unit, component_cost=component_cost_snapshot, packaging_cost=packaging_cost_snapshot, other_cost=other_cost, total_cost=total_cost, sale_price=locked_order.sale_price, tax=None, margin=None, margin_percent=None, notes=(notes or "").strip())
             for line, selected, lot, unit_cost, line_cost in ingredient_rows:
                 qty = Decimal(selected.selected_quantity)
@@ -102,5 +110,18 @@ class ProductionConfirmationService:
         if not order.is_active or order.status in {OrderStatus.ARCHIVED, OrderStatus.CANCELLED, OrderStatus.PRODUCED, OrderStatus.DELIVERED}:
             raise ProductionConfirmationLifecycleError("Этот заказ нельзя изготовить в текущем статусе.")
 
+    def _critical_order_snapshot(self, order) -> tuple:
+        return (
+            order.recipe_version_id,
+            order.client_recipe_id,
+            order.target_batch_size_value,
+            order.target_batch_size_unit,
+            order.packaging_item_id,
+            order.packaging_quantity,
+            order.sale_price,
+            order.status,
+            order.is_active,
+        )
 
-__all__ = ["ProductionConfirmationService", "ProductionConfirmationRequiredError", "ProductionConfirmationLifecycleError", "ProductionConfirmationReadinessError", "ProductionReadinessLifecycleError", "OrderNotFoundError", "ProductionBatchAlreadyExistsError"]
+
+__all__ = ["ProductionConfirmationService", "ProductionConfirmationRequiredError", "ProductionConfirmationLifecycleError", "ProductionConfirmationStaleStateError", "ProductionConfirmationReadinessError", "ProductionReadinessLifecycleError", "OrderNotFoundError", "ProductionBatchAlreadyExistsError"]

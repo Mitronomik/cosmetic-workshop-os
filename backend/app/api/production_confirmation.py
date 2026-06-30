@@ -3,7 +3,10 @@ from fastapi import APIRouter, HTTPException
 from app.domain.errors import DomainValidationError
 from app.repositories.client_recipes import ClientRecipeNotFoundError
 from app.repositories.orders import OrderNotFoundError
+from app.repositories.packaging_stock_movements import PackagingStockMovementInactiveItemError, PackagingStockMovementInsufficientBalanceError
+from app.repositories.production_batches import ProductionBatchAlreadyExistsError
 from app.repositories.recipes import RecipeVersionNotFoundError
+from app.repositories.stock_movements import StockMovementInactiveLotError, StockMovementInsufficientBalanceError, StockMovementLotUnitMismatchError
 from app.schemas.production_batches import ProductionBatchDetailResponse, ProductionBatchIngredientResponse, ProductionBatchPackagingResponse, ProductionConfirmRequest
 from app.services.production_confirmation import ProductionConfirmationLifecycleError, ProductionConfirmationReadinessError, ProductionConfirmationRequiredError, ProductionConfirmationService
 from app.services.production_readiness import ProductionReadinessLifecycleError
@@ -23,7 +26,17 @@ def produce_order(order_id: int, payload: ProductionConfirmRequest):
         raise HTTPException(404, detail="Order was not found.") from exc
     except (RecipeVersionNotFoundError, ClientRecipeNotFoundError) as exc:
         raise HTTPException(404, detail="Linked recipe record was not found.") from exc
-    except (ProductionConfirmationLifecycleError, ProductionConfirmationReadinessError, ProductionReadinessLifecycleError) as exc:
+    except (
+        ProductionConfirmationLifecycleError,
+        ProductionConfirmationReadinessError,
+        ProductionReadinessLifecycleError,
+        ProductionBatchAlreadyExistsError,
+        StockMovementInsufficientBalanceError,
+        PackagingStockMovementInsufficientBalanceError,
+        StockMovementInactiveLotError,
+        PackagingStockMovementInactiveItemError,
+        StockMovementLotUnitMismatchError,
+    ) as exc:
         raise HTTPException(409, detail=str(exc)) from exc
 
 

@@ -24,7 +24,13 @@ from app.services.ingredients import IngredientService
 from app.services.orders import OrderService
 from app.services.packaging_items import PackagingItemService
 from app.services.packaging_stock_movements import PackagingStockMovementService
+from fastapi import HTTPException
+
+from app.api import production_confirmation as production_confirmation_api
+from app.repositories.stock_movements import StockMovementInsufficientBalanceError
+from app.schemas.production_batches import ProductionConfirmRequest
 from app.services.production_confirmation import ProductionConfirmationLifecycleError, ProductionConfirmationReadinessError, ProductionConfirmationRequiredError, ProductionConfirmationService
+from app.services.production_readiness import ProductionReadinessService
 from app.services.recipes import RecipeService
 from app.services.stock_movements import StockMovementService
 
@@ -69,16 +75,18 @@ def test_producing_ready_order_creates_batch_snapshots_movements_and_status(tmp_
     _, _, lot, packaging, order = seed_ready(c)
     detail = ProductionConfirmationService(c).produce_order(order.id, confirm=True, notes="done")
     assert detail.batch.order_id == order.id
-    assert detail.batch.component_cost == 100
-    assert detail.batch.packaging_cost == 10
-    assert detail.batch.total_cost == 110
+    assert str(detail.batch.component_cost) == "100.00"
+    assert str(detail.batch.packaging_cost) == "10.00"
+    assert str(detail.batch.total_cost) == "110.00"
     assert detail.batch.sale_price == 200
     assert detail.batch.tax is None and detail.batch.margin is None and detail.batch.margin_percent is None
     assert detail.ingredients[0].ingredient_name_snapshot == "Water"
     assert detail.ingredients[0].lot_code_snapshot == "L1"
-    assert detail.ingredients[0].unit_cost_snapshot == 2
+    assert str(detail.ingredients[0].unit_cost_snapshot) == "2.00"
+    assert str(detail.ingredients[0].total_cost_snapshot) == "100.00"
     assert detail.packaging[0].packaging_name_snapshot == "Банка"
-    assert detail.packaging[0].unit_cost_snapshot == 10
+    assert str(detail.packaging[0].unit_cost_snapshot) == "10.00"
+    assert str(detail.packaging[0].total_cost_snapshot) == "10.00"
     assert counts(c) == {"batches": 1, "batch_ingredients": 1, "batch_packaging": 1, "stock": 1, "packaging": 1}
     assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "produced"
     assert scalar(c, "SELECT produced_at IS NOT NULL FROM orders WHERE id=?", (order.id,)) == 1
@@ -168,6 +176,48 @@ def test_production_snapshots_are_immutable_after_source_changes(tmp_path):
     assert tuple(bp) == ("Банка", "10.00")
 
 
+class MutatingReadinessService:
+    def __init__(self, config, order_id):
+        self.config = config
+        self.order_id = order_id
+        self.real = ProductionReadinessService(config)
+
+    def check_order(self, order_id):
+        result = self.real.check_order(order_id)
+        with sqlite3.connect(self.config.path) as con:
+            con.execute("UPDATE orders SET sale_price='201' WHERE id=?", (self.order_id,))
+        return result
+
+
+def test_stale_order_change_after_readiness_rolls_back_without_writes(tmp_path):
+    c = config(tmp_path)
+    *_, order = seed_ready(c)
+    service = ProductionConfirmationService(c)
+    service.readiness = MutatingReadinessService(c, order.id)
+
+    with pytest.raises(ProductionConfirmationLifecycleError, match="Order changed before production confirmation"):
+        service.produce_order(order.id, True)
+
+    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
+    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+    assert scalar(c, "SELECT sale_price FROM orders WHERE id=?", (order.id,)) == "201"
+
+
+class ConflictProductionService:
+    def produce_order(self, order_id, confirm, notes=None):
+        raise StockMovementInsufficientBalanceError("Outgoing movement would make lot balance negative.")
+
+
+def test_api_maps_expected_transactional_conflicts_to_409(monkeypatch):
+    monkeypatch.setattr(production_confirmation_api, "ProductionConfirmationService", ConflictProductionService)
+
+    with pytest.raises(HTTPException) as exc_info:
+        production_confirmation_api.produce_order(1, ProductionConfirmRequest(confirm=True))
+
+    assert exc_info.value.status_code == 409
+    assert "negative" in exc_info.value.detail
+
+
 @pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
 def test_api_produce_endpoint(monkeypatch, tmp_path):
     db = tmp_path / "api-production.sqlite"
@@ -179,7 +229,13 @@ def test_api_produce_endpoint(monkeypatch, tmp_path):
     assert api.post(f"/api/orders/{order.id}/produce", json={}).status_code == 422
     response = api.post(f"/api/orders/{order.id}/produce", json={"confirm": True, "notes": "ok"})
     assert response.status_code == 200
-    assert response.json()["order_id"] == order.id
-    assert response.json()["ingredients"]
+    body = response.json()
+    assert body["order_id"] == order.id
+    assert body["component_cost"] == "100.00"
+    assert body["packaging_cost"] == "10.00"
+    assert body["total_cost"] == "110.00"
+    assert body["tax"] is None and body["margin"] is None and body["margin_percent"] is None
+    assert body["ingredients"][0]["total_cost_snapshot"] == "100.00"
+    assert body["packaging"][0]["total_cost_snapshot"] == "10.00"
     assert api.post("/api/orders/999/produce", json={"confirm": True}).status_code == 404
     assert api.post(f"/api/orders/{order.id}/produce", json={"confirm": True}).status_code == 409
