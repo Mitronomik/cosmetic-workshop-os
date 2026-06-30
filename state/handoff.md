@@ -335,3 +335,12 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - A full-replace update may omit an inactive copied line to remove it, but cannot silently edit it or replace another line with an inactive ingredient.
 - Duplicate existing line ids in the payload are rejected before mutation.
 - Transactional replacement and `client_recipe.composition_updated` auditing remain unchanged; no frontend editor was added.
+
+## PR55: ClientRecipe composition editor
+
+- Frontend detail card now has an editor for copied ClientRecipe composition.
+- Saving uses the PR54 backend API: `PUT /api/client-recipes/{client_recipe_id}/ingredients`.
+- The base recipe and saved RecipeVersion are not changed by composition edits.
+- Archived/inactive ClientRecipes remain read-only.
+- Inactive/unavailable ingredient lines are protected in the editor: leave unchanged or remove.
+- This PR does not add production, stock deduction, cost calculation, or backend changes.
