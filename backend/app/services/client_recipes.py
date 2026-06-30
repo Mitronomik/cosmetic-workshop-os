@@ -31,6 +31,10 @@ class ClientRecipeIngredientLineOwnershipError(ValueError):
     pass
 
 
+class ClientRecipeRestoreClientInactiveError(ValueError):
+    pass
+
+
 class ClientRecipeService:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config
@@ -136,5 +140,27 @@ class ClientRecipeService:
             self.audit.create_log(action="client_recipe.deactivated", entity_type="client_recipe", entity_id=str(client_recipe.id), summary=f"Client recipe deactivated: {client_recipe.title}", metadata={"client_id": client_recipe.client_id}, connection=connection)
         return client_recipe
 
+    def restore(self, client_recipe_id: int) -> ClientRecipe:
+        client_recipe_id = require_positive_id(client_recipe_id, field="client_recipe_id", label="Индивидуальный рецепт")
+        with transaction(self.config) as connection:
+            current = self.repository.get_detail(client_recipe_id, connection=connection).client_recipe
+            client_row = connection.execute("SELECT is_active FROM clients WHERE id=?", (current.client_id,)).fetchone()
+            if client_row is None:
+                raise ClientNotFoundError(f"Client {current.client_id} was not found.")
+            if not bool(client_row["is_active"]):
+                raise ClientRecipeRestoreClientInactiveError("Linked client is inactive.")
+            if current.is_active and current.status != ClientRecipeStatus.ARCHIVED:
+                return current
+            client_recipe = self.repository.restore(client_recipe_id, connection=connection)
+            self.audit.create_log(
+                action="client_recipe.restored",
+                entity_type="client_recipe",
+                entity_id=str(client_recipe.id),
+                summary=f"Client recipe restored: {client_recipe.title}",
+                metadata={"client_id": client_recipe.client_id, "restored_status": "draft"},
+                connection=connection,
+            )
+        return client_recipe
 
-__all__ = ["ClientRecipeService", "ClientRecipeNotFoundError", "ClientNotFoundError", "RecipeVersionNotFoundError", "IngredientNotFoundError", "ClientInactiveError", "SourceRecipeVersionEmptyError", "ClientRecipeIngredientInactiveError", "ClientRecipeArchivedError", "ClientRecipeIngredientLineOwnershipError"]
+
+__all__ = ["ClientRecipeService", "ClientRecipeNotFoundError", "ClientNotFoundError", "RecipeVersionNotFoundError", "IngredientNotFoundError", "ClientInactiveError", "SourceRecipeVersionEmptyError", "ClientRecipeIngredientInactiveError", "ClientRecipeArchivedError", "ClientRecipeIngredientLineOwnershipError", "ClientRecipeRestoreClientInactiveError"]

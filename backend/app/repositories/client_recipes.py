@@ -99,6 +99,14 @@ class ClientRecipeRepository:
             row = c.execute("SELECT * FROM client_recipes WHERE id=?", (client_recipe_id,)).fetchone()
         return _recipe(row)
 
+    def restore(self, client_recipe_id: int, *, connection: sqlite3.Connection | None = None) -> ClientRecipe:
+        with _scope(self.config, connection) as c:
+            cur = c.execute("UPDATE client_recipes SET is_active=1, status='draft', updated_at=CURRENT_TIMESTAMP WHERE id=?", (client_recipe_id,))
+            if cur.rowcount == 0:
+                raise ClientRecipeNotFoundError(f"Client recipe {client_recipe_id} was not found.")
+            row = c.execute("SELECT * FROM client_recipes WHERE id=?", (client_recipe_id,)).fetchone()
+        return _recipe(row)
+
 
 def _recipe(r) -> ClientRecipe:
     return ClientRecipe(r["id"], r["client_id"], r["source_recipe_version_id"], r["title"], ClientRecipeStatus(r["status"]), None if r["target_batch_size_value"] is None else Decimal(r["target_batch_size_value"]), None if r["target_batch_size_unit"] is None else UnitCode(r["target_batch_size_unit"]), r["personalization_notes"], r["allergy_notes"], r["preference_notes"], r["contraindication_notes"], r["notes"], bool(r["is_active"]), r["created_at"], r["updated_at"])

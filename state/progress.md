@@ -268,3 +268,10 @@ PR16 - Ingredient catalog UI foundation
 - Archived/inactive ClientRecipes remain read-only.
 - Inactive/unavailable ingredient lines are protected in the editor: leave unchanged or remove.
 - This PR does not add production, stock deduction, cost calculation, or backend changes.
+
+## PR56: Restore archived ClientRecipe
+- Archived ClientRecipes can now be restored to the active working list through a backend-controlled restore workflow.
+- Restore sets the ClientRecipe back to `draft` with `is_active = true` and keeps copied composition rows unchanged.
+- Restore is rejected when the linked client is archived/inactive; source RecipeVersion rows and other ClientRecipes are not mutated.
+- Restore writes a transactional `client_recipe.restored` audit event and rolls back if audit logging fails.
+- This PR does not add global restore behavior for other entities.
