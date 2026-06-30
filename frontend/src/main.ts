@@ -110,6 +110,8 @@ type ProductionBatchDetailResponse = { id: number; order_id: number; product_nam
 type ProductionStatus = 'idle' | 'loading' | 'ready' | 'error';
 type ProductionBatchListItem = { id: number; order_id: number; product_name: string; client_id: number; client_name: string | null; recipe_version_id: number | null; client_recipe_id: number | null; final_batch_value: string; final_batch_unit: string; total_cost: string | null; sale_price: string | null; tax: string | null; margin: string | null; margin_percent: string | null; produced_at: string; ingredient_line_count: number; packaging_line_count: number; notes: string };
 type ProductionHistoryState = { batches: ProductionBatchListItem[]; selectedBatch: ProductionBatchDetailResponse | null; status: ProductionStatus; detailStatus: ProductionStatus; error: string; detailError: string; filters: { search: string } };
+type DashboardStatus = 'idle' | 'loading' | 'ready' | 'error';
+type DashboardState = { status: DashboardStatus; error: string; message: string; orders: Order[]; clients: Client[]; alerts: AlertResponse[]; purchaseSuggestions: PurchaseSuggestionResponse[]; productionBatches: ProductionBatchListItem[] };
 
 
 type AlertStatus = 'open' | 'resolved' | 'dismissed';
@@ -395,6 +397,7 @@ let ordersStatus: OrdersStatus = 'idle';
 let ordersError = '';
 let ordersMessage = '';
 let productionHistoryState: ProductionHistoryState = { batches: [], selectedBatch: null, status: 'idle', detailStatus: 'idle', error: '', detailError: '', filters: { search: '' } };
+let dashboardState: DashboardState = { status: 'idle', error: '', message: '', orders: [], clients: [], alerts: [], purchaseSuggestions: [], productionBatches: [] };
 let alertsState: AlertsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', type: '', search: '' }, lastGeneration: null };
 let purchaseSuggestionsState: PurchaseSuggestionsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', reason: '', itemType: '', search: '' }, lastGeneration: null, showManualForm: false, manualForm: { item_type: 'ingredient', item_id: '', recommended_quantity: '', unit: 'g', notes: '' }, editingSuggestionId: null, editForm: { recommended_quantity: '', unit: '', notes: '' } };
 let ordersState: OrdersState = { items: [], clients: [], templates: [], versions: [], clientRecipes: [], packagingItems: [], formMode: 'create', form: emptyOrderForm(), showForm: false, selectedOrder: null, includeInactive: true, filters: { search: '', status: 'active' }, readinessByOrderId: {}, readinessLoadingOrderId: null, readinessError: '', productionByOrderId: {}, productionLoadingOrderId: null, productionError: '', productionConfirmingOrderId: null, productionNotesByOrderId: {} };
@@ -458,6 +461,7 @@ function labelForSection(section: NavigationSection): string {
 }
 
 function loadSectionData(section: NavigationSection) {
+  if (section === 'Главная') loadDashboard();
   if (section === 'Алерты') loadAlerts();
   if (section === 'Склад') loadInventory();
   if (section === 'Компоненты') loadIngredients();
@@ -473,7 +477,7 @@ function loadSectionData(section: NavigationSection) {
 }
 
 function renderActivePage(section: NavigationSection) {
-  if (section === 'Главная') return dashboardPlaceholder();
+  if (section === 'Главная') return dashboardPage();
   if (section === 'Алерты') return alertsPage();
   if (section === 'Склад') return inventoryPage();
   if (section === 'Компоненты') return ingredientsPage();
@@ -552,6 +556,13 @@ function bindEvents(root: HTMLElement) {
       render();
     });
   });
+  root.querySelector<HTMLButtonElement>('[data-action="reload-dashboard"]')?.addEventListener('click', () => loadDashboard(true));
+  root.querySelectorAll<HTMLButtonElement>('[data-nav-section]').forEach((button) => button.addEventListener('click', () => {
+    activeSection = (button.dataset.navSection as NavigationSection | undefined) ?? 'Главная';
+    window.history.pushState({}, '', pathForSection(activeSection));
+    loadSectionData(activeSection);
+    render();
+  }));
   root.querySelector<HTMLButtonElement>('[data-action="start-onboarding"]')?.addEventListener('click', () => updateOnboarding('/api/onboarding/start'));
   root.querySelector<HTMLButtonElement>('[data-action="complete-step"]')?.addEventListener('click', (event) => {
     const step = (event.currentTarget as HTMLButtonElement).dataset.step;
@@ -898,9 +909,57 @@ function submitPurchaseSuggestionEditForm(event: SubmitEvent) { event.preventDef
 function markPurchaseSuggestionAsPurchased(id: number) { purchaseSuggestionsState.actionStatus = 'loading'; purchaseSuggestionsState.message = ''; purchaseSuggestionsState.error = ''; render(); markPurchaseSuggestionPurchased(id).then(() => reloadPurchaseSuggestionsAfterAction('Предложение отмечено как купленное. Склад не изменён — внесите приход отдельно, когда товар фактически поступит.')).catch(() => { purchaseSuggestionsState.error = 'Не удалось отметить предложение купленным. Проверьте локальное приложение и попробуйте снова.'; }).finally(() => { purchaseSuggestionsState.actionStatus = 'idle'; render(); }); }
 function dismissPurchaseSuggestionFromCard(id: number) { purchaseSuggestionsState.actionStatus = 'loading'; purchaseSuggestionsState.message = ''; purchaseSuggestionsState.error = ''; render(); dismissPurchaseSuggestion(id).then(() => reloadPurchaseSuggestionsAfterAction('Предложение скрыто.')).catch(() => { purchaseSuggestionsState.error = 'Не удалось скрыть предложение. Проверьте локальное приложение и попробуйте снова.'; }).finally(() => { purchaseSuggestionsState.actionStatus = 'idle'; render(); }); }
 
-function dashboardPlaceholder() {
-  return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Что уже можно открыть</h2><div class="readiness-grid"><div><h3>Работает сейчас</h3><ul><li>Рецепты</li><li>Индивидуальные рецепты</li><li>Клиенты</li><li>Заказы</li><li>Компоненты</li><li>Складской обзор</li><li>Тара</li><li>История производства</li><li>Алерты</li><li>Закупки</li></ul></div><div><h3>Скоро</h3><ul><li>Импорт</li><li>Отчеты</li></ul></div></div></section>`;
+function loadDashboard(force = false) {
+  if (!force && (dashboardState.status === 'loading' || dashboardState.status === 'ready')) return;
+  dashboardState.status = 'loading';
+  dashboardState.error = '';
+  dashboardState.message = '';
+  render();
+  Promise.all([
+    getOrders(true),
+    getClients(true),
+    getAlerts({ status: 'open', type: '', search: '' }),
+    getPurchaseSuggestions({ status: 'open', reason: '', itemType: '', search: '' }),
+    getProductionBatches(),
+  ]).then(([orders, clients, alerts, purchaseSuggestions, productionBatches]) => {
+    dashboardState = {
+      status: 'ready',
+      error: '',
+      message: force ? 'Обзор обновлён. Данные только перечитаны из локального API.' : '',
+      orders: orders.orders,
+      clients: clients.clients,
+      alerts: alerts.alerts,
+      purchaseSuggestions: purchaseSuggestions.purchase_suggestions,
+      productionBatches: productionBatches.production_batches,
+    };
+    render();
+  }).catch(() => {
+    dashboardState.status = 'error';
+    dashboardState.error = 'Не удалось загрузить обзор мастерской. Проверьте, что локальное приложение запущено, и попробуйте снова.';
+    render();
+  });
 }
+
+function dashboardPage() {
+  const activeOrders = dashboardActiveOrders();
+  const waitingOrders = activeOrders.filter((order) => order.status === 'waiting_for_materials');
+  const readyOrders = activeOrders.filter((order) => order.status === 'ready_to_produce');
+  const recentBatches = dashboardState.productionBatches.slice(0, 3);
+  return `<div class="dashboard-layout"><section class="card data-card dashboard-hero"><div><p class="card-kicker">Сегодня в мастерской</p><h2>Сегодня в мастерской</h2><p>Короткий обзор того, что требует внимания: заказы, алерты, закупки и последние партии.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-dashboard">Обновить обзор</button></div></section>${onboardingCard()}${dashboardState.status === 'error' ? dashboardErrorCard() : ''}${dashboardState.message ? `<p class="page-message">${escapeHtml(dashboardState.message)}</p>` : ''}${dashboardState.status === 'loading' ? '<section class="card"><p>Загружаем обзор мастерской…</p></section>' : ''}${dashboardState.status !== 'error' ? `${dashboardPriorityCards(activeOrders, waitingOrders, readyOrders, recentBatches)}${dashboardNextActions(waitingOrders, readyOrders)}<div class="dashboard-columns">${dashboardOrdersBlock(activeOrders)}${dashboardAlertsBlock()}${dashboardPurchaseBlock()}${dashboardProductionBlock(recentBatches)}${dashboardQuickActions()}${dashboardBackupReminder()}</div>` : ''}</div>`;
+}
+
+function dashboardErrorCard() { return `<section class="card error-card"><h2>Не удалось загрузить обзор мастерской</h2><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-dashboard">Повторить</button></div></section>`; }
+function dashboardActiveOrders() { return dashboardState.orders.filter((order) => order.is_active && !['cancelled', 'archived', 'delivered'].includes(order.status)); }
+function dashboardPriorityCards(activeOrders: Order[], waitingOrders: Order[], readyOrders: Order[], recentBatches: ProductionBatchListItem[]) { const cards = [['Активные заказы', activeOrders.length], ['Ждут материалов', waitingOrders.length], ['Готовы к производству', readyOrders.length], ['Открытые алерты', dashboardState.alerts.length], ['Купить', dashboardState.purchaseSuggestions.length], ['Последние партии', recentBatches.length]]; return `<section class="overview-grid">${cards.map(([label, value]) => `<div class="metric-card"><span>${escapeHtml(String(label))}</span><strong>${value}</strong></div>`).join('')}</section>`; }
+function dashboardNextActions(waitingOrders: Order[], readyOrders: Order[]) { const hasCriticalAlerts = dashboardState.alerts.some((alert) => alert.severity === 'critical' || alert.severity === 'blocking'); const actions: string[] = []; if (hasCriticalAlerts) actions.push('Сначала проверьте критичные алерты.'); if (waitingOrders.length) actions.push('Проверьте заказы, которые ждут компонентов или тары.'); if (dashboardState.purchaseSuggestions.length) actions.push('Откройте закупки и обработайте позиции, которые нужно купить.'); if (readyOrders.length) actions.push('Есть заказы, которые можно готовить к изготовлению.'); if (!actions.length) actions.push('Критичных задач сейчас нет. Можно продолжать плановую работу.'); return `<section class="card data-card"><p class="card-kicker">Что сделать сегодня</p><h2>Следующие шаги</h2><ul class="checklist dashboard-actions-list">${actions.map((action, index) => `<li><span>${index + 1}</span><strong>${escapeHtml(action)}</strong><small>Это подсказка по текущим данным. Действия выполняются только в соответствующих разделах.</small></li>`).join('')}</ul></section>`; }
+function dashboardOrdersBlock(activeOrders: Order[]) { return dashboardSection('Активные заказы', 'Что сейчас в работе', activeOrders.length ? activeOrders.slice(0, 5).map((order) => `<article class="dashboard-list-item"><strong>Заказ №${order.id} · ${escapeHtml(order.product_name || 'Продукт не указан')}</strong><small>${orderClientLabel(order)} · ${orderStatusLabel(order.status)} · ${quantityLabel(order.target_batch_size_value, order.target_batch_size_unit)}</small></article>`).join('') : '<p class="empty-hint">Активных заказов пока нет.</p>', 'Открыть заказы', 'Заказы'); }
+function dashboardAlertsBlock() { return dashboardSection('Алерты', 'Что требует внимания', dashboardState.alerts.length ? dashboardState.alerts.slice(0, 5).map((alert) => `<article class="dashboard-list-item"><strong>${alertSeverityLabel(alert.severity)} · ${alertTypeLabel(alert.type)}</strong><small>${escapeHtml(alert.message)}</small>${alert.recommended_action ? `<small>Что сделать: ${escapeHtml(alert.recommended_action)}</small>` : ''}</article>`).join('') : '<p class="empty-hint">Открытых алертов нет.</p>', 'Открыть алерты', 'Алерты'); }
+function dashboardPurchaseBlock() { return dashboardSection('Закупки', 'Что нужно купить', dashboardState.purchaseSuggestions.length ? dashboardState.purchaseSuggestions.slice(0, 5).map((suggestion) => `<article class="dashboard-list-item"><strong>${escapeHtml(suggestion.item_name_snapshot)}</strong><small>${quantityLabel(suggestion.recommended_quantity, suggestion.unit)} · ${purchaseSuggestionReasonLabel(suggestion.reason)}</small>${suggestion.message ? `<small>${escapeHtml(suggestion.message)}</small>` : ''}${suggestion.notes ? `<small>Заметка: ${escapeHtml(suggestion.notes)}</small>` : ''}</article>`).join('') : '<p class="empty-hint">Открытых закупочных предложений нет.</p>', 'Открыть закупки', 'Закупки'); }
+function dashboardProductionBlock(recentBatches: ProductionBatchListItem[]) { return dashboardSection('Последние партии', 'Что уже изготовлено', recentBatches.length ? recentBatches.map((batch) => `<article class="dashboard-list-item"><strong>${formatDateTime(batch.produced_at)} · ${escapeHtml(batch.product_name || 'Продукт не указан')}</strong><small>${escapeHtml(batch.client_name || 'Клиент не указан')} · ${quantityLabel(batch.final_batch_value, batch.final_batch_unit)} · ${moneyOrMissing(batch.total_cost)}</small></article>`).join('') : '<p class="empty-hint">Изготовленных партий пока нет.</p>', 'Открыть производство', 'Производство'); }
+function dashboardQuickActions() { const actions: Array<[string, NavigationSection]> = [['Новый заказ', 'Заказы'], ['Компоненты', 'Компоненты'], ['Партии компонентов', 'Партии'], ['Тара', 'Тара'], ['Алерты', 'Алерты'], ['Закупки', 'Закупки'], ['Производство', 'Производство']]; return `<section class="card data-card"><p class="card-kicker">Быстрые действия</p><h2>Куда перейти</h2><div class="actions">${actions.map(([label, section]) => `<button class="secondary-action" type="button" data-nav-section="${section}">${label}</button>`).join('')}</div><p class="next-step">Кнопки только открывают существующие разделы и не меняют данные.</p></section>`; }
+function dashboardBackupReminder() { return `<section class="card data-card"><p class="card-kicker">Резервная копия</p><h2>Backup перед крупными изменениями</h2><p>Перед крупными изменениями данных, импортом или обновлением приложения сделайте резервную копию данных. Полный экран backup/export будет добавлен отдельным PR.</p></section>`; }
+function dashboardSection(kicker: string, title: string, body: string, buttonLabel: string, section: NavigationSection) { return `<section class="card data-card dashboard-section"><div class="section-heading"><div><p class="card-kicker">${escapeHtml(kicker)}</p><h2>${escapeHtml(title)}</h2></div><button class="secondary-action compact" type="button" data-nav-section="${section}">${escapeHtml(buttonLabel)}</button></div><div class="dashboard-list">${body}</div></section>`; }
+function orderClientLabel(order: Order) { const client = dashboardState.clients.find((item) => item.id === order.client_id) ?? null; return client?.full_name ? escapeHtml(client.full_name) : `Клиент №${order.client_id}`; }
 
 
 

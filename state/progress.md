@@ -392,3 +392,11 @@ After PR61 — preparing production readiness foundation
 - Added visible safety copy that «Куплено» closes the recommendation but does not create IngredientLot records, packaging inbound movements, stock movements, order changes, or production changes.
 - Updated dashboard copy to list «Закупки» as working now; no dashboard widgets were added.
 - No backend behavior, migrations, supplier integration, online ordering, real procurement, stock mutation, order mutation, production mutation, scheduler, polling, notifications, import/export, or backup UI were added.
+
+## PR71 — Dashboard operational overview frontend
+- Replaced the dashboard placeholder with a frontend operational overview on `/`.
+- Dashboard uses existing APIs and frontend aggregation for orders, clients, open alerts, open purchase suggestions, and recent production batches.
+- Added onboarding, priority cards, “Что сделать сегодня” guidance, active orders, alerts, purchase suggestions, recent production, quick actions, and backup reminder blocks.
+- Dashboard reload only repeats existing GET data; it does not regenerate alerts or purchase suggestions and does not run production readiness checks.
+- No backend endpoint, migration, analytics, scheduler, polling, notifications, backup/export, import/export, stock/order/production mutations, or procurement automation were added.
+- Next recommended PR: Backup/export UI foundation or Backup/export backend/frontend foundation depending on existing backup/export state.
