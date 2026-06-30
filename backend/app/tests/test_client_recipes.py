@@ -76,7 +76,7 @@ def test_migration_creates_client_recipe_tables_and_guards(tmp_path):
     assert "client_recipe_ingredients" not in FORBIDDEN_FUTURE_TABLES
     assert_no_forbidden_future_tables(names)
     assert_only_current_tables(names)
-    assert {"orders", "production_batches", "import_sources", "import_drafts", "backup_records", "client_wishes", "client_feedback"}.isdisjoint(names)
+    assert {"orders", "production_batches", "import_sources", "import_drafts", "backup_records"}.isdisjoint(names)
 
 
 def test_create_list_get_and_snapshot_lines(tmp_path):

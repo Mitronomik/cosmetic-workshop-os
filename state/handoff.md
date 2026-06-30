@@ -351,3 +351,18 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Restore sets status back to `draft`, preserves copied composition, and is rejected if the linked client is archived/inactive.
 - Source RecipeVersion and other ClientRecipes are not mutated; the operation is audited transactionally.
 - This PR does not add global restore for clients, ingredients, packaging, recipe templates, or recipe versions.
+
+## PR57: Client wishes and feedback backend
+- Added additive migration `0011_client_wishes_feedback` for `client_wishes` and `client_feedback`.
+- Added domain validation, repositories, services, schemas, and FastAPI routes for ClientWish and ClientFeedback.
+- Wish operations are transactional and audited for create/status/archive; resolved status sets `resolved_at`, archive sets `status=archived` and `is_active=0`.
+- Feedback is append-only in this PR and is audited on create only.
+- Optional ClientRecipe links are validated to belong to the same client; archived ClientRecipes are allowed as historical context.
+- Creating for inactive clients is rejected; linked RecipeVersion, ClientRecipe composition, stock, production, and orders are untouched.
+- Frontend UI remains out of scope for this PR and should be added later.
+
+## PR57 follow-up: ClientWish status lifecycle
+- `PUT /api/client-wishes/{wish_id}/status` now only supports active-wish transitions among `open`, `planned`, and `resolved`.
+- `resolved_at` is set for `resolved` and cleared for `open`/`planned`; archived wishes reject generic status changes with HTTP 409.
+- `status=archived` through `PUT /status` is rejected so archiving continues to use `POST /api/client-wishes/{wish_id}/archive`.
+- No feedback update/delete, restore endpoint, frontend UI, or unrelated domain changes were added.

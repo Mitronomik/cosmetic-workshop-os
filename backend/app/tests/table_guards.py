@@ -18,13 +18,13 @@ CURRENT_ALLOWED_TABLES = {
     "ingredient_catalog_tags",
     "packaging_item_catalog_tags",
     "recipe_template_catalog_tags",
+    "client_wishes",
+    "client_feedback",
     "sqlite_sequence",
 }
 
 FORBIDDEN_FUTURE_TABLES = {
     "recipes",
-    "client_wishes",
-    "client_feedback",
     "orders",
     "production_batches",
     "import_sources",

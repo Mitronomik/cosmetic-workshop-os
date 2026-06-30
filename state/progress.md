@@ -275,3 +275,17 @@ PR16 - Ingredient catalog UI foundation
 - Restore is rejected when the linked client is archived/inactive; source RecipeVersion rows and other ClientRecipes are not mutated.
 - Restore writes a transactional `client_recipe.restored` audit event and rolls back if audit logging fails.
 - This PR does not add global restore behavior for other entities.
+
+## PR57: Client wishes and feedback backend
+- Added backend foundations for client wishes and client feedback.
+- Wishes can be created, listed, retrieved, status-updated, resolved, and archived.
+- Feedback is append-only in this PR: create/list/get only, with no update or delete endpoint.
+- Both wishes and feedback can optionally link to a ClientRecipe belonging to the same client, including archived ClientRecipes for historical context.
+- Creating wishes or feedback for inactive clients is rejected.
+- Source RecipeVersion, ClientRecipe composition, stock, production, and orders are not mutated.
+- Frontend UI will be added in a later PR.
+
+## PR57 follow-up: ClientWish status lifecycle
+- Fixed ClientWish status transitions so moving from `resolved` back to `open` or `planned` clears `resolved_at`.
+- Generic status updates no longer archive wishes or restore archived wishes; archive remains explicit through `POST /client-wishes/{wish_id}/archive`.
+- Feedback remains append-only and no ClientRecipe, RecipeVersion, inventory, production, or frontend behavior was changed.
