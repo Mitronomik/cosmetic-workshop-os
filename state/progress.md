@@ -1,7 +1,12 @@
 # Progress
 
 ## Current phase
-PR16 - Ingredient catalog UI foundation
+After PR58 — preparing Orders backend foundation
+
+## Current next step
+- Orders backend foundation is the next recommended roadmap-scoped implementation PR.
+- PR58 client wishes and append-only feedback UI, plus draft-preservation follow-up fixes, are complete.
+- Production, alerts, purchase suggestions, import/export, backup/restore UI, final packaging, cloud, mobile, OCR, auth, and roles remain out of scope until explicitly requested.
 
 ## Done
 - Architecture draft
@@ -67,15 +72,18 @@ PR16 - Ingredient catalog UI foundation
 - PR13 repository/service/API foundation for create, read, list, list-by-packaging-item, and movement-derived packaging item balance, plus negative-balance prevention.
 - PR13 transactional `packaging_stock_movement.created` audit event so audit failure rolls back movement creation and leaves derived balance unchanged.
 - PR13 follow-up replaced the packaging stock movement `packaging_item_id` validator with packaging-specific validation messages so invalid tare selection no longer references ingredients/components.
+- PR58 client wishes and feedback UI plus follow-up fixes preserving client-card drafts are complete.
+
 
 ## In progress
-- PR16 ingredient/component directory UI foundation validation and PR update
+- Preparing the next scoped PR: Orders backend foundation.
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- Continue with the next roadmap-scoped task after PR16 review/merge. Packaging inventory, recipes, clients, orders, production, FEFO allocation, automatic write-off, imports, exports, backup UI/restore, final packaging, Electron, Docker, cloud, mobile, OCR, auth and roles remain out of scope until explicitly requested.
+- Implement Orders backend foundation as the next roadmap-scoped task.
+- Keep production readiness/confirmation, automatic stock write-off, production batches, alerts, purchase suggestions, import/export, backup/restore UI, final packaging, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.
 
 ## Important notes
 - PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.
