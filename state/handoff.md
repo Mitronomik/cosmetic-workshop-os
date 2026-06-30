@@ -380,3 +380,8 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - Switching clients, closing forms, and successful submits still intentionally reset the relevant drafts.
 - Wish title input maxlength now matches backend validation at 180 characters.
 - Backend/domain/migrations were not changed. Feedback remains append-only and no wish restore UI was added.
+
+## PR58 follow-up: Preserve drafts on client card save
+- `submitClientForm(...)` now syncs open ClientWish/ClientFeedback drafts before edit-card validation, success-render, and error-render paths.
+- Saving the main client details should no longer overwrite unsaved wish/feedback drafts that remain visible in the same client card.
+- Backend/domain/migrations were not changed. Feedback remains append-only and no wish restore UI was added.

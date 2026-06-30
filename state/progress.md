@@ -301,3 +301,7 @@ PR16 - Ingredient catalog UI foundation
 - Open ClientWish and ClientFeedback form drafts are now synced from the DOM before background client-card refresh renders, preserving typed text, ClientRecipe selector values, dates, ratings, and follow-up checkbox state.
 - Wish title frontend maxlength is aligned with backend validation at 180 characters.
 - Backend/domain/migrations were not changed. Feedback edit/delete and wish restore were not added.
+
+## PR58 follow-up: Preserve drafts on client card save
+- Client card save now syncs open ClientWish/ClientFeedback drafts before edit-card render paths, so saving the main client details does not lose unsaved wish or feedback form input.
+- Backend/domain/migrations were not changed. Feedback edit/delete and wish restore were not added.
