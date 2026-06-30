@@ -10,10 +10,10 @@ Orders are available through the local API under `/api` and connect an active cl
 
 Endpoints:
 
-- `POST /api/orders` — create an order. Decimal-backed fields such as `target_batch_size_value`, `packaging_quantity`, and `sale_price` should be sent as strings.
+- `POST /api/orders` — create an order in `new` status. Decimal-backed fields such as `target_batch_size_value`, `packaging_quantity`, and `sale_price` should be sent as strings. Generic create does not accept `status`, `produced_at`, or `delivered_at`.
 - `GET /api/orders?include_inactive=true&status=&client_id=` — list orders with optional status/client filters.
 - `GET /api/orders/{order_id}` — read one order.
-- `PUT /api/orders/{order_id}` — update an active, non-cancelled order.
+- `PUT /api/orders/{order_id}` — update an active, non-cancelled order. Generic update preserves lifecycle fields and does not accept `status`, `produced_at`, or `delivered_at`.
 - `POST /api/orders/{order_id}/cancel` — cancel an active order; repeated cancel is idempotent.
 - `POST /api/orders/{order_id}/archive` — archive an order by setting `is_active=false` and `status=archived`.
 - `GET /api/clients/{client_id}/orders` — list orders for one client.

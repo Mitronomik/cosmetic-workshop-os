@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from app.db.config import DatabaseConfig
 from app.db.transactions import transaction
 from app.domain.orders import OrderDraft
@@ -24,6 +26,7 @@ class OrderService:
         self.config=config; self.repository=OrderRepository(config); self.clients=ClientRepository(config); self.recipes=RecipeRepository(config); self.client_recipes=ClientRecipeRepository(config); self.packaging=PackagingItemRepository(config); self.audit=AuditLogRepository(config)
 
     def create(self, draft: OrderDraft) -> Order:
+        draft = replace(draft, status=OrderStatus.NEW, produced_at=None, delivered_at=None)
         self._validate_refs(draft, require_active=True)
         with transaction(self.config) as connection:
             order=self.repository.create(draft, connection=connection)
@@ -43,6 +46,7 @@ class OrderService:
         current=self.repository.get_by_id(order_id)
         if current.status == OrderStatus.ARCHIVED or not current.is_active: raise OrderLifecycleError("Archived order cannot be updated.")
         if current.status == OrderStatus.CANCELLED: raise OrderLifecycleError("Cancelled order cannot be updated.")
+        draft = replace(draft, status=current.status, produced_at=current.produced_at, delivered_at=current.delivered_at)
         self._validate_refs(draft, require_active=True)
         with transaction(self.config) as connection:
             order=self.repository.update(order_id, draft, connection=connection)

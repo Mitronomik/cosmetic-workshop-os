@@ -35,6 +35,8 @@ class OrderDraft:
             raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "В заказе должен быть выбран ровно один источник рецепта.", "recipe_source", f"recipe_version_id={recipe_version_id}, client_recipe_id={client_recipe_id}", "Выберите либо версию базового рецепта, либо индивидуальный рецепт клиента."))
         unit = parse_unit(target_batch_size_unit, field="target_batch_size_unit", allowed=ALLOWED_BATCH_SIZE_UNITS)
         pkg_id = None if packaging_item_id is None else require_positive_id(packaging_item_id, field="packaging_item_id", label="Тара")
+        if packaging_quantity is not None and pkg_id is None:
+            raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "Для количества тары нужно выбрать конкретную тару.", "packaging_item_id", None, "Выберите тару или оставьте количество тары пустым."))
         pkg_qty = None
         if packaging_quantity is not None:
             pkg_qty = quantize_count(packaging_quantity, field="packaging_quantity")

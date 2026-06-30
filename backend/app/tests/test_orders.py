@@ -1,5 +1,6 @@
 import sqlite3
 import pytest
+from pydantic import ValidationError
 try:
     from fastapi.testclient import TestClient
 except RuntimeError:
@@ -12,7 +13,9 @@ from app.domain.orders import OrderDraft
 from app.domain.packaging_items import PackagingItemDraft
 from app.domain.recipes import RecipeIngredientDraft, RecipeTemplateDraft, RecipeVersionDraft
 from app.domain.errors import DomainValidationError
+from app.models.order import OrderStatus
 from app.main import create_app
+from app.schemas.orders import OrderCreateRequest, OrderUpdateRequest
 from app.services.clients import ClientService
 from app.services.database import initialize_database
 from app.services.ingredients import IngredientService
@@ -60,22 +63,35 @@ def test_migration_creates_orders_table_indexes_and_guards(tmp_path):
     assert {"production_batches","import_sources","import_drafts","purchase_suggestions","alerts"}.isdisjoint(names)
 
 def test_order_domain_validation_and_normalization():
-    good=draft(1, version_id=1, packaging_quantity="2", sale_price="100.50")
+    good=draft(1, version_id=1, packaging_item_id=1, packaging_quantity="2", sale_price="100.50")
     assert good.product_name == "Крем дневной" and good.notes == "без отдушки"
-    for kwargs in ({"client_id":None}, {"version_id":None}, {"version_id":1,"client_recipe_id":1}, {"version_id":1,"target_batch_size_value":"0"}, {"version_id":1,"target_batch_size_unit":"percent"}, {"version_id":1,"packaging_quantity":"1.5"}, {"version_id":1,"sale_price":"-1"}):
+    for kwargs in ({"client_id":None}, {"version_id":None}, {"version_id":1,"client_recipe_id":1}, {"version_id":1,"target_batch_size_value":"0"}, {"version_id":1,"target_batch_size_unit":"percent"}, {"version_id":1,"packaging_item_id":1,"packaging_quantity":"1.5"}, {"version_id":1,"packaging_quantity":"2"}, {"version_id":1,"sale_price":"-1"}):
         with pytest.raises(DomainValidationError):
             if "version_id" in kwargs: draft(kwargs.pop("client_id",1), **kwargs)
             else: draft(**kwargs)
 
+
+def test_order_api_schemas_reject_generic_lifecycle_fields():
+    payload={"client_id":1,"recipe_version_id":1,"product_name":"Крем","target_batch_size_value":"50","target_batch_size_unit":"g"}
+    for field, value in (("status", "produced"), ("produced_at", "2026-06-30"), ("delivered_at", "2026-07-01")):
+        with pytest.raises(ValidationError):
+            OrderCreateRequest(**{**payload, field: value})
+        with pytest.raises(ValidationError):
+            OrderUpdateRequest(**{**payload, field: value})
+
 def test_service_create_list_get_update_cancel_archive_and_safety(tmp_path):
     c=config(tmp_path); client, version, client_recipe, packaging=seed(c); service=OrderService(c)
-    order=service.create(draft(client.id, version_id=version.id, packaging_item_id=packaging.id, packaging_quantity="1", sale_price="1200"))
-    assert order.status.value == "new" and scalar(c,"SELECT count(*) FROM stock_movements")==0 and scalar(c,"SELECT count(*) FROM packaging_stock_movements")==0
+    order=service.create(draft(client.id, version_id=version.id, packaging_item_id=packaging.id, packaging_quantity="1", sale_price="1200", status=OrderStatus.PRODUCED, produced_at="2026-06-30", delivered_at="2026-07-01"))
+    assert order.status.value == "new" and order.produced_at is None and order.delivered_at is None
+    assert scalar(c,"SELECT count(*) FROM stock_movements")==0 and scalar(c,"SELECT count(*) FROM packaging_stock_movements")==0
     cr_order=service.create(draft(client.id, client_recipe_id=client_recipe.id, product_name="Индивидуальный крем"))
     assert cr_order.client_recipe_id == client_recipe.id
     assert service.get_by_id(order.id).id == order.id
-    updated=service.update(order.id, draft(client.id, version_id=version.id, product_name="Крем ночной", target_batch_size_value="75"))
+    with sqlite3.connect(c.path) as con:
+        con.execute("UPDATE orders SET status='in_progress', produced_at='future-produced', delivered_at='future-delivered' WHERE id=?", (order.id,))
+    updated=service.update(order.id, draft(client.id, version_id=version.id, product_name="Крем ночной", target_batch_size_value="75", status=OrderStatus.PRODUCED, produced_at="bad", delivered_at="bad"))
     assert updated.product_name == "Крем ночной"
+    assert updated.status.value == "in_progress" and updated.produced_at == "future-produced" and updated.delivered_at == "future-delivered"
     assert scalar(c,"SELECT title FROM recipe_versions WHERE id=?", (version.id,)) == version.title
     assert scalar(c,"SELECT count(*) FROM client_recipe_ingredients WHERE client_recipe_id=?", (client_recipe.id,)) > 0
     cancelled=service.cancel(order.id); assert cancelled.status.value == "cancelled"; assert service.cancel(order.id).status.value == "cancelled"
@@ -109,9 +125,14 @@ def test_audit_failure_rolls_back_writes(tmp_path):
 def test_api_orders_endpoints(monkeypatch, tmp_path):
     db=tmp_path/"api-orders.sqlite"; monkeypatch.setenv(DATABASE_PATH_ENV, str(db)); c=DatabaseConfig(path=db); initialize_database(c); client, version, _, _=seed(c); api=TestClient(create_app())
     payload={"client_id":client.id,"recipe_version_id":version.id,"product_name":"Крем","target_batch_size_value":"50","target_batch_size_unit":"g"}
+    for field, value in (("status", "produced"), ("produced_at", "2026-06-30"), ("delivered_at", "2026-07-01")):
+        assert api.post("/api/orders", json={**payload, field: value}).status_code == 422
     created=api.post("/api/orders", json=payload); assert created.status_code == 201; order_id=created.json()["id"]
+    assert created.json()["status"] == "new" and created.json()["produced_at"] is None and created.json()["delivered_at"] is None
     assert api.get("/api/orders").json()["orders"][0]["id"] == order_id
     assert api.get(f"/api/orders/{order_id}").status_code == 200
+    for field, value in (("status", "produced"), ("produced_at", "2026-06-30"), ("delivered_at", "2026-07-01")):
+        assert api.put(f"/api/orders/{order_id}", json={**payload, field: value}).status_code == 422
     assert api.put(f"/api/orders/{order_id}", json={**payload,"product_name":"Крем 2"}).json()["product_name"] == "Крем 2"
     assert api.get(f"/api/clients/{client.id}/orders").json()["orders"][0]["id"] == order_id
     assert api.post(f"/api/orders/{order_id}/cancel").json()["status"] == "cancelled"
