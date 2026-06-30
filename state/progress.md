@@ -289,3 +289,19 @@ PR16 - Ingredient catalog UI foundation
 - Fixed ClientWish status transitions so moving from `resolved` back to `open` or `planned` clears `resolved_at`.
 - Generic status updates no longer archive wishes or restore archived wishes; archive remains explicit through `POST /client-wishes/{wish_id}/archive`.
 - Feedback remains append-only and no ClientRecipe, RecipeVersion, inventory, production, or frontend behavior was changed.
+
+## PR58: Client wishes and feedback UI
+- Added frontend-only client-card sections for `Пожелания клиента` and `Обратная связь` using the existing PR57 backend endpoints.
+- Wishes can be created, moved only between `open`, `planned`, and `resolved`, and archived through the explicit archive endpoint; archived wishes are hidden by default, visible through `Показать архивные`, read-only, and not restorable in this PR.
+- Feedback can be created and viewed as append-only history; no edit/delete UI was added.
+- ClientRecipe linking is implemented in both create forms by loading existing client recipes, including archived recipes when available, and sending only the selected `client_recipe_id` without mutating ClientRecipe composition.
+- Backend/domain/migrations were not changed. Orders, production, stock, import/export, backup/restore, cloud, auth, and AI recommendations were not added.
+
+## PR58 follow-up: Preserve client card drafts
+- Open ClientWish and ClientFeedback form drafts are now synced from the DOM before background client-card refresh renders, preserving typed text, ClientRecipe selector values, dates, ratings, and follow-up checkbox state.
+- Wish title frontend maxlength is aligned with backend validation at 180 characters.
+- Backend/domain/migrations were not changed. Feedback edit/delete and wish restore were not added.
+
+## PR58 follow-up: Preserve drafts on client card save
+- Client card save now syncs open ClientWish/ClientFeedback drafts before edit-card render paths, so saving the main client details does not lose unsaved wish or feedback form input.
+- Backend/domain/migrations were not changed. Feedback edit/delete and wish restore were not added.

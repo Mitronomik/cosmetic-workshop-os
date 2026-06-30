@@ -96,6 +96,15 @@ type ClientRecipePayload = { client_id: number; source_recipe_version_id: number
 type ClientRecipeIngredientUpdatePayload = { id?: number; ingredient_id: number; position: number; phase: string; amount_value: string; amount_unit: string; personalization_note: string; notes: string };
 type ClientRecipeCompositionDraftLine = { id: number | null; ingredient_id: string; position: number; phase: string; amount_value: string; amount_unit: string; personalization_note: string; notes: string; lockedReason?: string };
 type ClientRecipeCompositionEditorState = { isOpen: boolean; isSaving: boolean; draft: ClientRecipeCompositionDraftLine[]; error: string };
+type ClientWishStatus = 'open' | 'planned' | 'resolved' | 'archived';
+type ClientWishPriority = 'low' | 'normal' | 'high';
+type ClientWish = { id: number; client_id: number; client_recipe_id: number | null; title: string; description: string; category: string; priority: ClientWishPriority; status: ClientWishStatus; is_active: boolean; created_at: string; updated_at: string; resolved_at: string | null };
+type ClientWishCreatePayload = { client_recipe_id: number | null; title: string; description: string; category: string; priority: ClientWishPriority };
+type ClientFeedback = { id: number; client_id: number; client_recipe_id: number | null; feedback_type: string; sentiment: string; rating: number | null; text: string; follow_up_needed: boolean; follow_up_note: string; occurred_at: string | null; created_at: string };
+type ClientFeedbackCreatePayload = { client_recipe_id: number | null; feedback_type: string; sentiment: string; rating: number | null; text: string; follow_up_needed: boolean; follow_up_note: string; occurred_at: string | null };
+type ClientWishFormState = { title: string; description: string; category: string; priority: ClientWishPriority; client_recipe_id: string };
+type ClientFeedbackFormState = { feedback_type: string; sentiment: string; rating: string; text: string; follow_up_needed: boolean; follow_up_note: string; occurred_at: string; client_recipe_id: string };
+type ClientCardState = { clientId: number | null; wishes: ClientWish[]; feedback: ClientFeedback[]; recipes: ClientRecipe[]; includeArchivedWishes: boolean; wishesStatus: 'idle' | 'loading' | 'ready' | 'error'; feedbackStatus: 'idle' | 'loading' | 'ready' | 'error'; recipesStatus: 'idle' | 'loading' | 'ready' | 'error'; showWishForm: boolean; showFeedbackForm: boolean; wishForm: ClientWishFormState; feedbackForm: ClientFeedbackFormState; wishError: string; feedbackError: string; savingWish: boolean; savingFeedback: boolean; changingWishId: number | null; archivingWishId: number | null };
 type ClientRecipeStatusFilter = 'active' | 'archived' | 'all';
 type ClientRecipeVersionsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type ClientRecipesState = { items: ClientRecipe[]; clients: Client[]; templates: RecipeTemplate[]; versions: RecipeVersion[]; versionsStatus: ClientRecipeVersionsStatus; selectedTemplateId: number | null; selectedDetail: ClientRecipeDetail | null; form: ClientRecipeFormState; includeInactive: boolean; detailStatus: ClientRecipeDetailStatus; showCreateForm: boolean; filters: { search: string; status: ClientRecipeStatusFilter; clientId: string }; compositionEditor: ClientRecipeCompositionEditorState };
@@ -328,6 +337,7 @@ let clientsStatus: ClientsStatus = 'idle';
 let clientsState: ClientsState = { items: [], formMode: 'create', form: emptyClientForm(), includeInactive: false, showCreateForm: false, filters: { search: '', status: 'active' } };
 let clientsError = '';
 let clientsMessage = '';
+let clientCardState: ClientCardState = emptyClientCardState();
 let clientRecipesStatus: ClientRecipesStatus = 'idle';
 let clientRecipesError = '';
 let clientRecipesMessage = '';
@@ -536,6 +546,15 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="clear-client-filter"]').forEach((button) => button.addEventListener('click', () => clearClientFilter(button.dataset.filter ?? '')));
   root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client"]').forEach((button) => button.addEventListener('click', () => deactivateClient(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="client"]')?.addEventListener('submit', submitClientForm);
+  root.querySelector<HTMLButtonElement>('[data-action="toggle-client-wish-form"]')?.addEventListener('click', toggleClientWishForm);
+  root.querySelector<HTMLButtonElement>('[data-action="toggle-archived-client-wishes"]')?.addEventListener('click', toggleArchivedClientWishes);
+  root.querySelector<HTMLFormElement>('[data-form="client-wish"]')?.addEventListener('submit', submitClientWishForm);
+  root.querySelector<HTMLButtonElement>('[data-action="close-client-wish-form"]')?.addEventListener('click', closeClientWishForm);
+  root.querySelectorAll<HTMLButtonElement>('[data-action="change-client-wish-status"]').forEach((button) => button.addEventListener('click', () => changeClientWishStatus(Number(button.dataset.id), button.dataset.status as ClientWishStatus)));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client-wish"]').forEach((button) => button.addEventListener('click', () => archiveClientWishFromCard(Number(button.dataset.id))));
+  root.querySelector<HTMLButtonElement>('[data-action="toggle-client-feedback-form"]')?.addEventListener('click', toggleClientFeedbackForm);
+  root.querySelector<HTMLFormElement>('[data-form="client-feedback"]')?.addEventListener('submit', submitClientFeedbackForm);
+  root.querySelector<HTMLButtonElement>('[data-action="close-client-feedback-form"]')?.addEventListener('click', closeClientFeedbackForm);
   root.querySelector<HTMLButtonElement>('[data-action="reload-client-recipes"]')?.addEventListener('click', () => loadClientRecipes(true));
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-client-recipe-create"]').forEach((button) => button.addEventListener('click', openClientRecipeCreate));
   root.querySelectorAll<HTMLButtonElement>('[data-action="hide-client-recipe-create"]').forEach((button) => button.addEventListener('click', hideClientRecipeCreate));
@@ -766,7 +785,48 @@ function clientFilterToolbar() {
 function clientForm() {
   const form = clientsState.form;
   const isEdit = clientsState.formMode === 'edit';
-  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить карточку клиента' : 'Создать клиента'}</h2><form data-form="client" class="ingredient-form"><div class="form-grid"><label>ФИО клиента<input name="full_name" data-field="client-full-name" required maxlength="200" value="${escapeHtml(form.full_name)}" placeholder="Например, Анна Иванова" /></label><label>Телефон<input name="phone" maxlength="80" value="${escapeHtml(form.phone)}" placeholder="+7 ..." /></label><label>Email<input name="email" type="email" maxlength="160" value="${escapeHtml(form.email)}" placeholder="Необязательно" /></label><label>Дата рождения<input name="birthday" type="date" value="${escapeHtml(form.birthday ?? '')}" /></label><label class="full-span">Адрес<input name="address" maxlength="300" value="${escapeHtml(form.address)}" placeholder="Необязательно" /></label><label class="full-span">Особенности кожи<textarea name="skin_notes" rows="2" maxlength="1200" placeholder="Например, чувствительная кожа">${escapeHtml(form.skin_notes)}</textarea></label><label class="full-span">Аллергии<textarea name="allergy_notes" rows="2" maxlength="1200" placeholder="Что важно учитывать в составах">${escapeHtml(form.allergy_notes)}</textarea></label><label class="full-span">Предпочтения<textarea name="preference_notes" rows="2" maxlength="1200" placeholder="Текстуры, ароматы, упаковка">${escapeHtml(form.preference_notes)}</textarea></label><label class="full-span">Противопоказания<textarea name="contraindication_notes" rows="2" maxlength="1200" placeholder="Ограничения, которые нельзя забыть">${escapeHtml(form.contraindication_notes)}</textarea></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1600" placeholder="Рабочие заметки по клиенту">${escapeHtml(form.notes)}</textarea></label></div><p class="next-step">Аллергии, предпочтения и противопоказания помогут позже безопасно создавать индивидуальные рецепты клиента.</p><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить карточку' : 'Создать клиента'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="cancel-client-edit">Закрыть редактирование</button>' : '<button class="secondary-action" type="button" data-action="hide-client-create">Вернуться к списку</button>'}</div></form></section>`;
+  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить карточку клиента' : 'Создать клиента'}</h2><form data-form="client" class="ingredient-form"><div class="form-grid"><label>ФИО клиента<input name="full_name" data-field="client-full-name" required maxlength="200" value="${escapeHtml(form.full_name)}" placeholder="Например, Анна Иванова" /></label><label>Телефон<input name="phone" maxlength="80" value="${escapeHtml(form.phone)}" placeholder="+7 ..." /></label><label>Email<input name="email" type="email" maxlength="160" value="${escapeHtml(form.email)}" placeholder="Необязательно" /></label><label>Дата рождения<input name="birthday" type="date" value="${escapeHtml(form.birthday ?? '')}" /></label><label class="full-span">Адрес<input name="address" maxlength="300" value="${escapeHtml(form.address)}" placeholder="Необязательно" /></label><label class="full-span">Особенности кожи<textarea name="skin_notes" rows="2" maxlength="1200" placeholder="Например, чувствительная кожа">${escapeHtml(form.skin_notes)}</textarea></label><label class="full-span">Аллергии<textarea name="allergy_notes" rows="2" maxlength="1200" placeholder="Что важно учитывать в составах">${escapeHtml(form.allergy_notes)}</textarea></label><label class="full-span">Предпочтения<textarea name="preference_notes" rows="2" maxlength="1200" placeholder="Текстуры, ароматы, упаковка">${escapeHtml(form.preference_notes)}</textarea></label><label class="full-span">Противопоказания<textarea name="contraindication_notes" rows="2" maxlength="1200" placeholder="Ограничения, которые нельзя забыть">${escapeHtml(form.contraindication_notes)}</textarea></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1600" placeholder="Рабочие заметки по клиенту">${escapeHtml(form.notes)}</textarea></label></div><p class="next-step">Аллергии, предпочтения и противопоказания помогут позже безопасно создавать индивидуальные рецепты клиента.</p><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить карточку' : 'Создать клиента'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="cancel-client-edit">Закрыть редактирование</button>' : '<button class="secondary-action" type="button" data-action="hide-client-create">Вернуться к списку</button>'}</div></form>${isEdit ? clientWishesSection() + clientFeedbackSection() : ''}</section>`;
+}
+
+
+function clientWishesSection() {
+  const state = clientCardState;
+  const wishes = state.includeArchivedWishes ? state.wishes : state.wishes.filter((wish) => wish.is_active && wish.status !== 'archived');
+  const loading = state.wishesStatus === 'loading';
+  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Что учесть дальше</p><h2>Пожелания клиента</h2></div><div class="actions"><button class="secondary-action" type="button" data-action="toggle-archived-client-wishes">${state.includeArchivedWishes ? 'Скрыть архивные' : 'Показать архивные'}</button><button class="primary-action" type="button" data-action="toggle-client-wish-form">Добавить пожелание</button></div></div><p>Здесь можно записать, что клиент просил учесть в следующий раз: текстуру, аромат, упаковку, ингредиенты или ограничения.</p>${state.wishError ? `<p class="page-message error-message">${escapeHtml(state.wishError)}</p>` : ''}${state.showWishForm ? clientWishForm() : ''}${loading ? '<p>Загружаем пожелания клиента…</p>' : wishes.length === 0 ? '<p class="empty-hint">Пожеланий пока нет. Добавьте первое пожелание, чтобы не потерять важные детали клиента.</p>' : `<div class="recipe-lines">${wishes.map(clientWishCard).join('')}</div>`}</section>`;
+}
+
+function clientWishForm() {
+  const form = clientCardState.wishForm;
+  return `<form data-form="client-wish" class="ingredient-form"><h3>Новое пожелание</h3><div class="form-grid"><label class="full-span">Кратко о пожелании<input name="title" required maxlength="180" value="${escapeHtml(form.title)}" placeholder="Например, более лёгкая текстура" /></label><label>Категория<select name="category">${clientWishCategoryOptions(form.category)}</select></label><label>Важность<select name="priority">${clientWishPriorityOptions(form.priority)}</select></label>${clientRecipeLinkSelect(form.client_recipe_id)}<label class="full-span">Подробности<textarea name="description" rows="3" maxlength="1600" placeholder="Что именно просил клиент, какие детали важно не забыть">${escapeHtml(form.description)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" ${clientCardState.savingWish ? 'disabled' : ''}>${clientCardState.savingWish ? 'Сохраняем…' : 'Сохранить пожелание'}</button><button class="secondary-action" type="button" data-action="close-client-wish-form">Закрыть форму</button></div></form>`;
+}
+
+function clientWishCard(wish: ClientWish) {
+  const archived = !wish.is_active || wish.status === 'archived';
+  return `<article class="recipe-line"><div class="section-heading"><div><h3>${escapeHtml(wish.title)}</h3><p><span class="pill ${archived ? 'muted' : wish.status === 'resolved' ? 'success' : wish.status === 'planned' ? 'warning' : 'info'}">${clientWishStatusLabel(wish.status)}</span> <span class="pill muted">${clientWishPriorityLabel(wish.priority)}</span> <span class="pill muted">${clientWishCategoryLabel(wish.category)}</span></p></div><small>${formatDateTime(wish.created_at)}</small></div>${wish.description ? `<p>${escapeHtml(wish.description)}</p>` : '<p class="empty-hint">Без подробного описания.</p>'}${wish.client_recipe_id ? `<p class="next-step">Связано с индивидуальным рецептом: ${escapeHtml(clientCardRecipeTitle(wish.client_recipe_id))}</p>` : ''}${archived ? '<p class="next-step">Архивное пожелание доступно только для просмотра.</p>' : `<div class="actions">${clientWishStatusActions(wish)}<button class="secondary-action danger-action" type="button" data-action="archive-client-wish" data-id="${wish.id}" ${clientCardState.archivingWishId === wish.id ? 'disabled' : ''}>${clientCardState.archivingWishId === wish.id ? 'Архивируем…' : 'Архивировать'}</button></div>`}</article>`;
+}
+
+function clientWishStatusActions(wish: ClientWish) {
+  const disabled = clientCardState.changingWishId === wish.id ? 'disabled' : '';
+  const actions: string[] = [];
+  if (wish.status !== 'open') actions.push(`<button class="secondary-action compact" type="button" data-action="change-client-wish-status" data-id="${wish.id}" data-status="open" ${disabled}>Вернуть в открытые</button>`);
+  if (wish.status !== 'planned') actions.push(`<button class="secondary-action compact" type="button" data-action="change-client-wish-status" data-id="${wish.id}" data-status="planned" ${disabled}>Запланировать</button>`);
+  if (wish.status !== 'resolved') actions.push(`<button class="secondary-action compact" type="button" data-action="change-client-wish-status" data-id="${wish.id}" data-status="resolved" ${disabled}>Отметить учтённым</button>`);
+  return actions.join('');
+}
+
+function clientFeedbackSection() {
+  const state = clientCardState;
+  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">История после выдачи продукта</p><h2>Обратная связь</h2></div><button class="primary-action" type="button" data-action="toggle-client-feedback-form">Добавить отзыв</button></div><p>Здесь хранится история отзывов клиента после использования продукта. Эти записи не редактируются, чтобы сохранить историю.</p>${state.feedbackError ? `<p class="page-message error-message">${escapeHtml(state.feedbackError)}</p>` : ''}${state.showFeedbackForm ? clientFeedbackForm() : ''}${state.feedbackStatus === 'loading' ? '<p>Загружаем обратную связь…</p>' : state.feedback.length === 0 ? '<p class="empty-hint">Обратной связи пока нет. Добавьте отзыв после выдачи продукта или разговора с клиентом.</p>' : `<div class="recipe-lines">${state.feedback.map(clientFeedbackCard).join('')}</div>`}</section>`;
+}
+
+function clientFeedbackForm() {
+  const form = clientCardState.feedbackForm;
+  return `<form data-form="client-feedback" class="ingredient-form"><h3>Новая обратная связь</h3><div class="form-grid"><label>Тип отзыва<select name="feedback_type">${clientFeedbackTypeOptions(form.feedback_type)}</select></label><label>Настроение<select name="sentiment">${clientFeedbackSentimentOptions(form.sentiment)}</select></label><label>Оценка<input name="rating" type="number" min="1" max="5" value="${escapeHtml(form.rating)}" placeholder="1–5" /></label><label>Дата отзыва<input name="occurred_at" type="date" value="${escapeHtml(form.occurred_at)}" /></label>${clientRecipeLinkSelect(form.client_recipe_id)}<label class="full-span">Текст отзыва<textarea name="text" required rows="3" maxlength="2000" placeholder="Что клиенту понравилось или не подошло">${escapeHtml(form.text)}</textarea></label><label class="full-span"><input name="follow_up_needed" type="checkbox" ${form.follow_up_needed ? 'checked' : ''} /> Нужно учесть в следующий раз</label><label class="full-span">Что учесть<textarea name="follow_up_note" rows="2" maxlength="1200" placeholder="Необязательно">${escapeHtml(form.follow_up_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" ${clientCardState.savingFeedback ? 'disabled' : ''}>${clientCardState.savingFeedback ? 'Сохраняем…' : 'Сохранить отзыв'}</button><button class="secondary-action" type="button" data-action="close-client-feedback-form">Закрыть форму</button></div></form>`;
+}
+
+function clientFeedbackCard(item: ClientFeedback) {
+  return `<article class="recipe-line"><div class="section-heading"><div><h3>${clientFeedbackTypeLabel(item.feedback_type)} · ${clientFeedbackSentimentLabel(item.sentiment)}</h3><p>${item.rating ? `Оценка: ${item.rating}/5` : 'Оценка не указана'}</p></div><small>${formatDate(item.occurred_at || item.created_at)}</small></div><p>${escapeHtml(item.text)}</p>${item.follow_up_needed ? `<p class="next-step"><strong>Учесть в следующий раз:</strong> ${escapeHtml(item.follow_up_note || 'Да, без дополнительной заметки.')}</p>` : ''}${item.client_recipe_id ? `<p class="next-step">Связано с индивидуальным рецептом: ${escapeHtml(clientCardRecipeTitle(item.client_recipe_id))}</p>` : ''}</article>`;
 }
 
 function clientList() {
@@ -1105,13 +1165,108 @@ function updateClientFilterSearch(input: HTMLInputElement) { const cursor = inpu
 function updateClientStatusFilter(status: ClientStatusFilter) { clientsState.filters.status = status; clientsState.includeInactive = status !== 'active'; loadClients(true); }
 function resetClientFilters() { const shouldReload = clientsState.includeInactive; clientsState.filters = { search: '', status: 'active' }; clientsState.includeInactive = false; if (shouldReload) loadClients(true); else render(); }
 function clearClientFilter(filter: string) { if (filter === 'search') { clientsState.filters.search = ''; render(); return; } if (filter === 'status') updateClientStatusFilter('active'); }
-function openClientCreateForm() { clientsState.formMode = 'create'; clientsState.showCreateForm = true; clientsState.form = emptyClientForm(); clientsMessage = ''; clientsError = ''; render(); focusClientName(); }
-function hideClientCreateForm() { clientsState.showCreateForm = false; if (clientsState.formMode === 'create') clientsState.form = emptyClientForm(); render(); }
-function closeClientEdit() { clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); clientsMessage = ''; clientsError = ''; render(); }
+function openClientCreateForm() { clientsState.formMode = 'create'; clientsState.showCreateForm = true; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; render(); focusClientName(); }
+function hideClientCreateForm() { clientsState.showCreateForm = false; if (clientsState.formMode === 'create') { clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); } render(); }
+
+function emptyClientWishForm(): ClientWishFormState { return { title: '', description: '', category: 'other', priority: 'normal', client_recipe_id: '' }; }
+function emptyClientFeedbackForm(): ClientFeedbackFormState { return { feedback_type: 'note', sentiment: 'neutral', rating: '', text: '', follow_up_needed: false, follow_up_note: '', occurred_at: '', client_recipe_id: '' }; }
+function emptyClientCardState(): ClientCardState { return { clientId: null, wishes: [], feedback: [], recipes: [], includeArchivedWishes: false, wishesStatus: 'idle', feedbackStatus: 'idle', recipesStatus: 'idle', showWishForm: false, showFeedbackForm: false, wishForm: emptyClientWishForm(), feedbackForm: emptyClientFeedbackForm(), wishError: '', feedbackError: '', savingWish: false, savingFeedback: false, changingWishId: null, archivingWishId: null }; }
+function syncClientCardDraftFormsFromDom() {
+  if (clientCardState.showWishForm) {
+    const form = document.querySelector<HTMLFormElement>('[data-form="client-wish"]');
+    if (form) {
+      const data = new FormData(form);
+      clientCardState.wishForm = {
+        title: String(data.get('title') ?? '').trim(),
+        description: String(data.get('description') ?? '').trim(),
+        category: String(data.get('category') ?? 'other'),
+        priority: String(data.get('priority') ?? 'normal') as ClientWishPriority,
+        client_recipe_id: String(data.get('client_recipe_id') ?? ''),
+      };
+    }
+  }
+  if (clientCardState.showFeedbackForm) {
+    const form = document.querySelector<HTMLFormElement>('[data-form="client-feedback"]');
+    if (form) {
+      const data = new FormData(form);
+      clientCardState.feedbackForm = {
+        feedback_type: String(data.get('feedback_type') ?? 'note'),
+        sentiment: String(data.get('sentiment') ?? 'neutral'),
+        rating: String(data.get('rating') ?? '').trim(),
+        text: String(data.get('text') ?? '').trim(),
+        follow_up_needed: data.get('follow_up_needed') === 'on',
+        follow_up_note: String(data.get('follow_up_note') ?? '').trim(),
+        occurred_at: String(data.get('occurred_at') ?? '').trim(),
+        client_recipe_id: String(data.get('client_recipe_id') ?? ''),
+      };
+    }
+  }
+}
+function loadClientCardData(clientId: number) { clientCardState = { ...emptyClientCardState(), clientId }; render(); refreshClientWishes(); refreshClientFeedback(); clientCardState.recipesStatus = 'loading'; getClientRecipes(true).then((response) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId); clientCardState.recipesStatus = 'ready'; render(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.recipesStatus = 'error'; render(); }); }
+function refreshClientWishes() { const clientId = clientCardState.clientId; if (!clientId) return Promise.resolve(); syncClientCardDraftFormsFromDom(); clientCardState.wishesStatus = 'loading'; render(); return fetchClientWishes(clientId, clientCardState.includeArchivedWishes).then((wishes) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.wishes = wishes; clientCardState.wishesStatus = 'ready'; render(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.wishesStatus = 'error'; clientCardState.wishError = 'Не удалось загрузить пожелания клиента. Обновите карточку и попробуйте ещё раз.'; render(); }); }
+function refreshClientFeedback() { const clientId = clientCardState.clientId; if (!clientId) return Promise.resolve(); syncClientCardDraftFormsFromDom(); clientCardState.feedbackStatus = 'loading'; render(); return fetchClientFeedback(clientId).then((feedback) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.feedback = feedback; clientCardState.feedbackStatus = 'ready'; render(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.feedbackStatus = 'error'; clientCardState.feedbackError = 'Не удалось загрузить обратную связь клиента. Обновите карточку и попробуйте ещё раз.'; render(); }); }
+function toggleClientWishForm() { if (clientCardState.showWishForm) syncClientCardDraftFormsFromDom(); clientCardState.showWishForm = !clientCardState.showWishForm; clientCardState.wishError = ''; render(); }
+function closeClientWishForm() { clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; render(); }
+function toggleArchivedClientWishes() { clientCardState.includeArchivedWishes = !clientCardState.includeArchivedWishes; refreshClientWishes(); }
+function submitClientWishForm(event: SubmitEvent) { event.preventDefault(); const clientId = clientCardState.clientId; if (!clientId) return; syncClientCardDraftFormsFromDom(); const form = clientCardState.wishForm; const payload: ClientWishCreatePayload = { title: form.title, description: form.description, category: form.category, priority: form.priority, client_recipe_id: nullableNumber(form.client_recipe_id) }; if (!payload.title) { clientCardState.wishError = 'Укажите краткое пожелание клиента.'; render(); return; } clientCardState.savingWish = true; clientCardState.wishError = ''; render(); createClientWish(clientId, payload).then(() => { clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.savingWish = false; return refreshClientWishes(); }).catch((error) => { syncClientCardDraftFormsFromDom(); clientCardState.savingWish = false; clientCardState.wishError = humanWishFeedbackError(error, 'Не удалось сохранить пожелание. Проверьте поля и попробуйте ещё раз.'); render(); }); }
+function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (!['open','planned','resolved'].includes(status)) return; syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = null; return refreshClientWishes(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; render(); }); }
+function archiveClientWishFromCard(wishId: number) { if (!window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = null; return refreshClientWishes(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; render(); }); }
+function toggleClientFeedbackForm() { if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; clientCardState.feedbackError = ''; render(); }
+function closeClientFeedbackForm() { clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; render(); }
+function submitClientFeedbackForm(event: SubmitEvent) { event.preventDefault(); const clientId = clientCardState.clientId; if (!clientId) return; syncClientCardDraftFormsFromDom(); const form = clientCardState.feedbackForm; const ratingRaw = form.rating.trim(); const payload: ClientFeedbackCreatePayload = { feedback_type: form.feedback_type, sentiment: form.sentiment, rating: ratingRaw ? Number(ratingRaw) : null, text: form.text, follow_up_needed: form.follow_up_needed, follow_up_note: form.follow_up_note, occurred_at: form.occurred_at || null, client_recipe_id: nullableNumber(form.client_recipe_id) }; if (!payload.text) { clientCardState.feedbackError = 'Запишите текст отзыва клиента.'; render(); return; } clientCardState.savingFeedback = true; clientCardState.feedbackError = ''; render(); createClientFeedback(clientId, payload).then(() => { clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.savingFeedback = false; return refreshClientFeedback(); }).catch((error) => { syncClientCardDraftFormsFromDom(); clientCardState.savingFeedback = false; clientCardState.feedbackError = humanWishFeedbackError(error, 'Не удалось сохранить отзыв. Проверьте поля и попробуйте ещё раз.'); render(); }); }
+function nullableNumber(value: string) { const trimmed = value.trim(); return trimmed ? Number(trimmed) : null; }
+function humanWishFeedbackError(error: unknown, fallback: string) { const message = error instanceof Error ? error.message : ''; if (message.toLowerCase().includes('client') && message.toLowerCase().includes('recipe')) return 'Выбранный индивидуальный рецепт не относится к этому клиенту. Обновите карточку клиента и выберите рецепт ещё раз.'; return fallback; }
+function clientRecipeLinkSelect(current: string) { const recipes = clientCardState.recipes; const options = [`<option value="">Без связи с индивидуальным рецептом</option>`, ...recipes.map((recipe) => `<option value="${recipe.id}" ${current === String(recipe.id) ? 'selected' : ''}>${escapeHtml(recipe.title)}${recipe.is_active ? '' : ' · архив'}</option>`)]; return `<label class="full-span">Индивидуальный рецепт<select name="client_recipe_id">${options.join('')}</select></label>`; }
+function clientCardRecipeTitle(id: number) { return clientCardState.recipes.find((recipe) => recipe.id === id)?.title ?? 'индивидуальный рецепт'; }
+function clientWishStatusLabel(value: string) { return ({ open: 'Открыто', planned: 'Запланировано', resolved: 'Учтено', archived: 'В архиве' } as Record<string,string>)[value] ?? 'Открыто'; }
+function clientWishPriorityLabel(value: string) { return ({ low: 'Низкий', normal: 'Обычный', high: 'Важный' } as Record<string,string>)[value] ?? 'Обычный'; }
+function clientWishCategoryLabel(value: string) { return ({ texture: 'Текстура', scent: 'Аромат', packaging: 'Упаковка', ingredient: 'Ингредиент', allergy: 'Аллергия', contraindication: 'Ограничение', effect: 'Эффект', price: 'Цена', other: 'Другое' } as Record<string,string>)[value] ?? 'Другое'; }
+function clientFeedbackTypeLabel(value: string) { return ({ note: 'Заметка', reaction: 'Реакция', texture: 'Текстура', scent: 'Аромат', effect: 'Эффект', packaging: 'Упаковка', request: 'Просьба', other: 'Другое' } as Record<string,string>)[value] ?? 'Другое'; }
+function clientFeedbackSentimentLabel(value: string) { return ({ positive: 'Положительный', neutral: 'Нейтральный', negative: 'Негативный', mixed: 'Смешанный' } as Record<string,string>)[value] ?? 'Нейтральный'; }
+function clientWishCategoryOptions(current: string) { return ['texture','scent','packaging','ingredient','allergy','contraindication','effect','price','other'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientWishCategoryLabel(v)}</option>`).join(''); }
+function clientWishPriorityOptions(current: string) { return ['low','normal','high'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientWishPriorityLabel(v)}</option>`).join(''); }
+function clientFeedbackTypeOptions(current: string) { return ['note','reaction','texture','scent','effect','packaging','request','other'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientFeedbackTypeLabel(v)}</option>`).join(''); }
+function clientFeedbackSentimentOptions(current: string) { return ['positive','neutral','negative','mixed'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientFeedbackSentimentLabel(v)}</option>`).join(''); }
+function closeClientEdit() { clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; render(); }
 function focusClientName() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="client-full-name"]')?.focus()); }
 function loadClients(force = false) { if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return; clientsStatus = 'loading'; clientsError = ''; render(); getClients(clientsState.includeInactive).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; render(); }).catch(() => { clientsStatus = 'error'; clientsError = 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'; render(); }); }
-function startEditClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; render(); focusClientName(); }
-function submitClientForm(event: SubmitEvent) { event.preventDefault(); const payload = clientPayloadFromForm(event.currentTarget as HTMLFormElement); if (!payload.full_name) { clientsMessage = ''; clientsError = 'Укажите ФИО клиента, например «Анна Иванова».'; render(); return; } const isEdit = Boolean(clientsState.formMode === 'edit' && clientsState.form.id); const request = isEdit ? updateClient(clientsState.form.id!, payload) : createClient(payload); request.then((client) => { clientsMessage = isEdit ? 'Карточка клиента обновлена.' : 'Клиент создан.'; clientsError = ''; clientsState.formMode = isEdit ? 'edit' : 'create'; clientsState.showCreateForm = false; clientsState.form = isEdit ? { ...payload, id: client.id } : emptyClientForm(); return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось сохранить клиента. Проверьте ФИО и контактные поля, затем попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
+function startEditClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; loadClientCardData(id); render(); focusClientName(); }
+function submitClientForm(event: SubmitEvent) {
+  event.preventDefault();
+  const isEdit = Boolean(clientsState.formMode === 'edit' && clientsState.form.id);
+  if (isEdit) syncClientCardDraftFormsFromDom();
+  const payload = clientPayloadFromForm(event.currentTarget as HTMLFormElement);
+  if (!payload.full_name) {
+    if (isEdit) syncClientCardDraftFormsFromDom();
+    clientsMessage = '';
+    clientsError = 'Укажите ФИО клиента, например «Анна Иванова».';
+    render();
+    return;
+  }
+  const request = isEdit ? updateClient(clientsState.form.id!, payload) : createClient(payload);
+  request
+    .then((client) => {
+      clientsMessage = isEdit ? 'Карточка клиента обновлена.' : 'Клиент создан.';
+      clientsError = '';
+      clientsState.formMode = isEdit ? 'edit' : 'create';
+      clientsState.showCreateForm = false;
+      clientsState.form = isEdit ? { ...payload, id: client.id } : emptyClientForm();
+      return getClients(clientsState.includeInactive);
+    })
+    .then((response) => {
+      if (isEdit) syncClientCardDraftFormsFromDom();
+      clientsState.items = response.clients;
+      clientsStatus = 'ready';
+      render();
+    })
+    .catch(() => {
+      if (isEdit) syncClientCardDraftFormsFromDom();
+      clientsMessage = '';
+      clientsError = 'Не удалось сохранить клиента. Проверьте ФИО и контактные поля, затем попробуйте еще раз.';
+      clientsStatus = 'ready';
+      render();
+    });
+}
 function deactivateClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return; deactivateClientRequest(id).then(() => { clientsMessage = 'Клиент архивирован.'; clientsError = ''; return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; if (clientsState.form.id === id) { clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); } render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
 
 
@@ -1212,6 +1367,12 @@ function apiSend<T>(url: string, method: 'POST' | 'PUT', body?: unknown): Promis
 function getClients(includeInactive = false) { return apiGet<{ clients: Client[] }>(`/api/clients${includeInactive ? '?include_inactive=true' : ''}`); }
 function getClientRecipes(includeInactive = false) { return apiGet<{ client_recipes: ClientRecipe[] }>(`/api/client-recipes?include_inactive=${includeInactive ? 'true' : 'false'}`); }
 function getClientRecipe(id: number) { return apiGet<ClientRecipeDetail>(`/api/client-recipes/${id}`); }
+function fetchClientWishes(clientId: number, includeInactive = false) { return apiGet<{ wishes: ClientWish[] }>(`/api/clients/${clientId}/wishes?include_inactive=${includeInactive ? 'true' : 'false'}`).then((response) => response.wishes); }
+function createClientWish(clientId: number, payload: ClientWishCreatePayload) { return apiSend<ClientWish>(`/api/clients/${clientId}/wishes`, 'POST', payload); }
+function updateClientWishStatus(wishId: number, status: 'open' | 'planned' | 'resolved') { return apiSend<ClientWish>(`/api/client-wishes/${wishId}/status`, 'PUT', { status }); }
+function archiveClientWish(wishId: number) { return apiSend<ClientWish>(`/api/client-wishes/${wishId}/archive`, 'POST'); }
+function fetchClientFeedback(clientId: number) { return apiGet<{ feedback: ClientFeedback[] }>(`/api/clients/${clientId}/feedback`).then((response) => response.feedback); }
+function createClientFeedback(clientId: number, payload: ClientFeedbackCreatePayload) { return apiSend<ClientFeedback>(`/api/clients/${clientId}/feedback`, 'POST', payload); }
 function createClientRecipe(payload: ClientRecipePayload) { return apiSend<ClientRecipeDetail>('/api/client-recipes', 'POST', payload); }
 function updateClientRecipeIngredients(clientRecipeId: number, ingredients: ClientRecipeIngredientUpdatePayload[]) { return apiSend<ClientRecipeDetail>(`/api/client-recipes/${clientRecipeId}/ingredients`, 'PUT', { ingredients }); }
 function deactivateClientRecipeRequest(id: number) { return apiSend<ClientRecipe>(`/api/client-recipes/${id}/deactivate`, 'POST'); }

@@ -366,3 +366,22 @@ PR17 is now implemented: backend recipe model foundation with RecipeTemplate -> 
 - `resolved_at` is set for `resolved` and cleared for `open`/`planned`; archived wishes reject generic status changes with HTTP 409.
 - `status=archived` through `PUT /status` is rejected so archiving continues to use `POST /api/client-wishes/{wish_id}/archive`.
 - No feedback update/delete, restore endpoint, frontend UI, or unrelated domain changes were added.
+
+## PR58: Client wishes and feedback UI
+- Client card editing view now displays two working sections: `Пожелания клиента` and `Обратная связь`.
+- Wishes load from `/api/clients/{client_id}/wishes`, can be created, status-updated only to `open`/`planned`/`resolved`, and archived through `POST /api/client-wishes/{wish_id}/archive`.
+- Archived wishes remain historical, are hidden unless `Показать архивные` is enabled, are read-only in the UI, and have no restore action in this PR.
+- Feedback loads from `/api/clients/{client_id}/feedback`, can be created, and remains append-only with no edit/delete controls.
+- Optional ClientRecipe linking is implemented for wishes and feedback by loading existing client recipes with `include_inactive=true` and filtering to the selected client; the selector includes archived recipes when available and does not mutate ClientRecipe data.
+- Backend/domain/migrations were not changed. Orders, production, stock movements, purchasing, import/export, backup/restore, cloud, auth, roles, and AI recommendations were not added.
+
+## PR58 follow-up: Preserve client card drafts
+- Open wish/feedback form drafts are now preserved across background client-card refresh renders, including ClientRecipe selector values and the feedback follow-up checkbox.
+- Switching clients, closing forms, and successful submits still intentionally reset the relevant drafts.
+- Wish title input maxlength now matches backend validation at 180 characters.
+- Backend/domain/migrations were not changed. Feedback remains append-only and no wish restore UI was added.
+
+## PR58 follow-up: Preserve drafts on client card save
+- `submitClientForm(...)` now syncs open ClientWish/ClientFeedback drafts before edit-card validation, success-render, and error-render paths.
+- Saving the main client details should no longer overwrite unsaved wish/feedback drafts that remain visible in the same client card.
+- Backend/domain/migrations were not changed. Feedback remains append-only and no wish restore UI was added.
