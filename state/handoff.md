@@ -2,45 +2,43 @@
 
 ## Last completed work
 
-PR62 is complete: the backend can check whether an existing order is ready for production without mutating stock, packaging, production, or order lifecycle data.
+PR63 is complete: the Orders frontend now exposes the existing read-only Production Readiness check to the user.
 
-## Current repo state after PR62
+## Current repo state after PR63
 
-Completed foundations include local-first backend/API persistence, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, Orders backend/UI foundations, and backend Production Readiness foundation.
+Completed foundations include local-first backend/API persistence, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, Orders backend/UI foundations, backend Production Readiness foundation, and Orders readiness UI.
 
 Production readiness now includes:
 
-- `POST /api/orders/{order_id}/check-production-readiness`;
-- exact recipe source resolution from `recipe_version_id` or `client_recipe_id`;
-- ingredient requirement calculation for the order batch size;
-- current ingredient lot balance checks from existing stock movements;
-- FEFO lot candidate selection, with dated lots before undated lots;
-- expired and soon-expiring selected lot warnings;
-- density/conversion warnings when ml↔g conversion cannot be trusted;
-- selected packaging balance checks when packaging is present on the order;
-- optional cost/tax/margin estimates when available data supports them;
-- lifecycle rejection for cancelled, archived, or inactive orders.
+- `POST /api/orders/{order_id}/check-production-readiness` on the backend;
+- a `Проверить изготовление` button in active order details;
+- frontend in-memory readiness state per order;
+- human-readable summary for ready/warning/blocked results;
+- blocking issue and warning sections using backend messages;
+- ingredient requirement table with required, available, missing, fulfillment status, and backend-selected FEFO lots;
+- packaging availability table or a clear no-packaging-needed message;
+- optional estimated cost, tax, and margin display, with null values shown as `Не рассчитано`;
+- safety copy that the check does not write off stock, reserve lots, create production batches, or mutate order status.
 
-The readiness endpoint intentionally does not create stock movements, packaging stock movements, production batch tables/rows, alerts, purchase suggestions, imports/exports, or frontend UI. It does not change order status, `produced_at`, `delivered_at`, recipe versions, client recipe composition, ingredient lots, or packaging items.
+The readiness UI intentionally does not calculate ingredient availability, select lots, calculate tax/margin, create stock movements, create packaging movements, create production batches, reserve lots, or mutate order lifecycle state.
 
 ## Important decisions
 
 - MVP remains local-first and API-first.
-- Readiness is a read-only backend/domain use case, not production confirmation.
-- FEFO uses current derived lot balances from immutable movement rows.
-- Cost estimates are opportunistic: missing unit costs return null estimates and explicit warnings rather than adding accounting scope.
-- Tax and margin estimates are not calculated until an explicit tax setting/snapshot exists; no hidden default tax rate is used.
+- Frontend displays backend readiness results and does not duplicate production-readiness business logic.
+- Readiness remains a read-only workflow; production confirmation is still a future explicit step.
+- Tax/margin remain backend-owned. The frontend shows `Не рассчитано` for null estimates and relies on backend warnings for the reason.
 
 ## Known testing limitations
 
-- FastAPI `TestClient` tests are skipped automatically if the installed Starlette/httpx combination is unavailable in the environment.
-- Frontend browser smoke was not run because PR62 is backend-only.
+- Manual browser smoke was not run in this non-interactive environment.
+- FastAPI `TestClient` tests may skip automatically if the installed Starlette/httpx combination is unavailable in the environment.
 
 ## Next recommended task
 
-Production confirmation foundation as a new scoped PR: add explicit confirmation, `ProductionBatch` persistence, transactional ingredient/packaging stock write-off, order lifecycle transition, and audit logging only if requested.
+Production confirmation backend foundation as a new scoped PR: add explicit confirmation, `ProductionBatch` persistence, transactional ingredient/packaging stock write-off, order lifecycle transition, and audit logging only if requested.
 
-Keep alerts, purchase suggestions, production UI, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.
+Keep alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.
 
 ## Commands to rerun during handoff
 
@@ -49,7 +47,5 @@ Keep alerts, purchase suggestions, production UI, import/export, backup/restore 
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')`
 - `python3 -m pytest backend/app/tests/test_orders.py -q`
 - `python3 -m pytest backend/app/tests/test_production_readiness.py -q`
-- `python3 -m pytest backend/app/tests/test_recipes.py -q`
-- `python3 -m pytest backend/app/tests/test_stock_movements.py -q`
-- `python3 -m pytest backend/app/tests/test_packaging_stock_movements.py -q`
+- `npm --prefix frontend run build`
 - `git diff --check`
