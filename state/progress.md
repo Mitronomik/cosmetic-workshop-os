@@ -369,3 +369,10 @@ After PR61 — preparing production readiness foundation
 - Added read-only/list, explicit regenerate, resolve, and dismiss Alert API endpoints.
 - Added backend tests for idempotency, deduplication, status transitions, MVP alert types, and read-only guarantees.
 - No frontend UI, purchase suggestions, notifications, scheduler, or automatic stock/order/production changes were added.
+
+## PR68 — Alerts UI
+- Added a frontend `Алерты` workspace at `/alerts` that consumes the PR67 backend alert endpoints.
+- Added status/type/search filters, explicit regeneration, resolve, and dismiss actions with Russian human-readable cards and empty/error states.
+- Updated dashboard copy to list Alerts as available.
+- No backend behavior, migrations, alert rules, purchase suggestions, notifications, scheduler, polling, or dashboard analytics were added.
+- Next recommended PR: purchase suggestions backend foundation.

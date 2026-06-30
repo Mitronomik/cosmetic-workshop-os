@@ -2,50 +2,46 @@
 
 ## Last completed work
 
-PR67 is complete: backend Alert engine foundation has been added.
+PR68 is complete: frontend Alerts workspace has been added.
 
-## Current repo state after PR67
+## Current repo state after PR68
 
-Completed foundations include local-first backend/API persistence, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, Orders backend/UI foundations, backend Production Readiness, Orders readiness UI, backend Production Confirmation, frontend Production Confirmation UI, read-only Production History, and backend Alerts.
+Completed foundations include local-first backend/API persistence, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, Orders backend/UI foundations, backend Production Readiness, Orders readiness UI, backend Production Confirmation, frontend Production Confirmation UI, read-only Production History, backend Alerts, and frontend Alerts UI.
 
-Alerts now include:
+Alerts UI now includes:
 
-- `alerts` table with unique `alert_key` for deduplication;
-- backend generation service for low ingredient stock, low packaging stock, expiring ingredient lots, expired ingredient lots, insufficient materials for active orders, and insufficient packaging for active orders;
-- `GET /api/alerts` with status/type/pagination filters;
-- `POST /api/alerts/regenerate` for explicit regeneration;
-- `POST /api/alerts/{alert_id}/resolve` and `POST /api/alerts/{alert_id}/dismiss`;
-- status history preservation: alerts are not deleted, open alerts are resolved when conditions disappear, and resolved/dismissed alerts are not reopened in PR67;
-- tests for idempotency, deduplication, status transitions, alert types, and read-only guarantees.
+- `/alerts` route and `Алерты` navigation item;
+- human-readable Russian alert cards for backend-provided message, severity, type, related entity, recommended action, timestamps, and status;
+- filters for status, type, and local text search;
+- explicit `Обновить алерты` action consuming PR67 `POST /api/alerts/regenerate`;
+- explicit resolve and dismiss actions consuming PR67 alert transition endpoints;
+- empty/error states that explain the next action.
 
 ## Important decisions
 
 - MVP remains local-first and API-first.
-- Alert generation is explicit; no scheduler, cron, background worker, notification channel, purchase suggestion, dashboard widget, or frontend page was added.
-- Alert generation may mutate only `alerts`; it must not mutate orders, production batches, stock movements, packaging movements, ingredient lots, ingredients, packaging items, recipes, or clients.
-- Order shortage alerts are order-level alerts, not one alert per missing ingredient/package item.
-- Resolved/dismissed alerts are not reopened automatically in PR67.
+- PR68 did not change backend behavior, migrations, alert rules, or API contracts.
+- The frontend consumes PR67 backend alert data; it does not calculate alert conditions, stock balances, production readiness, or purchase suggestions.
+- No purchase suggestions, automatic notifications, scheduler, cron, polling, dashboard analytics, stock/order/production mutations, import/export, cloud, mobile, auth, roles, or advanced analytics were added.
 
 ## Known testing limitations
 
-- Manual browser smoke was not required because PR67 is backend-only.
+- Manual browser smoke was not run in this non-interactive environment. Use the checklist from the PR68 prompt when a browser is available.
 - FastAPI TestClient-dependent tests may skip automatically when the installed Starlette/httpx combination is unavailable.
 
 ## Next recommended task
 
-Continue with the next explicitly requested roadmap slice. Keep alert frontend UI, dashboard widgets, purchase suggestions, external notifications, schedulers, production reversal/undo, partial production, lot override, reservations, import/export, backup/restore UI, cloud, mobile, OCR, auth, roles, and advanced analytics out of scope unless explicitly requested.
+Purchase suggestions backend foundation is the next recommended roadmap slice.
 
 ## Commands to rerun during handoff
 
 - `git status --short`
 - `git branch --show-current`
+- `npm --prefix frontend run build`
+- `git diff --check`
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')`
+- `python3 -m pytest backend/app/tests/test_alerts.py -q`
 - `python3 -m pytest backend/app/tests/test_orders.py -q`
 - `python3 -m pytest backend/app/tests/test_production_readiness.py -q`
 - `python3 -m pytest backend/app/tests/test_production_confirmation.py -q`
 - `python3 -m pytest backend/app/tests/test_production_batches_api.py -q`
-- `python3 -m pytest backend/app/tests/test_packaging_stock_movements.py -q`
-- `python3 -m pytest backend/app/tests/test_alerts.py -q`
-- `python3 -m pytest backend/app/tests/test_stock_movements.py -q`
-- `npm --prefix frontend run build`
-- `git diff --check`
