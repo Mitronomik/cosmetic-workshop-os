@@ -296,3 +296,8 @@ PR16 - Ingredient catalog UI foundation
 - Feedback can be created and viewed as append-only history; no edit/delete UI was added.
 - ClientRecipe linking is implemented in both create forms by loading existing client recipes, including archived recipes when available, and sending only the selected `client_recipe_id` without mutating ClientRecipe composition.
 - Backend/domain/migrations were not changed. Orders, production, stock, import/export, backup/restore, cloud, auth, and AI recommendations were not added.
+
+## PR58 follow-up: Preserve client card drafts
+- Open ClientWish and ClientFeedback form drafts are now synced from the DOM before background client-card refresh renders, preserving typed text, ClientRecipe selector values, dates, ratings, and follow-up checkbox state.
+- Wish title frontend maxlength is aligned with backend validation at 180 characters.
+- Backend/domain/migrations were not changed. Feedback edit/delete and wish restore were not added.
