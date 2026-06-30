@@ -12,6 +12,7 @@ from app.api.ingredients import router as ingredients_router
 from app.api.ingredient_lots import router as ingredient_lots_router
 from app.api.inventory import router as inventory_router
 from app.api.onboarding import router as onboarding_router
+from app.api.orders import router as orders_router
 from app.api.packaging_items import router as packaging_items_router
 from app.api.packaging_stock_movements import router as packaging_stock_movements_router
 from app.api.recipes import router as recipes_router
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(clients_router, prefix="/api")
     app.include_router(client_recipes_router, prefix="/api")
     app.include_router(client_wishes_feedback_router, prefix="/api")
+    app.include_router(orders_router, prefix="/api")
     app.include_router(onboarding_router, prefix="/api")
     return app
 

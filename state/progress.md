@@ -313,3 +313,9 @@ After PR58 — preparing Orders backend foundation
 ## PR58 follow-up: Preserve drafts on client card save
 - Client card save now syncs open ClientWish/ClientFeedback drafts before edit-card render paths, so saving the main client details does not lose unsaved wish or feedback form input.
 - Backend/domain/migrations were not changed. Feedback edit/delete and wish restore were not added.
+
+## PR60 — Orders backend foundation
+- Added the backend Orders foundation: SQLite `orders` table, domain validation, typed repository/model, transactional audited service, schemas, and `/api/orders` routes.
+- Orders now connect an active client to exactly one recipe source: either a `RecipeVersion` or a same-client active `ClientRecipe`; optional packaging is validated for active state on new writes.
+- Order create/update/cancel/archive writes are audited with rollback on audit failure and do not mutate recipes, client recipes, stock movements, packaging movements, or production data.
+- No frontend UI, production readiness, production confirmation, automatic stock write-off, alerts, purchase suggestions, import/export, cloud, mobile, OCR, auth, or roles were added.
