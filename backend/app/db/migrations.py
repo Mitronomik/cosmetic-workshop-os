@@ -17,6 +17,7 @@ MIGRATION_MODULES = [
     "app.migrations.versions.0011_client_wishes_feedback",
     "app.migrations.versions.0012_orders",
     "app.migrations.versions.0013_production_batches",
+    "app.migrations.versions.0014_alerts",
 ]
 MIGRATION_TABLE = "schema_migrations"
 

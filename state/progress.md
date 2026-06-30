@@ -362,3 +362,10 @@ After PR61 — preparing production readiness foundation
 - Added a real frontend `Производство` page with production history search, batch list, and read-only detail panel for cost, ingredient lot, and packaging snapshots.
 - Produced/delivered orders can open their production batch without showing production confirmation actions again.
 - No migrations, production write actions, reversal/edit/delete flows, frontend stock/cost/tax calculations, alerts, purchases, import/export, cloud, OCR, auth, or analytics were added.
+
+## PR67 — Alert engine backend foundation
+- Added the backend `alerts` table with `alert_key` deduplication, alert status/severity/type fields, and safe status timestamps.
+- Added backend alert generation for low ingredient stock, low packaging stock, expiring/expired ingredient lots, and order-level ingredient/packaging production readiness blockers.
+- Added read-only/list, explicit regenerate, resolve, and dismiss Alert API endpoints.
+- Added backend tests for idempotency, deduplication, status transitions, MVP alert types, and read-only guarantees.
+- No frontend UI, purchase suggestions, notifications, scheduler, or automatic stock/order/production changes were added.

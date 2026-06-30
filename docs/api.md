@@ -121,3 +121,67 @@ Error mapping:
 
 - `404` — production batch/order was not found, or the order has no production batch.
 - `422` — invalid `limit`/`offset` query parameters.
+
+## Alerts API (PR67 backend foundation)
+
+Alert generation is backend-only and explicit. It creates, updates, resolves, or dismisses rows in the `alerts` table only; it does **not** mutate orders, production batches, stock movements, packaging movements, ingredient lots, ingredients, packaging items, recipes, clients, purchase suggestions, or frontend UI state.
+
+### `GET /api/alerts`
+
+Lists alerts for operational review.
+
+Query parameters:
+
+- `status`: `open`, `resolved`, `dismissed`, or `all`; defaults to `open`.
+- `type`: optional alert type filter. Supported values are `low_ingredient_stock`, `low_packaging_stock`, `ingredient_expiration_soon`, `ingredient_expired`, `insufficient_materials_for_order`, and `insufficient_packaging_for_order`.
+- `limit`: `1..500`, defaults to `100`.
+- `offset`: `0+`, defaults to `0`.
+
+Example response:
+
+```json
+{
+  "alerts": [
+    {
+      "id": 1,
+      "alert_key": "low_ingredient_stock:ingredient:3",
+      "type": "low_ingredient_stock",
+      "severity": "warning",
+      "message": "Компонент «Масло ши» ниже минимального остатка: доступно 20 g, минимум 50 g.",
+      "related_entity_type": "ingredient",
+      "related_entity_id": 3,
+      "recommended_action": "Добавьте компонент в закупку или внесите новую партию после покупки.",
+      "status": "open",
+      "created_at": "2026-06-30T10:00:00",
+      "updated_at": "2026-06-30T10:00:00",
+      "resolved_at": null,
+      "dismissed_at": null
+    }
+  ],
+  "limit": 100,
+  "offset": 0
+}
+```
+
+### `POST /api/alerts/regenerate`
+
+Regenerates deterministic alert candidates from backend data. Existing open alerts are updated by `alert_key`; new candidates create open alerts; open alerts whose condition disappeared are marked `resolved`; resolved/dismissed alerts are not reopened in PR67.
+
+Example response:
+
+```json
+{
+  "created_count": 3,
+  "updated_count": 1,
+  "resolved_count": 2,
+  "open_count": 4
+}
+```
+
+### `POST /api/alerts/{alert_id}/resolve`
+
+Marks an alert as resolved and returns the alert. Re-resolving an already resolved alert is idempotent. A nonexistent alert returns `404`.
+
+### `POST /api/alerts/{alert_id}/dismiss`
+
+Marks an alert as dismissed and returns the alert. Re-dismissing an already dismissed alert is idempotent. A nonexistent alert returns `404`.
