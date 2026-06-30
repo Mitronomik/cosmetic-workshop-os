@@ -19,6 +19,7 @@ from app.api.packaging_stock_movements import router as packaging_stock_movement
 from app.api.production_readiness import router as production_readiness_router
 from app.api.production_confirmation import router as production_confirmation_router
 from app.api.production_batches import router as production_batches_router
+from app.api.purchase_suggestions import router as purchase_suggestions_router
 from app.api.recipes import router as recipes_router
 from app.api.settings import router as settings_router
 from app.api.stock_movements import router as stock_movements_router
@@ -38,7 +39,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT"],
+        allow_methods=["GET", "POST", "PUT", "PATCH"],
         allow_headers=["*"],
     )
     app.include_router(alerts_router, prefix="/api")
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(production_readiness_router, prefix="/api")
     app.include_router(production_confirmation_router, prefix="/api")
     app.include_router(production_batches_router, prefix="/api")
+    app.include_router(purchase_suggestions_router, prefix="/api")
     app.include_router(onboarding_router, prefix="/api")
     return app
 

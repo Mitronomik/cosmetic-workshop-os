@@ -185,3 +185,110 @@ Marks an alert as resolved and returns the alert. Re-resolving an already resolv
 ### `POST /api/alerts/{alert_id}/dismiss`
 
 Marks an alert as dismissed and returns the alert. Re-dismissing an already dismissed alert is idempotent. A nonexistent alert returns `404`.
+
+## Purchase Suggestions API (PR69)
+
+Purchase suggestions are a backend-only working purchase list. They are generated explicitly by the user/API from current backend domain data and are safe: generation only creates, updates, or archives rows in `purchase_suggestions`. Marking a suggestion as purchased does **not** create `IngredientLot`, packaging inbound movements, stock movements, orders, alerts, production batches, supplier records, invoices, or real purchases.
+
+### `GET /api/purchase-suggestions`
+
+Lists purchase suggestions.
+
+Query parameters:
+
+- `status`: `open`, `purchased`, `dismissed`, `archived`, or `all`; default `open`.
+- `reason`: optional `below_minimum_stock`, `insufficient_for_order`, `predicted_shortage`, `expiration_replacement`, or `manual`.
+- `item_type`: optional `ingredient` or `packaging`.
+- `limit`: integer from 1 to 500; default 100.
+- `offset`: integer >= 0; default 0.
+
+Example response:
+
+```json
+{
+  "purchase_suggestions": [
+    {
+      "id": 1,
+      "suggestion_key": "below_minimum_stock:ingredient:3",
+      "item_type": "ingredient",
+      "item_id": 3,
+      "item_name_snapshot": "Масло ши",
+      "recommended_quantity": "30",
+      "unit": "g",
+      "reason": "below_minimum_stock",
+      "source_entity_type": "ingredient",
+      "source_entity_id": 3,
+      "message": "Купить компонент «Масло ши»: не хватает 30 g до минимального остатка.",
+      "status": "open",
+      "notes": "Текущий остаток ниже минимума: доступно 20 g, минимум 50 g.",
+      "created_at": "2026-06-30 12:00:00",
+      "updated_at": "2026-06-30 12:00:00",
+      "resolved_at": null
+    }
+  ],
+  "limit": 100,
+  "offset": 0
+}
+```
+
+### `POST /api/purchase-suggestions/regenerate`
+
+Runs deterministic purchase suggestion generation for current PR69 rules:
+
+- low active ingredient stock versus `minimum_stock`;
+- low active packaging stock versus `minimum_stock`;
+- missing ingredients for active, not terminal orders;
+- missing packaging for active, not terminal orders.
+
+Generation uses deterministic `suggestion_key` values to avoid duplicates. Existing open generated suggestions are updated. Existing purchased, dismissed, or archived generated suggestions are not reopened. Stale open generated suggestions for PR69 managed reasons are archived. Manual suggestions are not auto-archived.
+
+Example response:
+
+```json
+{
+  "created_count": 3,
+  "updated_count": 1,
+  "archived_count": 2,
+  "open_count": 4
+}
+```
+
+### `POST /api/purchase-suggestions`
+
+Creates a manual open suggestion. This endpoint snapshots the active item name and does not create stock or any supplier/purchase record.
+
+Request:
+
+```json
+{
+  "item_type": "ingredient",
+  "item_id": 1,
+  "recommended_quantity": "100",
+  "unit": "g",
+  "notes": "Нужно для новой идеи рецепта"
+}
+```
+
+Response: a `PurchaseSuggestion` object with `reason = "manual"` and `status = "open"`.
+
+### `PATCH /api/purchase-suggestions/{suggestion_id}`
+
+Safely updates only editable fields on an open suggestion:
+
+```json
+{
+  "recommended_quantity": "150",
+  "unit": "g",
+  "notes": "optional note"
+}
+```
+
+If the suggestion is already terminal (`purchased`, `dismissed`, or `archived`), the backend preserves the terminal status and returns the current suggestion unchanged.
+
+### `POST /api/purchase-suggestions/{suggestion_id}/mark-purchased`
+
+Marks an open suggestion as `purchased` and sets `resolved_at`. Terminal suggestions stay terminal and are returned unchanged. This endpoint does not create ingredient lots, packaging inbound movements, stock movements, orders, or production changes.
+
+### `POST /api/purchase-suggestions/{suggestion_id}/dismiss`
+
+Marks an open suggestion as `dismissed` and sets `resolved_at`. Terminal suggestions stay terminal and are returned unchanged.
