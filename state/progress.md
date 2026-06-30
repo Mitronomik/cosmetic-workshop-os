@@ -346,3 +346,11 @@ After PR61 — preparing production readiness foundation
 - Added `production_batches`, `production_batch_ingredients`, and `production_batch_packaging` tables for historical production snapshots.
 - Production confirmation now requires `confirm=true`, reuses backend Production Readiness, rejects lifecycle/readiness conflicts, writes off ingredient lots and packaging through movement records, marks the order `produced`, sets `produced_at`, and writes a safe audit log in the same transaction.
 - Tax, margin, and margin percent remain null; no hidden tax rate or frontend production UI was added.
+
+## PR65 — Production confirmation UI
+- Added frontend Production Confirmation UI inside the Orders workspace, using the existing backend readiness result as the gate before showing `Изготовить`.
+- Added frontend production batch response types and a `produceOrder` helper that only sends `confirm=true` to `POST /api/orders/{order_id}/produce`.
+- Added an inline second-confirmation panel with optional notes before any production request is sent.
+- Successful production now displays a human-readable production result panel with batch id, produced date, costs when present, tax/margin as `Не рассчитано`, write-off row counts, and the stock movement safety note.
+- After successful production, the frontend refreshes order data from the backend and no longer exposes production actions for produced/cancelled/archived/inactive/delivered orders.
+- No frontend readiness, stock write-off, lot selection, production batch, tax, or margin calculations were added; no backend logic or migrations were changed.
