@@ -2,18 +2,18 @@
 
 ## Status
 
-PR62 — Production readiness backend foundation is implemented and ready for review.
+PR63 — Production readiness UI is implemented and ready for review.
 
-## Completed in PR62
+## Completed in PR63
 
-- Added backend Production Readiness service and schemas for order checks.
-- Added `POST /api/orders/{order_id}/check-production-readiness`.
-- Checks exact order recipe source (`RecipeVersion` or copied `ClientRecipe` composition), ingredient lot availability, FEFO candidate lots, packaging balance, expired/soon-expiring lots, density/conversion warnings, and optional cost/tax/margin estimates.
-- Preserved read-only production boundary: no stock movements, no packaging movements, no production batches, and no order lifecycle mutation.
-- Updated API docs and backend tests for readiness behavior.
+- Added a read-only `Проверить изготовление` action in the Orders detail view for active orders.
+- The frontend calls the existing PR62 endpoint: `POST /api/orders/{order_id}/check-production-readiness`.
+- The Orders workspace displays readiness summary, blocking issues, warnings, ingredient needs, FEFO-selected lots, packaging availability, and optional cost/tax/margin estimates from the backend response.
+- The UI clearly states that the check does not write off stock, reserve lots, create production batches, or change order status.
+- Cancelled, archived, or inactive orders do not expose the readiness action and show a safe read-only message.
 
 ## Next recommended task
 
-Next roadmap step: production confirmation foundation as a separate scoped PR.
+Next roadmap step: production confirmation backend foundation as a separate scoped PR.
 
-The next PR may add `ProductionBatch` and explicit stock/packaging write-off only if requested. Keep alerts, purchase suggestions, frontend production UI, import/export, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.
+The next PR may add `ProductionBatch` persistence, explicit user confirmation, transactional ingredient/packaging stock write-off, order lifecycle transition, and audit logging only if requested. Keep alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.

@@ -333,3 +333,10 @@ After PR61 — preparing production readiness foundation
 - Readiness checks current ingredient lot and packaging balances through existing inventory read logic and preserves the production boundary: no stock write-off, no packaging write-off, no production batches, and no order lifecycle mutation.
 - Added targeted backend tests for enough stock, missing/insufficient ingredients, FEFO selection, expired/soon-expiring lots, missing density, missing packaging, cancelled/archived rejection, API behavior, and read-only guarantees.
 - No frontend UI, production confirmation, alerts, purchase suggestions, import/export, cloud, mobile, OCR, auth, or roles were added.
+
+## PR63 — Production readiness UI
+- Added read-only Production Readiness UI inside the Orders workspace.
+- Added active-order `Проверить изготовление` action that calls existing `POST /api/orders/{order_id}/check-production-readiness` endpoint.
+- Displayed readiness summary, blocking issues, warnings, ingredient requirements, backend-selected FEFO lots, packaging availability, and optional estimates.
+- Null tax/margin/cost values are shown as `Не рассчитано`; the frontend does not invent tax settings or calculate margin itself.
+- Preserved production boundary: no production confirmation, no stock write-off, no packaging write-off, no lot reservation, no production batches, and no order lifecycle mutation.
