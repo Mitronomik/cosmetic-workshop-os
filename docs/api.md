@@ -99,3 +99,25 @@ Error mapping:
 - `409` — order lifecycle conflict, existing production batch, or readiness blockers.
 - `422` — invalid request body or missing explicit confirmation.
 - `500` — unexpected server error only.
+
+## Production batch history (PR66)
+
+Read-only production batch history is available under `/api` for inspecting immutable production snapshots created by `POST /api/orders/{order_id}/produce`.
+
+Endpoints:
+
+- `GET /api/production-batches?limit=50&offset=0` — list produced batches sorted by `produced_at DESC, id DESC`. The response includes order/product/client context, final batch size, cost/tax/margin snapshot fields, produced date, ingredient snapshot row count, packaging snapshot row count, and notes.
+- `GET /api/production-batches/{batch_id}` — open one production batch detail with the batch header, order/product/client context, consumed ingredient lot snapshots, and consumed packaging snapshots.
+- `GET /api/orders/{order_id}/production-batch` — open the production batch for one produced order. Returns `404` when the order does not exist or when the order has no production batch.
+
+Read-only boundary:
+
+- These endpoints do not create production batches.
+- These endpoints do not create stock movements or packaging stock movements.
+- These endpoints do not mutate orders or order statuses.
+- Snapshot values are returned as historical data and are not recalculated from current ingredient, lot, packaging, recipe, or order values.
+
+Error mapping:
+
+- `404` — production batch/order was not found, or the order has no production batch.
+- `422` — invalid `limit`/`offset` query parameters.

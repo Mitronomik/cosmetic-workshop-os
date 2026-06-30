@@ -106,7 +106,11 @@ type ProductionReadinessPackagingLine = { packaging_item_id: number; name: strin
 type ProductionReadinessResponse = { order_id: number; can_produce: boolean; status: ProductionReadinessStatus; blocking_issues: ProductionReadinessIssue[]; warnings: ProductionReadinessIssue[]; ingredients: ProductionReadinessIngredientLine[]; packaging: ProductionReadinessPackagingLine[]; estimated_cost: string | null; estimated_tax: string | null; estimated_margin: string | null; generated_at: string | null };
 type ProductionBatchIngredientResponse = { id: number; production_batch_id: number; ingredient_id: number; ingredient_lot_id: number; ingredient_name_snapshot: string; lot_code_snapshot: string; required_quantity: string; consumed_quantity: string; unit: string; unit_cost_snapshot: string | null; total_cost_snapshot: string | null; expiration_date_snapshot: string | null; created_at: string };
 type ProductionBatchPackagingResponse = { id: number; production_batch_id: number; packaging_item_id: number; packaging_name_snapshot: string; quantity: string; unit: string; unit_cost_snapshot: string | null; total_cost_snapshot: string | null; created_at: string };
-type ProductionBatchDetailResponse = { id: number; order_id: number; recipe_version_id: number | null; client_recipe_id: number | null; final_batch_value: string; final_batch_unit: string; component_cost: string | null; packaging_cost: string | null; other_cost: string; total_cost: string | null; sale_price: string | null; tax: string | null; margin: string | null; margin_percent: string | null; produced_at: string; notes: string; created_at: string; ingredients: ProductionBatchIngredientResponse[]; packaging: ProductionBatchPackagingResponse[] };
+type ProductionBatchDetailResponse = { id: number; order_id: number; product_name: string | null; client_id: number | null; client_name: string | null; recipe_version_id: number | null; client_recipe_id: number | null; final_batch_value: string; final_batch_unit: string; component_cost: string | null; packaging_cost: string | null; other_cost: string; total_cost: string | null; sale_price: string | null; tax: string | null; margin: string | null; margin_percent: string | null; produced_at: string; notes: string; created_at: string; ingredients: ProductionBatchIngredientResponse[]; packaging: ProductionBatchPackagingResponse[] };
+type ProductionStatus = 'idle' | 'loading' | 'ready' | 'error';
+type ProductionBatchListItem = { id: number; order_id: number; product_name: string; client_id: number; client_name: string | null; recipe_version_id: number | null; client_recipe_id: number | null; final_batch_value: string; final_batch_unit: string; total_cost: string | null; sale_price: string | null; tax: string | null; margin: string | null; margin_percent: string | null; produced_at: string; ingredient_line_count: number; packaging_line_count: number; notes: string };
+type ProductionHistoryState = { batches: ProductionBatchListItem[]; selectedBatch: ProductionBatchDetailResponse | null; status: ProductionStatus; detailStatus: ProductionStatus; error: string; detailError: string; filters: { search: string } };
+
 type OrdersState = { items: Order[]; clients: Client[]; templates: RecipeTemplate[]; versions: RecipeVersion[]; clientRecipes: ClientRecipe[]; packagingItems: PackagingItem[]; formMode: OrderFormMode; form: OrderFormState; showForm: boolean; selectedOrder: Order | null; includeInactive: boolean; filters: { search: string; status: OrderStatusFilter }; readinessByOrderId: Record<number, ProductionReadinessResponse>; readinessLoadingOrderId: number | null; readinessError: string; productionByOrderId: Record<number, ProductionBatchDetailResponse>; productionLoadingOrderId: number | null; productionError: string; productionConfirmingOrderId: number | null; productionNotesByOrderId: Record<number, string> };
 
 type ClientRecipe = { id: number; client_id: number; source_recipe_version_id: number; title: string; status: string; target_batch_size_value: string | null; target_batch_size_unit: string | null; personalization_notes: string; allergy_notes: string; preference_notes: string; contraindication_notes: string; notes: string; is_active: boolean; created_at: string; updated_at: string };
@@ -326,7 +330,7 @@ const navigationGroups: NavigationGroup[] = [
   ] },
   { title: 'Производство', items: [
     { label: 'Готовность', section: 'Готовность', path: '/#production-readiness', status: 'planned' },
-    { label: 'Производство', section: 'Производство', path: '/#production', status: 'planned' },
+    { label: 'Производство', section: 'Производство', path: '/production', status: 'ready' },
   ] },
   { title: 'Данные и настройки', items: [
     { label: 'Импорт', section: 'Импорт', path: '/#import', status: 'planned' },
@@ -366,6 +370,7 @@ let clientRecipesState: ClientRecipesState = { items: [], clients: [], templates
 let ordersStatus: OrdersStatus = 'idle';
 let ordersError = '';
 let ordersMessage = '';
+let productionHistoryState: ProductionHistoryState = { batches: [], selectedBatch: null, status: 'idle', detailStatus: 'idle', error: '', detailError: '', filters: { search: '' } };
 let ordersState: OrdersState = { items: [], clients: [], templates: [], versions: [], clientRecipes: [], packagingItems: [], formMode: 'create', form: emptyOrderForm(), showForm: false, selectedOrder: null, includeInactive: true, filters: { search: '', status: 'active' }, readinessByOrderId: {}, readinessLoadingOrderId: null, readinessError: '', productionByOrderId: {}, productionLoadingOrderId: null, productionError: '', productionConfirmingOrderId: null, productionNotesByOrderId: {} };
 let ingredientsStatus: IngredientsStatus = 'idle';
 let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, showCreateForm: false, filters: emptyCatalogBrowserFilters(), assignmentDraft: emptyAssignmentDraft() };
@@ -402,12 +407,12 @@ function sectionFromLocation(): NavigationSection {
     '/clients': 'Клиенты',
     '/client-recipes': 'Индивидуальные рецепты',
     '/orders': 'Заказы',
+    '/production': 'Производство',
     '/packaging-items': 'Тара',
   };
   const placeholderRoutes: Record<string, NavigationSection> = {
     '#purchases': 'Закупки',
     '#production-readiness': 'Готовность',
-    '#production': 'Производство',
     '#import': 'Импорт',
     '#reports': 'Отчеты',
     '#settings': 'Настройки',
@@ -433,6 +438,7 @@ function loadSectionData(section: NavigationSection) {
   if (section === 'Клиенты') loadClients();
   if (section === 'Индивидуальные рецепты') loadClientRecipes();
   if (section === 'Заказы') loadOrders();
+  if (section === 'Производство') loadProductionHistory();
   if (section === 'Тара') loadPackagingItems();
 }
 
@@ -446,6 +452,7 @@ function renderActivePage(section: NavigationSection) {
   if (section === 'Клиенты') return clientsPage();
   if (section === 'Индивидуальные рецепты') return clientRecipesPage();
   if (section === 'Заказы') return ordersPage();
+  if (section === 'Производство') return productionPage();
   if (section === 'Тара') return packagingItemsPage();
   return plannedSectionPlaceholder(section);
 }
@@ -533,6 +540,11 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="cancel-production-confirmation"]').forEach((button) => button.addEventListener('click', () => cancelProductionConfirmation(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="confirm-production"]').forEach((button) => button.addEventListener('click', () => confirmProduction(Number(button.dataset.id))));
   root.querySelector<HTMLTextAreaElement>('[data-action="production-notes"]')?.addEventListener('input', (event) => { const id = Number((event.currentTarget as HTMLTextAreaElement).dataset.id); ordersState.productionNotesByOrderId[id] = (event.currentTarget as HTMLTextAreaElement).value; });
+  root.querySelector<HTMLButtonElement>('[data-action="reload-production-history"]')?.addEventListener('click', () => loadProductionHistory(true));
+  root.querySelector<HTMLInputElement>('[data-action="filter-production-search"]')?.addEventListener('input', (event) => { productionHistoryState.filters.search = (event.currentTarget as HTMLInputElement).value; render(); });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="open-production-batch"]').forEach((button) => button.addEventListener('click', () => openProductionBatch(Number(button.dataset.id))));
+  root.querySelector<HTMLButtonElement>('[data-action="close-production-batch"]')?.addEventListener('click', () => { productionHistoryState.selectedBatch = null; productionHistoryState.detailStatus = 'idle'; render(); });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="open-order-production-batch"]').forEach((button) => button.addEventListener('click', () => openProductionBatchByOrder(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="order"]')?.addEventListener('submit', submitOrderForm);
   root.querySelector<HTMLInputElement>('[data-action="filter-orders-search"]')?.addEventListener('input', (event) => { ordersState.filters.search = (event.currentTarget as HTMLInputElement).value; render(); });
   root.querySelector<HTMLSelectElement>('[data-action="filter-orders-status"]')?.addEventListener('change', (event) => { ordersState.filters.status = (event.currentTarget as HTMLSelectElement).value as OrderStatusFilter; render(); });
@@ -778,12 +790,28 @@ function catalogTagPicker(params: { itemId: number; selectedIds: number[]; tags:
 }
 
 function dashboardPlaceholder() {
-  return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Что уже можно открыть</h2><div class="readiness-grid"><div><h3>Работает сейчас</h3><ul><li>Рецепты</li><li>Индивидуальные рецепты</li><li>Клиенты</li><li>Заказы</li><li>Компоненты</li><li>Складской обзор</li><li>Тара</li></ul></div><div><h3>Скоро</h3><ul><li>Производство</li><li>Закупки</li><li>Импорт</li><li>Отчеты</li></ul></div></div></section>`;
+  return `${onboardingCard()}<section class="card"><p class="card-kicker">Сегодня в мастерской</p><h2>Что уже можно открыть</h2><div class="readiness-grid"><div><h3>Работает сейчас</h3><ul><li>Рецепты</li><li>Индивидуальные рецепты</li><li>Клиенты</li><li>Заказы</li><li>Компоненты</li><li>Складской обзор</li><li>Тара</li></ul></div><div><h3>Скоро</h3><ul><li>История производства</li><li>Закупки</li><li>Импорт</li><li>Отчеты</li></ul></div></div></section>`;
 }
 
 
 
 
+
+
+function productionPage() {
+  const visible = filteredProductionBatches();
+  return `<section class="card"><p class="card-kicker">История изготовленных партий</p><h2>Производство</h2><p>Здесь показаны уже изготовленные партии. Это исторический журнал: данные партии и списания не редактируются.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-production-history">Обновить историю</button></div></section>${productionHistoryToolbar()}${productionHistoryState.error ? `<p class="page-message error-message">${escapeHtml(productionHistoryState.error)}</p>` : ''}${productionHistoryState.status === 'loading' ? '<section class="card"><p>Загружаем историю производства…</p></section>' : productionHistoryList(visible)}${productionHistoryDetailPanel()}`;
+}
+function productionHistoryToolbar() { return `<section class="card filter-card"><label>Поиск по истории<input data-action="filter-production-search" value="${escapeHtml(productionHistoryState.filters.search)}" placeholder="Продукт, клиент, заметка, номер заказа или партии" /></label></section>`; }
+function filteredProductionBatches() { const q=productionHistoryState.filters.search.trim().toLowerCase(); if(!q) return productionHistoryState.batches; return productionHistoryState.batches.filter((b)=>[b.product_name,b.client_name??'',b.notes,String(b.order_id),String(b.id)].some((v)=>v.toLowerCase().includes(q))); }
+function productionHistoryList(items: ProductionBatchListItem[]) { if (productionHistoryState.status === 'error') return `<section class="card empty-card"><h2>История недоступна</h2><p>Не удалось загрузить историю производства. Проверьте, что локальное приложение запущено.</p><button class="secondary-action" type="button" data-action="reload-production-history">Обновить историю</button></section>`; if (productionHistoryState.batches.length===0) return `<section class="card empty-card"><h2>Изготовленных партий пока нет</h2><p>Изготовленных партий пока нет. Они появятся здесь после подтверждения изготовления заказа.</p></section>`; if (items.length===0) return `<section class="card empty-card"><h2>Партии не найдены</h2><p>Измените поиск, чтобы снова увидеть историю.</p></section>`; return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Журнал</p><h2>Изготовленные партии</h2></div><span class="pill info">${items.length}</span></div><div class="table-wrap"><table class="compact-catalog-table"><thead><tr><th>Дата</th><th>Продукт</th><th>Клиент</th><th>Партия</th><th>Себестоимость</th><th>Цена/маржа</th><th>Списания</th><th>Действие</th></tr></thead><tbody>${items.map((b)=>`<tr class="${productionHistoryState.selectedBatch?.id===b.id?'catalog-row-selected':''}"><td>${formatDateTime(b.produced_at)}</td><td><strong>${escapeHtml(b.product_name)}</strong><small>Заказ №${b.order_id}</small></td><td>${escapeHtml(b.client_name || 'Клиент не указан')}</td><td>${quantityLabel(b.final_batch_value,b.final_batch_unit)}</td><td>${moneyOrMissing(b.total_cost)}</td><td>${moneyOrMissing(b.sale_price)}<small>Маржа: ${moneyOrMissing(b.margin)} · Налог: ${moneyOrMissing(b.tax)}</small></td><td>Компоненты: ${b.ingredient_line_count}<small>Тара: ${b.packaging_line_count}</small></td><td><button class="secondary-action compact" type="button" data-action="open-production-batch" data-id="${b.id}">Открыть партию</button></td></tr>`).join('')}</tbody></table></div><p class="next-step">Партии доступны только для просмотра. Изменения склада смотрите в складских движениях.</p></section>`; }
+function productionHistoryDetailPanel() { const b=productionHistoryState.selectedBatch; if (productionHistoryState.detailStatus==='loading') return `<section class="card"><p>Открываем производственную партию…</p></section>`; if (productionHistoryState.detailStatus==='error') return `<section class="card empty-card"><h2>Не удалось открыть партию</h2><p>${escapeHtml(productionHistoryState.detailError || 'Не удалось открыть производственную партию. Обновите историю производства и попробуйте ещё раз.')}</p></section>`; if (!b) return ''; return `<section class="card data-card readiness-result"><div class="section-heading"><div><p class="card-kicker">Историческая партия</p><h2>Партия №${b.id}</h2></div><button class="secondary-action" type="button" data-action="close-production-batch">Вернуться к списку</button></div><div class="readiness-grid"><div><strong>Дата изготовления</strong><p>${formatDateTime(b.produced_at)}</p></div><div><strong>Заказ</strong><p>№${b.order_id}</p></div><div><strong>Продукт</strong><p>${escapeHtml(b.product_name || 'Не указан')}</p></div><div><strong>Клиент</strong><p>${escapeHtml(b.client_name || 'Не указан')}</p></div><div><strong>Источник</strong><p>${productionSourceLabel(b)}</p></div><div><strong>Размер партии</strong><p>${quantityLabel(b.final_batch_value,b.final_batch_unit)}</p></div></div>${b.notes ? `<p><strong>Заметка к партии:</strong><br>${escapeHtml(b.notes)}</p>` : '<p><strong>Заметка к партии:</strong> нет заметки.</p>'}<div class="readiness-block"><h3>Снимок себестоимости</h3><div class="readiness-grid"><div><strong>Компоненты</strong><p>${moneyOrMissing(b.component_cost)}</p></div><div><strong>Тара</strong><p>${moneyOrMissing(b.packaging_cost)}</p></div><div><strong>Прочие расходы</strong><p>${moneyOrMissing(b.other_cost)}</p></div><div><strong>Итого</strong><p>${moneyOrMissing(b.total_cost)}</p></div><div><strong>Цена продажи</strong><p>${moneyOrMissing(b.sale_price)}</p></div><div><strong>Налог</strong><p>${moneyOrMissing(b.tax)}</p></div><div><strong>Маржа</strong><p>${moneyOrMissing(b.margin)}</p></div><div><strong>Маржинальность</strong><p>${b.margin_percent ? `${escapeHtml(b.margin_percent)}%` : 'Не рассчитано'}</p></div></div><p class="next-step">Это снимок на момент изготовления. Значения не пересчитываются задним числом.</p></div>${productionIngredientsTable(b.ingredients)}${productionPackagingTable(b.packaging)}<p class="next-step">Партия доступна только для просмотра. Списания уже записаны как складские движения.</p></section>`; }
+function productionSourceLabel(b: ProductionBatchDetailResponse) { if (b.client_recipe_id) return `Индивидуальная формула №${b.client_recipe_id}`; if (b.recipe_version_id) return `Базовая версия рецепта №${b.recipe_version_id}`; return 'Источник не указан'; }
+function productionIngredientsTable(rows: ProductionBatchIngredientResponse[]) { return `<div class="readiness-block"><h3>Списанные компоненты</h3>${rows.length ? `<div class="table-wrap"><table class="compact-catalog-table"><thead><tr><th>Компонент</th><th>Партия</th><th>Нужно</th><th>Списано</th><th>Ед.</th><th>Цена за ед.</th><th>Стоимость</th><th>Срок годности</th></tr></thead><tbody>${rows.map((r)=>`<tr><td><strong>${escapeHtml(r.ingredient_name_snapshot)}</strong></td><td>${escapeHtml(r.lot_code_snapshot || 'Без номера')}</td><td>${escapeHtml(r.required_quantity)}</td><td>${escapeHtml(r.consumed_quantity)}</td><td>${unitLabel(r.unit)}</td><td>${moneyOrMissing(r.unit_cost_snapshot)}</td><td>${moneyOrMissing(r.total_cost_snapshot)}</td><td>${r.expiration_date_snapshot ? formatDate(r.expiration_date_snapshot) : 'Не указан'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty-hint">Списания компонентов в снимке не найдены.</p>'}</div>`; }
+function productionPackagingTable(rows: ProductionBatchPackagingResponse[]) { return `<div class="readiness-block"><h3>Списанная тара</h3>${rows.length ? `<div class="table-wrap"><table class="compact-catalog-table"><thead><tr><th>Тара</th><th>Количество</th><th>Ед.</th><th>Цена за ед.</th><th>Стоимость</th></tr></thead><tbody>${rows.map((r)=>`<tr><td><strong>${escapeHtml(r.packaging_name_snapshot)}</strong></td><td>${escapeHtml(r.quantity)}</td><td>${unitLabel(r.unit)}</td><td>${moneyOrMissing(r.unit_cost_snapshot)}</td><td>${moneyOrMissing(r.total_cost_snapshot)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty-hint">Списания тары в снимке не найдены.</p>'}</div>`; }
+function loadProductionHistory(force=false) { if(!force && (productionHistoryState.status==='loading'||productionHistoryState.status==='ready')) return; productionHistoryState.status='loading'; productionHistoryState.error=''; render(); getProductionBatches().then((response)=>{ productionHistoryState.batches=response.production_batches; productionHistoryState.status='ready'; productionHistoryState.error=''; render(); }).catch(()=>{ productionHistoryState.status='error'; productionHistoryState.error='Не удалось загрузить историю производства. Проверьте, что локальное приложение запущено.'; render(); }); }
+function openProductionBatch(id:number) { productionHistoryState.detailStatus='loading'; productionHistoryState.detailError=''; render(); getProductionBatch(id).then((batch)=>{ productionHistoryState.selectedBatch=batch; productionHistoryState.detailStatus='ready'; render(); }).catch(()=>{ productionHistoryState.detailStatus='error'; productionHistoryState.detailError='Не удалось открыть производственную партию. Обновите историю производства и попробуйте ещё раз.'; render(); }); }
+function openProductionBatchByOrder(id:number) { ordersState.productionLoadingOrderId=id; ordersState.productionError=''; render(); getProductionBatchByOrder(id).then((batch)=>{ ordersState.productionByOrderId[id]=batch; ordersState.productionLoadingOrderId=null; productionHistoryState.selectedBatch=batch; activeSection='Производство'; window.history.pushState({}, '', pathForSection(activeSection)); loadProductionHistory(true); render(); }).catch((e)=>{ ordersState.productionLoadingOrderId=null; const status=typeof e==='object' && e && 'status' in e ? Number((e as {status?: number}).status) : 0; ordersState.productionError=status===404 ? 'Для этого заказа производственная партия пока не найдена.' : 'Не удалось открыть производственную партию. Обновите историю производства и попробуйте ещё раз.'; render(); }); }
 
 function emptyOrderForm(): OrderFormState { return { id: null, client_id: '', source_type: 'recipe_version', recipe_version_id: '', client_recipe_id: '', product_name: '', target_batch_size_value: '', target_batch_size_unit: 'g', packaging_item_id: '', packaging_quantity: '', sale_price: '', ordered_at: '', planned_production_at: '', notes: '' }; }
 function ordersPage() {
@@ -816,7 +844,7 @@ function orderReadinessPanel(o: Order) {
 function orderProductionPanel(o: Order) {
   const batch = ordersState.productionByOrderId[o.id];
   if (batch) return productionSuccessPanel(batch);
-  if (orderProductionClosed(o)) return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Изготовление недоступно</h2><p class="next-step">Для закрытых, выданных, архивных или уже изготовленных заказов действие изготовления не показывается.</p></section>`;
+  if (orderProductionClosed(o)) { const canOpen=o.status==='produced'||o.status==='delivered'; return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Изготовление недоступно</h2><p class="next-step">Для закрытых, выданных, архивных или уже изготовленных заказов действие изготовления не показывается.</p>${ordersState.productionError && ordersState.selectedOrder?.id===o.id ? `<p class="page-message error-message">${escapeHtml(ordersState.productionError)}</p>` : ''}${canOpen ? `<div class="actions"><button class="secondary-action" type="button" data-action="open-order-production-batch" data-id="${o.id}" ${ordersState.productionLoadingOrderId===o.id?'disabled':''}>${ordersState.productionLoadingOrderId===o.id?'Открываем…':'Открыть партию'}</button></div>` : ''}</section>`; }
   const readiness = ordersState.readinessByOrderId[o.id];
   if (!readiness) return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2><p class="next-step">Сначала проверьте готовность изготовления.</p></section>`;
   if (!readiness.can_produce || readiness.status === 'blocked') return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2><p class="next-step">Производство недоступно, пока есть блокирующие замечания.</p></section>`;
@@ -1172,7 +1200,7 @@ function plannedSectionPlaceholder(section: NavigationSection) {
     Заказы: { title: 'Заказы', now: 'Пока можно вести клиентов, рецепты и индивидуальные рецепты; заказы будут подключены отдельным безопасным шагом.' },
     Закупки: { title: 'Закупки', now: 'Пока можно заполнить компоненты, приходы и партии, тару и складские движения; рекомендации закупок появятся позже.' },
     Готовность: { title: 'Готовность производства', now: 'Пока можно проверить рецепты, компоненты, партии и тару вручную в складских разделах.' },
-    Производство: { title: 'Производство', now: 'Пока можно подготовить рецепты, клиентов, компоненты, партии и тару; подтверждение производства и списание склада появятся позже.' },
+    Производство: { title: 'Производство', now: 'История изготовленных партий доступна в отдельном read-only журнале.' },
     Импорт: { title: 'Импорт данных', now: 'Пока данные нужно добавлять через готовые формы компонентов, партий, тары, рецептов и клиентов.' },
     Отчеты: { title: 'Отчеты', now: 'Пока можно смотреть текущие списки и складской обзор; сводные отчеты появятся отдельным модулем.' },
     Настройки: { title: 'Настройки', now: 'Пока используются базовые локальные настройки приложения; пользовательский экран настроек появится позже.' },
@@ -1491,9 +1519,12 @@ function cancelIngredientEdit() {
   ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsState.assignmentDraft = emptyAssignmentDraft(); ingredientsState.showCreateForm = false; ingredientsMessage = ''; ingredientsError = ''; render();
 }
 
-function apiGet<T>(url: string): Promise<T> { return fetch(url).then((response) => { if (!response.ok) throw new Error('API request failed'); return response.json() as Promise<T>; }); }
+function apiGet<T>(url: string): Promise<T> { return fetch(url).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw Object.assign(new Error(apiErrorMessage(payload)), { status: response.status }); } return response.json() as Promise<T>; }); }
 function apiErrorMessage(payload: unknown) { if (typeof payload === 'string') return payload; if (payload && typeof payload === 'object' && 'detail' in payload) { const detail = (payload as { detail?: unknown }).detail; if (typeof detail === 'string') return detail; if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message?: unknown }).message ?? 'API request failed'); } return 'API request failed'; }
 function apiSend<T>(url: string, method: 'POST' | 'PUT', body?: unknown): Promise<T> { return fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw Object.assign(new Error(apiErrorMessage(payload)), { status: response.status }); } return response.json() as Promise<T>; }); }
+function getProductionBatches() { return apiGet<{ production_batches: ProductionBatchListItem[]; limit: number; offset: number }>('/api/production-batches'); }
+function getProductionBatch(batchId: number) { return apiGet<ProductionBatchDetailResponse>(`/api/production-batches/${batchId}`); }
+function getProductionBatchByOrder(orderId: number) { return apiGet<ProductionBatchDetailResponse>(`/api/orders/${orderId}/production-batch`); }
 function getOrders(includeInactive = true) { return apiGet<{ orders: Order[] }>(`/api/orders?include_inactive=${includeInactive ? 'true' : 'false'}`); }
 function getOrder(id: number) { return apiGet<Order>(`/api/orders/${id}`); }
 function createOrder(payload: OrderPayload) { return apiSend<Order>('/api/orders', 'POST', payload); }

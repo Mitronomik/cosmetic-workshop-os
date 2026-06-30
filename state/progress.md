@@ -354,3 +354,11 @@ After PR61 — preparing production readiness foundation
 - Successful production now displays a human-readable production result panel with batch id, produced date, costs when present, tax/margin as `Не рассчитано`, write-off row counts, and the stock movement safety note.
 - After successful production, the frontend refreshes order data from the backend and no longer exposes production actions for produced/cancelled/archived/inactive/delivered orders.
 - No frontend readiness, stock write-off, lot selection, production batch, tax, or margin calculations were added; no backend logic or migrations were changed.
+
+## PR66 — Production history read UI and production batch detail page
+- Added read-only production batch API endpoints for listing batches, opening one batch detail, and finding a batch by order.
+- Production batch repository now supports read-only list/detail access with order, product, and client display context without duplicating production confirmation write logic.
+- Added backend tests covering list sorting, detail snapshots, by-order lookup, not-found behavior, and read-only guarantees.
+- Added a real frontend `Производство` page with production history search, batch list, and read-only detail panel for cost, ingredient lot, and packaging snapshots.
+- Produced/delivered orders can open their production batch without showing production confirmation actions again.
+- No migrations, production write actions, reversal/edit/delete flows, frontend stock/cost/tax calculations, alerts, purchases, import/export, cloud, OCR, auth, or analytics were added.

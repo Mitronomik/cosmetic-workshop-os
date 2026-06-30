@@ -1,15 +1,24 @@
 from decimal import Decimal
 import sqlite3
 
+from app.db.config import DatabaseConfig, get_database_config
+from app.db.connection import session
 from app.domain.units import UnitCode
-from app.models.production_batch import ProductionBatch, ProductionBatchDetail, ProductionBatchIngredient, ProductionBatchPackaging
+from app.models.production_batch import ProductionBatch, ProductionBatchDetail, ProductionBatchIngredient, ProductionBatchListItem, ProductionBatchPackaging
 
 
 class ProductionBatchAlreadyExistsError(ValueError):
     pass
 
 
+class ProductionBatchNotFoundError(LookupError):
+    pass
+
+
 class ProductionBatchRepository:
+    def __init__(self, config: DatabaseConfig | None = None) -> None:
+        self.config = config or get_database_config()
+
     def create_batch(self, *, connection: sqlite3.Connection, order_id: int, recipe_version_id: int | None, client_recipe_id: int | None, final_batch_value: Decimal, final_batch_unit: UnitCode, component_cost: Decimal | None, packaging_cost: Decimal | None, other_cost: Decimal, total_cost: Decimal | None, sale_price: Decimal | None, tax: Decimal | None, margin: Decimal | None, margin_percent: Decimal | None, notes: str) -> ProductionBatch:
         try:
             cur = connection.execute(
@@ -46,11 +55,52 @@ class ProductionBatchRepository:
     def exists_for_order(self, order_id: int, *, connection: sqlite3.Connection) -> bool:
         return connection.execute("SELECT 1 FROM production_batches WHERE order_id=?", (order_id,)).fetchone() is not None
 
-    def get_detail(self, batch_id: int, *, connection: sqlite3.Connection) -> ProductionBatchDetail:
-        batch = _batch(connection.execute("SELECT * FROM production_batches WHERE id=?", (batch_id,)).fetchone())
+    def list_batches(self, *, limit: int = 50, offset: int = 0) -> list[ProductionBatchListItem]:
+        with session(self.config) as connection:
+            rows = connection.execute(
+                """
+                SELECT pb.*, o.product_name, o.client_id, c.full_name AS client_name,
+                       (SELECT COUNT(*) FROM production_batch_ingredients pbi WHERE pbi.production_batch_id = pb.id) AS ingredient_line_count,
+                       (SELECT COUNT(*) FROM production_batch_packaging pbp WHERE pbp.production_batch_id = pb.id) AS packaging_line_count
+                FROM production_batches pb
+                JOIN orders o ON o.id = pb.order_id
+                LEFT JOIN clients c ON c.id = o.client_id
+                ORDER BY pb.produced_at DESC, pb.id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            ).fetchall()
+        return [_list_item(r) for r in rows]
+
+    def get_detail(self, batch_id: int, *, connection: sqlite3.Connection | None = None) -> ProductionBatchDetail:
+        if connection is None:
+            with session(self.config) as c:
+                return self.get_detail(batch_id, connection=c)
+        row = connection.execute(
+            """
+            SELECT pb.*, o.product_name, o.client_id, c.full_name AS client_name
+            FROM production_batches pb
+            JOIN orders o ON o.id = pb.order_id
+            LEFT JOIN clients c ON c.id = o.client_id
+            WHERE pb.id=?
+            """,
+            (batch_id,),
+        ).fetchone()
+        if row is None:
+            raise ProductionBatchNotFoundError(f"Production batch {batch_id} was not found.")
+        batch = _batch(row)
         ingredients = [_ingredient(r) for r in connection.execute("SELECT * FROM production_batch_ingredients WHERE production_batch_id=? ORDER BY id", (batch_id,)).fetchall()]
         packaging = [_packaging(r) for r in connection.execute("SELECT * FROM production_batch_packaging WHERE production_batch_id=? ORDER BY id", (batch_id,)).fetchall()]
-        return ProductionBatchDetail(batch=batch, ingredients=ingredients, packaging=packaging)
+        return ProductionBatchDetail(batch=batch, ingredients=ingredients, packaging=packaging, product_name=row["product_name"], client_id=row["client_id"], client_name=row["client_name"])
+
+    def get_detail_by_order_id(self, order_id: int, *, connection: sqlite3.Connection | None = None) -> ProductionBatchDetail:
+        if connection is None:
+            with session(self.config) as c:
+                return self.get_detail_by_order_id(order_id, connection=c)
+        row = connection.execute("SELECT id FROM production_batches WHERE order_id=?", (order_id,)).fetchone()
+        if row is None:
+            raise ProductionBatchNotFoundError(f"Production batch for order {order_id} was not found.")
+        return self.get_detail(row["id"], connection=connection)
 
 
 def _d(v): return None if v is None else str(v)
@@ -64,3 +114,7 @@ def _ingredient(r):
 
 def _packaging(r):
     return ProductionBatchPackaging(r["id"], r["production_batch_id"], r["packaging_item_id"], r["packaging_name_snapshot"], Decimal(r["quantity"]), UnitCode(r["unit"]), _dec(r["unit_cost_snapshot"]), _dec(r["total_cost_snapshot"]), r["created_at"])
+
+
+def _list_item(r):
+    return ProductionBatchListItem(r["id"], r["order_id"], r["product_name"], r["client_id"], r["client_name"], r["recipe_version_id"], r["client_recipe_id"], Decimal(r["final_batch_value"]), UnitCode(r["final_batch_unit"]), _dec(r["total_cost"]), _dec(r["sale_price"]), _dec(r["tax"]), _dec(r["margin"]), _dec(r["margin_percent"]), r["produced_at"], int(r["ingredient_line_count"]), int(r["packaging_line_count"]), r["notes"])
