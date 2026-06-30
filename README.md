@@ -22,7 +22,9 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-PR2 database foundation is implemented: backend health endpoints remain stable, SQLite infrastructure tables and migration helpers exist, and the frontend shell remains unchanged.
+Current state: after PR58, the app has a local-first backend/API foundation with SQLite startup/migration safety, onboarding, stock foundations for ingredients/lots/movements and packaging, inventory reads, recipes with versions and calculation, catalog organization UX, clients, first-class client recipes with editable copied composition, ClientRecipe restore, and client wishes plus append-only feedback UI.
+
+Next recommended roadmap task: Orders backend foundation. Orders, production readiness/confirmation, automatic stock write-off, alerts, purchase suggestions, import/export, backup/restore UI, and final packaging remain future roadmap scope.
 
 ## Developer commands
 

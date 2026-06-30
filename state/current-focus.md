@@ -1,22 +1,21 @@
 # Current focus
 
-PR24 is implemented: backend-only user-managed catalog categories and tags for ingredients/components, packaging/tare, and recipe templates.
+PR58 is complete: client wishes and append-only feedback are available in the client-card UI, including follow-up fixes that preserve open wish/feedback drafts during background refreshes and client-card saves.
 
-Existing system classifications remain intact and continue to mean what they meant before PR24:
-- `IngredientCategory` remains the fixed ingredient/component system enum;
-- `PackagingKind` remains the fixed packaging/tare system enum;
-- `recipe_templates.product_type` remains the existing free-text recipe template field.
+The repository is now past stock, recipe, catalog, client, client recipe, ClientRecipe composition, restore, and client wishes/feedback foundations. Future Codex tasks should not start from the older PR24/PR26 catalog focus.
 
-The new catalog category/tag layer is additional organization metadata. Frontend catalog UI is still a follow-up.
+## Next recommended implementation step
 
-Scope intentionally excludes production, orders, FEFO, stock write-off, alerts, purchase suggestions, import/export, cloud, mobile, OCR, auth, roles, and any technical admin panel.
+Orders backend foundation.
 
-## PR25 note
-- PR25 adds ingredient-facing catalog organization controls on the existing «Компоненты» screen: ingredient-scoped catalog categories load as «Моя группа», ingredient-scoped catalog tags load as «Метки», and assignments use the ingredient assignment endpoints.
-- The existing `IngredientCategory` system category remains intact as «Системный тип» and catalog categories/tags remain organization metadata only.
-- Packaging and recipe catalog UI remain follow-ups; no migrations, production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
+The next PR should be a narrow backend/domain/data-model slice for orders only, aligned with Phase 4 in the roadmap. It should preserve the existing local-first/API-first architecture, keep user data outside the repository, avoid mutating historical recipes/client recipes, and add migrations/tests only for the explicitly scoped order backend work.
 
-## PR26 note
-- PR26 implements inline creation of ingredient catalog groups and tags from the `Компоненты` screen only.
-- Catalog groups/tags remain ingredient-scoped organization metadata; the system `IngredientCategory` field remains intact.
-- Packaging and recipe catalog UI remain follow-ups; no migrations, production, orders, import/export, cloud, mobile, OCR, auth, or roles were added.
+## Still out of scope until explicitly requested
+
+- Production readiness and production confirmation.
+- Automatic stock write-off and production batches.
+- Alerts and purchase suggestions.
+- Import/export workflows.
+- Backup/restore UI.
+- Final user packaging/macOS distribution.
+- Cloud sync, mobile app/view, OCR, auth, and roles.
