@@ -401,3 +401,10 @@ After PR61 — preparing production readiness foundation
 - Follow-up hardened dashboard loading so initial load does not show fake empty metrics, manual reload keeps stale data visible, and failed refresh shows a soft stale-data message.
 - No backend endpoint, migration, analytics, scheduler, polling, notifications, backup/export, import/export, stock/order/production mutations, or procurement automation were added.
 - Next recommended PR: Backup/export UI foundation or Backup/export backend/frontend foundation depending on existing backup/export state.
+
+## PR72 — Orders reference refresh and localized quantity display hotfix
+- Added frontend-only Orders reference refresh for create/edit forms so clients, recipe templates, recipe versions, client recipes, and packaging are reloaded before the form shows usable selectors.
+- Added explicit Orders form reference loading, retryable error, and post-load empty-state behavior to avoid disabled empty dropdowns caused by stale cached `ordersState` data.
+- Added Russian-friendly display formatting for user-facing quantities in Orders, production readiness, production snapshots/history, purchase snippets, and dashboard snippets so raw backend decimals like `100.000 г` render as `100 г`.
+- Kept backend Decimal/API payload contracts unchanged by continuing to submit dot-normalized decimal strings and adding no backend endpoints, migrations, or business-logic changes.
+- No stock/order/production side effects were added beyond existing explicit order create/edit/cancel/archive actions.
