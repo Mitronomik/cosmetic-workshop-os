@@ -1,7 +1,11 @@
-# Current focus
+# Current Focus
 
-PR77 — Import CSV/XLSX draft backend foundation — is implemented in this working tree.
+PR78 — Import draft UI / preview UI is implemented in this branch.
 
-Next recommended PR: **PR78 — Import draft UI / preview UI**.
+Scope now remains limited to validating and reviewing the frontend Import workspace at `/imports`:
 
-Keep PR78 scoped to frontend/API consumption for existing draft endpoints unless explicitly asked to refine backend validation first. Do not add import confirmation/apply until a later scoped PR.
+- consumes PR77 draft-only import API;
+- supports target listing, explicit CSV/XLSX draft upload, draft listing, draft detail, preview rows, validation issues, and cancellation;
+- does not implement import apply/confirmation, mapping editor, OCR, PDF/image import, automatic backup/export, or writes to real business tables.
+
+Next recommended PR after smoke feedback: Import validation refinement or Import apply design/backend.

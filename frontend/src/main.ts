@@ -125,6 +125,19 @@ type ExportCreateRequest = { reason?: string | null };
 type ExportCreateResponse = { export: ExportFileResponse; database_path: string; export_dir: string; entity_counts: Record<string, number>; message: string };
 type ExportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; message: string; exportStatus: ExportStatusResponse | null; exports: ExportFileResponse[]; reason: string; customReason: string; lastCreatedExport: ExportFileResponse | null; lastEntityCounts: Record<string, number> };
 
+type ImportTargetResponse = { type: string; label: string; required_columns: string[]; optional_columns: string[] };
+type ImportTargetsResponse = { targets: ImportTargetResponse[] };
+type ImportDraftSummary = { id: number; source_id: number; target_type: string; status: string; row_count: number; valid_row_count: number; invalid_row_count: number; warning_count: number; error_count: number; headers: string[]; created_at: string; updated_at?: string | null };
+type ImportIssue = { severity: 'info' | 'warning' | 'error' | string; code: string; message: string; row_number: number | null; field: string | null };
+type ImportPreviewRow = { id?: number; row_number: number; raw_values: Record<string, unknown>; normalized_values: Record<string, unknown>; issues: ImportIssue[]; status: string };
+type ImportDraftCreateResponse = { draft: ImportDraftSummary; preview_rows: ImportPreviewRow[]; issues: ImportIssue[]; message: string };
+type ImportDraftListParams = { status?: string; targetType?: string; limit?: number; offset?: number };
+type ImportDraftListResponse = { drafts: ImportDraftSummary[]; limit?: number; offset?: number; total?: number };
+type ImportSourceResponse = { id: number; original_filename: string; content_type: string | null; file_extension: string; file_size_bytes: number; target_type: string; status: string; created_at: string };
+type ImportDraftDetailResponse = { draft: ImportDraftSummary; source: ImportSourceResponse; preview_rows: ImportPreviewRow[]; issues: ImportIssue[]; limit?: number; offset?: number; total_rows?: number };
+type ImportDraftCancelResponse = { draft: ImportDraftSummary; message: string };
+type ImportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'uploading' | 'cancelling'; error: string; message: string; targets: ImportTargetResponse[]; drafts: ImportDraftSummary[]; selectedDraft: ImportDraftDetailResponse | null; selectedDraftStatus: 'idle' | 'loading' | 'ready' | 'error'; selectedDraftError: string; selectedTargetType: string; selectedFileName: string; filters: { status: string; targetType: string } };
+
 
 type AlertStatus = 'open' | 'resolved' | 'dismissed';
 type AlertStatusFilter = 'open' | 'resolved' | 'dismissed' | 'all';
@@ -373,7 +386,7 @@ const navigationGroups: NavigationGroup[] = [
   { title: 'Данные и настройки', items: [
     { label: 'Резервные копии', section: 'Резервные копии', path: '/backups', status: 'ready' },
     { label: 'Экспорт', section: 'Экспорт', path: '/exports', status: 'ready' },
-    { label: 'Импорт', section: 'Импорт', path: '/#import', status: 'planned' },
+    { label: 'Импорт', section: 'Импорт', path: '/imports', status: 'ready' },
     { label: 'Отчеты', section: 'Отчеты', path: '/#reports', status: 'planned' },
     { label: 'Настройки', section: 'Настройки', path: '/#settings', status: 'planned' },
     { label: 'Помощь', section: 'Помощь', path: '/#help', status: 'planned' },
@@ -414,6 +427,7 @@ let productionHistoryState: ProductionHistoryState = { batches: [], selectedBatc
 let dashboardState: DashboardState = { status: 'idle', error: '', message: '', orders: [], clients: [], alerts: [], purchaseSuggestions: [], productionBatches: [] };
 let backupUiState: BackupUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', backupStatus: null, backups: [], reason: 'manual', customReason: '', lastCreatedBackup: null };
 let exportUiState: ExportUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', exportStatus: null, exports: [], reason: 'manual', customReason: '', lastCreatedExport: null, lastEntityCounts: {} };
+let importUiState: ImportUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', targets: [], drafts: [], selectedDraft: null, selectedDraftStatus: 'idle', selectedDraftError: '', selectedTargetType: '', selectedFileName: '', filters: { status: '', targetType: '' } };
 let alertsState: AlertsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', type: '', search: '' }, lastGeneration: null };
 let purchaseSuggestionsState: PurchaseSuggestionsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', reason: '', itemType: '', search: '' }, lastGeneration: null, showManualForm: false, manualForm: { item_type: 'ingredient', item_id: '', recommended_quantity: '', unit: 'g', notes: '' }, editingSuggestionId: null, editForm: { recommended_quantity: '', unit: '', notes: '' } };
 let ordersState: OrdersState = { items: [], clients: [], templates: [], versions: [], clientRecipes: [], packagingItems: [], formMode: 'create', form: emptyOrderForm(), showForm: false, selectedOrder: null, includeInactive: true, filters: { search: '', status: 'active' }, referenceLoading: false, referenceError: '', readinessByOrderId: {}, readinessLoadingOrderId: null, readinessError: '', productionByOrderId: {}, productionLoadingOrderId: null, productionError: '', productionConfirmingOrderId: null, productionNotesByOrderId: {} };
@@ -447,6 +461,7 @@ function sectionFromLocation(): NavigationSection {
     '/alerts': 'Алерты',
     '/backups': 'Резервные копии',
     '/exports': 'Экспорт',
+    '/imports': 'Импорт',
     '/inventory': 'Склад',
     '/ingredients': 'Компоненты',
     '/ingredient-lots': 'Партии',
@@ -462,7 +477,6 @@ function sectionFromLocation(): NavigationSection {
   const placeholderRoutes: Record<string, NavigationSection> = {
     '#purchases': 'Закупки',
     '#production-readiness': 'Готовность',
-    '#import': 'Импорт',
     '#reports': 'Отчеты',
     '#settings': 'Настройки',
     '#help': 'Помощь',
@@ -483,6 +497,7 @@ function loadSectionData(section: NavigationSection) {
   if (section === 'Алерты') loadAlerts();
   if (section === 'Резервные копии') loadBackups();
   if (section === 'Экспорт') loadExports();
+  if (section === 'Импорт') loadImports();
   if (section === 'Склад') loadInventory();
   if (section === 'Компоненты') loadIngredients();
   if (section === 'Партии') loadIngredientLots();
@@ -501,6 +516,7 @@ function renderActivePage(section: NavigationSection) {
   if (section === 'Алерты') return alertsPage();
   if (section === 'Резервные копии') return backupPage();
   if (section === 'Экспорт') return exportPage();
+  if (section === 'Импорт') return importPage();
   if (section === 'Склад') return inventoryPage();
   if (section === 'Компоненты') return ingredientsPage();
   if (section === 'Партии') return ingredientLotsPage();
@@ -581,6 +597,15 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLButtonElement>('[data-action="reload-dashboard"]')?.addEventListener('click', () => loadDashboard(true));
   root.querySelector<HTMLButtonElement>('[data-action="reload-backups"]')?.addEventListener('click', () => loadBackups(true));
   root.querySelector<HTMLButtonElement>('[data-action="reload-exports"]')?.addEventListener('click', () => loadExports(true));
+  root.querySelector<HTMLButtonElement>('[data-action="reload-imports"]')?.addEventListener('click', () => loadImports(true));
+  root.querySelector<HTMLFormElement>('[data-form="import-draft"]')?.addEventListener('submit', submitImportDraftForm);
+  root.querySelector<HTMLSelectElement>('[data-action="select-import-target"]')?.addEventListener('change', (event) => { importUiState.selectedTargetType = (event.currentTarget as HTMLSelectElement).value; importUiState.error = ''; });
+  root.querySelector<HTMLInputElement>('[data-action="select-import-file"]')?.addEventListener('change', (event) => { importUiState.selectedFileName = (event.currentTarget as HTMLInputElement).files?.[0]?.name ?? ''; importUiState.error = ''; });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="open-import-draft"]').forEach((button) => button.addEventListener('click', () => openImportDraft(Number(button.dataset.id))));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="cancel-import-draft"]').forEach((button) => button.addEventListener('click', () => cancelImportDraftFromUi(Number(button.dataset.id))));
+  root.querySelector<HTMLSelectElement>('[data-action="filter-import-status"]')?.addEventListener('change', (event) => { importUiState.filters.status = (event.currentTarget as HTMLSelectElement).value; loadImports(true); });
+  root.querySelector<HTMLSelectElement>('[data-action="filter-import-target"]')?.addEventListener('change', (event) => { importUiState.filters.targetType = (event.currentTarget as HTMLSelectElement).value; loadImports(true); });
+  root.querySelector<HTMLButtonElement>('[data-action="reset-import-filters"]')?.addEventListener('click', () => { importUiState.filters = { status: '', targetType: '' }; loadImports(true); });
   root.querySelector<HTMLFormElement>('[data-form="export-create"]')?.addEventListener('submit', submitExportCreateForm);
   root.querySelector<HTMLButtonElement>('[data-action="create-export"]')?.addEventListener('click', () => submitExportCreate());
   root.querySelector<HTMLSelectElement>('[data-action="select-export-reason"]')?.addEventListener('change', (event) => { exportUiState.reason = (event.currentTarget as HTMLSelectElement).value; exportUiState.message = ''; exportUiState.error = ''; render(); });
@@ -1210,6 +1235,137 @@ function exportEntityLabel(key: string): string {
     audit_logs: 'Журнал действий',
   } as Record<string, string>)[key] ?? escapeHtml(key);
 }
+
+
+function loadImports(force = false) {
+  if (!force && (importUiState.status === 'loading' || importUiState.status === 'ready')) return;
+  importUiState.status = 'loading';
+  importUiState.error = '';
+  if (force) importUiState.message = '';
+  render();
+  Promise.all([getImportTargets(), getImportDrafts(importUiState.filters)])
+    .then(([targets, list]) => {
+      importUiState.status = 'ready';
+      importUiState.targets = targets.targets;
+      importUiState.drafts = list.drafts;
+      if (!importUiState.selectedTargetType && targets.targets[0]) importUiState.selectedTargetType = targets.targets[0].type;
+      importUiState.error = '';
+      render();
+    })
+    .catch(() => {
+      importUiState.status = 'error';
+      importUiState.error = 'Не удалось загрузить сведения об импорте. Проверьте, что локальное приложение запущено, и попробуйте снова.';
+      render();
+    });
+}
+
+function submitImportDraftForm(event: SubmitEvent) { event.preventDefault(); submitImportDraft(event.currentTarget as HTMLFormElement); }
+function submitImportDraft(form: HTMLFormElement) {
+  if (importUiState.actionStatus === 'uploading') return;
+  const targetType = importUiState.selectedTargetType || (form.elements.namedItem('target_type') as HTMLSelectElement | null)?.value || '';
+  const file = (form.elements.namedItem('file') as HTMLInputElement | null)?.files?.[0] ?? null;
+  if (!targetType) { importUiState.error = 'Выберите тип данных для импорта.'; importUiState.message = ''; render(); return; }
+  if (!file || !/\.(csv|xlsx)$/i.test(file.name)) { importUiState.error = 'Выберите файл CSV или XLSX.'; importUiState.message = ''; render(); return; }
+  importUiState.actionStatus = 'uploading';
+  importUiState.error = '';
+  importUiState.message = '';
+  render();
+  createImportDraft(file, targetType)
+    .then((response) => {
+      importUiState.message = response.message || 'Черновик импорта создан. Данные ещё не внесены в систему.';
+      importUiState.selectedFileName = '';
+      form.reset();
+      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]);
+    })
+    .then(([list, detail]) => {
+      importUiState.drafts = list.drafts;
+      importUiState.selectedDraft = detail;
+      importUiState.selectedDraftStatus = 'ready';
+      importUiState.status = 'ready';
+      importUiState.actionStatus = 'idle';
+      render();
+    })
+    .catch((error) => {
+      importUiState.actionStatus = 'idle';
+      importUiState.error = error instanceof Error && error.message !== 'API request failed'
+        ? error.message
+        : 'Не удалось создать черновик импорта. Проверьте формат CSV/XLSX и попробуйте снова.';
+      importUiState.message = '';
+      render();
+    });
+}
+
+function openImportDraft(id: number) {
+  importUiState.selectedDraftStatus = 'loading';
+  importUiState.selectedDraftError = '';
+  render();
+  getImportDraft(id)
+    .then((detail) => { importUiState.selectedDraft = detail; importUiState.selectedDraftStatus = 'ready'; render(); })
+    .catch(() => { importUiState.selectedDraftStatus = 'error'; importUiState.selectedDraftError = 'Не удалось открыть черновик импорта.'; render(); });
+}
+
+function cancelImportDraftFromUi(id: number) {
+  if (!window.confirm('Отменить черновик импорта? Рабочие данные не изменятся.')) return;
+  importUiState.actionStatus = 'cancelling';
+  importUiState.error = '';
+  importUiState.message = '';
+  render();
+  cancelImportDraft(id)
+    .then((response) => Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]).then(([list, detail]) => ({ response, list, detail })))
+    .then(({ response, list, detail }) => {
+      importUiState.drafts = list.drafts;
+      importUiState.selectedDraft = detail;
+      importUiState.selectedDraftStatus = 'ready';
+      importUiState.actionStatus = 'idle';
+      importUiState.message = response.message || 'Черновик импорта отменён. Рабочие данные не изменены.';
+      render();
+    })
+    .catch(() => { importUiState.actionStatus = 'idle'; importUiState.error = 'Не удалось отменить черновик импорта.'; render(); });
+}
+
+function importPage() {
+  const isLoading = importUiState.status === 'loading';
+  return `<div class="page-grid backup-page import-page">
+    <section class="card data-card dashboard-hero"><div><p class="card-kicker">Безопасный черновик</p><h2>Импорт данных</h2><p>Загрузите CSV/XLSX, чтобы создать черновик импорта, проверить строки и увидеть ошибки перед внесением данных.</p><p class="next-step">В этом разделе данные ещё не вносятся в рецепты, клиентов, склад или заказы. Сейчас создаётся только черновик для проверки.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-imports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button></div></section>
+    ${importUiState.error ? `<p class="page-message error-message">${escapeHtml(importUiState.error)}</p>` : ''}
+    ${importUiState.message ? `<p class="page-message">${escapeHtml(importUiState.message)}</p>` : ''}
+    ${importUiState.status === 'error' && !importUiState.targets.length ? importLoadErrorCard() : `${importUploadCard()}${importTargetsCard()}${importBackupRecommendationCard()}${importDraftsCard()}${importDraftDetailCard()}${importNonGoalsCard()}`}
+  </div>`;
+}
+function importLoadErrorCard() { return `<section class="card error-card"><h2>Сведения недоступны</h2><p>Не удалось загрузить сведения об импорте.</p><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-imports">Обновить</button></div></section>`; }
+function importUploadCard() {
+  const target = importUiState.targets.find((item) => item.type === importUiState.selectedTargetType);
+  const disabled = importUiState.actionStatus === 'uploading' || importUiState.status === 'loading';
+  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать черновик импорта</h2><p>Поддерживаются CSV и XLSX. Первая непустая строка должна быть строкой заголовков.</p><form class="form-grid" data-form="import-draft"><label>Тип данных<select name="target_type" data-action="select-import-target"><option value="">Выберите раздел</option>${importUiState.targets.map((item) => `<option value="${escapeHtml(item.type)}" ${item.type === importUiState.selectedTargetType ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('')}</select></label><label>Файл CSV/XLSX<input name="file" type="file" accept=".csv,.xlsx" data-action="select-import-file" /></label><div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${importUiState.actionStatus === 'uploading' ? 'Загружаем файл…' : 'Создать черновик'}</button></div></form>${target ? `<p class="next-step">Для «${escapeHtml(target.label)}» обязательные столбцы: ${escapeHtml(target.required_columns.join(', ') || 'нет')}.</p>` : '<p class="next-step">Выберите тип данных и файл. Фронтенд не читает файл сам — проверку выполняет локальный backend.</p>'}</section>`;
+}
+function importTargetsCard() {
+  if (importUiState.status === 'loading' && !importUiState.targets.length) return '<section class="card"><p>Загружаем поддерживаемые типы импорта…</p></section>';
+  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Форматы</p><h2>Какие файлы можно загрузить</h2></div><span class="pill info">${importUiState.targets.length}</span></div>${importUiState.targets.length ? `<div class="recipe-list">${importUiState.targets.map((target) => `<article class="recipe-line"><h3>${escapeHtml(target.label)}</h3><p>Обязательные столбцы: <strong>${escapeHtml(target.required_columns.join(', ') || 'нет')}</strong></p>${target.optional_columns.length ? `<p class="muted-text">Дополнительные столбцы: ${escapeHtml(target.optional_columns.join(', '))}</p>` : ''}</article>`).join('')}</div>` : '<p>Список целей импорта пока недоступен. Нажмите «Обновить».</p>'}</section>`;
+}
+function importDraftsCard() {
+  const targetOptions = importUiState.targets.map((target) => `<option value="${escapeHtml(target.type)}" ${importUiState.filters.targetType === target.type ? 'selected' : ''}>${escapeHtml(target.label)}</option>`).join('');
+  if (!importUiState.drafts.length) return `<section class="card empty-card"><div class="section-heading"><div><p class="card-kicker">Черновики</p><h2>Черновики импорта</h2></div></div><div class="form-grid compact-form"><label>Статус<select data-action="filter-import-status"><option value="">Все</option>${importDraftFilterStatuses().map((status) => `<option value="${status}" ${importUiState.filters.status === status ? 'selected' : ''}>${importDraftStatusLabel(status)}</option>`).join('')}</select></label><label>Тип<select data-action="filter-import-target"><option value="">Все</option>${targetOptions}</select></label><div class="actions"><button class="secondary-action" type="button" data-action="reset-import-filters">Сбросить</button></div></div><p>Черновиков импорта пока нет.</p><p>Загрузите CSV/XLSX, чтобы проверить данные перед импортом.</p></section>`;
+  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Черновики</p><h2>Черновики импорта</h2></div><span class="pill info">${importUiState.drafts.length}</span></div><div class="form-grid compact-form"><label>Статус<select data-action="filter-import-status"><option value="">Все</option>${importDraftFilterStatuses().map((status) => `<option value="${status}" ${importUiState.filters.status === status ? 'selected' : ''}>${importDraftStatusLabel(status)}</option>`).join('')}</select></label><label>Тип<select data-action="filter-import-target"><option value="">Все</option>${targetOptions}</select></label><div class="actions"><button class="secondary-action" type="button" data-action="reset-import-filters">Сбросить</button></div></div><div class="backup-list">${importUiState.drafts.map(importDraftItem).join('')}</div></section>`;
+}
+function importDraftItem(draft: ImportDraftSummary) { const canCancel = !['cancelled', 'failed'].includes(draft.status); return `<article class="recipe-line backup-item"><div class="section-heading"><div><h3>${importTargetLabel(draft.target_type)} · черновик #${draft.id}</h3><p><span class="pill info">${importDraftStatusLabel(draft.status)}</span> <span class="pill muted">строк: ${draft.row_count}</span> <span class="pill ${draft.error_count ? 'danger' : 'success'}">ошибок: ${draft.error_count}</span> <span class="pill ${draft.warning_count ? 'warning' : 'muted'}">предупреждений: ${draft.warning_count}</span></p></div><small>${formatDateTime(draft.created_at || '')}</small></div><p>Корректных строк: <strong>${draft.valid_row_count}</strong>, строк с ошибками: <strong>${draft.invalid_row_count}</strong>.</p><div class="actions"><button class="secondary-action" type="button" data-action="open-import-draft" data-id="${draft.id}">Открыть</button>${canCancel ? `<button class="danger-action" type="button" data-action="cancel-import-draft" data-id="${draft.id}" ${importUiState.actionStatus === 'cancelling' ? 'disabled' : ''}>Отменить</button>` : ''}</div></article>`; }
+function importDraftDetailCard() {
+  if (importUiState.selectedDraftStatus === 'loading') return '<section class="card"><p>Открываем черновик импорта…</p></section>';
+  if (importUiState.selectedDraftStatus === 'error') return `<section class="card error-card"><h2>Черновик недоступен</h2><p>${escapeHtml(importUiState.selectedDraftError || 'Не удалось открыть черновик импорта.')}</p></section>`;
+  const detail = importUiState.selectedDraft;
+  if (!detail) return `<section class="card empty-card"><h2>Предпросмотр черновика</h2><p>Выберите черновик из списка или создайте новый из CSV/XLSX.</p><p class="next-step">Это только предпросмотр. Реальные данные мастерской ещё не изменены.</p></section>`;
+  const d = detail.draft;
+  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Предпросмотр</p><h2>Предпросмотр черновика</h2></div><span class="pill info">${importDraftStatusLabel(d.status)}</span></div><p class="next-step">Это только предпросмотр. Реальные данные мастерской ещё не изменены.</p><div class="overview-grid compact-overview"><div class="metric-card"><span>Файл</span><strong>${escapeHtml(detail.source.original_filename)}</strong><small>${formatFileSize(detail.source.file_size_bytes)}</small></div><div class="metric-card"><span>Тип</span><strong>${importTargetLabel(d.target_type)}</strong></div><div class="metric-card"><span>Строки</span><strong>${d.row_count}</strong></div><div class="metric-card"><span>Корректные</span><strong>${d.valid_row_count}</strong></div><div class="metric-card"><span>С ошибками</span><strong>${d.invalid_row_count}</strong></div><div class="metric-card"><span>Предупреждения / ошибки</span><strong>${d.warning_count} / ${d.error_count}</strong></div></div><p><strong>Заголовки:</strong> ${escapeHtml(d.headers.join(', ') || 'не найдены')}</p>${importIssuesMarkup(detail.issues)}${importPreviewRowsMarkup(detail)}</section>`;
+}
+function importIssuesMarkup(issues: ImportIssue[]) { return `<div class="subsection"><h3>Ошибки и предупреждения</h3>${issues.length ? `<div class="recipe-list">${issues.map((issue) => `<article class="recipe-line"><p><span class="pill ${importIssueSeverityPill(issue.severity)}">${importIssueSeverityLabel(issue.severity)}</span> ${escapeHtml(issue.message)}</p><p class="muted-text">${issue.row_number ? `Строка ${issue.row_number}. ` : ''}${issue.field ? `Поле: ${escapeHtml(issue.field)}. ` : ''}${issue.code ? `Код: ${escapeHtml(issue.code)}.` : ''}</p></article>`).join('')}</div>` : '<p class="next-step">Критичных ошибок в предпросмотре не найдено.</p>'}</div>`; }
+function importPreviewRowsMarkup(detail: ImportDraftDetailResponse) { const headers = detail.draft.headers.length ? detail.draft.headers : Array.from(new Set(detail.preview_rows.flatMap((row) => Object.keys(row.normalized_values || row.raw_values || {})))); if (!detail.preview_rows.length) return '<div class="subsection"><h3>Первые строки файла</h3><p>Backend не вернул строки предпросмотра.</p></div>'; return `<div class="subsection"><h3>Первые строки файла</h3><div class="table-wrapper"><table class="data-table"><thead><tr><th>Строка</th><th>Статус</th>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}<th>Замечания</th></tr></thead><tbody>${detail.preview_rows.map((row) => `<tr class="${row.issues.some((issue) => issue.severity === 'error') ? 'row-error' : ''}"><td>${row.row_number}</td><td>${escapeHtml(importDraftStatusLabel(row.status))}</td>${headers.map((header) => `<td>${escapeHtml(formatImportCellValue((row.normalized_values || {})[header] ?? (row.raw_values || {})[header]))}</td>`).join('')}<td>${row.issues.map((issue) => `${importIssueSeverityLabel(issue.severity)}: ${issue.message}`).map(escapeHtml).join('<br>') || '—'}</td></tr>`).join('')}</tbody></table></div><p class="next-step">Строки нельзя редактировать на этом шаге. Сопоставление столбцов и применение импорта будут отдельными PR.</p></div>`; }
+function importBackupRecommendationCard() { return `<section class="card data-card"><p class="card-kicker">Перед будущим применением</p><h2>Резервная копия перед импортом</h2><p>Перед настоящим применением импорта сделайте резервную копию. Сейчас применение ещё не реализовано, поэтому этот экран не меняет рабочие данные.</p><div class="actions"><button class="secondary-action" type="button" data-nav-section="Резервные копии">Открыть резервные копии</button><button class="secondary-action" type="button" data-nav-section="Экспорт">Открыть экспорт</button></div></section>`; }
+function importNonGoalsCard() { return `<section class="card data-card"><p class="card-kicker">Честные границы</p><h2>Пока не реализовано</h2><p>Сейчас этот экран только создаёт черновик, показывает предпросмотр и ошибки. Применение импорта будет добавлено отдельным PR.</p><ul class="checklist compact-list"><li>Применение черновика в реальные данные</li><li>Настройка сопоставления столбцов</li><li>Импорт PDF/изображений/OCR</li><li>Автоматическое создание backup перед импортом</li><li>Импорт из export JSON</li><li>Cloud import</li></ul></section>`; }
+function importTargetLabel(type: string): string { return importUiState.targets.find((target) => target.type === type)?.label ?? escapeHtml(type); }
+function importDraftFilterStatuses(): string[] { return ['draft', 'failed', 'cancelled']; }
+function importDraftStatusLabel(status: string): string { return ({ draft: 'Черновик', failed: 'Ошибка', cancelled: 'Отменён', uploaded: 'Загружен', parsed: 'Разобран', valid: 'Проверено', invalid: 'Есть ошибки' } as Record<string, string>)[status] ?? escapeHtml(status); }
+function importIssueSeverityLabel(severity: string): string { return ({ error: 'Ошибка', warning: 'Предупреждение', info: 'Информация' } as Record<string, string>)[severity] ?? escapeHtml(severity); }
+function importIssueSeverityPill(severity: string): string { return severity === 'error' ? 'danger' : severity === 'warning' ? 'warning' : 'info'; }
+function formatImportCellValue(value: unknown): string { if (value == null || value === '') return '—'; if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value); return '[сложное значение]'; }
 
 function backupPage() {
   const isLoading = backupUiState.status === 'loading';
@@ -1978,9 +2134,15 @@ function cancelIngredientEdit() {
 function apiGet<T>(url: string): Promise<T> { return fetch(url).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw Object.assign(new Error(apiErrorMessage(payload)), { status: response.status }); } return response.json() as Promise<T>; }); }
 function apiErrorMessage(payload: unknown) { if (typeof payload === 'string') return payload; if (payload && typeof payload === 'object' && 'detail' in payload) { const detail = (payload as { detail?: unknown }).detail; if (typeof detail === 'string') return detail; if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message?: unknown }).message ?? 'API request failed'); } return 'API request failed'; }
 function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'PATCH', body?: unknown): Promise<T> { return fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw Object.assign(new Error(apiErrorMessage(payload)), { status: response.status }); } return response.json() as Promise<T>; }); }
+function apiForm<T>(url: string, method: 'POST', formData: FormData): Promise<T> { return fetch(url, { method, body: formData }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw Object.assign(new Error(apiErrorMessage(payload)), { status: response.status }); } return response.json() as Promise<T>; }); }
 function getBackupStatus(): Promise<BackupStatusResponse> { return apiGet<BackupStatusResponse>('/api/backups/status'); }
 function getBackups(): Promise<BackupListResponse> { return apiGet<BackupListResponse>('/api/backups'); }
 function createBackup(payload: BackupCreateRequest): Promise<BackupCreateResponse> { return apiSend<BackupCreateResponse>('/api/backups', 'POST', payload); }
+function getImportTargets(): Promise<ImportTargetsResponse> { return apiGet<ImportTargetsResponse>('/api/imports/targets'); }
+function createImportDraft(file: File, targetType: string): Promise<ImportDraftCreateResponse> { const formData = new FormData(); formData.append('file', file); formData.append('target_type', targetType); return apiForm<ImportDraftCreateResponse>('/api/imports/drafts', 'POST', formData); }
+function getImportDrafts(params: ImportDraftListParams = {}): Promise<ImportDraftListResponse> { const search = new URLSearchParams(); if (params.status) search.set('status', params.status); if (params.targetType) search.set('target_type', params.targetType); if (params.limit) search.set('limit', String(params.limit)); if (params.offset) search.set('offset', String(params.offset)); const query = search.toString(); return apiGet<ImportDraftListResponse>(`/api/imports/drafts${query ? `?${query}` : ''}`); }
+function getImportDraft(id: number, params: { limit?: number; offset?: number } = {}): Promise<ImportDraftDetailResponse> { const search = new URLSearchParams(); if (params.limit) search.set('limit', String(params.limit)); if (params.offset) search.set('offset', String(params.offset)); const query = search.toString(); return apiGet<ImportDraftDetailResponse>(`/api/imports/drafts/${id}${query ? `?${query}` : ''}`); }
+function cancelImportDraft(id: number): Promise<ImportDraftCancelResponse> { return apiSend<ImportDraftCancelResponse>(`/api/imports/drafts/${id}/cancel`, 'POST'); }
 function getExportStatus(): Promise<ExportStatusResponse> { return apiGet<ExportStatusResponse>('/api/exports/status'); }
 function getExports(): Promise<ExportListResponse> { return apiGet<ExportListResponse>('/api/exports'); }
 function createExport(payload: ExportCreateRequest): Promise<ExportCreateResponse> { return apiSend<ExportCreateResponse>('/api/exports', 'POST', payload); }
