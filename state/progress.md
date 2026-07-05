@@ -484,3 +484,10 @@ Import CSV/XLSX draft backend foundation.
 - Added regression tests for applied-cancel blocking and migration 0017 data preservation/applied status acceptance.
 - Updated Import UI defensive labels/readiness pills for `applied` and hides cancel actions unless status is `draft`.
 - Updated API/import docs to include `applied` readiness and the no-cancel safety rule for applied drafts.
+
+## PR81 — Import confirmation/apply UI
+- Added frontend confirmation/apply UI in the import draft detail panel for PR80-supported targets: ingredients, clients, recipe templates, and packaging items.
+- The UI consumes `POST /api/imports/drafts/{draft_id}/apply` only after explicit apply confirmation, backup acknowledgement, and warning acknowledgement for `ready_with_warnings` drafts.
+- Blocked, cancelled, failed, already-applied, and unsupported drafts (including ingredient lots and orders) cannot be applied from the UI.
+- Successful apply refreshes the draft list/detail and displays created records; backup/export buttons only navigate and do not create files.
+- No backend targets, mappings, cell editing, partial import, OCR/PDF/image import, stock/order/lot/production import, automatic backup/export, migrations, or domain direct frontend mutations were added.

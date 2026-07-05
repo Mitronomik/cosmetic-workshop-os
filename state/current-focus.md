@@ -1,7 +1,10 @@
 # Current Focus
 
-PR80 — Import apply backend foundation is implemented.
+## Last completed
+PR81 — Import confirmation/apply UI.
 
-Next recommended scoped task: PR81 — Import confirmation/apply UI.
+## Next allowed task
+PR82 — Import apply hardening and smoke fixes.
 
-Scope guard for PR81: add the frontend confirmation/apply flow for the existing backend endpoint only. Do not add mapping editor, partial imports, stock/order apply, automatic backup/export, restore, OCR/PDF/image import, cloud import, scheduled import, reports, or analytics.
+## Scope guard
+Keep the next PR focused on hardening/smoke fixes around the PR80/PR81 import apply flow unless a manual smoke pass is completely clean; do not expand supported import apply targets, add stock/order/lot/production imports, mapping editor, partial imports, OCR/PDF/image import, or automatic backup/export creation without an explicit task.
