@@ -1,12 +1,13 @@
 # Progress
 
 ## Current phase
-After PR61 — preparing production readiness foundation
+After PR72 — hotfix complete; preparing Backup/export foundation
 
 ## Current next step
-- Orders backend and Orders UI foundations are complete.
-- Production readiness foundation is the next recommended roadmap-scoped implementation PR.
-- Production confirmation, automatic stock write-off, production batches, alerts, purchase suggestions, import/export, backup/restore UI, cloud, mobile, OCR, auth, and roles remain out of scope until explicitly requested.
+- PR72 Orders reference refresh and localized quantity display hotfix is complete.
+- Completed foundations now include orders, production readiness, production confirmation, production history, alerts, purchase suggestions, and the operational dashboard.
+- Next recommended roadmap slice: Backup/export UI foundation or Backup/export backend/frontend foundation, depending on existing backend support and desired scope.
+- Keep import/export expansion, cloud sync, mobile, OCR, auth/roles, advanced analytics, scheduler/polling, production reversal, and automatic background jobs out of scope unless explicitly requested.
 
 ## Done
 - Architecture draft
