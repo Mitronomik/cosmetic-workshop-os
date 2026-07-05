@@ -1,10 +1,10 @@
 # Current Focus
 
 ## Last completed
-PR81 — Import confirmation/apply UI.
+PR82 — Import apply hardening / smoke fixes.
 
 ## Next allowed task
-PR82 — Import apply hardening and smoke fixes.
+O3 — Guided setup checklist, or PR83 — Import apply follow-up fixes if manual browser smoke finds remaining import issues.
 
 ## Scope guard
-Keep the next PR focused on hardening/smoke fixes around the PR80/PR81 import apply flow unless a manual smoke pass is completely clean; do not expand supported import apply targets, add stock/order/lot/production imports, mapping editor, partial imports, OCR/PDF/image import, or automatic backup/export creation without an explicit task.
+Do not expand import apply targets yet. Ingredient lots and orders import remain unsupported. Do not add stock/order/lot/production imports, mapping editor, partial imports, OCR/PDF/image import, or automatic backup/export creation without an explicit task.

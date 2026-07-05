@@ -7,10 +7,10 @@ PR77 implements the backend foundation for safe import drafts in **Мастер�
 All imports must go through this flow:
 
 ```text
-upload → parse → draft → preview → validation → future confirmation → future apply
+upload → parse → draft → preview → validation → explicit confirmation → apply for supported safe targets
 ```
 
-PR77 implements only upload, parsing, persistent drafts, preview rows, validation issues, listing, detail, and cancellation. There is no confirmation/apply endpoint yet, and import rows are not written to real business tables.
+PR77 introduced upload/parsing/drafts; PR80/PR81 added explicit confirmation and apply for a narrow set of safe catalog targets. Import rows are still never written directly from upload/preview, and unsupported targets remain preview-only.
 
 ## Supported files
 
@@ -81,7 +81,7 @@ Missing required business columns create a draft with validation errors instead 
 
 ## Import aliases vs domain fields
 
-Import draft column names are user-facing import aliases. They are not necessarily identical to internal domain/API field names. A later confirmation/apply PR must explicitly map import aliases to domain fields before writing to business tables.
+Import draft column names are user-facing import aliases. They are not necessarily identical to internal domain/API field names. The apply service explicitly maps supported aliases to domain fields before writing to business tables.
 
 ## Validation issues
 
@@ -133,13 +133,13 @@ PR77 does not:
 
 ## PR79 readiness and validation refinements
 
-Import draft API responses now include `draft.apply_readiness`. This contract answers whether the draft is validation-ready for a future explicit apply endpoint; it does **not** mean apply exists today.
+Import draft API responses now include `draft.apply_readiness`. This contract answers whether the draft is validation-ready for the explicit apply endpoint. It does **not** bypass confirmation or target support checks.
 
 Readiness statuses:
 
 - `ready` — draft has rows, no errors, and no warnings/info issues.
 - `ready_with_warnings` — draft has rows and no errors, but has warnings/info the user should review.
-- `blocked` — draft has zero rows or at least one validation error. Future apply must be all-or-nothing, so any row error blocks the whole draft.
+- `blocked` — draft has zero rows or at least one validation error. Apply is all-or-nothing, so any row error blocks the whole draft.
 - `cancelled` — draft was cancelled and working data was not changed.
 - `failed` — parsing/checking failed and working data was not changed.
 
@@ -188,4 +188,19 @@ Safety rules:
 - Packaging rows with non-empty `stock` are rejected because stock must go through movements.
 - No stock movements, lots, orders, production records, alerts, purchase suggestions, backups, or exports are created by PR80 apply.
 - Applied drafts cannot be cancelled. If rows were already written to domain tables, the draft/source must remain `applied` for historical traceability.
-- The frontend apply button is not implemented yet; PR81 is expected to add the confirmation/apply UI.
+- The frontend confirmation UI calls only the backend apply endpoint, requires confirmation and backup acknowledgement, and requires warning acknowledgement for `ready_with_warnings`.
+
+
+## PR82 — Apply hardening notes
+
+PR82 keeps the same apply target set and hardens the smoke path:
+
+- structured apply conflicts use `detail.message` plus `detail.issues[]` with `code`, `row_number`, and `field` where available;
+- the UI must show those conflicts as human-readable row/field messages, not raw JSON;
+- already-applied drafts show `Черновик уже применён`, stored `apply_result`, created count, target type, row numbers, and created record labels when available;
+- apply buttons are hidden for applied, blocked, cancelled, failed, and unsupported drafts;
+- double-clicks are guarded while an apply request is in progress;
+- failed apply leaves the draft/source unapplied and creates zero partial domain rows;
+- backup/export navigation remains advisory only and does not create files automatically.
+
+Supported apply targets remain only `ingredients`, `clients`, `recipe_templates`, and `packaging_items`. `ingredient_lots` and `orders` remain unsupported until a separate safe scenario is designed.

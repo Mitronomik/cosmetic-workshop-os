@@ -143,7 +143,7 @@ type ImportDraftApplyRequest = { confirm_apply: boolean; backup_acknowledged: bo
 type ImportApplyCreatedRecordResponse = { target_type: string; row_number: number; record_id: number; label: string };
 type ImportDraftApplyResultResponse = { draft_id: number; target_type: string; applied_at: string; applied_row_count: number; created_count: number; created_records: ImportApplyCreatedRecordResponse[]; warnings: string[] };
 type ImportDraftApplyResponse = { draft: ImportDraftSummary; apply_result: ImportDraftApplyResultResponse; message: string };
-type ImportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'uploading' | 'cancelling'; applyStatus: 'idle' | 'confirming' | 'applying' | 'success' | 'error'; error: string; message: string; applyError: string; applyMessage: string; applyConfirmChecked: boolean; backupAcknowledged: boolean; allowWarnings: boolean; lastApplyResult: ImportDraftApplyResultResponse | null; showApplyConfirm: boolean; targets: ImportTargetResponse[]; drafts: ImportDraftSummary[]; selectedDraft: ImportDraftDetailResponse | null; selectedDraftStatus: 'idle' | 'loading' | 'ready' | 'error'; selectedDraftError: string; selectedTargetType: string; selectedFileName: string; filters: { status: string; targetType: string } };
+type ImportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'uploading' | 'cancelling'; applyStatus: 'idle' | 'confirming' | 'applying' | 'success' | 'error'; error: string; message: string; applyError: string; applyErrorIssues: ApiIssue[]; applyMessage: string; applyConfirmChecked: boolean; backupAcknowledged: boolean; allowWarnings: boolean; lastApplyResult: ImportDraftApplyResultResponse | null; showApplyConfirm: boolean; targets: ImportTargetResponse[]; drafts: ImportDraftSummary[]; selectedDraft: ImportDraftDetailResponse | null; selectedDraftStatus: 'idle' | 'loading' | 'ready' | 'error'; selectedDraftError: string; selectedTargetType: string; selectedFileName: string; filters: { status: string; targetType: string } };
 const APPLY_SUPPORTED_IMPORT_TARGETS = new Set(['ingredients', 'clients', 'recipe_templates', 'packaging_items']);
 
 
@@ -435,7 +435,7 @@ let productionHistoryState: ProductionHistoryState = { batches: [], selectedBatc
 let dashboardState: DashboardState = { status: 'idle', error: '', message: '', orders: [], clients: [], alerts: [], purchaseSuggestions: [], productionBatches: [] };
 let backupUiState: BackupUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', backupStatus: null, backups: [], reason: 'manual', customReason: '', lastCreatedBackup: null };
 let exportUiState: ExportUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', exportStatus: null, exports: [], reason: 'manual', customReason: '', lastCreatedExport: null, lastEntityCounts: {} };
-let importUiState: ImportUiState = { status: 'idle', actionStatus: 'idle', applyStatus: 'idle', error: '', message: '', applyError: '', applyMessage: '', applyConfirmChecked: false, backupAcknowledged: false, allowWarnings: false, lastApplyResult: null, showApplyConfirm: false, targets: [], drafts: [], selectedDraft: null, selectedDraftStatus: 'idle', selectedDraftError: '', selectedTargetType: '', selectedFileName: '', filters: { status: '', targetType: '' } };
+let importUiState: ImportUiState = { status: 'idle', actionStatus: 'idle', applyStatus: 'idle', error: '', message: '', applyError: '', applyErrorIssues: [], applyMessage: '', applyConfirmChecked: false, backupAcknowledged: false, allowWarnings: false, lastApplyResult: null, showApplyConfirm: false, targets: [], drafts: [], selectedDraft: null, selectedDraftStatus: 'idle', selectedDraftError: '', selectedTargetType: '', selectedFileName: '', filters: { status: '', targetType: '' } };
 let alertsState: AlertsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', type: '', search: '' }, lastGeneration: null };
 let purchaseSuggestionsState: PurchaseSuggestionsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', reason: '', itemType: '', search: '' }, lastGeneration: null, showManualForm: false, manualForm: { item_type: 'ingredient', item_id: '', recommended_quantity: '', unit: 'g', notes: '' }, editingSuggestionId: null, editForm: { recommended_quantity: '', unit: '', notes: '' } };
 let ordersState: OrdersState = { items: [], clients: [], templates: [], versions: [], clientRecipes: [], packagingItems: [], formMode: 'create', form: emptyOrderForm(), showForm: false, selectedOrder: null, includeInactive: true, filters: { search: '', status: 'active' }, referenceLoading: false, referenceError: '', readinessByOrderId: {}, readinessLoadingOrderId: null, readinessError: '', productionByOrderId: {}, productionLoadingOrderId: null, productionError: '', productionConfirmingOrderId: null, productionNotesByOrderId: {} };
@@ -1310,7 +1310,7 @@ function submitImportDraft(form: HTMLFormElement) {
     });
 }
 
-function resetImportApplyState() { importUiState.applyStatus = 'idle'; importUiState.applyError = ''; importUiState.applyMessage = ''; importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; importUiState.lastApplyResult = null; importUiState.showApplyConfirm = false; }
+function resetImportApplyState() { importUiState.applyStatus = 'idle'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; importUiState.lastApplyResult = null; importUiState.showApplyConfirm = false; }
 function openImportDraft(id: number) {
   resetImportApplyState();
   importUiState.selectedDraftStatus = 'loading';
@@ -1341,19 +1341,19 @@ function cancelImportDraftFromUi(id: number) {
 }
 
 
-function showImportApplyConfirmation() { if (!canShowApplyButton(importUiState.selectedDraft)) return; importUiState.applyStatus = 'confirming'; importUiState.showApplyConfirm = true; importUiState.applyError = ''; importUiState.applyMessage = ''; render(); }
-function hideImportApplyConfirmation() { importUiState.showApplyConfirm = false; importUiState.applyStatus = 'idle'; importUiState.applyError = ''; importUiState.applyMessage = ''; importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; render(); }
-function updateImportApplyChecks() { importUiState.applyConfirmChecked = Boolean(document.querySelector<HTMLInputElement>('input[name="import_apply_confirm"]')?.checked); importUiState.backupAcknowledged = Boolean(document.querySelector<HTMLInputElement>('input[name="import_backup_acknowledged"]')?.checked); importUiState.allowWarnings = Boolean(document.querySelector<HTMLInputElement>('input[name="import_allow_warnings"]')?.checked); importUiState.applyError = ''; render(); }
+function showImportApplyConfirmation() { if (!canShowApplyButton(importUiState.selectedDraft)) return; importUiState.applyStatus = 'confirming'; importUiState.showApplyConfirm = true; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; render(); }
+function hideImportApplyConfirmation() { importUiState.showApplyConfirm = false; importUiState.applyStatus = 'idle'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; render(); }
+function updateImportApplyChecks() { importUiState.applyConfirmChecked = Boolean(document.querySelector<HTMLInputElement>('input[name="import_apply_confirm"]')?.checked); importUiState.backupAcknowledged = Boolean(document.querySelector<HTMLInputElement>('input[name="import_backup_acknowledged"]')?.checked); importUiState.allowWarnings = Boolean(document.querySelector<HTMLInputElement>('input[name="import_allow_warnings"]')?.checked); importUiState.applyError = ''; importUiState.applyErrorIssues = []; render(); }
 function applySelectedImportDraftFromUi() {
   const detail = importUiState.selectedDraft;
-  if (!detail || !canShowApplyButton(detail)) return;
+  if (!detail || !canShowApplyButton(detail) || importUiState.applyStatus === 'applying') return;
   const needsWarningAck = detail.draft.apply_readiness?.status === 'ready_with_warnings';
   if (!importUiState.applyConfirmChecked || !importUiState.backupAcknowledged || (needsWarningAck && !importUiState.allowWarnings)) { importUiState.applyError = needsWarningAck ? 'Перед применением подтвердите запись в базу, backup и разрешение применить черновик с предупреждениями.' : 'Перед применением подтвердите запись в базу и backup.'; render(); return; }
-  importUiState.applyStatus = 'applying'; importUiState.applyError = ''; importUiState.applyMessage = ''; render();
+  importUiState.applyStatus = 'applying'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; render();
   applyImportDraft(detail.draft.id, { confirm_apply: true, backup_acknowledged: true, allow_warnings: needsWarningAck ? true : importUiState.allowWarnings })
     .then((response) => Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]).then(([list, refreshed]) => ({ response, list, refreshed })))
     .then(({ response, list, refreshed }) => { importUiState.drafts = list.drafts; importUiState.selectedDraft = refreshed; importUiState.selectedDraftStatus = 'ready'; importUiState.applyStatus = 'success'; importUiState.showApplyConfirm = false; importUiState.applyMessage = response.message || 'Черновик импорта применён. Данные внесены в систему.'; importUiState.lastApplyResult = response.apply_result || getDraftApplyResult(refreshed.draft); importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; render(); })
-    .catch((error) => { importUiState.applyStatus = 'error'; importUiState.applyError = importApplyErrorMessage(error); render(); });
+    .catch((error) => { const apiError = error as ApiErrorWithDetails; importUiState.applyStatus = 'error'; importUiState.applyError = importApplyErrorMessage(error); importUiState.applyErrorIssues = Array.isArray(apiError?.issues) ? apiError.issues : []; render(); });
 }
 function importApplyErrorMessage(error: unknown) {
   const apiError = error as ApiErrorWithDetails;
@@ -1368,6 +1368,14 @@ function importApplyErrorMessage(error: unknown) {
   if (status === 409) return `Backend отклонил применение: есть конфликт или дубликат. Исправьте файл и создайте новый черновик.${details}`;
   return `Не удалось применить черновик. Рабочие данные не были частично изменены.${details}`;
 }
+
+function importApplyErrorMarkup() {
+  if (!importUiState.applyError) return '';
+  const issues = importUiState.applyErrorIssues || [];
+  const issueList = issues.length ? `<ul class="issue-list">${issues.map((issue) => { const row = issue.row_number ? `Строка ${issue.row_number}` : 'Общий конфликт'; const field = issue.field ? ` · поле ${escapeHtml(String(issue.field))}` : ''; const code = issue.code ? ` · ${escapeHtml(String(issue.code))}` : ''; return `<li><strong>${row}${field}</strong>: ${escapeHtml(String(issue.message || 'Проверьте строку.'))}<br><small>${code}</small></li>`; }).join('')}</ul>` : '';
+  return `<div class="page-message error-message"><p>${escapeHtml(importUiState.applyError)}</p>${issueList}<p class="next-step">Рабочие данные не были частично изменены.</p></div>`;
+}
+
 function navigateToSection(section: NavigationSection | undefined) { if (!section) return; activeSection = section; window.history.pushState({}, '', pathForSection(activeSection)); loadSectionData(activeSection); render(); }
 
 function importPage() {
@@ -1425,7 +1433,7 @@ function importApplySection(detail: ImportDraftDetailResponse) {
   if (!readiness || readiness.can_apply === false || status === 'blocked' || readiness.status === 'blocked') return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p class="error-message">Черновик нельзя применить: сначала исправьте ошибки в файле и создайте новый черновик.</p>${blockedReasons.length ? `<p class="warning-text">${blockedReasons.map(escapeHtml).join('<br>')}</p>` : ''}</div>`;
   if (unsupported) return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p>Этот тип черновика пока нельзя применить из интерфейса.</p><p class="next-step">Применение этого типа импорта пока не поддерживается. В PR80 доступны только компоненты, клиенты, рецепты-карточки и тара.</p></div>`;
   const warningCopy = readiness.status === 'ready_with_warnings' ? '<p class="warning-text">Черновик можно применить, но в нём есть предупреждения. Проверьте их перед продолжением.</p>' : '<p class="next-step">Черновик готов к применению.</p>';
-  return `<div class="subsection apply-panel"><h3>Применение черновика</h3>${importUiState.applyError ? `<p class="page-message error-message">${escapeHtml(importUiState.applyError)}</p>` : ''}${importUiState.applyMessage ? `<p class="page-message">${escapeHtml(importUiState.applyMessage)}</p>` : ''}${success}${warningCopy}${importUiState.showApplyConfirm ? importApplyConfirmPanel(detail) : `<div class="actions"><button class="primary-action" type="button" data-action="show-import-apply-confirm">Перейти к подтверждению</button></div>`}</div>`;
+  return `<div class="subsection apply-panel"><h3>Применение черновика</h3>${importUiState.applyError ? `${importApplyErrorMarkup()}` : ''}${importUiState.applyMessage ? `<p class="page-message">${escapeHtml(importUiState.applyMessage)}</p>` : ''}${success}${warningCopy}${importUiState.showApplyConfirm ? importApplyConfirmPanel(detail) : `<div class="actions"><button class="primary-action" type="button" data-action="show-import-apply-confirm">Перейти к подтверждению</button></div>`}</div>`;
 }
 function importApplyConfirmPanel(detail: ImportDraftDetailResponse) {
   const draft = detail.draft; const readiness = draft.apply_readiness; const needsWarningAck = readiness?.status === 'ready_with_warnings'; const disabled = importUiState.applyStatus === 'applying' || !importUiState.applyConfirmChecked || !importUiState.backupAcknowledged || (needsWarningAck && !importUiState.allowWarnings);

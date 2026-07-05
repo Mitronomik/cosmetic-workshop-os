@@ -158,6 +158,63 @@ def test_applied_draft_cannot_be_cancelled_and_status_remains_applied(tmp_path):
         assert connection.execute("SELECT COUNT(*) FROM ingredients").fetchone()[0] == 1
 
 
+def test_unsupported_orders_apply_creates_no_orders(tmp_path):
+    db_path = tmp_path / "db.sqlite"
+    _create_database(db_path)
+    config = DatabaseConfig(path=db_path)
+    draft = _draft(config, "orders", b"client_name,product_name,target_batch_size_value,target_batch_size_unit\nAnna,Cream,50,g\n")
+
+    with pytest.raises(ImportApplyConflictError) as unsupported_error:
+        apply_import_draft(draft["id"], confirm_apply=True, backup_acknowledged=True, config=config)
+
+    assert unsupported_error.value.issues[0]["code"] == "apply_target_not_supported"
+    assert _count(db_path, "orders") == 0
+    assert _count(db_path, "stock_movements") == 0
+
+
+def test_failed_apply_keeps_source_draft_unapplied_and_no_side_effect_records(tmp_path):
+    db_path = tmp_path / "db.sqlite"
+    _create_database(db_path)
+    config = DatabaseConfig(path=db_path)
+    first = _draft(config, "ingredients", b"name,unit\nWater,g\n")
+    apply_import_draft(first["id"], confirm_apply=True, backup_acknowledged=True, config=config)
+    draft = _draft(config, "ingredients", b"name,unit\nWater,g\nOil,g\n")
+
+    with pytest.raises(ImportApplyConflictError) as conflict:
+        apply_import_draft(draft["id"], confirm_apply=True, backup_acknowledged=True, config=config)
+
+    assert conflict.value.detail["message"] == "Черновик нельзя применить."
+    assert conflict.value.detail["issues"][0]["code"] == "duplicate_domain_record"
+    assert conflict.value.detail["issues"][0]["row_number"] == 2
+    assert conflict.value.detail["issues"][0]["field"] == "name"
+    with sqlite3.connect(db_path) as connection:
+        assert connection.execute("SELECT status FROM import_drafts WHERE id = ?", (draft["id"],)).fetchone()[0] == "draft"
+        assert connection.execute("SELECT status FROM import_sources WHERE id = ?", (draft["source_id"],)).fetchone()[0] == "parsed"
+        for table in ("backup_records", "exports", "alerts", "purchase_suggestions"):
+            exists = connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()
+            if exists:
+                assert connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+
+
+def test_applied_draft_detail_and_list_include_applied_readiness_and_result(tmp_path):
+    db_path = tmp_path / "db.sqlite"
+    _create_database(db_path)
+    config = DatabaseConfig(path=db_path)
+    draft = _draft(config, "ingredients", b"name,unit\nWater,g\n")
+
+    applied = apply_import_draft(draft["id"], confirm_apply=True, backup_acknowledged=True, config=config)
+
+    from app.services.imports import get_import_draft, list_import_drafts
+    detail = get_import_draft(draft["id"], config=config)
+    listed = list_import_drafts(config=config)["drafts"][0]
+    assert applied["draft"]["apply_readiness"]["status"] == "applied"
+    assert detail["draft"]["status"] == "applied"
+    assert detail["draft"]["apply_readiness"]["status"] == "applied"
+    assert detail["draft"]["summary"]["apply_result"]["created_count"] == 1
+    assert listed["status"] == "applied"
+    assert listed["apply_readiness"]["status"] == "applied"
+
+
 def test_migration_0017_preserves_import_data_and_allows_applied_status(tmp_path):
     db_path = tmp_path / "migration.sqlite"
     m0016 = import_module("app.migrations.versions.0016_import_drafts")

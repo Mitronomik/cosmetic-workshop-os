@@ -452,9 +452,9 @@ Safety guarantees:
 
 ## Import drafts API (PR77)
 
-PR77 adds backend-only CSV/XLSX import draft endpoints. The import flow is deliberately limited to upload → parse → preview → validation. It does **not** apply rows to ingredients, clients, recipes, lots, orders, stock, production, alerts, purchase suggestions, backups, or exports.
+CSV/XLSX import uses safe drafts first: upload → parse → preview → validation → explicit confirmation → apply for supported safe targets. Upload/preview still does not mutate domain tables; applying requires the dedicated apply endpoint and confirmation flags.
 
-Import draft column names are user-facing aliases for uploaded files. They are not guaranteed to match internal domain/API field names; a later confirmation/apply PR must explicitly map aliases before writing to business tables. Source file hashes remain stored internally and are not exposed in import source responses.
+Import draft column names are user-facing aliases for uploaded files. They are not guaranteed to match internal domain/API field names; the apply service explicitly maps supported aliases before writing to business tables. Source file hashes remain stored internally and are not exposed in import source responses.
 
 ### `GET /api/imports/targets`
 
@@ -507,7 +507,7 @@ Successful response includes the draft summary, first preview rows, validation i
       "invalid_row_count": 0,
       "blocking_reasons": [],
       "warnings": [],
-      "next_action": "Черновик готов для будущего шага применения. Кнопки применения пока нет."
+      "next_action": "Черновик готов к явному применению после проверки и подтверждения."
     },
     "created_at": "2026-07-05 12:00:00",
     "updated_at": "2026-07-05 12:00:00"
@@ -565,7 +565,7 @@ Import draft create, list, detail, and cancel responses include `draft.apply_rea
 }
 ```
 
-Allowed readiness statuses are `ready`, `ready_with_warnings`, `blocked`, `cancelled`, `failed`, and `applied`. `can_apply` means only “validation-ready for an explicit apply endpoint”. PR79 introduced readiness only; PR80 adds the explicit apply endpoint documented below. Import drafts still do not write rows into business tables unless the PR80 apply endpoint is called with explicit confirmation and backup acknowledgement.
+Allowed readiness statuses are `ready`, `ready_with_warnings`, `blocked`, `cancelled`, `failed`, and `applied`. `can_apply` means only “validation-ready for an explicit apply endpoint”; the request can still be rejected for unsupported targets, warnings without acknowledgement, duplicates, or already-applied drafts. Import drafts do not write rows into business tables unless the apply endpoint is called with explicit confirmation and backup acknowledgement.
 
 Draft `summary` may also include `readiness`, `issue_counts_by_code`, and `issue_counts_by_severity`. Refined validation issue codes include `header_alias_used`, `decimal_comma_normalized`, `ambiguous_decimal`, `invalid_positive_decimal`, `invalid_non_negative_decimal`, `unit_alias_normalized`, `date_format_normalized`, `invalid_email`, and `invalid_id` in addition to the PR77 codes.
 
@@ -594,8 +594,27 @@ Rules:
 - Apply is transactional and all-or-nothing: if any row conflicts or insert fails, zero domain records are committed and the draft/source remain unapplied.
 - Existing domain records are not silently updated. Duplicate records in the database or inside the draft return `409 Conflict`.
 - Packaging import is catalog-only. A non-empty `stock` column is rejected because stock must be changed through movements.
-- No frontend apply UI exists in PR80; this is an API-only foundation.
+- The frontend confirmation UI calls this endpoint only after explicit user confirmation; it does not apply domain data directly.
 - No stock movements, ingredient lots, orders, production records, alerts, purchase suggestions, backups, or exports are created automatically.
 - Applied drafts cannot be cancelled. Cancelling an applied draft returns `409 Conflict`; the draft/source stay `applied`, and created domain records are not rolled back by cancellation.
 
-Successful response includes the updated draft, an apply result with created record ids/labels, and the message `Черновик импорта применён. Данные внесены в систему.` Conflicts return `409` with structured `detail.message` and `detail.issues` where possible.
+Successful response includes the updated draft, an apply result with created record ids/labels, and the message `Черновик импорта применён. Данные внесены в систему.` Conflicts return structured details where possible:
+
+```json
+{
+  "detail": {
+    "message": "Черновик нельзя применить.",
+    "issues": [
+      {
+        "severity": "error",
+        "code": "duplicate_domain_record",
+        "message": "Компонент с названием «Масло ши» уже существует.",
+        "row_number": 2,
+        "field": "name"
+      }
+    ]
+  }
+}
+```
+
+Missing `confirm_apply` or `backup_acknowledged` returns a safe rejection; conflicts, unsupported targets, already-applied drafts, and duplicate records return conflict-style issues. Failed apply is all-or-nothing: the draft/source remain unapplied and zero partial domain rows are committed.
