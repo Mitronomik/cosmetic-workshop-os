@@ -15,11 +15,22 @@ ONBOARDING_STEPS: tuple[str, ...] = (
     "welcome",
     "data_location",
     "first_ingredient",
+    "first_ingredient_lot",
+    "first_packaging",
     "first_recipe",
     "first_client",
+    "first_client_recipe",
     "first_order",
-    "first_backup",
+    "production_readiness",
+    "first_production",
+    "alerts_and_purchases",
+    "backup_and_export",
+    "import_draft",
 )
+
+LEGACY_STEP_MAP: dict[str, str] = {
+    "first_backup": "backup_and_export",
+}
 
 
 class OnboardingStepError(ValueError):
@@ -73,7 +84,7 @@ class OnboardingService:
         current_step = _next_step(tuple(completed))
         next_state = OnboardingState(
             has_started=True,
-            is_completed=state.is_completed,
+            is_completed=state.is_completed or len(completed) == len(ONBOARDING_STEPS),
             current_step=current_step,
             completed_steps=tuple(completed),
             dismissed_hints=state.dismissed_hints,
@@ -122,7 +133,7 @@ class OnboardingService:
         next_state = OnboardingState(
             has_started=True,
             is_completed=True,
-            current_step="first_backup",
+            current_step=ONBOARDING_STEPS[-1],
             completed_steps=ONBOARDING_STEPS,
             dismissed_hints=state.dismissed_hints,
             created_at=state.created_at or now,
@@ -179,17 +190,36 @@ class OnboardingService:
             payload = json.loads(raw)
         except json.JSONDecodeError:
             return self._default_state()
-        completed = tuple(step for step in payload.get("completed_steps", []) if step in ONBOARDING_STEPS)
-        current_step = payload.get("current_step") if payload.get("current_step") in ONBOARDING_STEPS else _next_step(completed)
+        completed = _normalize_completed_steps(payload.get("completed_steps", []))
+        current_step = _normalize_step(payload.get("current_step")) or _next_step(completed)
+        is_completed = bool(payload.get("is_completed", False))
         return OnboardingState(
             has_started=bool(payload.get("has_started", False)),
-            is_completed=bool(payload.get("is_completed", False)),
+            is_completed=is_completed,
             current_step=current_step,
             completed_steps=completed,
             dismissed_hints=tuple(str(hint) for hint in payload.get("dismissed_hints", [])),
             created_at=payload.get("created_at"),
             updated_at=payload.get("updated_at"),
         )
+
+
+def _normalize_step(step: object) -> str | None:
+    if not isinstance(step, str):
+        return None
+    mapped = LEGACY_STEP_MAP.get(step, step)
+    return mapped if mapped in ONBOARDING_STEPS else None
+
+
+def _normalize_completed_steps(steps: object) -> tuple[str, ...]:
+    if not isinstance(steps, list):
+        return ()
+    normalized: list[str] = []
+    for raw_step in steps:
+        step = _normalize_step(raw_step)
+        if step and step not in normalized:
+            normalized.append(step)
+    return tuple(normalized)
 
 
 def _next_step(completed_steps: tuple[str, ...]) -> str:

@@ -2,53 +2,34 @@
 
 ## Last completed work
 
-PR82 — Import apply hardening / smoke fixes.
+PR83 — Refresh existing onboarding checklist after import/apply.
 
-## Current repo state after PR82
+## Current repo state after PR83
 
-Import apply remains a safe, explicit flow for only these targets:
-
-- `ingredients`
-- `clients`
-- `recipe_templates`
-- `packaging_items`
-
-Unsupported targets remain blocked with no apply button:
-
-- `ingredient_lots`
-- `orders`
-
-## PR82 changes
-
-- Frontend apply errors now render structured backend `detail.issues` as readable row/field/code conflict details instead of raw JSON.
-- Apply failure copy explicitly reassures: working data was not partially changed.
-- Apply is guarded while a request is in progress to avoid double-click duplicate calls.
-- Applied draft detail/list continues to show `Черновик уже применён` and stored `summary.apply_result` after reload when available.
-- Backend tests cover duplicate conflicts, already-applied rejection, unsupported lots/orders, warning acknowledgement, failed apply keeping draft/source unapplied, no side-effect backup/export/alert/purchase records, and applied readiness/result in list/detail.
-- Docs were updated for the current apply behavior and PR82 hardening notes.
-
-## Safety notes
-
-- No new import apply targets were added.
-- Ingredient lots and orders remain unsupported.
-- No stock movements, production records, alerts, purchase suggestions, backups, or exports are created automatically by import apply.
-- Existing records are not silently updated.
-- Failed apply remains all-or-nothing: zero partial rows are committed and draft/source stay unapplied.
-- Frontend still mutates domain data only through `POST /api/imports/drafts/{draft_id}/apply`.
+- The project still has one onboarding/checklist mechanism: the existing `/api/onboarding` API, `OnboardingService`, and `app_settings` JSON state.
+- The checklist now reflects the current MVP workflow: local data, components, component lots, packaging, recipes, clients, individual recipes, orders, production readiness, production confirmation, alerts/purchases, backup/export, and import drafts.
+- Frontend checklist actions only mark onboarding progress or navigate to existing sections. They do not create recipes, inventory, orders, production records, backups, exports, or imports.
+- Legacy onboarding state remains compatible. `first_backup` maps to `backup_and_export`, unknown old step IDs are ignored, and unknown current steps fall back to the first incomplete refreshed step.
+- Existing completed/skipped onboarding remains closed unless the user resets it.
+- Import apply targets were not expanded. `ingredient_lots` and `orders` remain unsupported for apply.
+- Stale import readiness copy that said apply would be added in a future PR was replaced with current supported-target wording.
 
 ## Manual smoke
 
-Manual browser smoke was not run in this non-interactive session because no long-running backend/frontend browser session was started and no browser was available. Automated backend/API/frontend build checks were run instead. Recommended manual smoke remains:
+Manual browser smoke was not run in this non-interactive session because no long-running backend/frontend browser session was started and no browser was available. Automated backend onboarding/import regression checks and frontend build were run instead.
 
-1. Create a valid ingredients CSV draft, apply it, verify records appear in Components, and verify no second apply button.
-2. Upload the same CSV again, verify duplicate conflict details and zero partial inserts.
-3. Create a warning draft, verify warning acknowledgement is required before apply.
-4. Create a blocked draft, verify no apply button.
-5. Create `ingredient_lots` and `orders` drafts, verify unsupported copy and no apply button.
-6. Verify `/backups`, `/exports`, and `/dashboard` load and no backup/export files are created automatically.
+Recommended manual smoke:
+1. Open dashboard/home and confirm there is only one onboarding/checklist area.
+2. Confirm the checklist uses current MVP steps and shows progress.
+3. Start onboarding and mark a step complete.
+4. Navigate from checklist to Components, Recipes, Clients, Orders, Backups/Exports, and Imports.
+5. Confirm checklist actions do not create business data, backups, exports, or imports automatically.
+6. Confirm skip closes the checklist and reset reopens it if visible.
+7. Confirm import page no longer says apply is entirely future-only.
+8. Confirm ingredient lots and orders still do not offer import apply.
 
 ## Next recommended PR
 
-O3 — Guided setup checklist.
+O4 — Demo data mode.
 
-If browser smoke finds remaining import issues, do PR83 — Import apply follow-up fixes before moving on.
+If manual onboarding smoke finds issues, do PR84 — Onboarding follow-up fixes first.
