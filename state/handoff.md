@@ -2,46 +2,46 @@
 
 ## Last completed work
 
-PR77 — Import CSV/XLSX draft backend foundation — has been implemented.
+PR78 — Import draft UI / preview UI — has been implemented.
 
-## Current repo state after PR77
+## Current repo state after PR78
 
-Backend now supports safe import drafts for CSV/XLSX files through:
+Frontend now has a real `/imports` workspace reachable from the “Импорт” item in the “Данные и настройки” navigation group.
+
+The page consumes only the PR77 draft API:
 
 - `GET /api/imports/targets`;
-- `POST /api/imports/drafts`;
 - `GET /api/imports/drafts`;
+- `POST /api/imports/drafts` from an explicit user-selected CSV/XLSX file via multipart `FormData`;
 - `GET /api/imports/drafts/{draft_id}`;
 - `POST /api/imports/drafts/{draft_id}/cancel`.
 
-New persistent draft-only tables:
+UI capabilities added:
 
-- `import_sources`;
-- `import_drafts`;
-- `import_draft_rows`.
-
-The parser supports CSV with UTF-8, UTF-8 BOM, CP1251 fallback, comma/semicolon/tab sniffing, and XLSX first-visible-sheet parsing. Draft rows preserve raw values and normalized values separately and expose structured validation issues.
-
-## PR77 follow-up fixed parser correctness
-
-- CSV and XLSX draft rows now preserve real source row numbers.
-- XLSX cell references are used so blank leading/middle cells do not shift values left.
-- Import source API responses no longer expose `content_hash`; it remains stored internally.
-- Import column names are documented as user-facing aliases for future explicit apply mapping.
+- supported import target display;
+- safe upload form with target selection and `.csv,.xlsx` file input;
+- draft list with status/row/issue counts and filters;
+- draft detail preview with source metadata, headers, validation issues, and preview rows;
+- draft cancellation with confirmation;
+- recommendation to create a backup before future real import apply;
+- clear “Пока не реализовано” card.
 
 ## Safety notes
 
-- Import draft creation writes only import source/draft/draft-row records.
-- No ingredients, clients, recipes, orders, stock, production, alerts, purchase suggestions, backups, or exports are mutated.
-- No import confirmation/apply endpoint was added.
-- No frontend UI was added.
-- No OCR/PDF/image import was added.
-- No backup/export is created automatically.
+- Page load and reload call only GET import endpoints.
+- Draft creation happens only after explicit form submit with a user-selected CSV/XLSX file.
+- The frontend does not parse CSV/XLSX itself.
+- No import apply/confirmation endpoint was added or called.
+- No mapping editor, OCR, PDF/image import, automatic backup/export, polling, notifications, or business workflows were added.
+- No ingredients, clients, recipes, orders, stock, production, alerts, purchase suggestions, backups, or exports are mutated by this UI.
+- Draft cancellation changes only import draft lifecycle through the PR77 endpoint.
 
-## Commands to rerun during handoff
+## Commands run during PR78
 
 - `git status --short`
 - `git branch --show-current`
+- `npm --prefix frontend run build`
+- `git diff --check`
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')`
 - `python3 -m pytest backend/app/tests/test_import_parsing.py -q`
 - `python3 -m pytest backend/app/tests/test_imports_api.py -q`
@@ -52,28 +52,21 @@ The parser supports CSV with UTF-8, UTF-8 BOM, CP1251 fallback, comma/semicolon/
 - `python3 -m pytest backend/app/tests/test_production_confirmation.py -q`
 - `python3 -m pytest backend/app/tests/test_purchase_suggestions.py -q`
 - `python3 -m pytest backend/app/tests/test_alerts.py -q`
-- `npm --prefix frontend run build`
-- `git diff --check`
 
 ## Manual smoke
 
-Manual API smoke was not run through a long-running local server in this non-interactive session. The API behavior is covered by TestClient tests for target listing, draft creation, persistence, detail pagination, cancellation, safe errors, and no domain-table mutation.
+Manual browser smoke was not run in this non-interactive session because no long-running backend/frontend browser session was started. Recommended smoke:
 
-Recommended PR77 smoke:
-
-1. Start backend.
-2. Call `GET /api/imports/targets`.
-3. Upload a valid CSV via `POST /api/imports/drafts`.
-4. Confirm response says the draft was created and data was not applied.
-5. Open the draft via `GET /api/imports/drafts/{draft_id}`.
-6. Confirm preview rows and issues are visible.
-7. Upload a CSV with missing required columns.
-8. Confirm a draft is created with validation errors.
-9. Upload an unsupported file type.
-10. Confirm safe error copy.
-11. Cancel the draft.
-12. Confirm draft status changed to `cancelled` and business tables were not changed.
+1. Start backend and frontend.
+2. Open `/imports`.
+3. Confirm supported targets and draft list load.
+4. Confirm there is no import apply/confirm button.
+5. Upload a valid CSV/XLSX and confirm a draft is created, opens, and states data was not applied.
+6. Upload a CSV with missing required columns and confirm validation issues are visible.
+7. Cancel a draft and confirm cancelled status/message.
+8. Confirm no domain records were created by drafts.
+9. Confirm backup/export pages and dashboard still work.
 
 ## Next recommended PR
 
-PR78 — Import draft UI / preview UI.
+Import validation refinement or Import apply design/backend, depending on smoke feedback.

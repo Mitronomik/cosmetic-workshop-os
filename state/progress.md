@@ -454,3 +454,11 @@ Import CSV/XLSX draft backend foundation.
 - Fixed XLSX parsing to use cell references and preserve blank/missing cell positions.
 - Removed `content_hash` from user-facing import source API responses while keeping it stored internally.
 - Documented import columns as user-facing aliases that future confirmation/apply must explicitly map to domain fields.
+
+## PR78 — Import draft UI / preview UI
+- Added frontend Import workspace at `/imports` with “Импорт” navigation in “Данные и настройки”.
+- The UI consumes only PR77 import draft endpoints: targets, create draft, list drafts, draft detail, and cancel draft.
+- The workspace supports CSV/XLSX target selection, explicit multipart draft upload, draft list, detail preview, validation issue display, preview rows, and cancellation.
+- The screen repeatedly explains that rows are only draft/preview data and are not applied to real workshop records.
+- Import apply/confirmation, column mapping, OCR, PDF/image import, automatic backup/export, polling, and business-domain mutations remain out of scope.
+- Next recommended PR: import validation refinement or import apply design/backend, depending on browser smoke feedback.
