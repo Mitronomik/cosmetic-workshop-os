@@ -498,6 +498,17 @@ Successful response includes the draft summary, first preview rows, validation i
     "error_count": 0,
     "headers": ["name", "unit"],
     "summary": {"message": "Данные ещё не внесены в систему."},
+    "apply_readiness": {
+      "can_apply": true,
+      "status": "ready",
+      "blocking_error_count": 0,
+      "warning_count": 0,
+      "valid_row_count": 2,
+      "invalid_row_count": 0,
+      "blocking_reasons": [],
+      "warnings": [],
+      "next_action": "Черновик готов для будущего шага применения. Кнопки применения пока нет."
+    },
     "created_at": "2026-07-05 12:00:00",
     "updated_at": "2026-07-05 12:00:00"
   },

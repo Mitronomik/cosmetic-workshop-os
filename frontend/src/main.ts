@@ -1362,9 +1362,35 @@ function importReadinessPanel(draft: ImportDraftSummary) {
   const readiness = draft.apply_readiness;
   if (!readiness) return '';
   const copy = ({ ready: 'Черновик выглядит готовым для будущего шага применения. Само применение будет добавлено отдельным PR.', ready_with_warnings: 'Черновик можно готовить к применению, но сначала проверьте предупреждения.', blocked: 'Черновик нельзя применять: есть ошибки, которые нужно исправить в файле.', cancelled: 'Черновик отменён. Рабочие данные не изменены.', failed: 'Черновик не удалось проверить. Рабочие данные не изменены.' } as Record<string, string>)[readiness.status] ?? readiness.next_action;
-  return `<div class="subsection readiness-panel"><div class="section-heading"><div><h3>Готовность черновика</h3><p>${escapeHtml(copy)}</p></div><span class="pill ${importReadinessPill(readiness.status)}">${importReadinessLabel(readiness.status)}</span></div><div class="overview-grid compact-overview"><div class="metric-card"><span>Можно готовить к применению</span><strong>${readiness.can_apply ? 'Да' : 'Нет'}</strong></div><div class="metric-card"><span>Блокирующие ошибки</span><strong>${readiness.blocking_error_count}</strong></div><div class="metric-card"><span>Предупреждения</span><strong>${readiness.warning_count}</strong></div></div>${readiness.blocking_reasons.length ? `<p class="warning-text">${readiness.blocking_reasons.map(escapeHtml).join('<br>')}</p>` : ''}${readiness.warnings.length ? `<p class="next-step">${readiness.warnings.map(escapeHtml).join('<br>')}</p>` : ''}<p class="next-step">Кнопки применения пока нет. Этот экран только помогает проверить файл.</p></div>`;
+  return `<div class="subsection readiness-panel"><div class="section-heading"><div><h3>Готовность черновика</h3><p>${escapeHtml(copy)}</p></div><span class="pill ${importReadinessPill(readiness.status)}">${importReadinessLabel(readiness.status)}</span></div><div class="overview-grid compact-overview"><div class="metric-card"><span>Можно готовить к применению</span><strong>${readiness.can_apply ? 'Да' : 'Нет'}</strong></div><div class="metric-card"><span>Блокирующие ошибки</span><strong>${readiness.blocking_error_count}</strong></div><div class="metric-card"><span>Предупреждения / заметки</span><strong>${readiness.warning_count}</strong></div></div>${readiness.blocking_reasons.length ? `<p class="warning-text">${readiness.blocking_reasons.map(escapeHtml).join('<br>')}</p>` : ''}${readiness.warnings.length ? `<p class="next-step">${readiness.warnings.map(escapeHtml).join('<br>')}</p>` : ''}<p class="next-step">Кнопки применения пока нет. Этот экран только помогает проверить файл.</p></div>`;
 }
-function importIssueCountsMarkup(draft: ImportDraftSummary) { const summary = draft.summary || {}; const counts = summary.issue_counts_by_code as Record<string, number> | undefined; if (!counts || !Object.keys(counts).length) return ''; return `<div class="subsection"><h3>Сводка кодов проверки</h3><p>${Object.entries(counts).map(([code, count]) => `${escapeHtml(code)}: ${count}`).join(' · ')}</p></div>`; }
+function importIssueCodeLabel(code: string): string {
+  return ({
+    header_alias_used: 'Распознан альтернативный заголовок',
+    decimal_comma_normalized: 'Запятая в числе заменена на точку',
+    ambiguous_decimal: 'Неоднозначное число',
+    invalid_positive_decimal: 'Число должно быть больше нуля',
+    invalid_non_negative_decimal: 'Число не может быть отрицательным',
+    unit_alias_normalized: 'Единица измерения распознана',
+    date_format_normalized: 'Дата приведена к формату YYYY-MM-DD',
+    invalid_email: 'Email выглядит некорректно',
+    invalid_id: 'ID должен быть положительным целым числом',
+    unknown_column: 'Неизвестный столбец',
+    missing_required_column: 'Не найден обязательный столбец',
+    missing_required_value: 'Не заполнено обязательное поле',
+    invalid_decimal: 'Некорректное число',
+    invalid_date: 'Некорректная дата',
+    invalid_unit: 'Неизвестная единица измерения',
+    duplicate_header: 'Повторяющийся заголовок',
+    missing_header: 'Пустой заголовок',
+    empty_file: 'Файл пустой',
+    unsupported_file_type: 'Неподдерживаемый тип файла',
+    file_too_large: 'Файл слишком большой',
+    too_many_rows: 'Слишком много строк',
+    too_many_columns: 'Слишком много столбцов',
+  } as Record<string, string>)[code] ?? code;
+}
+function importIssueCountsMarkup(draft: ImportDraftSummary) { const summary = draft.summary || {}; const counts = summary.issue_counts_by_code as Record<string, number> | undefined; if (!counts || !Object.keys(counts).length) return ''; return `<div class="subsection"><h3>Сводка кодов проверки</h3><p>${Object.entries(counts).map(([code, count]) => `${escapeHtml(importIssueCodeLabel(code))}: ${count}`).join(' · ')}</p></div>`; }
 function importReadinessLabel(status: string): string { return ({ ready: 'Готов', ready_with_warnings: 'Готов с предупреждениями', blocked: 'Заблокирован', cancelled: 'Отменён', failed: 'Ошибка' } as Record<string, string>)[status] ?? status; }
 function importReadinessPill(status: string): string { return ({ ready: 'success', ready_with_warnings: 'warning', blocked: 'danger', cancelled: 'muted', failed: 'danger' } as Record<string, string>)[status] ?? 'muted'; }
 function importIssuesMarkup(issues: ImportIssue[]) { return `<div class="subsection"><h3>Ошибки и предупреждения</h3>${issues.length ? `<div class="recipe-list">${issues.map((issue) => `<article class="recipe-line"><p><span class="pill ${importIssueSeverityPill(issue.severity)}">${importIssueSeverityLabel(issue.severity)}</span> ${escapeHtml(issue.message)}</p><p class="muted-text">${issue.row_number ? `Строка ${issue.row_number}. ` : ''}${issue.field ? `Поле: ${escapeHtml(issue.field)}. ` : ''}${issue.code ? `Код: ${escapeHtml(issue.code)}.` : ''}</p></article>`).join('')}</div>` : '<p class="next-step">Критичных ошибок в предпросмотре не найдено.</p>'}</div>`; }
