@@ -2,52 +2,65 @@
 
 ## Last completed work
 
-PR72 hotfix — Orders form reference refresh and localized quantity display — has been implemented.
+PR73 — Manual Backup API foundation — has been implemented.
 
-## Current repo state after PR72
+## Current repo state after PR73
 
-Completed foundations include local-first backend/API persistence, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, Orders backend/UI foundations, backend Production Readiness, Orders readiness UI, backend Production Confirmation, frontend Production Confirmation UI, read-only Production History, backend Alerts, frontend Alerts UI, backend Purchase Suggestions, frontend Purchase Suggestions UI, the frontend operational Dashboard, and the PR72 Orders UX hotfix.
+Completed foundations include local-first backend/API persistence, user data directory foundation, SQLite backup service, ingredients/lots, stock movements, packaging and packaging movements, inventory reads, recipe templates/versions/calculation, clients, client recipes and copied composition editing/restoring, client wishes/feedback, Orders backend/UI foundations, backend Production Readiness, Orders readiness UI, backend Production Confirmation, frontend Production Confirmation UI, read-only Production History, backend Alerts, frontend Alerts UI, backend Purchase Suggestions, frontend Purchase Suggestions UI, the operational Dashboard, PR72 Orders UX hotfix, and PR73 manual backup API foundation.
 
-PR72 frontend hotfix now includes:
+PR73 backend changes include:
 
-- Orders create/edit form refreshes clients, recipe templates, recipe versions, client recipes, and packaging items before showing usable dropdowns;
-- stale cached `ordersState` reference arrays no longer leave client/version/client-recipe selectors disabled after clients or recipes were added elsewhere;
-- Orders form shows “Загружаем клиентов, рецепты и тару для заказа…” while references load;
-- Orders form shows a retryable error, “Не удалось загрузить клиентов и рецепты для заказа. Проверьте локальное приложение и попробуйте ещё раз.”, if references fail to load;
-- empty client/source messages are shown only after reference loading has finished;
-- user-facing quantity display avoids misleading raw backend decimals such as `100.000 г`, uses comma decimals, strips unnecessary trailing zeros, and uses spaces as thousands separators;
-- order form submit still sends backend-compatible dot-normalized decimal strings, including comma input normalization.
+- `GET /api/backups/status` reports current database path/existence/size, selected backup directory/existence, backup count, and latest backup metadata;
+- `GET /api/backups` lists existing SQLite-like backup files newest first and treats a missing backup directory as an empty list;
+- `POST /api/backups` explicitly creates a local SQLite backup using the existing backup service and returns safe metadata plus `Резервная копия создана.`;
+- backup path selection uses the resolved user backup directory only when the current database is the resolved user database path or `COSMETIC_WORKSHOP_USER_DATA_DIR` is explicitly set; otherwise development backups stay next to the configured database;
+- backup reasons are trimmed, blank reasons become `manual`, reasons over 80 characters are rejected, and unsafe filename characters are sanitized by the backup service.
 
 ## Safety notes
 
-- PR72 is frontend-focused and does not add backend endpoints, migrations, production readiness logic changes, production confirmation logic changes, stock mutations, recipe mutations, client mutations, alert regeneration, purchase suggestion regeneration, scheduler, polling, backup/export, import/export, or new business workflows.
-- Backend Decimal storage and API response/request contracts were not changed.
-- The retry action reloads only order reference data and does not create orders, run readiness, confirm production, mutate stock, regenerate alerts, or regenerate purchase suggestions.
-- Orders still mutate only through existing explicit create/edit/cancel/archive actions.
+- No restore, backup UI, scheduled backups, cloud backup, CSV/XLSX export, database download endpoint, backup deletion/rename/compression/encryption, migrations, frontend navigation, supplier/procurement features, analytics, polling, notifications, or app packaging changes were added.
+- GET backup endpoints are read-only and do not create backup directories, backup files, database files, migrations, imports, exports, orders, stock movements, production batches, alerts, or purchase suggestions.
+- POST backup does not accept arbitrary source or destination paths; it copies only the currently configured SQLite database and never overwrites an existing backup.
+- Tests use temporary paths via environment overrides and must not write to the real `~/Documents/Мастерская косметолога/` directory.
 
 ## Commands to rerun during handoff
 
 - `git status --short`
 - `git branch --show-current`
-- `npm --prefix frontend run build`
-- `git diff --check`
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')`
+- `python3 -m pytest backend/app/tests/test_backups_api.py -q`
+- `python3 -m pytest backend/app/tests/test_database_foundation.py -q`
 - `python3 -m pytest backend/app/tests/test_orders.py -q`
 - `python3 -m pytest backend/app/tests/test_production_readiness.py -q`
 - `python3 -m pytest backend/app/tests/test_production_confirmation.py -q`
 - `python3 -m pytest backend/app/tests/test_purchase_suggestions.py -q`
 - `python3 -m pytest backend/app/tests/test_alerts.py -q`
+- `npm --prefix frontend run build`
+- `git diff --check`
 
 ## Manual smoke
 
-Browser smoke was not run in this non-interactive terminal session. Recommended PR72 manual smoke checklist:
+Manual backend smoke was not run because this non-interactive PR session used automated tests only and did not start a long-running local backend server. Recommended PR73 manual smoke checklist:
 
-1. Start backend and frontend.
-2. Open `Заказы` and click `Создать заказ`.
-3. Confirm the form shows the reference loading copy while fetching data.
-4. Confirm active clients and non-archived recipe versions appear after loading.
-5. Switch to individual client formula source and confirm formulas filter by selected client.
-6. Add a client or recipe/version elsewhere, reopen create order, and confirm the new record appears without browser refresh.
-7. Confirm order list/detail/readiness/production/dashboard quantity snippets show localized values such as `100 г`, `100,5 г`, and `1 000 г`, not raw `100.000 г`.
-8. Confirm comma decimal input such as `50,5` can still be submitted because payloads are dot-normalized.
-9. Confirm no automatic order creation, readiness check, production confirmation, stock mutation, alert regeneration, or purchase suggestion regeneration occurs.
+1. Start backend with a temporary or intended local database path.
+2. Confirm current DB exists.
+3. Call `GET /api/backups/status`.
+4. Confirm it returns current database path and backup dir.
+5. Confirm status GET does not create a backup file.
+6. Call `GET /api/backups`.
+7. Confirm it returns existing backups or an empty list.
+8. Call `POST /api/backups` with `{ "reason": "manual" }`.
+9. Confirm response says backup was created.
+10. Confirm a new backup file appears in backup dir.
+11. Confirm source DB still exists and was not modified.
+12. Call `POST /api/backups` again.
+13. Confirm a second unique backup file is created and the first is not overwritten.
+14. Call `GET /api/backups`.
+15. Confirm both backups appear newest first.
+16. Point DB path to a missing temp file.
+17. Confirm `POST /api/backups` returns the safe missing DB error.
+18. Confirm no restore/import/export/stock/order/production changes are possible through this API.
+
+## Next recommended PR
+
+PR74 — Backup UI.

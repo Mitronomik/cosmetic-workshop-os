@@ -292,3 +292,75 @@ Marks an open suggestion as `purchased` and sets `resolved_at`. Terminal suggest
 ### `POST /api/purchase-suggestions/{suggestion_id}/dismiss`
 
 Marks an open suggestion as `dismissed` and sets `resolved_at`. Terminal suggestions stay terminal and are returned unchanged.
+
+## Manual Backups API (PR73)
+
+Manual backups are explicit local SQLite safety copies. The API does not restore databases, delete backups, download backup files, export business tables as CSV/XLSX, schedule background backups, or use cloud storage. Status and list endpoints are read-only: they must not create directories, databases, backup files, migrations, exports, imports, stock movements, orders, production batches, alerts, or purchase suggestions.
+
+### `GET /api/backups/status`
+
+Returns the current configured SQLite database path, whether that database exists, the selected backup directory, whether it exists, the number of listed backups, and the latest backup if any. This endpoint is read-only and does not create the database or backup directory.
+
+Example response:
+
+```json
+{
+  "database_path": "/path/to/cosmetic_workshop.sqlite",
+  "database_exists": true,
+  "database_size_bytes": 245760,
+  "backup_dir": "/path/to/backups",
+  "backup_dir_exists": true,
+  "backup_count": 2,
+  "latest_backup": {
+    "filename": "20260705T100000000000Z-cosmetic_workshop-manual.sqlite",
+    "path": "/path/to/backups/20260705T100000000000Z-cosmetic_workshop-manual.sqlite",
+    "created_at": "2026-07-05T10:00:00Z",
+    "reason": "manual",
+    "size_bytes": 245760
+  }
+}
+```
+
+### `GET /api/backups`
+
+Lists existing SQLite-like backup files (`.sqlite`, `.sqlite3`, `.db`) in the selected backup directory, newest first. If the backup directory does not exist, returns an empty list and does not create it.
+
+Example response:
+
+```json
+{
+  "backup_dir": "/path/to/backups",
+  "backups": []
+}
+```
+
+### `POST /api/backups`
+
+Creates an explicit manual backup of the currently configured SQLite database by copying the source database into the selected backup directory. The API does not accept arbitrary source or destination paths. Existing backup files are never overwritten.
+
+Request body is optional; missing, null, or blank `reason` becomes `manual`. Reasons are limited to 80 characters and are sanitized for filenames by the backup service.
+
+```json
+{
+  "reason": "before_large_edit"
+}
+```
+
+Success response:
+
+```json
+{
+  "backup": {
+    "filename": "20260705T100000000000Z-cosmetic_workshop-before_large_edit.sqlite",
+    "path": "/path/to/backups/20260705T100000000000Z-cosmetic_workshop-before_large_edit.sqlite",
+    "created_at": "2026-07-05T10:00:00Z",
+    "reason": "before_large_edit",
+    "size_bytes": 245760
+  },
+  "database_path": "/path/to/cosmetic_workshop.sqlite",
+  "backup_dir": "/path/to/backups",
+  "message": "Резервная копия создана."
+}
+```
+
+If the database file is missing, the endpoint returns `404` with a human-readable Russian message. If the configured database path exists but is not a file, it returns `409`.

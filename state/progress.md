@@ -1,13 +1,13 @@
 # Progress
 
 ## Current phase
-After PR72 — hotfix complete; preparing Backup/export foundation
+After PR73 — manual backup API foundation complete; preparing Backup UI
 
 ## Current next step
-- PR72 Orders reference refresh and localized quantity display hotfix is complete.
-- Completed foundations now include orders, production readiness, production confirmation, production history, alerts, purchase suggestions, and the operational dashboard.
-- Next recommended roadmap slice: Backup/export UI foundation or Backup/export backend/frontend foundation, depending on existing backend support and desired scope.
-- Keep import/export expansion, cloud sync, mobile, OCR, auth/roles, advanced analytics, scheduler/polling, production reversal, and automatic background jobs out of scope unless explicitly requested.
+- PR73 Manual Backup API foundation is complete.
+- Completed foundations now include orders, production readiness, production confirmation, production history, alerts, purchase suggestions, the operational dashboard, and backend manual backup status/list/create endpoints.
+- Next recommended roadmap slice: PR74 — Backup UI.
+- Keep restore, scheduled backups, cloud sync, import/export expansion, mobile, OCR, auth/roles, advanced analytics, scheduler/polling, production reversal, and automatic background jobs out of scope unless explicitly requested.
 
 ## Done
 - Architecture draft
@@ -38,6 +38,7 @@ After PR72 — hotfix complete; preparing Backup/export foundation
 - PR3 explicit startup initialization service that creates user data directories and applies migrations only when called
 - PR4 backend backup service for copying existing SQLite databases into user-data `backups/` without modifying or overwriting the source
 - PR4 user-mode startup backup-before-migration guard for existing databases with pending migrations
+- PR73 manual backup API foundation with `GET /api/backups/status`, `GET /api/backups`, and `POST /api/backups`; status/list are read-only, create copies only the configured SQLite database, no restore/UI/migrations/business mutations were added.
 - PR5 backend-only Decimal parsing and quantization helpers for grams, milliliters, percentages, money, counts, and density
 - PR5 MVP unit primitives for grams, milliliters, percent, and pieces with canonical codes and Russian labels
 - PR5 lightweight measurement value objects for weight, volume, percentage, money, quantity/count, and density
@@ -77,7 +78,7 @@ After PR72 — hotfix complete; preparing Backup/export foundation
 
 
 ## In progress
-- Preparing the next scoped PR: Orders backend foundation.
+- Preparing the next scoped PR: PR74 — Backup UI.
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.

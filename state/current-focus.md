@@ -1,16 +1,16 @@
 # Current focus
 
-PR72 hotfix is implemented: Orders form reference refresh and localized quantity display.
+PR73 — Manual Backup API foundation is implemented.
 
-## Completed in PR72
-- Orders create/edit now refreshes active clients, recipe templates, recipe versions, client recipes, and packaging items before showing usable dropdowns.
-- Orders form has explicit reference loading and retryable error states so stale `ordersState` data does not leave client or recipe selects disabled after related records were added elsewhere.
-- User-facing quantity labels in Orders/readiness/production/dashboard snippets now display Russian-friendly decimals, e.g. `100.000 г` as `100 г`, `100.500` as `100,5`, and thousands with spaces.
-- Order form payloads still normalize comma decimal input back to dot decimal strings for the backend.
+## Completed in PR73
+- Added backend-only manual backup API endpoints: `GET /api/backups/status`, `GET /api/backups`, and `POST /api/backups`.
+- Reused the existing SQLite backup service for explicit backup creation so source database files are copied without mutation and existing backups are not overwritten.
+- Added backup metadata schemas and service helpers for safe path selection, backup listing, timestamp parsing, reason normalization, and SQLite-like file filtering.
+- Added backend tests for read-only status/list behavior, missing directories, malformed filenames, explicit backup creation, unique backup filenames, missing database errors, and reason validation/sanitization.
+- Updated backup/API/state documentation.
 
 ## Out of scope / not added
-- No backend endpoints, migrations, Decimal storage/API contract changes, production readiness changes, production confirmation changes, stock mutations, recipe mutations, client mutations, alert regeneration, purchase suggestion regeneration, scheduler, polling, import/export, or backup/export changes were added.
-- Orders still mutate only through existing explicit create/edit/cancel/archive actions.
+- No restore, backup UI, scheduled backups, cloud backup, export files, import/export, database download, backup deletion/rename, migrations, frontend navigation, business-table mutation, orders, stock, production, alerts, or purchase suggestions were added.
 
 ## Next recommended PR
-- Return to the prior roadmap direction: Backup/export UI foundation or Backup/export backend/frontend foundation, depending on existing backend support and desired next slice.
+- PR74 — Backup UI.
