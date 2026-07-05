@@ -194,7 +194,7 @@ def _readiness(status: str, row_count: int, valid_count: int, invalid_count: int
         if error_count: reasons.append("Исправьте ошибки в строках или заголовках перед применением.")
         return {"can_apply": False, "status": "blocked", "blocking_error_count": error_count, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": reasons, "warnings": warnings, "next_action": "Исправьте файл и создайте новый черновик."}
     ready_status = "ready_with_warnings" if warning_count else "ready"
-    return {"can_apply": True, "status": ready_status, "blocking_error_count": 0, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": [], "warnings": warnings, "next_action": "Проверьте предупреждения. Кнопки применения пока нет — она будет добавлена отдельным PR." if warning_count else "Черновик готов для будущего шага применения. Кнопки применения пока нет."}
+    return {"can_apply": True, "status": ready_status, "blocking_error_count": 0, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": [], "warnings": warnings, "next_action": "Проверьте предупреждения перед явным применением черновика." if warning_count else "Черновик готов к явному применению для поддерживаемых типов: компоненты, клиенты, карточки рецептов и тара."}
 
 
 def _issue_counts(issues: list[dict[str, object]]) -> tuple[dict[str, int], dict[str, int]]:

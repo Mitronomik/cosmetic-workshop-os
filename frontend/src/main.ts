@@ -403,11 +403,36 @@ const navigationGroups: NavigationGroup[] = [
 const stepLabels: Record<string, string> = {
   welcome: 'Познакомиться с рабочим пространством',
   data_location: 'Понять, где хранятся локальные данные',
-  first_ingredient: 'Подготовить первый компонент',
-  first_recipe: 'Подготовить первый рецепт',
-  first_client: 'Подготовить первую карточку клиента',
-  first_order: 'Подготовить первый заказ',
-  first_backup: 'Запланировать первую резервную копию',
+  first_ingredient: 'Добавить первый компонент',
+  first_ingredient_lot: 'Добавить первую партию компонента',
+  first_packaging: 'Добавить первую тару',
+  first_recipe: 'Создать первый рецепт',
+  first_client: 'Создать первого клиента',
+  first_client_recipe: 'Создать индивидуальный рецепт клиента',
+  first_order: 'Создать первый заказ',
+  production_readiness: 'Проверить готовность производства',
+  first_production: 'Провести первое производство',
+  alerts_and_purchases: 'Проверить алерты и закупки',
+  backup_and_export: 'Создать backup или export',
+  import_draft: 'Проверить импорт через черновик',
+};
+
+type OnboardingStepUi = { hint: string; sections: NavigationSection[] };
+const onboardingStepUi: Record<string, OnboardingStepUi> = {
+  welcome: { hint: 'Коротко понять назначение системы и основные разделы.', sections: ['Главная'] },
+  data_location: { hint: 'Данные остаются на этом компьютере; backup и export помогают защитить работу.', sections: ['Резервные копии', 'Экспорт'] },
+  first_ingredient: { hint: 'Откройте компоненты и добавьте сырье с единицей, плотностью и минимальным остатком.', sections: ['Компоненты'] },
+  first_ingredient_lot: { hint: 'Добавьте партию компонента со сроком годности, ценой и поставщиком.', sections: ['Партии'] },
+  first_packaging: { hint: 'Добавьте баночки, флаконы, крышки или расходники для будущих заказов.', sections: ['Тара'] },
+  first_recipe: { hint: 'Создайте карточку рецепта и версию с процентами или фиксированными количествами.', sections: ['Рецепты'] },
+  first_client: { hint: 'Добавьте клиента без лишней технической информации и с аккуратными заметками.', sections: ['Клиенты'] },
+  first_client_recipe: { hint: 'Создайте индивидуальный рецепт на основе версии рецепта для конкретного клиента.', sections: ['Индивидуальные рецепты'] },
+  first_order: { hint: 'Создайте заказ: клиент, формула, размер партии, тара и цена продажи.', sections: ['Заказы'] },
+  production_readiness: { hint: 'В заказах проверьте материалы, тару, предупреждения, себестоимость и маржу перед производством.', sections: ['Заказы'] },
+  first_production: { hint: 'Проведите производство только после явного подтверждения; склад спишется через backend.', sections: ['Заказы', 'Производство'] },
+  alerts_and_purchases: { hint: 'Проверьте низкие остатки, сроки годности и список закупок.', sections: ['Алерты', 'Закупки'] },
+  backup_and_export: { hint: 'Создайте резервную копию или экспорт перед важными изменениями.', sections: ['Резервные копии', 'Экспорт'] },
+  import_draft: { hint: 'Загрузите CSV/XLSX в черновик, проверьте ошибки и применяйте только поддерживаемые типы.', sections: ['Импорт'] },
 };
 
 let activeSection: NavigationSection = sectionFromLocation();
@@ -616,6 +641,8 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLButtonElement>('[data-action="apply-import-draft"]')?.addEventListener('click', applySelectedImportDraftFromUi);
   root.querySelectorAll<HTMLInputElement>('[data-action="toggle-import-apply-check"]').forEach((input) => input.addEventListener('change', () => updateImportApplyChecks()));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-import-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-onboarding-step"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
+  root.querySelector<HTMLButtonElement>('[data-action="reset-onboarding"]')?.addEventListener('click', () => updateOnboarding('/api/onboarding/reset'));
   root.querySelector<HTMLSelectElement>('[data-action="filter-import-status"]')?.addEventListener('change', (event) => { importUiState.filters.status = (event.currentTarget as HTMLSelectElement).value; loadImports(true); });
   root.querySelector<HTMLSelectElement>('[data-action="filter-import-target"]')?.addEventListener('change', (event) => { importUiState.filters.targetType = (event.currentTarget as HTMLSelectElement).value; loadImports(true); });
   root.querySelector<HTMLButtonElement>('[data-action="reset-import-filters"]')?.addEventListener('click', () => { importUiState.filters = { status: '', targetType: '' }; loadImports(true); });
@@ -1431,7 +1458,7 @@ function importApplySection(detail: ImportDraftDetailResponse) {
   if (status === 'cancelled') return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p>Черновик отменён. Рабочие данные не изменены.</p></div>`;
   if (status === 'failed') return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p class="error-message">Черновик не готов к применению из-за ошибки обработки.</p></div>`;
   if (!readiness || readiness.can_apply === false || status === 'blocked' || readiness.status === 'blocked') return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p class="error-message">Черновик нельзя применить: сначала исправьте ошибки в файле и создайте новый черновик.</p>${blockedReasons.length ? `<p class="warning-text">${blockedReasons.map(escapeHtml).join('<br>')}</p>` : ''}</div>`;
-  if (unsupported) return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p>Этот тип черновика пока нельзя применить из интерфейса.</p><p class="next-step">Применение этого типа импорта пока не поддерживается. В PR80 доступны только компоненты, клиенты, рецепты-карточки и тара.</p></div>`;
+  if (unsupported) return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p>Этот тип черновика пока нельзя применить из интерфейса.</p><p class="next-step">Применение доступно только для безопасных типов: компоненты, клиенты, карточки рецептов и тара. Партии компонентов и заказы пока остаются только на уровне черновика.</p></div>`;
   const warningCopy = readiness.status === 'ready_with_warnings' ? '<p class="warning-text">Черновик можно применить, но в нём есть предупреждения. Проверьте их перед продолжением.</p>' : '<p class="next-step">Черновик готов к применению.</p>';
   return `<div class="subsection apply-panel"><h3>Применение черновика</h3>${importUiState.applyError ? `${importApplyErrorMarkup()}` : ''}${importUiState.applyMessage ? `<p class="page-message">${escapeHtml(importUiState.applyMessage)}</p>` : ''}${success}${warningCopy}${importUiState.showApplyConfirm ? importApplyConfirmPanel(detail) : `<div class="actions"><button class="primary-action" type="button" data-action="show-import-apply-confirm">Перейти к подтверждению</button></div>`}</div>`;
 }
@@ -1919,14 +1946,16 @@ function escapeHtml(value: string) { return value.replace(/[&<>'"]/g, (char) => 
 
 function onboardingCard() {
   if (onboardingStatus === 'loading') return `<section class="card onboarding-card"><p class="card-kicker">Первый запуск</p><h2>Готовим рабочее пространство…</h2><p>Проверяем состояние первичной настройки.</p></section>`;
-  if (onboardingStatus === 'unavailable') return `<section class="card onboarding-card"><p class="card-kicker">Первый запуск</p><h2>Добро пожаловать в Мастерскую косметолога</h2><p>Это локальная рабочая система. Даже если локальный API сейчас недоступен, вы можете осмотреть разделы приложения.</p><p class="next-step">Когда приложение будет запущено полностью, здесь появится чек-лист первичной настройки.</p></section>`;
-  if (onboardingState?.is_completed) return `<section class="card onboarding-card"><p class="card-kicker">Первичная настройка</p><h2>Чек-лист первичной настройки закрыт</h2><p>Вы сможете вернуться к заполнению компонентов, рецептов, клиентов и заказов постепенно.</p></section>`;
+  if (onboardingStatus === 'unavailable') return `<section class="card onboarding-card"><p class="card-kicker">Первый запуск</p><h2>Чеклист временно недоступен</h2><p>Чеклист временно недоступен. Основные разделы приложения продолжают работать.</p><p class="next-step">Проверьте, что локальный backend запущен, и обновите главную страницу.</p></section>`;
   const currentStep = onboardingState?.current_step ?? 'welcome';
   const started = onboardingState?.has_started ?? false;
-  return `<section class="card onboarding-card"><p class="card-kicker">Первый запуск</p><h2>Добро пожаловать в Мастерскую косметолога</h2><p>Это локальная рабочая система для вашей косметической мастерской. Данные хранятся на этом компьютере, отдельно от кода приложения.</p><div class="onboarding-note"><strong>Что важно:</strong> регулярно делайте резервные копии, а компоненты, рецепты, клиентов и заказы заполняйте постепенно.</div>${onboardingMessage ? `<p class="inline-message">${onboardingMessage}</p>` : ''}<ol class="checklist">${(onboardingState?.available_steps ?? Object.keys(stepLabels)).map((step) => checklistItem(step, currentStep)).join('')}</ol><div class="actions">${started ? `<button class="primary-action" type="button" data-action="complete-step" data-step="${currentStep}">Отметить текущий шаг</button>` : '<button class="primary-action" type="button" data-action="start-onboarding">Начать настройку</button>'}<button class="secondary-action" type="button" data-action="skip-onboarding">Пропустить пока</button></div></section>`;
+  const steps = onboardingState?.available_steps ?? Object.keys(stepLabels);
+  const doneCount = steps.filter((step) => onboardingState?.completed_steps.includes(step)).length;
+  if (onboardingState?.is_completed) return `<section class="card onboarding-card"><p class="card-kicker">Первичная настройка</p><h2>Базовая настройка завершена</h2><p>Базовая настройка завершена. Вы можете вернуться к чеклисту в любой момент, если хотите проверить путь ещё раз.</p><p class="next-step">Чеклист не меняет рецепты, склад, заказы и производство. Он только отмечает ваш прогресс.</p><div class="actions"><button class="secondary-action" type="button" data-action="reset-onboarding">Проверить путь ещё раз</button></div></section>`;
+  return `<section class="card onboarding-card"><p class="card-kicker">Первый запуск</p><h2>Настройте мастерскую по шагам</h2><p>Пройдите короткий путь: подготовьте склад, рецепты, клиентов, заказ, производство и защиту данных. Чеклист ничего не создаёт сам — он только помогает не пропустить важные разделы.</p><div class="onboarding-note"><strong>Безопасно:</strong> чеклист не меняет рецепты, склад, заказы и производство. Он только отмечает ваш прогресс и открывает нужные разделы.</div><p class="onboarding-progress">Выполнено ${doneCount} из ${steps.length}</p>${onboardingMessage ? `<p class="inline-message">${onboardingMessage}</p>` : ''}<ol class="checklist">${steps.map((step) => checklistItem(step, currentStep)).join('')}</ol><div class="actions">${started ? `<button class="primary-action" type="button" data-action="complete-step" data-step="${currentStep}">Отметить текущий шаг</button>` : '<button class="primary-action" type="button" data-action="start-onboarding">Начать настройку</button>'}<button class="secondary-action" type="button" data-action="skip-onboarding">Пропустить пока</button></div></section>`;
 }
-function checklistItem(step: string, currentStep: string) { const isDone = onboardingState?.completed_steps.includes(step); const isCurrent = step === currentStep && !isDone; const marker = isDone ? '✓' : isCurrent ? '•' : '○'; return `<li class="${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}"><span>${marker}</span><div><strong>${stepLabels[step] ?? step}</strong><small>${stepHint(step)}</small></div></li>`; }
-function stepHint(step: string) { return ({ welcome: 'Коротко понять назначение системы.', data_location: 'Данные остаются на этом компьютере; будущие резервные копии помогут защитить работу.', first_ingredient: 'Позже здесь появится добавление компонентов и плотностей.', first_recipe: 'Рецепты будут храниться версиями, без скрытого изменения истории.', first_client: 'Клиентские данные будут заполняться аккуратно и понятно.', first_order: 'Заказы и производство появятся отдельным roadmap-шагом.', first_backup: 'Резервные копии — обязательная привычка для локальной системы.' } as Record<string, string>)[step] ?? 'Шаг будет уточнен позже.'; }
+function checklistItem(step: string, currentStep: string) { const isDone = onboardingState?.completed_steps.includes(step); const isCurrent = step === currentStep && !isDone; const marker = isDone ? '✓' : isCurrent ? '•' : '○'; const sections = onboardingStepUi[step]?.sections ?? []; const links = sections.map((section) => `<button class="secondary-action compact" type="button" data-action="navigate-onboarding-step" data-section="${section}">Открыть ${labelForSection(section).toLowerCase()}</button>`).join(''); return `<li class="${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}"><span>${marker}</span><div><strong>${stepLabels[step] ?? step}</strong><small>${stepHint(step)}</small>${links ? `<div class="checklist-links">${links}</div>` : ''}</div></li>`; }
+function stepHint(step: string) { return onboardingStepUi[step]?.hint ?? 'Шаг будет уточнен позже.'; }
 function plannedSectionPlaceholder(section: NavigationSection) {
   const copy: Record<string, { title: string; now: string }> = {
     Заказы: { title: 'Заказы', now: 'Пока можно вести клиентов, рецепты и индивидуальные рецепты; заказы будут подключены отдельным безопасным шагом.' },

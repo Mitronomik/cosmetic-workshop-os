@@ -96,8 +96,101 @@ def test_complete_still_marks_all_steps_completed(tmp_path):
 
     assert completed.has_started is True
     assert completed.is_completed is True
-    assert completed.current_step == "first_backup"
+    assert completed.current_step == ONBOARDING_STEPS[-1]
     assert completed.completed_steps == ONBOARDING_STEPS
+
+
+def test_get_returns_refreshed_steps_and_new_step_can_complete(tmp_path):
+    config = initialized_config(tmp_path)
+    service = OnboardingService(config)
+
+    state = service.get_state()
+    assert "first_ingredient_lot" in ONBOARDING_STEPS
+    assert "first_packaging" in ONBOARDING_STEPS
+    assert "backup_and_export" in ONBOARDING_STEPS
+    assert "import_draft" in ONBOARDING_STEPS
+
+    completed = service.complete_step("first_ingredient_lot")
+    assert completed.has_started is True
+    assert "first_ingredient_lot" in completed.completed_steps
+
+
+def test_legacy_onboarding_state_is_mapped_without_crashing(tmp_path):
+    config = initialized_config(tmp_path)
+    legacy_payload = {
+        "has_started": True,
+        "is_completed": False,
+        "current_step": "first_backup",
+        "completed_steps": ["welcome", "first_backup", "unknown_old_step"],
+        "dismissed_hints": ["old-hint"],
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+    }
+    with sqlite3.connect(config.path) as connection:
+        connection.execute(
+            "INSERT INTO app_settings (key, value, value_type) VALUES (?, ?, 'json')",
+            (ONBOARDING_SETTING_KEY, json.dumps(legacy_payload)),
+        )
+
+    state = OnboardingService(config).get_state()
+
+    assert state.is_completed is False
+    assert state.current_step == "backup_and_export"
+    assert state.completed_steps == ("welcome", "backup_and_export")
+
+
+def test_unknown_current_step_falls_back_to_first_incomplete(tmp_path):
+    config = initialized_config(tmp_path)
+    payload = {
+        "has_started": True,
+        "is_completed": False,
+        "current_step": "removed_step",
+        "completed_steps": ["welcome", "data_location", "unknown_step"],
+    }
+    with sqlite3.connect(config.path) as connection:
+        connection.execute(
+            "INSERT INTO app_settings (key, value, value_type) VALUES (?, ?, 'json')",
+            (ONBOARDING_SETTING_KEY, json.dumps(payload)),
+        )
+
+    state = OnboardingService(config).get_state()
+
+    assert state.current_step == "first_ingredient"
+    assert state.completed_steps == ("welcome", "data_location")
+
+
+def test_completed_or_skipped_legacy_state_stays_closed(tmp_path):
+    config = initialized_config(tmp_path)
+    payload = {
+        "has_started": True,
+        "is_completed": True,
+        "current_step": "first_backup",
+        "completed_steps": ["welcome", "data_location", "first_backup"],
+    }
+    with sqlite3.connect(config.path) as connection:
+        connection.execute(
+            "INSERT INTO app_settings (key, value, value_type) VALUES (?, ?, 'json')",
+            (ONBOARDING_SETTING_KEY, json.dumps(payload)),
+        )
+
+    state = OnboardingService(config).get_state()
+
+    assert state.is_completed is True
+    assert state.current_step == "backup_and_export"
+    assert "backup_and_export" in state.completed_steps
+
+
+def test_completing_all_refreshed_steps_marks_checklist_complete(tmp_path):
+    config = initialized_config(tmp_path)
+    service = OnboardingService(config)
+    state = service.start()
+
+    for step in ONBOARDING_STEPS:
+        state = service.complete_step(step)
+
+    assert state.is_completed is True
+    assert state.current_step == ONBOARDING_STEPS[-1]
+    assert state.completed_steps == ONBOARDING_STEPS
 
 
 def test_onboarding_api_flow(monkeypatch, tmp_path):

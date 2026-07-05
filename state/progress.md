@@ -503,3 +503,12 @@ Import CSV/XLSX draft backend foundation.
 - Added a double-submit guard while apply is in progress and preserved applied-draft result display after refresh through stored `summary.apply_result`.
 - Expanded backend regression coverage for already-applied draft rejection, unsupported orders/lots, duplicate conflicts, warning acknowledgement, unapplied draft/source after failure, no side-effect backup/export/alert/purchase records, and applied detail/list readiness.
 - Updated import API/format docs and state handoff. No migrations, new apply targets, automatic backup/export, stock movements, lots, orders, production records, alerts, or purchase suggestions were added.
+
+## PR83 — Refresh existing onboarding checklist after import/apply
+- Refreshed the existing single onboarding/checklist flow to match the current MVP workflow after import/apply.
+- Added current onboarding steps for component lots, packaging, individual recipes, production readiness/confirmation, alerts/purchases, backup/export, and import drafts.
+- Preserved the existing `/api/onboarding` API and `app_settings` state store; no second checklist, table, or API was added.
+- Added compatibility handling for old onboarding state, including mapping `first_backup` to `backup_and_export`, ignoring unknown completed steps, and falling back unknown current steps to the first incomplete refreshed step.
+- Updated frontend Russian onboarding copy, progress count, safety copy, and navigation hints/buttons.
+- Fixed stale import readiness copy that said apply would be added in a separate future PR.
+- Import apply targets were not expanded; ingredient lots and orders remain unsupported.

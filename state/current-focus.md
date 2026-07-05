@@ -1,10 +1,12 @@
-# Current Focus
+# Current focus
 
-## Last completed
-PR82 — Import apply hardening / smoke fixes.
+PR83 — Refresh the existing onboarding checklist after import/apply.
 
-## Next allowed task
-O3 — Guided setup checklist, or PR83 — Import apply follow-up fixes if manual browser smoke finds remaining import issues.
+Scope:
+- keep the existing onboarding API/service/app_settings state mechanism;
+- refresh onboarding steps, Russian copy, progress, and route hints for the current MVP workflow;
+- preserve compatibility with old onboarding state;
+- fix stale import copy that claimed apply was entirely future-only;
+- do not create business data or expand import apply targets.
 
-## Scope guard
-Do not expand import apply targets yet. Ingredient lots and orders import remain unsupported. Do not add stock/order/lot/production imports, mapping editor, partial imports, OCR/PDF/image import, or automatic backup/export creation without an explicit task.
+Next recommended PR: O4 — Demo data mode, unless onboarding smoke finds follow-up issues requiring PR84.
