@@ -1180,7 +1180,36 @@ function exportHistoryCard() {
 function exportHistoryItem(item: ExportFileResponse) { return `<article class="recipe-line backup-item"><div class="section-heading"><div><h3>${escapeHtml(item.filename)}</h3><p><span class="pill info">${exportReasonLabel(item.reason)}</span> <span class="pill muted">${formatFileSize(item.size_bytes)}</span></p></div><small>${formatDateTime(item.created_at || '')}</small></div><p><strong>Локальный путь:</strong><br><code class="path-text">${escapeHtml(item.path)}</code></p><p class="next-step">Это только JSON-снимок. Импорт из экспорта будет добавлен отдельным шагом.</p></article>`; }
 function exportNonGoalsCard() { return `<section class="card data-card"><p class="card-kicker">Честные границы</p><h2>Пока не реализовано</h2><p>Сейчас этот экран только создаёт и показывает локальные JSON-экспорты. Импорт, восстановление, CSV/XLSX и отчёты будут добавлены отдельными PR.</p><ul class="checklist compact-list"><li>Импорт из export-файла</li><li>Восстановление из export-файла</li><li>Скачивание файла через браузер</li><li>CSV/XLSX export</li><li>PDF-отчёты</li><li>Автоматический export по расписанию</li><li>Cloud export</li></ul></section>`; }
 function exportReasonLabel(reason: string | null): string { return ({ manual: 'Обычный экспорт', before_import: 'Перед импортом', before_update: 'Перед обновлением', before_large_edit: 'Перед крупными изменениями', support_snapshot: 'Для поддержки' } as Record<string, string>)[reason || ''] ?? (reason ? escapeHtml(reason) : 'Не указана'); }
-function exportEntityLabel(key: string): string { return ({ ingredients: 'Компоненты', ingredient_lots: 'Партии компонентов', stock_movements: 'Движения сырья', packaging_items: 'Тара', packaging_stock_movements: 'Движения тары', recipe_templates: 'Рецепты', recipe_versions: 'Версии рецептов', recipe_version_ingredients: 'Составы версий', clients: 'Клиенты', client_recipes: 'Индивидуальные рецепты', client_recipe_ingredients: 'Составы индивидуальных рецептов', client_wishes: 'Пожелания клиентов', client_feedback: 'Обратная связь', orders: 'Заказы', production_batches: 'Производственные партии', production_batch_ingredients: 'Списания компонентов', production_batch_packaging: 'Списания тары', alerts: 'Алерты', purchase_suggestions: 'Закупочные предложения' } as Record<string, string>)[key] ?? escapeHtml(key); }
+function exportEntityLabel(key: string): string {
+  return ({
+    app_settings: 'Настройки приложения',
+    ingredients: 'Компоненты',
+    ingredient_lots: 'Партии компонентов',
+    stock_movements: 'Движения сырья',
+    packaging_items: 'Тара',
+    packaging_stock_movements: 'Движения тары',
+    catalog_categories: 'Группы каталога',
+    catalog_tags: 'Метки каталога',
+    ingredient_catalog_tags: 'Метки компонентов',
+    packaging_item_catalog_tags: 'Метки тары',
+    recipe_template_catalog_tags: 'Метки рецептов',
+    recipe_templates: 'Рецепты',
+    recipe_versions: 'Версии рецептов',
+    recipe_ingredients: 'Составы версий',
+    clients: 'Клиенты',
+    client_recipes: 'Индивидуальные рецепты',
+    client_recipe_ingredients: 'Составы индивидуальных рецептов',
+    client_wishes: 'Пожелания клиентов',
+    client_feedback: 'Обратная связь',
+    orders: 'Заказы',
+    production_batches: 'Производственные партии',
+    production_batch_ingredients: 'Списания компонентов',
+    production_batch_packaging: 'Списания тары',
+    alerts: 'Алерты',
+    purchase_suggestions: 'Закупочные предложения',
+    audit_logs: 'Журнал действий',
+  } as Record<string, string>)[key] ?? escapeHtml(key);
+}
 
 function backupPage() {
   const isLoading = backupUiState.status === 'loading';
