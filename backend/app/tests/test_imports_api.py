@@ -153,3 +153,46 @@ def test_service_create_detail_list_and_cancel_import_draft_without_domain_mutat
     assert cancelled is not None
     assert cancelled["draft"]["status"] == "cancelled"
     assert _counts(db_path) == before_counts
+
+
+def test_service_readiness_states_and_issue_counts(tmp_path):
+    from app.services.imports import UploadedFileData, cancel_import_draft, create_import_draft, get_import_draft, list_import_drafts
+
+    db_path = tmp_path / "readiness.sqlite"
+    _create_database(db_path)
+    config = DatabaseConfig(path=db_path)
+
+    ready = create_import_draft(UploadedFileData(filename="ingredients.csv", content_type="text/csv", content=b"name,unit\nWater,g\n"), "ingredients", config=config)
+    assert ready["draft"]["apply_readiness"]["status"] == "ready"
+    assert ready["draft"]["apply_readiness"]["can_apply"] is True
+
+    warned = create_import_draft(UploadedFileData(filename="ingredients.csv", content_type="text/csv", content=b"name,unit,extra\nWater,g,x\n"), "ingredients", config=config)
+    assert warned["draft"]["apply_readiness"]["status"] == "ready_with_warnings"
+    assert warned["draft"]["summary"]["issue_counts_by_code"]["unknown_column"] == 1
+
+    blocked = create_import_draft(UploadedFileData(filename="ingredients.csv", content_type="text/csv", content=b"unit\ng\n"), "ingredients", config=config)
+    assert blocked["draft"]["apply_readiness"]["status"] == "blocked"
+    assert blocked["draft"]["apply_readiness"]["can_apply"] is False
+
+    empty = create_import_draft(UploadedFileData(filename="ingredients.csv", content_type="text/csv", content=b"name,unit\n"), "ingredients", config=config)
+    assert empty["draft"]["apply_readiness"]["status"] == "blocked"
+
+    cancelled = cancel_import_draft(ready["draft"]["id"], config=config)
+    assert cancelled["draft"]["apply_readiness"]["status"] == "cancelled"
+
+    detail = get_import_draft(warned["draft"]["id"], config=config)
+    assert detail["draft"]["apply_readiness"]["warning_count"] == warned["draft"]["warning_count"]
+    listing = list_import_drafts(config=config)
+    assert all("apply_readiness" in draft for draft in listing["drafts"])
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_no_import_apply_endpoint_exists(tmp_path, monkeypatch):
+    db_path = tmp_path / "db.sqlite"
+    _create_database(db_path)
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+    client = TestClient(create_app())
+
+    response = client.post("/api/imports/drafts/1/apply", json={"confirm": True})
+
+    assert response.status_code == 404
