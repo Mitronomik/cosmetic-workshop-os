@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.alerts import router as alerts_router
+from app.api.backups import router as backups_router
 from app.api.catalog import router as catalog_router
 from app.api.catalog_assignments import router as catalog_assignments_router
 from app.api.client_recipes import router as client_recipes_router
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(alerts_router, prefix="/api")
+    app.include_router(backups_router, prefix="/api")
     app.include_router(health_router, prefix="/api")
     app.include_router(health_router)
     app.include_router(database_router, prefix="/api")
