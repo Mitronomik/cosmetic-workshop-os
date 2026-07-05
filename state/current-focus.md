@@ -1,12 +1,7 @@
 # Current Focus
 
-PR79 — Import validation refinement and apply readiness contract is implemented in this branch.
+PR80 — Import apply backend foundation is implemented.
 
-Scope remains limited to import draft validation/readiness and UI display:
+Next recommended scoped task: PR81 — Import confirmation/apply UI.
 
-- import drafts expose `apply_readiness` for ready, ready_with_warnings, blocked, cancelled, and failed states;
-- validation supports visible header alias, decimal comma, unit alias, date, email, ID, and target-specific numeric checks;
-- `/imports` displays readiness and still has no apply/confirmation button;
-- import rows still are not applied to business domain tables.
-
-Next recommended PR after smoke confirms readiness is clear: PR80 — Import apply backend foundation.
+Scope guard for PR81: add the frontend confirmation/apply flow for the existing backend endpoint only. Do not add mapping editor, partial imports, stock/order apply, automatic backup/export, restore, OCR/PDF/image import, cloud import, scheduled import, reports, or analytics.

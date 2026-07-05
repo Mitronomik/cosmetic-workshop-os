@@ -468,3 +468,19 @@ Import CSV/XLSX draft backend foundation.
 - Refined import validation with visible header aliases, decimal comma normalization, unit/date normalization, email/ID checks, and target-specific numeric rules.
 - Updated Import UI to show readiness while keeping the flow draft-only.
 - Updated API/import/state docs for PR79.
+
+## PR80 — Import apply backend foundation
+- Added backend-only `POST /api/imports/drafts/{draft_id}/apply` for explicit import application.
+- Apply requires confirmation and backup acknowledgement, blocks cancelled/failed/already-applied/blocked drafts, and requires `allow_warnings=true` for ready-with-warnings drafts.
+- Implemented transactional all-or-nothing creation for `ingredients`, `clients`, `recipe_templates`, and catalog-only `packaging_items`.
+- Kept `ingredient_lots` and `orders` unsupported for apply in PR80.
+- Added duplicate/existing-record conflict checks and packaging `stock` apply blocking.
+- Successful apply updates draft/source to `applied`, stores `apply_result` in `summary_json`, and writes an audit log entry.
+- Added migration support for the new `applied` import status and backend apply tests.
+- Next recommended PR: PR81 — Import confirmation/apply UI.
+
+## PR80 follow-up — Applied import cancellation safety
+- Blocked cancelling already-applied import drafts; cancel now returns a structured conflict and leaves draft/source status as `applied`.
+- Added regression tests for applied-cancel blocking and migration 0017 data preservation/applied status acceptance.
+- Updated Import UI defensive labels/readiness pills for `applied` and hides cancel actions unless status is `draft`.
+- Updated API/import docs to include `applied` readiness and the no-cancel safety rule for applied drafts.
