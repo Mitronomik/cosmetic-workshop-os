@@ -130,3 +130,25 @@ PR77 does not:
 - add restore;
 - add OCR/PDF/image import;
 - use cloud services.
+
+## PR79 readiness and validation refinements
+
+Import draft API responses now include `draft.apply_readiness`. This contract answers whether the draft is validation-ready for a future explicit apply endpoint; it does **not** mean apply exists today.
+
+Readiness statuses:
+
+- `ready` — draft has rows, no errors, and no warnings/info issues.
+- `ready_with_warnings` — draft has rows and no errors, but has warnings/info the user should review.
+- `blocked` — draft has zero rows or at least one validation error. Future apply must be all-or-nothing, so any row error blocks the whole draft.
+- `cancelled` — draft was cancelled and working data was not changed.
+- `failed` — parsing/checking failed and working data was not changed.
+
+Validation now recognizes deterministic Russian/user-friendly header aliases for supported targets, for example `Название` → `name`, `ФИО` → `full_name`, `Компонент` → `ingredient_name`, `Дата_покупки` → `purchase_date`, and `Цена` → `sale_price` for orders or `cost` for packaging. Alias use is always visible through `header_alias_used` info issues.
+
+Decimal values keep raw source values in `raw_values`. A safe comma decimal such as `100,5` is normalized to `100.5` in `normalized_values` and emits `decimal_comma_normalized`. Ambiguous thousand formats such as `1.000,5`, `1,000.5`, or values with space thousand separators are blocked with `ambiguous_decimal`.
+
+Unit aliases are normalized visibly: `г`, `gram`, `grams` → `g`; `мл`, `milliliter`, `milliliters` → `ml`; `шт`, `piece`, `pieces` → `pcs`. Each alias normalization emits `unit_alias_normalized`; unknown units remain `invalid_unit` errors.
+
+Dates should use ISO `YYYY-MM-DD`. Deterministic Russian `DD.MM.YYYY` dates are normalized to ISO with `date_format_normalized`; ambiguous slash dates are not accepted.
+
+Additional issue codes include `invalid_positive_decimal`, `invalid_non_negative_decimal`, `invalid_email`, `invalid_id`, `header_alias_used`, `decimal_comma_normalized`, `ambiguous_decimal`, `unit_alias_normalized`, and `date_format_normalized`. Unknown columns remain warnings and produce `ready_with_warnings`, not `ready`.

@@ -1,11 +1,12 @@
 # Current Focus
 
-PR78 — Import draft UI / preview UI is implemented in this branch.
+PR79 — Import validation refinement and apply readiness contract is implemented in this branch.
 
-Scope now remains limited to validating and reviewing the frontend Import workspace at `/imports`:
+Scope remains limited to import draft validation/readiness and UI display:
 
-- consumes PR77 draft-only import API;
-- supports target listing, explicit CSV/XLSX draft upload, draft listing, draft detail, preview rows, validation issues, and cancellation;
-- does not implement import apply/confirmation, mapping editor, OCR, PDF/image import, automatic backup/export, or writes to real business tables.
+- import drafts expose `apply_readiness` for ready, ready_with_warnings, blocked, cancelled, and failed states;
+- validation supports visible header alias, decimal comma, unit alias, date, email, ID, and target-specific numeric checks;
+- `/imports` displays readiness and still has no apply/confirmation button;
+- import rows still are not applied to business domain tables.
 
-Next recommended PR after smoke feedback: Import validation refinement or Import apply design/backend.
+Next recommended PR after smoke confirms readiness is clear: PR80 — Import apply backend foundation.

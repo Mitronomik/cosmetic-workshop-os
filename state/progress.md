@@ -462,3 +462,9 @@ Import CSV/XLSX draft backend foundation.
 - The screen repeatedly explains that rows are only draft/preview data and are not applied to real workshop records.
 - Import apply/confirmation, column mapping, OCR, PDF/image import, automatic backup/export, polling, and business-domain mutations remain out of scope.
 - Next recommended PR: import validation refinement or import apply design/backend, depending on browser smoke feedback.
+
+## PR79 — Import validation refinement and apply readiness contract
+- Added explicit import draft apply readiness contract for create/list/detail/cancel responses without adding apply or confirmation.
+- Refined import validation with visible header aliases, decimal comma normalization, unit/date normalization, email/ID checks, and target-specific numeric rules.
+- Updated Import UI to show readiness while keeping the flow draft-only.
+- Updated API/import/state docs for PR79.

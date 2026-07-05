@@ -20,6 +20,18 @@ class ImportIssueResponse(BaseModel):
     field: str | None = None
 
 
+class ImportApplyReadinessResponse(BaseModel):
+    can_apply: bool
+    status: str
+    blocking_error_count: int
+    warning_count: int
+    valid_row_count: int
+    invalid_row_count: int
+    blocking_reasons: list[str]
+    warnings: list[str]
+    next_action: str
+
+
 class ImportDraftSummaryResponse(BaseModel):
     id: int
     source_id: int
@@ -32,6 +44,7 @@ class ImportDraftSummaryResponse(BaseModel):
     error_count: int
     headers: list[str]
     summary: dict[str, object]
+    apply_readiness: ImportApplyReadinessResponse
     created_at: str
     updated_at: str
 

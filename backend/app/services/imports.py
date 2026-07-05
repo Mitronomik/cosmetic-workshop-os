@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from collections.abc import Sequence
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from io import BytesIO, StringIO
 import csv
@@ -33,7 +34,19 @@ TARGETS = {
 DECIMAL_FIELDS = {"density", "quantity", "unit_cost", "cost", "stock", "minimum_stock", "sale_price", "target_batch_size_value"}
 DATE_FIELDS = {"purchase_date", "expiration_date", "due_date"}
 UNIT_FIELDS = {"unit", "target_batch_size_unit"}
-VALID_UNITS = {"g", "ml", "pcs", "gram", "grams", "milliliter", "milliliters", "piece", "pieces", "г", "мл", "шт"}
+UNIT_ALIASES = {"g": "g", "gram": "g", "grams": "g", "г": "g", "ml": "ml", "milliliter": "ml", "milliliters": "ml", "мл": "ml", "pcs": "pcs", "piece": "pcs", "pieces": "pcs", "шт": "pcs"}
+VALID_UNITS = set(UNIT_ALIASES)
+POSITIVE_DECIMAL_FIELDS = {"density", "quantity", "target_batch_size_value"}
+NON_NEGATIVE_DECIMAL_FIELDS = {"stock", "minimum_stock", "cost", "unit_cost", "sale_price"}
+ID_FIELDS = {"ingredient_id", "client_id"}
+HEADER_ALIASES = {
+    "ingredients": {"название": "name", "наименование": "name", "inci": "inci_name", "инци": "inci_name", "плотность": "density", "единица": "unit", "единица_измерения": "unit", "комментарий": "notes", "заметки": "notes"},
+    "packaging_items": {"название": "name", "наименование": "name", "тип": "category", "категория": "category", "единица": "unit", "единица_измерения": "unit", "остаток": "stock", "минимальный_остаток": "minimum_stock", "себестоимость": "cost", "стоимость": "cost", "цена": "cost"},
+    "clients": {"фио": "full_name", "имя": "full_name", "клиент": "full_name", "телефон": "phone", "почта": "email", "email": "email", "адрес": "address", "комментарий": "notes", "заметки": "notes"},
+    "recipe_templates": {"название": "name", "наименование": "name", "тип_продукта": "product_type", "категория": "product_type", "комментарий": "notes", "заметки": "notes"},
+    "ingredient_lots": {"компонент": "ingredient_name", "название_компонента": "ingredient_name", "id_компонента": "ingredient_id", "партия": "lot_number", "номер_партии": "lot_number", "количество": "quantity", "единица": "unit", "единица_измерения": "unit", "себестоимость": "unit_cost", "стоимость": "unit_cost", "цена_за_единицу": "unit_cost", "дата_покупки": "purchase_date", "срок_годности": "expiration_date", "поставщик": "supplier"},
+    "orders": {"клиент": "client_name", "id_клиента": "client_id", "продукт": "product_name", "название_продукта": "product_name", "размер_партии": "target_batch_size_value", "объем": "target_batch_size_value", "единица": "target_batch_size_unit", "единица_измерения": "target_batch_size_unit", "цена": "sale_price", "дата": "due_date", "плановая_дата": "due_date", "комментарий": "notes", "заметки": "notes"},
+}
 
 
 @dataclass(frozen=True)
@@ -98,6 +111,75 @@ def normalize_header(value: str) -> str:
     normalized = re.sub(r"\s+", "_", value.strip().lower())
     return normalized
 
+
+
+def apply_header_alias(header: str, target_type: str) -> str:
+    return HEADER_ALIASES.get(target_type, {}).get(header, header)
+
+
+def _normalize_decimal_value(value: str, row_number: int, field: str) -> tuple[str, ValidationIssue | None]:
+    text = value.strip()
+    if not text:
+        return text, None
+    if "," in text and "." in text:
+        return text, _issue("error", "ambiguous_decimal", f"В строке {row_number} в поле “{field}” неоднозначное число «{text}». Уберите разделители тысяч и используйте 100.5 или 100,5.", row_number, field)
+    if re.search(r"\d\s+\d", text):
+        return text, _issue("error", "ambiguous_decimal", f"В строке {row_number} в поле “{field}” неоднозначное число «{text}». Уберите пробелы-разделители тысяч.", row_number, field)
+    if "," in text:
+        if re.fullmatch(r"[-+]?\d+,\d+", text):
+            normalized = text.replace(",", ".")
+            return normalized, _issue("warning", "decimal_comma_normalized", f"В строке {row_number} значение «{text}» будет прочитано как {normalized}.", row_number, field)
+        return text, _issue("error", "ambiguous_decimal", f"В строке {row_number} в поле “{field}” неоднозначное число «{text}». Используйте 100.5 или 100,5 без разделителей тысяч.", row_number, field)
+    if re.fullmatch(r"[-+]?\d+(\.\d+)?", text):
+        return text, None
+    return text, _issue("error", "invalid_decimal", f"В строке {row_number} в поле “{field}” нужно число, например 30 или 30,5.", row_number, field)
+
+
+def _normalize_date_value(value: str, row_number: int, field: str) -> tuple[str, ValidationIssue | None]:
+    text = value.strip()
+    if not text:
+        return text, None
+    try:
+        date.fromisoformat(text)
+        return text, None
+    except ValueError:
+        pass
+    match = re.fullmatch(r"(\d{2})\.(\d{2})\.(\d{4})", text)
+    if match:
+        normalized = f"{match.group(3)}-{match.group(2)}-{match.group(1)}"
+        try:
+            date.fromisoformat(normalized)
+            return normalized, _issue("warning", "date_format_normalized", f"В строке {row_number} дата «{text}» будет прочитана как {normalized}.", row_number, field)
+        except ValueError:
+            pass
+    return text, _issue("error", "invalid_date", f"В строке {row_number} в поле “{field}” нужна дата в формате YYYY-MM-DD, например 2026-07-05.", row_number, field)
+
+
+def _readiness(status: str, row_count: int, valid_count: int, invalid_count: int, issues: list[dict[str, object]], warning_count: int, error_count: int) -> dict[str, object]:
+    if status == "cancelled":
+        return {"can_apply": False, "status": "cancelled", "blocking_error_count": error_count, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": ["Черновик отменён."], "warnings": [], "next_action": "Создайте новый черновик, если файл нужно проверить заново."}
+    if status == "failed":
+        return {"can_apply": False, "status": "failed", "blocking_error_count": error_count, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": ["Черновик не удалось разобрать."], "warnings": [], "next_action": "Исправьте файл и создайте новый черновик."}
+    warnings = []
+    codes = {str(i.get("code")) for i in issues if i.get("severity") in {"warning", "info"}}
+    if "unknown_column" in codes: warnings.append("Есть неизвестные столбцы, которые не будут применены.")
+    if any(c in codes for c in {"header_alias_used", "decimal_comma_normalized", "unit_alias_normalized", "date_format_normalized"}): warnings.append("Есть нормализации значений или заголовков — проверьте предпросмотр.")
+    if error_count or row_count == 0:
+        reasons = []
+        if row_count == 0: reasons.append("В черновике нет строк данных.")
+        if error_count: reasons.append("Исправьте ошибки в строках или заголовках перед применением.")
+        return {"can_apply": False, "status": "blocked", "blocking_error_count": error_count, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": reasons, "warnings": warnings, "next_action": "Исправьте файл и создайте новый черновик."}
+    ready_status = "ready_with_warnings" if warning_count else "ready"
+    return {"can_apply": True, "status": ready_status, "blocking_error_count": 0, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": [], "warnings": warnings, "next_action": "Проверьте предупреждения. Кнопки применения пока нет — она будет добавлена отдельным PR." if warning_count else "Черновик готов для будущего шага применения. Кнопки применения пока нет."}
+
+
+def _issue_counts(issues: list[dict[str, object]]) -> tuple[dict[str, int], dict[str, int]]:
+    by_code: dict[str, int] = {}
+    by_severity: dict[str, int] = {}
+    for issue in issues:
+        by_code[str(issue.get("code"))] = by_code.get(str(issue.get("code")), 0) + 1
+        by_severity[str(issue.get("severity"))] = by_severity.get(str(issue.get("severity")), 0) + 1
+    return by_code, by_severity
 
 def _issue(severity: str, code: str, message: str, row_number: int | None = None, field: str | None = None) -> ValidationIssue:
     return ValidationIssue(severity=severity, code=code, message=message, row_number=row_number, field=field)
@@ -248,8 +330,12 @@ def parse_import_file(filename: str, content: bytes, target_type: str) -> ParseR
     if len(data_rows) > MAX_ROWS:
         raise ImportParseError(f"В файле больше {MAX_ROWS} строк данных.")
 
-    normalized_headers = [normalize_header(header) for header in headers]
+    raw_normalized_headers = [normalize_header(header) for header in headers]
+    normalized_headers = [apply_header_alias(header, target_type) for header in raw_normalized_headers]
     issues: list[ValidationIssue] = []
+    for raw_header, normalized_header, original_header in zip(raw_normalized_headers, normalized_headers, headers):
+        if raw_header and raw_header != normalized_header:
+            issues.append(_issue("info", "header_alias_used", f"Столбец «{original_header.strip()}» распознан как {normalized_header}.", header_row_number, normalized_header))
     seen: set[str] = set()
     for header in normalized_headers:
         if not header:
@@ -276,20 +362,42 @@ def parse_import_file(filename: str, content: bytes, target_type: str) -> ParseR
             if required in normalized and not normalized[required].strip():
                 row_issues.append(_issue("error", "missing_required_value", f"В строке {row_number} не заполнено обязательное поле: {required}", row_number, required))
         for field in DECIMAL_FIELDS & normalized.keys():
-            value = normalized[field].strip()
-            if value and not re.fullmatch(r"[-+]?\d+(\.\d+)?", value):
-                row_issues.append(_issue("error", "invalid_decimal", f"В строке {row_number} в поле “{field}” нужно число с точкой в качестве десятичного разделителя.", row_number, field))
+            normalized_value, issue = _normalize_decimal_value(normalized[field], row_number, field)
+            normalized[field] = normalized_value
+            if issue:
+                row_issues.append(issue)
+                if issue.severity == "error":
+                    continue
+            if normalized_value:
+                number = Decimal(normalized_value)
+                if field in POSITIVE_DECIMAL_FIELDS and number <= 0:
+                    row_issues.append(_issue("error", "invalid_positive_decimal", f"В строке {row_number} поле “{field}” должно быть больше нуля.", row_number, field))
+                if field in NON_NEGATIVE_DECIMAL_FIELDS and number < 0:
+                    row_issues.append(_issue("error", "invalid_non_negative_decimal", f"В строке {row_number} поле “{field}” не может быть отрицательным.", row_number, field))
         for field in DATE_FIELDS & normalized.keys():
-            value = normalized[field].strip()
-            if value:
-                try:
-                    date.fromisoformat(value)
-                except ValueError:
-                    row_issues.append(_issue("error", "invalid_date", f"В строке {row_number} в поле “{field}” нужна дата в формате YYYY-MM-DD.", row_number, field))
+            normalized_value, issue = _normalize_date_value(normalized[field], row_number, field)
+            normalized[field] = normalized_value
+            if issue:
+                row_issues.append(issue)
         for field in UNIT_FIELDS & normalized.keys():
-            value = normalized[field].strip().lower()
-            if value and value not in VALID_UNITS:
-                row_issues.append(_issue("error", "invalid_unit", f"В строке {row_number} в поле “{field}” указана неизвестная единица измерения.", row_number, field))
+            raw_unit = normalized[field].strip()
+            value = raw_unit.lower()
+            if value:
+                canonical = UNIT_ALIASES.get(value)
+                if canonical is None:
+                    row_issues.append(_issue("error", "invalid_unit", f"В строке {row_number} в поле “{field}” указана неизвестная единица измерения. Используйте g, ml или pcs.", row_number, field))
+                else:
+                    normalized[field] = canonical
+                    if canonical != raw_unit:
+                        row_issues.append(_issue("info", "unit_alias_normalized", f"В строке {row_number} единица «{raw_unit}» будет прочитана как {canonical}.", row_number, field))
+        for field in ID_FIELDS & normalized.keys():
+            value = normalized[field].strip()
+            if value and not re.fullmatch(r"[1-9]\d*", value):
+                row_issues.append(_issue("error", "invalid_id", f"В строке {row_number} поле “{field}” должно быть положительным целым числом.", row_number, field))
+        if target_type == "clients" and normalized.get("email", "").strip():
+            email = normalized["email"].strip()
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+                row_issues.append(_issue("warning", "invalid_email", f"В строке {row_number} email «{email}» выглядит некорректно. Проверьте адрес перед будущим применением.", row_number, "email"))
         parsed_rows.append(ParsedRow(row_number=row_number, raw_values=raw, normalized_values=normalized, issues=row_issues))
     return ParseResult(headers=normalized_headers, rows=parsed_rows, issues=issues)
 
@@ -321,16 +429,26 @@ def _source_to_response(row: sqlite3.Row) -> dict[str, object]:
 
 
 def _draft_to_response(row: sqlite3.Row) -> dict[str, object]:
-    return {"id": row["id"], "source_id": row["source_id"], "target_type": row["target_type"], "status": row["status"], "row_count": row["row_count"], "valid_row_count": row["valid_row_count"], "invalid_row_count": row["invalid_row_count"], "warning_count": row["warning_count"], "error_count": row["error_count"], "headers": json.loads(row["headers_json"]), "summary": json.loads(row["summary_json"]), "created_at": row["created_at"], "updated_at": row["updated_at"]}
+    summary = json.loads(row["summary_json"])
+    global_issues = summary.get("global_issues", []) if isinstance(summary, dict) else []
+    readiness = summary.get("readiness") if isinstance(summary, dict) else None
+    if row["status"] in {"cancelled", "failed"} or not isinstance(readiness, dict):
+        readiness = _readiness(row["status"], row["row_count"], row["valid_row_count"], row["invalid_row_count"], global_issues, row["warning_count"], row["error_count"])
+        if isinstance(summary, dict):
+            summary["readiness"] = readiness
+    return {"id": row["id"], "source_id": row["source_id"], "target_type": row["target_type"], "status": row["status"], "row_count": row["row_count"], "valid_row_count": row["valid_row_count"], "invalid_row_count": row["invalid_row_count"], "warning_count": row["warning_count"], "error_count": row["error_count"], "headers": json.loads(row["headers_json"]), "summary": summary, "apply_readiness": readiness, "created_at": row["created_at"], "updated_at": row["updated_at"]}
 
 
 def create_import_draft(upload: UploadedFileData, target_type: str, config: DatabaseConfig | None = None) -> dict[str, object]:
     result = parse_import_file(upload.filename, upload.content, target_type)
     row_errors = sum(1 for row in result.rows if row.status == "error")
-    warning_count = sum(1 for row in result.rows for issue in row.issues if issue.severity == "warning") + sum(1 for issue in result.issues if issue.severity == "warning")
-    error_count = sum(1 for row in result.rows for issue in row.issues if issue.severity == "error") + sum(1 for issue in result.issues if issue.severity == "error")
+    all_issue_dicts = [issue.to_dict() for issue in result.issues] + [issue.to_dict() for row in result.rows for issue in row.issues]
+    warning_count = sum(1 for issue in all_issue_dicts if issue["severity"] in {"warning", "info"})
+    error_count = sum(1 for issue in all_issue_dicts if issue["severity"] == "error")
     valid_count = sum(1 for row in result.rows if row.status == "valid")
-    summary = {"message": "Данные ещё не внесены в систему.", "global_issues": [issue.to_dict() for issue in result.issues]}
+    by_code, by_severity = _issue_counts(all_issue_dicts)
+    readiness = _readiness("draft", len(result.rows), valid_count, row_errors, all_issue_dicts, warning_count, error_count)
+    summary = {"message": "Данные ещё не внесены в систему.", "global_issues": [issue.to_dict() for issue in result.issues], "readiness": readiness, "issue_counts_by_code": by_code, "issue_counts_by_severity": by_severity}
     with session(config) as connection:
         source_id = connection.execute(
             """

@@ -121,3 +121,59 @@ def test_xlsx_preserves_real_row_numbers():
     result = parse_import_file("ingredients.xlsx", content, "ingredients")
 
     assert result.rows[0].row_number == 5
+
+
+def _codes(issues):
+    return [issue.code for issue in issues]
+
+
+def _all_codes(result):
+    return [issue.code for issue in result.issues] + [issue.code for row in result.rows for issue in row.issues]
+
+
+def test_header_alias_decimal_unit_date_email_id_and_readiness_contract():
+    result = parse_import_file("lots.csv", "Компонент;Количество;Единица;Дата_покупки;id_компонента\nВода;100,5;г;05.07.2026;1\n".encode(), "ingredient_lots")
+
+    assert result.headers == ["ingredient_name", "quantity", "unit", "purchase_date", "ingredient_id"]
+    row = result.rows[0]
+    assert row.raw_values["Количество"] == "100,5"
+    assert row.normalized_values["quantity"] == "100.5"
+    assert row.normalized_values["unit"] == "g"
+    assert row.normalized_values["purchase_date"] == "2026-07-05"
+    assert row.status == "warning"
+    assert {"header_alias_used", "decimal_comma_normalized", "unit_alias_normalized", "date_format_normalized"} <= set(_all_codes(result))
+
+
+def test_client_alias_and_invalid_email_warning():
+    result = parse_import_file("clients.csv", "ФИО,email\nАнна,not-email\n".encode(), "clients")
+
+    assert result.headers == ["full_name", "email"]
+    assert result.rows[0].normalized_values["full_name"] == "Анна"
+    assert "header_alias_used" in _codes(result.issues)
+    assert result.rows[0].status == "warning"
+    assert result.rows[0].issues[0].code == "invalid_email"
+
+
+def test_ambiguous_decimal_and_positive_negative_rules_block_rows():
+    ambiguous = parse_import_file("lots.csv", b"ingredient_name,quantity,unit\nOil,1.000,5,g\n", "ingredient_lots")
+    # CSV comma splits this value; explicit semicolon keeps the ambiguous value intact.
+    ambiguous = parse_import_file("lots.csv", "ingredient_name;quantity;unit\nOil;1.000,5;g\n".encode(), "ingredient_lots")
+    assert ambiguous.rows[0].status == "error"
+    assert "ambiguous_decimal" in _codes(ambiguous.rows[0].issues)
+
+    zero_quantity = parse_import_file("lots.csv", b"ingredient_name,quantity,unit\nOil,0,g\n", "ingredient_lots")
+    assert "invalid_positive_decimal" in _codes(zero_quantity.rows[0].issues)
+
+    negative_price = parse_import_file("packaging.csv", b"name,cost\nJar,-1\n", "packaging_items")
+    assert "invalid_non_negative_decimal" in _codes(negative_price.rows[0].issues)
+
+    zero_price = parse_import_file("packaging.csv", b"name,cost\nJar,0\n", "packaging_items")
+    assert zero_price.rows[0].status == "valid"
+
+
+def test_unknown_unit_and_invalid_id_are_blocking():
+    unit = parse_import_file("lots.csv", b"ingredient_name,quantity,unit\nOil,1,kg\n", "ingredient_lots")
+    assert "invalid_unit" in _codes(unit.rows[0].issues)
+
+    bad_id = parse_import_file("orders.csv", b"client_name,product_name,target_batch_size_value,target_batch_size_unit,client_id\nAnna,Cream,10,g,0\n", "orders")
+    assert "invalid_id" in _codes(bad_id.rows[0].issues)

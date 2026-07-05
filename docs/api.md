@@ -535,3 +535,25 @@ Marks a draft and its source as cancelled. This safe mutation changes only impor
   "message": "Черновик импорта отменён. Рабочие данные не изменены."
 }
 ```
+
+## Imports apply readiness (PR79)
+
+Import draft create, list, detail, and cancel responses include `draft.apply_readiness`:
+
+```json
+{
+  "can_apply": false,
+  "status": "blocked",
+  "blocking_error_count": 1,
+  "warning_count": 2,
+  "valid_row_count": 9,
+  "invalid_row_count": 1,
+  "blocking_reasons": ["Исправьте ошибки в строках или заголовках перед применением."],
+  "warnings": ["Есть неизвестные столбцы, которые не будут применены."],
+  "next_action": "Исправьте файл и создайте новый черновик."
+}
+```
+
+Allowed readiness statuses are `ready`, `ready_with_warnings`, `blocked`, `cancelled`, and `failed`. `can_apply` means only “validation-ready for a future explicit apply endpoint”. PR79 still has no apply or confirmation endpoint, and import drafts still do not write rows into ingredients, clients, recipes, orders, stock, production, alerts, purchases, backups, or exports.
+
+Draft `summary` may also include `readiness`, `issue_counts_by_code`, and `issue_counts_by_severity`. Refined validation issue codes include `header_alias_used`, `decimal_comma_normalized`, `ambiguous_decimal`, `invalid_positive_decimal`, `invalid_non_negative_decimal`, `unit_alias_normalized`, `date_format_normalized`, `invalid_email`, and `invalid_id` in addition to the PR77 codes.
