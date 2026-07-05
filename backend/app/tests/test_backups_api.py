@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 try:
     from fastapi.testclient import TestClient
-except RuntimeError:
+except (RuntimeError, ImportError):
     TestClient = None
 
 from app.db.config import DATABASE_PATH_ENV
