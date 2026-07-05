@@ -22,6 +22,13 @@ New persistent draft-only tables:
 
 The parser supports CSV with UTF-8, UTF-8 BOM, CP1251 fallback, comma/semicolon/tab sniffing, and XLSX first-visible-sheet parsing. Draft rows preserve raw values and normalized values separately and expose structured validation issues.
 
+## PR77 follow-up fixed parser correctness
+
+- CSV and XLSX draft rows now preserve real source row numbers.
+- XLSX cell references are used so blank leading/middle cells do not shift values left.
+- Import source API responses no longer expose `content_hash`; it remains stored internally.
+- Import column names are documented as user-facing aliases for future explicit apply mapping.
+
 ## Safety notes
 
 - Import draft creation writes only import source/draft/draft-row records.

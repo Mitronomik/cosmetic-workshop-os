@@ -78,6 +78,11 @@ Raw values are stored separately from normalized values so the user can review t
 
 Missing required business columns create a draft with validation errors instead of failing the whole upload. This lets the user preview and fix the file later.
 
+
+## Import aliases vs domain fields
+
+Import draft column names are user-facing import aliases. They are not necessarily identical to internal domain/API field names. A later confirmation/apply PR must explicitly map import aliases to domain fields before writing to business tables.
+
 ## Validation issues
 
 Validation issues are structured and visible through the API:

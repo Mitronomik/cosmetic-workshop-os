@@ -454,6 +454,8 @@ Safety guarantees:
 
 PR77 adds backend-only CSV/XLSX import draft endpoints. The import flow is deliberately limited to upload → parse → preview → validation. It does **not** apply rows to ingredients, clients, recipes, lots, orders, stock, production, alerts, purchase suggestions, backups, or exports.
 
+Import draft column names are user-facing aliases for uploaded files. They are not guaranteed to match internal domain/API field names; a later confirmation/apply PR must explicitly map aliases before writing to business tables. Source file hashes remain stored internally and are not exposed in import source responses.
+
 ### `GET /api/imports/targets`
 
 Returns supported import target types and basic required/optional columns.

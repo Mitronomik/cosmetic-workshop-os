@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from collections.abc import Sequence
+from datetime import date
 from hashlib import sha256
 from io import BytesIO, StringIO
 import csv
@@ -122,7 +123,7 @@ def _sniff_dialect(sample: str) -> csv.Dialect:
         return csv.excel
 
 
-def _parse_csv(content: bytes) -> tuple[list[str], list[list[str]], int]:
+def _parse_csv(content: bytes) -> tuple[list[str], list[tuple[int, list[str]]], int]:
     text = _decode_csv(content)
     if not text.strip():
         raise ImportParseError("Файл пустой или не содержит строк с данными.")
@@ -132,7 +133,7 @@ def _parse_csv(content: bytes) -> tuple[list[str], list[list[str]], int]:
     if not non_empty:
         raise ImportParseError("Файл пустой или не содержит строк с данными.")
     header_source_row, headers = non_empty[0]
-    data_rows = [row for _, row in non_empty[1:]]
+    data_rows = [(row_number, row) for row_number, row in non_empty[1:]]
     return headers, data_rows, header_source_row
 
 
@@ -153,7 +154,36 @@ def _xlsx_cell_text(cell: ElementTree.Element, shared_strings: list[str], ns: di
     return value.strip()
 
 
-def _parse_xlsx(content: bytes) -> tuple[list[str], list[list[str]], int]:
+def _xlsx_column_index(cell_reference: str) -> int:
+    letters = ""
+    for character in cell_reference:
+        if character.isalpha():
+            letters += character.upper()
+        else:
+            break
+    if not letters:
+        return 0
+    index = 0
+    for character in letters:
+        index = index * 26 + (ord(character) - ord("A") + 1)
+    return index - 1
+
+
+def _xlsx_row_values(row: ElementTree.Element, shared_strings: list[str], ns: dict[str, str]) -> list[str]:
+    values_by_index: dict[int, str] = {}
+    next_index = 0
+    for cell in row.findall("main:c", ns):
+        reference = cell.attrib.get("r", "")
+        column_index = _xlsx_column_index(reference) if reference else next_index
+        values_by_index[column_index] = _xlsx_cell_text(cell, shared_strings, ns).strip()
+        next_index = max(next_index, column_index + 1)
+    if not values_by_index:
+        return []
+    width = max(values_by_index) + 1
+    return [values_by_index.get(index, "") for index in range(width)]
+
+
+def _parse_xlsx(content: bytes) -> tuple[list[str], list[tuple[int, list[str]]], int]:
     try:
         archive = zipfile.ZipFile(BytesIO(content))
         ns = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main", "rel": "http://schemas.openxmlformats.org/officeDocument/2006/relationships", "pkgrel": "http://schemas.openxmlformats.org/package/2006/relationships"}
@@ -177,24 +207,29 @@ def _parse_xlsx(content: bytes) -> tuple[list[str], list[list[str]], int]:
             raise ImportParseError(ImportParseError.message)
         sheet_path = "xl/" + target.lstrip("/")
         root = ElementTree.fromstring(archive.read(sheet_path))
-        rows: list[list[str]] = []
-        row_numbers: list[int] = []
+        rows: list[tuple[int, list[str]]] = []
+        fallback_row_number = 1
         for row in root.findall(".//main:sheetData/main:row", ns):
-            values = [_xlsx_cell_text(cell, shared_strings, ns) for cell in row.findall("main:c", ns)]
+            try:
+                row_number = int(row.attrib.get("r", fallback_row_number))
+            except ValueError:
+                row_number = fallback_row_number
+            values = _xlsx_row_values(row, shared_strings, ns)
             if any(values):
-                rows.append([value.strip() for value in values])
-                row_numbers.append(int(row.attrib.get("r", len(row_numbers) + 1)))
+                rows.append((row_number, values))
+            fallback_row_number = row_number + 1
         if not rows:
             raise ImportParseError("Файл пустой или не содержит строк с данными.")
-        return rows[0], rows[1:], row_numbers[0]
+        header_row_number, headers = rows[0]
+        return headers, rows[1:], header_row_number
     except ImportParseError:
         raise
     except Exception as exc:
         raise ImportParseError(ImportParseError.message) from exc
 
 
-def _pad_row(row: list[str], width: int) -> list[str]:
-    return (row + [""] * width)[:width]
+def _pad_row(row: Sequence[str], width: int) -> list[str]:
+    return (list(row) + [""] * width)[:width]
 
 
 def parse_import_file(filename: str, content: bytes, target_type: str) -> ParseResult:
@@ -232,30 +267,30 @@ def parse_import_file(filename: str, content: bytes, target_type: str) -> ParseR
             issues.append(_issue("warning", "unknown_column", f"Неизвестный столбец будет показан в черновике: {header}", None, header))
 
     parsed_rows: list[ParsedRow] = []
-    for index, row in enumerate(data_rows, start=header_row_number + 1):
+    for row_number, row in data_rows:
         values = _pad_row(row, len(normalized_headers))
         raw = {headers[i].strip(): values[i] for i in range(len(normalized_headers))}
         normalized = {normalized_headers[i]: values[i] for i in range(len(normalized_headers)) if normalized_headers[i]}
         row_issues: list[ValidationIssue] = []
         for required in target["required_columns"]:
             if required in normalized and not normalized[required].strip():
-                row_issues.append(_issue("error", "missing_required_value", f"В строке {index} не заполнено обязательное поле: {required}", index, required))
+                row_issues.append(_issue("error", "missing_required_value", f"В строке {row_number} не заполнено обязательное поле: {required}", row_number, required))
         for field in DECIMAL_FIELDS & normalized.keys():
             value = normalized[field].strip()
             if value and not re.fullmatch(r"[-+]?\d+(\.\d+)?", value):
-                row_issues.append(_issue("error", "invalid_decimal", f"В строке {index} в поле “{field}” нужно число с точкой в качестве десятичного разделителя.", index, field))
+                row_issues.append(_issue("error", "invalid_decimal", f"В строке {row_number} в поле “{field}” нужно число с точкой в качестве десятичного разделителя.", row_number, field))
         for field in DATE_FIELDS & normalized.keys():
             value = normalized[field].strip()
             if value:
                 try:
                     date.fromisoformat(value)
                 except ValueError:
-                    row_issues.append(_issue("error", "invalid_date", f"В строке {index} в поле “{field}” нужна дата в формате YYYY-MM-DD.", index, field))
+                    row_issues.append(_issue("error", "invalid_date", f"В строке {row_number} в поле “{field}” нужна дата в формате YYYY-MM-DD.", row_number, field))
         for field in UNIT_FIELDS & normalized.keys():
             value = normalized[field].strip().lower()
             if value and value not in VALID_UNITS:
-                row_issues.append(_issue("error", "invalid_unit", f"В строке {index} в поле “{field}” указана неизвестная единица измерения.", index, field))
-        parsed_rows.append(ParsedRow(row_number=index, raw_values=raw, normalized_values=normalized, issues=row_issues))
+                row_issues.append(_issue("error", "invalid_unit", f"В строке {row_number} в поле “{field}” указана неизвестная единица измерения.", row_number, field))
+        parsed_rows.append(ParsedRow(row_number=row_number, raw_values=raw, normalized_values=normalized, issues=row_issues))
     return ParseResult(headers=normalized_headers, rows=parsed_rows, issues=issues)
 
 
@@ -269,6 +304,20 @@ def _json(data: object) -> str:
 
 def _row_to_response(row: sqlite3.Row) -> dict[str, object]:
     return {"id": row["id"], "row_number": row["row_number"], "raw_values": json.loads(row["raw_values_json"]), "normalized_values": json.loads(row["normalized_values_json"]), "issues": json.loads(row["issues_json"]), "status": row["status"], "created_at": row["created_at"]}
+
+
+def _source_to_response(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "id": row["id"],
+        "original_filename": row["original_filename"],
+        "content_type": row["content_type"],
+        "file_extension": row["file_extension"],
+        "file_size_bytes": row["file_size_bytes"],
+        "target_type": row["target_type"],
+        "status": row["status"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
 
 
 def _draft_to_response(row: sqlite3.Row) -> dict[str, object]:
@@ -331,7 +380,7 @@ def get_import_draft(draft_id: int, limit: int = 50, offset: int = 0, config: Da
             return None
         source = connection.execute("SELECT * FROM import_sources WHERE id = ?", (draft["source_id"],)).fetchone()
         rows = connection.execute("SELECT * FROM import_draft_rows WHERE draft_id = ? ORDER BY row_number, id LIMIT ? OFFSET ?", (draft_id, limit, offset)).fetchall()
-    source_response = dict(source)
+    source_response = _source_to_response(source)
     return {"draft": _draft_to_response(draft), "source": source_response, "preview_rows": [_row_to_response(row) for row in rows], "issues": json.loads(draft["summary_json"]).get("global_issues", []), "limit": limit, "offset": offset}
 
 

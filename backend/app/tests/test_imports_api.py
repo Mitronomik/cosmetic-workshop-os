@@ -78,6 +78,7 @@ def test_create_list_detail_and_cancel_import_draft_without_domain_mutation(tmp_
     assert listing["drafts"][0]["id"] == draft["id"]
     detail = client.get(f"/api/imports/drafts/{draft['id']}", params={"limit": 1, "offset": 1}).json()
     assert detail["source"]["original_filename"] == "ingredients.csv"
+    assert "content_hash" not in detail["source"]
     assert detail["limit"] == 1 and detail["offset"] == 1
     assert len(detail["preview_rows"]) == 1
 
@@ -147,6 +148,7 @@ def test_service_create_detail_list_and_cancel_import_draft_without_domain_mutat
     detail = get_import_draft(draft_id, config=config)
     assert detail is not None
     assert detail["source"]["original_filename"] == "ingredients.csv"
+    assert "content_hash" not in detail["source"]
     cancelled = cancel_import_draft(draft_id, config=config)
     assert cancelled is not None
     assert cancelled["draft"]["status"] == "cancelled"

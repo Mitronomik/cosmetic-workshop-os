@@ -447,3 +447,10 @@ Import CSV/XLSX draft backend foundation.
 - Added parser/API tests covering supported formats, validation issues, persistence, cancellation, and safety boundaries.
 - Updated API/import docs and state handoff.
 - No import apply/confirmation, frontend UI, OCR/PDF/image import, automatic backup/export, or domain-table mutations were added.
+
+### PR77 follow-up fixes
+
+- Fixed CSV/XLSX draft row numbering so preview rows and row-level validation issues keep real source row numbers.
+- Fixed XLSX parsing to use cell references and preserve blank/missing cell positions.
+- Removed `content_hash` from user-facing import source API responses while keeping it stored internally.
+- Documented import columns as user-facing aliases that future confirmation/apply must explicitly map to domain fields.

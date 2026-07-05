@@ -52,7 +52,6 @@ class ImportSourceResponse(BaseModel):
     content_type: str
     file_extension: str
     file_size_bytes: int
-    content_hash: str
     target_type: str
     status: str
     created_at: str
