@@ -12,6 +12,7 @@ from app.api.database import router as database_router
 from app.api.exports import router as exports_router
 from app.api.health import router as health_router
 from app.api.ingredients import router as ingredients_router
+from app.api.imports import router as imports_router
 from app.api.ingredient_lots import router as ingredient_lots_router
 from app.api.inventory import router as inventory_router
 from app.api.onboarding import router as onboarding_router
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(alerts_router, prefix="/api")
     app.include_router(backups_router, prefix="/api")
     app.include_router(exports_router, prefix="/api")
+    app.include_router(imports_router, prefix="/api")
     app.include_router(health_router, prefix="/api")
     app.include_router(health_router)
     app.include_router(database_router, prefix="/api")

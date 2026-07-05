@@ -51,7 +51,6 @@ def test_migration_creates_purchase_suggestions_table_indexes_and_guards(tmp_pat
     assert "purchase_suggestions" in names
     assert {"idx_purchase_suggestions_key", "idx_purchase_suggestions_status_reason", "idx_purchase_suggestions_item"} <= indexes(c)
     assert_only_current_tables(names); assert_no_forbidden_future_tables(names)
-    assert "import_sources" not in names
 
 
 def test_repository_list_get_and_not_found(tmp_path):

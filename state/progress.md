@@ -438,3 +438,19 @@ After PR73 — manual backup API foundation complete; preparing Backup UI
 ## Next recommended PR
 
 Import CSV/XLSX draft backend foundation.
+
+## PR77 — Import CSV/XLSX draft backend foundation
+
+- Added import source/draft/draft-row persistence for the safe draft-only import flow.
+- Added backend parsing and validation for CSV/XLSX import drafts with raw and normalized row storage.
+- Added import API endpoints for supported targets, draft creation, draft listing, draft detail, and cancellation.
+- Added parser/API tests covering supported formats, validation issues, persistence, cancellation, and safety boundaries.
+- Updated API/import docs and state handoff.
+- No import apply/confirmation, frontend UI, OCR/PDF/image import, automatic backup/export, or domain-table mutations were added.
+
+### PR77 follow-up fixes
+
+- Fixed CSV/XLSX draft row numbering so preview rows and row-level validation issues keep real source row numbers.
+- Fixed XLSX parsing to use cell references and preserve blank/missing cell positions.
+- Removed `content_hash` from user-facing import source API responses while keeping it stored internally.
+- Documented import columns as user-facing aliases that future confirmation/apply must explicitly map to domain fields.
