@@ -2,41 +2,53 @@
 
 ## Last completed work
 
-PR81 follow-up — Import apply stale-state and structured errors.
+PR82 — Import apply hardening / smoke fixes.
 
-## Current repo state after PR81
+## Current repo state after PR82
 
-Import now has a safe frontend confirmation flow for the PR80 backend apply endpoint:
+Import apply remains a safe, explicit flow for only these targets:
 
-- Draft detail shows a `Применение черновика` section below backend readiness.
-- Supported UI apply targets match PR80 only: `ingredients`, `clients`, `recipe_templates`, `packaging_items`.
-- Unsupported targets such as `ingredient_lots` and `orders` show an unsupported message and no apply button.
-- Blocked, cancelled, failed, and already-applied drafts do not show an apply action.
-- Ready supported drafts can open an in-panel confirmation step.
-- Apply requires explicit confirmation that data will be written and explicit backup acknowledgement.
-- `ready_with_warnings` drafts additionally require warning acknowledgement before the button enables.
-- The frontend calls only `POST /api/imports/drafts/{draft_id}/apply` after those checkboxes are satisfied.
-- Successful apply refreshes the draft list/detail and displays created records returned by backend.
-- Backup/export buttons in the confirmation UI only navigate to `/backups` and `/exports`; they do not create backup/export files automatically.
+- `ingredients`
+- `clients`
+- `recipe_templates`
+- `packaging_items`
+
+Unsupported targets remain blocked with no apply button:
+
+- `ingredient_lots`
+- `orders`
+
+## PR82 changes
+
+- Frontend apply errors now render structured backend `detail.issues` as readable row/field/code conflict details instead of raw JSON.
+- Apply failure copy explicitly reassures: working data was not partially changed.
+- Apply is guarded while a request is in progress to avoid double-click duplicate calls.
+- Applied draft detail/list continues to show `Черновик уже применён` and stored `summary.apply_result` after reload when available.
+- Backend tests cover duplicate conflicts, already-applied rejection, unsupported lots/orders, warning acknowledgement, failed apply keeping draft/source unapplied, no side-effect backup/export/alert/purchase records, and applied readiness/result in list/detail.
+- Docs were updated for the current apply behavior and PR82 hardening notes.
 
 ## Safety notes
 
-- No apply call runs on page load or draft open.
-- No frontend CSV/XLSX parsing, mapping editor, cell editing, partial import, OCR/PDF/image import, or backend target expansion was added.
-- No frontend direct mutation of ingredients, clients, recipes, packaging, orders, stock, production, alerts, purchase suggestions, backups, or exports was added.
-- No stock movements, ingredient lots, orders, production records, alerts, purchase suggestions, backups, or exports are created automatically by the UI.
+- No new import apply targets were added.
+- Ingredient lots and orders remain unsupported.
+- No stock movements, production records, alerts, purchase suggestions, backups, or exports are created automatically by import apply.
+- Existing records are not silently updated.
+- Failed apply remains all-or-nothing: zero partial rows are committed and draft/source stay unapplied.
+- Frontend still mutates domain data only through `POST /api/imports/drafts/{draft_id}/apply`.
 
 ## Manual smoke
 
-Manual browser smoke was not run in this non-interactive session because no long-running backend/frontend browser session was started. Recommended PR82 smoke: create valid and warning ingredients drafts, verify checkbox gating, apply once, verify created records and applied status, retry cannot apply, verify blocked drafts and unsupported `ingredient_lots`/`orders` show no apply button, and verify backup/export buttons only navigate.
+Manual browser smoke was not run in this non-interactive session because no long-running backend/frontend browser session was started and no browser was available. Automated backend/API/frontend build checks were run instead. Recommended manual smoke remains:
+
+1. Create a valid ingredients CSV draft, apply it, verify records appear in Components, and verify no second apply button.
+2. Upload the same CSV again, verify duplicate conflict details and zero partial inserts.
+3. Create a warning draft, verify warning acknowledgement is required before apply.
+4. Create a blocked draft, verify no apply button.
+5. Create `ingredient_lots` and `orders` drafts, verify unsupported copy and no apply button.
+6. Verify `/backups`, `/exports`, and `/dashboard` load and no backup/export files are created automatically.
 
 ## Next recommended PR
 
-PR82 — Import apply hardening and smoke fixes.
+O3 — Guided setup checklist.
 
-## PR81 follow-up notes
-
-- New draft creation now resets apply status, messages, confirmation checkboxes, confirmation panel visibility, and last apply result before upload and after backend draft creation.
-- Frontend API errors now retain structured backend `detail.issues`; import apply errors include row-level issue messages when backend provides them.
-- Apply supported targets and semantics remain unchanged; no backend endpoints, migrations, parser logic, automatic backup/export, partial import, rollback/revert, lots/orders/stock/production apply, or direct frontend business-data mutation was added.
-- Manual browser smoke was not run in this non-interactive session. Recommended smoke remains: apply draft A, create draft B, verify stale result is gone, and verify duplicate/conflict issues show row-level messages.
+If browser smoke finds remaining import issues, do PR83 — Import apply follow-up fixes before moving on.

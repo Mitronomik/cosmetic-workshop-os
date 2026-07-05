@@ -496,3 +496,10 @@ Import CSV/XLSX draft backend foundation.
 - Reset import apply state before upload and after new draft creation so stale success/errors/results from a previous draft cannot appear on the newly selected draft.
 - Preserved structured backend `detail.issues` on frontend API errors and surfaced issue messages in import apply conflict/error copy.
 - Improved import draft cancel rejection copy to show backend-provided messages while keeping apply gating and supported targets unchanged.
+
+## PR82 — Import apply hardening / smoke fixes
+- Hardened import apply after PR80/PR81 without expanding supported targets: `ingredients`, `clients`, `recipe_templates`, and `packaging_items` remain the only apply-supported targets.
+- Improved frontend apply failure display so structured backend conflict issues show row, field, code, and user-readable message, plus reassurance that working data was not partially changed.
+- Added a double-submit guard while apply is in progress and preserved applied-draft result display after refresh through stored `summary.apply_result`.
+- Expanded backend regression coverage for already-applied draft rejection, unsupported orders/lots, duplicate conflicts, warning acknowledgement, unapplied draft/source after failure, no side-effect backup/export/alert/purchase records, and applied detail/list readiness.
+- Updated import API/format docs and state handoff. No migrations, new apply targets, automatic backup/export, stock movements, lots, orders, production records, alerts, or purchase suggestions were added.
