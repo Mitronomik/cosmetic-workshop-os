@@ -410,3 +410,11 @@ After PR73 — manual backup API foundation complete; preparing Backup UI
 - Added Russian-friendly display formatting for user-facing quantities in Orders, production readiness, production snapshots/history, purchase snippets, and dashboard snippets so raw backend decimals like `100.000 г` render as `100 г`.
 - Kept backend Decimal/API payload contracts unchanged by continuing to submit dot-normalized decimal strings and adding no backend endpoints, migrations, or business-logic changes.
 - No stock/order/production side effects were added beyond existing explicit order create/edit/cancel/archive actions.
+
+## PR74 — Backup UI
+- Added a frontend `Резервные копии` workspace at `/backups` that consumes PR73 backup status/list/manual-create endpoints only.
+- Added navigation and dashboard reminder link to the backup workspace.
+- Added status cards for database path/existence/size, backup directory path/existence, backup count, and latest backup.
+- Added explicit manual backup creation with reason presets/custom reason and a refreshed backup history list after success.
+- Missing backup directory is shown as a normal empty/local-first state; missing database disables backup creation with a clear next step.
+- Restore, download, delete, scheduled backups, cloud backup, export, import, arbitrary paths, polling, notifications, backend changes, migrations, and business mutations were not added.
