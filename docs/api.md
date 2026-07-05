@@ -364,3 +364,84 @@ Success response:
 ```
 
 If the database file is missing, the endpoint returns `404` with a human-readable Russian message. If the configured database path exists but is not a file, it returns `409`.
+
+## Export API (PR75)
+
+Local JSON exports are explicit data snapshots for inspection, transfer preparation, and pre-import safety checks. Export is intentionally separate from backup, import, restore, reporting, and analytics.
+
+### `GET /api/exports/status`
+
+Read-only status endpoint. It reports the current configured SQLite database path, whether that database file exists, the selected local export directory, whether the directory exists, export count, and latest export metadata.
+
+Safety guarantees:
+
+- does not create a database file;
+- does not create the `exports/` directory;
+- does not create export files, backups, migrations, imports, restores, alerts, purchase suggestions, orders, production batches, or stock movements;
+- does not mutate business data.
+
+### `GET /api/exports`
+
+Read-only export listing endpoint. It returns JSON export file metadata from the selected local `exports/` directory, newest first.
+
+If the export directory does not exist, the response is an empty list and the resolved directory path:
+
+```json
+{
+  "exports": [],
+  "export_dir": "/path/to/exports"
+}
+```
+
+Safety guarantees:
+
+- does not create missing directories;
+- lists only local JSON export metadata;
+- does not expose export file contents;
+- does not download, rename, delete, import, restore, or mutate data.
+
+### `POST /api/exports`
+
+Explicitly creates a local JSON export snapshot for the currently configured SQLite database.
+
+Request body:
+
+```json
+{
+  "reason": "manual"
+}
+```
+
+`reason` is optional, trimmed, defaults to `manual` when empty, and is limited to 80 characters. It is stored in the export manifest and sanitized only for the filename segment.
+
+Successful response shape:
+
+```json
+{
+  "export": {
+    "filename": "20260705T120000000000Z-cosmetic_workshop-export-manual.json",
+    "path": "/path/to/exports/20260705T120000000000Z-cosmetic_workshop-export-manual.json",
+    "created_at": "2026-07-05T12:00:00Z",
+    "reason": "manual",
+    "size_bytes": 120000
+  },
+  "database_path": "/path/to/cosmetic_workshop.sqlite",
+  "export_dir": "/path/to/exports",
+  "entity_counts": {
+    "ingredients": 12,
+    "clients": 4
+  },
+  "message": "Экспорт создан."
+}
+```
+
+Safety guarantees:
+
+- creates only the selected local `exports/` directory when needed;
+- writes only a new `.json` export snapshot;
+- never overwrites an existing export file;
+- does not accept arbitrary source or destination paths;
+- does not create backups;
+- does not run migrations;
+- does not implement import, restore, download, delete, CSV/XLSX, PDF, cloud export, scheduled export, or UI behavior;
+- does not mutate recipes, clients, orders, stock, lots, packaging, production, alerts, purchase suggestions, settings, or audit records.

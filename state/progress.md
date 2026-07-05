@@ -418,3 +418,15 @@ After PR73 — manual backup API foundation complete; preparing Backup UI
 - Added explicit manual backup creation with reason presets/custom reason and a refreshed backup history list after success.
 - Missing backup directory is shown as a normal empty/local-first state; missing database disables backup creation with a clear next step.
 - Restore, download, delete, scheduled backups, cloud backup, export, import, arbitrary paths, polling, notifications, backend changes, migrations, and business mutations were not added.
+
+## PR75 — Export API foundation
+
+- Added backend Export API foundation for explicit local JSON snapshots: `GET /api/exports/status`, `GET /api/exports`, and `POST /api/exports`.
+- Added safe export path resolution mirroring backup behavior: user-mode exports use the resolved user `exports/` directory; development/test exports stay next to the configured database.
+- Added JSON export creation with `manifest`, whitelisted domain `data`, entity counts, preserved IDs/relationships, non-overwriting filenames, and reason normalization/safe filename sanitization.
+- Added export listing/status response schemas and tests for read-only GET behavior, missing directories, JSON creation, uniqueness, missing/invalid database handling, reason validation, and malformed filenames.
+- Updated API/export documentation.
+
+## Next recommended PR
+
+PR76 — Export UI.
