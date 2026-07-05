@@ -1,11 +1,7 @@
-# Current Focus
+# Current focus
 
-PR76 — Export UI is complete in this branch.
+PR77 — Import CSV/XLSX draft backend foundation — is implemented in this working tree.
 
-Next recommended scoped PR: Import CSV/XLSX draft backend foundation.
+Next recommended PR: **PR78 — Import draft UI / preview UI**.
 
-Keep scope narrow:
-- build import drafts through safe preview/confirmation architecture;
-- do not implement restore from export;
-- do not add export download/delete/CSV/XLSX/PDF/cloud/scheduled behavior unless explicitly requested;
-- preserve local-first API-first boundaries and avoid direct frontend data-table inspection.
+Keep PR78 scoped to frontend/API consumption for existing draft endpoints unless explicitly asked to refine backend validation first. Do not add import confirmation/apply until a later scoped PR.

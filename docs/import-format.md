@@ -1,224 +1,127 @@
-# Import Format
+# Import format — CSV/XLSX drafts
 
-Document: `docs/import-format.md`  
-Project: `cosmetic-workshop-os`  
-Human-facing name: `Мастерская косметолога`  
-Status: draft contract for future PR21/PR22 import work
+PR77 implements the backend foundation for safe import drafts in **Мастерская косметолога**.
 
----
+## Safety flow
 
-## 1. Purpose
-
-This document defines the expected CSV/XLSX import contract for MVP import work.
-
-Imports are not implemented yet. This file exists so future implementation PRs have a single place for file-format rules and do not put import behavior only in prompts.
-
-Use together with:
-
-- `AGENTS.md`
-- `docs/product-spec.md`
-- `docs/architecture.md`
-- `docs/domain-model.md`
-- `docs/roadmap.md`
-- `docs/pr-testing-and-smoke-rules.md`
-
----
-
-## 2. Hard rules
-
-- MVP import formats: CSV and Excel/XLSX.
-- Never write parsed rows directly into production tables.
-- Every import must create an `ImportSource` and `ImportDraft` first.
-- User must preview, validate, map columns when needed, and explicitly confirm before apply.
-- Import apply must be transactional.
-- Import apply must create an `AuditLog` entry.
-- OCR/PDF/image imports are future scope only and must also produce drafts requiring manual confirmation.
-
----
-
-## 3. MVP importable entities
-
-Future import implementation should support drafts for:
-
-- clients;
-- ingredients;
-- ingredient lots;
-- packaging items;
-- stock balances or stock movements;
-- recipe templates when source data is structured enough.
-
-Unsupported or ambiguous rows must remain in draft/error state until the user fixes or excludes them.
-
----
-
-## 4. General CSV/XLSX expectations
-
-- First row should usually contain column headers.
-- UTF-8 CSV is preferred.
-- Semicolon and comma delimiters may be accepted if implementation supports auto-detection.
-- Decimal numbers may use `.` or `,` if normalized safely.
-- Dates should be accepted only in documented formats.
-- Empty optional fields are allowed.
-- Empty required fields must produce row-level validation errors.
-
-Recommended date formats:
+All imports must go through this flow:
 
 ```text
-YYYY-MM-DD
-DD.MM.YYYY
+upload → parse → draft → preview → validation → future confirmation → future apply
 ```
 
----
+PR77 implements only upload, parsing, persistent drafts, preview rows, validation issues, listing, detail, and cancellation. There is no confirmation/apply endpoint yet, and import rows are not written to real business tables.
 
-## 5. Validation error format
+## Supported files
 
-Human-readable import errors must identify:
+Supported in PR77:
 
-- row number;
-- column name;
-- problematic value;
-- expected format;
-- suggested fix.
+- `.csv`
+- `.xlsx`
+
+Not supported in PR77:
+
+- PDF;
+- images (`.png`, `.jpg`, `.jpeg`, `.heic`);
+- `.docx`;
+- `.txt`;
+- OCR or AI extraction.
+
+## Limits
+
+- Maximum file size: 5 MB.
+- Maximum data rows: 5000.
+- Maximum columns: 100.
+- XLSX parsing reads the first visible worksheet only.
+
+## CSV rules
+
+- UTF-8 and UTF-8 BOM are supported.
+- CP1251 fallback is supported for legacy Russian CSV files.
+- Comma, semicolon, and tab delimiters are detected by safe sniffing.
+- The first non-empty row is the header row.
+- Headers and string values are trimmed.
+- Empty files and files without headers are rejected.
+- Duplicate headers are reported after normalization.
+- Decimal semantics are not silently changed; decimal values must use a dot when validated as decimals.
+
+## XLSX rules
+
+- XLSX parsing is implemented in the backend without OCR.
+- The first visible worksheet is parsed.
+- Formula evaluation is not performed by the import service.
+- Charts, images, and workbook styling are ignored.
+- The first non-empty row is the header row.
+
+## Header normalization
+
+Headers are normalized for validation by trimming, lowercasing, and replacing whitespace with `_`.
 
 Example:
 
 ```text
-В строке 7 в поле “Остаток” указано “много”. Нужно число, например 30 или 30,5.
+Full Name → full_name
 ```
 
-Do not show raw parser stack traces or database errors to the user.
+Raw values are stored separately from normalized values so the user can review the original file content in the future UI.
 
----
+## Supported target types
 
-## 6. Entity column drafts
+| Target type | Label | Required columns | Optional columns |
+| --- | --- | --- | --- |
+| `ingredients` | Компоненты | `name` | `inci_name`, `unit`, `density`, `notes` |
+| `packaging_items` | Тара | `name` | `category`, `unit`, `cost`, `stock`, `minimum_stock` |
+| `clients` | Клиенты | `full_name` | `phone`, `email`, `address`, `notes` |
+| `recipe_templates` | Рецепты | `name` | `product_type`, `notes` |
+| `ingredient_lots` | Партии компонентов | `ingredient_name`, `quantity`, `unit` | `ingredient_id`, `unit_cost`, `purchase_date`, `expiration_date`, `supplier`, `lot_number` |
+| `orders` | Заказы | `client_name`, `product_name`, `target_batch_size_value`, `target_batch_size_unit` | `client_id`, `sale_price`, `due_date`, `notes` |
 
-These are draft column contracts. Future PR21/PR22 may refine them while preserving the safe import flow.
+Missing required business columns create a draft with validation errors instead of failing the whole upload. This lets the user preview and fix the file later.
 
-### 6.1. Clients
+## Validation issues
 
-Required:
+Validation issues are structured and visible through the API:
 
-- `name`
+```json
+{
+  "severity": "error",
+  "code": "missing_required_column",
+  "message": "Не найден обязательный столбец: name",
+  "row_number": null,
+  "field": "name"
+}
+```
 
-Optional:
+Supported severities:
 
-- `phone`
-- `email`
-- `address`
-- `notes`
-- `allergies`
-- `preferences`
-- `status`
+- `info`
+- `warning`
+- `error`
 
-Privacy rule: sensitive notes may be imported only if the user explicitly imports clients. Do not log full notes verbatim.
+Examples of issue codes:
 
-### 6.2. Ingredients
+- `empty_file`
+- `unsupported_file_type`
+- `file_too_large`
+- `too_many_rows`
+- `too_many_columns`
+- `missing_header`
+- `duplicate_header`
+- `missing_required_column`
+- `missing_required_value`
+- `unknown_column`
+- `invalid_decimal`
+- `invalid_date`
+- `invalid_unit`
 
-Required:
+## What PR77 does not do
 
-- `name`
-- `base_unit`
+PR77 does not:
 
-Optional:
-
-- `inci`
-- `category`
-- `technological_role`
-- `density`
-- `default_purchase_price`
-- `minimum_stock_threshold`
-- `expiration_alert_threshold_days`
-- `supplier`
-- `status`
-
-Density must be numeric if provided.
-
-### 6.3. Ingredient lots
-
-Required:
-
-- `ingredient_name`
-- `purchased_quantity`
-- `remaining_quantity`
-- `unit`
-- `purchase_date`
-
-Optional:
-
-- `unit_cost`
-- `total_cost`
-- `expiration_date`
-- `supplier`
-- `lot_number`
-- `status`
-
-Validation rules:
-
-- quantities must be non-negative;
-- `remaining_quantity` must not exceed `purchased_quantity`;
-- referenced ingredient must be matched or created only through confirmed import behavior.
-
-### 6.4. Packaging items
-
-Required:
-
-- `name`
-- `unit`
-
-Optional:
-
-- `category`
-- `volume_capacity`
-- `cost`
-- `stock`
-- `minimum_stock`
-- `status`
-
-### 6.5. Stock balances / movements
-
-Required:
-
-- `item_type`
-- `item_name`
-- `quantity`
-- `unit`
-- `reason`
-
-Optional:
-
-- `lot_number`
-- `movement_type`
-- `source`
-- `occurred_at`
-
-Stock import must still result in explicit `StockMovement` records after confirmation.
-
-### 6.6. Recipe templates
-
-Required if imported:
-
-- `template_name`
-
-Optional:
-
-- `status`
-- `version_number`
-- `ingredient_name`
-- `phase`
-- `percentage`
-- `comment`
-
-Recipe import should validate total percentage and show warnings for totals below or above 100%. It must not silently normalize percentages.
-
----
-
-## 7. Follow-up for implementation PRs
-
-When PR21/PR22 implement imports, update this document with:
-
-- exact accepted headers;
-- sample CSV snippets;
-- duplicate matching rules;
-- supported date/number normalization;
-- entity-specific preview behavior;
-- apply/rollback guarantees.
+- apply import rows;
+- create ingredients, clients, recipes, lots, orders, stock movements, production records, alerts, purchase suggestions, backups, or exports;
+- add frontend UI;
+- add import confirmation;
+- add restore;
+- add OCR/PDF/image import;
+- use cloud services.

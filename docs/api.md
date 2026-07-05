@@ -449,3 +449,87 @@ Safety guarantees:
 - does not run migrations;
 - does not implement import, restore, download, delete, CSV/XLSX, PDF, cloud export, scheduled export, or UI behavior;
 - does not mutate recipes, clients, orders, stock, lots, packaging, production, alerts, purchase suggestions, settings, or audit records.
+
+## Import drafts API (PR77)
+
+PR77 adds backend-only CSV/XLSX import draft endpoints. The import flow is deliberately limited to upload → parse → preview → validation. It does **not** apply rows to ingredients, clients, recipes, lots, orders, stock, production, alerts, purchase suggestions, backups, or exports.
+
+### `GET /api/imports/targets`
+
+Returns supported import target types and basic required/optional columns.
+
+```json
+{
+  "targets": [
+    {
+      "type": "ingredients",
+      "label": "Компоненты",
+      "required_columns": ["name"],
+      "optional_columns": ["inci_name", "unit", "density", "notes"]
+    }
+  ]
+}
+```
+
+### `POST /api/imports/drafts`
+
+Creates a persistent import draft from a multipart CSV/XLSX upload.
+
+Request: `multipart/form-data`
+
+- `file`: `.csv` or `.xlsx` file;
+- `target_type`: one of `ingredients`, `packaging_items`, `clients`, `recipe_templates`, `ingredient_lots`, `orders`.
+
+Successful response includes the draft summary, first preview rows, validation issues, and the required safety message:
+
+```json
+{
+  "draft": {
+    "id": 1,
+    "source_id": 1,
+    "target_type": "ingredients",
+    "status": "draft",
+    "row_count": 2,
+    "valid_row_count": 2,
+    "invalid_row_count": 0,
+    "warning_count": 0,
+    "error_count": 0,
+    "headers": ["name", "unit"],
+    "summary": {"message": "Данные ещё не внесены в систему."},
+    "created_at": "2026-07-05 12:00:00",
+    "updated_at": "2026-07-05 12:00:00"
+  },
+  "preview_rows": [],
+  "issues": [],
+  "message": "Черновик импорта создан. Данные ещё не внесены в систему."
+}
+```
+
+Unsupported file types return `415` with `Поддерживаются только CSV и XLSX файлы.`. Oversized files return `413` with `Файл слишком большой для черновика импорта.`. Unreadable or empty files return a safe user-readable `400` error.
+
+### `GET /api/imports/drafts`
+
+Lists draft summaries only. Query parameters:
+
+- `status` — optional draft status filter;
+- `target_type` — optional target type filter;
+- `limit` — default `50`, maximum `100`;
+- `offset` — default `0`.
+
+### `GET /api/imports/drafts/{draft_id}`
+
+Returns draft details with source metadata, headers, paginated preview rows, and validation issues. Query parameters:
+
+- `limit` — default `50`, maximum `100`;
+- `offset` — default `0`.
+
+### `POST /api/imports/drafts/{draft_id}/cancel`
+
+Marks a draft and its source as cancelled. This safe mutation changes only import draft records and returns:
+
+```json
+{
+  "draft": {},
+  "message": "Черновик импорта отменён. Рабочие данные не изменены."
+}
+```

@@ -54,7 +54,6 @@ def test_migration_creates_clients_and_no_forbidden_tables(tmp_path):
     assert_no_forbidden_future_tables(tables)
     assert "clients" in CURRENT_ALLOWED_TABLES
     assert "clients" not in FORBIDDEN_FUTURE_TABLES
-    assert {"orders", "production_batches", "import_sources", "import_drafts"}.isdisjoint(tables)
     assert {"client_recipes", "client_recipe_ingredients"} <= tables
 
 

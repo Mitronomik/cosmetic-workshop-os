@@ -26,13 +26,14 @@ CURRENT_ALLOWED_TABLES = {
     "production_batch_packaging",
     "alerts",
     "purchase_suggestions",
+    "import_sources",
+    "import_drafts",
+    "import_draft_rows",
     "sqlite_sequence",
 }
 
 FORBIDDEN_FUTURE_TABLES = {
     "recipes",
-    "import_sources",
-    "import_drafts",
     "backup_records",
 }
 

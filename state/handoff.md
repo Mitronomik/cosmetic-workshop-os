@@ -2,41 +2,42 @@
 
 ## Last completed work
 
-PR76 — Export UI — has been implemented.
+PR77 — Import CSV/XLSX draft backend foundation — has been implemented.
 
-## Current repo state after PR76
+## Current repo state after PR77
 
-The frontend now has a real `/exports` workspace reachable from the “Экспорт” navigation item under “Данные и настройки”. The page consumes only the PR75 Export API:
+Backend now supports safe import drafts for CSV/XLSX files through:
 
-- `GET /api/exports/status` for database/export directory status;
-- `GET /api/exports` for read-only local JSON export history;
-- `POST /api/exports` only after the user explicitly clicks/submits “Создать экспорт”.
+- `GET /api/imports/targets`;
+- `POST /api/imports/drafts`;
+- `GET /api/imports/drafts`;
+- `GET /api/imports/drafts/{draft_id}`;
+- `POST /api/imports/drafts/{draft_id}/cancel`.
 
-The UI includes:
+New persistent draft-only tables:
 
-- local-first intro and safety copy explaining JSON export snapshots;
-- status cards for database existence/path/size, export directory, export count, and latest export;
-- manual export creation with reason presets and a max-80-character custom reason;
-- success/error messaging and created filename display;
-- backend-provided entity count summary after successful export creation;
-- export history list showing filename, date, size, reason, and local path;
-- explicit “Пока не реализовано” card for import, restore, download, CSV/XLSX, PDF reports, scheduled export, and cloud export.
+- `import_sources`;
+- `import_drafts`;
+- `import_draft_rows`.
+
+The parser supports CSV with UTF-8, UTF-8 BOM, CP1251 fallback, comma/semicolon/tab sniffing, and XLSX first-visible-sheet parsing. Draft rows preserve raw values and normalized values separately and expose structured validation issues.
 
 ## Safety notes
 
-- Page load and explicit reload call only GET export endpoints.
-- No export is created automatically on page load or reload.
-- No import, restore, download, delete, rename, verification, CSV/XLSX, PDF/report, scheduled export, cloud export, polling, notifications, dashboard analytics, or arbitrary path input was added.
-- No backend endpoints, migrations, or business-entity mutations were added.
-- The frontend does not inspect JSON export files or infer entity counts; it displays backend response data only.
+- Import draft creation writes only import source/draft/draft-row records.
+- No ingredients, clients, recipes, orders, stock, production, alerts, purchase suggestions, backups, or exports are mutated.
+- No import confirmation/apply endpoint was added.
+- No frontend UI was added.
+- No OCR/PDF/image import was added.
+- No backup/export is created automatically.
 
 ## Commands to rerun during handoff
 
 - `git status --short`
 - `git branch --show-current`
-- `npm --prefix frontend run build`
-- `git diff --check`
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')`
+- `python3 -m pytest backend/app/tests/test_import_parsing.py -q`
+- `python3 -m pytest backend/app/tests/test_imports_api.py -q`
 - `python3 -m pytest backend/app/tests/test_exports_api.py -q`
 - `python3 -m pytest backend/app/tests/test_backups_api.py -q`
 - `python3 -m pytest backend/app/tests/test_orders.py -q`
@@ -44,19 +45,28 @@ The UI includes:
 - `python3 -m pytest backend/app/tests/test_production_confirmation.py -q`
 - `python3 -m pytest backend/app/tests/test_purchase_suggestions.py -q`
 - `python3 -m pytest backend/app/tests/test_alerts.py -q`
+- `npm --prefix frontend run build`
+- `git diff --check`
 
 ## Manual smoke
 
-Manual browser smoke was not run in this non-interactive session because starting and exercising long-running backend/frontend servers through a browser is not practical here. Recommended PR76 smoke:
+Manual API smoke was not run through a long-running local server in this non-interactive session. The API behavior is covered by TestClient tests for target listing, draft creation, persistence, detail pagination, cancellation, safe errors, and no domain-table mutation.
 
-1. Start backend and frontend.
-2. Open `/exports`.
-3. Confirm status/list load and no export is created automatically.
-4. Create exports with `manual` and custom reasons.
-5. Confirm success message, entity counts, and history reload.
-6. Confirm there are no import/restore/download/delete buttons.
-7. Confirm Backup page and Dashboard still open.
+Recommended PR77 smoke:
+
+1. Start backend.
+2. Call `GET /api/imports/targets`.
+3. Upload a valid CSV via `POST /api/imports/drafts`.
+4. Confirm response says the draft was created and data was not applied.
+5. Open the draft via `GET /api/imports/drafts/{draft_id}`.
+6. Confirm preview rows and issues are visible.
+7. Upload a CSV with missing required columns.
+8. Confirm a draft is created with validation errors.
+9. Upload an unsupported file type.
+10. Confirm safe error copy.
+11. Cancel the draft.
+12. Confirm draft status changed to `cancelled` and business tables were not changed.
 
 ## Next recommended PR
 
-Import CSV/XLSX draft backend foundation.
+PR78 — Import draft UI / preview UI.
