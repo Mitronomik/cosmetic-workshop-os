@@ -9,6 +9,7 @@ from app.api.client_recipes import router as client_recipes_router
 from app.api.client_wishes_feedback import router as client_wishes_feedback_router
 from app.api.clients import router as clients_router
 from app.api.database import router as database_router
+from app.api.exports import router as exports_router
 from app.api.health import router as health_router
 from app.api.ingredients import router as ingredients_router
 from app.api.ingredient_lots import router as ingredient_lots_router
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(alerts_router, prefix="/api")
     app.include_router(backups_router, prefix="/api")
+    app.include_router(exports_router, prefix="/api")
     app.include_router(health_router, prefix="/api")
     app.include_router(health_router)
     app.include_router(database_router, prefix="/api")

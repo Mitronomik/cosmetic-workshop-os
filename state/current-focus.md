@@ -1,16 +1,16 @@
-# Current focus
+# Current Focus
 
-PR74 — Backup UI is implemented.
+## Last completed
 
-## Completed in PR74
-- Added frontend `/backups` workspace and navigation item «Резервные копии».
-- Consumes only PR73 backup API endpoints: `GET /api/backups/status`, `GET /api/backups`, and explicit-click `POST /api/backups`.
-- Shows database location/existence/size, backup folder location/existence, backup count, latest backup, and backup history.
-- Supports manual backup creation with reason presets and a max-80-character custom reason.
-- Updated dashboard backup reminder so it navigates to the backup workspace instead of promising a future backup/export screen.
+PR75 — Export API foundation — is implemented.
 
-## Out of scope / not added
-- No restore, download, delete, scheduled backups, cloud backup, export, import, arbitrary path input, polling, notifications, automatic backups, backend endpoints, migrations, or business mutations were added.
+## Next allowed task
 
-## Next recommended PR
-- Export foundation or Import/Export preparation, depending on the next roadmap slice.
+PR76 — Export UI.
+
+Scope for PR76 should remain frontend-only unless the prompt explicitly says otherwise:
+
+- consume existing `GET /api/exports/status`, `GET /api/exports`, and explicit-click `POST /api/exports`;
+- show export status, local export directory, export history, and creation result in human-readable Russian UI;
+- do not create exports on page load;
+- do not add import, restore, CSV/XLSX/PDF export, download/delete endpoints, scheduled/cloud exports, migrations, arbitrary filesystem paths, or business-data mutations.
