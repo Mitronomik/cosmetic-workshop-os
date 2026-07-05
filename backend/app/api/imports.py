@@ -4,6 +4,8 @@ from email.policy import default
 from fastapi import APIRouter, HTTPException, Query, Request, status
 
 from app.schemas.imports import (
+    ImportDraftApplyRequest,
+    ImportDraftApplyResponse,
     ImportDraftCancelResponse,
     ImportDraftCreateResponse,
     ImportDraftDetailResponse,
@@ -12,10 +14,12 @@ from app.schemas.imports import (
 )
 from app.services.imports import (
     ImportFileTooLargeError,
+    ImportApplyConflictError,
     ImportParseError,
     ImportServiceError,
     UnsupportedImportFileError,
     UploadedFileData,
+    apply_import_draft,
     create_import_draft,
     cancel_import_draft,
     get_import_draft,
@@ -94,3 +98,23 @@ def post_import_draft_cancel(draft_id: int) -> ImportDraftCancelResponse:
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Черновик импорта не найден.")
     return ImportDraftCancelResponse(**result)
+
+
+@router.post("/drafts/{draft_id}/apply", response_model=ImportDraftApplyResponse)
+def post_import_draft_apply(draft_id: int, request: ImportDraftApplyRequest) -> ImportDraftApplyResponse:
+    try:
+        result = apply_import_draft(
+            draft_id,
+            confirm_apply=request.confirm_apply,
+            backup_acknowledged=request.backup_acknowledged,
+            allow_warnings=request.allow_warnings,
+        )
+    except ImportApplyConflictError as exc:
+        code = status.HTTP_400_BAD_REQUEST
+        issue_codes = {str(issue.get("code")) for issue in exc.issues}
+        if issue_codes - {"apply_confirmation_required", "backup_acknowledgement_required"}:
+            code = status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail=exc.detail) from exc
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Черновик импорта не найден.")
+    return ImportDraftApplyResponse(**result)

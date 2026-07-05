@@ -96,3 +96,31 @@ class ImportDraftDetailResponse(BaseModel):
 class ImportDraftCancelResponse(BaseModel):
     draft: ImportDraftSummaryResponse
     message: str
+
+class ImportDraftApplyRequest(BaseModel):
+    confirm_apply: bool
+    backup_acknowledged: bool
+    allow_warnings: bool = False
+
+
+class ImportApplyCreatedRecordResponse(BaseModel):
+    target_type: str
+    row_number: int
+    record_id: int
+    label: str
+
+
+class ImportDraftApplyResultResponse(BaseModel):
+    draft_id: int
+    target_type: str
+    applied_at: str
+    applied_row_count: int
+    created_count: int
+    created_records: list[ImportApplyCreatedRecordResponse]
+    warnings: list[str]
+
+
+class ImportDraftApplyResponse(BaseModel):
+    draft: ImportDraftSummaryResponse
+    apply_result: ImportDraftApplyResultResponse
+    message: str

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from io import BytesIO, StringIO
@@ -16,6 +16,15 @@ from xml.etree import ElementTree
 
 from app.db.config import DatabaseConfig
 from app.db.connection import session
+from app.domain.clients import ClientDraft
+from app.domain.ingredients import IngredientDraft
+from app.domain.packaging_items import PackagingItemDraft
+from app.domain.recipes import RecipeTemplateDraft
+from app.repositories.audit import AuditLogRepository
+from app.repositories.clients import ClientRepository
+from app.repositories.ingredients import IngredientRepository
+from app.repositories.packaging_items import PackagingItemRepository
+from app.repositories.recipes import RecipeRepository
 
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 5000
@@ -25,7 +34,7 @@ SUPPORTED_EXTENSIONS = {"csv", "xlsx"}
 
 TARGETS = {
     "ingredients": {"label": "Компоненты", "required_columns": ["name"], "optional_columns": ["inci_name", "unit", "density", "notes"]},
-    "packaging_items": {"label": "Тара", "required_columns": ["name"], "optional_columns": ["category", "unit", "cost", "stock", "minimum_stock"]},
+    "packaging_items": {"label": "Тара", "required_columns": ["name"], "optional_columns": ["category", "unit", "cost", "stock", "minimum_stock", "notes"]},
     "clients": {"label": "Клиенты", "required_columns": ["full_name"], "optional_columns": ["phone", "email", "address", "notes"]},
     "recipe_templates": {"label": "Рецепты", "required_columns": ["name"], "optional_columns": ["product_type", "notes"]},
     "ingredient_lots": {"label": "Партии компонентов", "required_columns": ["ingredient_name", "quantity", "unit"], "optional_columns": ["ingredient_id", "unit_cost", "purchase_date", "expiration_date", "supplier", "lot_number"]},
@@ -107,6 +116,19 @@ class ImportParseError(ImportServiceError):
     message = "Не удалось прочитать файл. Проверьте формат CSV/XLSX и попробуйте снова."
 
 
+class ImportApplyConflictError(ImportServiceError):
+    status_code = 409
+
+    def __init__(self, message: str = "Черновик нельзя применить.", issues: list[dict[str, object]] | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        self.issues = issues or []
+
+    @property
+    def detail(self) -> dict[str, object]:
+        return {"message": self.message, "issues": self.issues}
+
+
 def normalize_header(value: str) -> str:
     normalized = re.sub(r"\s+", "_", value.strip().lower())
     return normalized
@@ -156,6 +178,8 @@ def _normalize_date_value(value: str, row_number: int, field: str) -> tuple[str,
 
 
 def _readiness(status: str, row_count: int, valid_count: int, invalid_count: int, issues: list[dict[str, object]], warning_count: int, error_count: int) -> dict[str, object]:
+    if status == "applied":
+        return {"can_apply": False, "status": "applied", "blocking_error_count": error_count, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": ["Черновик уже применён."], "warnings": [], "next_action": "Данные уже внесены в систему. Повторное применение недоступно."}
     if status == "cancelled":
         return {"can_apply": False, "status": "cancelled", "blocking_error_count": error_count, "warning_count": warning_count, "valid_row_count": valid_count, "invalid_row_count": invalid_count, "blocking_reasons": ["Черновик отменён."], "warnings": [], "next_action": "Создайте новый черновик, если файл нужно проверить заново."}
     if status == "failed":
@@ -432,7 +456,7 @@ def _draft_to_response(row: sqlite3.Row) -> dict[str, object]:
     summary = json.loads(row["summary_json"])
     global_issues = summary.get("global_issues", []) if isinstance(summary, dict) else []
     readiness = summary.get("readiness") if isinstance(summary, dict) else None
-    if row["status"] in {"cancelled", "failed"} or not isinstance(readiness, dict):
+    if row["status"] in {"cancelled", "failed", "applied"} or not isinstance(readiness, dict):
         readiness = _readiness(row["status"], row["row_count"], row["valid_row_count"], row["invalid_row_count"], global_issues, row["warning_count"], row["error_count"])
         if isinstance(summary, dict):
             summary["readiness"] = readiness
@@ -511,3 +535,142 @@ def cancel_import_draft(draft_id: int, config: DatabaseConfig | None = None) -> 
         connection.execute("UPDATE import_sources SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (draft["source_id"],))
         updated = connection.execute("SELECT * FROM import_drafts WHERE id = ?", (draft_id,)).fetchone()
     return {"draft": _draft_to_response(updated), "message": "Черновик импорта отменён. Рабочие данные не изменены."}
+
+APPLY_SUPPORTED_TARGETS = {"ingredients", "clients", "recipe_templates", "packaging_items"}
+
+
+def _norm_key(value: str | None) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _conflict(code: str, message: str, row_number: int | None = None, field: str | None = None) -> dict[str, object]:
+    return {"severity": "error", "code": code, "message": message, "row_number": row_number, "field": field}
+
+
+def _draft_rows(connection: sqlite3.Connection, draft_id: int) -> list[dict[str, object]]:
+    rows = connection.execute("SELECT * FROM import_draft_rows WHERE draft_id = ? ORDER BY row_number, id", (draft_id,)).fetchall()
+    return [{"row_number": row["row_number"], "values": json.loads(row["normalized_values_json"]), "status": row["status"]} for row in rows]
+
+
+def _check_duplicates(values: list[tuple[int, str]], *, field: str, label: str) -> list[dict[str, object]]:
+    issues: list[dict[str, object]] = []
+    seen: dict[str, int] = {}
+    for row_number, value in values:
+        key = _norm_key(value)
+        if not key:
+            continue
+        if key in seen:
+            issues.append(_conflict("duplicate_domain_record", f"Повтор в черновике: {label} «{value}» уже указан в строке {seen[key]}.", row_number, field))
+        else:
+            seen[key] = row_number
+    return issues
+
+
+def _preflight_apply(connection: sqlite3.Connection, target_type: str, rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    issues: list[dict[str, object]] = []
+    if target_type == "ingredients":
+        names = [(int(r["row_number"]), str(r["values"].get("name", ""))) for r in rows]
+        issues += _check_duplicates(names, field="name", label="компонент")
+        existing = {_norm_key(row["name"]): row["name"] for row in connection.execute("SELECT name FROM ingredients").fetchall()}
+        for row_number, name in names:
+            if _norm_key(name) in existing:
+                issues.append(_conflict("duplicate_domain_record", f"Компонент с названием «{name}» уже существует.", row_number, "name"))
+    elif target_type == "clients":
+        fields = [("email", "email"), ("phone", "телефон"), ("full_name", "клиент")]
+        for field, label in fields:
+            issues += _check_duplicates([(int(r["row_number"]), str(r["values"].get(field, ""))) for r in rows], field=field, label=label)
+        existing_email = {_norm_key(row["email"]): row["email"] for row in connection.execute("SELECT email FROM clients WHERE trim(email) <> ''").fetchall()}
+        existing_phone = {_norm_key(row["phone"]): row["phone"] for row in connection.execute("SELECT phone FROM clients WHERE trim(phone) <> ''").fetchall()}
+        existing_name = {_norm_key(row["full_name"]): row["full_name"] for row in connection.execute("SELECT full_name FROM clients").fetchall()}
+        for r in rows:
+            row_number = int(r["row_number"]); values = r["values"]
+            email = str(values.get("email", "")); phone = str(values.get("phone", "")); name = str(values.get("full_name", ""))
+            if _norm_key(email) and _norm_key(email) in existing_email:
+                issues.append(_conflict("duplicate_domain_record", f"Клиент с email «{email}» уже существует.", row_number, "email"))
+            if _norm_key(phone) and _norm_key(phone) in existing_phone:
+                issues.append(_conflict("duplicate_domain_record", f"Клиент с телефоном «{phone}» уже существует.", row_number, "phone"))
+            if _norm_key(name) in existing_name:
+                issues.append(_conflict("duplicate_domain_record", f"Клиент «{name}» уже существует.", row_number, "full_name"))
+    elif target_type == "recipe_templates":
+        names = [(int(r["row_number"]), str(r["values"].get("name", ""))) for r in rows]
+        issues += _check_duplicates(names, field="name", label="рецепт")
+        existing = {_norm_key(row["name"]): row["name"] for row in connection.execute("SELECT name FROM recipe_templates").fetchall()}
+        for row_number, name in names:
+            if _norm_key(name) in existing:
+                issues.append(_conflict("duplicate_domain_record", f"Шаблон рецепта с названием «{name}» уже существует.", row_number, "name"))
+    elif target_type == "packaging_items":
+        names = [(int(r["row_number"]), str(r["values"].get("name", ""))) for r in rows]
+        issues += _check_duplicates(names, field="name", label="тара")
+        existing = {_norm_key(row["name"]): row["name"] for row in connection.execute("SELECT name FROM packaging_items").fetchall()}
+        for r in rows:
+            row_number = int(r["row_number"]); values = r["values"]; name = str(values.get("name", ""))
+            if _norm_key(name) in existing:
+                issues.append(_conflict("duplicate_domain_record", f"Тара с названием «{name}» уже существует.", row_number, "name"))
+            if str(values.get("stock", "")).strip():
+                issues.append(_conflict("apply_unsupported_field", "Поле “stock” нельзя применять для тары в PR80: остатки должны вноситься движениями склада.", row_number, "stock"))
+            if str(values.get("minimum_stock", "")).strip():
+                issues.append(_conflict("apply_unsupported_field", "Поле “minimum_stock” пока не поддерживается моделью тары для применения импорта.", row_number, "minimum_stock"))
+    return issues
+
+
+def _create_from_import(connection: sqlite3.Connection, target_type: str, row: dict[str, object], config: DatabaseConfig | None) -> dict[str, object]:
+    values = row["values"]
+    row_number = int(row["row_number"])
+    if target_type == "ingredients":
+        draft = IngredientDraft.create(name=values.get("name", ""), category="other", default_unit=values.get("unit") or "g", density_g_per_ml=values.get("density") or None, notes=values.get("notes", ""), inci_name=values.get("inci_name", ""))
+        record = IngredientRepository(config).create(draft, connection=connection)
+        return {"target_type": target_type, "row_number": row_number, "record_id": record.id, "label": record.name}
+    if target_type == "clients":
+        draft = ClientDraft.create(full_name=values.get("full_name", ""), phone=values.get("phone", ""), email=values.get("email", ""), address=values.get("address", ""), notes=values.get("notes", ""))
+        record = ClientRepository(config).create(draft, connection=connection)
+        return {"target_type": target_type, "row_number": row_number, "record_id": record.id, "label": record.full_name}
+    if target_type == "recipe_templates":
+        draft = RecipeTemplateDraft.create(name=values.get("name", ""), product_type=values.get("product_type", ""), notes=values.get("notes", ""))
+        record = RecipeRepository(config).create_template(draft, connection=connection)
+        return {"target_type": target_type, "row_number": row_number, "record_id": record.id, "label": record.name}
+    if target_type == "packaging_items":
+        draft = PackagingItemDraft.create(name=values.get("name", ""), kind=values.get("category") or "other", unit=values.get("unit") or "pcs", unit_cost=values.get("cost") or None, notes=values.get("notes", ""))
+        record = PackagingItemRepository(config).create(draft, connection=connection)
+        return {"target_type": target_type, "row_number": row_number, "record_id": record.id, "label": record.name}
+    raise ImportApplyConflictError(issues=[_conflict("apply_target_not_supported", f"Тип импорта {target_type} пока нельзя применить.")])
+
+
+def apply_import_draft(draft_id: int, *, confirm_apply: bool, backup_acknowledged: bool, allow_warnings: bool = False, config: DatabaseConfig | None = None) -> dict[str, object] | None:
+    if not confirm_apply:
+        raise ImportApplyConflictError(issues=[_conflict("apply_confirmation_required", "Перед применением нужно явно подтвердить импорт.")])
+    if not backup_acknowledged:
+        raise ImportApplyConflictError(issues=[_conflict("backup_acknowledgement_required", "Перед применением подтвердите, что резервная копия создана или не требуется.")])
+    with session(config) as connection:
+        draft = connection.execute("SELECT * FROM import_drafts WHERE id = ?", (draft_id,)).fetchone()
+        if draft is None:
+            return None
+        if draft["status"] == "cancelled":
+            raise ImportApplyConflictError(issues=[_conflict("draft_cancelled", "Отменённый черновик нельзя применить.")])
+        if draft["status"] == "failed":
+            raise ImportApplyConflictError(issues=[_conflict("draft_failed", "Неуспешный черновик нельзя применить.")])
+        if draft["status"] == "applied":
+            raise ImportApplyConflictError(issues=[_conflict("draft_already_applied", "Черновик уже применён.")])
+        target_type = draft["target_type"]
+        summary = json.loads(draft["summary_json"])
+        readiness = _draft_to_response(draft)["apply_readiness"]
+        if readiness["status"] == "blocked" or not readiness["can_apply"]:
+            raise ImportApplyConflictError(issues=[_conflict("draft_not_ready", "Черновик содержит ошибки и не готов к применению.")])
+        if readiness["status"] == "ready_with_warnings" and not allow_warnings:
+            raise ImportApplyConflictError(issues=[_conflict("warnings_not_allowed", "В черновике есть предупреждения. Для применения передайте allow_warnings=true.")])
+        if target_type not in APPLY_SUPPORTED_TARGETS:
+            raise ImportApplyConflictError(issues=[_conflict("apply_target_not_supported", f"Тип импорта {target_type} пока нельзя применить в PR80.")])
+        rows = _draft_rows(connection, draft_id)
+        issues = _preflight_apply(connection, target_type, rows)
+        if issues:
+            raise ImportApplyConflictError(issues=issues)
+        created_records = [_create_from_import(connection, target_type, row, config) for row in rows]
+        applied_at = datetime.now(timezone.utc).isoformat()
+        warning_messages = list(readiness.get("warnings") or [])
+        apply_result = {"draft_id": draft_id, "target_type": target_type, "applied_at": applied_at, "applied_row_count": len(rows), "created_count": len(created_records), "created_records": created_records, "warnings": warning_messages}
+        summary["apply_result"] = apply_result
+        summary["message"] = "Черновик импорта применён. Данные внесены в систему."
+        connection.execute("UPDATE import_drafts SET status = 'applied', summary_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (_json(summary), draft_id))
+        connection.execute("UPDATE import_sources SET status = 'applied', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (draft["source_id"],))
+        AuditLogRepository(config).create_log(action="import_draft_applied", entity_type="ImportDraft", entity_id=str(draft_id), summary="Import draft applied", metadata={"target_type": target_type, "applied_row_count": len(rows), "created_count": len(created_records)}, connection=connection)
+        updated = connection.execute("SELECT * FROM import_drafts WHERE id = ?", (draft_id,)).fetchone()
+    return {"draft": _draft_to_response(updated), "apply_result": apply_result, "message": "Черновик импорта применён. Данные внесены в систему."}

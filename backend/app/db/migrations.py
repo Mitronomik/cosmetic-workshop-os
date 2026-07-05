@@ -20,6 +20,7 @@ MIGRATION_MODULES = [
     "app.migrations.versions.0014_alerts",
     "app.migrations.versions.0015_purchase_suggestions",
     "app.migrations.versions.0016_import_drafts",
+    "app.migrations.versions.0017_import_apply_status",
 ]
 MIGRATION_TABLE = "schema_migrations"
 

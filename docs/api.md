@@ -568,3 +568,33 @@ Import draft create, list, detail, and cancel responses include `draft.apply_rea
 Allowed readiness statuses are `ready`, `ready_with_warnings`, `blocked`, `cancelled`, and `failed`. `can_apply` means only “validation-ready for a future explicit apply endpoint”. PR79 still has no apply or confirmation endpoint, and import drafts still do not write rows into ingredients, clients, recipes, orders, stock, production, alerts, purchases, backups, or exports.
 
 Draft `summary` may also include `readiness`, `issue_counts_by_code`, and `issue_counts_by_severity`. Refined validation issue codes include `header_alias_used`, `decimal_comma_normalized`, `ambiguous_decimal`, `invalid_positive_decimal`, `invalid_non_negative_decimal`, `unit_alias_normalized`, `date_format_normalized`, `invalid_email`, and `invalid_id` in addition to the PR77 codes.
+
+## PR80 — Import draft apply backend endpoint
+
+`POST /api/imports/drafts/{draft_id}/apply` explicitly applies a validation-ready import draft into supported domain tables.
+
+Request body:
+
+```json
+{
+  "confirm_apply": true,
+  "backup_acknowledged": true,
+  "allow_warnings": false
+}
+```
+
+Rules:
+
+- `confirm_apply=true` is required; otherwise the request is rejected.
+- `backup_acknowledged=true` is required. The endpoint does **not** create a backup automatically.
+- Drafts in `blocked`, `cancelled`, `failed`, or `applied` states cannot be applied.
+- Drafts with readiness `ready_with_warnings` require `allow_warnings=true`.
+- PR80 apply-supported targets: `ingredients`, `clients`, `recipe_templates`, `packaging_items`.
+- PR80 apply-unsupported targets: `ingredient_lots`, `orders`.
+- Apply is transactional and all-or-nothing: if any row conflicts or insert fails, zero domain records are committed and the draft/source remain unapplied.
+- Existing domain records are not silently updated. Duplicate records in the database or inside the draft return `409 Conflict`.
+- Packaging import is catalog-only. A non-empty `stock` column is rejected because stock must be changed through movements.
+- No frontend apply UI exists in PR80; this is an API-only foundation.
+- No stock movements, ingredient lots, orders, production records, alerts, purchase suggestions, backups, or exports are created automatically.
+
+Successful response includes the updated draft, an apply result with created record ids/labels, and the message `Черновик импорта применён. Данные внесены в систему.` Conflicts return `409` with structured `detail.message` and `detail.issues` where possible.

@@ -152,3 +152,39 @@ Unit aliases are normalized visibly: `г`, `gram`, `grams` → `g`; `мл`, `mil
 Dates should use ISO `YYYY-MM-DD`. Deterministic Russian `DD.MM.YYYY` dates are normalized to ISO with `date_format_normalized`; ambiguous slash dates are not accepted.
 
 Additional issue codes include `invalid_positive_decimal`, `invalid_non_negative_decimal`, `invalid_email`, `invalid_id`, `header_alias_used`, `decimal_comma_normalized`, `ambiguous_decimal`, `unit_alias_normalized`, and `date_format_normalized`. Unknown columns remain warnings and produce `ready_with_warnings`, not `ready`.
+
+## PR80 — Backend apply foundation
+
+PR80 adds the backend-only apply step for import drafts. Data is still parsed and validated through drafts first; production tables are changed only by an explicit API call:
+
+```http
+POST /api/imports/drafts/{draft_id}/apply
+```
+
+Required request flags:
+
+- `confirm_apply=true` — explicit confirmation that the user wants to apply the draft.
+- `backup_acknowledged=true` — acknowledgement that a backup was created or is not required. The endpoint does not create backups automatically.
+- `allow_warnings=true` — required only for drafts with readiness `ready_with_warnings`.
+
+Supported apply targets in PR80:
+
+- `ingredients` — creates new component catalog records.
+- `clients` — creates new client records.
+- `recipe_templates` — creates catalog-only recipe templates; recipe versions and composition rows are not imported yet.
+- `packaging_items` — creates catalog-only packaging records when safe.
+
+Unsupported apply targets in PR80:
+
+- `ingredient_lots` — remains blocked because lots affect inventory and must create stock movements correctly.
+- `orders` — remains blocked because orders require client/recipe matching and production readiness implications.
+
+Safety rules:
+
+- Apply is all-or-nothing inside one database transaction.
+- If one row conflicts or fails, zero rows are inserted.
+- Existing records are never silently updated.
+- Duplicate names/emails/phones inside the draft or in existing tables block the whole apply.
+- Packaging rows with non-empty `stock` are rejected because stock must go through movements.
+- No stock movements, lots, orders, production records, alerts, purchase suggestions, backups, or exports are created by PR80 apply.
+- The frontend apply button is not implemented yet; PR81 is expected to add the confirmation/apply UI.

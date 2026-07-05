@@ -2,37 +2,34 @@
 
 ## Last completed work
 
-PR79 — Import validation refinement and apply readiness contract.
+PR80 — Import apply backend foundation.
 
-## Current repo state after PR79
+## Current repo state after PR80
 
-Import remains draft-only. The backend now computes `draft.apply_readiness` for create/detail/list/cancel responses and stores readiness/count aggregation in new draft summaries. Older summaries get fallback readiness when returned by the service.
+Import now supports a backend-only explicit apply step:
 
-Validation refinements added:
-
-- deterministic target-specific Russian/user-friendly header aliases with visible `header_alias_used` issues;
-- comma decimal normalization with visible `decimal_comma_normalized` issues;
-- ambiguous decimal blocking via `ambiguous_decimal`;
-- positive/non-negative numeric validation;
-- visible unit alias normalization to `g`, `ml`, `pcs`;
-- ISO plus deterministic `DD.MM.YYYY` date handling;
-- client email warnings;
-- positive integer validation for optional `ingredient_id` and `client_id`.
-
-Frontend `/imports` displays draft readiness in list/detail panels and repeats that the apply button does not exist yet.
+- `POST /api/imports/drafts/{draft_id}/apply` exists.
+- Apply requires `confirm_apply=true` and `backup_acknowledged=true`.
+- `ready_with_warnings` drafts require `allow_warnings=true`.
+- Supported PR80 apply targets: `ingredients`, `clients`, `recipe_templates`, `packaging_items`.
+- Unsupported PR80 apply targets: `ingredient_lots`, `orders`.
+- Apply is transactional and all-or-nothing.
+- Existing domain conflicts and duplicate rows inside drafts block the whole apply.
+- Successful apply marks both import draft and source as `applied` and stores `apply_result` in `summary_json`.
+- Audit log entry `import_draft_applied` is created on successful apply.
 
 ## Safety notes
 
-- No import apply endpoint was added.
-- No import confirmation endpoint was added.
-- No apply button was added.
-- No ingredients, clients, recipes, orders, stock, production, alerts, purchase suggestions, backups, or exports are changed by validation.
-- Normalized values are visible in draft rows and raw source values remain preserved.
+- No frontend apply UI or apply button was added.
+- No mapping editor, cell editing, partial import, restore, OCR/PDF/image import, cloud import, or scheduled import was added.
+- No stock movements, ingredient lots, orders, production records, alerts, purchase suggestions, backups, or exports are created automatically by apply.
+- Packaging apply is catalog-only; non-empty `stock` is blocked.
+- A migration adds `applied` as an allowed import source/draft status because the existing CHECK constraints did not permit it.
 
 ## Manual smoke
 
-Manual browser smoke was not run in this non-interactive session because no long-running backend/frontend browser session was started. Recommended smoke: open `/imports`, upload valid, alias, comma-decimal, missing-column, invalid-unit, and unknown-column CSV files; verify readiness states and absence of an apply/confirm button; confirm domain tables, backup/export pages, and dashboard remain unchanged.
+Manual browser/API smoke was not run in this non-interactive session because no long-running backend/frontend browser session was started. Recommended smoke for PR81: create an ingredients CSV draft, call apply with missing confirmation and missing backup acknowledgement to confirm rejections, apply with both flags, verify created records and `applied` status, retry apply to confirm conflict, and confirm unsupported `ingredient_lots` creates no stock/lots/movements.
 
 ## Next recommended PR
 
-PR80 — Import apply backend foundation, only after smoke confirms validation/readiness is clear.
+PR81 — Import confirmation/apply UI.

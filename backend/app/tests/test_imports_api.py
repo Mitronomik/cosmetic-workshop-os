@@ -187,12 +187,12 @@ def test_service_readiness_states_and_issue_counts(tmp_path):
 
 
 @pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
-def test_no_import_apply_endpoint_exists(tmp_path, monkeypatch):
+def test_import_apply_endpoint_exists(tmp_path, monkeypatch):
     db_path = tmp_path / "db.sqlite"
     _create_database(db_path)
     monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
     client = TestClient(create_app())
 
-    response = client.post("/api/imports/drafts/1/apply", json={"confirm": True})
+    response = client.post("/api/imports/drafts/1/apply", json={"confirm_apply": True, "backup_acknowledged": True})
 
     assert response.status_code == 404
