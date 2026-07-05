@@ -118,6 +118,12 @@ type BackupListResponse = { backups: BackupFileResponse[]; backup_dir: string };
 type BackupCreateRequest = { reason?: string | null };
 type BackupCreateResponse = { backup: BackupFileResponse; database_path: string; backup_dir: string; message: string };
 type BackupUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; message: string; backupStatus: BackupStatusResponse | null; backups: BackupFileResponse[]; reason: string; customReason: string; lastCreatedBackup: BackupFileResponse | null };
+type ExportFileResponse = { filename: string; path: string; created_at: string | null; reason: string | null; size_bytes: number };
+type ExportStatusResponse = { database_path: string; database_exists: boolean; database_size_bytes: number | null; export_dir: string; export_dir_exists: boolean; export_count: number; latest_export: ExportFileResponse | null };
+type ExportListResponse = { exports: ExportFileResponse[]; export_dir: string };
+type ExportCreateRequest = { reason?: string | null };
+type ExportCreateResponse = { export: ExportFileResponse; database_path: string; export_dir: string; entity_counts: Record<string, number>; message: string };
+type ExportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; message: string; exportStatus: ExportStatusResponse | null; exports: ExportFileResponse[]; reason: string; customReason: string; lastCreatedExport: ExportFileResponse | null; lastEntityCounts: Record<string, number> };
 
 
 type AlertStatus = 'open' | 'resolved' | 'dismissed';
@@ -337,7 +343,7 @@ type RecipesState = {
 };
 
 
-type NavigationSection = 'Главная' | 'Алерты' | 'Резервные копии' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Готовность' | 'Производство' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Помощь';
+type NavigationSection = 'Главная' | 'Алерты' | 'Резервные копии' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Готовность' | 'Производство' | 'Экспорт' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Помощь';
 type NavigationStatus = 'ready' | 'empty' | 'planned';
 type NavigationItem = { label: string; section: NavigationSection; path: string; status: NavigationStatus };
 type NavigationGroup = { title: string; items: NavigationItem[] };
@@ -366,6 +372,7 @@ const navigationGroups: NavigationGroup[] = [
   ] },
   { title: 'Данные и настройки', items: [
     { label: 'Резервные копии', section: 'Резервные копии', path: '/backups', status: 'ready' },
+    { label: 'Экспорт', section: 'Экспорт', path: '/exports', status: 'ready' },
     { label: 'Импорт', section: 'Импорт', path: '/#import', status: 'planned' },
     { label: 'Отчеты', section: 'Отчеты', path: '/#reports', status: 'planned' },
     { label: 'Настройки', section: 'Настройки', path: '/#settings', status: 'planned' },
@@ -406,6 +413,7 @@ let ordersMessage = '';
 let productionHistoryState: ProductionHistoryState = { batches: [], selectedBatch: null, status: 'idle', detailStatus: 'idle', error: '', detailError: '', filters: { search: '' } };
 let dashboardState: DashboardState = { status: 'idle', error: '', message: '', orders: [], clients: [], alerts: [], purchaseSuggestions: [], productionBatches: [] };
 let backupUiState: BackupUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', backupStatus: null, backups: [], reason: 'manual', customReason: '', lastCreatedBackup: null };
+let exportUiState: ExportUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', exportStatus: null, exports: [], reason: 'manual', customReason: '', lastCreatedExport: null, lastEntityCounts: {} };
 let alertsState: AlertsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', type: '', search: '' }, lastGeneration: null };
 let purchaseSuggestionsState: PurchaseSuggestionsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', reason: '', itemType: '', search: '' }, lastGeneration: null, showManualForm: false, manualForm: { item_type: 'ingredient', item_id: '', recommended_quantity: '', unit: 'g', notes: '' }, editingSuggestionId: null, editForm: { recommended_quantity: '', unit: '', notes: '' } };
 let ordersState: OrdersState = { items: [], clients: [], templates: [], versions: [], clientRecipes: [], packagingItems: [], formMode: 'create', form: emptyOrderForm(), showForm: false, selectedOrder: null, includeInactive: true, filters: { search: '', status: 'active' }, referenceLoading: false, referenceError: '', readinessByOrderId: {}, readinessLoadingOrderId: null, readinessError: '', productionByOrderId: {}, productionLoadingOrderId: null, productionError: '', productionConfirmingOrderId: null, productionNotesByOrderId: {} };
@@ -438,6 +446,7 @@ function sectionFromLocation(): NavigationSection {
   const routes: Record<string, NavigationSection> = {
     '/alerts': 'Алерты',
     '/backups': 'Резервные копии',
+    '/exports': 'Экспорт',
     '/inventory': 'Склад',
     '/ingredients': 'Компоненты',
     '/ingredient-lots': 'Партии',
@@ -473,6 +482,7 @@ function loadSectionData(section: NavigationSection) {
   if (section === 'Главная') loadDashboard();
   if (section === 'Алерты') loadAlerts();
   if (section === 'Резервные копии') loadBackups();
+  if (section === 'Экспорт') loadExports();
   if (section === 'Склад') loadInventory();
   if (section === 'Компоненты') loadIngredients();
   if (section === 'Партии') loadIngredientLots();
@@ -490,6 +500,7 @@ function renderActivePage(section: NavigationSection) {
   if (section === 'Главная') return dashboardPage();
   if (section === 'Алерты') return alertsPage();
   if (section === 'Резервные копии') return backupPage();
+  if (section === 'Экспорт') return exportPage();
   if (section === 'Склад') return inventoryPage();
   if (section === 'Компоненты') return ingredientsPage();
   if (section === 'Партии') return ingredientLotsPage();
@@ -569,6 +580,11 @@ function bindEvents(root: HTMLElement) {
   });
   root.querySelector<HTMLButtonElement>('[data-action="reload-dashboard"]')?.addEventListener('click', () => loadDashboard(true));
   root.querySelector<HTMLButtonElement>('[data-action="reload-backups"]')?.addEventListener('click', () => loadBackups(true));
+  root.querySelector<HTMLButtonElement>('[data-action="reload-exports"]')?.addEventListener('click', () => loadExports(true));
+  root.querySelector<HTMLFormElement>('[data-form="export-create"]')?.addEventListener('submit', submitExportCreateForm);
+  root.querySelector<HTMLButtonElement>('[data-action="create-export"]')?.addEventListener('click', () => submitExportCreate());
+  root.querySelector<HTMLSelectElement>('[data-action="select-export-reason"]')?.addEventListener('change', (event) => { exportUiState.reason = (event.currentTarget as HTMLSelectElement).value; exportUiState.message = ''; exportUiState.error = ''; render(); });
+  root.querySelector<HTMLInputElement>('[data-action="custom-export-reason"]')?.addEventListener('input', (event) => { exportUiState.customReason = (event.currentTarget as HTMLInputElement).value.slice(0, 80); });
   root.querySelector<HTMLFormElement>('[data-form="backup-create"]')?.addEventListener('submit', submitBackupCreateForm);
   root.querySelector<HTMLButtonElement>('[data-action="create-backup"]')?.addEventListener('click', () => submitBackupCreate());
   root.querySelector<HTMLSelectElement>('[data-action="select-backup-reason"]')?.addEventListener('change', (event) => { backupUiState.reason = (event.currentTarget as HTMLSelectElement).value; backupUiState.message = ''; backupUiState.error = ''; render(); });
@@ -1056,6 +1072,115 @@ function submitBackupCreate() {
       render();
     });
 }
+
+
+function loadExports(force = false) {
+  if (!force && (exportUiState.status === 'loading' || exportUiState.status === 'ready')) return;
+  exportUiState.status = 'loading';
+  exportUiState.error = '';
+  if (force) exportUiState.message = '';
+  render();
+  Promise.all([getExportStatus(), getExports()])
+    .then(([status, list]) => {
+      exportUiState.status = 'ready';
+      exportUiState.exportStatus = status;
+      exportUiState.exports = list.exports;
+      exportUiState.error = '';
+      render();
+    })
+    .catch(() => {
+      exportUiState.status = 'error';
+      exportUiState.error = 'Не удалось загрузить сведения об экспортах. Проверьте, что локальное приложение запущено, и попробуйте снова.';
+      render();
+    });
+}
+
+function submitExportCreateForm(event: SubmitEvent) { event.preventDefault(); submitExportCreate(); }
+function submitExportCreate() {
+  if (exportUiState.actionStatus === 'creating') return;
+  const status = exportUiState.exportStatus;
+  if (!status?.database_exists) {
+    exportUiState.error = 'База данных пока не найдена. Сначала запустите приложение и создайте рабочие данные.';
+    exportUiState.message = '';
+    render();
+    return;
+  }
+  const rawReason = exportUiState.reason === 'custom' ? exportUiState.customReason.trim() : exportUiState.reason;
+  const reason = rawReason || 'manual';
+  exportUiState.actionStatus = 'creating';
+  exportUiState.error = '';
+  exportUiState.message = '';
+  render();
+  createExport({ reason })
+    .then((response) => {
+      exportUiState.lastCreatedExport = response.export;
+      exportUiState.lastEntityCounts = response.entity_counts || {};
+      exportUiState.message = `${response.message || 'Экспорт создан.'} Файл: ${response.export.filename}`;
+      return Promise.all([getExportStatus(), getExports()]);
+    })
+    .then(([statusResponse, list]) => {
+      exportUiState.exportStatus = statusResponse;
+      exportUiState.exports = list.exports;
+      exportUiState.status = 'ready';
+      exportUiState.actionStatus = 'idle';
+      render();
+    })
+    .catch(() => {
+      exportUiState.actionStatus = 'idle';
+      exportUiState.error = 'Не удалось создать экспорт. Проверьте, что база данных существует и локальное приложение запущено.';
+      exportUiState.message = '';
+      render();
+    });
+}
+
+function exportPage() {
+  const isLoading = exportUiState.status === 'loading';
+  const status = exportUiState.exportStatus;
+  const createDisabled = exportUiState.actionStatus === 'creating' || isLoading || !status?.database_exists;
+  return `<div class="page-grid backup-page">
+    <section class="card data-card dashboard-hero">
+      <div><p class="card-kicker">Локальный JSON-снимок</p><h2>Экспорт данных</h2><p>Создавайте локальный JSON-снимок данных мастерской перед импортом, переносом или обращением за поддержкой.</p><p class="next-step">Экспорт не меняет рецепты, клиентов, заказы, склад и производство. Это отдельный JSON-файл в локальной папке exports.</p></div>
+      <div class="actions"><button class="secondary-action" type="button" data-action="reload-exports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button><button class="primary-action" type="button" data-action="create-export" ${createDisabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div>
+    </section>
+    ${exportUiState.error ? `<p class="page-message error-message">${escapeHtml(exportUiState.error)}</p>` : ''}
+    ${exportUiState.message ? `<p class="page-message">${escapeHtml(exportUiState.message)}</p>` : ''}
+    ${exportUiState.status === 'error' && !status ? exportLoadErrorCard() : `${exportStatusCards()}${exportCreateCard()}${exportEntityCountsCard()}${exportHistoryCard()}${exportNonGoalsCard()}`}
+  </div>`;
+}
+
+function exportLoadErrorCard() { return `<section class="card error-card"><h2>Сведения недоступны</h2><p>Не удалось загрузить сведения об экспортах.</p><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-exports">Обновить</button></div></section>`; }
+function exportStatusCards() {
+  const status = exportUiState.exportStatus;
+  if (exportUiState.status === 'loading' && !status) return '<section class="card"><p>Загружаем сведения о базе и экспортах…</p></section>';
+  if (!status) return '';
+  const latest = status.latest_export ? `${escapeHtml(status.latest_export.filename)} · ${formatDateTime(status.latest_export.created_at || '')}` : 'Пока нет';
+  return `<section class="overview-grid">
+    <div class="metric-card"><span>База данных</span><strong>${status.database_exists ? 'База найдена' : 'База данных пока не найдена'}</strong></div>
+    <div class="metric-card wide"><span>Расположение базы</span><strong class="path-text">${escapeHtml(status.database_path)}</strong></div>
+    <div class="metric-card"><span>Размер базы</span><strong>${formatFileSize(status.database_size_bytes)}</strong></div>
+    <div class="metric-card wide"><span>Папка экспорта</span><strong>${status.export_dir_exists ? 'Папка exports найдена' : 'Папка exports ещё не создана. Она появится после первого явного экспорта.'}</strong><small class="path-text">${escapeHtml(status.export_dir)}</small></div>
+    <div class="metric-card"><span>Количество экспортов</span><strong>${status.export_count}</strong></div>
+    <div class="metric-card wide"><span>Последний экспорт</span><strong>${latest}</strong></div>
+  </section>`;
+}
+function exportCreateCard() {
+  const status = exportUiState.exportStatus;
+  const disabled = exportUiState.actionStatus === 'creating' || exportUiState.status === 'loading' || !status?.database_exists;
+  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать экспорт</h2><p>Экспорт создаёт JSON-снимок основных данных: рецептов, клиентов, заказов, склада, производства, алертов и закупок. Файл можно использовать для проверки данных или будущего переноса, но импорт из него пока не реализован.</p>${!status?.database_exists ? '<p class="page-message error-message">Сначала запустите приложение и создайте рабочую базу данных.</p>' : ''}<form class="form-grid" data-form="export-create"><label>Причина<select name="reason" data-action="select-export-reason"><option value="manual" ${exportUiState.reason === 'manual' ? 'selected' : ''}>Обычный экспорт</option><option value="before_import" ${exportUiState.reason === 'before_import' ? 'selected' : ''}>Перед импортом</option><option value="before_update" ${exportUiState.reason === 'before_update' ? 'selected' : ''}>Перед обновлением приложения</option><option value="before_large_edit" ${exportUiState.reason === 'before_large_edit' ? 'selected' : ''}>Перед крупными изменениями</option><option value="support_snapshot" ${exportUiState.reason === 'support_snapshot' ? 'selected' : ''}>Для поддержки</option><option value="custom" ${exportUiState.reason === 'custom' ? 'selected' : ''}>Своя причина</option></select></label>${exportUiState.reason === 'custom' ? `<label>Своя причина<input name="customReason" maxlength="80" value="${escapeHtml(exportUiState.customReason)}" data-action="custom-export-reason" placeholder="Например: перед обращением в поддержку" /></label>` : ''}<div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div></form>${exportUiState.lastCreatedExport ? `<p class="next-step">Последний созданный export-файл: <strong>${escapeHtml(exportUiState.lastCreatedExport.filename)}</strong></p>` : '<p class="next-step">Создание экспорта не запускается автоматически и не меняет рабочие данные.</p>'}</section>`;
+}
+function exportEntityCountsCard() {
+  const entries = Object.entries(exportUiState.lastEntityCounts || {});
+  if (!entries.length) return '';
+  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Снимок данных</p><h2>Что попало в экспорт</h2></div><span class="pill info">${entries.length}</span></div><div class="overview-grid compact-overview">${entries.map(([key, value]) => `<div class="metric-card"><span>${exportEntityLabel(key)}</span><strong>${value}</strong></div>`).join('')}</div><p class="next-step">Количество строк сообщает backend. Экран не открывает JSON-файл и не пересчитывает данные самостоятельно.</p></section>`;
+}
+function exportHistoryCard() {
+  if (!exportUiState.exports.length) return `<section class="card empty-card"><h2>История экспортов</h2><p>Экспортов пока нет.</p><p>Создайте первый экспорт перед импортом, переносом или крупными изменениями.</p></section>`;
+  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Локальные JSON-файлы</p><h2>История экспортов</h2></div><span class="pill info">${exportUiState.exports.length}</span></div><div class="backup-list">${exportUiState.exports.map(exportHistoryItem).join('')}</div></section>`;
+}
+function exportHistoryItem(item: ExportFileResponse) { return `<article class="recipe-line backup-item"><div class="section-heading"><div><h3>${escapeHtml(item.filename)}</h3><p><span class="pill info">${exportReasonLabel(item.reason)}</span> <span class="pill muted">${formatFileSize(item.size_bytes)}</span></p></div><small>${formatDateTime(item.created_at || '')}</small></div><p><strong>Локальный путь:</strong><br><code class="path-text">${escapeHtml(item.path)}</code></p><p class="next-step">Это только JSON-снимок. Импорт из экспорта будет добавлен отдельным шагом.</p></article>`; }
+function exportNonGoalsCard() { return `<section class="card data-card"><p class="card-kicker">Честные границы</p><h2>Пока не реализовано</h2><p>Сейчас этот экран только создаёт и показывает локальные JSON-экспорты. Импорт, восстановление, CSV/XLSX и отчёты будут добавлены отдельными PR.</p><ul class="checklist compact-list"><li>Импорт из export-файла</li><li>Восстановление из export-файла</li><li>Скачивание файла через браузер</li><li>CSV/XLSX export</li><li>PDF-отчёты</li><li>Автоматический export по расписанию</li><li>Cloud export</li></ul></section>`; }
+function exportReasonLabel(reason: string | null): string { return ({ manual: 'Обычный экспорт', before_import: 'Перед импортом', before_update: 'Перед обновлением', before_large_edit: 'Перед крупными изменениями', support_snapshot: 'Для поддержки' } as Record<string, string>)[reason || ''] ?? (reason ? escapeHtml(reason) : 'Не указана'); }
+function exportEntityLabel(key: string): string { return ({ ingredients: 'Компоненты', ingredient_lots: 'Партии компонентов', stock_movements: 'Движения сырья', packaging_items: 'Тара', packaging_stock_movements: 'Движения тары', recipe_templates: 'Рецепты', recipe_versions: 'Версии рецептов', recipe_version_ingredients: 'Составы версий', clients: 'Клиенты', client_recipes: 'Индивидуальные рецепты', client_recipe_ingredients: 'Составы индивидуальных рецептов', client_wishes: 'Пожелания клиентов', client_feedback: 'Обратная связь', orders: 'Заказы', production_batches: 'Производственные партии', production_batch_ingredients: 'Списания компонентов', production_batch_packaging: 'Списания тары', alerts: 'Алерты', purchase_suggestions: 'Закупочные предложения' } as Record<string, string>)[key] ?? escapeHtml(key); }
 
 function backupPage() {
   const isLoading = backupUiState.status === 'loading';
@@ -1827,6 +1952,9 @@ function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'PATCH', body?: unknow
 function getBackupStatus(): Promise<BackupStatusResponse> { return apiGet<BackupStatusResponse>('/api/backups/status'); }
 function getBackups(): Promise<BackupListResponse> { return apiGet<BackupListResponse>('/api/backups'); }
 function createBackup(payload: BackupCreateRequest): Promise<BackupCreateResponse> { return apiSend<BackupCreateResponse>('/api/backups', 'POST', payload); }
+function getExportStatus(): Promise<ExportStatusResponse> { return apiGet<ExportStatusResponse>('/api/exports/status'); }
+function getExports(): Promise<ExportListResponse> { return apiGet<ExportListResponse>('/api/exports'); }
+function createExport(payload: ExportCreateRequest): Promise<ExportCreateResponse> { return apiSend<ExportCreateResponse>('/api/exports', 'POST', payload); }
 function getPurchaseSuggestions(filters: PurchaseSuggestionsState['filters']): Promise<PurchaseSuggestionListResponse> { const params = new URLSearchParams({ status: filters.status, limit: '100', offset: '0' }); if (filters.reason) params.set('reason', filters.reason); if (filters.itemType) params.set('item_type', filters.itemType); return apiGet<PurchaseSuggestionListResponse>(`/api/purchase-suggestions?${params.toString()}`); }
 function regeneratePurchaseSuggestions(): Promise<PurchaseSuggestionGenerationResponse> { return apiSend<PurchaseSuggestionGenerationResponse>('/api/purchase-suggestions/regenerate', 'POST'); }
 function createManualPurchaseSuggestion(payload: ManualPurchaseSuggestionRequest): Promise<PurchaseSuggestionResponse> { return apiSend<PurchaseSuggestionResponse>('/api/purchase-suggestions', 'POST', payload); }
