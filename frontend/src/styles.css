@@ -73,6 +73,12 @@ h1 { color: #2e211f; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; margi
 .metric-card { background: rgba(255, 253, 250, .94); border: 1px solid #ead6ca; border-radius: 22px; box-shadow: 0 14px 34px rgba(82, 54, 47, .08); padding: 18px; }
 .metric-card span { color: #7b6259; display: block; font-size: 14px; font-weight: 800; line-height: 1.35; margin-bottom: 10px; }
 .metric-card strong { color: #3b2925; display: block; font-size: 34px; line-height: 1; }
+.metric-card.wide { grid-column: span 2; }
+.path-text { color: #5f4b45; display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 13px !important; font-weight: 700; line-height: 1.35; max-width: 100%; overflow-wrap: anywhere; white-space: normal; word-break: break-word; }
+.metric-card.wide strong.path-text { font-size: 13px !important; line-height: 1.35; }
+.backup-list { display: grid; gap: 14px; }
+.backup-item { grid-template-columns: 1fr; }
+.backup-item code.path-text { background: #fff8f1; border: 1px solid #ecd4c7; border-radius: 12px; padding: 10px 12px; }
 .data-card { max-width: none; }
 .empty-card { max-width: none; }
 .error-card { border-color: #efc0b7; }
@@ -86,7 +92,7 @@ tbody tr:hover { background: #fffaf6; }
 .pill.warning { background: #fff3d4; color: #7a5b18; }
 .pill.danger { background: #fde8e2; color: #9a3526; }
 .pill.muted { background: #efe8e3; color: #6f5a52; }
-@media (max-width: 820px) { .overview-grid { grid-template-columns: 1fr 1fr; } .metric-card strong { font-size: 28px; } }
+@media (max-width: 820px) { .overview-grid { grid-template-columns: 1fr 1fr; } .metric-card strong { font-size: 28px; } .metric-card.wide { grid-column: span 1; } }
 @media (max-width: 520px) { .overview-grid { grid-template-columns: 1fr; } }
 
 .catalog-layout { display: grid; gap: 22px; max-width: 1180px; }
