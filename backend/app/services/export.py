@@ -29,6 +29,11 @@ EXPORT_TABLES = (
     "stock_movements",
     "packaging_items",
     "packaging_stock_movements",
+    "catalog_categories",
+    "catalog_tags",
+    "ingredient_catalog_tags",
+    "packaging_item_catalog_tags",
+    "recipe_template_catalog_tags",
     "recipe_templates",
     "recipe_versions",
     "recipe_ingredients",
@@ -82,6 +87,14 @@ def _safe_filename_part(value: str) -> str:
         for character in value.strip()
     )
     return cleaned.strip("_") or "manual"
+
+
+def _database_location_kind(database_path: Path) -> str:
+    user_paths = resolve_user_data_paths()
+    user_data_dir_explicit = bool(os.environ.get(USER_DATA_DIR_ENV))
+    if database_path == user_paths.database_path or user_data_dir_explicit:
+        return "user_data"
+    return "development"
 
 
 def resolve_export_paths() -> ExportPaths:
@@ -233,7 +246,8 @@ def create_json_export(database_path: Path, export_dir: Path, reason: str = "man
             "created_at": created_at.isoformat().replace("+00:00", "Z"),
             "reason": normalized_reason,
             "source": EXPORT_SOURCE,
-            "database_path": str(resolved_database_path),
+            "database_filename": resolved_database_path.name,
+            "database_location_kind": _database_location_kind(resolved_database_path),
             "tables": entity_counts,
         },
         "data": data,

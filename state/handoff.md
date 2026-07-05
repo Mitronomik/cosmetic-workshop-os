@@ -14,7 +14,8 @@ PR75 backend changes include:
 - `GET /api/exports` for read-only local JSON export listing;
 - `POST /api/exports` for explicit local JSON snapshot creation;
 - safe export path resolution for user-data mode and development/test mode;
-- whitelisted SQLite table export into `{ manifest, data }` JSON files;
+- whitelisted SQLite table export into `{ manifest, data }` JSON files, including catalog categories/tags and tag assignment tables;
+- portable manifest source metadata with `database_filename` and `database_location_kind` instead of an absolute database path inside export files;
 - non-overwriting export filenames with normalized reason and safe filename sanitization;
 - tests using temporary directories only;
 - API and export documentation updates.

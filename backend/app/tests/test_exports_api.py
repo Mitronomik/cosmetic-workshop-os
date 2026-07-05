@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ from app.db.migrations import apply_migrations
 from app.db.paths import USER_DATA_DIR_ENV
 from app.main import create_app
 from app.schemas.exports import ExportCreateRequest
-from app.services.export import list_export_files
+from app.services.export import create_json_export, list_export_files
 
 
 def _create_database(path: Path) -> None:
@@ -129,7 +130,9 @@ def test_post_export_creates_json_snapshot_without_modifying_source(tmp_path, mo
     assert manifest["export_schema_version"] == 1
     assert manifest["reason"] == "before_large_edit"
     assert manifest["source"] == "cosmetic-workshop-os"
-    assert manifest["database_path"] == str(db_path)
+    assert manifest["database_filename"] == db_path.name
+    assert manifest["database_location_kind"] == "development"
+    assert "database_path" not in manifest
     assert manifest["tables"] == first.json()["entity_counts"]
     for table_name, rows in export_payload["data"].items():
         assert manifest["tables"][table_name] == len(rows)
@@ -141,6 +144,88 @@ def test_post_export_creates_json_snapshot_without_modifying_source(tmp_path, mo
 
     listed = client.get("/api/exports").json()["exports"]
     assert [item["filename"] for item in listed] == [second_export["filename"], first_export["filename"]]
+
+
+def test_export_includes_catalog_tables(tmp_path, monkeypatch):
+    db_path = tmp_path / "cosmetic_workshop.sqlite"
+    _create_database(db_path)
+    with sqlite3.connect(db_path) as connection:
+        ingredient_id = connection.execute(
+            """
+            INSERT INTO ingredients (name, category, default_unit)
+            VALUES ('Масло ши', 'oil', 'g')
+            """
+        ).lastrowid
+        packaging_item_id = connection.execute(
+            """
+            INSERT INTO packaging_items (name, kind, unit)
+            VALUES ('Баночка 30 мл', 'jar', 'pcs')
+            """
+        ).lastrowid
+        recipe_template_id = connection.execute(
+            """
+            INSERT INTO recipe_templates (name, product_type)
+            VALUES ('Базовый крем', 'cream')
+            """
+        ).lastrowid
+        ingredient_tag_id = connection.execute(
+            """
+            INSERT INTO catalog_tags (scope, name, slug)
+            VALUES ('ingredient', 'Любимые масла', 'favorite-oils')
+            """
+        ).lastrowid
+        packaging_tag_id = connection.execute(
+            """
+            INSERT INTO catalog_tags (scope, name, slug)
+            VALUES ('packaging', 'Подарочная тара', 'gift-packaging')
+            """
+        ).lastrowid
+        recipe_tag_id = connection.execute(
+            """
+            INSERT INTO catalog_tags (scope, name, slug)
+            VALUES ('recipe', 'Базовые рецепты', 'base-recipes')
+            """
+        ).lastrowid
+        connection.execute(
+            """
+            INSERT INTO catalog_categories (scope, name, slug)
+            VALUES ('ingredient', 'Масла', 'oils')
+            """
+        )
+        connection.execute(
+            "INSERT INTO ingredient_catalog_tags (ingredient_id, tag_id) VALUES (?, ?)",
+            (ingredient_id, ingredient_tag_id),
+        )
+        connection.execute(
+            "INSERT INTO packaging_item_catalog_tags (packaging_item_id, tag_id) VALUES (?, ?)",
+            (packaging_item_id, packaging_tag_id),
+        )
+        connection.execute(
+            "INSERT INTO recipe_template_catalog_tags (recipe_template_id, tag_id) VALUES (?, ?)",
+            (recipe_template_id, recipe_tag_id),
+        )
+
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+    monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+
+    result = create_json_export(db_path, tmp_path / "exports", reason="catalog_check")
+    payload = json.loads(result.export_path.read_text(encoding="utf-8"))
+
+    expected_counts = {
+        "catalog_categories": 1,
+        "catalog_tags": 3,
+        "ingredient_catalog_tags": 1,
+        "packaging_item_catalog_tags": 1,
+        "recipe_template_catalog_tags": 1,
+    }
+    for table_name, expected_count in expected_counts.items():
+        assert table_name in payload["data"]
+        assert table_name in payload["manifest"]["tables"]
+        assert payload["manifest"]["tables"][table_name] == len(payload["data"][table_name])
+        assert payload["manifest"]["tables"][table_name] == expected_count
+    assert payload["manifest"]["database_filename"] == db_path.name
+    assert payload["manifest"]["database_location_kind"] == "development"
+    assert "database_path" not in payload["manifest"]
 
 
 @pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")

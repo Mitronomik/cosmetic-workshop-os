@@ -49,7 +49,8 @@ Each export file contains:
     "created_at": "2026-07-05T12:00:00Z",
     "reason": "manual",
     "source": "cosmetic-workshop-os",
-    "database_path": "/path/to/cosmetic_workshop.sqlite",
+    "database_filename": "cosmetic_workshop.sqlite",
+    "database_location_kind": "user_data",
     "tables": {
       "ingredients": 12,
       "ingredient_lots": 3
@@ -62,6 +63,8 @@ Each export file contains:
 }
 ```
 
+The export file intentionally does not store the absolute local database path. API status responses may show local paths for the local UI, but exported JSON snapshots use portable source metadata.
+
 IDs and relationship fields are preserved as stored in SQLite. Date/time values are exported as stored strings or ISO-compatible JSON values. Decimal-like values remain the app's stored string values; decimal localization is UI-only.
 
 ## Exported entity groups
@@ -72,6 +75,8 @@ The export service uses an explicit whitelist and skips whitelisted tables that 
 - ingredients and ingredient lots;
 - ingredient stock movements;
 - packaging items and packaging stock movements;
+- catalog categories and catalog tags;
+- ingredient, packaging, and recipe tag assignment tables;
 - recipe templates, recipe versions, and recipe ingredients;
 - clients, client recipes, client recipe ingredients, wishes, and feedback;
 - orders;

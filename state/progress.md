@@ -423,7 +423,8 @@ After PR73 — manual backup API foundation complete; preparing Backup UI
 
 - Added backend Export API foundation for explicit local JSON snapshots: `GET /api/exports/status`, `GET /api/exports`, and `POST /api/exports`.
 - Added safe export path resolution mirroring backup behavior: user-mode exports use the resolved user `exports/` directory; development/test exports stay next to the configured database.
-- Added JSON export creation with `manifest`, whitelisted domain `data`, entity counts, preserved IDs/relationships, non-overwriting filenames, and reason normalization/safe filename sanitization.
+- Added JSON export creation with `manifest`, whitelisted domain `data`, entity counts, preserved IDs/relationships, catalog/user-organization tables, non-overwriting filenames, and reason normalization/safe filename sanitization.
+- Follow-up removed absolute local `database_path` from exported JSON manifests; exports now store `database_filename` and `database_location_kind` while API responses may still show local paths for the local UI.
 - Added export listing/status response schemas and tests for read-only GET behavior, missing directories, JSON creation, uniqueness, missing/invalid database handling, reason validation, and malformed filenames.
 - Updated API/export documentation.
 

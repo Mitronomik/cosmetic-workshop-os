@@ -435,6 +435,10 @@ Successful response shape:
 }
 ```
 
+The exported JSON file manifest does not store the absolute local `database_path`. It stores portable source metadata instead: `database_filename` and `database_location_kind` (`user_data` or `development`). API status/create responses may still include local paths for the local UI.
+
+Exported JSON snapshots include whitelisted user-organization catalog tables when they exist: `catalog_categories`, `catalog_tags`, `ingredient_catalog_tags`, `packaging_item_catalog_tags`, and `recipe_template_catalog_tags`.
+
 Safety guarantees:
 
 - creates only the selected local `exports/` directory when needed;
