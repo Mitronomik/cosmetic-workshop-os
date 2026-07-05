@@ -2,7 +2,7 @@
 
 ## Last completed work
 
-PR81 — Import confirmation/apply UI.
+PR81 follow-up — Import apply stale-state and structured errors.
 
 ## Current repo state after PR81
 
@@ -33,3 +33,10 @@ Manual browser smoke was not run in this non-interactive session because no long
 ## Next recommended PR
 
 PR82 — Import apply hardening and smoke fixes.
+
+## PR81 follow-up notes
+
+- New draft creation now resets apply status, messages, confirmation checkboxes, confirmation panel visibility, and last apply result before upload and after backend draft creation.
+- Frontend API errors now retain structured backend `detail.issues`; import apply errors include row-level issue messages when backend provides them.
+- Apply supported targets and semantics remain unchanged; no backend endpoints, migrations, parser logic, automatic backup/export, partial import, rollback/revert, lots/orders/stock/production apply, or direct frontend business-data mutation was added.
+- Manual browser smoke was not run in this non-interactive session. Recommended smoke remains: apply draft A, create draft B, verify stale result is gone, and verify duplicate/conflict issues show row-level messages.

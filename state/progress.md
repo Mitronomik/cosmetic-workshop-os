@@ -491,3 +491,8 @@ Import CSV/XLSX draft backend foundation.
 - Blocked, cancelled, failed, already-applied, and unsupported drafts (including ingredient lots and orders) cannot be applied from the UI.
 - Successful apply refreshes the draft list/detail and displays created records; backup/export buttons only navigate and do not create files.
 - No backend targets, mappings, cell editing, partial import, OCR/PDF/image import, stock/order/lot/production import, automatic backup/export, migrations, or domain direct frontend mutations were added.
+
+## PR81 follow-up — Import apply stale-state and structured errors
+- Reset import apply state before upload and after new draft creation so stale success/errors/results from a previous draft cannot appear on the newly selected draft.
+- Preserved structured backend `detail.issues` on frontend API errors and surfaced issue messages in import apply conflict/error copy.
+- Improved import draft cancel rejection copy to show backend-provided messages while keeping apply gating and supported targets unchanged.

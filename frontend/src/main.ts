@@ -130,6 +130,8 @@ type ImportTargetsResponse = { targets: ImportTargetResponse[] };
 type ImportApplyReadiness = { can_apply: boolean; status: string; blocking_error_count: number; warning_count: number; valid_row_count: number; invalid_row_count: number; blocking_reasons: string[]; warnings: string[]; next_action: string };
 type ImportDraftSummary = { id: number; source_id: number; target_type: string; status: string; row_count: number; valid_row_count: number; invalid_row_count: number; warning_count: number; error_count: number; headers: string[]; summary?: Record<string, unknown>; apply_readiness?: ImportApplyReadiness; created_at: string; updated_at?: string | null };
 type ImportIssue = { severity: 'info' | 'warning' | 'error' | string; code: string; message: string; row_number: number | null; field: string | null };
+type ApiIssue = { severity?: string; code?: string; message?: string; row_number?: number | null; field?: string | null };
+type ApiErrorWithDetails = Error & { status?: number; issues?: ApiIssue[] };
 type ImportPreviewRow = { id?: number; row_number: number; raw_values: Record<string, unknown>; normalized_values: Record<string, unknown>; issues: ImportIssue[]; status: string };
 type ImportDraftCreateResponse = { draft: ImportDraftSummary; preview_rows: ImportPreviewRow[]; issues: ImportIssue[]; message: string };
 type ImportDraftListParams = { status?: string; targetType?: string; limit?: number; offset?: number };
@@ -1277,12 +1279,14 @@ function submitImportDraft(form: HTMLFormElement) {
   const file = (form.elements.namedItem('file') as HTMLInputElement | null)?.files?.[0] ?? null;
   if (!targetType) { importUiState.error = 'Выберите тип данных для импорта.'; importUiState.message = ''; render(); return; }
   if (!file || !/\.(csv|xlsx)$/i.test(file.name)) { importUiState.error = 'Выберите файл CSV или XLSX.'; importUiState.message = ''; render(); return; }
+  resetImportApplyState();
   importUiState.actionStatus = 'uploading';
   importUiState.error = '';
   importUiState.message = '';
   render();
   createImportDraft(file, targetType)
     .then((response) => {
+      resetImportApplyState();
       importUiState.message = response.message || 'Черновик импорта создан. Данные ещё не внесены в систему.';
       importUiState.selectedFileName = '';
       form.reset();
@@ -1333,7 +1337,7 @@ function cancelImportDraftFromUi(id: number) {
       importUiState.message = response.message || 'Черновик импорта отменён. Рабочие данные не изменены.';
       render();
     })
-    .catch(() => { importUiState.actionStatus = 'idle'; importUiState.error = 'Не удалось отменить черновик импорта.'; render(); });
+    .catch((error) => { importUiState.actionStatus = 'idle'; importUiState.error = error instanceof Error && error.message !== 'API request failed' ? error.message : 'Не удалось отменить черновик импорта.'; render(); });
 }
 
 
@@ -1351,7 +1355,19 @@ function applySelectedImportDraftFromUi() {
     .then(({ response, list, refreshed }) => { importUiState.drafts = list.drafts; importUiState.selectedDraft = refreshed; importUiState.selectedDraftStatus = 'ready'; importUiState.applyStatus = 'success'; importUiState.showApplyConfirm = false; importUiState.applyMessage = response.message || 'Черновик импорта применён. Данные внесены в систему.'; importUiState.lastApplyResult = response.apply_result || getDraftApplyResult(refreshed.draft); importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; render(); })
     .catch((error) => { importUiState.applyStatus = 'error'; importUiState.applyError = importApplyErrorMessage(error); render(); });
 }
-function importApplyErrorMessage(error: unknown) { const status = typeof error === 'object' && error && 'status' in error ? Number((error as { status?: unknown }).status) : 0; const message = error instanceof Error && error.message !== 'API request failed' ? error.message : ''; if (/backup/i.test(message) || /резерв/i.test(message)) return 'Перед применением нужно подтвердить, что резервная копия создана или не требуется.'; if (/warning/i.test(message) || /предупреж/i.test(message)) return 'Черновик содержит предупреждения. Чтобы продолжить, отметьте разрешение на применение с предупреждениями.'; if (status === 409) return `Backend отклонил применение: есть конфликт или дубликат. Исправьте файл и создайте новый черновик.${message ? ` Детали: ${message}` : ''}`; return `Не удалось применить черновик. Рабочие данные не были частично изменены.${message ? ` Детали: ${message}` : ''}`; }
+function importApplyErrorMessage(error: unknown) {
+  const apiError = error as ApiErrorWithDetails;
+  const status = typeof apiError?.status === 'number' ? apiError.status : 0;
+  const message = error instanceof Error && error.message !== 'API request failed' ? error.message : '';
+  const issueMessages = Array.isArray(apiError?.issues)
+    ? apiError.issues.map((issue) => { const row = issue.row_number ? `Строка ${issue.row_number}: ` : ''; return issue.message ? `${row}${issue.message}` : ''; }).filter(Boolean)
+    : [];
+  const details = issueMessages.length ? ` Детали: ${issueMessages.join(' ')}` : (message ? ` Детали: ${message}` : '');
+  if (/backup/i.test(message) || /резерв/i.test(message)) return `Перед применением нужно подтвердить, что резервная копия создана или не требуется.${details && !details.includes(message) ? details : ''}`;
+  if (/warning/i.test(message) || /предупреж/i.test(message)) return `Черновик содержит предупреждения. Чтобы продолжить, отметьте разрешение на применение с предупреждениями.${details && !details.includes(message) ? details : ''}`;
+  if (status === 409) return `Backend отклонил применение: есть конфликт или дубликат. Исправьте файл и создайте новый черновик.${details}`;
+  return `Не удалось применить черновик. Рабочие данные не были частично изменены.${details}`;
+}
 function navigateToSection(section: NavigationSection | undefined) { if (!section) return; activeSection = section; window.history.pushState({}, '', pathForSection(activeSection)); loadSectionData(activeSection); render(); }
 
 function importPage() {
@@ -2227,10 +2243,12 @@ function cancelIngredientEdit() {
   ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsState.assignmentDraft = emptyAssignmentDraft(); ingredientsState.showCreateForm = false; ingredientsMessage = ''; ingredientsError = ''; render();
 }
 
-function apiGet<T>(url: string): Promise<T> { return fetch(url).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw Object.assign(new Error(apiErrorMessage(payload)), { status: response.status }); } return response.json() as Promise<T>; }); }
+function apiGet<T>(url: string): Promise<T> { return fetch(url).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
 function apiErrorMessage(payload: unknown) { if (typeof payload === 'string') return payload; if (payload && typeof payload === 'object' && 'detail' in payload) { const detail = (payload as { detail?: unknown }).detail; if (typeof detail === 'string') return detail; if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message?: unknown }).message ?? 'API request failed'); } return 'API request failed'; }
-function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'PATCH', body?: unknown): Promise<T> { return fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw Object.assign(new Error(apiErrorMessage(payload)), { status: response.status }); } return response.json() as Promise<T>; }); }
-function apiForm<T>(url: string, method: 'POST', formData: FormData): Promise<T> { return fetch(url, { method, body: formData }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw Object.assign(new Error(apiErrorMessage(payload)), { status: response.status }); } return response.json() as Promise<T>; }); }
+function apiIssues(payload: unknown): ApiIssue[] { if (!payload || typeof payload !== 'object' || !('detail' in payload)) return []; const detail = (payload as { detail?: unknown }).detail; if (!detail || typeof detail !== 'object' || !('issues' in detail)) return []; const issues = (detail as { issues?: unknown }).issues; return Array.isArray(issues) ? issues as ApiIssue[] : []; }
+function apiErrorFromPayload(payload: unknown, status: number): ApiErrorWithDetails { const error = new Error(apiErrorMessage(payload)) as ApiErrorWithDetails; error.status = status; error.issues = apiIssues(payload); return error; }
+function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'PATCH', body?: unknown): Promise<T> { return fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
+function apiForm<T>(url: string, method: 'POST', formData: FormData): Promise<T> { return fetch(url, { method, body: formData }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
 function getBackupStatus(): Promise<BackupStatusResponse> { return apiGet<BackupStatusResponse>('/api/backups/status'); }
 function getBackups(): Promise<BackupListResponse> { return apiGet<BackupListResponse>('/api/backups'); }
 function createBackup(payload: BackupCreateRequest): Promise<BackupCreateResponse> { return apiSend<BackupCreateResponse>('/api/backups', 'POST', payload); }
