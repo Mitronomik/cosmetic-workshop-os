@@ -565,7 +565,7 @@ Import draft create, list, detail, and cancel responses include `draft.apply_rea
 }
 ```
 
-Allowed readiness statuses are `ready`, `ready_with_warnings`, `blocked`, `cancelled`, and `failed`. `can_apply` means only “validation-ready for a future explicit apply endpoint”. PR79 still has no apply or confirmation endpoint, and import drafts still do not write rows into ingredients, clients, recipes, orders, stock, production, alerts, purchases, backups, or exports.
+Allowed readiness statuses are `ready`, `ready_with_warnings`, `blocked`, `cancelled`, `failed`, and `applied`. `can_apply` means only “validation-ready for an explicit apply endpoint”. PR79 introduced readiness only; PR80 adds the explicit apply endpoint documented below. Import drafts still do not write rows into business tables unless the PR80 apply endpoint is called with explicit confirmation and backup acknowledgement.
 
 Draft `summary` may also include `readiness`, `issue_counts_by_code`, and `issue_counts_by_severity`. Refined validation issue codes include `header_alias_used`, `decimal_comma_normalized`, `ambiguous_decimal`, `invalid_positive_decimal`, `invalid_non_negative_decimal`, `unit_alias_normalized`, `date_format_normalized`, `invalid_email`, and `invalid_id` in addition to the PR77 codes.
 
@@ -596,5 +596,6 @@ Rules:
 - Packaging import is catalog-only. A non-empty `stock` column is rejected because stock must be changed through movements.
 - No frontend apply UI exists in PR80; this is an API-only foundation.
 - No stock movements, ingredient lots, orders, production records, alerts, purchase suggestions, backups, or exports are created automatically.
+- Applied drafts cannot be cancelled. Cancelling an applied draft returns `409 Conflict`; the draft/source stay `applied`, and created domain records are not rolled back by cancellation.
 
 Successful response includes the updated draft, an apply result with created record ids/labels, and the message `Черновик импорта применён. Данные внесены в систему.` Conflicts return `409` with structured `detail.message` and `detail.issues` where possible.

@@ -531,6 +531,16 @@ def cancel_import_draft(draft_id: int, config: DatabaseConfig | None = None) -> 
         draft = connection.execute("SELECT * FROM import_drafts WHERE id = ?", (draft_id,)).fetchone()
         if draft is None:
             return None
+        if draft["status"] == "applied":
+            raise ImportApplyConflictError(
+                "Черновик нельзя отменить.",
+                issues=[
+                    _conflict(
+                        "draft_already_applied",
+                        "Применённый черновик нельзя отменить: данные уже внесены в систему.",
+                    )
+                ],
+            )
         connection.execute("UPDATE import_drafts SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (draft_id,))
         connection.execute("UPDATE import_sources SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (draft["source_id"],))
         updated = connection.execute("SELECT * FROM import_drafts WHERE id = ?", (draft_id,)).fetchone()

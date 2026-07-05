@@ -94,7 +94,10 @@ def get_import_draft_details(draft_id: int, limit: int = Query(default=50, ge=1,
 
 @router.post("/drafts/{draft_id}/cancel", response_model=ImportDraftCancelResponse)
 def post_import_draft_cancel(draft_id: int) -> ImportDraftCancelResponse:
-    result = cancel_import_draft(draft_id)
+    try:
+        result = cancel_import_draft(draft_id)
+    except ImportApplyConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.detail) from exc
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Черновик импорта не найден.")
     return ImportDraftCancelResponse(**result)

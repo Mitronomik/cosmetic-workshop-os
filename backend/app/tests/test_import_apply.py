@@ -1,4 +1,5 @@
 import sqlite3
+from importlib import import_module
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,7 @@ except (RuntimeError, ImportError):
 
 from app.db.config import DATABASE_PATH_ENV, DatabaseConfig
 from app.db.migrations import apply_migrations
-from app.services.imports import UploadedFileData, apply_import_draft, create_import_draft, ImportApplyConflictError
+from app.services.imports import UploadedFileData, apply_import_draft, cancel_import_draft, create_import_draft, ImportApplyConflictError
 
 
 def _create_database(path: Path) -> None:
@@ -138,6 +139,70 @@ def test_apply_duplicate_rows_and_packaging_stock_are_blocked(tmp_path):
     assert _count(db_path, "packaging_items") == 0
 
 
+def test_applied_draft_cannot_be_cancelled_and_status_remains_applied(tmp_path):
+    db_path = tmp_path / "db.sqlite"
+    _create_database(db_path)
+    config = DatabaseConfig(path=db_path)
+
+    draft = _draft(config, "ingredients", b"name,unit\nWater,g\n")
+    applied = apply_import_draft(draft["id"], confirm_apply=True, backup_acknowledged=True, config=config)
+    assert applied["draft"]["status"] == "applied"
+
+    with pytest.raises(ImportApplyConflictError) as error:
+        cancel_import_draft(draft["id"], config=config)
+
+    assert error.value.issues[0]["code"] == "draft_already_applied"
+    with sqlite3.connect(db_path) as connection:
+        assert connection.execute("SELECT status FROM import_drafts WHERE id = ?", (draft["id"],)).fetchone()[0] == "applied"
+        assert connection.execute("SELECT status FROM import_sources WHERE id = ?", (draft["source_id"],)).fetchone()[0] == "applied"
+        assert connection.execute("SELECT COUNT(*) FROM ingredients").fetchone()[0] == 1
+
+
+def test_migration_0017_preserves_import_data_and_allows_applied_status(tmp_path):
+    db_path = tmp_path / "migration.sqlite"
+    m0016 = import_module("app.migrations.versions.0016_import_drafts")
+    m0017 = import_module("app.migrations.versions.0017_import_apply_status")
+
+    with sqlite3.connect(db_path) as connection:
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        m0016.upgrade(connection)
+        source_id = connection.execute(
+            """
+            INSERT INTO import_sources (original_filename, content_type, file_extension, file_size_bytes, content_hash, target_type, status)
+            VALUES ('ingredients.csv', 'text/csv', 'csv', 16, 'hash', 'ingredients', 'parsed')
+            """
+        ).lastrowid
+        draft_id = connection.execute(
+            """
+            INSERT INTO import_drafts (source_id, target_type, status, row_count, valid_row_count, headers_json, summary_json)
+            VALUES (?, 'ingredients', 'draft', 1, 1, '["name"]', '{}')
+            """,
+            (source_id,),
+        ).lastrowid
+        connection.execute(
+            """
+            INSERT INTO import_draft_rows (draft_id, row_number, raw_values_json, normalized_values_json, issues_json, status)
+            VALUES (?, 2, '{"name":"Water"}', '{"name":"Water"}', '[]', 'valid')
+            """,
+            (draft_id,),
+        )
+        connection.commit()
+
+        m0017.upgrade(connection)
+
+        assert connection.execute("SELECT COUNT(*) FROM import_sources").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM import_drafts").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM import_draft_rows").fetchone()[0] == 1
+        assert connection.execute("SELECT original_filename FROM import_sources WHERE id = ?", (source_id,)).fetchone()[0] == "ingredients.csv"
+        assert connection.execute("SELECT row_count FROM import_drafts WHERE id = ?", (draft_id,)).fetchone()[0] == 1
+        connection.execute("UPDATE import_sources SET status = 'applied' WHERE id = ?", (source_id,))
+        connection.execute("UPDATE import_drafts SET status = 'applied' WHERE id = ?", (draft_id,))
+        connection.commit()
+        assert connection.execute("SELECT status FROM import_sources WHERE id = ?", (source_id,)).fetchone()[0] == "applied"
+        assert connection.execute("SELECT status FROM import_drafts WHERE id = ?", (draft_id,)).fetchone()[0] == "applied"
+
+
 @pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
 def test_apply_api_response_and_missing_draft(tmp_path, monkeypatch):
     db_path = tmp_path / "db.sqlite"
@@ -154,3 +219,7 @@ def test_apply_api_response_and_missing_draft(tmp_path, monkeypatch):
     body = response.json()
     assert body["draft"]["status"] == "applied"
     assert body["apply_result"]["created_records"][0]["label"] == "Water"
+
+    cancel_response = client.post(f"/api/imports/drafts/{created['draft']['id']}/cancel")
+    assert cancel_response.status_code == 409
+    assert cancel_response.json()["detail"]["issues"][0]["code"] == "draft_already_applied"

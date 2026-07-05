@@ -187,4 +187,5 @@ Safety rules:
 - Duplicate names/emails/phones inside the draft or in existing tables block the whole apply.
 - Packaging rows with non-empty `stock` are rejected because stock must go through movements.
 - No stock movements, lots, orders, production records, alerts, purchase suggestions, backups, or exports are created by PR80 apply.
+- Applied drafts cannot be cancelled. If rows were already written to domain tables, the draft/source must remain `applied` for historical traceability.
 - The frontend apply button is not implemented yet; PR81 is expected to add the confirmation/apply UI.

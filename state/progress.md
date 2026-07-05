@@ -478,3 +478,9 @@ Import CSV/XLSX draft backend foundation.
 - Successful apply updates draft/source to `applied`, stores `apply_result` in `summary_json`, and writes an audit log entry.
 - Added migration support for the new `applied` import status and backend apply tests.
 - Next recommended PR: PR81 — Import confirmation/apply UI.
+
+## PR80 follow-up — Applied import cancellation safety
+- Blocked cancelling already-applied import drafts; cancel now returns a structured conflict and leaves draft/source status as `applied`.
+- Added regression tests for applied-cancel blocking and migration 0017 data preservation/applied status acceptance.
+- Updated Import UI defensive labels/readiness pills for `applied` and hides cancel actions unless status is `draft`.
+- Updated API/import docs to include `applied` readiness and the no-cancel safety rule for applied drafts.

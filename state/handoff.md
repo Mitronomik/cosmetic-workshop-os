@@ -17,6 +17,7 @@ Import now supports a backend-only explicit apply step:
 - Existing domain conflicts and duplicate rows inside drafts block the whole apply.
 - Successful apply marks both import draft and source as `applied` and stores `apply_result` in `summary_json`.
 - Audit log entry `import_draft_applied` is created on successful apply.
+- Attempting to cancel an applied draft now returns a structured conflict and leaves draft/source status as `applied`.
 
 ## Safety notes
 
@@ -24,6 +25,7 @@ Import now supports a backend-only explicit apply step:
 - No mapping editor, cell editing, partial import, restore, OCR/PDF/image import, cloud import, or scheduled import was added.
 - No stock movements, ingredient lots, orders, production records, alerts, purchase suggestions, backups, or exports are created automatically by apply.
 - Packaging apply is catalog-only; non-empty `stock` is blocked.
+- Import UI labels `applied` as `Применён` and hides cancellation unless a draft is still in `draft` status.
 - A migration adds `applied` as an allowed import source/draft status because the existing CHECK constraints did not permit it.
 
 ## Manual smoke
