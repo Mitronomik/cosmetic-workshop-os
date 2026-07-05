@@ -428,6 +428,13 @@ After PR73 — manual backup API foundation complete; preparing Backup UI
 - Added export listing/status response schemas and tests for read-only GET behavior, missing directories, JSON creation, uniqueness, missing/invalid database handling, reason validation, and malformed filenames.
 - Updated API/export documentation.
 
+## PR76 — Export UI
+- Added frontend `/exports` workspace and “Экспорт” navigation under “Данные и настройки”.
+- Export UI consumes only PR75 endpoints: `GET /api/exports/status`, `GET /api/exports`, and explicit-click `POST /api/exports`.
+- Added status cards for database/export directory, manual JSON export creation with reason presets/custom reason, export history list, and entity-count summary from backend response.
+- UI explicitly states that import, restore, download/delete, CSV/XLSX, PDF/report, scheduled export, cloud export, and automation are not implemented.
+- No backend behavior, migrations, business mutations, dashboard analytics, import/restore/download/delete flows, or arbitrary path inputs were added.
+
 ## Next recommended PR
 
-PR76 — Export UI.
+Import CSV/XLSX draft backend foundation.
