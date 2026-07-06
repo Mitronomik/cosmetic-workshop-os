@@ -78,3 +78,10 @@ PR87 — Help center contextual polish / smoke fixes if smoke finds issues; othe
 ## PR87 manual smoke note
 
 Manual long-running backend smoke was not run in this non-interactive session. Automated API coverage used FastAPI TestClient where available and verified all `/api/reports/*` endpoints return `generated_at`/`warnings` and keep table row counts unchanged. Recommended next local smoke for PR88: start backend, call reports on an empty database, install demo data, call reports again, and confirm no backup/export files or alert/purchase regeneration occurred.
+
+
+## PR87 follow-up — finance margin basis safety
+- Fixed finance report margin basis: `known_margin` and `known_margin_percent` now use only production batches where both `sale_price` and `total_cost` are known on the same row.
+- `known_revenue` and `known_production_cost` remain independent known totals, but reports no longer combine revenue from one incomplete batch with cost from another unrelated incomplete batch to produce margin.
+- Added `complete_finance_record_count`, `incomplete_margin_count`, `margin_unavailable`, and `partial_margin_basis` coverage/docs.
+- Manual long-running API smoke was not run in this non-interactive session; automated service/API tests cover the finance mismatch regression and read-only endpoints.

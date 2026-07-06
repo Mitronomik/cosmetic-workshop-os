@@ -28,9 +28,12 @@ This is not advanced analytics and not an accounting module.
 
 The finance report is an operational snapshot, not accounting or tax filing.
 
-- Revenue is summed only from produced production batches that already have a sale price.
-- Production cost is summed only from production batches that already have known total cost.
-- Margin is returned only when it can be calculated from existing known values.
+- `known_revenue` is the sum of all known sale prices.
+- `known_production_cost` is the sum of all known production costs.
+- `known_margin` is calculated only from production batches where both `sale_price` and `total_cost` are known on the same row.
+- `known_margin_percent` uses the same complete paired basis as `known_margin`, not the global known revenue total.
+- `complete_finance_record_count` is the count of production batches used for margin.
+- `incomplete_margin_count` is the count of production batches excluded from margin because sale price or cost is missing.
 - Tax is not invented or recalculated by reports.
 - Missing sale prices or costs are surfaced as warnings.
 
@@ -42,6 +45,8 @@ When data is missing or ambiguous, reports return warnings instead of silently i
 - `missing_production_cost` — some production batches do not have total cost.
 - `mixed_units` — produced quantities are shown by unit because grams, milliliters, and pieces cannot be safely summed together.
 - `no_production_data` — no production batches exist yet.
+- `margin_unavailable` — no production batch has both sale price and cost, so margin is not returned.
+- `partial_margin_basis` — margin is returned, but only for complete finance rows.
 
 ## Endpoints
 

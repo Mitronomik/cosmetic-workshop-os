@@ -107,31 +107,72 @@ class ReportsService:
     def get_finance_report(self, *, generated_at: str | None = None) -> FinanceReportResponse:
         with session(self.config) as connection:
             rows = connection.execute("SELECT sale_price, total_cost FROM production_batches").fetchall()
+
         warnings = []
         revenue = Decimal("0")
         cost = Decimal("0")
+        paired_revenue = Decimal("0")
+        paired_cost = Decimal("0")
         with_sale = 0
+        with_cost = 0
         missing_sale = 0
         missing_cost = 0
+        complete_finance_record_count = 0
+        incomplete_margin_count = 0
+
         for row in rows:
-            if row["sale_price"] is None:
-                missing_sale += 1
-            else:
+            sale_known = row["sale_price"] is not None
+            cost_known = row["total_cost"] is not None
+
+            if sale_known:
                 with_sale += 1
                 revenue += Decimal(row["sale_price"])
-            if row["total_cost"] is None:
-                missing_cost += 1
             else:
+                missing_sale += 1
+
+            if cost_known:
+                with_cost += 1
                 cost += Decimal(row["total_cost"])
+            else:
+                missing_cost += 1
+
+            if sale_known and cost_known:
+                complete_finance_record_count += 1
+                paired_revenue += Decimal(row["sale_price"])
+                paired_cost += Decimal(row["total_cost"])
+            else:
+                incomplete_margin_count += 1
+
         if missing_sale:
             warnings.append(_warning("missing_sale_price", "Не у всех произведённых заказов указана цена продажи.", "known_revenue"))
         if missing_cost:
             warnings.append(_warning("missing_production_cost", "Не для всех производственных партий известна себестоимость.", "known_production_cost"))
-        known_margin = revenue - cost if with_sale and missing_cost < len(rows) else None
+        if rows and complete_finance_record_count == 0:
+            warnings.append(_warning("margin_unavailable", "Маржу нельзя рассчитать: нет произведённых партий, где одновременно известны цена продажи и себестоимость.", "known_margin"))
+        elif incomplete_margin_count and complete_finance_record_count:
+            warnings.append(_warning("partial_margin_basis", "Маржа рассчитана только по произведённым партиям, где одновременно известны цена продажи и себестоимость.", "known_margin"))
+
+        known_margin = None
         margin_percent = None
-        if known_margin is not None and revenue > 0:
-            margin_percent = (known_margin / revenue * Decimal("100")).quantize(Decimal("0.01"))
-        return FinanceReportResponse(generated_at=generated_at or _now(), produced_order_count=len(rows), produced_orders_with_sale_price=with_sale, known_revenue=str(revenue) if with_sale else None, known_production_cost=str(cost) if rows and missing_cost < len(rows) else None, known_margin=str(known_margin) if known_margin is not None else None, known_margin_percent=str(margin_percent) if margin_percent is not None else None, missing_sale_price_count=missing_sale, missing_cost_count=missing_cost, warnings=warnings)
+        if complete_finance_record_count:
+            known_margin = paired_revenue - paired_cost
+            if paired_revenue > 0:
+                margin_percent = (known_margin / paired_revenue * Decimal("100")).quantize(Decimal("0.01"))
+
+        return FinanceReportResponse(
+            generated_at=generated_at or _now(),
+            produced_order_count=len(rows),
+            produced_orders_with_sale_price=with_sale,
+            known_revenue=str(revenue) if with_sale else None,
+            known_production_cost=str(cost) if with_cost else None,
+            known_margin=str(known_margin) if known_margin is not None else None,
+            known_margin_percent=str(margin_percent) if margin_percent is not None else None,
+            complete_finance_record_count=complete_finance_record_count,
+            incomplete_margin_count=incomplete_margin_count,
+            missing_sale_price_count=missing_sale,
+            missing_cost_count=missing_cost,
+            warnings=warnings,
+        )
 
     def _alerts_summary(self) -> AlertsReportSummary:
         with session(self.config) as connection:

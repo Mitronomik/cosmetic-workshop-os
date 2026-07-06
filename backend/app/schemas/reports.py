@@ -62,6 +62,8 @@ class FinanceReportResponse(BaseModel):
     known_production_cost: str | None
     known_margin: str | None
     known_margin_percent: str | None
+    complete_finance_record_count: int
+    incomplete_margin_count: int
     missing_sale_price_count: int
     missing_cost_count: int
     warnings: list[ReportWarning]

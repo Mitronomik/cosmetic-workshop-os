@@ -757,9 +757,11 @@ Returns a basic operational financial snapshot, not accounting:
 - produced orders with sale price;
 - known revenue;
 - known production cost;
-- known margin;
-- known margin percent;
+- known margin calculated only from rows where sale price and production cost are both known;
+- known margin percent calculated from the same paired revenue basis;
+- complete finance record count;
+- incomplete margin count;
 - missing sale price count;
 - missing cost count.
 
-The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate.
+The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate. `known_revenue` and `known_production_cost` are independent known totals, but `known_margin` never combines revenue from one incomplete batch with cost from another incomplete batch. Warnings include `margin_unavailable` when no paired sale+cost row exists and `partial_margin_basis` when margin is based on a subset of complete rows.

@@ -25,6 +25,12 @@ def test_report_api_endpoints_return_generated_at_warnings_and_are_read_only(mon
         body = response.json()
         assert body["generated_at"]
         assert "warnings" in body
+        if path == "finance":
+            assert "complete_finance_record_count" in body
+            assert "incomplete_margin_count" in body
+        if path == "overview":
+            assert "complete_finance_record_count" in body["finance_summary"]
+            assert "incomplete_margin_count" in body["finance_summary"]
     with sqlite3.connect(db) as con:
         after = {table: con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in before}
     assert after == before

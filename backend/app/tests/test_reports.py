@@ -122,8 +122,40 @@ def test_finance_report_sums_decimal_values_and_warns_for_missing_data(tmp_path)
     assert report.produced_orders_with_sale_price == 1
     assert report.known_revenue == "1200.10"
     assert report.known_production_cost == "150.10"
+    assert report.complete_finance_record_count == 1
+    assert report.incomplete_margin_count == 1
     assert report.known_margin == "1050.00"
     assert report.known_margin_percent == "87.49"
     assert report.missing_sale_price_count == 1
     assert report.missing_cost_count == 1
-    assert {w.code for w in report.warnings} >= {"missing_sale_price", "missing_production_cost"}
+    assert {w.code for w in report.warnings} >= {"missing_sale_price", "missing_production_cost", "partial_margin_basis"}
+
+
+def test_finance_report_does_not_mix_unpaired_revenue_and_cost(tmp_path):
+    c = config(tmp_path)
+    with sqlite3.connect(c.path) as con:
+        client = con.execute("INSERT INTO clients (full_name) VALUES ('Анна')").lastrowid
+        ingredient = con.execute("INSERT INTO ingredients (name, category, default_unit) VALUES ('Вода', 'water_phase', 'g')").lastrowid
+        template = con.execute("INSERT INTO recipe_templates (name, product_type) VALUES ('Крем', 'cream')").lastrowid
+        version = con.execute("INSERT INTO recipe_versions (recipe_template_id, version_number, title, status) VALUES (?, 1, 'v1', 'draft')", (template,)).lastrowid
+        order_with_sale = con.execute("INSERT INTO orders (client_id, recipe_version_id, product_name, target_batch_size_value, target_batch_size_unit, status, sale_price) VALUES (?, ?, 'Цена без себестоимости', '50', 'g', 'produced', '1000.00')", (client, version)).lastrowid
+        order_with_cost = con.execute("INSERT INTO orders (client_id, recipe_version_id, product_name, target_batch_size_value, target_batch_size_unit, status) VALUES (?, ?, 'Себестоимость без цены', '50', 'g', 'produced')", (client, version)).lastrowid
+        con.execute("INSERT INTO production_batches (order_id, recipe_version_id, final_batch_value, final_batch_unit, other_cost, sale_price) VALUES (?, ?, '50.000', 'g', '0.00', '1000.00')", (order_with_sale, version))
+        con.execute("INSERT INTO production_batches (order_id, recipe_version_id, final_batch_value, final_batch_unit, other_cost, total_cost) VALUES (?, ?, '50.000', 'g', '0.00', '700.00')", (order_with_cost, version))
+        con.execute("INSERT INTO ingredient_lots (ingredient_id, unit) VALUES (?, 'g')", (ingredient,))
+
+    report = ReportsService(c).get_finance_report()
+
+    assert report.produced_order_count == 2
+    assert report.produced_orders_with_sale_price == 1
+    assert report.known_revenue == "1000.00"
+    assert report.known_production_cost == "700.00"
+    assert report.complete_finance_record_count == 0
+    assert report.incomplete_margin_count == 2
+    assert report.known_margin is None
+    assert report.known_margin_percent is None
+    warning_codes = {w.code for w in report.warnings}
+    assert "missing_sale_price" in warning_codes
+    assert "missing_production_cost" in warning_codes
+    assert "margin_unavailable" in warning_codes
+    assert "partial_margin_basis" not in warning_codes
