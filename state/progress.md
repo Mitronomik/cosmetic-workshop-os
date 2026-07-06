@@ -528,3 +528,17 @@ Import CSV/XLSX draft backend foundation.
 - Demo status now reports `can_clear=false` with a blocking reason when untracked working records reference tracked demo rows.
 - Added regression tests for unsafe alert, purchase suggestion, client wish/feedback, production batch dependencies, and unsafe status behavior.
 - No frontend UI, migrations, automatic install/clear, backup/export creation, production confirmation, import target expansion, or user-data deletion behavior was added.
+
+
+## PR85 — Demo data mode UI
+- Added `/demo-data` frontend route and “Демо-данные” navigation item under “Данные и настройки”.
+- Added frontend API helpers for PR84 demo-data status/install/clear endpoints.
+- Added human-readable demo status cards, backend blocking reason display, demo dataset explanation, explicit install confirmation with two checkboxes, explicit clear confirmation with one checkbox, created/deleted counts, safety boundaries, and post-install navigation links.
+- Added compact dashboard card linking to demo data mode; dashboard does not duplicate the full demo UI.
+- Demo data is not installed or cleared on page load; frontend does not create/delete business records directly and does not create backup/export automatically.
+- No backend demo dataset changes, migrations, import apply target expansion, help center, reports, cloud, OCR/PDF/image behavior, or packaging work was added.
+
+## PR85 follow-up — Demo data UI polish
+- Clarified `docs/demo-data.md` so PR84 is described as the backend/API foundation and PR85 as the frontend UI route.
+- Failed demo install/clear attempts now refresh demo-data status afterward, preserving the action error while replacing stale `can_install`, `can_clear`, and `blocking_reasons` with backend truth when available.
+- No backend endpoints, migrations, demo dataset changes, automatic install/clear, backup/export creation, production behavior, import behavior, or direct frontend business-data mutation were added.

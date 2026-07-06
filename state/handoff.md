@@ -2,37 +2,51 @@
 
 ## Last completed work
 
-PR84 follow-up — Harden demo-data clear dependency guards.
+PR85 follow-up — Demo data UI polish.
 
-## Current repo state after PR84
+## Current repo state after PR85 follow-up
 
-- Demo tracking tables `demo_data_sessions` and `demo_data_records` were added by migration `0018_demo_data_tracking`.
-- Backend API endpoints were added under `/api/demo-data`:
+- Frontend route `/demo-data` is available through “Данные и настройки” → “Демо-данные”.
+- The page consumes PR84 backend endpoints:
   - `GET /api/demo-data/status`;
   - `POST /api/demo-data/install`;
   - `POST /api/demo-data/clear`.
-- Demo install is explicit, transactional, labels records with `Демо ·`, and is blocked when non-demo business rows exist.
-- Demo clear is explicit, transactional, deletes only tracked demo rows, and blocks when untracked working records reference demo rows through direct table references, alerts, or purchase suggestions.
-- Demo status now returns `can_clear=false` plus a blocking reason when automatic clear would be unsafe because working records reference demo records.
-- Demo install does not create production batches, backups, exports, import apply target expansion, frontend UI, startup seed data, migration seed data, or onboarding seed data.
+- Demo install requires explicit user confirmation with two checkboxes and calls only the backend install endpoint.
+- Demo clear requires explicit user confirmation with one checkbox and calls only the backend clear endpoint.
+- Backend remains the source of truth for `can_install`, `can_clear`, and blocking reasons.
+- The UI does not install demo data automatically, clear demo data automatically, create/delete business records directly, create backup/export automatically, expand import apply targets, create production batches, or alter the demo dataset.
+- Dashboard has only a compact link card to `/demo-data`.
+
+- Follow-up polish clarified demo-data docs so PR84 is the backend/API foundation and PR85 is the frontend UI route.
+- Failed install/clear attempts now refresh status after the backend rejects an action, preserving the action error and updating `can_install`, `can_clear`, and `blocking_reasons` when status refresh succeeds.
+
+## Automated checks from PR85 follow-up
+
+- `git status --short` showed only PR85 follow-up working-tree changes before commit.
+- `git branch --show-current` returned `work`.
+- `npm --prefix frontend run build` passed.
+- `git diff --check` passed.
+- `python3 -m py_compile $(find backend/app launcher -name '*.py')` passed.
+- `python3 -m pytest backend/app/tests/test_demo_data.py -q` passed.
+- `python3 -m pytest backend/app/tests/test_demo_data_api.py -q` skipped because FastAPI TestClient requires `httpx` in this environment.
+- PR85 follow-up reran the scoped checks requested for this polish change.
 
 ## Manual smoke
 
-Manual browser/API smoke was not run with a long-running local server in this non-interactive session. Automated service tests were run; FastAPI TestClient API tests are skipped when `httpx` is unavailable in the environment.
+Manual browser smoke was not run for the follow-up in this non-interactive session because no long-running backend/frontend browser session was started.
 
-Recommended manual API smoke for PR85 or local review:
-1. Start backend with a temporary empty DB.
-2. Call `GET /api/demo-data/status` and confirm `can_install=true`.
-3. Call `POST /api/demo-data/install` without confirmation and confirm rejection.
-4. Call `POST /api/demo-data/install` with both confirmation flags.
-5. Confirm created counts and `Демо ·` labels in ingredient, packaging, recipe, client, and order APIs.
-6. Confirm no production batches, backup files, or export files were created automatically.
-7. Create or regenerate an alert/purchase suggestion that references demo records.
-8. Confirm status returns `can_clear=false` and clear with confirmation returns `409`.
-9. Verify demo records still exist and the session remains active.
-10. In a clean demo install with no untracked dependencies, call clear with confirmation and confirm tracked records are removed.
-11. Create a real business record in a temp DB and confirm install is blocked.
+Recommended local smoke:
+1. Start backend and frontend with an empty temp/dev database.
+2. Open `/demo-data` and confirm status loads.
+3. Confirm install requires both checkboxes.
+4. Install demo data and verify success message plus counts.
+5. Navigate to Components, Inventory, Recipes, Clients, Orders, Alerts, and Purchases to verify `Демо ·` records.
+6. Return to `/demo-data`, confirm clear requires checkbox, clear demo data, and verify records disappear.
+7. In a fresh temp DB with one real record, confirm install is blocked.
+8. Confirm no backup/export files are created automatically and dashboard link opens `/demo-data`.
 
 ## Next recommended PR
 
-PR85 — Demo data mode UI.
+O5 — In-app help center.
+
+If demo smoke finds issues: PR86 — Demo data UI follow-up fixes.
