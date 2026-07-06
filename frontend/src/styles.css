@@ -69,6 +69,18 @@ h1 { color: #2e211f; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; margi
 .primary-action, .secondary-action { border-radius: 14px; cursor: pointer; font-weight: 800; padding: 12px 16px; }
 .primary-action { background: #6e4a43; border: 1px solid #6e4a43; color: #fffaf7; }
 .secondary-action { background: #fffaf6; border: 1px solid #d9bbaa; color: #5d4039; }
+
+.reports-layout { display: grid; gap: 22px; max-width: 1180px; }
+.reports-hero { max-width: none; }
+.segmented-control { display: flex; flex-wrap: wrap; gap: 10px; }
+.segmented-control .active { background: #6e4a43; border-color: #6e4a43; color: #fffaf7; }
+.warning-panel { background: #fff8ed; border: 1px solid #edd4b7; border-radius: 18px; margin-top: 18px; padding: 14px 16px; }
+.warning-panel h3 { margin: 0 0 8px; }
+.warning-panel ul { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.warning-panel li { background: #fffaf6; border: 1px solid #edddd3; border-radius: 14px; padding: 10px 12px; }
+.warning-panel small { color: #7b6259; display: block; margin-top: 4px; }
+.muted-text { color: #7b6259; font-size: 14px; font-weight: 700; }
+
 .inventory-layout { display: grid; gap: 22px; max-width: 1180px; }
 .inventory-intro { max-width: none; }
 .overview-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
