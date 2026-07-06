@@ -686,3 +686,82 @@ Safety behavior:
 - marks the demo session `cleared` only after successful deletes.
 
 When an active demo session has unsafe working references, `GET /api/demo-data/status` returns `can_clear=false` and includes a Russian blocking reason so the future UI can ask the user to resolve those working records manually before clearing demo data.
+
+## Reports API
+
+Read-only operational reports are available under `/api/reports`. Reports do not mutate business data, do not create audit logs, do not create backup/export files, and do not regenerate alerts or purchase suggestions.
+
+All report responses include `generated_at` and `warnings`.
+
+### `GET /api/reports/overview`
+
+Returns one combined operational snapshot:
+
+- `inventory_summary`
+- `orders_summary`
+- `production_summary`
+- `alerts_summary`
+- `purchase_summary`
+- `finance_summary`
+- `warnings`
+
+### `GET /api/reports/inventory`
+
+Returns stock-health counters:
+
+- active ingredients;
+- active ingredient lots;
+- lots with positive balance;
+- expired and expiring-soon lots;
+- active packaging items;
+- packaging items with positive balance;
+- open low-stock alerts;
+- open purchase suggestions.
+
+This endpoint reads existing alerts and purchase suggestions only; it does not regenerate them.
+
+### `GET /api/reports/orders`
+
+Returns order pipeline counters by status:
+
+- total and active orders;
+- `new`;
+- `waiting_for_materials`;
+- `ready_to_produce`;
+- `in_progress`;
+- `produced`;
+- `delivered`;
+- `cancelled`;
+- `archived`;
+- orders missing recipe references if such invalid legacy data exists.
+
+### `GET /api/reports/production`
+
+Returns all-time production summary:
+
+- total production batches;
+- batches in period (same as total in PR87 because date filters are not implemented);
+- last production date;
+- produced orders count;
+- produced quantity totals grouped by unit;
+- total known production cost;
+- missing cost warnings.
+
+Quantities are grouped by unit instead of being silently summed across incompatible units.
+
+### `GET /api/reports/finance`
+
+Returns a basic operational financial snapshot, not accounting:
+
+- produced order count;
+- produced orders with sale price;
+- known revenue;
+- known production cost;
+- known margin calculated only from rows where sale price and production cost are both known;
+- known margin percent calculated from the same paired revenue basis;
+- complete finance record count;
+- incomplete margin count;
+- missing sale price count;
+- missing cost count.
+
+The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate. `known_revenue` and `known_production_cost` are independent known totals, but `known_margin` never combines revenue from one incomplete batch with cost from another incomplete batch. Warnings include `margin_unavailable` when no paired sale+cost row exists and `partial_margin_basis` when margin is based on a subset of complete rows.
