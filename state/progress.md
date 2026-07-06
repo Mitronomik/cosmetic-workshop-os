@@ -572,3 +572,9 @@ Import CSV/XLSX draft backend foundation.
 - Added Reports page hero, reload button, tabs, metric cards, backend warning panels, friendly empty state, related navigation buttons, and finance safety copy.
 - Added compact dashboard card linking to Reports.
 - Reports UI displays backend-provided values only and does not calculate core report values, mutate business data, create backup/export files, regenerate alerts/purchase suggestions, or add PDF/export/charts/accounting.
+
+
+## PR88 follow-up — Reports dashboard card wiring
+- Wired the compact Reports dashboard card into the dashboard between demo data and help so users can open `/reports` from the main screen.
+- Updated the defensive planned-section fallback for “Отчеты” so it no longer says reports are a future module.
+- Reports remain read-only and backend-owned; no mutations, backup/export creation, alert/purchase regeneration, production actions, import apply actions, or frontend finance recalculation were added.
