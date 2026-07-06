@@ -382,8 +382,14 @@ type PurchaseReportSummary = { open_purchase_suggestions: number };
 type OverviewReportResponse = { generated_at: string; inventory_summary: InventoryReportResponse; orders_summary: OrdersReportResponse; production_summary: ProductionReportResponse; alerts_summary: AlertsReportSummary; purchase_summary: PurchaseReportSummary; finance_summary: FinanceReportResponse; warnings: ReportWarning[] };
 type ReportTab = 'overview' | 'inventory' | 'orders' | 'production' | 'finance';
 type ReportsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; selectedReport: ReportTab; error: string; message: string; overview: OverviewReportResponse | null; inventory: InventoryReportResponse | null; orders: OrdersReportResponse | null; production: ProductionReportResponse | null; finance: FinanceReportResponse | null };
+type ReportDocumentMetadata = { id: string; document_type: string; format: string; filename: string; metadata_filename: string | null; created_at: string; source: string; source_generated_at: string | null; title: string; warnings_count: number; size_bytes: number };
+type ReportDocumentStatusResponse = { documents_dir: string; available_formats: string[]; available_document_types: string[]; can_create: boolean; documents_count: number; message: string };
+type ReportDocumentListResponse = { items: ReportDocumentMetadata[]; limit: number; offset: number; total: number };
+type ReportOverviewDocumentCreateRequest = { format?: 'markdown'; reason?: string };
+type ReportDocumentCreateResponse = { document: ReportDocumentMetadata; message: string };
+type ReportDocumentsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; message: string; documentStatus: ReportDocumentStatusResponse | null; documents: ReportDocumentMetadata[]; lastCreatedDocument: ReportDocumentMetadata | null; reason: string };
 
-type NavigationSection = 'Главная' | 'Алерты' | 'Демо-данные' | 'Резервные копии' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Готовность' | 'Производство' | 'Экспорт' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Помощь';
+type NavigationSection = 'Главная' | 'Алерты' | 'Демо-данные' | 'Резервные копии' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Готовность' | 'Производство' | 'Экспорт' | 'Документы отчетов' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Помощь';
 type NavigationStatus = 'ready' | 'empty' | 'planned';
 type NavigationItem = { label: string; section: NavigationSection; path: string; status: NavigationStatus };
 type NavigationGroup = { title: string; items: NavigationItem[] };
@@ -415,6 +421,7 @@ const navigationGroups: NavigationGroup[] = [
   { title: 'Данные и настройки', items: [
     { label: 'Резервные копии', section: 'Резервные копии', path: '/backups', status: 'ready' },
     { label: 'Экспорт', section: 'Экспорт', path: '/exports', status: 'ready' },
+    { label: 'Документы отчетов', section: 'Документы отчетов', path: '/report-documents', status: 'ready' },
     { label: 'Импорт', section: 'Импорт', path: '/imports', status: 'ready' },
     { label: 'Демо-данные', section: 'Демо-данные', path: '/demo-data', status: 'ready' },
     { label: 'Отчеты', section: 'Отчеты', path: '/reports', status: 'ready' },
@@ -534,12 +541,14 @@ let ingredientCatalogControls: CatalogControlState = { categorySearch: '', tagSe
 let packagingCatalogControls: CatalogControlState = { categorySearch: '', tagSearch: '', showAllTags: false };
 let helpUiState: HelpUiState = { search: '', category: '', selectedArticleId: 'getting-started' };
 let reportsUiState: ReportsUiState = { status: 'idle', selectedReport: 'overview', error: '', message: '', overview: null, inventory: null, orders: null, production: null, finance: null };
+let reportDocumentsUiState: ReportDocumentsUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', documentStatus: null, documents: [], lastCreatedDocument: null, reason: '' };
 
 function sectionFromLocation(): NavigationSection {
   const routes: Record<string, NavigationSection> = {
     '/alerts': 'Алерты',
     '/backups': 'Резервные копии',
     '/exports': 'Экспорт',
+    '/report-documents': 'Документы отчетов',
     '/imports': 'Импорт',
     '/demo-data': 'Демо-данные',
     '/inventory': 'Склад',
@@ -578,6 +587,7 @@ function loadSectionData(section: NavigationSection) {
   if (section === 'Алерты') loadAlerts();
   if (section === 'Резервные копии') loadBackups();
   if (section === 'Экспорт') loadExports();
+  if (section === 'Документы отчетов') loadReportDocuments();
   if (section === 'Импорт') loadImports();
   if (section === 'Демо-данные') loadDemoDataStatus();
   if (section === 'Склад') loadInventory();
@@ -599,6 +609,7 @@ function renderActivePage(section: NavigationSection) {
   if (section === 'Алерты') return alertsPage();
   if (section === 'Резервные копии') return backupPage();
   if (section === 'Экспорт') return exportPage();
+  if (section === 'Документы отчетов') return reportDocumentsPage();
   if (section === 'Импорт') return importPage();
   if (section === 'Демо-данные') return demoDataPage();
   if (section === 'Склад') return inventoryPage();
@@ -682,6 +693,10 @@ function bindEvents(root: HTMLElement) {
   });
   root.querySelector<HTMLButtonElement>('[data-action="reload-dashboard"]')?.addEventListener('click', () => loadDashboard(true));
   root.querySelector<HTMLButtonElement>('[data-action="reload-reports"]')?.addEventListener('click', () => loadReports(true));
+  root.querySelector<HTMLButtonElement>('[data-action="reload-report-documents"]')?.addEventListener('click', () => loadReportDocuments(true));
+  root.querySelector<HTMLFormElement>('[data-form="report-document-create"]')?.addEventListener('submit', submitReportDocumentCreateForm);
+  root.querySelector<HTMLInputElement>('[data-action="report-document-reason"]')?.addEventListener('input', (event) => { reportDocumentsUiState.reason = (event.currentTarget as HTMLInputElement).value.slice(0, 80); });
+  root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-report-documents-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
   root.querySelectorAll<HTMLButtonElement>('[data-action="select-report-tab"]').forEach((button) => button.addEventListener('click', () => { reportsUiState.selectedReport = (button.dataset.report as ReportTab | undefined) ?? 'overview'; render(); }));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-report-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
   root.querySelector<HTMLButtonElement>('[data-action="reload-backups"]')?.addEventListener('click', () => loadBackups(true));
@@ -2099,10 +2114,23 @@ function checklistItem(step: string, currentStep: string) { const isDone = onboa
 function stepHint(step: string) { return onboardingStepUi[step]?.hint ?? 'Шаг будет уточнен позже.'; }
 
 
+function reportDocumentsPage() {
+  const isLoading = reportDocumentsUiState.status === 'loading';
+  return `<div class="page-grid backup-page report-documents-page"><section class="card data-card dashboard-hero"><div><p class="card-kicker">Markdown-документы</p><h2>Документы отчетов</h2><p>Создавайте читаемые файлы отчета по сводке мастерской. Сейчас поддерживается Markdown — простой текстовый документ, который хранится локально.</p><p class="next-step">Документы создаются только вручную. Страница не меняет склад, заказы, производство, закупки, backup или import.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить список'}</button></div></section>${reportDocumentsUiState.error ? `<p class="page-message error-message">${escapeHtml(reportDocumentsUiState.error)}</p>` : ''}${reportDocumentsUiState.message ? `<p class="page-message">${escapeHtml(reportDocumentsUiState.message)}</p>` : ''}${reportDocumentsUiState.status === 'error' && !reportDocumentsUiState.documentStatus ? reportDocumentsLoadErrorCard() : `${reportDocumentsStatusCard()}${reportDocumentsCreateCard()}${reportDocumentsLastCreatedCard()}${reportDocumentsListCard()}${reportDocumentsBoundariesCard()}`}</div>`;
+}
+function reportDocumentsLoadErrorCard() { return `<section class="card error-card"><h2>Документы недоступны</h2><p>Не удалось загрузить документы отчетов. Проверьте, что локальное приложение запущено.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents">Повторить</button></div></section>`; }
+function reportDocumentsStatusCard() { const s = reportDocumentsUiState.documentStatus; if (reportDocumentsUiState.status === 'loading' && !s) return '<section class="card"><p>Загружаем статус документов отчетов…</p></section>'; if (!s) return ''; return `<section class="overview-grid"><div class="metric-card"><span>Доступный формат</span><strong>${s.available_formats.includes('markdown') ? 'Markdown' : escapeHtml(s.available_formats.join(', ') || 'Нет')}</strong></div><div class="metric-card"><span>Тип документа</span><strong>${s.available_document_types.includes('workshop_overview') ? 'Сводка мастерской' : escapeHtml(s.available_document_types.join(', ') || 'Нет')}</strong></div><div class="metric-card"><span>Создано документов</span><strong>${s.documents_count}</strong></div><div class="metric-card"><span>Можно создать</span><strong>${s.can_create ? 'Да' : 'Нет'}</strong></div><div class="metric-card wide"><span>Сообщение backend</span><strong>${escapeHtml(s.message || 'Нет сообщения')}</strong><small class="path-text">Папка документов: ${escapeHtml(s.documents_dir)}</small></div></section>`; }
+function reportDocumentsCreateCard() { const disabled = reportDocumentsUiState.actionStatus === 'creating' || reportDocumentsUiState.status === 'loading' || !reportDocumentsUiState.documentStatus?.can_create; return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать сводку мастерской</h2><p>Файл будет создан из текущих backend-отчетов: склад, заказы, производство, алерты, закупки и базовые финансы.</p><p class="page-message">Markdown — это временный безопасный формат MVP. PDF и DOCX появятся отдельными задачами позже.</p><form class="form-grid" data-form="report-document-create"><label>Причина / заметка<input name="reason" maxlength="80" value="${escapeHtml(reportDocumentsUiState.reason)}" data-action="report-document-reason" placeholder="Например: еженедельная проверка" /></label><div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаем…' : 'Создать Markdown-документ'}</button></div></form><p class="next-step">Создание не запускается на загрузке страницы: документ появляется только после нажатия кнопки.</p></section>`; }
+function reportDocumentsLastCreatedCard() { const d = reportDocumentsUiState.lastCreatedDocument; if (!d) return ''; return `<section class="card data-card"><p class="card-kicker">Последний результат</p><h2>Документ создан</h2><p>Файл: <strong>${escapeHtml(d.filename)}</strong></p><p class="next-step">Он сохранен в локальной папке документов отчетов.</p></section>`; }
+function reportDocumentsListCard() { const docs = reportDocumentsUiState.documents; if (!docs.length) return `<section class="card empty-card"><h2>Созданные документы</h2><p>Документы отчетов пока не создавались.</p><p>Создайте Markdown-сводку вручную, когда нужен файл для просмотра или передачи.</p><div class="actions"><button class="secondary-action" type="button" data-action="navigate-report-documents-related" data-section="Отчеты">Открыть отчеты</button></div></section>`; return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Локальные Markdown-файлы</p><h2>Созданные документы</h2></div><span class="pill info">${docs.length}</span></div><div class="backup-list">${docs.map(reportDocumentItem).join('')}</div><p class="next-step">Файл создан в локальной папке данных приложения. Интерфейс открытия файла будет добавлен отдельной задачей.</p><div class="actions"><button class="secondary-action" type="button" data-action="navigate-report-documents-related" data-section="Отчеты">Открыть отчеты</button></div></section>`; }
+function reportDocumentItem(d: ReportDocumentMetadata) { return `<article class="recipe-line backup-item"><div class="section-heading"><div><h3>${escapeHtml(d.title || 'Сводка мастерской')}</h3><p><span class="pill info">${reportDocumentFormatLabel(d.format)}</span> <span class="pill muted">${formatFileSize(d.size_bytes)}</span></p></div><small>${formatDateTime(d.created_at)}</small></div><dl class="metadata-list"><div><dt>Файл</dt><dd>${escapeHtml(d.filename)}</dd></div><div><dt>Формат</dt><dd>${reportDocumentFormatLabel(d.format)}</dd></div><div><dt>Создан</dt><dd>${formatDateTime(d.created_at)}</dd></div><div><dt>Размер</dt><dd>${formatFileSize(d.size_bytes)}</dd></div><div><dt>Предупреждений</dt><dd>${d.warnings_count}</dd></div><div><dt>Источник данных</dt><dd>${escapeHtml(d.source)}${d.source_generated_at ? ` · ${formatDateTime(d.source_generated_at)}` : ''}</dd></div></dl></article>`; }
+function reportDocumentFormatLabel(format: string) { return format === 'markdown' ? 'Markdown' : escapeHtml(format); }
+function reportDocumentsBoundariesCard() { return `<section class="card data-card"><p class="card-kicker">Честные границы</p><h2>Что важно знать</h2><ul class="checklist compact-list"><li>Сейчас создается только Markdown-документ.</li><li>PDF и DOCX не создаются в этом PR.</li><li>Документ строится из backend-отчетов и не пересчитывает данные во frontend.</li><li>Создание документа не меняет заказы, склад, производство или закупки.</li><li>Это не бухгалтерский и не налоговый документ.</li><li>Налоговые ставки не придумываются.</li></ul></section>`; }
+
 function reportsPage() {
   const generatedAt = reportsUiState.overview?.generated_at ?? reportsUiState.inventory?.generated_at ?? reportsUiState.orders?.generated_at ?? reportsUiState.production?.generated_at ?? reportsUiState.finance?.generated_at ?? null;
   const body = reportsUiState.status === 'loading' && !reportsUiState.overview ? reportsLoadingCard() : reportsUiState.status === 'error' && !reportsUiState.overview ? reportsErrorCard() : reportsContent();
-  return `<div class="reports-layout"><section class="card data-card reports-hero"><div class="section-heading"><div><p class="card-kicker">Отчеты</p><h2>Отчеты</h2><p>Короткая сводка по мастерской: склад, заказы, производство, закупки и базовые финансовые показатели.</p><p class="next-step">Отчеты только читают данные. Они не списывают склад, не создают закупки, backup или export.</p>${generatedAt ? `<p class="muted-text">Сформировано: ${formatDateTime(generatedAt)}</p>` : ''}</div><button class="primary-action" type="button" data-action="reload-reports" ${reportsUiState.status === 'loading' ? 'disabled' : ''}>Обновить отчеты</button></div></section>${reportsUiState.error && reportsUiState.overview ? `<p class="page-message error-message">${escapeHtml(reportsUiState.error)}</p>` : ''}${reportsUiState.message ? `<p class="page-message">${escapeHtml(reportsUiState.message)}</p>` : ''}${body}</div>`;
+  return `<div class="reports-layout"><section class="card data-card reports-hero"><div class="section-heading"><div><p class="card-kicker">Отчеты</p><h2>Отчеты</h2><p>Короткая сводка по мастерской: склад, заказы, производство, закупки и базовые финансовые показатели.</p><p class="next-step">Отчеты только читают данные. Они не списывают склад, не создают закупки, backup или export.</p><div class="actions"><button class="secondary-action compact" type="button" data-action="navigate-report-related" data-section="Документы отчетов">Создать документ отчета</button></div>${generatedAt ? `<p class="muted-text">Сформировано: ${formatDateTime(generatedAt)}</p>` : ''}</div><button class="primary-action" type="button" data-action="reload-reports" ${reportsUiState.status === 'loading' ? 'disabled' : ''}>Обновить отчеты</button></div></section>${reportsUiState.error && reportsUiState.overview ? `<p class="page-message error-message">${escapeHtml(reportsUiState.error)}</p>` : ''}${reportsUiState.message ? `<p class="page-message">${escapeHtml(reportsUiState.message)}</p>` : ''}${body}</div>`;
 }
 function reportsLoadingCard() { return `<section class="card"><p class="card-kicker">Отчеты</p><h2>Загружаем отчеты…</h2><p>Получаем read-only сводки из локального backend.</p></section>`; }
 function reportsErrorCard() { return `<section class="card error-card"><p class="card-kicker">Отчеты</p><h2>Не удалось загрузить отчеты</h2><p>${escapeHtml(reportsUiState.error || 'Не удалось загрузить отчеты. Проверьте, что локальное приложение запущено, и попробуйте снова.')}</p><button class="primary-action" type="button" data-action="reload-reports">Повторить</button></section>`; }
@@ -2485,6 +2513,9 @@ function getInventoryReport(): Promise<InventoryReportResponse> { return apiGet<
 function getOrdersReport(): Promise<OrdersReportResponse> { return apiGet<OrdersReportResponse>('/api/reports/orders'); }
 function getProductionReport(): Promise<ProductionReportResponse> { return apiGet<ProductionReportResponse>('/api/reports/production'); }
 function getFinanceReport(): Promise<FinanceReportResponse> { return apiGet<FinanceReportResponse>('/api/reports/finance'); }
+function getReportDocumentStatus(): Promise<ReportDocumentStatusResponse> { return apiGet<ReportDocumentStatusResponse>('/api/report-documents/status'); }
+function getReportDocuments(): Promise<ReportDocumentListResponse> { return apiGet<ReportDocumentListResponse>('/api/report-documents'); }
+function createOverviewReportDocument(payload: ReportOverviewDocumentCreateRequest): Promise<ReportDocumentCreateResponse> { return apiSend<ReportDocumentCreateResponse>('/api/report-documents/reports/overview', 'POST', payload); }
 function getBackupStatus(): Promise<BackupStatusResponse> { return apiGet<BackupStatusResponse>('/api/backups/status'); }
 function getBackups(): Promise<BackupListResponse> { return apiGet<BackupListResponse>('/api/backups'); }
 function createBackup(payload: BackupCreateRequest): Promise<BackupCreateResponse> { return apiSend<BackupCreateResponse>('/api/backups', 'POST', payload); }
@@ -2780,6 +2811,29 @@ function deactivateIngredient(id: number) {
   deactivateIngredientRequest(id).then(() => { ingredientsMessage = 'Компонент деактивирован.'; ingredientsError = ''; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; if (recipesStatus === 'ready') setRecipeIngredientOptions(response.ingredients); ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsMessage = ''; ingredientsError = 'Не удалось деактивировать компонент. Попробуйте еще раз.'; ingredientsStatus = 'ready'; render(); });
 }
 
+
+function loadReportDocuments(force = false) {
+  if (!force && (reportDocumentsUiState.status === 'loading' || reportDocumentsUiState.status === 'ready')) return;
+  reportDocumentsUiState.status = 'loading';
+  reportDocumentsUiState.error = '';
+  if (force) reportDocumentsUiState.message = '';
+  render();
+  Promise.all([getReportDocumentStatus(), getReportDocuments()])
+    .then(([status, list]) => { reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.error = ''; render(); })
+    .catch(() => { reportDocumentsUiState.status = 'error'; reportDocumentsUiState.error = 'Не удалось загрузить документы отчетов. Проверьте, что локальное приложение запущено.'; render(); });
+}
+
+function submitReportDocumentCreateForm(event: SubmitEvent) { event.preventDefault(); createReportDocumentFromUi(); }
+function createReportDocumentFromUi() {
+  if (reportDocumentsUiState.actionStatus === 'creating') return;
+  if (!reportDocumentsUiState.documentStatus?.can_create) { reportDocumentsUiState.error = 'Backend сейчас не разрешает создать документ отчета.'; reportDocumentsUiState.message = ''; render(); return; }
+  const reason = reportDocumentsUiState.reason.trim();
+  reportDocumentsUiState.actionStatus = 'creating'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = ''; render();
+  createOverviewReportDocument({ format: 'markdown', ...(reason ? { reason } : {}) })
+    .then((response) => { reportDocumentsUiState.lastCreatedDocument = response.document; reportDocumentsUiState.reason = ''; reportDocumentsUiState.message = `${response.message || 'Документ создан.'} Он сохранен в локальной папке документов отчетов.`; return Promise.all([getReportDocumentStatus(), getReportDocuments()]); })
+    .then(([status, list]) => { reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; render(); })
+    .catch((error: unknown) => { const detail = error instanceof Error && error.message && error.message !== 'API request failed' ? ` ${error.message}` : ''; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = `Не удалось создать документ отчета. Данные мастерской не изменялись.${detail}`; reportDocumentsUiState.message = ''; render(); });
+}
 
 function loadReports(force = false) {
   if (!force && (reportsUiState.status === 'loading' || reportsUiState.status === 'ready')) return;

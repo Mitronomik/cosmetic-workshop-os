@@ -96,3 +96,11 @@ If report data is missing, the document renders values as `не рассчита
 ## Future work
 
 PDF and DOCX generation should be added as later formats through the same document-service pipeline, without changing report calculations or moving rendering logic into the frontend.
+
+## PR90 — frontend report document export UI
+- Added `/report-documents` / «Документы отчетов» in the «Данные и настройки» navigation group.
+- The page consumes only PR89 endpoints: status, list, and explicit Markdown overview creation.
+- Page load and refresh are read-only; documents are created only by the «Создать Markdown-документ» action.
+- Markdown is the only exposed format. PDF/DOCX are described as future work and are not actionable.
+- The Reports page now has a contextual link to the document page; it only navigates and does not create files.
+- Backend cleanup hardening now deletes the metadata sidecar only when the current operation actually created it.

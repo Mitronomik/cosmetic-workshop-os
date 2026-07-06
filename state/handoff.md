@@ -2,49 +2,34 @@
 
 ## Last completed work
 
-PR89 follow-up — report document pair-safety and docs polish.
+PR90 — Report document export UI + sidecar cleanup hardening.
 
-## Current repo state after PR89 follow-up
+## What changed
 
-- Report document creation remains explicit POST-only at `/api/report-documents/reports/overview`.
-- Markdown remains the only supported report document format; PDF/DOCX remain rejected.
-- `ReportDocumentService` now chooses a unique `.md + .json` pair where both paths are free before writing files.
-- A stale metadata sidecar without a matching Markdown file now causes the backend to choose a suffixed pair instead of writing an orphan Markdown file.
-- If metadata sidecar writing fails after Markdown writing, the newly created Markdown file is best-effort removed and the same safe Russian `ReportDocumentError` is raised.
-- Existing files are not overwritten, user-supplied `reason` remains sanitized and does not affect output paths, and files remain under the safe report-documents directory.
-- Document generation continues to use backend `ReportsService.get_overview()` output and does not mutate business data, create backups/export snapshots, regenerate alerts/purchase suggestions, apply imports, run production, install/clear demo data, or add frontend UI.
-- `docs/report-documents.md` filename examples now match the actual timestamp and suffix behavior.
-- `docs/reports.md` no longer describes the `/reports` UI as future-only; it states the UI is available and must keep calculations in the backend.
-
-## Automated checks from PR89 follow-up
-
-- `git status --short` showed the follow-up working-tree changes before commit.
-- `git branch --show-current` returned `work`.
-- `python3 -m py_compile $(find backend/app launcher -name '*.py')` passed.
-- `python3 -m pytest backend/app/tests/test_report_documents.py -q` passed.
-- `python3 -m pytest backend/app/tests/test_report_documents_api.py -q` passed with the existing optional TestClient skip pattern.
-- `python3 -m pytest backend/app/tests/test_reports.py -q` passed.
-- `python3 -m pytest backend/app/tests/test_reports_api.py -q` passed with the existing optional TestClient skip pattern.
-- `npm --prefix frontend run build` passed; npm printed the existing `http-proxy` env config warning.
-- `git diff --check` passed.
-
-Full requested regression command results are in the final summary for this session.
+- Added `/report-documents` / «Документы отчетов» to the frontend navigation under «Данные и настройки».
+- The new page calls only PR89 endpoints:
+  - `GET /api/report-documents/status`
+  - `GET /api/report-documents`
+  - `POST /api/report-documents/reports/overview`
+- Page load and refresh are read-only. Document creation is explicit and sends `format: "markdown"` plus an optional reason.
+- The UI states clearly that Markdown is the only MVP format and PDF/DOCX are future work.
+- The documents list shows metadata returned by the backend and does not preview raw file content or offer fake download/open actions.
+- `/reports` now includes a contextual «Создать документ отчета» navigation action only; it does not create a document.
+- `ReportDocumentService` cleanup now tracks current-operation document/metadata creation separately and only unlinks metadata when this operation actually created the sidecar.
+- Added a regression test for metadata write failure before final sidecar creation; it verifies safe error, Markdown cleanup, no sidecar unlink attempt, and no business-table mutation.
 
 ## Manual smoke
 
-Manual long-running local API smoke was not run in this non-interactive session. Automated service/API tests cover explicit create/list/status, stale sidecar pair suffixing, metadata-write rollback, unsupported format rejection, path safety, file creation, and business-table non-mutation.
-
-Recommended local API smoke:
-1. Start backend with a test user-data directory.
-2. Call `GET /api/report-documents/status`.
-3. Call `GET /api/report-documents`.
-4. Call `POST /api/report-documents/reports/overview` with `{ "format": "markdown", "reason": "../../manual test" }`.
-5. Confirm exactly one `.md` and one matching `.json` sidecar are created under `<user_data_dir>/exports/report-documents/`.
-6. Confirm the sanitized reason does not affect filename/path.
-7. Call `GET /api/report-documents` and confirm the document appears.
-8. Call `POST /api/report-documents/reports/overview` with `{ "format": "pdf" }` and confirm it returns the unsupported-format error.
-9. Confirm no backups, root JSON export snapshots, business rows, alerts, purchase suggestions, or production rows are created.
+Manual browser smoke was not run in this non-interactive environment. Recommended local smoke:
+1. Start backend and frontend.
+2. Open `/report-documents`.
+3. Confirm status/list load and no document appears merely from page load.
+4. Enter `еженедельная проверка` and click «Создать Markdown-документ».
+5. Confirm the button disables while creating, success appears, and the new document appears in the list.
+6. Refresh the list and confirm the document remains listed.
+7. Open `/reports` and confirm «Создать документ отчета» only navigates to `/report-documents`.
+8. Confirm exports/backups/imports/demo/help pages still load and no backup/export/import/demo action is triggered.
 
 ## Next recommended PR
 
-PR90 — Report document export UI, unless backend smoke finds issues requiring backend follow-up fixes.
+PR91 — Report PDF generation foundation, unless smoke finds UI issues. If smoke finds issues, do PR91 as report document UI follow-up fixes first.
