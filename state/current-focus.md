@@ -1,12 +1,12 @@
 # Current focus
 
-PR83 — Refresh the existing onboarding checklist after import/apply.
+PR84 — Demo data mode backend foundation.
 
 Scope:
-- keep the existing onboarding API/service/app_settings state mechanism;
-- refresh onboarding steps, Russian copy, progress, and route hints for the current MVP workflow;
-- preserve compatibility with old onboarding state;
-- fix stale import copy that claimed apply was entirely future-only;
-- do not create business data or expand import apply targets.
+- add explicit backend/API demo data status, install, and clear endpoints;
+- add demo tracking tables for sessions and table/id records;
+- keep demo install limited to empty workspaces;
+- clear only tracked demo records with dependency guards;
+- no frontend UI, no startup/onboarding seeding, no backup/export automation, no production batches.
 
-Next recommended PR: O4 — Demo data mode, unless onboarding smoke finds follow-up issues requiring PR84.
+Next recommended PR: PR85 — Demo data mode UI.
