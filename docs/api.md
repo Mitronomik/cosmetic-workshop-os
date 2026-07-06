@@ -618,3 +618,71 @@ Successful response includes the updated draft, an apply result with created rec
 ```
 
 Missing `confirm_apply` or `backup_acknowledged` returns a safe rejection; conflicts, unsupported targets, already-applied drafts, and duplicate records return conflict-style issues. Failed apply is all-or-nothing: the draft/source remain unapplied and zero partial domain rows are committed.
+
+## Demo data API (PR84 backend foundation)
+
+Demo data mode is explicit and safe-by-default. It never runs from migrations, startup, onboarding, import, backup, or export, and PR84 adds no frontend UI.
+
+### `GET /api/demo-data/status`
+
+Read-only status endpoint.
+
+Example response:
+
+```json
+{
+  "is_installed": false,
+  "active_session_id": null,
+  "demo_version": "mvp-1",
+  "can_install": true,
+  "can_clear": false,
+  "has_business_data": false,
+  "has_non_demo_business_data": false,
+  "created_counts": {},
+  "blocking_reasons": [],
+  "message": "Демо-данные ещё не установлены."
+}
+```
+
+### `POST /api/demo-data/install`
+
+Installs a compact cosmetic-workshop demo dataset only after explicit confirmation and only when the workspace has no non-demo business rows.
+
+Request:
+
+```json
+{
+  "confirm_install": true,
+  "understand_demo_data": true
+}
+```
+
+Safety behavior:
+
+- rejects missing confirmation with `400`;
+- rejects active demo data with `409`;
+- rejects non-empty real workspaces with `409` and the message `Демо-данные можно установить только в пустую рабочую базу. В этой базе уже есть рабочие данные.`;
+- writes demo business rows and `demo_data_records` in one transaction;
+- does not create production batches, backups, exports, or import apply targets.
+
+### `POST /api/demo-data/clear`
+
+Deletes only rows tracked in `demo_data_records` for the active demo session.
+
+Request:
+
+```json
+{
+  "confirm_clear": true
+}
+```
+
+Safety behavior:
+
+- rejects missing confirmation with `400`;
+- rejects missing active demo data with `409`;
+- preflights untracked dependencies and blocks with `409` if real records reference demo records, including direct table references plus generic `alerts.related_entity_type/id`, `purchase_suggestions.item_type/item_id`, and `purchase_suggestions.source_entity_type/id` references;
+- deletes in reverse dependency order in one transaction;
+- marks the demo session `cleared` only after successful deletes.
+
+When an active demo session has unsafe working references, `GET /api/demo-data/status` returns `can_clear=false` and includes a Russian blocking reason so the future UI can ask the user to resolve those working records manually before clearing demo data.

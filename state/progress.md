@@ -512,3 +512,19 @@ Import CSV/XLSX draft backend foundation.
 - Updated frontend Russian onboarding copy, progress count, safety copy, and navigation hints/buttons.
 - Fixed stale import readiness copy that said apply would be added in a separate future PR.
 - Import apply targets were not expanded; ingredient lots and orders remain unsupported.
+
+## PR84 — Demo data mode backend foundation
+- Added backend-only demo data tracking migration with `demo_data_sessions` and `demo_data_records`.
+- Added explicit demo status/install/clear API under `/api/demo-data`.
+- Demo install is transactional and blocked for workspaces with non-demo business data.
+- Demo clear deletes only tracked rows and blocks when real records reference demo records.
+- Demo records are labeled with `Демо ·` and tracked by table name plus record id.
+- No frontend UI, startup seeding, migration seeding, backup/export automation, production batches, or import apply target expansion were added.
+- Next recommended PR: PR85 — Demo data mode UI.
+
+
+## PR84 follow-up — Demo data clear safety hardening
+- Expanded demo-data clear guards for client wishes, feedback, production batches, production batch rows, alerts, and purchase suggestions.
+- Demo status now reports `can_clear=false` with a blocking reason when untracked working records reference tracked demo rows.
+- Added regression tests for unsafe alert, purchase suggestion, client wish/feedback, production batch dependencies, and unsafe status behavior.
+- No frontend UI, migrations, automatic install/clear, backup/export creation, production confirmation, import target expansion, or user-data deletion behavior was added.

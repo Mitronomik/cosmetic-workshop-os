@@ -29,6 +29,8 @@ CURRENT_ALLOWED_TABLES = {
     "import_sources",
     "import_drafts",
     "import_draft_rows",
+    "demo_data_sessions",
+    "demo_data_records",
     "sqlite_sequence",
 }
 
