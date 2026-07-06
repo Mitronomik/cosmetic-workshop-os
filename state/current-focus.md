@@ -1,3 +1,3 @@
 # Current Focus
 
-PR87 follow-up fixed the Reports finance margin basis safety blocker. Next recommended PR: PR88 — Reports UI foundation, unless API smoke finds backend follow-up issues.
+PR88 — Reports UI foundation is implemented. Next recommended PR: PR89 — Reports UI polish / smoke fixes if browser smoke finds issues; otherwise PR89 — PDF export foundation when Reports UI is stable.

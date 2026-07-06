@@ -565,3 +565,10 @@ Import CSV/XLSX draft backend foundation.
 - `known_revenue` and `known_production_cost` remain independent known totals, but reports no longer combine revenue from one incomplete batch with cost from another unrelated incomplete batch to produce margin.
 - Added `complete_finance_record_count`, `incomplete_margin_count`, `margin_unavailable`, and `partial_margin_basis` coverage/docs.
 - Manual long-running API smoke was not run in this non-interactive session; automated service/API tests cover the finance mismatch regression and read-only endpoints.
+
+## PR88 — Reports UI foundation
+- Added `/reports` frontend route and marked “Отчеты” ready in “Данные и настройки”.
+- Added typed frontend report DTOs and API helpers for PR87 read-only endpoints: overview, inventory, orders, production, and finance.
+- Added Reports page hero, reload button, tabs, metric cards, backend warning panels, friendly empty state, related navigation buttons, and finance safety copy.
+- Added compact dashboard card linking to Reports.
+- Reports UI displays backend-provided values only and does not calculate core report values, mutate business data, create backup/export files, regenerate alerts/purchase suggestions, or add PDF/export/charts/accounting.

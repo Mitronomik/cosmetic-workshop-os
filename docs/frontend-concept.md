@@ -1542,3 +1542,11 @@ The dashboard keeps the existing single onboarding/checklist card and refreshes 
 ## PR86 Help Center note
 
 - `/help` is now a ready user-facing in-app Help Center. Content is static and bundled with the frontend, works offline, and does not call backend APIs or mutate data.
+
+## PR88 Reports UI note
+
+- `/reports` is now a ready user-facing route under “Данные и настройки”.
+- The Reports page consumes the PR87 read-only backend report endpoints for overview, inventory, orders, production, and finance.
+- The frontend displays backend DTO values and warnings; it does not calculate core report values, tax, stock, production, revenue, cost, or margin.
+- Reports are read-only in the UI: they do not mutate business data, create backup/export files, or regenerate alerts/purchase suggestions.
+- PDF/export/charts/accounting remain follow-up work.
