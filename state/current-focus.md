@@ -1,12 +1,11 @@
 # Current focus
 
-PR84 — Demo data mode backend foundation.
+PR84 follow-up — Harden demo-data clear dependency guards.
 
 Scope:
-- add explicit backend/API demo data status, install, and clear endpoints;
-- add demo tracking tables for sessions and table/id records;
-- keep demo install limited to empty workspaces;
-- clear only tracked demo records with dependency guards;
-- no frontend UI, no startup/onboarding seeding, no backup/export automation, no production batches.
+- expand demo-data clear guards for all current direct dependency tables;
+- add generic alert and purchase suggestion reference guards;
+- make status report `can_clear=false` when clear would be unsafe;
+- no frontend UI, migrations, automatic install/clear, backup/export automation, production confirmation, or import target expansion.
 
 Next recommended PR: PR85 — Demo data mode UI.

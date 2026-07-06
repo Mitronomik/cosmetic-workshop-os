@@ -521,3 +521,10 @@ Import CSV/XLSX draft backend foundation.
 - Demo records are labeled with `Демо ·` and tracked by table name plus record id.
 - No frontend UI, startup seeding, migration seeding, backup/export automation, production batches, or import apply target expansion were added.
 - Next recommended PR: PR85 — Demo data mode UI.
+
+
+## PR84 follow-up — Demo data clear safety hardening
+- Expanded demo-data clear guards for client wishes, feedback, production batches, production batch rows, alerts, and purchase suggestions.
+- Demo status now reports `can_clear=false` with a blocking reason when untracked working records reference tracked demo rows.
+- Added regression tests for unsafe alert, purchase suggestion, client wish/feedback, production batch dependencies, and unsafe status behavior.
+- No frontend UI, migrations, automatic install/clear, backup/export creation, production confirmation, import target expansion, or user-data deletion behavior was added.

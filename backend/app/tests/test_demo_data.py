@@ -237,3 +237,224 @@ def test_failed_clear_rolls_back(monkeypatch, tmp_path):
             ).fetchone()
             is not None
         )
+
+
+def demo_id(conn, table: str) -> int:
+    return conn.execute(
+        """
+        SELECT record_id
+        FROM demo_data_records
+        WHERE table_name = ?
+        ORDER BY id
+        LIMIT 1
+        """,
+        (table,),
+    ).fetchone()[0]
+
+
+def assert_demo_clear_blocked_and_active(service, db_path):
+    with pytest.raises(DemoDataConflictError):
+        service.clear(confirm_clear=True)
+    with sqlite3.connect(db_path) as conn:
+        assert count(conn, "demo_data_records") > 0
+        assert (
+            conn.execute(
+                "SELECT status FROM demo_data_sessions WHERE status='active'"
+            ).fetchone()
+            is not None
+        )
+
+
+def test_clear_blocks_after_alert_references_demo_ingredient(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        ingredient_id = demo_id(conn, "ingredients")
+        conn.execute(
+            """
+            INSERT INTO alerts (
+                alert_key, type, severity, message, related_entity_type,
+                related_entity_id, recommended_action
+            ) VALUES (?, 'low_ingredient_stock', 'warning', ?, 'ingredient', ?, ?)
+            """,
+            (
+                "test-alert-demo-ingredient",
+                "Тестовый алерт на демо-компонент.",
+                ingredient_id,
+                "Проверьте тестовую зависимость.",
+            ),
+        )
+    assert_demo_clear_blocked_and_active(service, c.path)
+
+
+def test_clear_blocks_after_alert_references_demo_order(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        order_id = demo_id(conn, "orders")
+        conn.execute(
+            """
+            INSERT INTO alerts (
+                alert_key, type, severity, message, related_entity_type,
+                related_entity_id, recommended_action
+            ) VALUES (?, 'insufficient_materials_for_order', 'blocking', ?, 'order', ?, ?)
+            """,
+            (
+                "test-alert-demo-order",
+                "Тестовый алерт на демо-заказ.",
+                order_id,
+                "Проверьте тестовую зависимость.",
+            ),
+        )
+    assert_demo_clear_blocked_and_active(service, c.path)
+
+
+def test_clear_blocks_after_purchase_suggestion_references_demo_ingredient(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        ingredient_id = demo_id(conn, "ingredients")
+        conn.execute(
+            """
+            INSERT INTO purchase_suggestions (
+                suggestion_key, item_type, item_id, item_name_snapshot,
+                recommended_quantity, unit, reason, source_entity_type,
+                source_entity_id, message
+            ) VALUES (?, 'ingredient', ?, 'Тестовый компонент', '10', 'g', 'manual', 'manual', NULL, ?)
+            """,
+            (
+                "test-purchase-demo-ingredient",
+                ingredient_id,
+                "Тестовая закупка с ссылкой на демо-компонент.",
+            ),
+        )
+    assert_demo_clear_blocked_and_active(service, c.path)
+
+
+def test_clear_blocks_after_purchase_suggestion_references_demo_packaging(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        packaging_id = demo_id(conn, "packaging_items")
+        conn.execute(
+            """
+            INSERT INTO purchase_suggestions (
+                suggestion_key, item_type, item_id, item_name_snapshot,
+                recommended_quantity, unit, reason, source_entity_type,
+                source_entity_id, message
+            ) VALUES (?, 'packaging', ?, 'Тестовая тара', '2', 'pcs', 'manual', 'manual', NULL, ?)
+            """,
+            (
+                "test-purchase-demo-packaging",
+                packaging_id,
+                "Тестовая закупка с ссылкой на демо-тару.",
+            ),
+        )
+    assert_demo_clear_blocked_and_active(service, c.path)
+
+
+def test_clear_blocks_after_purchase_suggestion_source_references_demo_order(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        order_id = demo_id(conn, "orders")
+        real_ingredient_id = conn.execute(
+            "INSERT INTO ingredients (name, category, default_unit) VALUES ('Тестовый рабочий компонент', 'oil', 'g')"
+        ).lastrowid
+        conn.execute(
+            """
+            INSERT INTO purchase_suggestions (
+                suggestion_key, item_type, item_id, item_name_snapshot,
+                recommended_quantity, unit, reason, source_entity_type,
+                source_entity_id, message
+            ) VALUES (?, 'ingredient', ?, 'Тестовый рабочий компонент', '5', 'g', 'insufficient_for_order', 'order', ?, ?)
+            """,
+            (
+                "test-purchase-demo-order-source",
+                real_ingredient_id,
+                order_id,
+                "Тестовая закупка с источником-демо-заказом.",
+            ),
+        )
+    assert_demo_clear_blocked_and_active(service, c.path)
+
+
+def test_clear_blocks_after_client_wish_references_demo_client(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        client_id = demo_id(conn, "clients")
+        conn.execute(
+            """
+            INSERT INTO client_wishes (client_id, title, description)
+            VALUES (?, 'Тестовое пожелание', 'Ссылка на демо-клиента')
+            """,
+            (client_id,),
+        )
+    assert_demo_clear_blocked_and_active(service, c.path)
+
+
+def test_clear_blocks_after_client_feedback_references_demo_client(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        client_id = demo_id(conn, "clients")
+        conn.execute(
+            """
+            INSERT INTO client_feedback (client_id, text)
+            VALUES (?, 'Тестовый отзыв со ссылкой на демо-клиента')
+            """,
+            (client_id,),
+        )
+    assert_demo_clear_blocked_and_active(service, c.path)
+
+
+def test_clear_blocks_after_production_batch_references_demo_order(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        order_id = demo_id(conn, "orders")
+        recipe_version_id = demo_id(conn, "recipe_versions")
+        conn.execute(
+            """
+            INSERT INTO production_batches (
+                order_id, recipe_version_id, final_batch_value, final_batch_unit
+            ) VALUES (?, ?, '10', 'g')
+            """,
+            (order_id, recipe_version_id),
+        )
+    assert_demo_clear_blocked_and_active(service, c.path)
+
+
+def test_status_reports_clear_blocked_when_unsafe_dependency_exists(tmp_path):
+    c = cfg(tmp_path)
+    service = DemoDataService(c)
+    service.install(confirm_install=True, understand_demo_data=True)
+    with sqlite3.connect(c.path) as conn:
+        ingredient_id = demo_id(conn, "ingredients")
+        conn.execute(
+            """
+            INSERT INTO alerts (
+                alert_key, type, severity, message, related_entity_type,
+                related_entity_id, recommended_action
+            ) VALUES (?, 'low_ingredient_stock', 'warning', ?, 'ingredient', ?, ?)
+            """,
+            (
+                "test-alert-demo-status",
+                "Тестовый алерт на демо-компонент.",
+                ingredient_id,
+                "Проверьте тестовую зависимость.",
+            ),
+        )
+    st = service.status()
+    assert st["is_installed"] is True
+    assert st["can_clear"] is False
+    assert any("нельзя удалить" in reason for reason in st["blocking_reasons"])

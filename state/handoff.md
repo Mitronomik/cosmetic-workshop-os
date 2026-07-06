@@ -2,7 +2,7 @@
 
 ## Last completed work
 
-PR84 — Demo data mode backend foundation.
+PR84 follow-up — Harden demo-data clear dependency guards.
 
 ## Current repo state after PR84
 
@@ -12,7 +12,8 @@ PR84 — Demo data mode backend foundation.
   - `POST /api/demo-data/install`;
   - `POST /api/demo-data/clear`.
 - Demo install is explicit, transactional, labels records with `Демо ·`, and is blocked when non-demo business rows exist.
-- Demo clear is explicit, transactional, deletes only tracked demo rows, and blocks when untracked working records reference demo rows.
+- Demo clear is explicit, transactional, deletes only tracked demo rows, and blocks when untracked working records reference demo rows through direct table references, alerts, or purchase suggestions.
+- Demo status now returns `can_clear=false` plus a blocking reason when automatic clear would be unsafe because working records reference demo records.
 - Demo install does not create production batches, backups, exports, import apply target expansion, frontend UI, startup seed data, migration seed data, or onboarding seed data.
 
 ## Manual smoke
@@ -26,10 +27,11 @@ Recommended manual API smoke for PR85 or local review:
 4. Call `POST /api/demo-data/install` with both confirmation flags.
 5. Confirm created counts and `Демо ·` labels in ingredient, packaging, recipe, client, and order APIs.
 6. Confirm no production batches, backup files, or export files were created automatically.
-7. Call `POST /api/demo-data/clear` without confirmation and confirm rejection.
-8. Call clear with confirmation and confirm tracked records are removed.
-9. Create a real business record in a temp DB and confirm install is blocked.
-10. Create a real order referencing demo records and confirm clear is blocked.
+7. Create or regenerate an alert/purchase suggestion that references demo records.
+8. Confirm status returns `can_clear=false` and clear with confirmation returns `409`.
+9. Verify demo records still exist and the session remains active.
+10. In a clean demo install with no untracked dependencies, call clear with confirmation and confirm tracked records are removed.
+11. Create a real business record in a temp DB and confirm install is blocked.
 
 ## Next recommended PR
 

@@ -681,6 +681,8 @@ Safety behavior:
 
 - rejects missing confirmation with `400`;
 - rejects missing active demo data with `409`;
-- preflights untracked dependencies and blocks with `409` if real records reference demo records;
+- preflights untracked dependencies and blocks with `409` if real records reference demo records, including direct table references plus generic `alerts.related_entity_type/id`, `purchase_suggestions.item_type/item_id`, and `purchase_suggestions.source_entity_type/id` references;
 - deletes in reverse dependency order in one transaction;
 - marks the demo session `cleared` only after successful deletes.
+
+When an active demo session has unsafe working references, `GET /api/demo-data/status` returns `can_clear=false` and includes a Russian blocking reason so the future UI can ask the user to resolve those working records manually before clearing demo data.

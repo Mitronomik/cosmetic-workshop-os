@@ -55,6 +55,58 @@ DELETE_ORDER = (
     "ingredients",
 )
 
+
+DIRECT_DEPENDENCY_CHECKS = (
+    ("orders", "client_id", "clients"),
+    ("orders", "recipe_version_id", "recipe_versions"),
+    ("orders", "client_recipe_id", "client_recipes"),
+    ("orders", "packaging_item_id", "packaging_items"),
+    ("recipe_ingredients", "ingredient_id", "ingredients"),
+    ("client_recipe_ingredients", "ingredient_id", "ingredients"),
+    ("client_recipes", "client_id", "clients"),
+    ("client_recipes", "source_recipe_version_id", "recipe_versions"),
+    ("stock_movements", "ingredient_lot_id", "ingredient_lots"),
+    ("packaging_stock_movements", "packaging_item_id", "packaging_items"),
+    ("client_wishes", "client_id", "clients"),
+    ("client_wishes", "client_recipe_id", "client_recipes"),
+    ("client_feedback", "client_id", "clients"),
+    ("client_feedback", "client_recipe_id", "client_recipes"),
+    ("production_batches", "order_id", "orders"),
+    ("production_batches", "recipe_version_id", "recipe_versions"),
+    ("production_batches", "client_recipe_id", "client_recipes"),
+    ("production_batch_ingredients", "ingredient_id", "ingredients"),
+    ("production_batch_ingredients", "ingredient_lot_id", "ingredient_lots"),
+    ("production_batch_packaging", "packaging_item_id", "packaging_items"),
+)
+
+GENERIC_REFERENCE_TARGETS = {
+    "ingredient": "ingredients",
+    "ingredients": "ingredients",
+    "ingredient_lot": "ingredient_lots",
+    "ingredient_lots": "ingredient_lots",
+    "packaging": "packaging_items",
+    "packaging_item": "packaging_items",
+    "packaging_items": "packaging_items",
+    "order": "orders",
+    "orders": "orders",
+    "client": "clients",
+    "clients": "clients",
+    "client_recipe": "client_recipes",
+    "client_recipes": "client_recipes",
+    "recipe_template": "recipe_templates",
+    "recipe_templates": "recipe_templates",
+    "recipe_version": "recipe_versions",
+    "recipe_versions": "recipe_versions",
+}
+
+PURCHASE_ITEM_REFERENCE_TARGETS = {
+    "ingredient": "ingredients",
+    "ingredients": "ingredients",
+    "packaging": "packaging_items",
+    "packaging_item": "packaging_items",
+    "packaging_items": "packaging_items",
+}
+
 COUNT_KEYS = {
     "ingredients": "ingredients",
     "ingredient_lots": "ingredient_lots",
@@ -207,6 +259,11 @@ class DemoDataService:
             )
             if non_demo:
                 has_non_demo = True
+        has_unsafe_clear_dependencies = False
+        if active:
+            has_unsafe_clear_dependencies = self._has_untracked_dependencies(
+                conn, int(active["id"])
+            )
         blocking = []
         if active:
             blocking.append("Демо-данные уже установлены.")
@@ -214,12 +271,16 @@ class DemoDataService:
             blocking.append(
                 "Демо-данные можно установить только в пустую рабочую базу. В этой базе уже есть рабочие данные."
             )
+        if has_unsafe_clear_dependencies:
+            blocking.append(
+                "Демо-данные нельзя удалить автоматически: на них уже ссылаются рабочие записи."
+            )
         return {
             "is_installed": active is not None,
             "active_session_id": None if active is None else int(active["id"]),
             "demo_version": DEMO_VERSION,
             "can_install": active is None and not has_non_demo,
-            "can_clear": active is not None,
+            "can_clear": active is not None and not has_unsafe_clear_dependencies,
             "has_business_data": has_business,
             "has_non_demo_business_data": has_non_demo,
             "created_counts": created_counts,
@@ -548,23 +609,104 @@ class DemoDataService:
             ),
         )
 
-    def _has_untracked_dependencies(self, conn, sid: int) -> bool:
-        checks = [
-            ("orders", "client_id", "clients"),
-            ("orders", "recipe_version_id", "recipe_versions"),
-            ("orders", "client_recipe_id", "client_recipes"),
-            ("orders", "packaging_item_id", "packaging_items"),
-            ("recipe_ingredients", "ingredient_id", "ingredients"),
-            ("client_recipe_ingredients", "ingredient_id", "ingredients"),
-            ("client_recipes", "client_id", "clients"),
-            ("client_recipes", "source_recipe_version_id", "recipe_versions"),
-            ("stock_movements", "ingredient_lot_id", "ingredient_lots"),
-            ("packaging_stock_movements", "packaging_item_id", "packaging_items"),
-        ]
-        for table, col, ref_table in checks:
-            sql = f"""SELECT 1 FROM {table} child JOIN demo_data_records ref ON ref.session_id=? AND ref.table_name=? AND ref.record_id=child.{col}
-                    WHERE child.{col} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM demo_data_records own WHERE own.session_id=? AND own.table_name=? AND own.record_id=child.id) LIMIT 1"""
-            if conn.execute(sql, (sid, ref_table, sid, table)).fetchone():
+    def _has_untracked_dependencies(self, conn: sqlite3.Connection, sid: int) -> bool:
+        for child_table, child_column, ref_table in DIRECT_DEPENDENCY_CHECKS:
+            if self._has_untracked_fk_dependency(
+                conn, sid, child_table, child_column, ref_table
+            ):
+                return True
+        if self._has_untracked_generic_dependency(
+            conn,
+            sid,
+            "alerts",
+            "related_entity_type",
+            "related_entity_id",
+            GENERIC_REFERENCE_TARGETS,
+        ):
+            return True
+        if self._has_untracked_generic_dependency(
+            conn,
+            sid,
+            "purchase_suggestions",
+            "item_type",
+            "item_id",
+            PURCHASE_ITEM_REFERENCE_TARGETS,
+        ):
+            return True
+        if self._has_untracked_generic_dependency(
+            conn,
+            sid,
+            "purchase_suggestions",
+            "source_entity_type",
+            "source_entity_id",
+            GENERIC_REFERENCE_TARGETS,
+        ):
+            return True
+        return False
+
+    def _has_untracked_fk_dependency(
+        self,
+        conn: sqlite3.Connection,
+        session_id: int,
+        child_table: str,
+        child_column: str,
+        ref_table: str,
+    ) -> bool:
+        sql = f"""
+            SELECT 1
+            FROM {child_table} child
+            JOIN demo_data_records ref
+              ON ref.session_id = ?
+             AND ref.table_name = ?
+             AND ref.record_id = child.{child_column}
+            WHERE child.{child_column} IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1
+                FROM demo_data_records own
+                WHERE own.session_id = ?
+                  AND own.table_name = ?
+                  AND own.record_id = child.id
+              )
+            LIMIT 1
+        """
+        return (
+            conn.execute(
+                sql, (session_id, ref_table, session_id, child_table)
+            ).fetchone()
+            is not None
+        )
+
+    def _has_untracked_generic_dependency(
+        self,
+        conn: sqlite3.Connection,
+        session_id: int,
+        child_table: str,
+        type_column: str,
+        id_column: str,
+        type_to_table: dict[str, str],
+    ) -> bool:
+        for entity_type, ref_table in type_to_table.items():
+            sql = f"""
+                SELECT 1
+                FROM {child_table} child
+                JOIN demo_data_records ref
+                  ON ref.session_id = ?
+                 AND ref.table_name = ?
+                 AND ref.record_id = child.{id_column}
+                WHERE child.{type_column} = ?
+                  AND child.{id_column} IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM demo_data_records own
+                    WHERE own.session_id = ?
+                      AND own.table_name = ?
+                      AND own.record_id = child.id
+                  )
+                LIMIT 1
+            """
+            if conn.execute(
+                sql, (session_id, ref_table, entity_type, session_id, child_table)
+            ).fetchone():
                 return True
         return False
 
