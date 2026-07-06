@@ -66,3 +66,15 @@ Recommended local smoke:
 ## Next recommended PR
 
 PR87 — Help center contextual polish / smoke fixes if smoke finds issues; otherwise PR87 — Reports foundation.
+
+
+## PR87 — Reports backend foundation
+- Added read-only backend reports service, schemas, and `/api/reports` endpoints for overview, inventory, orders, production, and finance.
+- Reports aggregate existing SQLite data only and do not create audit logs, backups, exports, alerts, purchase suggestions, or report tables.
+- Finance values use Decimal-backed string totals and do not invent tax. Missing sale price/cost and mixed production units are surfaced as warnings.
+- Added backend report service/API tests and docs.
+- Next recommended PR: PR88 — Reports UI foundation, unless report API smoke finds backend follow-up fixes.
+
+## PR87 manual smoke note
+
+Manual long-running backend smoke was not run in this non-interactive session. Automated API coverage used FastAPI TestClient where available and verified all `/api/reports/*` endpoints return `generated_at`/`warnings` and keep table row counts unchanged. Recommended next local smoke for PR88: start backend, call reports on an empty database, install demo data, call reports again, and confirm no backup/export files or alert/purchase regeneration occurred.

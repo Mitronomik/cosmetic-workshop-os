@@ -550,3 +550,11 @@ Import CSV/XLSX draft backend foundation.
 - Added frontend-only search, category filter, selected article detail view, and related-section navigation buttons that only navigate.
 - Added a compact dashboard card linking to Help; no backup/export/import/demo actions are triggered from Help.
 - No backend help API, database tables, migrations, CMS, AI/RAG, external docs, reports/settings/audit/package work, or import apply target changes were added.
+
+
+## PR87 — Reports backend foundation
+- Added read-only backend reports service, schemas, and `/api/reports` endpoints for overview, inventory, orders, production, and finance.
+- Reports aggregate existing SQLite data only and do not create audit logs, backups, exports, alerts, purchase suggestions, or report tables.
+- Finance values use Decimal-backed string totals and do not invent tax. Missing sale price/cost and mixed production units are surfaced as warnings.
+- Added backend report service/API tests and docs.
+- Next recommended PR: PR88 — Reports UI foundation, unless report API smoke finds backend follow-up fixes.
