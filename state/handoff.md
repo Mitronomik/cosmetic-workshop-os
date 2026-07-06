@@ -2,9 +2,9 @@
 
 ## Last completed work
 
-PR85 — Demo data mode UI.
+PR85 follow-up — Demo data UI polish.
 
-## Current repo state after PR85
+## Current repo state after PR85 follow-up
 
 - Frontend route `/demo-data` is available through “Данные и настройки” → “Демо-данные”.
 - The page consumes PR84 backend endpoints:
@@ -17,20 +17,23 @@ PR85 — Demo data mode UI.
 - The UI does not install demo data automatically, clear demo data automatically, create/delete business records directly, create backup/export automatically, expand import apply targets, create production batches, or alter the demo dataset.
 - Dashboard has only a compact link card to `/demo-data`.
 
-## Automated checks from PR85
+- Follow-up polish clarified demo-data docs so PR84 is the backend/API foundation and PR85 is the frontend UI route.
+- Failed install/clear attempts now refresh status after the backend rejects an action, preserving the action error and updating `can_install`, `can_clear`, and `blocking_reasons` when status refresh succeeds.
 
-- `git status --short` showed only PR85 working-tree changes before commit.
+## Automated checks from PR85 follow-up
+
+- `git status --short` showed only PR85 follow-up working-tree changes before commit.
 - `git branch --show-current` returned `work`.
 - `npm --prefix frontend run build` passed.
 - `git diff --check` passed.
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')` passed.
 - `python3 -m pytest backend/app/tests/test_demo_data.py -q` passed.
 - `python3 -m pytest backend/app/tests/test_demo_data_api.py -q` skipped because FastAPI TestClient requires `httpx` in this environment.
-- Regression pytest commands requested in PR85 passed; several suites include environment-gated skips for TestClient-dependent cases.
+- PR85 follow-up reran the scoped checks requested for this polish change.
 
 ## Manual smoke
 
-Manual browser smoke was not run in this non-interactive session because no long-running backend/frontend browser session was started.
+Manual browser smoke was not run for the follow-up in this non-interactive session because no long-running backend/frontend browser session was started.
 
 Recommended local smoke:
 1. Start backend and frontend with an empty temp/dev database.

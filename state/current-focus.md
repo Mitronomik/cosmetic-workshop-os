@@ -1,8 +1,8 @@
 # Current focus
 
 ## Now
-- PR85 — Demo data mode UI is implemented in the working tree.
-- Scope stayed frontend-focused: `/demo-data` route, navigation entry, PR84 API helpers, explicit install/clear confirmation flows, dashboard link, and state/docs updates.
+- PR85 follow-up — Demo data UI polish is implemented in the working tree.
+- Scope stayed narrow: docs wording plus frontend status refresh after failed demo install/clear attempts.
 
 ## Next allowed task
 - O5 — In-app help center.

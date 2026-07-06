@@ -1,6 +1,6 @@
 # Demo data mode
 
-Demo data mode is a backend/API foundation for showing a non-technical user a safe example workspace for **Мастерская косметолога**.
+Demo data mode started as the PR84 backend/API foundation and is exposed to users through the PR85 frontend route for showing a non-technical user a safe example workspace for **Мастерская косметолога**.
 
 ## Safety contract
 
@@ -43,9 +43,9 @@ Records are not tracked by name only. Names are user-visible labels; table/id tr
 
 Conflict responses use Russian safety messages suitable for future UI.
 
-## PR84 limitations
+## PR84 backend foundation limitations
 
-- No frontend UI is included.
+- PR84 itself did not include frontend UI; PR85 exposes the safe frontend route described below.
 - Demo data can be installed only when no non-demo business data exists.
 - `GET /api/demo-data/status` returns `can_clear=false` when automatic clear is unsafe because working records still reference demo records.
 - Before clearing, the user should manually resolve or delete working records that reference demo data.

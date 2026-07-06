@@ -1316,6 +1316,14 @@ function showDemoClearConfirm() { demoDataUiState.showClearConfirm = true; demoD
 function hideDemoClearConfirm() { demoDataUiState.showClearConfirm = false; demoDataUiState.clearConfirmChecked = false; render(); }
 function updateDemoClearChecks() { demoDataUiState.clearConfirmChecked = !!document.querySelector<HTMLInputElement>('input[name="demo_clear_confirm"]')?.checked; render(); }
 function demoErrorDetails(error: unknown) { const message = error instanceof Error ? error.message : ''; return message && message !== 'API request failed' ? ` ${message}` : ''; }
+function refreshDemoStatusAfterActionError(errorMessage: string) {
+  demoDataUiState.error = errorMessage;
+  demoDataUiState.message = '';
+  return getDemoDataStatus()
+    .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; })
+    .catch(() => { if (!demoDataUiState.demoStatus) demoDataUiState.status = 'error'; })
+    .finally(() => { demoDataUiState.actionStatus = 'idle'; render(); });
+}
 function installDemoDataFromUi() {
   if (demoDataUiState.actionStatus !== 'idle') return;
   if (!demoDataUiState.demoStatus?.can_install || !demoDataUiState.installConfirmChecked || !demoDataUiState.understandDemoChecked) return;
@@ -1323,7 +1331,7 @@ function installDemoDataFromUi() {
   installDemoData({ confirm_install: true, understand_demo_data: true })
     .then((response) => { demoDataUiState.lastInstallResult = response; demoDataUiState.lastClearResult = null; demoDataUiState.message = response.message || 'Демо-данные установлены. Теперь можно открыть разделы и посмотреть пример работы.'; demoDataUiState.showInstallConfirm = false; demoDataUiState.installConfirmChecked = false; demoDataUiState.understandDemoChecked = false; return getDemoDataStatus(); })
     .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
-    .catch((error) => { demoDataUiState.actionStatus = 'idle'; demoDataUiState.error = `Не удалось установить демо-данные. Рабочие данные не были частично изменены.${demoErrorDetails(error)}`; render(); });
+    .catch((error) => { const message = `Не удалось установить демо-данные. Рабочие данные не были частично изменены.${demoErrorDetails(error)}`; refreshDemoStatusAfterActionError(message); });
 }
 function clearDemoDataFromUi() {
   if (demoDataUiState.actionStatus !== 'idle') return;
@@ -1332,7 +1340,7 @@ function clearDemoDataFromUi() {
   clearDemoData({ confirm_clear: true })
     .then((response) => { demoDataUiState.lastClearResult = response; demoDataUiState.lastInstallResult = null; demoDataUiState.message = response.message || 'Демо-данные очищены.'; demoDataUiState.showClearConfirm = false; demoDataUiState.clearConfirmChecked = false; return getDemoDataStatus(); })
     .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
-    .catch((error) => { demoDataUiState.actionStatus = 'idle'; demoDataUiState.error = `Не удалось очистить демо-данные. Реальные данные не удалялись.${demoErrorDetails(error)}`; render(); });
+    .catch((error) => { const message = `Не удалось очистить демо-данные. Реальные данные не удалялись.${demoErrorDetails(error)}`; refreshDemoStatusAfterActionError(message); });
 }
 function demoDataPage() {
   const isLoading = demoDataUiState.status === 'loading';
