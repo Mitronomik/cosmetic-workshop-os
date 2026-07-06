@@ -689,7 +689,7 @@ When an active demo session has unsafe working references, `GET /api/demo-data/s
 
 ## Report documents API
 
-Report document endpoints are available under `/api/report-documents`. They create human-readable report documents explicitly and store them in the safe report-documents directory under the user data/export area. PR89 supports Markdown only. PDF and DOCX requests are rejected with a Russian message that Markdown is the only supported format.
+Report document endpoints are available under `/api/report-documents`. They create human-readable report documents explicitly and store them in the safe report-documents directory under the user data/export area. The post-PR90 MVP supports Markdown only. PDF and DOCX requests are rejected with a Russian message that Markdown is the only supported format.
 
 Document generation reads backend `ReportsService` data, does not mutate business records, does not create backup/export snapshots, and does not regenerate alerts or purchase suggestions.
 
@@ -698,8 +698,8 @@ Document generation reads backend `ReportsService` data, does not mutate busines
 Returns document export availability:
 
 - `documents_dir`;
-- `available_formats` (`["markdown"]` in PR89);
-- `available_document_types` (`["workshop_overview"]` in PR89);
+- `available_formats` (`["markdown"]` in the MVP);
+- `available_document_types` (`["workshop_overview"]` in the MVP);
 - `can_create`;
 - `documents_count`;
 - `message`.

@@ -1,23 +1,22 @@
 # Report documents
 
-PR89 adds the backend foundation for explicit report document generation.
+The report document feature now includes the PR89 backend foundation and the PR90 frontend UI for explicit report document generation.
 
 ## Scope
 
 The first supported document is **Сводка мастерской** (`workshop_overview`). It is generated from the backend `ReportsService` overview DTO and rendered as a human-readable Markdown file.
 
-Supported in PR89:
+Supported in the post-PR90 MVP:
 
 - Markdown (`markdown`, `.md`);
 - explicit backend/API document creation;
 - metadata sidecar JSON files;
 - listing generated document metadata.
 
-Not supported in PR89:
+Not supported in the post-PR90 MVP:
 
 - PDF;
 - DOCX;
-- frontend buttons or download UI;
 - charts;
 - invoices, acts, labels, certificates, recipe technical cards, accounting documents, tax reports;
 - scheduled generation, email/share/send, cloud sync, external document services, AI/RAG summaries, or template editing.
@@ -99,7 +98,7 @@ PDF and DOCX generation should be added as later formats through the same docume
 
 ## PR90 — frontend report document export UI
 - Added `/report-documents` / «Документы отчетов» in the «Данные и настройки» navigation group.
-- The page consumes only PR89 endpoints: status, list, and explicit Markdown overview creation.
+- The page consumes only the implemented report document endpoints: status, list, and explicit Markdown overview creation.
 - Page load and refresh are read-only; documents are created only by the «Создать Markdown-документ» action.
 - Markdown is the only exposed format. PDF/DOCX are described as future work and are not actionable.
 - The Reports page now has a contextual link to the document page; it only navigates and does not create files.

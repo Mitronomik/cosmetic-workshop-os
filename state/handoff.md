@@ -7,7 +7,7 @@ PR90 — Report document export UI + sidecar cleanup hardening.
 ## What changed
 
 - Added `/report-documents` / «Документы отчетов» to the frontend navigation under «Данные и настройки».
-- The new page calls only PR89 endpoints:
+- The new page calls only the implemented report document endpoints:
   - `GET /api/report-documents/status`
   - `GET /api/report-documents`
   - `POST /api/report-documents/reports/overview`
