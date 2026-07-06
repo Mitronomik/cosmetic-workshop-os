@@ -170,6 +170,35 @@ def test_metadata_write_failure_removes_created_markdown(tmp_path, monkeypatch):
     assert list(svc.documents_dir.glob("*.json")) == []
 
 
+
+def test_metadata_failure_before_sidecar_creation_does_not_unlink_uncreated_sidecar(tmp_path, monkeypatch):
+    c, svc = service(tmp_path)
+    before = counts(c)
+    original_write = report_documents_module._write_text_exclusive
+    unlink_attempts: list[Path] = []
+
+    def flaky_write(path: Path, text: str) -> None:
+        if path.suffix == ".json":
+            raise OSError("metadata open failed before final sidecar was created")
+        original_write(path, text)
+
+    original_unlink = Path.unlink
+
+    def tracking_unlink(self: Path, *args, **kwargs):
+        unlink_attempts.append(self)
+        return original_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(report_documents_module, "_write_text_exclusive", flaky_write)
+    monkeypatch.setattr(Path, "unlink", tracking_unlink)
+
+    with pytest.raises(ReportDocumentError, match="Данные мастерской не изменялись"):
+        svc.create_overview_document(ReportOverviewDocumentCreateRequest())
+
+    assert counts(c) == before
+    assert list(svc.documents_dir.glob("*.md")) == []
+    assert list(svc.documents_dir.glob("*.json")) == []
+    assert [path.suffix for path in unlink_attempts] == [".md"]
+
 def test_document_generation_only_writes_report_document_files(tmp_path):
     c, svc = service(tmp_path)
     before = counts(c)

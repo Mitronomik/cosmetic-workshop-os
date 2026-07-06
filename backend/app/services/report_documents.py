@@ -73,10 +73,11 @@ class ReportDocumentService:
 
         self.documents_dir.mkdir(parents=True, exist_ok=True)
         document_id, markdown_path, metadata_path = _unique_document_paths(self.documents_dir, base_document_id)
-        markdown_written = False
+        document_created = False
+        metadata_created = False
         try:
             _write_text_exclusive(markdown_path, markdown_text)
-            markdown_written = True
+            document_created = True
             metadata = ReportDocumentMetadata(
                 id=document_id,
                 document_type=SUPPORTED_DOCUMENT_TYPE,
@@ -91,18 +92,18 @@ class ReportDocumentService:
                 size_bytes=markdown_path.stat().st_size,
             )
             _write_text_exclusive(metadata_path, json.dumps(_metadata_json(metadata), ensure_ascii=False, indent=2) + "\n")
+            metadata_created = True
         except OSError as exc:
-            if markdown_written:
+            if metadata_created:
+                try:
+                    metadata_path.unlink()
+                except OSError:
+                    pass
+            if document_created:
                 try:
                     markdown_path.unlink()
                 except OSError:
                     pass
-            try:
-                metadata_path.unlink()
-            except FileNotFoundError:
-                pass
-            except OSError:
-                pass
             raise ReportDocumentError("Не удалось создать документ отчета. Данные мастерской не изменялись.") from exc
         return ReportDocumentCreateResponse(document=metadata, message="Документ отчета создан.")
 

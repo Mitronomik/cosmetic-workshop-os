@@ -595,3 +595,10 @@ Import CSV/XLSX draft backend foundation.
 - Corrected report document filename examples and documented numeric suffix behavior.
 - Updated Reports docs so they no longer describe the `/reports` frontend UI as future-only.
 - Manual long-running API smoke was not run in this non-interactive session; automated tests cover the follow-up safety scenarios.
+
+## PR90 — Report document export UI + sidecar cleanup hardening
+- Added a focused `/report-documents` frontend route labeled «Документы отчетов» under «Данные и настройки».
+- The UI loads PR89 report document status/list endpoints and creates only explicit Markdown «Сводка мастерской» documents via `POST /api/report-documents/reports/overview`.
+- Page load and list refresh remain read-only; PDF/DOCX are documented in the UI as future work and no unsupported format actions are shown.
+- Added a Reports page contextual navigation link to the document export UI; it does not create documents from `/reports`.
+- Hardened `ReportDocumentService` cleanup so the metadata sidecar is unlinked only if this operation actually created it, while preserving original safe errors.
