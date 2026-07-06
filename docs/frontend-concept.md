@@ -1538,3 +1538,7 @@ If the backend is unavailable, the shell must still render a warm fallback expla
 ## PR83 onboarding refresh
 
 The dashboard keeps the existing single onboarding/checklist card and refreshes its copy for the current MVP workflow. The checklist guides the user through inventory setup, recipes, clients, orders, production readiness/confirmation, alerts and purchase suggestions, backup/export, and import drafts. Checklist buttons only navigate or update onboarding progress; they do not create business data, backups, exports, stock movements, orders, or production records.
+
+## PR86 Help Center note
+
+- `/help` is now a ready user-facing in-app Help Center. Content is static and bundled with the frontend, works offline, and does not call backend APIs or mutate data.

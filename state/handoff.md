@@ -2,51 +2,67 @@
 
 ## Last completed work
 
-PR85 follow-up — Demo data UI polish.
+PR86 — In-app help center foundation.
 
-## Current repo state after PR85 follow-up
+## Current repo state after PR86
 
-- Frontend route `/demo-data` is available through “Данные и настройки” → “Демо-данные”.
-- The page consumes PR84 backend endpoints:
-  - `GET /api/demo-data/status`;
-  - `POST /api/demo-data/install`;
-  - `POST /api/demo-data/clear`.
-- Demo install requires explicit user confirmation with two checkboxes and calls only the backend install endpoint.
-- Demo clear requires explicit user confirmation with one checkbox and calls only the backend clear endpoint.
-- Backend remains the source of truth for `can_install`, `can_clear`, and blocking reasons.
-- The UI does not install demo data automatically, clear demo data automatically, create/delete business records directly, create backup/export automatically, expand import apply targets, create production batches, or alter the demo dataset.
-- Dashboard has only a compact link card to `/demo-data`.
+- `/help` is a real frontend route.
+- “Помощь” is marked ready in “Данные и настройки” and opens `/help`.
+- Help Center is static frontend content bundled in `frontend/src/main.ts`; it works offline and does not require backend data.
+- Help includes Russian, user-facing articles for:
+  - first steps;
+  - components, lots, stock movements, packaging;
+  - recipes and versions;
+  - individual client recipes;
+  - clients, wishes, feedback;
+  - orders, readiness, production/write-off;
+  - alerts and purchase suggestions;
+  - backup/export;
+  - import;
+  - demo data.
+- Help has frontend-only search, category filtering, article cards, selected article detail, and related-section buttons.
+- Related-section buttons only navigate; Help does not install/clear demo data, create imports, apply imports, create backup/export, or mutate business data.
+- Dashboard now has a compact Help link card that only opens Help.
+- No backend help API, migrations, database tables, CMS, AI/RAG, external docs, internet dependency, import target expansion, reports/settings/audit/package work, or demo data behavior changes were added.
 
-- Follow-up polish clarified demo-data docs so PR84 is the backend/API foundation and PR85 is the frontend UI route.
-- Failed install/clear attempts now refresh status after the backend rejects an action, preserving the action error and updating `can_install`, `can_clear`, and `blocking_reasons` when status refresh succeeds.
+## Automated checks from PR86
 
-## Automated checks from PR85 follow-up
-
-- `git status --short` showed only PR85 follow-up working-tree changes before commit.
+- `git status --short` showed only PR86 working-tree changes before commit.
 - `git branch --show-current` returned `work`.
 - `npm --prefix frontend run build` passed.
 - `git diff --check` passed.
 - `python3 -m py_compile $(find backend/app launcher -name '*.py')` passed.
-- `python3 -m pytest backend/app/tests/test_demo_data.py -q` passed.
-- `python3 -m pytest backend/app/tests/test_demo_data_api.py -q` skipped because FastAPI TestClient requires `httpx` in this environment.
-- PR85 follow-up reran the scoped checks requested for this polish change.
+- `python3 -m pytest backend/app/tests/test_onboarding.py -q` passed: 10 passed, 1 skipped.
+- `python3 -m pytest backend/app/tests/test_demo_data.py -q` passed: 20 passed.
+- `python3 -m pytest backend/app/tests/test_import_parsing.py -q` passed: 16 passed.
+- `python3 -m pytest backend/app/tests/test_imports_api.py -q` passed: 2 passed, 5 skipped.
+- `python3 -m pytest backend/app/tests/test_import_apply.py -q` passed: 11 passed, 1 skipped.
+- `python3 -m pytest backend/app/tests/test_exports_api.py -q` passed: 5 passed, 6 skipped.
+- `python3 -m pytest backend/app/tests/test_backups_api.py -q` passed: 4 passed, 5 skipped.
+- `python3 -m pytest backend/app/tests/test_orders.py -q` passed: 6 passed, 1 skipped.
+- `python3 -m pytest backend/app/tests/test_production_readiness.py -q` passed: 8 passed, 1 skipped.
+- `python3 -m pytest backend/app/tests/test_production_confirmation.py -q` passed: 10 passed, 1 skipped.
+- `python3 -m pytest backend/app/tests/test_purchase_suggestions.py -q` passed: 9 passed, 2 skipped.
+- `python3 -m pytest backend/app/tests/test_alerts.py -q` passed: 10 passed, 1 skipped.
+- API-test skips are existing optional FastAPI/TestClient dependency skips in this environment.
 
 ## Manual smoke
 
-Manual browser smoke was not run for the follow-up in this non-interactive session because no long-running backend/frontend browser session was started.
+Manual browser smoke was not run yet in this non-interactive session because no long-running backend/frontend browser session was started.
 
 Recommended local smoke:
-1. Start backend and frontend with an empty temp/dev database.
-2. Open `/demo-data` and confirm status loads.
-3. Confirm install requires both checkboxes.
-4. Install demo data and verify success message plus counts.
-5. Navigate to Components, Inventory, Recipes, Clients, Orders, Alerts, and Purchases to verify `Демо ·` records.
-6. Return to `/demo-data`, confirm clear requires checkbox, clear demo data, and verify records disappear.
-7. In a fresh temp DB with one real record, confirm install is blocked.
-8. Confirm no backup/export files are created automatically and dashboard link opens `/demo-data`.
+1. Start backend and frontend.
+2. Open `/help`.
+3. Confirm Help route loads.
+4. Confirm “Помощь” navigation opens `/help`.
+5. Confirm categories are visible.
+6. Open “Как начать работу”.
+7. Search `рецепт`, `backup`, and `импорт` and confirm matching articles.
+8. Open “Демо-данные”.
+9. Confirm related section buttons navigate only.
+10. Confirm no install/clear/import/backup/export action is triggered from Help.
+11. Confirm dashboard, onboarding, demo data, and import pages still load.
 
 ## Next recommended PR
 
-O5 — In-app help center.
-
-If demo smoke finds issues: PR86 — Demo data UI follow-up fixes.
+PR87 — Help center contextual polish / smoke fixes if smoke finds issues; otherwise PR87 — Reports foundation.

@@ -542,3 +542,11 @@ Import CSV/XLSX draft backend foundation.
 - Clarified `docs/demo-data.md` so PR84 is described as the backend/API foundation and PR85 as the frontend UI route.
 - Failed demo install/clear attempts now refresh demo-data status afterward, preserving the action error while replacing stale `can_install`, `can_clear`, and `blocking_reasons` with backend truth when available.
 - No backend endpoints, migrations, demo dataset changes, automatic install/clear, backup/export creation, production behavior, import behavior, or direct frontend business-data mutation were added.
+
+## PR86 — In-app help center foundation
+- Added a static frontend Help Center at `/help` and marked “Помощь” ready in the “Данные и настройки” navigation group.
+- Help content is bundled in `frontend/src/main.ts`, works offline, and does not call backend APIs or mutate business data.
+- Added Russian user-facing articles for first steps, inventory/components/lots/movements/packaging, recipes/client recipes, clients, orders/readiness/production, alerts/purchases, backup/export, import, and demo data.
+- Added frontend-only search, category filter, selected article detail view, and related-section navigation buttons that only navigate.
+- Added a compact dashboard card linking to Help; no backup/export/import/demo actions are triggered from Help.
+- No backend help API, database tables, migrations, CMS, AI/RAG, external docs, reports/settings/audit/package work, or import apply target changes were added.
