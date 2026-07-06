@@ -70,4 +70,9 @@ PR87 intentionally keeps reports all-time. Date filters are not implemented in t
 
 ## Future UI
 
-The frontend Reports UI is planned for a follow-up PR. The UI should consume these backend endpoints and keep calculations in the backend.
+The frontend Reports UI is available at `/reports` and consumes these backend endpoints. The UI must keep calculations in the backend and display backend-provided warnings instead of recalculating core report values in the frontend.
+
+
+## Report document export foundation
+
+PR89 adds a backend document-export foundation for reports. The first document type is “Сводка мастерской” (`workshop_overview`) generated as Markdown from the existing overview report DTO. This is an explicit POST-only operation under `/api/report-documents`; opening `/reports` does not create files. PDF and DOCX remain future work. See `docs/report-documents.md` for storage, safety, and metadata details.

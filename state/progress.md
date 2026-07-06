@@ -578,3 +578,20 @@ Import CSV/XLSX draft backend foundation.
 - Wired the compact Reports dashboard card into the dashboard between demo data and help so users can open `/reports` from the main screen.
 - Updated the defensive planned-section fallback for “Отчеты” so it no longer says reports are a future module.
 - Reports remain read-only and backend-owned; no mutations, backup/export creation, alert/purchase regeneration, production actions, import apply actions, or frontend finance recalculation were added.
+
+## PR89 — Report document export foundation
+- Added backend report document schemas, service, and `/api/report-documents` endpoints for status, metadata listing, and explicit overview document creation.
+- Added Markdown “Сводка мастерской” generation from backend `ReportsService.get_overview()` data with required Russian sections, warnings, finance limitation copy, and explicit non-accounting/non-tax notes.
+- Generated files are stored under the safe report-documents directory with non-overwriting timestamped filenames and JSON metadata sidecars.
+- PDF and DOCX are rejected with a clear Russian unsupported-format message; Markdown is the only PR89 format.
+- Document generation writes only the Markdown document and metadata sidecar, does not mutate business data, does not create backup/export snapshots, and does not regenerate alerts or purchase suggestions.
+- Added `docs/report-documents.md`, API docs, Reports docs cross-reference, state updates, and backend service/API tests.
+- Next recommended PR: PR90 — Report document export UI, unless backend smoke finds follow-up fixes.
+
+## PR89 follow-up — Report document pair-safety and docs polish
+- Made report document file creation pair-safe: the service now chooses a unique `.md + .json` pair where both paths are free before writing.
+- Added rollback behavior so metadata sidecar write failure best-effort removes the newly created Markdown file and does not leave orphan Markdown.
+- Added service regression tests for stale metadata sidecars and metadata-write failure rollback.
+- Corrected report document filename examples and documented numeric suffix behavior.
+- Updated Reports docs so they no longer describe the `/reports` frontend UI as future-only.
+- Manual long-running API smoke was not run in this non-interactive session; automated tests cover the follow-up safety scenarios.
