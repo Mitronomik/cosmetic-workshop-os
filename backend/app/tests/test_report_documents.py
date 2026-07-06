@@ -1,11 +1,14 @@
 import json
+from pathlib import Path
 import sqlite3
 
 import pytest
 
 from app.db.config import DatabaseConfig
 from app.services.database import initialize_database
+from app.services import report_documents as report_documents_module
 from app.services.report_documents import (
+    ReportDocumentError,
     ReportDocumentService,
     UnsupportedReportDocumentFormatError,
     sanitize_reason,
@@ -122,6 +125,49 @@ def test_multiple_documents_do_not_overwrite_each_other(tmp_path):
     assert (svc.documents_dir / first.filename).exists()
     assert (svc.documents_dir / second.filename).exists()
     assert svc.list_documents().total == 2
+
+
+def test_stale_metadata_sidecar_gets_suffixed_pair_without_orphan_markdown(tmp_path, monkeypatch):
+    _c, svc = service(tmp_path)
+    svc.documents_dir.mkdir(parents=True)
+    stale_sidecar = svc.documents_dir / "workshop-overview-20260706-123456.json"
+    stale_sidecar.write_text('{"stale": true}\n', encoding="utf-8")
+
+    monkeypatch.setattr(
+        report_documents_module,
+        "_document_id",
+        lambda created_at: "workshop-overview-20260706-123456",
+    )
+
+    response = svc.create_overview_document(ReportOverviewDocumentCreateRequest())
+
+    assert response.document.id == "workshop-overview-20260706-123456-1"
+    assert response.document.filename == "workshop-overview-20260706-123456-1.md"
+    assert response.document.metadata_filename == "workshop-overview-20260706-123456-1.json"
+    assert stale_sidecar.exists()
+    assert not (svc.documents_dir / "workshop-overview-20260706-123456.md").exists()
+    assert (svc.documents_dir / response.document.filename).exists()
+    assert (svc.documents_dir / response.document.metadata_filename).exists()
+    for md_path in svc.documents_dir.glob("*.md"):
+        assert md_path.with_suffix(".json").exists()
+
+
+def test_metadata_write_failure_removes_created_markdown(tmp_path, monkeypatch):
+    _c, svc = service(tmp_path)
+    original_write = report_documents_module._write_text_exclusive
+
+    def flaky_write(path: Path, text: str) -> None:
+        if path.suffix == ".json":
+            raise OSError("metadata write failed")
+        original_write(path, text)
+
+    monkeypatch.setattr(report_documents_module, "_write_text_exclusive", flaky_write)
+
+    with pytest.raises(ReportDocumentError, match="Не удалось создать документ отчета"):
+        svc.create_overview_document(ReportOverviewDocumentCreateRequest())
+
+    assert list(svc.documents_dir.glob("*.md")) == []
+    assert list(svc.documents_dir.glob("*.json")) == []
 
 
 def test_document_generation_only_writes_report_document_files(tmp_path):

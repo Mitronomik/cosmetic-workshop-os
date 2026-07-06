@@ -2,47 +2,49 @@
 
 ## Last completed work
 
-PR89 — Report document export foundation.
+PR89 follow-up — report document pair-safety and docs polish.
 
-## Current repo state after PR89
+## Current repo state after PR89 follow-up
 
-- Added backend report document schemas, service, and API router under `/api/report-documents`.
-- `GET /api/report-documents/status` reports Markdown availability and document count.
-- `GET /api/report-documents` lists generated metadata sidecars newest first with limit/offset.
-- `POST /api/report-documents/reports/overview` explicitly creates a Markdown “Сводка мастерской” document from `ReportsService.get_overview()`.
-- Generated files are written only under the safe report-documents directory (`exports/report-documents` in user-data/development conventions).
-- Each document has a Markdown file and JSON metadata sidecar.
-- PDF and DOCX are rejected with a safe Russian message; they remain future work.
-- The renderer includes Russian required sections, report timestamps, warnings, incomplete-data notes, finance limitations, and explicit non-accounting/non-tax copy.
-- Document generation reads report DTO values and does not mutate business tables, create backup files, create JSON export snapshots, regenerate alerts or purchase suggestions, apply imports, run production, or install/clear demo data.
-- No frontend UI, download button, charts, accounting/tax reports, invoices/acts/labels/certificates, scheduled jobs, external services, AI/RAG, or cloud behavior was added.
+- Report document creation remains explicit POST-only at `/api/report-documents/reports/overview`.
+- Markdown remains the only supported report document format; PDF/DOCX remain rejected.
+- `ReportDocumentService` now chooses a unique `.md + .json` pair where both paths are free before writing files.
+- A stale metadata sidecar without a matching Markdown file now causes the backend to choose a suffixed pair instead of writing an orphan Markdown file.
+- If metadata sidecar writing fails after Markdown writing, the newly created Markdown file is best-effort removed and the same safe Russian `ReportDocumentError` is raised.
+- Existing files are not overwritten, user-supplied `reason` remains sanitized and does not affect output paths, and files remain under the safe report-documents directory.
+- Document generation continues to use backend `ReportsService.get_overview()` output and does not mutate business data, create backups/export snapshots, regenerate alerts/purchase suggestions, apply imports, run production, install/clear demo data, or add frontend UI.
+- `docs/report-documents.md` filename examples now match the actual timestamp and suffix behavior.
+- `docs/reports.md` no longer describes the `/reports` UI as future-only; it states the UI is available and must keep calculations in the backend.
 
-## Automated checks from PR89
+## Automated checks from PR89 follow-up
 
-- `python3 -m pytest backend/app/tests/test_report_documents.py -q` passed: 9 passed.
-- `python3 -m pytest backend/app/tests/test_report_documents_api.py -q` passed: 1 passed, 1 skipped.
+- `git status --short` showed the follow-up working-tree changes before commit.
+- `git branch --show-current` returned `work`.
+- `python3 -m py_compile $(find backend/app launcher -name '*.py')` passed.
+- `python3 -m pytest backend/app/tests/test_report_documents.py -q` passed.
+- `python3 -m pytest backend/app/tests/test_report_documents_api.py -q` passed with the existing optional TestClient skip pattern.
+- `python3 -m pytest backend/app/tests/test_reports.py -q` passed.
+- `python3 -m pytest backend/app/tests/test_reports_api.py -q` passed with the existing optional TestClient skip pattern.
+- `npm --prefix frontend run build` passed; npm printed the existing `http-proxy` env config warning.
+- `git diff --check` passed.
 
-Full requested regression/check command results are in the PR/final summary for this session.
+Full requested regression command results are in the final summary for this session.
 
 ## Manual smoke
 
-Manual long-running local API smoke was not run in this non-interactive session. Automated service/API tests cover status, list, explicit creation, file creation, metadata sidecar creation, unsupported format rejection, path traversal safety, no overwrite behavior, and business-table non-mutation.
+Manual long-running local API smoke was not run in this non-interactive session. Automated service/API tests cover explicit create/list/status, stale sidecar pair suffixing, metadata-write rollback, unsupported format rejection, path safety, file creation, and business-table non-mutation.
 
 Recommended local API smoke:
-1. Start backend with an empty temp/dev database.
+1. Start backend with a test user-data directory.
 2. Call `GET /api/report-documents/status`.
 3. Call `GET /api/report-documents`.
-4. Call `POST /api/report-documents/reports/overview` with `{ "format": "markdown" }`.
-5. Confirm response returns document metadata.
-6. Confirm Markdown and JSON sidecar files are created in the report-documents directory.
-7. Open the Markdown file and confirm Russian sections are readable.
-8. Confirm warnings and finance limitations are present.
-9. Call `GET /api/report-documents` again and confirm the new document appears.
-10. Call create again and confirm a second file is created without overwrite.
-11. Try `format: "pdf"` and confirm it is rejected safely.
-12. Try suspicious reason text and confirm output path remains safe.
-13. Confirm no business data changed, no backup/export snapshot was created, and alerts/purchase suggestions were not regenerated.
+4. Call `POST /api/report-documents/reports/overview` with `{ "format": "markdown", "reason": "../../manual test" }`.
+5. Confirm exactly one `.md` and one matching `.json` sidecar are created under `<user_data_dir>/exports/report-documents/`.
+6. Confirm the sanitized reason does not affect filename/path.
+7. Call `GET /api/report-documents` and confirm the document appears.
+8. Call `POST /api/report-documents/reports/overview` with `{ "format": "pdf" }` and confirm it returns the unsupported-format error.
+9. Confirm no backups, root JSON export snapshots, business rows, alerts, purchase suggestions, or production rows are created.
 
 ## Next recommended PR
 
-PR90 — Report document export UI, unless backend smoke finds issues requiring PR90 backend follow-up fixes.
+PR90 — Report document export UI, unless backend smoke finds issues requiring backend follow-up fixes.

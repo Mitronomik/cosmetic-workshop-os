@@ -587,3 +587,11 @@ Import CSV/XLSX draft backend foundation.
 - Document generation writes only the Markdown document and metadata sidecar, does not mutate business data, does not create backup/export snapshots, and does not regenerate alerts or purchase suggestions.
 - Added `docs/report-documents.md`, API docs, Reports docs cross-reference, state updates, and backend service/API tests.
 - Next recommended PR: PR90 — Report document export UI, unless backend smoke finds follow-up fixes.
+
+## PR89 follow-up — Report document pair-safety and docs polish
+- Made report document file creation pair-safe: the service now chooses a unique `.md + .json` pair where both paths are free before writing.
+- Added rollback behavior so metadata sidecar write failure best-effort removes the newly created Markdown file and does not leave orphan Markdown.
+- Added service regression tests for stale metadata sidecars and metadata-write failure rollback.
+- Corrected report document filename examples and documented numeric suffix behavior.
+- Updated Reports docs so they no longer describe the `/reports` frontend UI as future-only.
+- Manual long-running API smoke was not run in this non-interactive session; automated tests cover the follow-up safety scenarios.

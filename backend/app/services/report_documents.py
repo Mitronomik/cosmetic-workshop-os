@@ -68,19 +68,15 @@ class ReportDocumentService:
         reason = sanitize_reason(request.reason)
         report = self.reports_service.get_overview()
         created_at = datetime.now(UTC)
-        document_id = _document_id(created_at)
-        markdown_filename = f"{document_id}.md"
-        metadata_filename = f"{document_id}.json"
+        base_document_id = _document_id(created_at)
         markdown_text = _render_workshop_overview_markdown(report, created_at=created_at, reason=reason)
 
         self.documents_dir.mkdir(parents=True, exist_ok=True)
-        markdown_path = _unique_path(self.documents_dir / markdown_filename)
-        if markdown_path.name != markdown_filename:
-            document_id = markdown_path.stem
-            metadata_filename = f"{document_id}.json"
-        metadata_path = self.documents_dir / metadata_filename
+        document_id, markdown_path, metadata_path = _unique_document_paths(self.documents_dir, base_document_id)
+        markdown_written = False
         try:
             _write_text_exclusive(markdown_path, markdown_text)
+            markdown_written = True
             metadata = ReportDocumentMetadata(
                 id=document_id,
                 document_type=SUPPORTED_DOCUMENT_TYPE,
@@ -96,6 +92,17 @@ class ReportDocumentService:
             )
             _write_text_exclusive(metadata_path, json.dumps(_metadata_json(metadata), ensure_ascii=False, indent=2) + "\n")
         except OSError as exc:
+            if markdown_written:
+                try:
+                    markdown_path.unlink()
+                except OSError:
+                    pass
+            try:
+                metadata_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
             raise ReportDocumentError("Не удалось создать документ отчета. Данные мастерской не изменялись.") from exc
         return ReportDocumentCreateResponse(document=metadata, message="Документ отчета создан.")
 
@@ -120,14 +127,14 @@ def _document_id(created_at: datetime) -> str:
     return f"workshop-overview-{created_at.strftime('%Y%m%d-%H%M%S')}"
 
 
-def _unique_path(path: Path) -> Path:
-    if not path.exists():
-        return path
-    suffix = 1
+def _unique_document_paths(documents_dir: Path, document_id: str) -> tuple[str, Path, Path]:
+    suffix = 0
     while True:
-        candidate = path.with_name(f"{path.stem}-{suffix}{path.suffix}")
-        if not candidate.exists():
-            return candidate
+        candidate_id = document_id if suffix == 0 else f"{document_id}-{suffix}"
+        markdown_path = documents_dir / f"{candidate_id}.md"
+        metadata_path = documents_dir / f"{candidate_id}.json"
+        if not markdown_path.exists() and not metadata_path.exists():
+            return candidate_id, markdown_path, metadata_path
         suffix += 1
 
 
