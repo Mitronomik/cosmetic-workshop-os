@@ -51,3 +51,8 @@ Conflict responses use Russian safety messages suitable for future UI.
 - Before clearing, the user should manually resolve or delete working records that reference demo data.
 - Alerts and purchase suggestions are not inserted directly by demo install; the dataset creates conditions that can be evaluated by existing explicit regeneration flows.
 - Orders are not produced automatically. The user can manually run production readiness and confirmation later.
+
+
+## Frontend UI route
+
+PR85 exposes demo mode through `/demo-data` in the frontend navigation under “Данные и настройки”. The page loads `GET /api/demo-data/status`, shows backend blocking reasons, and calls install/clear only after explicit confirmation checkboxes. The UI does not create demo business records directly, does not delete business records directly, and does not create backup/export files automatically.
