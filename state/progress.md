@@ -578,3 +578,12 @@ Import CSV/XLSX draft backend foundation.
 - Wired the compact Reports dashboard card into the dashboard between demo data and help so users can open `/reports` from the main screen.
 - Updated the defensive planned-section fallback for “Отчеты” so it no longer says reports are a future module.
 - Reports remain read-only and backend-owned; no mutations, backup/export creation, alert/purchase regeneration, production actions, import apply actions, or frontend finance recalculation were added.
+
+## PR89 — Report document export foundation
+- Added backend report document schemas, service, and `/api/report-documents` endpoints for status, metadata listing, and explicit overview document creation.
+- Added Markdown “Сводка мастерской” generation from backend `ReportsService.get_overview()` data with required Russian sections, warnings, finance limitation copy, and explicit non-accounting/non-tax notes.
+- Generated files are stored under the safe report-documents directory with non-overwriting timestamped filenames and JSON metadata sidecars.
+- PDF and DOCX are rejected with a clear Russian unsupported-format message; Markdown is the only PR89 format.
+- Document generation writes only the Markdown document and metadata sidecar, does not mutate business data, does not create backup/export snapshots, and does not regenerate alerts or purchase suggestions.
+- Added `docs/report-documents.md`, API docs, Reports docs cross-reference, state updates, and backend service/API tests.
+- Next recommended PR: PR90 — Report document export UI, unless backend smoke finds follow-up fixes.

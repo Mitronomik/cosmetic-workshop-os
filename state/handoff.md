@@ -2,53 +2,47 @@
 
 ## Last completed work
 
-PR88 follow-up — Reports dashboard card wiring and stale placeholder cleanup.
+PR89 — Report document export foundation.
 
-## Current repo state after PR88 follow-up
+## Current repo state after PR89
 
-- `/reports` remains a real ready frontend route.
-- “Отчеты” remains marked ready in “Данные и настройки” with `path: '/reports'`.
-- The dashboard now renders three compact navigation cards in this order: demo data, Reports, Help.
-- The Reports dashboard card uses `data-nav-section="Отчеты"` and only navigates to the Reports route; it does not call report APIs directly and does not mutate data.
-- The defensive `plannedSectionPlaceholder()` fallback for “Отчеты” no longer says reports will appear later; it points users back to the ready `/reports` route.
-- Reports UI still consumes PR87 read-only backend endpoints only and displays backend-owned values/warnings.
-- No backend endpoints, migrations, report persistence, PDF, Excel export, charts, accounting, settings, audit, cloud, AI/RAG, package work, backup/export creation, alert regeneration, purchase suggestion regeneration, production actions, or import apply actions were added.
+- Added backend report document schemas, service, and API router under `/api/report-documents`.
+- `GET /api/report-documents/status` reports Markdown availability and document count.
+- `GET /api/report-documents` lists generated metadata sidecars newest first with limit/offset.
+- `POST /api/report-documents/reports/overview` explicitly creates a Markdown “Сводка мастерской” document from `ReportsService.get_overview()`.
+- Generated files are written only under the safe report-documents directory (`exports/report-documents` in user-data/development conventions).
+- Each document has a Markdown file and JSON metadata sidecar.
+- PDF and DOCX are rejected with a safe Russian message; they remain future work.
+- The renderer includes Russian required sections, report timestamps, warnings, incomplete-data notes, finance limitations, and explicit non-accounting/non-tax copy.
+- Document generation reads report DTO values and does not mutate business tables, create backup files, create JSON export snapshots, regenerate alerts or purchase suggestions, apply imports, run production, or install/clear demo data.
+- No frontend UI, download button, charts, accounting/tax reports, invoices/acts/labels/certificates, scheduled jobs, external services, AI/RAG, or cloud behavior was added.
 
-## Automated checks from PR88 follow-up
+## Automated checks from PR89
 
-- `git status --short` showed PR88 follow-up working-tree changes before commit.
-- `git branch --show-current` returned `work`.
-- `npm --prefix frontend run build` passed (npm printed an existing `http-proxy` env config warning).
-- `git diff --check` passed.
-- `python3 -m py_compile $(find backend/app launcher -name '*.py')` passed.
-- `python3 -m pytest backend/app/tests/test_reports.py -q` passed: 7 passed.
-- `python3 -m pytest backend/app/tests/test_reports_api.py -q` passed: 1 passed, 1 skipped.
-- `python3 -m pytest backend/app/tests/test_onboarding.py -q` passed: 10 passed, 1 skipped.
-- `python3 -m pytest backend/app/tests/test_demo_data.py -q` passed: 20 passed.
-- `python3 -m pytest backend/app/tests/test_import_parsing.py -q` passed: 16 passed.
-- `python3 -m pytest backend/app/tests/test_imports_api.py -q` passed: 2 passed, 5 skipped.
-- `python3 -m pytest backend/app/tests/test_import_apply.py -q` passed: 11 passed, 1 skipped.
-- `python3 -m pytest backend/app/tests/test_exports_api.py -q` passed: 5 passed, 6 skipped.
-- `python3 -m pytest backend/app/tests/test_backups_api.py -q` passed: 4 passed, 5 skipped.
-- `python3 -m pytest backend/app/tests/test_orders.py -q` passed: 6 passed, 1 skipped.
-- `python3 -m pytest backend/app/tests/test_production_readiness.py -q` passed: 8 passed, 1 skipped.
-- `python3 -m pytest backend/app/tests/test_production_confirmation.py -q` passed: 10 passed, 1 skipped.
-- `python3 -m pytest backend/app/tests/test_purchase_suggestions.py -q` passed: 9 passed, 2 skipped.
-- `python3 -m pytest backend/app/tests/test_alerts.py -q` passed: 10 passed, 1 skipped.
-- API-test skips are existing optional FastAPI/TestClient dependency skips in this environment.
+- `python3 -m pytest backend/app/tests/test_report_documents.py -q` passed: 9 passed.
+- `python3 -m pytest backend/app/tests/test_report_documents_api.py -q` passed: 1 passed, 1 skipped.
+
+Full requested regression/check command results are in the PR/final summary for this session.
 
 ## Manual smoke
 
-Manual browser smoke has not been run yet in this non-interactive session because no long-running backend/frontend browser session has been started.
+Manual long-running local API smoke was not run in this non-interactive session. Automated service/API tests cover status, list, explicit creation, file creation, metadata sidecar creation, unsupported format rejection, path traversal safety, no overwrite behavior, and business-table non-mutation.
 
-Recommended local smoke:
-1. Open the dashboard `/`.
-2. Confirm the dashboard shows demo data, Reports, and Help cards.
-3. Click the Reports card and confirm it navigates to `/reports`.
-4. Confirm no backup/export/import/demo/alert/purchase/production action is triggered.
-5. Open `/reports` directly and confirm all report tabs render.
-6. Confirm refresh only reloads report GET endpoints.
+Recommended local API smoke:
+1. Start backend with an empty temp/dev database.
+2. Call `GET /api/report-documents/status`.
+3. Call `GET /api/report-documents`.
+4. Call `POST /api/report-documents/reports/overview` with `{ "format": "markdown" }`.
+5. Confirm response returns document metadata.
+6. Confirm Markdown and JSON sidecar files are created in the report-documents directory.
+7. Open the Markdown file and confirm Russian sections are readable.
+8. Confirm warnings and finance limitations are present.
+9. Call `GET /api/report-documents` again and confirm the new document appears.
+10. Call create again and confirm a second file is created without overwrite.
+11. Try `format: "pdf"` and confirm it is rejected safely.
+12. Try suspicious reason text and confirm output path remains safe.
+13. Confirm no business data changed, no backup/export snapshot was created, and alerts/purchase suggestions were not regenerated.
 
 ## Next recommended PR
 
-PR89 — Reports UI polish / smoke fixes if browser smoke finds issues; otherwise PR89 — PDF export foundation when Reports UI is stable.
+PR90 — Report document export UI, unless backend smoke finds issues requiring PR90 backend follow-up fixes.
