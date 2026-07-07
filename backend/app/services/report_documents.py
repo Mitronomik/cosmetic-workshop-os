@@ -27,6 +27,22 @@ class UnsupportedReportDocumentFormatError(ReportDocumentError):
     """Raised when a requested document format is not supported yet."""
 
 
+class ReportDocumentNotFoundError(ReportDocumentError):
+    """Raised when requested report document metadata is unknown."""
+
+
+class ReportDocumentFileMissingError(ReportDocumentError):
+    """Raised when known report document file is missing from disk."""
+
+
+class ReportDocumentUnsafePathError(ReportDocumentError):
+    """Raised when metadata points outside the safe report documents directory."""
+
+
+class UnsupportedReportDocumentDispositionError(ReportDocumentError):
+    """Raised when requested file disposition is not supported."""
+
+
 SUPPORTED_FORMAT = "markdown"
 PDF_FORMAT = "pdf"
 SUPPORTED_DOCUMENT_TYPE = "workshop_overview"
@@ -55,15 +71,32 @@ class ReportDocumentService:
     def list_documents(self, limit: int = 50, offset: int = 0) -> ReportDocumentListResponse:
         normalized_limit = max(1, min(limit, 100))
         normalized_offset = max(0, offset)
-        items = [_read_metadata(path) for path in _list_metadata_files(self.documents_dir)]
-        items = [item for item in items if item is not None]
-        items.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+        items = _all_metadata(self.documents_dir)
         return ReportDocumentListResponse(
             items=items[normalized_offset : normalized_offset + normalized_limit],
             limit=normalized_limit,
             offset=normalized_offset,
             total=len(items),
         )
+
+    def get_document_file(
+        self, document_id: str, disposition: str = "attachment"
+    ) -> tuple[ReportDocumentMetadata, Path, str, str]:
+        normalized_disposition = disposition.strip().lower()
+        if normalized_disposition not in {"attachment", "inline"}:
+            raise UnsupportedReportDocumentDispositionError("Неподдерживаемый режим открытия документа.")
+
+        metadata = next((item for item in _all_metadata(self.documents_dir) if item.id == document_id), None)
+        if metadata is None:
+            raise ReportDocumentNotFoundError("Документ отчета не найден.")
+
+        document_path = _safe_document_path(self.documents_dir, metadata)
+        if not document_path.exists() or not document_path.is_file():
+            raise ReportDocumentFileMissingError("Файл документа отчета не найден. Данные мастерской не изменялись.")
+
+        media_type = _media_type_for_format(metadata.format)
+        effective_disposition = "inline" if normalized_disposition == "inline" and metadata.format == PDF_FORMAT else "attachment"
+        return metadata, document_path, media_type, effective_disposition
 
     def create_overview_document(self, request: ReportOverviewDocumentCreateRequest) -> ReportDocumentCreateResponse:
         if request.format == "docx":
@@ -168,6 +201,38 @@ def _read_metadata(path: Path) -> ReportDocumentMetadata | None:
     except (OSError, ValueError):
         return None
 
+
+def _all_metadata(documents_dir: Path) -> list[ReportDocumentMetadata]:
+    items = [_read_metadata(path) for path in _list_metadata_files(documents_dir)]
+    items = [item for item in items if item is not None]
+    items.sort(key=lambda item: (item.created_at, item.id), reverse=True)
+    return items
+
+
+def _safe_document_path(documents_dir: Path, metadata: ReportDocumentMetadata) -> Path:
+    if Path(metadata.filename).name != metadata.filename:
+        raise ReportDocumentUnsafePathError("Документ отчета не может быть открыт из-за ошибки безопасности пути.")
+    expected_suffix = ".pdf" if metadata.format == PDF_FORMAT else ".md" if metadata.format == SUPPORTED_FORMAT else ""
+    if not expected_suffix or not metadata.filename.endswith(expected_suffix):
+        raise ReportDocumentUnsafePathError("Документ отчета не может быть открыт из-за ошибки безопасности пути.")
+    expected_name = f"{metadata.id}{expected_suffix}"
+    if metadata.filename != expected_name:
+        raise ReportDocumentUnsafePathError("Документ отчета не может быть открыт из-за ошибки безопасности пути.")
+    try:
+        root = documents_dir.resolve()
+        candidate = (documents_dir / metadata.filename).resolve(strict=False)
+        candidate.relative_to(root)
+    except (OSError, ValueError):
+        raise ReportDocumentUnsafePathError("Документ отчета не может быть открыт из-за ошибки безопасности пути.") from None
+    return candidate
+
+
+def _media_type_for_format(format: str) -> str:
+    if format == PDF_FORMAT:
+        return "application/pdf"
+    if format == SUPPORTED_FORMAT:
+        return "text/markdown; charset=utf-8"
+    return "application/octet-stream"
 
 def _metadata_json(metadata: ReportDocumentMetadata) -> dict[str, Any]:
     data = metadata.model_dump(mode="json")

@@ -49,6 +49,17 @@ def test_report_document_api_endpoints_create_metadata_and_are_safe(monkeypatch,
     assert after_listing.json()["total"] == 1
     assert after_listing.json()["items"][0]["id"] == document["id"]
 
+    markdown_download = client.get(f"/api/report-documents/{document['id']}/download")
+    assert markdown_download.status_code == 200
+    assert markdown_download.text.startswith("# Сводка мастерской")
+    assert "text/markdown" in markdown_download.headers["content-type"]
+    assert "attachment" in markdown_download.headers["content-disposition"]
+    assert document["filename"] in markdown_download.headers["content-disposition"]
+
+    markdown_inline = client.get(f"/api/report-documents/{document['id']}/download?disposition=inline")
+    assert markdown_inline.status_code == 200
+    assert "attachment" in markdown_inline.headers["content-disposition"]
+
     monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
 
     def fake_write_pdf_exclusive(path: Path, lines: list[str], *, created_at: datetime) -> None:
@@ -72,6 +83,20 @@ def test_report_document_api_endpoints_create_metadata_and_are_safe(monkeypatch,
     assert pdf_listing.json()["total"] == 2
     assert any(item["id"] == pdf_document["id"] and item["format"] == "pdf" for item in pdf_listing.json()["items"])
 
+    pdf_inline = client.get(f"/api/report-documents/{pdf_document['id']}/download?disposition=inline")
+    assert pdf_inline.status_code == 200
+    assert pdf_inline.content.startswith(b"%PDF-")
+    assert pdf_inline.headers["content-type"] == "application/pdf"
+    assert "inline" in pdf_inline.headers["content-disposition"]
+
+    unknown = client.get("/api/report-documents/workshop-overview-20990101-000000/download")
+    assert unknown.status_code == 404
+    assert "Документ отчета не найден" in unknown.json()["detail"]
+
+    bad_disposition = client.get(f"/api/report-documents/{pdf_document['id']}/download?disposition=preview")
+    assert bad_disposition.status_code == 422
+    assert "Неподдерживаемый режим" in bad_disposition.json()["detail"]
+
     docx = client.post("/api/report-documents/reports/overview", json={"format": "docx"})
     assert docx.status_code == 422
     assert "DOCX пока не поддерживается" in docx.json()["detail"]
@@ -93,4 +118,5 @@ def test_report_document_routes_are_registered():
     routes = {(route.path, tuple(sorted(route.methods))) for route in create_app().routes if hasattr(route, "methods")}
     assert ("/api/report-documents/status", ("GET",)) in routes
     assert ("/api/report-documents", ("GET",)) in routes
+    assert ("/api/report-documents/{document_id}/download", ("GET",)) in routes
     assert ("/api/report-documents/reports/overview", ("POST",)) in routes

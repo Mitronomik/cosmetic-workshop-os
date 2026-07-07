@@ -1558,3 +1558,9 @@ The dashboard keeps the existing single onboarding/checklist card and refreshes 
 - Markdown is the only exposed format. PDF/DOCX are described as future work and are not actionable.
 - The Reports page now has a contextual link to the document page; it only navigates and does not create files.
 - Backend cleanup hardening now deletes the metadata sidecar only when the current operation actually created it.
+
+## PR93 — report document open/download actions
+- `/report-documents` now shows read-only actions for generated files: `Открыть PDF`, `Скачать PDF`, and `Скачать Markdown`.
+- Actions use `/api/report-documents/{document_id}/download` and do not expose absolute local file paths or create object URLs in frontend memory.
+- Empty state now tells the user to create a Markdown or PDF workshop summary manually.
+- `/reports` still only navigates with `Открыть документы отчетов`; it does not generate Markdown/PDF files.

@@ -319,3 +319,85 @@ def test_status_omits_pdf_when_generation_is_unavailable(tmp_path, monkeypatch):
     assert svc.status().available_formats == ["markdown"]
     with pytest.raises(UnsupportedReportDocumentFormatError):
         svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))
+
+
+def test_get_document_file_returns_existing_markdown_with_attachment(tmp_path):
+    c, svc = service(tmp_path)
+    before = counts(c)
+    created = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown")).document
+
+    metadata, path, media_type, disposition = svc.get_document_file(created.id)
+
+    assert metadata.id == created.id
+    assert path == (svc.documents_dir / created.filename).resolve()
+    assert media_type.startswith("text/markdown")
+    assert disposition == "attachment"
+    assert path.read_text(encoding="utf-8").startswith("# Сводка мастерской")
+    assert counts(c) == before
+    assert len(list(svc.documents_dir.glob("*.md"))) == 1
+    assert len(list(svc.documents_dir.glob("*.json"))) == 1
+
+
+def test_get_document_file_returns_existing_pdf_with_inline(tmp_path, monkeypatch):
+    c, svc = service(tmp_path)
+    monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
+
+    def fake_write_pdf_exclusive(path: Path, lines: list[str], *, created_at: datetime) -> None:
+        with path.open("xb") as file:
+            file.write(b"%PDF-1.4\n% fake test pdf\n%%EOF\n")
+
+    monkeypatch.setattr(report_documents_module, "_write_pdf_exclusive", fake_write_pdf_exclusive)
+    before = counts(c)
+    created = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf")).document
+
+    _metadata, path, media_type, disposition = svc.get_document_file(created.id, disposition="inline")
+
+    assert path.name == created.filename
+    assert media_type == "application/pdf"
+    assert disposition == "inline"
+    assert path.read_bytes().startswith(b"%PDF-")
+    assert counts(c) == before
+
+
+def test_get_document_file_rejects_unknown_missing_and_unsupported_disposition(tmp_path):
+    _c, svc = service(tmp_path)
+    with pytest.raises(report_documents_module.ReportDocumentNotFoundError, match="Документ отчета не найден"):
+        svc.get_document_file("missing")
+    created = svc.create_overview_document(ReportOverviewDocumentCreateRequest()).document
+    with pytest.raises(report_documents_module.UnsupportedReportDocumentDispositionError, match="Неподдерживаемый режим"):
+        svc.get_document_file(created.id, disposition="preview")
+    (svc.documents_dir / created.filename).unlink()
+    with pytest.raises(report_documents_module.ReportDocumentFileMissingError, match="Файл документа отчета не найден"):
+        svc.get_document_file(created.id)
+
+
+def test_get_document_file_rejects_metadata_path_traversal_and_outside_path(tmp_path):
+    _c, svc = service(tmp_path)
+    svc.documents_dir.mkdir(parents=True)
+    sidecar = {
+        "id": "workshop-overview-20260707-010101",
+        "document_type": "workshop_overview",
+        "format": "markdown",
+        "filename": "../secret.md",
+        "metadata_filename": "workshop-overview-20260707-010101.json",
+        "created_at": "2026-07-07T01:01:01Z",
+        "source": "reports.overview",
+        "source_generated_at": "2026-07-07T01:01:01Z",
+        "title": "Сводка мастерской",
+        "warnings_count": 0,
+        "size_bytes": 1,
+    }
+    (svc.documents_dir / sidecar["metadata_filename"]).write_text(json.dumps(sidecar), encoding="utf-8")
+    with pytest.raises(report_documents_module.ReportDocumentUnsafePathError, match="ошибки безопасности пути"):
+        svc.get_document_file(sidecar["id"])
+
+
+def test_get_document_file_rejects_metadata_filename_mismatch(tmp_path):
+    _c, svc = service(tmp_path)
+    created = svc.create_overview_document(ReportOverviewDocumentCreateRequest()).document
+    metadata_path = svc.documents_dir / created.metadata_filename
+    data = json.loads(metadata_path.read_text(encoding="utf-8"))
+    data["filename"] = "another.md"
+    metadata_path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(report_documents_module.ReportDocumentUnsafePathError, match="ошибки безопасности пути"):
+        svc.get_document_file(created.id)

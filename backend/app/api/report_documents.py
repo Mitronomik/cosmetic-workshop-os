@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Body, HTTPException, Query, status
+from fastapi.responses import FileResponse
 
 from app.schemas.report_documents import (
     ReportDocumentCreateResponse,
@@ -6,7 +7,15 @@ from app.schemas.report_documents import (
     ReportDocumentStatusResponse,
     ReportOverviewDocumentCreateRequest,
 )
-from app.services.report_documents import ReportDocumentError, ReportDocumentService, UnsupportedReportDocumentFormatError
+from app.services.report_documents import (
+    ReportDocumentError,
+    ReportDocumentFileMissingError,
+    ReportDocumentNotFoundError,
+    ReportDocumentService,
+    ReportDocumentUnsafePathError,
+    UnsupportedReportDocumentDispositionError,
+    UnsupportedReportDocumentFormatError,
+)
 
 router = APIRouter(prefix="/report-documents", tags=["report-documents"])
 
@@ -22,6 +31,31 @@ def list_report_documents(
     offset: int = Query(default=0, ge=0),
 ) -> ReportDocumentListResponse:
     return ReportDocumentService().list_documents(limit=limit, offset=offset)
+
+
+@router.get("/{document_id}/download")
+def download_report_document(
+    document_id: str,
+    disposition: str = Query(default="attachment"),
+) -> FileResponse:
+    try:
+        metadata, path, media_type, effective_disposition = ReportDocumentService().get_document_file(
+            document_id, disposition=disposition
+        )
+    except ReportDocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ReportDocumentFileMissingError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ReportDocumentUnsafePathError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except UnsupportedReportDocumentDispositionError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return FileResponse(
+        path=path,
+        media_type=media_type,
+        filename=metadata.filename,
+        content_disposition_type=effective_disposition,
+    )
 
 
 @router.post("/reports/overview", response_model=ReportDocumentCreateResponse, status_code=status.HTTP_201_CREATED)
