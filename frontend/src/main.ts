@@ -425,7 +425,7 @@ const navigationGroups: NavigationGroup[] = [
     { label: 'Импорт', section: 'Импорт', path: '/imports', status: 'ready' },
     { label: 'Демо-данные', section: 'Демо-данные', path: '/demo-data', status: 'ready' },
     { label: 'Отчеты', section: 'Отчеты', path: '/reports', status: 'ready' },
-    { label: 'Настройки', section: 'Настройки', path: '/#settings', status: 'planned' },
+    { label: 'Настройки', section: 'Настройки', path: '/settings', status: 'ready' },
     { label: 'Помощь', section: 'Помощь', path: '/help', status: 'ready' },
   ] },
 ];
@@ -563,12 +563,12 @@ function sectionFromLocation(): NavigationSection {
     '/packaging-items': 'Тара',
     '/purchase-suggestions': 'Закупки',
     '/reports': 'Отчеты',
+    '/settings': 'Настройки',
     '/help': 'Помощь',
   };
   const placeholderRoutes: Record<string, NavigationSection> = {
     '#purchases': 'Закупки',
     '#production-readiness': 'Готовность',
-    '#settings': 'Настройки',
     '#help': 'Помощь',
   };
   return routes[window.location.pathname] ?? placeholderRoutes[window.location.hash] ?? 'Главная';
@@ -624,6 +624,7 @@ function renderActivePage(section: NavigationSection) {
   if (section === 'Тара') return packagingItemsPage();
   if (section === 'Закупки') return purchaseSuggestionsPage();
   if (section === 'Отчеты') return reportsPage();
+  if (section === 'Настройки') return settingsPage();
   if (section === 'Помощь') return helpPage();
   return plannedSectionPlaceholder(section);
 }
@@ -740,6 +741,7 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-help-article"]').forEach((button) => button.addEventListener('click', () => { helpUiState.selectedArticleId = button.dataset.id || 'getting-started'; render(); }));
   root.querySelectorAll<HTMLButtonElement>('[data-action="reset-help-filters"]').forEach((button) => button.addEventListener('click', () => { helpUiState.search = ''; helpUiState.category = ''; helpUiState.selectedArticleId = 'getting-started'; render(); }));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-help-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-settings-target"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
   root.querySelectorAll<HTMLButtonElement>('[data-nav-section]').forEach((button) => button.addEventListener('click', () => {
     activeSection = (button.dataset.navSection as NavigationSection | undefined) ?? 'Главная';
     window.history.pushState({}, '', pathForSection(activeSection));
@@ -2149,6 +2151,47 @@ function productionReportMarkup() { const r=reportsUiState.production; if(!r) re
 function financeReportMarkup() { const r=reportsUiState.finance; if(!r) return ''; return `<section class="card data-card"><p class="card-kicker">Финансы</p><h2>Базовая финансовая сводка</h2><p class="page-message">Это не бухгалтерский отчет и не налоговая декларация. Система не придумывает налог и показывает предупреждения, если данных не хватает.</p>${r.known_margin === null ? '<p class="page-message error-message">Маржа недоступна: не хватает цены продажи или себестоимости в одних и тех же производственных записях.</p>' : ''}${metricGrid([['Произведенных заказов',r.produced_order_count],['С ценой продажи',r.produced_orders_with_sale_price],['Известная выручка',moneyText(r.known_revenue)],['Известная себестоимость',moneyText(r.known_production_cost)],['Известная маржа',moneyText(r.known_margin)],['Маржа, %',r.known_margin_percent],['Полных финансовых записей',r.complete_finance_record_count],['Неполных для маржи',r.incomplete_margin_count],['Без цены продажи',r.missing_sale_price_count],['Без себестоимости',r.missing_cost_count]])}${reportWarningsMarkup(r.warnings)}</section>`; }
 function reportWarningsMarkup(warnings: ReportWarning[]) { return `<div class="warning-panel"><h3>На что обратить внимание</h3>${warnings.length === 0 ? '<p>Критичных предупреждений нет.</p>' : `<ul>${warnings.map((w)=>`<li><strong>${escapeHtml(w.message)}</strong>${w.field ? `<small>Поле: ${escapeHtml(w.field)}</small>` : ''}</li>`).join('')}</ul>`}</div>`; }
 function moneyText(value: string | null) { return value === null || value === '' ? 'Нет данных' : value; }
+
+
+function settingsPage() {
+  return `<div class="settings-layout"><section class="card data-card dashboard-hero settings-hero"><div><p class="card-kicker">Настройки</p><h2>Настройки</h2><p>Здесь собраны безопасные точки управления приложением: данные, резервные копии, импорт, экспорт, документы отчетов и справка.</p><p class="next-step">Эта страница пока ничего не меняет сама. Она помогает перейти к уже готовым безопасным разделам.</p></div></section><div class="settings-card-grid">${settingsLocalDataCard()}${settingsBackupCard()}${settingsImportExportCard()}${settingsReportDocumentsCard()}${settingsDemoDataCard()}${settingsHelpCard()}${settingsAboutCard()}${settingsFutureCard()}</div></div>`;
+}
+
+function settingsAction(label: string, section: NavigationSection, primary = false) {
+  return `<button class="${primary ? 'primary-action' : 'secondary-action'} compact" type="button" data-action="navigate-settings-target" data-section="${section}">${escapeHtml(label)}</button>`;
+}
+
+function settingsLocalDataCard() {
+  return `<section class="card data-card settings-card"><p class="card-kicker">Безопасность данных</p><h2>Локальные данные</h2><p>Приложение работает локально. Данные мастерской хранятся отдельно от кода приложения и не требуют обязательного интернета.</p><div class="actions">${settingsAction('Открыть резервные копии', 'Резервные копии', true)}${settingsAction('Открыть экспорт', 'Экспорт')}${settingsAction('Открыть импорт', 'Импорт')}</div></section>`;
+}
+
+function settingsBackupCard() {
+  return `<section class="card data-card settings-card"><p class="card-kicker">Восстановление</p><h2>Резервные копии</h2><p>Перед важными изменениями и обновлениями полезно создавать резервную копию данных.</p><div class="actions">${settingsAction('Перейти к backup', 'Резервные копии')}</div></section>`;
+}
+
+function settingsImportExportCard() {
+  return `<section class="card data-card settings-card"><p class="card-kicker">Перенос данных</p><h2>Импорт и экспорт</h2><p>Импорт проходит через черновик, проверку и подтверждение. Экспорт создает отдельные файлы и не меняет данные.</p><div class="actions">${settingsAction('Открыть импорт', 'Импорт')}${settingsAction('Открыть экспорт', 'Экспорт')}</div></section>`;
+}
+
+function settingsReportDocumentsCard() {
+  return `<section class="card data-card settings-card"><p class="card-kicker">Файлы для работы</p><h2>Документы отчетов</h2><p>Создавайте Markdown и PDF-сводки мастерской, а затем открывайте или скачивайте их из раздела документов отчетов.</p><div class="actions">${settingsAction('Открыть документы отчетов', 'Документы отчетов')}${settingsAction('Открыть отчеты', 'Отчеты')}</div></section>`;
+}
+
+function settingsDemoDataCard() {
+  return `<section class="card data-card settings-card"><p class="card-kicker">Пример мастерской</p><h2>Демо-данные</h2><p>Демо-режим помогает посмотреть пример заполненной мастерской. Он должен оставаться явным и управляемым.</p><div class="actions">${settingsAction('Открыть демо-данные', 'Демо-данные')}</div></section>`;
+}
+
+function settingsHelpCard() {
+  return `<section class="card data-card settings-card"><p class="card-kicker">Подсказки</p><h2>Помощь</h2><p>В справке собраны подсказки по основным рабочим сценариям.</p><div class="actions">${settingsAction('Открыть помощь', 'Помощь')}</div></section>`;
+}
+
+function settingsAboutCard() {
+  return `<section class="card data-card settings-card settings-about-card"><p class="card-kicker">О приложении</p><h2>Мастерская косметолога</h2><p>Локальная рабочая система для рецептов, клиентов, заказов, склада, производства, отчетов и резервных копий.</p><p>Сейчас приложение не использует облачную синхронизацию, роли, мультипользовательский доступ или полноценную бухгалтерию.</p></section>`;
+}
+
+function settingsFutureCard() {
+  return `<section class="card data-card settings-card"><p class="card-kicker">Позже</p><h2>Что появится позже</h2><p>Позже здесь можно будет добавить настройки профиля мастерской, единиц измерения, налоговых параметров и оформления документов — только после отдельного безопасного backend-решения.</p><p class="next-step">В этом PR эти настройки не создаются и не сохраняются.</p></section>`;
+}
 
 function helpPage() {
   const articles = filteredHelpArticles();

@@ -1,13 +1,14 @@
 # Progress
 
 ## Current phase
-After PR90 — report document export UI and sidecar cleanup hardening complete; preparing the next roadmap slice.
+After PR94 — Settings UI foundation complete; preparing the next roadmap slice.
 
 ## Current next step
+- PR94 is complete: `/settings` / «Настройки» is a ready user-facing route with a read-only, navigation-only foundation for local data safety, backups, import/export, report documents, demo data, Help Center, and app information. No backend settings persistence/API, migrations, file creation, or business-data mutations were added.
 - PR90 is complete: `/report-documents` / «Документы отчетов» is available under «Данные и настройки», and Markdown «Сводка мастерской» report documents are created only by explicit user action.
 - Completed foundations now include local-first app shell, SQLite persistence and migrations, user data directory, local launcher, onboarding, ingredients/components, ingredient lots, ingredient stock movements, packaging/tare, packaging stock movements, inventory read models and UI, recipe templates, recipe versions, backend recipe calculation, recipe UI, clients, client recipes, client recipe composition editing/restoring, client wishes and append-only feedback, orders backend and UI, production readiness backend and UI, production confirmation backend and UI, immutable production history, alerts backend and UI, purchase suggestions backend and UI, operational dashboard, manual backup API and UI, local JSON export API and UI, CSV/XLSX import draft backend and UI, import validation/readiness/apply flow for supported safe catalog targets, demo data backend and UI, refreshed onboarding checklist, static in-app Help Center, reports backend and UI, Markdown report document backend, report document UI, and sidecar cleanup hardening.
-- Next recommended roadmap slice: **Next implementation PR — Report PDF generation foundation**, unless PR90 local browser smoke finds UI issues. If smoke finds issues, make the next implementation PR a report document UI follow-up fixes PR before adding PDF.
-- Keep DOCX generation, download/open-file endpoints, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and business-record mutations out of scope unless explicitly requested.
+- Next recommended roadmap slice: **PR95 — Settings data/status foundation**, unless PR94 browser smoke finds Settings UI issues. If smoke finds issues, make PR95 a Settings UI follow-up fixes PR.
+- Keep DOCX generation, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and business-record mutations out of scope unless explicitly requested.
 
 ## Done
 - Architecture draft
@@ -78,15 +79,15 @@ After PR90 — report document export UI and sidecar cleanup hardening complete;
 
 
 ## In progress
-- Preparing the next scoped implementation PR: Report PDF generation foundation, unless PR90 local browser smoke finds report document UI issues that should be fixed first.
+- Preparing the next scoped implementation PR: PR95 — Settings data/status foundation, unless PR94 smoke finds Settings UI issues that should be fixed first.
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- Next implementation PR — Report PDF generation foundation is the recommended next roadmap-scoped task.
-- If PR90 local browser smoke finds report document UI issues, fix those issues in the next implementation PR before adding PDF.
-- Keep DOCX, download/open-file endpoints, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and unrelated business behavior out of scope unless explicitly requested.
+- PR95 — Settings data/status foundation is the recommended next roadmap-scoped task.
+- If PR94 local browser smoke finds Settings navigation or copy issues, fix those issues in a Settings UI follow-up PR first.
+- Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and unrelated business behavior out of scope unless explicitly requested.
 
 ## Important notes
 - PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.
@@ -631,3 +632,9 @@ Import CSV/XLSX draft backend foundation.
 - Removed stale `docs/frontend-concept.md` wording that described report document export as Markdown-only or PDF future-only.
 - Documented the current PR92/PR93 workflow: Markdown always available, PDF shown only when backend support is advertised, DOCX unsupported, and generated files accessed only through the safe backend download endpoint.
 - Reconfirmed that `/reports` only navigates to `/report-documents` and does not create files.
+
+## PR94 — Settings UI foundation
+- Added a ready `/settings` route and «Настройки» navigation item.
+- Added a user-facing, read-only Settings foundation page for local data, backups, import/export, report documents, demo data, Help Center, About app, and future settings boundaries.
+- Settings actions only navigate to existing safe workflows and do not run backup/export/import/demo/report document creation actions.
+- No backend settings API, persistence, migrations, file creation, or business-data mutations were added.
