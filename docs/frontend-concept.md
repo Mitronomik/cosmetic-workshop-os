@@ -1588,3 +1588,8 @@ The dashboard keeps the existing single onboarding/checklist card and refreshes 
 - Settings actions only navigate to existing sections. They do not create backups, exports, imports, demo data, report documents, files, or business records.
 - No backend settings API, settings persistence, database table, migration, editable tax/currency/company/profile settings, roles, authentication, cloud sync, integrations, template editor, or AI/RAG settings were added.
 - Future editable settings require a separate backend/API design so user data remains safe and local-first.
+
+
+## Settings status foundation
+
+The `/settings` route loads `GET /api/settings/status` and renders read-only local app/data status, safe workflow capability cards, and the future Settings Decision Matrix. Settings actions remain navigation-only. The page must not render editable inputs, toggles, checkboxes, save buttons, reset buttons, delete buttons, or upload controls for PR95. If the backend is unavailable, `/settings` shows a human-readable error and keeps fallback navigation cards.

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.repositories.settings import SettingsNotInitializedError
-from app.schemas.settings import AppSettingsResponse, AppSettingResponse
-from app.services.settings import read_app_settings
+from app.schemas.settings import AppSettingsResponse, AppSettingResponse, SettingsStatusResponse
+from app.services.settings import get_settings_status, read_app_settings
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -17,3 +17,8 @@ def get_settings() -> AppSettingsResponse:
             detail="Database is not initialized. Run explicit database initialization before reading settings.",
         ) from exc
     return AppSettingsResponse(settings=settings)
+
+
+@router.get("/status", response_model=SettingsStatusResponse)
+def get_settings_status_endpoint() -> SettingsStatusResponse:
+    return get_settings_status()
