@@ -95,3 +95,8 @@ The profile is stored backend-side in the existing local `app_settings` key-valu
 Validation is backend-owned: values are trimmed, empty strings are allowed, overlong values are rejected with Russian validation errors, and unsafe control characters are rejected. Phone/email formats are not required.
 
 Profile values are display-only settings for Settings and future documents. They are not calculation inputs and do not mutate recipes, clients, orders, production batches, stock movements, reports, costs, taxes, margins, alerts, purchases, imports, exports, backups, or historical records. Calculation-sensitive settings such as tax, currency, margin, units, stock thresholds, and expiry warning days remain non-editable and require future backend rules.
+
+
+Settings status uses `editable_now` to indicate fields editable in the current build. In PR96, only `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note` have `editable_now=true`; every calculation-sensitive, V2/V3, and not-MVP setting remains `editable_now=false` and requires future backend rules where applicable.
+
+Workshop profile GET/PUT responses include persisted `updated_at` metadata after the profile has been saved.

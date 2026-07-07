@@ -655,3 +655,5 @@ Import CSV/XLSX draft backend foundation.
 - Added `GET /api/settings/workshop-profile` and `PUT /api/settings/workshop-profile`, using the existing `app_settings` storage with grouped JSON key `workshop_profile` and no migration.
 - Updated `/settings` with an explicit «Профиль мастерской» form, save/cancel states, validation display, and safety copy.
 - Updated Settings status so only workshop profile fields are `editable_now`; calculation-sensitive settings remain non-editable.
+
+- PR96 follow-up finalized the Settings DTO editability contract as `editable_now` and returns persisted workshop profile `updated_at` metadata on GET/PUT.

@@ -18,7 +18,7 @@ class SettingsRepository:
             try:
                 rows = connection.execute(
                     """
-                    SELECT key, value, value_type, description
+                    SELECT key, value, value_type, description, updated_at
                     FROM app_settings
                     ORDER BY key
                     """
@@ -31,6 +31,7 @@ class SettingsRepository:
                 value=row["value"],
                 value_type=row["value_type"],
                 description=row["description"],
+                updated_at=row["updated_at"],
             )
             for row in rows
         ]
@@ -42,7 +43,7 @@ class SettingsRepository:
             try:
                 row = connection.execute(
                     """
-                    SELECT key, value, value_type, description
+                    SELECT key, value, value_type, description, updated_at
                     FROM app_settings
                     WHERE key = ?
                     """,
@@ -52,7 +53,7 @@ class SettingsRepository:
                 raise SettingsNotInitializedError("Database settings are not initialized yet.") from exc
         if row is None:
             return None
-        return AppSetting(key=row["key"], value=row["value"], value_type=row["value_type"], description=row["description"])
+        return AppSetting(key=row["key"], value=row["value"], value_type=row["value_type"], description=row["description"], updated_at=row["updated_at"])
 
     def upsert_setting(self, key: str, value: str, value_type: str, description: str) -> None:
         if not self.config.path.exists():

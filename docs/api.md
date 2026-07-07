@@ -5,7 +5,7 @@ Status: evolving implementation contract. Existing implemented areas have backen
 
 ## Settings status
 
-`GET /api/settings/status` returns the read-only Settings status foundation. It reports local-first app information, local data separation, safe workflow capabilities, and a Settings Decision Matrix. The endpoint is deterministic and read-only: it does not create files, mutate business data, persist settings, run migrations, trigger backup/export/import/demo/report-document actions, or regenerate alerts/purchases. All settings returned by PR95 have `editable_in_pr95: false`.
+`GET /api/settings/status` returns the read-only Settings status foundation. It reports local-first app information, local data separation, safe workflow capabilities, and a Settings Decision Matrix. The endpoint is deterministic and read-only: it does not create files, mutate business data, persist settings, run migrations, trigger backup/export/import/demo/report-document actions, or regenerate alerts/purchases. Settings status uses `editable_now` to indicate fields editable in the current build. In PR96 only workshop profile fields are editable; calculation-sensitive settings remain `editable_now: false` and require backend rules.
 
 Standard error shape includes `code`, `message`, `user_message`, and `details`. Planned sections: health, settings, onboarding, clients, recipes, inventory, orders, production, alerts, purchases, imports, exports, backups, reports, audit logs.
 
@@ -834,7 +834,7 @@ The report uses Decimal-safe string values. It does not invent tax or apply a hi
 
 ## Workshop profile settings API
 
-`GET /api/settings/workshop-profile` returns the local workshop profile from backend settings storage. Empty defaults are safe and mean the profile is not configured.
+`GET /api/settings/workshop-profile` returns the local workshop profile from backend settings storage. Empty defaults are safe and mean the profile is not configured. After a profile is saved, responses include the persisted `updated_at` timestamp from `app_settings`.
 
 `PUT /api/settings/workshop-profile` explicitly replaces the complete workshop profile object:
 
@@ -849,4 +849,4 @@ The report uses Decimal-safe string values. It does not invent tax or apply a hi
 
 The endpoint trims strings, allows empty values, rejects overlong values and unsafe control characters, and updates only the grouped `workshop_profile` app setting. It does not mutate business data, create files, run backup/export/import/demo/report-document actions, or recalculate reports, recipes, orders, production, stock, costs, taxes, or margins.
 
-`GET /api/settings/status` now marks only `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note` as `editable_now`; calculation-sensitive settings remain `requires_backend_rules`.
+`GET /api/settings/status` now marks only `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note` as `editable_now: true`; calculation-sensitive settings remain `editable_now: false` with `requires_backend_rules`.

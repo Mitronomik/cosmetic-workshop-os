@@ -1599,3 +1599,6 @@ The `/settings` route loads `GET /api/settings/status` and renders read-only loc
 `/settings` now includes the first editable Settings area: «Профиль мастерской». The form loads and saves values only through `GET /api/settings/workshop-profile` and `PUT /api/settings/workshop-profile`; it must not use frontend `localStorage` as the source of truth.
 
 The form has explicit save and cancel actions, loading/saving states, Russian validation/success/error messages, and a safety note explaining that profile changes do not affect recipes, stock, orders, production, historical calculations, taxes, or margins. Other Settings cards remain read-only/navigation-only, and tax/currency/margin/unit/threshold/expiry settings are not editable.
+
+
+The Settings Decision Matrix consumes the backend `editable_now` flag. Only workshop profile entries are editable in PR96; the frontend must not render controls for tax, currency, margin, units, thresholds, expiry days, templates, roles/auth, cloud, integrations, DOCX, accounting, or AI/RAG settings.

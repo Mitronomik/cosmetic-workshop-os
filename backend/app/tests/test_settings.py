@@ -53,7 +53,7 @@ def test_settings_decision_matrix_contains_required_groups_and_profile_items_are
     assert {"currency_display", "default_tax_rate", "target_margin", "default_low_stock_threshold", "expiry_warning_days", "default_measurement_units"} <= calculation_ids
     assert {"document_templates", "labels", "certificates", "docx_export", "email_sending", "external_integrations", "cloud_sync"} <= v2_ids
     assert {"roles_multi_user", "full_accounting", "advanced_analytics", "template_marketplace"} <= not_mvp_ids
-    assert all(item.editable_in_pr95 is False for group in response.setting_groups for item in group.items)
+    assert all(item.editable_now is (item.status == "editable_now") for group in response.setting_groups for item in group.items)
 
 
 def test_calculation_sensitive_settings_require_backend_service_and_history_flags_are_explicit():
@@ -104,6 +104,20 @@ def test_workshop_profile_defaults_and_update_are_persisted(monkeypatch, tmp_pat
 
     loaded = service.get_profile()
     assert loaded.profile == updated.profile
+
+
+def test_workshop_profile_get_returns_persisted_updated_at(tmp_path):
+    config = DatabaseConfig(path=tmp_path / "settings-profile-updated-at.sqlite")
+    initialize_database(config)
+    service = WorkshopProfileSettingsService(config)
+
+    default = service.get_profile()
+    assert default.updated_at is None
+
+    saved = service.update_profile(WorkshopProfileUpdateRequest(workshop_name="Мастерская"))
+    assert saved.updated_at is not None
+    loaded = service.get_profile()
+    assert loaded.updated_at == saved.updated_at
 
 
 def test_workshop_profile_allows_empty_and_preserves_unrelated_settings(tmp_path):
@@ -159,7 +173,8 @@ def test_workshop_profile_update_does_not_create_files_or_mutate_business_tables
 
 def test_settings_status_marks_only_workshop_profile_editable():
     response = SettingsService().build_status()
-    editable = {item.id for group in response.setting_groups for item in group.items if item.status == "editable_now"}
+    editable = {item.id for group in response.setting_groups for item in group.items if item.editable_now}
     assert editable == {"workshop_name", "master_name", "workshop_contact_text", "workshop_note"}
+    assert all(item.editable_now is (item.status == "editable_now") for group in response.setting_groups for item in group.items)
     calculation_group = next(group for group in response.setting_groups if group.id == "calculation_sensitive_candidates")
     assert all(item.status == "requires_backend_rules" for item in calculation_group.items)

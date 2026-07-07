@@ -89,12 +89,13 @@ class WorkshopProfileSettingsService:
     def get_profile(self) -> WorkshopProfileResponse:
         setting = self.repository.get_setting(WORKSHOP_PROFILE_KEY)
         profile = WorkshopProfile()
-        updated_at = None
+        updated_at = setting.updated_at if setting else None
         if setting and setting.value:
             try:
                 profile = WorkshopProfile(**json.loads(setting.value))
             except (json.JSONDecodeError, TypeError, ValueError):
                 profile = WorkshopProfile()
+                updated_at = None
         return self._response(profile, updated_at, "Профиль мастерской загружен." if self._is_configured(profile) else "Профиль мастерской пока не заполнен.")
 
     def update_profile(self, request: WorkshopProfileUpdateRequest) -> WorkshopProfileResponse:
@@ -110,9 +111,10 @@ class WorkshopProfileSettingsService:
             "json",
             WORKSHOP_PROFILE_DESCRIPTION,
         )
-        return self._response(profile, datetime.now(UTC), "Профиль мастерской сохранен.")
+        saved = self.repository.get_setting(WORKSHOP_PROFILE_KEY)
+        return self._response(profile, saved.updated_at if saved else None, "Профиль мастерской сохранен.")
 
-    def _response(self, profile: WorkshopProfile, updated_at: datetime | None, message: str) -> WorkshopProfileResponse:
+    def _response(self, profile: WorkshopProfile, updated_at: str | None, message: str) -> WorkshopProfileResponse:
         return WorkshopProfileResponse(profile=profile, is_configured=self._is_configured(profile), updated_at=updated_at, message=message)
 
     def _is_configured(self, profile: WorkshopProfile) -> bool:
@@ -142,12 +144,12 @@ def _capabilities() -> list[SettingsCapability]:
     ]
 
 
-def _definition(id: str, title: str, status: SettingsDefinitionStatus, description: str, safety_note: str, *, affects_calculations: bool = False, affects_historical_data: bool = False, requires_backend_service: bool = False) -> SettingsDefinition:
+def _definition(id: str, title: str, status: SettingsDefinitionStatus, description: str, safety_note: str, *, editable_now: bool = False, affects_calculations: bool = False, affects_historical_data: bool = False, requires_backend_service: bool = False) -> SettingsDefinition:
     return SettingsDefinition(
         id=id,
         title=title,
         status=status,
-        editable_in_pr95=False,
+        editable_now=editable_now,
         affects_calculations=affects_calculations,
         affects_historical_data=affects_historical_data,
         requires_backend_service=requires_backend_service,
@@ -159,10 +161,10 @@ def _definition(id: str, title: str, status: SettingsDefinitionStatus, descripti
 def _setting_groups() -> list[SettingsGroup]:
     return [
         SettingsGroup(id="safe_mvp_candidates", title="Безопасные кандидаты для MVP", description="Настройки, которые можно добавить позже без влияния на расчеты и историю, если у них появятся backend-владелец, валидация и тесты.", items=[
-            _definition("workshop_name", "Название мастерской", "editable_now", "Отображаемое название в интерфейсе и документах.", "Можно делать редактируемым только как отображаемый профиль, без изменения исторических записей."),
-            _definition("master_name", "Имя мастера", "editable_now", "Имя для будущих документов и подсказок.", "Должно применяться к новым документам или отображению, не переписывая историю."),
-            _definition("workshop_contact_text", "Контакты мастерской", "editable_now", "Короткий текст с телефоном, адресом или способом связи.", "Не должен попадать в расчеты или складские операции."),
-            _definition("workshop_note", "Краткое описание / примечание", "editable_now", "Короткое описание мастерской для будущего отображения.", "Не влияет на расчеты, склад или исторические записи."),
+            _definition("workshop_name", "Название мастерской", "editable_now", "Отображаемое название в интерфейсе и документах.", "Можно делать редактируемым только как отображаемый профиль, без изменения исторических записей.", editable_now=True),
+            _definition("master_name", "Имя мастера", "editable_now", "Имя для будущих документов и подсказок.", "Должно применяться к новым документам или отображению, не переписывая историю.", editable_now=True),
+            _definition("workshop_contact_text", "Контакты мастерской", "editable_now", "Короткий текст с телефоном, адресом или способом связи.", "Не должен попадать в расчеты или складские операции.", editable_now=True),
+            _definition("workshop_note", "Краткое описание / примечание", "editable_now", "Короткое описание мастерской для будущего отображения.", "Не влияет на расчеты, склад или исторические записи.", editable_now=True),
             _definition("default_report_document_format", "Формат документа отчета по умолчанию", "safe_mvp_candidate", "Будущий выбор Markdown или PDF при создании отчетного документа.", "Создание файла всё равно должно оставаться явным действием пользователя."),
             _definition("backup_reminder_hint", "Подсказка о резервных копиях", "safe_mvp_candidate", "Будущая пользовательская подсказка о том, когда напоминать про backup.", "Не должна автоматически создавать файлы или блокировать работу."),
             _definition("hide_demo_hints_after_onboarding", "Скрывать подсказки про демо после онбординга", "safe_mvp_candidate", "Будущий UI-флаг для уменьшения подсказок после знакомства с приложением.", "Не должен устанавливать или очищать демо-данные."),

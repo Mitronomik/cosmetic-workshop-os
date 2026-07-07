@@ -57,7 +57,7 @@ class SettingsDefinition(BaseModel):
     id: str
     title: str
     status: SettingsDefinitionStatus
-    editable_in_pr95: bool
+    editable_now: bool
     affects_calculations: bool
     affects_historical_data: bool
     requires_backend_service: bool
@@ -106,5 +106,5 @@ class WorkshopProfileUpdateRequest(BaseModel):
 class WorkshopProfileResponse(BaseModel):
     profile: WorkshopProfile
     is_configured: bool
-    updated_at: datetime | None = None
+    updated_at: str | None = None
     message: str
