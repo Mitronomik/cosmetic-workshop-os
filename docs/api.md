@@ -831,3 +831,22 @@ Returns a basic operational financial snapshot, not accounting:
 - missing cost count.
 
 The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate. `known_revenue` and `known_production_cost` are independent known totals, but `known_margin` never combines revenue from one incomplete batch with cost from another incomplete batch. Warnings include `margin_unavailable` when no paired sale+cost row exists and `partial_margin_basis` when margin is based on a subset of complete rows.
+
+## Workshop profile settings API
+
+`GET /api/settings/workshop-profile` returns the local workshop profile from backend settings storage. Empty defaults are safe and mean the profile is not configured.
+
+`PUT /api/settings/workshop-profile` explicitly replaces the complete workshop profile object:
+
+```json
+{
+  "workshop_name": "Мастерская косметолога",
+  "master_name": "Мария Чистякова",
+  "workshop_contact_text": "Телефон: +7 ...",
+  "workshop_note": "Индивидуальная косметика и уход"
+}
+```
+
+The endpoint trims strings, allows empty values, rejects overlong values and unsafe control characters, and updates only the grouped `workshop_profile` app setting. It does not mutate business data, create files, run backup/export/import/demo/report-document actions, or recalculate reports, recipes, orders, production, stock, costs, taxes, or margins.
+
+`GET /api/settings/status` now marks only `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note` as `editable_now`; calculation-sensitive settings remain `requires_backend_rules`.

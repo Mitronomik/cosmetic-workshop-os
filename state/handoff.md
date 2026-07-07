@@ -1,23 +1,19 @@
 # Handoff
 
-PR95 — Settings data/status foundation is implemented.
+PR96 implemented editable workshop profile settings foundation.
 
-Implemented:
-- PR95 type-safety polish removed the settings `_definition()` status `type: ignore` by sharing the Settings definition status Literal type; runtime behavior is unchanged.
-- `GET /api/settings/status` returns read-only local-first app status, local data status, safe workflow capabilities, and Settings Decision Matrix.
-- `/settings` loads backend status and renders local data status, capabilities, future setting candidates, about-app info, and MVP boundaries.
-- All Settings actions remain navigation-only and do not trigger backup/export/import/demo/report-document creation actions.
-- No editable settings, persistence, database tables, migrations, file creation, or business-data mutation were added.
-- `docs/settings.md`, API docs, frontend concept docs, and state docs were updated.
+Changed behavior:
+- `GET /api/settings/workshop-profile` returns safe empty defaults or the saved profile.
+- `PUT /api/settings/workshop-profile` saves workshop name, master name, contact text, and note after backend validation.
+- Settings profile data is stored backend-side in `app_settings` as grouped JSON key `workshop_profile`; no migration was added.
+- `/settings` now shows «Профиль мастерской» with explicit save/cancel controls.
+- `GET /api/settings/status` marks only workshop profile definitions as `editable_now`; calculation-sensitive settings remain `requires_backend_rules`.
 
-Manual smoke was not run in a browser in this non-interactive environment. Suggested smoke:
-1. Start backend and frontend.
-2. Open `/settings`.
-3. Confirm settings status loads.
-4. Confirm local-first and user-data separation status is shown.
-5. Confirm capabilities and decision matrix appear.
-6. Confirm Settings has no inputs, toggles, checkboxes, save/reset/delete/upload buttons.
-7. Click capability actions and confirm they navigate only.
-8. Call `GET /api/settings/status` and confirm response shape.
+Safety notes:
+- Profile changes do not mutate recipes, clients, orders, production, stock, reports, costs, taxes, margins, or historical records.
+- Settings page does not create backup/export/import/demo/report document actions or files.
+- No tax/currency/margin/unit/threshold/expiry settings were added.
 
-Next recommended task: PR96 — Workshop profile settings foundation, or PR96 — Settings data/status follow-up fixes if smoke finds issues.
+Manual smoke was not run in a browser in this non-interactive environment. Recommended smoke: open `/settings`, save profile fields, reload, cancel draft edits, try an overlong value, and call the two Settings API endpoints manually.
+
+Next recommended task: PR97 — Workshop profile integration with report documents, or PR97 — Workshop profile settings follow-up fixes if smoke finds issues.
