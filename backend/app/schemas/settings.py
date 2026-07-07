@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 SettingsCapabilityStatus = Literal["ready", "available", "planned", "disabled"]
 SettingsDefinitionStatus = Literal[
+    "editable_now",
     "read_only_now",
     "safe_mvp_candidate",
     "requires_backend_rules",
@@ -56,7 +57,7 @@ class SettingsDefinition(BaseModel):
     id: str
     title: str
     status: SettingsDefinitionStatus
-    editable_in_pr95: bool
+    editable_now: bool
     affects_calculations: bool
     affects_historical_data: bool
     requires_backend_service: bool
@@ -86,3 +87,24 @@ class SettingsStatusResponse(BaseModel):
     editable_settings_available: bool
     message: str
     warnings: list[SettingsWarning]
+
+
+class WorkshopProfile(BaseModel):
+    workshop_name: str = ""
+    master_name: str = ""
+    workshop_contact_text: str = ""
+    workshop_note: str = ""
+
+
+class WorkshopProfileUpdateRequest(BaseModel):
+    workshop_name: str = ""
+    master_name: str = ""
+    workshop_contact_text: str = ""
+    workshop_note: str = ""
+
+
+class WorkshopProfileResponse(BaseModel):
+    profile: WorkshopProfile
+    is_configured: bool
+    updated_at: str | None = None
+    message: str

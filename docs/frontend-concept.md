@@ -1593,3 +1593,12 @@ The dashboard keeps the existing single onboarding/checklist card and refreshes 
 ## Settings status foundation
 
 The `/settings` route loads `GET /api/settings/status` and renders read-only local app/data status, safe workflow capability cards, and the future Settings Decision Matrix. Settings actions remain navigation-only. The page must not render editable inputs, toggles, checkboxes, save buttons, reset buttons, delete buttons, or upload controls for PR95. If the backend is unavailable, `/settings` shows a human-readable error and keeps fallback navigation cards.
+
+### PR96 Settings workshop profile form
+
+`/settings` now includes the first editable Settings area: «Профиль мастерской». The form loads and saves values only through `GET /api/settings/workshop-profile` and `PUT /api/settings/workshop-profile`; it must not use frontend `localStorage` as the source of truth.
+
+The form has explicit save and cancel actions, loading/saving states, Russian validation/success/error messages, and a safety note explaining that profile changes do not affect recipes, stock, orders, production, historical calculations, taxes, or margins. Other Settings cards remain read-only/navigation-only, and tax/currency/margin/unit/threshold/expiry settings are not editable.
+
+
+The Settings Decision Matrix consumes the backend `editable_now` flag. Only workshop profile entries are editable in PR96; the frontend must not render controls for tax, currency, margin, units, thresholds, expiry days, templates, roles/auth, cloud, integrations, DOCX, accounting, or AI/RAG settings.

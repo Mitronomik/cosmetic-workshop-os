@@ -650,3 +650,10 @@ Import CSV/XLSX draft backend foundation.
 - Replaced the raw `str` status parameter in `SettingsService._definition()` with the shared Settings definition status Literal type.
 - Removed the `# type: ignore[arg-type]` from settings status construction.
 - No runtime Settings behavior, response shape, persistence, migrations, or editability changed.
+
+- PR96 added the first safe editable Settings area: backend-owned workshop profile fields for workshop name, master name, contact text, and note.
+- Added `GET /api/settings/workshop-profile` and `PUT /api/settings/workshop-profile`, using the existing `app_settings` storage with grouped JSON key `workshop_profile` and no migration.
+- Updated `/settings` with an explicit «Профиль мастерской» form, save/cancel states, validation display, and safety copy.
+- Updated Settings status so only workshop profile fields are `editable_now`; calculation-sensitive settings remain non-editable.
+
+- PR96 follow-up finalized the Settings DTO editability contract as `editable_now` and returns persisted workshop profile `updated_at` metadata on GET/PUT.
