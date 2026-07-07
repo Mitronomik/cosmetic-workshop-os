@@ -7,3 +7,4 @@ class AppSetting:
     value: str
     value_type: str
     description: str
+    updated_at: str | None = None
