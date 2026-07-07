@@ -12,7 +12,8 @@ Supported after PR92:
 - PDF (`pdf`, `.pdf`) when the backend finds a safe local Cyrillic-capable font;
 - explicit backend/API document creation;
 - metadata sidecar JSON files;
-- listing generated document metadata.
+- listing generated document metadata;
+- safe read-only open/download access for known generated Markdown/PDF files through `/api/report-documents/{document_id}/download`.
 
 Not supported after PR92:
 
@@ -96,9 +97,20 @@ If report data is missing, the document renders values as `не рассчита
 
 PDF generation is local and explicit. The backend embeds a local TTF font into a simple PDF so Russian text remains readable. `GET /api/report-documents/status` advertises `pdf` only when the backend finds a local `.ttf` font that the current renderer can parse and that contains Cyrillic glyphs. TTC font collections (`.ttc`) are not supported in PR92. If no compatible TTF font is available, status omits `pdf` and PDF creation is rejected safely.
 
+## Open and download workflow
+
+Generated documents can be accessed from `/report-documents` without manually searching through technical folders:
+
+- PDF documents show `Открыть PDF` and `Скачать PDF`;
+- Markdown documents show `Скачать Markdown`.
+
+These actions call `GET /api/report-documents/{document_id}/download` and never construct local file paths in the frontend. Opening/downloading existing files is read-only: it does not create new documents, mutate workshop data, create backup/import/demo data, or regenerate alerts and purchase suggestions. `/reports` still only navigates to `/report-documents` via `Открыть документы отчетов` and does not create files.
+
+The backend validates that the document ID is known from metadata, the metadata filename/format match the generated file, and the resolved file remains inside `exports/report-documents`. Unknown IDs, missing files, path traversal, and unsafe metadata are rejected with human-readable Russian errors.
+
 ## Future work
 
-DOCX generation, download/open workflows, preview, and polished document styling should be added as later scoped PRs without changing report calculations or moving rendering logic into the frontend.
+DOCX generation, preview, Markdown/PDF editors, arbitrary file browsing, and polished document styling should be added as later scoped PRs without changing report calculations or moving rendering logic into the frontend.
 
 ## PR90 — frontend report document export UI
 - Added `/report-documents` / «Документы отчетов» in the «Данные и настройки» navigation group.
@@ -115,3 +127,9 @@ DOCX generation, download/open workflows, preview, and polished document styling
 - PDF content uses backend `ReportsService` data and the same user-facing sections as Markdown; the renderer does not recalculate report values or invent tax.
 - Generated PDF files and UTF-8 metadata sidecars are stored only in `exports/report-documents`.
 - `/reports` navigation copy now says «Открыть документы отчетов» because it only navigates.
+
+## PR93 — Report PDF UI polish / download-open workflow
+- Added safe read-only backend file access for known generated Markdown/PDF report documents.
+- Added `/report-documents` actions to open/download PDF files and download Markdown files through the backend endpoint.
+- Kept document creation explicit and `/reports` navigation-only.
+- DOCX and arbitrary file browsing remain unsupported.

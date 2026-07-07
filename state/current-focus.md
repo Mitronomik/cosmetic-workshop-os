@@ -1,11 +1,7 @@
 # Current focus
 
-PR92 follow-up is implemented: PDF availability is deterministic, tests do not depend on host system fonts, and report-document docs have been corrected.
+PR93 is complete. Next recommended task: **PR94 — Settings UI foundation**.
 
-The next implementation PR should be **PR93 — Report PDF UI polish / download-open workflow**, unless PR92 smoke finds PDF generation or report document UI issues. If smoke finds issues, the next PR should be **PR93 — Report PDF generation follow-up fixes**.
+If smoke testing finds document open/download issues, use **PR94 — Report document download/open follow-up fixes** instead.
 
-Scope guard for the next session:
-- Do not add DOCX, invoices, acts, labels, certificates, recipe technical cards, accounting/tax reports, charts, scheduled jobs, cloud sync, AI/RAG, or template editing.
-- Do not create PDFs automatically from page load or from `/reports`.
-- Keep PDF support TTF-only unless a future task explicitly adds and tests TTC parsing.
-- Keep report values backend-owned; frontend should only display backend responses.
+Do not jump to DOCX, invoices, labels, certificates, recipe technical cards, accounting/tax reports, charts, template editors, scheduled generation, cloud services, external document services, or AI/RAG summaries.

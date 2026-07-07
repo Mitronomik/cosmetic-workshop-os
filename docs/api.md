@@ -715,6 +715,22 @@ Response fields include:
 - `offset`;
 - `total`.
 
+### `GET /api/report-documents/{document_id}/download`
+
+Read-only access to an already generated report document file. The endpoint only serves files known from report document metadata under the safe report-documents directory; it is not a generic file browser and does not accept arbitrary paths or filenames.
+
+Query parameters:
+
+- `disposition=attachment|inline` (default `attachment`). `inline` is used for PDF opening; Markdown is returned as an attachment even if inline is requested.
+
+Content types:
+
+- PDF: `application/pdf`;
+- Markdown: `text/markdown; charset=utf-8`;
+- fallback: `application/octet-stream`.
+
+Safe errors are returned for unknown document IDs, missing files, unsupported disposition values, and metadata/path mismatches. The endpoint does not create documents, mutate business data, create backup/import/demo data, or regenerate alerts/purchase suggestions.
+
 ### `POST /api/report-documents/reports/overview`
 
 Creates a Markdown or PDF “Сводка мастерской” document from `/api/reports/overview` backend data.

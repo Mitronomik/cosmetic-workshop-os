@@ -620,3 +620,14 @@ Import CSV/XLSX draft backend foundation.
 - TTC font collections are not supported in PR92.
 - Markdown remains always available, and unavailable PDF creation is rejected with a safe Russian message.
 - Corrected report-document docs so they no longer describe PDF as future-only after PR92 and use document-file + metadata-sidecar wording.
+
+## PR93 — Report PDF UI polish / download-open workflow
+- Added a read-only `/api/report-documents/{document_id}/download` endpoint for known generated Markdown/PDF report documents.
+- The endpoint validates metadata, format/filename consistency, safe directory containment, file existence, and disposition before serving files.
+- `/report-documents` now shows `Открыть PDF`, `Скачать PDF`, and `Скачать Markdown` actions through the backend endpoint.
+- Document creation remains explicit; `/reports` remains navigation-only and DOCX remains unsupported.
+
+## PR93 docs follow-up — frontend concept wording
+- Removed stale `docs/frontend-concept.md` wording that described report document export as Markdown-only or PDF future-only.
+- Documented the current PR92/PR93 workflow: Markdown always available, PDF shown only when backend support is advertised, DOCX unsupported, and generated files accessed only through the safe backend download endpoint.
+- Reconfirmed that `/reports` only navigates to `/report-documents` and does not create files.
