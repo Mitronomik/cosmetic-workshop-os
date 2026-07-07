@@ -626,3 +626,8 @@ Import CSV/XLSX draft backend foundation.
 - The endpoint validates metadata, format/filename consistency, safe directory containment, file existence, and disposition before serving files.
 - `/report-documents` now shows `Открыть PDF`, `Скачать PDF`, and `Скачать Markdown` actions through the backend endpoint.
 - Document creation remains explicit; `/reports` remains navigation-only and DOCX remains unsupported.
+
+## PR93 docs follow-up — frontend concept wording
+- Removed stale `docs/frontend-concept.md` wording that described report document export as Markdown-only or PDF future-only.
+- Documented the current PR92/PR93 workflow: Markdown always available, PDF shown only when backend support is advertised, DOCX unsupported, and generated files accessed only through the safe backend download endpoint.
+- Reconfirmed that `/reports` only navigates to `/report-documents` and does not create files.

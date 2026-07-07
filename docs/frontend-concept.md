@@ -1549,15 +1549,31 @@ The dashboard keeps the existing single onboarding/checklist card and refreshes 
 - The Reports page consumes the PR87 read-only backend report endpoints for overview, inventory, orders, production, and finance.
 - The frontend displays backend DTO values and warnings; it does not calculate core report values, tax, stock, production, revenue, cost, or margin.
 - Reports are read-only in the UI: they do not mutate business data, create backup/export files, or regenerate alerts/purchase suggestions.
-- PDF/export/charts/accounting remain follow-up work.
+- `/reports` includes a contextual link to `/report-documents`; it only navigates and does not create Markdown/PDF files.
+- Charts, accounting/tax reports, DOCX, invoices, labels, certificates, cloud services, and external document services remain follow-up work.
+
+## Report documents UI
+- `/report-documents` / «Документы отчетов» is the user-facing route for generated report documents under «Данные и настройки».
+- The page loads document status and generated document metadata through the backend.
+- Page load and refresh are read-only.
+- Documents are created only by explicit user action.
+- Markdown generation is always available.
+- PDF generation is shown only when the backend reports local PDF support.
+- DOCX remains unsupported.
+- Generated files are accessed only through `/api/report-documents/{document_id}/download`.
+- PDF documents can be opened inline or downloaded.
+- Markdown documents are downloaded as attachments.
+- The frontend does not construct absolute local paths, does not create object URLs, and does not browse arbitrary files.
+- Opening/downloading existing documents does not create new documents and does not mutate recipes, clients, orders, stock, production, alerts, purchases, backup, export, import, or demo data.
+- `/reports` only links to `/report-documents` and does not create files.
 
 ## PR90 — frontend report document export UI
-- Added `/report-documents` / «Документы отчетов» in the «Данные и настройки» navigation group.
-- The page consumes only the implemented report document endpoints: status, list, and explicit Markdown overview creation.
-- Page load and refresh are read-only; documents are created only by the «Создать Markdown-документ» action.
-- Markdown is the only exposed format. PDF/DOCX are described as future work and are not actionable.
-- The Reports page now has a contextual link to the document page; it only navigates and does not create files.
-- Backend cleanup hardening now deletes the metadata sidecar only when the current operation actually created it.
+- PR90 initially added `/report-documents` / «Документы отчетов» in the «Данные и настройки» navigation group.
+- PR90 initially consumed status, list, and explicit Markdown overview creation endpoints; PR92 later added backend-advertised PDF creation, and PR93 added safe open/download actions.
+- Page load and refresh remain read-only; documents are still created only by explicit user action.
+- Markdown remains available, PDF is actionable only when advertised by backend status, and DOCX remains unsupported.
+- The Reports page contextual link only navigates and does not create files.
+- Backend cleanup hardening deletes the metadata sidecar only when the current operation actually created it.
 
 ## PR93 — report document open/download actions
 - `/report-documents` now shows read-only actions for generated files: `Открыть PDF`, `Скачать PDF`, and `Скачать Markdown`.
