@@ -53,7 +53,7 @@ class SettingsService:
             capabilities=_capabilities(),
             setting_groups=_setting_groups(),
             editable_settings_available=True,
-            message="Профиль мастерской можно редактировать. Расчетные и исторически чувствительные настройки остаются только для просмотра.",
+            message="Профиль мастерской уже можно редактировать. Остальные настройки пока показаны как безопасная карта будущих возможностей.",
             warnings=[],
         )
 

@@ -15,6 +15,8 @@ from app.services.report_documents import (
     sanitize_reason,
 )
 from app.schemas.report_documents import ReportOverviewDocumentCreateRequest
+from app.schemas.settings import WorkshopProfileUpdateRequest
+from app.services.settings import WorkshopProfileSettingsService
 from app.tests.test_reports import BUSINESS_TABLES, counts, seed_orders_and_production
 
 
@@ -85,6 +87,101 @@ def test_create_overview_markdown_document_on_empty_db(tmp_path):
     assert listing.total == 1
     assert listing.items[0].id == metadata.id
 
+
+
+def test_markdown_document_includes_configured_workshop_profile(tmp_path):
+    c, svc = service(tmp_path)
+    WorkshopProfileSettingsService(c).update_profile(WorkshopProfileUpdateRequest(
+        workshop_name="Мастерская Марии",
+        master_name="Мария",
+        workshop_contact_text="Телефон: +7 000",
+        workshop_note="Натуральная косметика",
+    ))
+
+    response = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown"))
+    text = (svc.documents_dir / response.document.filename).read_text(encoding="utf-8")
+
+    assert "## Профиль мастерской" in text
+    assert "- Мастерская: Мастерская Марии" in text
+    assert "- Мастер: Мария" in text
+    assert r"- Контакты: Телефон: \+7 000" in text
+    assert "- Примечание: Натуральная косметика" in text
+    assert text.index("## Профиль мастерской") < text.index("## Краткая сводка")
+
+
+def test_markdown_document_omits_empty_profile_fields_and_empty_section(tmp_path):
+    c, svc = service(tmp_path)
+    WorkshopProfileSettingsService(c).update_profile(WorkshopProfileUpdateRequest(workshop_name="Мастерская"))
+
+    response = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown"))
+    text = (svc.documents_dir / response.document.filename).read_text(encoding="utf-8")
+
+    assert "## Профиль мастерской" in text
+    assert "- Мастерская: Мастерская" in text
+    assert "- Мастер:" not in text
+    assert "- Контакты:" not in text
+    assert "- Примечание:" not in text
+
+    WorkshopProfileSettingsService(c).update_profile(WorkshopProfileUpdateRequest())
+    empty_response = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown"))
+    empty_text = (svc.documents_dir / empty_response.document.filename).read_text(encoding="utf-8")
+    assert "## Профиль мастерской" not in empty_text
+
+
+def test_markdown_profile_values_are_safe_plain_text(tmp_path):
+    c, svc = service(tmp_path)
+    WorkshopProfileSettingsService(c).update_profile(WorkshopProfileUpdateRequest(
+        workshop_name="# Заголовок **bold**",
+        workshop_contact_text="<script>alert(1)</script>\n- injected",
+    ))
+
+    response = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown"))
+    text = (svc.documents_dir / response.document.filename).read_text(encoding="utf-8")
+
+    assert r"- Мастерская: \# Заголовок \*\*bold\*\*" in text
+    assert r"&lt;script\>alert\(1\)&lt;/script\>" in text
+    assert r"\- injected" in text
+    assert "\n- injected" not in text
+
+
+def test_pdf_document_uses_profile_lines_and_remains_valid_pdf(tmp_path, monkeypatch):
+    c, svc = service(tmp_path)
+    WorkshopProfileSettingsService(c).update_profile(WorkshopProfileUpdateRequest(workshop_name="PDF мастерская"))
+    captured_lines: list[str] = []
+    monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
+
+    def fake_write_pdf_exclusive(path: Path, lines: list[str], *, created_at: datetime) -> None:
+        captured_lines.extend(lines)
+        with path.open("xb") as file:
+            file.write(b"%PDF-1.4\n% fake test pdf\n%%EOF\n")
+
+    monkeypatch.setattr(report_documents_module, "_write_pdf_exclusive", fake_write_pdf_exclusive)
+
+    response = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))
+
+    assert "## Профиль мастерской" in captured_lines
+    assert "- Мастерская: PDF мастерская" in captured_lines
+    assert (svc.documents_dir / response.document.filename).read_bytes().startswith(b"%PDF-")
+
+
+def test_document_generation_with_profile_does_not_update_settings_or_existing_documents(tmp_path):
+    c, svc = service(tmp_path)
+    profile_service = WorkshopProfileSettingsService(c)
+    saved = profile_service.update_profile(WorkshopProfileUpdateRequest(workshop_name="Старая мастерская"))
+    first = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown")).document
+    first_path = svc.documents_dir / first.filename
+    first_text = first_path.read_text(encoding="utf-8")
+
+    profile_service.update_profile(WorkshopProfileUpdateRequest(workshop_name="Новая мастерская"))
+    updated_before_generation = profile_service.get_profile()
+    before = counts(c)
+    second = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown")).document
+
+    assert profile_service.get_profile() == updated_before_generation
+    assert counts(c) == before
+    assert first_path.read_text(encoding="utf-8") == first_text
+    assert "Старая мастерская" in first_text
+    assert "Новая мастерская" in (svc.documents_dir / second.filename).read_text(encoding="utf-8")
 
 def test_generated_markdown_includes_report_warnings_and_finance_limits(tmp_path):
     c, svc = service(tmp_path)

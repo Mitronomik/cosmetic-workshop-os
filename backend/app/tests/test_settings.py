@@ -27,6 +27,7 @@ def test_settings_status_response_builds_local_first_status(monkeypatch, tmp_pat
     assert response.local_data.backup_before_migration_required is True
     assert "отдельно от кода" in response.local_data.message
     assert response.editable_settings_available is True
+    assert "Профиль мастерской уже можно редактировать" in response.message
 
 
 def test_settings_status_capabilities_are_navigation_only():
@@ -37,6 +38,7 @@ def test_settings_status_capabilities_are_navigation_only():
     assert all(capability.mutates_from_settings is False for capability in response.capabilities)
     assert capabilities["backups"].route == "/backups"
     assert capabilities["settings"].route == "/settings"
+    assert "редактировать только профиль мастерской" in capabilities["settings"].description
 
 
 def test_settings_decision_matrix_contains_required_groups_and_profile_items_are_editable():

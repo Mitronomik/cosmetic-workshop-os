@@ -1,8 +1,6 @@
 # Settings
 
-Settings (`/settings`) is a user-facing, read-only place to understand application and data status.
-
-PR95 intentionally does **not** add editable settings, persistence, migrations, save buttons, or reset/delete actions. Settings must not become a technical admin panel.
+Settings (`/settings`) is a user-facing place to understand application/data status and edit the safe display-only Workshop profile. Settings must not become a technical admin panel.
 
 ## API
 
@@ -12,19 +10,24 @@ PR95 intentionally does **not** add editable settings, persistence, migrations, 
 - local data separation status;
 - safe workflow capabilities;
 - Settings Decision Matrix;
-- `editable_settings_available: false`.
+- `editable_settings_available: true`;
+- copy explaining that the Workshop profile is editable while calculation-sensitive settings remain a future backend-rule map.
 
-The endpoint is read-only. It must not create files, mutate business data, trigger backup/export/import/demo/report-document actions, regenerate alerts or purchases, or change app configuration.
+`GET /api/settings/status` is read-only. It must not create files, mutate business data, trigger backup/export/import/demo/report-document actions, regenerate alerts or purchases, or change app configuration.
 
 ## Settings Decision Matrix
 
 ### Safe MVP candidates
 
-These may become editable later in small scoped PRs if they have backend ownership, validation, defaults, tests, and documentation:
+The Workshop profile fields are editable now through `GET /api/settings/workshop-profile` and `PUT /api/settings/workshop-profile` with backend validation and `app_settings` persistence:
 
 - workshop name;
 - master name;
 - workshop contact text;
+- workshop note.
+
+Other safe candidates remain future work:
+
 - default report document format;
 - backup reminder hint;
 - hide demo hints after onboarding.
@@ -75,7 +78,7 @@ Frontend must not own critical setting logic. If a setting affects calculations,
 
 ## Allowed future Settings PR examples
 
-- PR96 — Workshop profile settings foundation: read/write display-only profile fields with backend validation and no historical mutation.
+- PR98 uses saved Workshop profile fields in newly generated Markdown/PDF report overview documents without changing calculations or existing generated files.
 - Add default report document format: backend-owned preference used only to preselect a creation option, while document creation remains explicit.
 - Add backup reminder hint: UI guidance only, without scheduled jobs or automatic file creation.
 
@@ -95,3 +98,7 @@ The profile is stored backend-side in the existing local `app_settings` key-valu
 Validation is backend-owned: values are trimmed, empty strings are allowed, overlong values are rejected with Russian validation errors, and unsafe control characters are rejected. Phone/email formats are not required.
 
 Profile values are display-only settings for Settings and future documents. They are not calculation inputs and do not mutate recipes, clients, orders, production batches, stock movements, reports, costs, taxes, margins, alerts, purchases, imports, exports, backups, or historical records. Calculation-sensitive settings such as tax, currency, margin, units, stock thresholds, and expiry warning days remain non-editable and require future backend rules.
+
+## PR98 report-document behavior
+
+Saved Workshop profile fields are display metadata for newly generated report documents. They do not affect recipes, clients, orders, production, stock, costs, taxes, margins, alerts, purchases, imports, exports, backups, demo data, or historical records. Existing documents are not mutated. No tax/currency/margin/unit/stock-threshold/expiry settings, template editor, logo upload, DOCX, invoices, labels, or certificates were added.

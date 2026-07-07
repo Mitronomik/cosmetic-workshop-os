@@ -1,7 +1,7 @@
 # Current focus
 
-PR96 — Workshop profile settings foundation is implemented.
+PR98 — Workshop profile integration with report documents is implemented.
 
-Next recommended task: **PR97 — Workshop profile integration with report documents**.
+Next recommended task: **PR99 — Workshop profile display polish / app header integration**.
 
-If PR96 smoke testing finds Settings API/UI issues, use **PR97 — Workshop profile settings follow-up fixes** instead. Do not jump to tax, currency, margin, unit, role/auth, cloud, integrations, template, label, certificate, accounting, scheduled-job, or AI/RAG settings next.
+If PR98 smoke testing finds document integration issues, use **PR99 — Workshop profile report document integration follow-up fixes** instead. Do not jump to tax, currency, margin, unit, stock-threshold, expiry, role/auth, cloud, integrations, template, label, certificate, accounting, scheduled-job, or AI/RAG settings next.

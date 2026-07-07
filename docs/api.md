@@ -694,16 +694,16 @@ When an active demo session has unsafe working references, `GET /api/demo-data/s
 
 ## Report documents API
 
-Report document endpoints are available under `/api/report-documents`. They create human-readable report documents explicitly and store them in the safe report-documents directory under the user data/export area. After PR92 the API supports Markdown and, when the backend finds a parseable local TTF font with Cyrillic glyphs, PDF. DOCX requests are rejected with a clear Russian message.
+Report document endpoints are available under `/api/report-documents`. They create human-readable report documents explicitly and store them in the safe report-documents directory under the user data/export area. The API supports Markdown and, when the backend finds a parseable local TTF font with Cyrillic glyphs, PDF. DOCX requests are rejected with a clear Russian message.
 
-Document generation reads backend `ReportsService` data, does not mutate business records, does not create backup/export snapshots, and does not regenerate alerts or purchase suggestions.
+Document generation reads backend `ReportsService` data and the saved display-only Workshop profile. Configured profile fields are included near the top of newly generated Markdown/PDF overview documents, but profile values are not stored in document metadata and do not affect report calculations. Generation does not mutate business records, existing generated documents, backup/export snapshots, imports, demo data, alerts, or purchase suggestions.
 
 ### `GET /api/report-documents/status`
 
 Returns document export availability:
 
 - `documents_dir`;
-- `available_formats` (`["markdown", "pdf"]` when a parseable local TTF font with Cyrillic glyphs is available; TTC font collections are not supported in PR92, and otherwise PDF is omitted);
+- `available_formats` (`["markdown", "pdf"]` when a parseable local TTF font with Cyrillic glyphs is available; TTC font collections are not supported, and otherwise PDF is omitted);
 - `available_document_types` (`["workshop_overview"]` in the MVP);
 - `can_create`;
 - `documents_count`;
@@ -738,7 +738,7 @@ Safe errors are returned for unknown document IDs, missing files, unsupported di
 
 ### `POST /api/report-documents/reports/overview`
 
-Creates a Markdown or PDF “Сводка мастерской” document from `/api/reports/overview` backend data.
+Creates a Markdown or PDF “Сводка мастерской” document from `/api/reports/overview` backend data and, when configured, display-only Workshop profile fields from Settings.
 
 Request:
 
