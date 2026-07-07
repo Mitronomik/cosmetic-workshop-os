@@ -6,7 +6,7 @@ After PR90 — report document export UI and sidecar cleanup hardening complete;
 ## Current next step
 - PR90 is complete: `/report-documents` / «Документы отчетов» is available under «Данные и настройки», and Markdown «Сводка мастерской» report documents are created only by explicit user action.
 - Completed foundations now include local-first app shell, SQLite persistence and migrations, user data directory, local launcher, onboarding, ingredients/components, ingredient lots, ingredient stock movements, packaging/tare, packaging stock movements, inventory read models and UI, recipe templates, recipe versions, backend recipe calculation, recipe UI, clients, client recipes, client recipe composition editing/restoring, client wishes and append-only feedback, orders backend and UI, production readiness backend and UI, production confirmation backend and UI, immutable production history, alerts backend and UI, purchase suggestions backend and UI, operational dashboard, manual backup API and UI, local JSON export API and UI, CSV/XLSX import draft backend and UI, import validation/readiness/apply flow for supported safe catalog targets, demo data backend and UI, refreshed onboarding checklist, static in-app Help Center, reports backend and UI, Markdown report document backend, report document UI, and sidecar cleanup hardening.
-- Next recommended roadmap slice: **PR91 — Report PDF generation foundation**, unless PR90 local browser smoke finds UI issues. If smoke finds issues, make PR91 a report document UI follow-up fixes PR before adding PDF.
+- Next recommended roadmap slice: **Next implementation PR — Report PDF generation foundation**, unless PR90 local browser smoke finds UI issues. If smoke finds issues, make the next implementation PR a report document UI follow-up fixes PR before adding PDF.
 - Keep DOCX generation, download/open-file endpoints, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and business-record mutations out of scope unless explicitly requested.
 
 ## Done
@@ -78,14 +78,14 @@ After PR90 — report document export UI and sidecar cleanup hardening complete;
 
 
 ## In progress
-- Preparing the next scoped PR: PR91 — Report PDF generation foundation, unless PR90 local browser smoke finds report document UI issues that should be fixed first.
+- Preparing the next scoped implementation PR: Report PDF generation foundation, unless PR90 local browser smoke finds report document UI issues that should be fixed first.
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- PR91 — Report PDF generation foundation is the recommended next roadmap-scoped task.
-- If PR90 local browser smoke finds report document UI issues, do PR91 as report document UI follow-up fixes before adding PDF.
+- Next implementation PR — Report PDF generation foundation is the recommended next roadmap-scoped task.
+- If PR90 local browser smoke finds report document UI issues, fix those issues in the next implementation PR before adding PDF.
 - Keep DOCX, download/open-file endpoints, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and unrelated business behavior out of scope unless explicitly requested.
 
 ## Important notes
