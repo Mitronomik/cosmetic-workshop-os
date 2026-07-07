@@ -24,6 +24,17 @@ type ClientsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type ClientRecipesStatus = 'idle' | 'loading' | 'ready' | 'error';
 type ClientRecipeDetailStatus = 'idle' | 'loading' | 'ready' | 'error';
 
+type SettingStatus = 'read_only_now' | 'safe_mvp_candidate' | 'requires_backend_rules' | 'v2_or_later' | 'not_mvp';
+type SettingsCapabilityStatus = 'ready' | 'available' | 'planned' | 'disabled';
+type AppSettingsInfo = { product_name: string; repository_name: string | null; mode: string; local_first: boolean; internet_required: boolean; version?: string | null };
+type LocalDataStatus = { user_data_separate_from_code: boolean; user_data_path_available: boolean; user_data_path_display: string | null; backup_before_migration_required: boolean; message: string };
+type SettingsCapability = { id: string; title: string; status: SettingsCapabilityStatus; route: string | null; description: string; mutates_from_settings: boolean };
+type SettingsDefinition = { id: string; title: string; status: SettingStatus; editable_in_pr95: boolean; affects_calculations: boolean; affects_historical_data: boolean; requires_backend_service: boolean; description: string; safety_note: string };
+type SettingsGroup = { id: string; title: string; description: string; items: SettingsDefinition[] };
+type SettingsWarning = { code: string; message: string; severity: 'info' | 'warning' };
+type SettingsStatusResponse = { generated_at: string; app: AppSettingsInfo; local_data: LocalDataStatus; capabilities: SettingsCapability[]; setting_groups: SettingsGroup[]; editable_settings_available: boolean; message: string; warnings: SettingsWarning[] };
+type SettingsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; data: SettingsStatusResponse | null; error: string };
+
 type OnboardingState = {
   has_started: boolean;
   is_completed: boolean;
@@ -542,6 +553,7 @@ let packagingCatalogControls: CatalogControlState = { categorySearch: '', tagSea
 let helpUiState: HelpUiState = { search: '', category: '', selectedArticleId: 'getting-started' };
 let reportsUiState: ReportsUiState = { status: 'idle', selectedReport: 'overview', error: '', message: '', overview: null, inventory: null, orders: null, production: null, finance: null };
 let reportDocumentsUiState: ReportDocumentsUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', documentStatus: null, documents: [], lastCreatedDocument: null, reason: '' };
+let settingsUiState: SettingsUiState = { status: 'idle', data: null, error: '' };
 
 function sectionFromLocation(): NavigationSection {
   const routes: Record<string, NavigationSection> = {
@@ -602,6 +614,7 @@ function loadSectionData(section: NavigationSection) {
   if (section === 'Тара') loadPackagingItems();
   if (section === 'Закупки') loadPurchaseSuggestions();
   if (section === 'Отчеты') loadReports();
+  if (section === 'Настройки') loadSettingsStatus();
 }
 
 function renderActivePage(section: NavigationSection) {
@@ -742,6 +755,7 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="reset-help-filters"]').forEach((button) => button.addEventListener('click', () => { helpUiState.search = ''; helpUiState.category = ''; helpUiState.selectedArticleId = 'getting-started'; render(); }));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-help-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-settings-target"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="reload-settings"]').forEach((button) => button.addEventListener('click', () => loadSettingsStatus(true)));
   root.querySelectorAll<HTMLButtonElement>('[data-nav-section]').forEach((button) => button.addEventListener('click', () => {
     activeSection = (button.dataset.navSection as NavigationSection | undefined) ?? 'Главная';
     window.history.pushState({}, '', pathForSection(activeSection));
@@ -2153,45 +2167,35 @@ function reportWarningsMarkup(warnings: ReportWarning[]) { return `<div class="w
 function moneyText(value: string | null) { return value === null || value === '' ? 'Нет данных' : value; }
 
 
+function loadSettingsStatus(force = false) {
+  if (!force && (settingsUiState.status === 'loading' || settingsUiState.status === 'ready')) return;
+  settingsUiState.status = 'loading'; settingsUiState.error = ''; render();
+  getSettingsStatus().then((data) => { settingsUiState = { status: 'ready', data, error: '' }; render(); }).catch(() => { settingsUiState.status = 'error'; settingsUiState.error = 'Не удалось загрузить статус настроек. Проверьте, что локальное приложение запущено.'; render(); });
+}
+
 function settingsPage() {
-  return `<div class="settings-layout"><section class="card data-card dashboard-hero settings-hero"><div><p class="card-kicker">Настройки</p><h2>Настройки</h2><p>Здесь собраны безопасные точки управления приложением: данные, резервные копии, импорт, экспорт, документы отчетов и справка.</p><p class="next-step">Эта страница пока ничего не меняет сама. Она помогает перейти к уже готовым безопасным разделам.</p></div></section><div class="settings-card-grid">${settingsLocalDataCard()}${settingsBackupCard()}${settingsImportExportCard()}${settingsReportDocumentsCard()}${settingsDemoDataCard()}${settingsHelpCard()}${settingsAboutCard()}${settingsFutureCard()}</div></div>`;
+  const data = settingsUiState.data;
+  const loading = settingsUiState.status === 'loading' && !data;
+  const error = settingsUiState.status === 'error' && !data;
+  return `<div class="settings-layout"><section class="card data-card dashboard-hero settings-hero"><div><p class="card-kicker">Настройки</p><h2>Настройки</h2><p>Здесь собраны безопасные точки управления приложением: данные, резервные копии, импорт, экспорт, документы отчетов и справка.</p><p class="next-step">В PR95 настройки только описаны. Изменять их пока нельзя — это защищает расчеты, склад и исторические данные.</p>${data ? `<p class="muted-text">Статус сформирован: ${formatDateTime(data.generated_at)}</p>` : ''}</div>${settingsUiState.status === 'ready' ? '<span class="pill success">Только просмотр</span>' : '<span class="pill muted">Загрузка</span>'}</section>${loading ? '<section class="card"><p>Загружаем настройки…</p></section>' : ''}${error ? settingsLoadErrorCard() : ''}${data ? `${settingsLocalDataCard(data)}${settingsCapabilitiesSection(data)}${settingsDecisionMatrix(data)}${settingsAboutSection(data)}${settingsBoundariesSection()}` : settingsFallbackCards()}</div>`;
 }
 
-function settingsAction(label: string, section: NavigationSection, primary = false) {
-  return `<button class="${primary ? 'primary-action' : 'secondary-action'} compact" type="button" data-action="navigate-settings-target" data-section="${section}">${escapeHtml(label)}</button>`;
-}
-
-function settingsLocalDataCard() {
-  return `<section class="card data-card settings-card"><p class="card-kicker">Безопасность данных</p><h2>Локальные данные</h2><p>Приложение работает локально. Данные мастерской хранятся отдельно от кода приложения и не требуют обязательного интернета.</p><div class="actions">${settingsAction('Открыть резервные копии', 'Резервные копии', true)}${settingsAction('Открыть экспорт', 'Экспорт')}${settingsAction('Открыть импорт', 'Импорт')}</div></section>`;
-}
-
-function settingsBackupCard() {
-  return `<section class="card data-card settings-card"><p class="card-kicker">Восстановление</p><h2>Резервные копии</h2><p>Перед важными изменениями и обновлениями полезно создавать резервную копию данных.</p><div class="actions">${settingsAction('Перейти к backup', 'Резервные копии')}</div></section>`;
-}
-
-function settingsImportExportCard() {
-  return `<section class="card data-card settings-card"><p class="card-kicker">Перенос данных</p><h2>Импорт и экспорт</h2><p>Импорт проходит через черновик, проверку и подтверждение. Экспорт создает отдельные файлы и не меняет данные.</p><div class="actions">${settingsAction('Открыть импорт', 'Импорт')}${settingsAction('Открыть экспорт', 'Экспорт')}</div></section>`;
-}
-
-function settingsReportDocumentsCard() {
-  return `<section class="card data-card settings-card"><p class="card-kicker">Файлы для работы</p><h2>Документы отчетов</h2><p>Создавайте Markdown и PDF-сводки мастерской, а затем открывайте или скачивайте их из раздела документов отчетов.</p><div class="actions">${settingsAction('Открыть документы отчетов', 'Документы отчетов')}${settingsAction('Открыть отчеты', 'Отчеты')}</div></section>`;
-}
-
-function settingsDemoDataCard() {
-  return `<section class="card data-card settings-card"><p class="card-kicker">Пример мастерской</p><h2>Демо-данные</h2><p>Демо-режим помогает посмотреть пример заполненной мастерской. Он должен оставаться явным и управляемым.</p><div class="actions">${settingsAction('Открыть демо-данные', 'Демо-данные')}</div></section>`;
-}
-
-function settingsHelpCard() {
-  return `<section class="card data-card settings-card"><p class="card-kicker">Подсказки</p><h2>Помощь</h2><p>В справке собраны подсказки по основным рабочим сценариям.</p><div class="actions">${settingsAction('Открыть помощь', 'Помощь')}</div></section>`;
-}
-
-function settingsAboutCard() {
-  return `<section class="card data-card settings-card settings-about-card"><p class="card-kicker">О приложении</p><h2>Мастерская косметолога</h2><p>Локальная рабочая система для рецептов, клиентов, заказов, склада, производства, отчетов и резервных копий.</p><p>Сейчас приложение не использует облачную синхронизацию, роли, мультипользовательский доступ или полноценную бухгалтерию.</p></section>`;
-}
-
-function settingsFutureCard() {
-  return `<section class="card data-card settings-card"><p class="card-kicker">Позже</p><h2>Что появится позже</h2><p>Позже здесь можно будет добавить настройки профиля мастерской, единиц измерения, налоговых параметров и оформления документов — только после отдельного безопасного backend-решения.</p><p class="next-step">В этом PR эти настройки не создаются и не сохраняются.</p></section>`;
-}
+function settingsLoadErrorCard() { return `<section class="card error-card"><h2>Статус недоступен</h2><p>Не удалось загрузить статус настроек. Проверьте, что локальное приложение запущено.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-settings">Обновить</button></div></section>`; }
+function settingsFallbackCards() { return `<div class="settings-card-grid">${settingsStaticCard('Локальные данные', 'Приложение работает локально. Статус будет показан после подключения к backend.', [['Открыть резервные копии', 'Резервные копии'], ['Открыть экспорт', 'Экспорт'], ['Открыть импорт', 'Импорт']])}${settingsStaticCard('Помощь', 'Справка доступна без изменения данных.', [['Открыть помощь', 'Помощь']])}</div>`; }
+function settingsStaticCard(title: string, text: string, actions: Array<[string, NavigationSection]>) { return `<section class="card data-card settings-card"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p><div class="actions">${actions.map(([label, section]) => settingsAction(label, section)).join('')}</div></section>`; }
+function settingsAction(label: string, section: NavigationSection, primary = false) { return `<button class="${primary ? 'primary-action' : 'secondary-action'} compact" type="button" data-action="navigate-settings-target" data-section="${section}">${escapeHtml(label)}</button>`; }
+function settingsLocalDataCard(data: SettingsStatusResponse) { const local = data.local_data; return `<section class="card data-card settings-card"><p class="card-kicker">Безопасность данных</p><h2>Локальные данные</h2><p>${escapeHtml(local.message)}</p><div class="overview-grid compact-overview"><div class="metric-card"><span>Данные отдельно от кода</span><strong>${yesNo(local.user_data_separate_from_code)}</strong></div><div class="metric-card"><span>Интернет обязателен</span><strong>${yesNo(data.app.internet_required)}</strong></div><div class="metric-card"><span>Backup перед миграцией</span><strong>${yesNo(local.backup_before_migration_required)}</strong></div>${local.user_data_path_display ? `<div class="metric-card wide"><span>Папка данных</span><strong class="path-text">${escapeHtml(local.user_data_path_display)}</strong></div>` : ''}</div><div class="actions">${settingsAction('Открыть резервные копии', 'Резервные копии', true)}${settingsAction('Открыть экспорт', 'Экспорт')}${settingsAction('Открыть импорт', 'Импорт')}</div></section>`; }
+function settingsCapabilitiesSection(data: SettingsStatusResponse) { return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Готовые безопасные сценарии</p><h2>Возможности</h2><p>Кнопки из настроек только открывают существующие разделы и не запускают действия.</p></div><span class="pill info">${data.capabilities.length}</span></div><div class="settings-card-grid">${data.capabilities.map(settingsCapabilityCard).join('')}</div></section>`; }
+function settingsCapabilityCard(capability: SettingsCapability) { const section = sectionForRoute(capability.route); return `<article class="card data-card settings-card"><div class="section-heading"><h3>${escapeHtml(capability.title)}</h3><span class="pill ${capability.status === 'ready' ? 'success' : 'muted'}">${settingsCapabilityStatusLabel(capability.status)}</span></div><p>${escapeHtml(capability.description)}</p><p class="muted-text">Запускает действие из настроек: ${yesNo(capability.mutates_from_settings)}</p>${section ? `<div class="actions">${settingsAction(`Открыть ${labelForSection(section).toLowerCase()}`, section)}</div>` : ''}</article>`; }
+function settingsDecisionMatrix(data: SettingsStatusResponse) { return `<section class="card data-card"><p class="card-kicker">Решение на будущее</p><h2>Матрица будущих настроек</h2><p class="next-step">В PR95 настройки только описаны. Изменять их пока нельзя — это защищает расчеты, склад и исторические данные.</p>${data.setting_groups.map(settingsGroupMarkup).join('')}</section>`; }
+function settingsGroupMarkup(group: SettingsGroup) { return `<div class="settings-group"><h3>${escapeHtml(group.title)}</h3><p>${escapeHtml(group.description)}</p><div class="settings-definition-list">${group.items.map(settingsDefinitionMarkup).join('')}</div></div>`; }
+function settingsDefinitionMarkup(item: SettingsDefinition) { return `<article class="recipe-line settings-definition"><div class="section-heading"><div><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.description)}</p></div><span class="pill info">${settingsStatusLabel(item.status)}</span></div><p><strong>Влияет на расчеты:</strong> ${yesNo(item.affects_calculations)} · <strong>Влияет на историю:</strong> ${yesNo(item.affects_historical_data)} · <strong>Нужен backend-сервис:</strong> ${yesNo(item.requires_backend_service)}</p><p class="next-step">${escapeHtml(item.safety_note)}</p></article>`; }
+function settingsAboutSection(data: SettingsStatusResponse) { return `<section class="card data-card settings-about-card"><p class="card-kicker">О приложении</p><h2>${escapeHtml(data.app.product_name)}</h2><p>${escapeHtml(data.app.mode)} для рецептов, клиентов, заказов, склада, производства, отчетов и резервных копий.</p><div class="overview-grid compact-overview"><div class="metric-card"><span>Local-first</span><strong>${yesNo(data.app.local_first)}</strong></div><div class="metric-card"><span>Интернет обязателен</span><strong>${yesNo(data.app.internet_required)}</strong></div><div class="metric-card"><span>Репозиторий</span><strong>${escapeHtml(data.app.repository_name || 'Не указан')}</strong></div></div><p class="next-step">${escapeHtml(data.message)}</p></section>`; }
+function settingsBoundariesSection() { return `<section class="card data-card settings-card"><p class="card-kicker">Границы MVP</p><h2>Что не добавлено</h2><p>Нет редактируемых настроек, сохранения, миграций, профиля компании, налогов, валют, маржи, ролей, облака, интеграций, шаблонов, DOCX, счетов, этикеток, сертификатов, расписаний или AI/RAG.</p></section>`; }
+function sectionForRoute(route: string | null): NavigationSection | null { if (!route) return null; return navigationGroups.flatMap((group) => group.items).find((item) => item.path === route)?.section ?? null; }
+function yesNo(value: boolean) { return value ? 'Да' : 'Нет'; }
+function settingsStatusLabel(status: SettingStatus) { return ({ read_only_now: 'Только просмотр', safe_mvp_candidate: 'Кандидат для MVP', requires_backend_rules: 'Нужны backend-правила', v2_or_later: 'Позже', not_mvp: 'Не MVP' } as Record<SettingStatus, string>)[status]; }
+function settingsCapabilityStatusLabel(status: SettingsCapabilityStatus) { return ({ ready: 'Готово', available: 'Доступно', planned: 'Запланировано', disabled: 'Отключено' } as Record<SettingsCapabilityStatus, string>)[status]; }
 
 function helpPage() {
   const articles = filteredHelpArticles();
@@ -2553,6 +2557,7 @@ function apiIssues(payload: unknown): ApiIssue[] { if (!payload || typeof payloa
 function apiErrorFromPayload(payload: unknown, status: number): ApiErrorWithDetails { const error = new Error(apiErrorMessage(payload)) as ApiErrorWithDetails; error.status = status; error.issues = apiIssues(payload); return error; }
 function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'PATCH', body?: unknown): Promise<T> { return fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
 function apiForm<T>(url: string, method: 'POST', formData: FormData): Promise<T> { return fetch(url, { method, body: formData }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
+function getSettingsStatus(): Promise<SettingsStatusResponse> { return apiGet<SettingsStatusResponse>('/api/settings/status'); }
 function getReportsOverview(): Promise<OverviewReportResponse> { return apiGet<OverviewReportResponse>('/api/reports/overview'); }
 function getInventoryReport(): Promise<InventoryReportResponse> { return apiGet<InventoryReportResponse>('/api/reports/inventory'); }
 function getOrdersReport(): Promise<OrdersReportResponse> { return apiGet<OrdersReportResponse>('/api/reports/orders'); }

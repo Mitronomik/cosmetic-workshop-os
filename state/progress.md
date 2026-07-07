@@ -638,3 +638,10 @@ Import CSV/XLSX draft backend foundation.
 - Added a user-facing, read-only Settings foundation page for local data, backups, import/export, report documents, demo data, Help Center, About app, and future settings boundaries.
 - Settings actions only navigate to existing safe workflows and do not run backup/export/import/demo/report document creation actions.
 - No backend settings API, persistence, migrations, file creation, or business-data mutations were added.
+
+## PR95 — Settings data/status foundation
+- Added read-only `GET /api/settings/status` backend endpoint.
+- Added Settings status DTOs/service with local-first app status, user-data separation status, safe workflow capabilities, and Settings Decision Matrix.
+- Updated `/settings` to load backend status, render local data status, capability cards, future settings groups, app info, and MVP boundaries.
+- Settings actions remain navigation-only; no editable controls, persistence, migrations, file creation, or business-data mutations were added.
+- Added `docs/settings.md` and updated API/frontend docs.
