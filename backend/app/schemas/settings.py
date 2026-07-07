@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -6,6 +5,7 @@ from pydantic import BaseModel
 
 SettingsCapabilityStatus = Literal["ready", "available", "planned", "disabled"]
 SettingsDefinitionStatus = Literal[
+    "editable_now",
     "read_only_now",
     "safe_mvp_candidate",
     "requires_backend_rules",
@@ -56,7 +56,6 @@ class SettingsDefinition(BaseModel):
     id: str
     title: str
     status: SettingsDefinitionStatus
-    editable_in_pr95: bool
     affects_calculations: bool
     affects_historical_data: bool
     requires_backend_service: bool
@@ -78,7 +77,7 @@ class SettingsWarning(BaseModel):
 
 
 class SettingsStatusResponse(BaseModel):
-    generated_at: datetime
+    generated_at: str
     app: AppSettingsInfo
     local_data: LocalDataStatus
     capabilities: list[SettingsCapability]
@@ -86,3 +85,24 @@ class SettingsStatusResponse(BaseModel):
     editable_settings_available: bool
     message: str
     warnings: list[SettingsWarning]
+
+
+class WorkshopProfile(BaseModel):
+    workshop_name: str = ""
+    master_name: str = ""
+    workshop_contact_text: str = ""
+    workshop_note: str = ""
+
+
+class WorkshopProfileUpdateRequest(BaseModel):
+    workshop_name: str = ""
+    master_name: str = ""
+    workshop_contact_text: str = ""
+    workshop_note: str = ""
+
+
+class WorkshopProfileResponse(BaseModel):
+    profile: WorkshopProfile
+    is_configured: bool
+    updated_at: str | None = None
+    message: str

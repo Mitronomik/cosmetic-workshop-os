@@ -1,3 +1,5 @@
+import json
+import unicodedata
 from datetime import UTC, datetime
 
 from app.db.config import DatabaseConfig
@@ -12,6 +14,9 @@ from app.schemas.settings import (
     SettingsDefinitionStatus,
     SettingsGroup,
     SettingsStatusResponse,
+    WorkshopProfile,
+    WorkshopProfileResponse,
+    WorkshopProfileUpdateRequest,
 )
 
 
@@ -29,7 +34,7 @@ class SettingsService:
     def build_status(self) -> SettingsStatusResponse:
         user_paths = resolve_user_data_paths()
         return SettingsStatusResponse(
-            generated_at=datetime.now(UTC),
+            generated_at=datetime.now(UTC).isoformat(),
             app=AppSettingsInfo(
                 product_name=PRODUCT_NAME,
                 repository_name=REPOSITORY_NAME,
@@ -47,14 +52,81 @@ class SettingsService:
             ),
             capabilities=_capabilities(),
             setting_groups=_setting_groups(),
-            editable_settings_available=False,
-            message="Настройки пока доступны только для просмотра. Изменение настроек будет добавляться отдельными безопасными PR.",
+            editable_settings_available=True,
+            message="Профиль мастерской можно редактировать. Расчетные и исторически чувствительные настройки остаются только для просмотра.",
             warnings=[],
         )
 
 
 def get_settings_status() -> SettingsStatusResponse:
     return SettingsService().build_status()
+
+
+WORKSHOP_PROFILE_KEY = "workshop_profile"
+WORKSHOP_PROFILE_DESCRIPTION = "Workshop profile settings: display-only identity fields for Settings and future documents."
+PROFILE_LIMITS = {
+    "workshop_name": 120,
+    "master_name": 120,
+    "workshop_contact_text": 500,
+    "workshop_note": 500,
+}
+PROFILE_FIELD_LABELS = {
+    "workshop_name": "Название мастерской",
+    "master_name": "Имя мастера",
+    "workshop_contact_text": "Контактный текст",
+    "workshop_note": "Примечание",
+}
+
+
+class WorkshopProfileValidationError(ValueError):
+    pass
+
+
+class WorkshopProfileSettingsService:
+    def __init__(self, config: DatabaseConfig | None = None) -> None:
+        self.repository = SettingsRepository(config)
+
+    def get_profile(self) -> WorkshopProfileResponse:
+        setting = self.repository.get_setting(WORKSHOP_PROFILE_KEY)
+        profile = WorkshopProfile()
+        updated_at = setting.updated_at if setting else None
+        if setting and setting.value:
+            try:
+                profile = WorkshopProfile(**json.loads(setting.value))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                profile = WorkshopProfile()
+        return self._response(profile, updated_at, "Профиль мастерской загружен." if self._is_configured(profile) else "Профиль мастерской пока не заполнен.")
+
+    def update_profile(self, request: WorkshopProfileUpdateRequest) -> WorkshopProfileResponse:
+        profile = WorkshopProfile(
+            workshop_name=self._clean_value("workshop_name", request.workshop_name),
+            master_name=self._clean_value("master_name", request.master_name),
+            workshop_contact_text=self._clean_value("workshop_contact_text", request.workshop_contact_text),
+            workshop_note=self._clean_value("workshop_note", request.workshop_note),
+        )
+        self.repository.upsert_setting(
+            WORKSHOP_PROFILE_KEY,
+            json.dumps(profile.model_dump(), ensure_ascii=False),
+            "json",
+            WORKSHOP_PROFILE_DESCRIPTION,
+        )
+        return self.get_profile().model_copy(update={"message": "Профиль мастерской сохранен."})
+
+    def _response(self, profile: WorkshopProfile, updated_at: str | None, message: str) -> WorkshopProfileResponse:
+        return WorkshopProfileResponse(profile=profile, is_configured=self._is_configured(profile), updated_at=updated_at, message=message)
+
+    def _is_configured(self, profile: WorkshopProfile) -> bool:
+        return any(value.strip() for value in profile.model_dump().values())
+
+    def _clean_value(self, field: str, value: str | None) -> str:
+        text = unicodedata.normalize("NFKC", str(value or "")).strip()
+        if len(text) > PROFILE_LIMITS[field]:
+            raise WorkshopProfileValidationError(f"{PROFILE_FIELD_LABELS[field]} слишком длинное.")
+        allowed_controls = {"\n", "\r", "\t"} if field in {"workshop_contact_text", "workshop_note"} else set()
+        for char in text:
+            if unicodedata.category(char)[0] == "C" and char not in allowed_controls:
+                raise WorkshopProfileValidationError("Поле содержит недопустимые символы.")
+        return text
 
 
 def _capabilities() -> list[SettingsCapability]:
@@ -66,7 +138,7 @@ def _capabilities() -> list[SettingsCapability]:
         SettingsCapability(id="reports", title="Отчеты", status="ready", route="/reports", description="Отчеты читают данные и показывают сводки без изменения склада, заказов и производства.", mutates_from_settings=False),
         SettingsCapability(id="demo_data", title="Демо-данные", status="ready", route="/demo-data", description="Демо-данные устанавливаются и очищаются только через отдельный явный сценарий.", mutates_from_settings=False),
         SettingsCapability(id="help", title="Помощь", status="ready", route="/help", description="Справка объясняет рабочие сценарии и не меняет данные.", mutates_from_settings=False),
-        SettingsCapability(id="settings", title="Настройки", status="ready", route="/settings", description="Этот раздел показывает статус и матрицу будущих настроек без редактирования.", mutates_from_settings=False),
+        SettingsCapability(id="settings", title="Настройки", status="ready", route="/settings", description="Этот раздел показывает статус настроек и позволяет редактировать только профиль мастерской; расчетные настройки остаются закрыты.", mutates_from_settings=False),
     ]
 
 
@@ -75,7 +147,6 @@ def _definition(id: str, title: str, status: SettingsDefinitionStatus, descripti
         id=id,
         title=title,
         status=status,
-        editable_in_pr95=False,
         affects_calculations=affects_calculations,
         affects_historical_data=affects_historical_data,
         requires_backend_service=requires_backend_service,
@@ -87,9 +158,10 @@ def _definition(id: str, title: str, status: SettingsDefinitionStatus, descripti
 def _setting_groups() -> list[SettingsGroup]:
     return [
         SettingsGroup(id="safe_mvp_candidates", title="Безопасные кандидаты для MVP", description="Настройки, которые можно добавить позже без влияния на расчеты и историю, если у них появятся backend-владелец, валидация и тесты.", items=[
-            _definition("workshop_name", "Название мастерской", "safe_mvp_candidate", "Отображаемое название в интерфейсе и документах.", "Можно делать редактируемым только как отображаемый профиль, без изменения исторических записей."),
-            _definition("master_name", "Имя мастера", "safe_mvp_candidate", "Имя для будущих документов и подсказок.", "Должно применяться к новым документам или отображению, не переписывая историю."),
-            _definition("workshop_contact_text", "Контакты мастерской", "safe_mvp_candidate", "Короткий текст с телефоном, адресом или способом связи.", "Не должен попадать в расчеты или складские операции."),
+            _definition("workshop_name", "Название мастерской", "editable_now", "Отображаемое название в интерфейсе и документах.", "Можно делать редактируемым только как отображаемый профиль, без изменения исторических записей."),
+            _definition("master_name", "Имя мастера", "editable_now", "Имя для будущих документов и подсказок.", "Должно применяться к новым документам или отображению, не переписывая историю."),
+            _definition("workshop_contact_text", "Контакты мастерской", "editable_now", "Короткий текст с телефоном, адресом или способом связи.", "Не должен попадать в расчеты или складские операции."),
+            _definition("workshop_note", "Краткое описание / примечание", "editable_now", "Короткое описание мастерской для будущего отображения.", "Не влияет на расчеты, склад или исторические записи."),
             _definition("default_report_document_format", "Формат документа отчета по умолчанию", "safe_mvp_candidate", "Будущий выбор Markdown или PDF при создании отчетного документа.", "Создание файла всё равно должно оставаться явным действием пользователя."),
             _definition("backup_reminder_hint", "Подсказка о резервных копиях", "safe_mvp_candidate", "Будущая пользовательская подсказка о том, когда напоминать про backup.", "Не должна автоматически создавать файлы или блокировать работу."),
             _definition("hide_demo_hints_after_onboarding", "Скрывать подсказки про демо после онбординга", "safe_mvp_candidate", "Будущий UI-флаг для уменьшения подсказок после знакомства с приложением.", "Не должен устанавливать или очищать демо-данные."),
