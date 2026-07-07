@@ -1577,6 +1577,7 @@ The dashboard keeps the existing single onboarding/checklist card and refreshes 
 
 ## PR93 — report document open/download actions
 - `/report-documents` now shows read-only actions for generated files: `Открыть PDF`, `Скачать PDF`, and `Скачать Markdown`.
+- `/report-documents` tells the user that a filled Workshop profile from Settings is included in new Markdown/PDF summaries; profile editing stays on `/settings`.
 - Actions use `/api/report-documents/{document_id}/download` and do not expose absolute local file paths or create object URLs in frontend memory.
 - Empty state now tells the user to create a Markdown or PDF workshop summary manually.
 - `/reports` still only navigates with `Открыть документы отчетов`; it does not generate Markdown/PDF files.

@@ -1,21 +1,22 @@
 # Report documents
 
-The report document feature now includes the PR89 backend foundation, the PR90 frontend UI, and the PR92 PDF generation foundation for explicit report document generation.
+The report document feature includes the backend/API foundation, frontend UI, PDF generation foundation, safe open/download workflow, and PR98 Workshop profile integration for explicit report document generation.
 
 ## Scope
 
 The first supported document is **Сводка мастерской** (`workshop_overview`). It is generated from the backend `ReportsService` overview DTO and rendered as a human-readable Markdown or PDF file from the same canonical content.
 
-Supported after PR92:
+Supported now:
 
 - Markdown (`markdown`, `.md`);
 - PDF (`pdf`, `.pdf`) when the backend finds a safe local Cyrillic-capable font;
 - explicit backend/API document creation;
 - metadata sidecar JSON files;
 - listing generated document metadata;
-- safe read-only open/download access for known generated Markdown/PDF files through `/api/report-documents/{document_id}/download`.
+- safe read-only open/download access for known generated Markdown/PDF files through `/api/report-documents/{document_id}/download`;
+- Workshop profile display near the top of newly generated overview documents when Settings profile fields are configured.
 
-Not supported after PR92:
+Not supported:
 
 - DOCX;
 - charts;
@@ -29,11 +30,14 @@ Report documents are created only by an explicit `POST /api/report-documents/rep
 Generation:
 
 - reads report data from backend `ReportsService`;
+- reads display-only Workshop profile fields from Settings for newly generated documents;
 - does not recalculate core report values in the renderer;
+- does not let Workshop profile values affect calculations, stock, costs, taxes, margins, reports, or historical records;
 - does not mutate ingredients, lots, packaging, stock movements, recipes, clients, orders, production batches, alerts, purchase suggestions, imports, demo data, or audit logs;
 - does not create backup files;
 - does not create JSON export snapshots;
 - does not regenerate alerts or purchase suggestions;
+- does not mutate existing generated Markdown/PDF files;
 - writes only the requested Markdown/PDF document and its metadata sidecar.
 
 ## Storage
@@ -83,6 +87,7 @@ Markdown and PDF documents are Russian and user-readable. They include:
 
 - creation time;
 - source report generation time;
+- configured Workshop profile fields (`Мастерская`, `Мастер`, `Контакты`, `Примечание`) when non-empty;
 - inventory summary;
 - order summary;
 - production summary;
@@ -91,7 +96,7 @@ Markdown and PDF documents are Russian and user-readable. They include:
 - warnings and incomplete-data notes;
 - limitations explaining that the document is not accounting or tax reporting.
 
-If report data is missing, the document renders values as `не рассчитано` or `нет данных` instead of inventing values. Tax is not invented or calculated by the document renderer.
+If report data is missing, the document renders values as `не рассчитано` or `нет данных` instead of inventing values. Tax is not invented or calculated by the document renderer. Profile values are rendered as plain document text, not as HTML, links, scripts, images, logos, or editable templates.
 
 ## PDF generation
 
@@ -133,3 +138,10 @@ DOCX generation, preview, Markdown/PDF editors, arbitrary file browsing, and pol
 - Added `/report-documents` actions to open/download PDF files and download Markdown files through the backend endpoint.
 - Kept document creation explicit and `/reports` navigation-only.
 - DOCX and arbitrary file browsing remain unsupported.
+
+## PR98 — Workshop profile integration
+- Newly generated Markdown/PDF `workshop_overview` documents include the saved Workshop profile near the top when at least one profile field is configured.
+- Empty profile fields are omitted, and an entirely empty profile omits the whole profile section.
+- Existing generated documents and sidecar metadata are not rewritten. Full profile values are not stored in document metadata.
+- Profile text is display metadata only and does not change report calculations or business data.
+- No template editor, logo upload, DOCX, invoices, labels, certificates, tax/currency/margin/unit settings, stock threshold settings, or expiry settings were added.

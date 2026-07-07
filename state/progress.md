@@ -1,14 +1,17 @@
 # Progress
 
 ## Current phase
-After PR94 — Settings UI foundation complete; preparing the next roadmap slice.
+After PR98 — Workshop profile integration with report documents complete; preparing the next focused polish slice.
 
 ## Current next step
-- PR94 is complete: `/settings` / «Настройки» is a ready user-facing route with a read-only, navigation-only foundation for local data safety, backups, import/export, report documents, demo data, Help Center, and app information. No backend settings persistence/API, migrations, file creation, or business-data mutations were added.
-- PR90 is complete: `/report-documents` / «Документы отчетов» is available under «Данные и настройки», and Markdown «Сводка мастерской» report documents are created only by explicit user action.
-- Completed foundations now include local-first app shell, SQLite persistence and migrations, user data directory, local launcher, onboarding, ingredients/components, ingredient lots, ingredient stock movements, packaging/tare, packaging stock movements, inventory read models and UI, recipe templates, recipe versions, backend recipe calculation, recipe UI, clients, client recipes, client recipe composition editing/restoring, client wishes and append-only feedback, orders backend and UI, production readiness backend and UI, production confirmation backend and UI, immutable production history, alerts backend and UI, purchase suggestions backend and UI, operational dashboard, manual backup API and UI, local JSON export API and UI, CSV/XLSX import draft backend and UI, import validation/readiness/apply flow for supported safe catalog targets, demo data backend and UI, refreshed onboarding checklist, static in-app Help Center, reports backend and UI, Markdown report document backend, report document UI, and sidecar cleanup hardening.
-- Next recommended roadmap slice: **PR95 — Settings data/status foundation**, unless PR94 browser smoke finds Settings UI issues. If smoke finds issues, make PR95 a Settings UI follow-up fixes PR.
-- Keep DOCX generation, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and business-record mutations out of scope unless explicitly requested.
+- Workshop profile settings are implemented via backend-owned `GET /api/settings/workshop-profile` and `PUT /api/settings/workshop-profile`, persisted in `app_settings`, and editable from `/settings`.
+- Newly generated Markdown/PDF `Сводка мастерской` report documents now include configured Workshop profile fields near the top.
+- Empty profile fields are omitted; an empty profile omits the whole profile section.
+- Existing generated documents are not mutated.
+- Settings capability/copy was updated so it no longer implies all Settings are read-only.
+- Calculation-sensitive settings remain out of scope. No tax/currency/margin/unit/stock-threshold/expiry settings were added.
+- Next recommended roadmap slice: **PR99 — Workshop profile display polish / app header integration**, unless PR98 smoke finds integration issues. If smoke finds issues, make PR99 a report document integration follow-up fixes PR.
+- Keep DOCX generation, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, migration changes, and business-record mutations out of scope unless explicitly requested.
 
 ## Done
 - Architecture draft
@@ -655,3 +658,12 @@ Import CSV/XLSX draft backend foundation.
 - Added `GET /api/settings/workshop-profile` and `PUT /api/settings/workshop-profile`, using the existing `app_settings` storage with grouped JSON key `workshop_profile` and no migration.
 - Updated `/settings` with an explicit «Профиль мастерской» form, save/cancel states, validation display, and safety copy.
 - Updated Settings status so only workshop profile fields are `editable_now`; calculation-sensitive settings remain non-editable.
+
+## PR98 — Workshop profile integration with report documents
+- Report document generation now reads the saved Workshop profile and includes configured fields in new Markdown/PDF workshop overview documents.
+- Profile rendering is backend-owned, plain-text/Markdown-safe, and shared by Markdown/PDF content lines.
+- Empty/default profiles continue to generate documents without an empty profile section.
+- Existing generated documents and metadata are not rewritten.
+- Settings and report-document UI copy now reflects that Workshop profile is editable and added to new summaries.
+- Docs/state were cleaned up from stale PR94/PR95/PR96/PR97 wording.
+- No report calculations, business records, tax/currency/margin/unit/stock-threshold/expiry settings, document templates, logo upload, DOCX, invoices, labels, or certificates were added.

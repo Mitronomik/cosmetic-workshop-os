@@ -114,6 +114,34 @@ def test_report_document_api_endpoints_create_metadata_and_are_safe(monkeypatch,
     assert list((user_data / "exports").glob("*.json")) == []
 
 
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_report_document_api_uses_saved_workshop_profile(monkeypatch, tmp_path):
+    db = tmp_path / "report-documents-profile-api.sqlite"
+    user_data = tmp_path / "user-data"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data))
+    initialize_database(DatabaseConfig(path=db))
+    client = TestClient(create_app())
+
+    saved = client.put("/api/settings/workshop-profile", json={"workshop_name": "Мастерская API", "master_name": "Мария"})
+    assert saved.status_code == 200
+
+    created = client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+    assert created.status_code == 201
+    document = created.json()["document"]
+    text = (user_data / "exports" / "report-documents" / document["filename"]).read_text(encoding="utf-8")
+    assert "## Профиль мастерской" in text
+    assert "- Мастерская: Мастерская API" in text
+    assert "- Мастер: Мария" in text
+
+    client.put("/api/settings/workshop-profile", json={})
+    empty = client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+    assert empty.status_code == 201
+    empty_document = empty.json()["document"]
+    empty_text = (user_data / "exports" / "report-documents" / empty_document["filename"]).read_text(encoding="utf-8")
+    assert "## Профиль мастерской" not in empty_text
+
 def test_report_document_routes_are_registered():
     routes = {(route.path, tuple(sorted(route.methods))) for route in create_app().routes if hasattr(route, "methods")}
     assert ("/api/report-documents/status", ("GET",)) in routes

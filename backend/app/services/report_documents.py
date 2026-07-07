@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Literal
 import struct
 
 from app.db.config import DatabaseConfig, get_database_config
@@ -16,7 +16,9 @@ from app.schemas.report_documents import (
     ReportOverviewDocumentCreateRequest,
 )
 from app.schemas.reports import OverviewReportResponse, ReportWarning
+from app.schemas.settings import WorkshopProfile
 from app.services.reports import ReportsService
+from app.services.settings import WorkshopProfileSettingsService
 
 
 class ReportDocumentError(RuntimeError):
@@ -57,6 +59,7 @@ class ReportDocumentService:
         self.config = config or get_database_config()
         self.documents_dir = documents_dir or resolve_report_documents_dir(self.config)
         self.reports_service = ReportsService(self.config)
+        self.workshop_profile_service = WorkshopProfileSettingsService(self.config)
 
     def status(self) -> ReportDocumentStatusResponse:
         return ReportDocumentStatusResponse(
@@ -107,9 +110,17 @@ class ReportDocumentService:
             raise UnsupportedReportDocumentFormatError("Этот формат пока не поддерживается. Сейчас доступны: Markdown и PDF.")
         reason = sanitize_reason(request.reason)
         report = self.reports_service.get_overview()
+        workshop_profile = self.workshop_profile_service.get_profile().profile
         created_at = datetime.now(UTC)
         base_document_id = _document_id(created_at)
-        content_lines = _workshop_overview_document_lines(report, created_at=created_at, reason=reason)
+        profile_rendering_mode: ProfileRenderingMode = "plain" if request.format == PDF_FORMAT else "markdown"
+        content_lines = _workshop_overview_document_lines(
+            report,
+            created_at=created_at,
+            reason=reason,
+            workshop_profile=workshop_profile,
+            profile_rendering_mode=profile_rendering_mode,
+        )
 
         self.documents_dir.mkdir(parents=True, exist_ok=True)
         document_id, document_path, metadata_path = _unique_document_paths(self.documents_dir, base_document_id, request.format)
@@ -261,7 +272,17 @@ def _warnings_lines(warnings: list[ReportWarning]) -> list[str]:
     return [f"- {warning.message}" + (f" (`{warning.code}`)" if warning.code else "") for warning in warnings]
 
 
-def _workshop_overview_document_lines(report: OverviewReportResponse, *, created_at: datetime, reason: str | None = None) -> list[str]:
+ProfileRenderingMode = Literal["markdown", "plain"]
+
+
+def _workshop_overview_document_lines(
+    report: OverviewReportResponse,
+    *,
+    created_at: datetime,
+    reason: str | None = None,
+    workshop_profile: WorkshopProfile | None = None,
+    profile_rendering_mode: ProfileRenderingMode = "markdown",
+) -> list[str]:
     inventory = report.inventory_summary
     orders = report.orders_summary
     production = report.production_summary
@@ -276,6 +297,9 @@ def _workshop_overview_document_lines(report: OverviewReportResponse, *, created
     ]
     if reason:
         lines.append(f"- Причина создания: {reason}")
+    profile_lines = _workshop_profile_lines(workshop_profile, rendering_mode=profile_rendering_mode)
+    if profile_lines:
+        lines += ["", "## Профиль мастерской", *profile_lines]
     lines += [
         "",
         "## Краткая сводка",
@@ -343,6 +367,29 @@ def _workshop_overview_document_lines(report: OverviewReportResponse, *, created
         "- Markdown и PDF создаются вручную; DOCX пока не поддерживается.",
         "",
     ]
+    return lines
+
+def _plain_document_text(value: str) -> str:
+    return " ".join(str(value or "").split())
+
+
+def _markdown_safe_text(value: str) -> str:
+    text = _plain_document_text(value)
+    replacements = {"\\": "\\\\", "`": "\\`", "*": "\\*", "_": "\\_", "{": "\\{", "}": "\\}", "[": "\\[", "]": "\\]", "(": "\\(", ")": "\\)", "#": "\\#", "+": "\\+", "-": "\\-", ".": "\\.", "!": "\\!", "|": "\\|", ">": "\\>", "<": "&lt;"}
+    return "".join(replacements.get(character, character) for character in text)
+
+
+def _workshop_profile_lines(profile: WorkshopProfile | None, *, rendering_mode: ProfileRenderingMode) -> list[str]:
+    if profile is None:
+        return []
+    formatter = _markdown_safe_text if rendering_mode == "markdown" else _plain_document_text
+    fields = [
+        ("Мастерская", profile.workshop_name),
+        ("Мастер", profile.master_name),
+        ("Контакты", profile.workshop_contact_text),
+        ("Примечание", profile.workshop_note),
+    ]
+    lines = [f"- {label}: {formatter(value)}" for label, value in fields if value and value.strip()]
     return lines
 
 
