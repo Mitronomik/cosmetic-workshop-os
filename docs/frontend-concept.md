@@ -1553,7 +1553,7 @@ The dashboard keeps the existing single onboarding/checklist card and refreshes 
 
 ## PR90 — frontend report document export UI
 - Added `/report-documents` / «Документы отчетов» in the «Данные и настройки» navigation group.
-- The page consumes only PR89 endpoints: status, list, and explicit Markdown overview creation.
+- The page consumes only the implemented report document endpoints: status, list, and explicit Markdown overview creation.
 - Page load and refresh are read-only; documents are created only by the «Создать Markdown-документ» action.
 - Markdown is the only exposed format. PDF/DOCX are described as future work and are not actionable.
 - The Reports page now has a contextual link to the document page; it only navigates and does not create files.

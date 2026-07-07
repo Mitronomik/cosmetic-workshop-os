@@ -1,13 +1,13 @@
 # Progress
 
 ## Current phase
-After PR73 — manual backup API foundation complete; preparing Backup UI
+After PR90 — report document export UI and sidecar cleanup hardening complete; preparing the next roadmap slice.
 
 ## Current next step
-- PR73 Manual Backup API foundation is complete.
-- Completed foundations now include orders, production readiness, production confirmation, production history, alerts, purchase suggestions, the operational dashboard, and backend manual backup status/list/create endpoints.
-- Next recommended roadmap slice: PR74 — Backup UI.
-- Keep restore, scheduled backups, cloud sync, import/export expansion, mobile, OCR, auth/roles, advanced analytics, scheduler/polling, production reversal, and automatic background jobs out of scope unless explicitly requested.
+- PR90 is complete: `/report-documents` / «Документы отчетов» is available under «Данные и настройки», and Markdown «Сводка мастерской» report documents are created only by explicit user action.
+- Completed foundations now include local-first app shell, SQLite persistence and migrations, user data directory, local launcher, onboarding, ingredients/components, ingredient lots, ingredient stock movements, packaging/tare, packaging stock movements, inventory read models and UI, recipe templates, recipe versions, backend recipe calculation, recipe UI, clients, client recipes, client recipe composition editing/restoring, client wishes and append-only feedback, orders backend and UI, production readiness backend and UI, production confirmation backend and UI, immutable production history, alerts backend and UI, purchase suggestions backend and UI, operational dashboard, manual backup API and UI, local JSON export API and UI, CSV/XLSX import draft backend and UI, import validation/readiness/apply flow for supported safe catalog targets, demo data backend and UI, refreshed onboarding checklist, static in-app Help Center, reports backend and UI, Markdown report document backend, report document UI, and sidecar cleanup hardening.
+- Next recommended roadmap slice: **Next implementation PR — Report PDF generation foundation**, unless PR90 local browser smoke finds UI issues. If smoke finds issues, make the next implementation PR a report document UI follow-up fixes PR before adding PDF.
+- Keep DOCX generation, download/open-file endpoints, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and business-record mutations out of scope unless explicitly requested.
 
 ## Done
 - Architecture draft
@@ -78,14 +78,15 @@ After PR73 — manual backup API foundation complete; preparing Backup UI
 
 
 ## In progress
-- Preparing the next scoped PR: PR74 — Backup UI.
+- Preparing the next scoped implementation PR: Report PDF generation foundation, unless PR90 local browser smoke finds report document UI issues that should be fixed first.
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- Implement Orders backend foundation as the next roadmap-scoped task.
-- Keep production readiness/confirmation, automatic stock write-off, production batches, alerts, purchase suggestions, import/export, backup/restore UI, final packaging, cloud, mobile, OCR, auth, and roles out of scope unless explicitly requested.
+- Next implementation PR — Report PDF generation foundation is the recommended next roadmap-scoped task.
+- If PR90 local browser smoke finds report document UI issues, fix those issues in the next implementation PR before adding PDF.
+- Keep DOCX, download/open-file endpoints, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and unrelated business behavior out of scope unless explicitly requested.
 
 ## Important notes
 - PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.
@@ -411,7 +412,7 @@ After PR73 — manual backup API foundation complete; preparing Backup UI
 - Kept backend Decimal/API payload contracts unchanged by continuing to submit dot-normalized decimal strings and adding no backend endpoints, migrations, or business-logic changes.
 - No stock/order/production side effects were added beyond existing explicit order create/edit/cancel/archive actions.
 
-## PR74 — Backup UI
+## PR74 Backup UI
 - Added a frontend `Резервные копии` workspace at `/backups` that consumes PR73 backup status/list/manual-create endpoints only.
 - Added navigation and dashboard reminder link to the backup workspace.
 - Added status cards for database path/existence/size, backup directory path/existence, backup count, and latest backup.

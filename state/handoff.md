@@ -7,7 +7,7 @@ PR90 — Report document export UI + sidecar cleanup hardening.
 ## What changed
 
 - Added `/report-documents` / «Документы отчетов» to the frontend navigation under «Данные и настройки».
-- The new page calls only PR89 endpoints:
+- The new page calls only the implemented report document endpoints:
   - `GET /api/report-documents/status`
   - `GET /api/report-documents`
   - `POST /api/report-documents/reports/overview`
@@ -32,4 +32,4 @@ Manual browser smoke was not run in this non-interactive environment. Recommende
 
 ## Next recommended PR
 
-PR91 — Report PDF generation foundation, unless smoke finds UI issues. If smoke finds issues, do PR91 as report document UI follow-up fixes first.
+Next implementation PR — Report PDF generation foundation, unless smoke finds UI issues. If smoke finds issues, fix the report document UI in the next implementation PR before adding PDF.

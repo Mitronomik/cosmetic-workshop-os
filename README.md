@@ -22,9 +22,9 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current state: after PR58, the app has a local-first backend/API foundation with SQLite startup/migration safety, onboarding, stock foundations for ingredients/lots/movements and packaging, inventory reads, recipes with versions and calculation, catalog organization UX, clients, first-class client recipes with editable copied composition, ClientRecipe restore, and client wishes plus append-only feedback UI.
+Current state: after PR90, the app has a local-first backend/API foundation with SQLite startup/migration safety, onboarding, stock foundations for ingredients/lots/movements and packaging, inventory reads and UI, recipes with versions and backend calculation, recipe UI, clients, first-class client recipes with editable/restorable composition, client wishes and append-only feedback, orders backend/UI, production readiness and confirmation backend/UI, immutable production history, alerts backend/UI, purchase suggestions backend/UI, operational dashboard, manual backup API/UI, local JSON export API/UI, CSV/XLSX import drafts with validation/readiness/apply flow for supported safe catalog targets, demo data backend/UI, refreshed onboarding checklist, static in-app Help Center, reports backend/UI, and explicit Markdown report document generation backend/UI.
 
-Next recommended roadmap task: Orders backend foundation. Orders, production readiness/confirmation, automatic stock write-off, alerts, purchase suggestions, import/export, backup/restore UI, and final packaging remain future roadmap scope.
+Next recommended roadmap task: Next implementation PR — Report PDF generation foundation, unless PR90 local browser smoke finds report document UI issues. If smoke finds issues, fix the report document UI in the next implementation PR before adding PDF. Markdown is the only report document format in the MVP today; PDF/DOCX, download/open-file endpoints, automatic report generation, scheduled jobs, cloud sync, AI/RAG, document preview, and template editing remain future scope unless explicitly requested.
 
 ## Developer commands
 
