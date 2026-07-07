@@ -2,34 +2,31 @@
 
 ## Last completed work
 
-PR90 — Report document export UI + sidecar cleanup hardening.
+PR92 — Report PDF generation foundation + Reports link copy fix.
 
 ## What changed
 
-- Added `/report-documents` / «Документы отчетов» to the frontend navigation under «Данные и настройки».
-- The new page calls only the implemented report document endpoints:
-  - `GET /api/report-documents/status`
-  - `GET /api/report-documents`
-  - `POST /api/report-documents/reports/overview`
-- Page load and refresh are read-only. Document creation is explicit and sends `format: "markdown"` plus an optional reason.
-- The UI states clearly that Markdown is the only MVP format and PDF/DOCX are future work.
-- The documents list shows metadata returned by the backend and does not preview raw file content or offer fake download/open actions.
-- `/reports` now includes a contextual «Создать документ отчета» navigation action only; it does not create a document.
-- `ReportDocumentService` cleanup now tracks current-operation document/metadata creation separately and only unlinks metadata when this operation actually created the sidecar.
-- Added a regression test for metadata write failure before final sidecar creation; it verifies safe error, Markdown cleanup, no sidecar unlink attempt, and no business-table mutation.
+- Extended the existing report document backend pipeline to accept `format: "pdf"` for `POST /api/report-documents/reports/overview`.
+- Markdown remains supported; DOCX remains rejected safely.
+- PDF generation uses backend `ReportsService.get_overview()` data and the same operational sections as Markdown.
+- Generated PDF files and JSON metadata sidecars are written only under the safe `exports/report-documents` user-data area.
+- `GET /api/report-documents/status` advertises `pdf` only when the backend can find a local Cyrillic-capable font.
+- `/report-documents` can explicitly create Markdown or PDF when backend status allows it; page load/list refresh remain read-only.
+- `/reports` now says «Открыть документы отчетов» for the navigation-only report documents link.
 
 ## Manual smoke
 
-Manual browser smoke was not run in this non-interactive environment. Recommended local smoke:
+Manual browser/API smoke was not run in this non-interactive session. Recommended local smoke:
 1. Start backend and frontend.
-2. Open `/report-documents`.
-3. Confirm status/list load and no document appears merely from page load.
-4. Enter `еженедельная проверка` and click «Создать Markdown-документ».
-5. Confirm the button disables while creating, success appears, and the new document appears in the list.
-6. Refresh the list and confirm the document remains listed.
-7. Open `/reports` and confirm «Создать документ отчета» only navigates to `/report-documents`.
-8. Confirm exports/backups/imports/demo/help pages still load and no backup/export/import/demo action is triggered.
+2. Open `/reports` and confirm the button says «Открыть документы отчетов».
+3. Click it and confirm it only navigates to `/report-documents` and does not create a file.
+4. Confirm status/list load on `/report-documents`.
+5. Create Markdown and PDF documents explicitly.
+6. Confirm both appear in the list with metadata.
+7. Confirm the PDF file exists under `exports/report-documents` and Russian text is readable in a local PDF viewer.
+8. Send `{ "format": "docx" }` to the create endpoint and confirm it is rejected safely.
+9. Confirm no backup/export/import/demo action is triggered and business data row counts do not change.
 
 ## Next recommended PR
 
-Next implementation PR — Report PDF generation foundation, unless smoke finds UI issues. If smoke finds issues, fix the report document UI in the next implementation PR before adding PDF.
+PR93 — Report PDF UI polish / download-open workflow, unless smoke finds issues. If smoke finds issues, use PR93 for focused PDF generation follow-up fixes.

@@ -26,7 +26,7 @@ def test_report_document_api_endpoints_create_metadata_and_are_safe(monkeypatch,
     client = TestClient(create_app())
     status = client.get("/api/report-documents/status")
     assert status.status_code == 200
-    assert status.json()["available_formats"] == ["markdown"]
+    assert status.json()["available_formats"] == ["markdown", "pdf"]
     assert status.json()["documents_count"] == 0
 
     listing = client.get("/api/report-documents")
@@ -47,8 +47,19 @@ def test_report_document_api_endpoints_create_metadata_and_are_safe(monkeypatch,
     assert after_listing.json()["items"][0]["id"] == document["id"]
 
     pdf = client.post("/api/report-documents/reports/overview", json={"format": "pdf"})
-    assert pdf.status_code == 422
-    assert "Сейчас доступен только Markdown" in pdf.json()["detail"]
+    assert pdf.status_code == 201
+    pdf_document = pdf.json()["document"]
+    assert pdf_document["format"] == "pdf"
+    assert pdf_document["filename"].endswith(".pdf")
+    assert (user_data / "exports" / "report-documents" / pdf_document["filename"]).read_bytes().startswith(b"%PDF-")
+    pdf_listing = client.get("/api/report-documents")
+    assert pdf_listing.status_code == 200
+    assert pdf_listing.json()["total"] == 2
+    assert any(item["id"] == pdf_document["id"] and item["format"] == "pdf" for item in pdf_listing.json()["items"])
+
+    docx = client.post("/api/report-documents/reports/overview", json={"format": "docx"})
+    assert docx.status_code == 422
+    assert "DOCX пока не поддерживается" in docx.json()["detail"]
 
     suspicious = client.post("/api/report-documents/reports/overview", json={"format": "markdown", "reason": "../../bad"})
     assert suspicious.status_code == 201

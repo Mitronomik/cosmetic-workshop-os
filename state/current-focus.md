@@ -1,10 +1,10 @@
 # Current focus
 
-PR90 is implemented: frontend report document export UI plus the PR89 metadata sidecar cleanup hardening.
+PR92 is implemented: Report PDF generation foundation plus the `/reports` navigation copy fix.
 
-The next implementation PR should be **Report PDF generation foundation**, unless PR90 browser smoke or release testing finds issues in the new report document UI. If smoke finds issues, the next implementation PR should fix the report document UI before PDF.
+The next implementation PR should be **PR93 — Report PDF UI polish / download-open workflow**, unless PR92 smoke finds PDF generation or report document UI issues. If smoke finds issues, the next PR should be **PR93 — Report PDF generation follow-up fixes**.
 
 Scope guard for the next session:
-- Do not add PDF/DOCX unless the next task explicitly selects the PDF foundation.
-- Keep download/open-file endpoints, automatic generation, scheduled jobs, cloud sync, AI/RAG, document template editing, and document preview out of scope unless explicitly requested.
+- Do not add DOCX, invoices, acts, labels, certificates, recipe technical cards, accounting/tax reports, charts, scheduled jobs, cloud sync, AI/RAG, or template editing.
+- Do not create PDFs automatically from page load or from `/reports`.
 - Keep report values backend-owned; frontend should only display backend responses.

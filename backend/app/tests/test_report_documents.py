@@ -31,7 +31,7 @@ def service(tmp_path):
 def test_status_and_empty_list_work_on_empty_db(tmp_path):
     _c, svc = service(tmp_path)
     status = svc.status()
-    assert status.available_formats == ["markdown"]
+    assert status.available_formats == ["markdown", "pdf"]
     assert status.available_document_types == ["workshop_overview"]
     assert status.can_create is True
     assert status.documents_count == 0
@@ -100,10 +100,38 @@ def test_generated_markdown_includes_report_warnings_and_finance_limits(tmp_path
     assert "Неполных записей для расчета маржи: 1" in text
 
 
-@pytest.mark.parametrize("fmt", ["pdf", "docx"])
-def test_unsupported_formats_are_rejected(tmp_path, fmt):
+def test_create_overview_pdf_document_on_empty_db(tmp_path):
+    c, svc = service(tmp_path)
+    before = counts(c)
+    response = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf", reason="weekly_check"))
+    metadata = response.document
+    pdf_path = svc.documents_dir / metadata.filename
+    json_path = svc.documents_dir / metadata.metadata_filename
+
+    assert metadata.format == "pdf"
+    assert metadata.filename.endswith(".pdf")
+    assert metadata.metadata_filename.endswith(".json")
+    assert metadata.source == "reports.overview"
+    assert metadata.source_generated_at is not None
+    assert metadata.size_bytes > 100
+    assert pdf_path.exists()
+    assert json_path.exists()
+    assert pdf_path.read_bytes().startswith(b"%PDF-")
+    assert counts(c) == before
+
+    sidecar = json.loads(json_path.read_text(encoding="utf-8"))
+    assert sidecar["format"] == "pdf"
+    assert sidecar["filename"] == metadata.filename
+    assert sidecar["warnings_count"] == metadata.warnings_count
+    listing = svc.list_documents()
+    assert listing.total == 1
+    assert listing.items[0].format == "pdf"
+
+
+@pytest.mark.parametrize("fmt, message", [("docx", "DOCX пока не поддерживается"), ("xlsx", "Markdown и PDF")])
+def test_unsupported_formats_are_rejected(tmp_path, fmt, message):
     _c, svc = service(tmp_path)
-    with pytest.raises(UnsupportedReportDocumentFormatError, match="Markdown"):
+    with pytest.raises(UnsupportedReportDocumentFormatError, match=message):
         svc.create_overview_document(ReportOverviewDocumentCreateRequest(format=fmt))
 
 
@@ -202,7 +230,7 @@ def test_metadata_failure_before_sidecar_creation_does_not_unlink_uncreated_side
 def test_document_generation_only_writes_report_document_files(tmp_path):
     c, svc = service(tmp_path)
     before = counts(c)
-    svc.create_overview_document(ReportOverviewDocumentCreateRequest())
+    svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))
     assert counts(c) == before
     assert not (tmp_path / "backups").exists()
     export_root = tmp_path / "exports"
@@ -226,3 +254,33 @@ def test_document_generation_uses_reports_service_output(tmp_path, monkeypatch):
     monkeypatch.setattr(svc.reports_service, "get_overview", wrapped)
     svc.create_overview_document(ReportOverviewDocumentCreateRequest())
     assert called is True
+
+
+def test_pdf_metadata_write_failure_removes_created_pdf_only(tmp_path, monkeypatch):
+    _c, svc = service(tmp_path)
+    existing = svc.documents_dir / "keep.pdf"
+    svc.documents_dir.mkdir(parents=True)
+    existing.write_bytes(b"%PDF-existing")
+    original_write = report_documents_module._write_text_exclusive
+
+    def flaky_write(path: Path, text: str) -> None:
+        if path.suffix == ".json":
+            raise OSError("metadata write failed")
+        original_write(path, text)
+
+    monkeypatch.setattr(report_documents_module, "_write_text_exclusive", flaky_write)
+
+    with pytest.raises(ReportDocumentError, match="PDF-документ"):
+        svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))
+
+    assert existing.exists()
+    assert [p.name for p in svc.documents_dir.glob("*.pdf")] == ["keep.pdf"]
+    assert list(svc.documents_dir.glob("*.json")) == []
+
+
+def test_status_omits_pdf_when_generation_is_unavailable(tmp_path, monkeypatch):
+    _c, svc = service(tmp_path)
+    monkeypatch.setattr(report_documents_module, "_find_cyrillic_font_path", lambda: None)
+    assert svc.status().available_formats == ["markdown"]
+    with pytest.raises(UnsupportedReportDocumentFormatError):
+        svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))

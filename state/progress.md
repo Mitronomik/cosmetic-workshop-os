@@ -603,3 +603,12 @@ Import CSV/XLSX draft backend foundation.
 - Page load and list refresh remain read-only; PDF/DOCX are documented in the UI as future work and no unsupported format actions are shown.
 - Added a Reports page contextual navigation link to the document export UI; it does not create documents from `/reports`.
 - Hardened `ReportDocumentService` cleanup so the metadata sidecar is unlinked only if this operation actually created it, while preserving original safe errors.
+
+## PR92 — Report PDF generation foundation
+- Added explicit PDF generation for workshop overview report documents through the existing `/api/report-documents/reports/overview` pipeline.
+- Markdown remains supported; DOCX remains unsupported with a clear Russian error.
+- PDF generation uses backend `ReportsService` overview data and the same report document sections as Markdown, without frontend recalculation, tax invention, business-data mutation, backup/export/import/demo creation, or alert/purchase regeneration.
+- Generated PDF files and metadata sidecars are stored only in the safe `exports/report-documents` area with non-overwriting filenames and cleanup on current-operation failures.
+- Status reports `pdf` only when a local Cyrillic-capable font is available for readable Russian text.
+- `/report-documents` can explicitly create Markdown or PDF when available, and `/reports` navigation copy was clarified to «Открыть документы отчетов».
+- Next recommended PR: PR93 — Report PDF UI polish / download-open workflow, unless smoke finds follow-up fixes.
