@@ -1580,3 +1580,11 @@ The dashboard keeps the existing single onboarding/checklist card and refreshes 
 - Actions use `/api/report-documents/{document_id}/download` and do not expose absolute local file paths or create object URLs in frontend memory.
 - Empty state now tells the user to create a Markdown or PDF workshop summary manually.
 - `/reports` still only navigates with `Открыть документы отчетов`; it does not generate Markdown/PDF files.
+
+## PR94 — Settings UI foundation
+
+- `/settings` is now a ready user-facing route for «Настройки».
+- The Settings page is a read-only, navigation-only foundation: it explains local data safety and links to existing safe workflows for backups, import/export, report documents, reports, demo data, and Help Center.
+- Settings actions only navigate to existing sections. They do not create backups, exports, imports, demo data, report documents, files, or business records.
+- No backend settings API, settings persistence, database table, migration, editable tax/currency/company/profile settings, roles, authentication, cloud sync, integrations, template editor, or AI/RAG settings were added.
+- Future editable settings require a separate backend/API design so user data remains safe and local-first.

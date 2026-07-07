@@ -1,16 +1,21 @@
 # Handoff
 
-PR93 docs follow-up updated `docs/frontend-concept.md` so the frontend concept no longer describes report documents as Markdown-only or PDF future-only.
+PR94 — Settings UI foundation is implemented.
 
-Current documented behavior:
-- `/report-documents` is the user-facing route for generated report documents.
-- Markdown generation is always available.
-- PDF generation is shown only when backend status advertises local PDF support.
-- DOCX remains unsupported.
-- Generated files are opened/downloaded only through `GET /api/report-documents/{document_id}/download`.
-- The frontend does not construct absolute local paths, create object URLs, or browse arbitrary files.
-- `/reports` only navigates to `/report-documents` and does not create files.
+Current behavior:
+- `/settings` is a ready user-facing route for «Настройки».
+- The Settings page is read-only and navigation-only.
+- It explains local-first data safety and points users to backups, import/export, report documents, reports, demo data, and Help Center.
+- Settings buttons only navigate to existing sections; they do not run backup/export/import/demo/report document creation actions.
+- No backend settings API, persistence, database table, migration, or file-creation behavior was added.
+- No editable tax, currency, company profile, branding, document template, auth/roles, cloud sync, accounting, integrations, or AI/RAG settings were added.
 
-No backend or frontend code was changed in this follow-up.
+Manual browser smoke was not run in this environment because no browser session was available. Recommended local smoke:
+1. Start backend and frontend.
+2. Open `/settings`.
+3. Confirm «Настройки» is active and ready in navigation.
+4. Click each Settings card action and confirm it only navigates to the target section.
+5. Confirm no backup, export, import, demo data, or report document action starts from Settings.
+6. Confirm dashboard, reports, and report documents still load.
 
-Next recommended task: PR94 — Settings UI foundation, unless smoke finds document workflow follow-up fixes.
+Next recommended task: PR95 — Settings data/status foundation, or PR95 — Settings UI follow-up fixes if smoke finds issues.
