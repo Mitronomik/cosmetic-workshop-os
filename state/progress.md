@@ -612,3 +612,11 @@ Import CSV/XLSX draft backend foundation.
 - Status reports `pdf` only when a local Cyrillic-capable font is available for readable Russian text.
 - `/report-documents` can explicitly create Markdown or PDF when available, and `/reports` navigation copy was clarified to «Открыть документы отчетов».
 - Next recommended PR: PR93 — Report PDF UI polish / download-open workflow, unless smoke finds follow-up fixes.
+
+## PR92 follow-up — deterministic PDF availability
+- Made PDF availability deterministic and independent of host test environment fonts.
+- Updated PDF happy-path service/API tests to monkeypatch PDF availability and fake PDF output instead of relying on installed DejaVu, Liberation, or Noto fonts.
+- PDF is advertised only when the backend finds a parseable local `.ttf` font with Cyrillic glyphs that the current renderer can use.
+- TTC font collections are not supported in PR92.
+- Markdown remains always available, and unavailable PDF creation is rejected with a safe Russian message.
+- Corrected report-document docs so they no longer describe PDF as future-only after PR92 and use document-file + metadata-sidecar wording.

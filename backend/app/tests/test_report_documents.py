@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 import sqlite3
 
@@ -31,7 +32,7 @@ def service(tmp_path):
 def test_status_and_empty_list_work_on_empty_db(tmp_path):
     _c, svc = service(tmp_path)
     status = svc.status()
-    assert status.available_formats == ["markdown", "pdf"]
+    assert "markdown" in status.available_formats
     assert status.available_document_types == ["workshop_overview"]
     assert status.can_create is True
     assert status.documents_count == 0
@@ -100,8 +101,16 @@ def test_generated_markdown_includes_report_warnings_and_finance_limits(tmp_path
     assert "Неполных записей для расчета маржи: 1" in text
 
 
-def test_create_overview_pdf_document_on_empty_db(tmp_path):
+def test_create_overview_pdf_document_on_empty_db(tmp_path, monkeypatch):
     c, svc = service(tmp_path)
+
+    monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
+
+    def fake_write_pdf_exclusive(path: Path, lines: list[str], *, created_at: datetime) -> None:
+        with path.open("xb") as file:
+            file.write(b"%PDF-1.4\n% fake test pdf\n%%EOF\n")
+
+    monkeypatch.setattr(report_documents_module, "_write_pdf_exclusive", fake_write_pdf_exclusive)
     before = counts(c)
     response = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf", reason="weekly_check"))
     metadata = response.document
@@ -113,7 +122,7 @@ def test_create_overview_pdf_document_on_empty_db(tmp_path):
     assert metadata.metadata_filename.endswith(".json")
     assert metadata.source == "reports.overview"
     assert metadata.source_generated_at is not None
-    assert metadata.size_bytes > 100
+    assert metadata.size_bytes > 0
     assert pdf_path.exists()
     assert json_path.exists()
     assert pdf_path.read_bytes().startswith(b"%PDF-")
@@ -198,7 +207,6 @@ def test_metadata_write_failure_removes_created_markdown(tmp_path, monkeypatch):
     assert list(svc.documents_dir.glob("*.json")) == []
 
 
-
 def test_metadata_failure_before_sidecar_creation_does_not_unlink_uncreated_sidecar(tmp_path, monkeypatch):
     c, svc = service(tmp_path)
     before = counts(c)
@@ -227,8 +235,16 @@ def test_metadata_failure_before_sidecar_creation_does_not_unlink_uncreated_side
     assert list(svc.documents_dir.glob("*.json")) == []
     assert [path.suffix for path in unlink_attempts] == [".md"]
 
-def test_document_generation_only_writes_report_document_files(tmp_path):
+
+def test_document_generation_only_writes_report_document_files(tmp_path, monkeypatch):
     c, svc = service(tmp_path)
+    monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
+
+    def fake_write_pdf_exclusive(path: Path, lines: list[str], *, created_at: datetime) -> None:
+        with path.open("xb") as file:
+            file.write(b"%PDF-1.4\n% fake test pdf\n%%EOF\n")
+
+    monkeypatch.setattr(report_documents_module, "_write_pdf_exclusive", fake_write_pdf_exclusive)
     before = counts(c)
     svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))
     assert counts(c) == before
@@ -258,10 +274,17 @@ def test_document_generation_uses_reports_service_output(tmp_path, monkeypatch):
 
 def test_pdf_metadata_write_failure_removes_created_pdf_only(tmp_path, monkeypatch):
     _c, svc = service(tmp_path)
+    monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
     existing = svc.documents_dir / "keep.pdf"
     svc.documents_dir.mkdir(parents=True)
     existing.write_bytes(b"%PDF-existing")
     original_write = report_documents_module._write_text_exclusive
+
+    def fake_write_pdf_exclusive(path: Path, lines: list[str], *, created_at: datetime) -> None:
+        with path.open("xb") as file:
+            file.write(b"%PDF-1.4\n% fake test pdf\n%%EOF\n")
+
+    monkeypatch.setattr(report_documents_module, "_write_pdf_exclusive", fake_write_pdf_exclusive)
 
     def flaky_write(path: Path, text: str) -> None:
         if path.suffix == ".json":
@@ -276,6 +299,18 @@ def test_pdf_metadata_write_failure_removes_created_pdf_only(tmp_path, monkeypat
     assert existing.exists()
     assert [p.name for p in svc.documents_dir.glob("*.pdf")] == ["keep.pdf"]
     assert list(svc.documents_dir.glob("*.json")) == []
+
+
+def test_ttc_font_collection_is_not_supported_for_pdf_renderer(tmp_path):
+    ttc = tmp_path / "NotoSansCJK-Regular.ttc"
+    ttc.write_bytes(b"ttcf fake")
+    assert report_documents_module._font_supports_cyrillic_for_pdf_renderer(ttc) is False
+
+
+def test_invalid_ttf_is_not_supported_for_pdf_renderer(tmp_path):
+    ttf = tmp_path / "DejaVuSans.ttf"
+    ttf.write_bytes(b"not a real ttf")
+    assert report_documents_module._font_supports_cyrillic_for_pdf_renderer(ttf) is False
 
 
 def test_status_omits_pdf_when_generation_is_unavailable(tmp_path, monkeypatch):

@@ -33,6 +33,7 @@ SUPPORTED_DOCUMENT_TYPE = "workshop_overview"
 REPORT_DOCUMENT_SOURCE = "reports.overview"
 REPORT_DOCUMENT_TITLE = "Сводка мастерской"
 REPORT_DOCUMENTS_DIRNAME = "report-documents"
+CYRILLIC_FONT_SAMPLE = "Сводка мастерской Привет Яя"
 
 
 class ReportDocumentService:
@@ -280,7 +281,6 @@ def _workshop_overview_document_lines(report: OverviewReportResponse, *, created
     return lines
 
 
-
 def _available_formats() -> list[str]:
     formats = [SUPPORTED_FORMAT]
     if _is_pdf_generation_available():
@@ -296,17 +296,36 @@ def _find_cyrillic_font_path() -> Path | None:
     candidates = [
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
         Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"),
-        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
     ]
     for path in candidates:
-        if path.exists() and path.is_file():
+        if _font_supports_cyrillic_for_pdf_renderer(path):
             return path
     for root in (Path("/usr/share/fonts"), Path("/System/Library/Fonts"), Path("/Library/Fonts")):
         if root.exists():
             for path in root.rglob("*.ttf"):
-                if any(name in path.name.lower() for name in ("dejavusans", "notosans", "liberationsans")):
+                if any(name in path.name.lower() for name in ("dejavusans", "notosans", "liberationsans")) and _font_supports_cyrillic_for_pdf_renderer(path):
                     return path
     return None
+
+
+def _font_supports_cyrillic_for_pdf_renderer(path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+    if path.suffix.lower() != ".ttf":
+        return False
+    try:
+        font_data = path.read_bytes()
+    except OSError:
+        return False
+    cmap = _read_ttf_cmap_format4(font_data)
+    if not cmap:
+        return False
+    for character in CYRILLIC_FONT_SAMPLE:
+        if character.isspace():
+            continue
+        if cmap.get(ord(character), 0) == 0:
+            return False
+    return True
 
 
 def _render_markdown_from_lines(lines: list[str]) -> str:

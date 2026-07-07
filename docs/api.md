@@ -689,7 +689,7 @@ When an active demo session has unsafe working references, `GET /api/demo-data/s
 
 ## Report documents API
 
-Report document endpoints are available under `/api/report-documents`. They create human-readable report documents explicitly and store them in the safe report-documents directory under the user data/export area. After PR92 the API supports Markdown and, when local Cyrillic-capable PDF generation is available, PDF. DOCX requests are rejected with a clear Russian message.
+Report document endpoints are available under `/api/report-documents`. They create human-readable report documents explicitly and store them in the safe report-documents directory under the user data/export area. After PR92 the API supports Markdown and, when the backend finds a parseable local TTF font with Cyrillic glyphs, PDF. DOCX requests are rejected with a clear Russian message.
 
 Document generation reads backend `ReportsService` data, does not mutate business records, does not create backup/export snapshots, and does not regenerate alerts or purchase suggestions.
 
@@ -698,7 +698,7 @@ Document generation reads backend `ReportsService` data, does not mutate busines
 Returns document export availability:
 
 - `documents_dir`;
-- `available_formats` (`["markdown", "pdf"]` when local PDF generation with Russian text is available; otherwise PDF is omitted);
+- `available_formats` (`["markdown", "pdf"]` when a parseable local TTF font with Cyrillic glyphs is available; TTC font collections are not supported in PR92, and otherwise PDF is omitted);
 - `available_document_types` (`["workshop_overview"]` in the MVP);
 - `can_create`;
 - `documents_count`;

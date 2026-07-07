@@ -2,30 +2,29 @@
 
 ## Last completed work
 
-PR92 — Report PDF generation foundation + Reports link copy fix.
+PR92 follow-up — deterministic PDF availability and report-document docs fix.
 
 ## What changed
 
-- Extended the existing report document backend pipeline to accept `format: "pdf"` for `POST /api/report-documents/reports/overview`.
-- Markdown remains supported; DOCX remains rejected safely.
-- PDF generation uses backend `ReportsService.get_overview()` data and the same operational sections as Markdown.
-- Generated PDF files and JSON metadata sidecars are written only under the safe `exports/report-documents` user-data area.
-- `GET /api/report-documents/status` advertises `pdf` only when the backend can find a local Cyrillic-capable font.
-- `/report-documents` can explicitly create Markdown or PDF when backend status allows it; page load/list refresh remain read-only.
-- `/reports` now says «Открыть документы отчетов» for the navigation-only report documents link.
+- PDF tests no longer depend on host system fonts: PDF happy-path coverage monkeypatches PDF availability and writes fake PDF bytes.
+- Backend status always includes Markdown and advertises PDF only when a local `.ttf` font exists, is parseable by the current renderer, and contains glyphs for a Russian sample string.
+- TTC font collections (`.ttc`) are not treated as supported in PR92.
+- `format: "pdf"` is rejected safely when PDF is unavailable.
+- Pair-safety, rollback, no-overwrite behavior, no business-data mutation, no backup/export snapshot creation, and no alert/purchase regeneration remain covered.
+- `docs/report-documents.md` no longer says PDF is future-only after PR92 and now describes “document file + metadata sidecar” wording.
 
 ## Manual smoke
 
-Manual browser/API smoke was not run in this non-interactive session. Recommended local smoke:
-1. Start backend and frontend.
-2. Open `/reports` and confirm the button says «Открыть документы отчетов».
-3. Click it and confirm it only navigates to `/report-documents` and does not create a file.
-4. Confirm status/list load on `/report-documents`.
-5. Create Markdown and PDF documents explicitly.
-6. Confirm both appear in the list with metadata.
-7. Confirm the PDF file exists under `exports/report-documents` and Russian text is readable in a local PDF viewer.
-8. Send `{ "format": "docx" }` to the create endpoint and confirm it is rejected safely.
-9. Confirm no backup/export/import/demo action is triggered and business data row counts do not change.
+Manual browser/PDF smoke was not run in this non-interactive environment. TestClient/httpx-dependent API tests are skipped in this environment when FastAPI TestClient dependencies are unavailable.
+
+Recommended local smoke:
+1. Start backend with a test user-data directory.
+2. Open `/report-documents`.
+3. Confirm available formats match backend status.
+4. If PDF is unavailable, confirm only Markdown action is shown and PDF action is hidden.
+5. If PDF is available, click «Создать PDF», confirm one `.pdf` and one `.json` sidecar appear in `exports/report-documents`, then open the PDF and confirm Russian text is readable.
+6. Confirm `/reports` button only navigates to `/report-documents`.
+7. Confirm no business rows, backups, JSON exports, alerts, purchase suggestions, production batches, imports, or demo data are created.
 
 ## Next recommended PR
 
