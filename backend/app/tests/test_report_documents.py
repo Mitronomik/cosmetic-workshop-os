@@ -146,7 +146,7 @@ def test_markdown_profile_values_are_safe_plain_text(tmp_path):
 
 def test_pdf_document_uses_profile_lines_and_remains_valid_pdf(tmp_path, monkeypatch):
     c, svc = service(tmp_path)
-    WorkshopProfileSettingsService(c).update_profile(WorkshopProfileUpdateRequest(workshop_name="PDF мастерская"))
+    WorkshopProfileSettingsService(c).update_profile(WorkshopProfileUpdateRequest(workshop_name="PDF мастерская", workshop_contact_text="Телефон: +7 000, email: test@example.com"))
     captured_lines: list[str] = []
     monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
 
@@ -161,6 +161,9 @@ def test_pdf_document_uses_profile_lines_and_remains_valid_pdf(tmp_path, monkeyp
 
     assert "## Профиль мастерской" in captured_lines
     assert "- Мастерская: PDF мастерская" in captured_lines
+    assert "- Контакты: Телефон: +7 000, email: test@example.com" in captured_lines
+    assert not any(r"\+7" in line for line in captured_lines)
+    assert not any(r"test@example\.com" in line for line in captured_lines)
     assert (svc.documents_dir / response.document.filename).read_bytes().startswith(b"%PDF-")
 
 
