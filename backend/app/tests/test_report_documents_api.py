@@ -1,3 +1,5 @@
+from datetime import datetime
+from pathlib import Path
 import sqlite3
 
 import pytest
@@ -10,6 +12,7 @@ from app.db.config import DATABASE_PATH_ENV, DatabaseConfig
 from app.db.paths import USER_DATA_DIR_ENV
 from app.main import create_app
 from app.services.database import initialize_database
+from app.services import report_documents as report_documents_module
 from app.tests.test_reports import BUSINESS_TABLES
 
 
@@ -26,7 +29,7 @@ def test_report_document_api_endpoints_create_metadata_and_are_safe(monkeypatch,
     client = TestClient(create_app())
     status = client.get("/api/report-documents/status")
     assert status.status_code == 200
-    assert status.json()["available_formats"] == ["markdown"]
+    assert "markdown" in status.json()["available_formats"]
     assert status.json()["documents_count"] == 0
 
     listing = client.get("/api/report-documents")
@@ -46,9 +49,32 @@ def test_report_document_api_endpoints_create_metadata_and_are_safe(monkeypatch,
     assert after_listing.json()["total"] == 1
     assert after_listing.json()["items"][0]["id"] == document["id"]
 
+    monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
+
+    def fake_write_pdf_exclusive(path: Path, lines: list[str], *, created_at: datetime) -> None:
+        with path.open("xb") as file:
+            file.write(b"%PDF-1.4\n% fake test pdf\n%%EOF\n")
+
+    monkeypatch.setattr(report_documents_module, "_write_pdf_exclusive", fake_write_pdf_exclusive)
+
+    pdf_status = client.get("/api/report-documents/status")
+    assert pdf_status.status_code == 200
+    assert pdf_status.json()["available_formats"] == ["markdown", "pdf"]
+
     pdf = client.post("/api/report-documents/reports/overview", json={"format": "pdf"})
-    assert pdf.status_code == 422
-    assert "Сейчас доступен только Markdown" in pdf.json()["detail"]
+    assert pdf.status_code == 201
+    pdf_document = pdf.json()["document"]
+    assert pdf_document["format"] == "pdf"
+    assert pdf_document["filename"].endswith(".pdf")
+    assert (user_data / "exports" / "report-documents" / pdf_document["filename"]).read_bytes().startswith(b"%PDF-")
+    pdf_listing = client.get("/api/report-documents")
+    assert pdf_listing.status_code == 200
+    assert pdf_listing.json()["total"] == 2
+    assert any(item["id"] == pdf_document["id"] and item["format"] == "pdf" for item in pdf_listing.json()["items"])
+
+    docx = client.post("/api/report-documents/reports/overview", json={"format": "docx"})
+    assert docx.status_code == 422
+    assert "DOCX пока не поддерживается" in docx.json()["detail"]
 
     suspicious = client.post("/api/report-documents/reports/overview", json={"format": "markdown", "reason": "../../bad"})
     assert suspicious.status_code == 201

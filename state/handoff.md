@@ -2,34 +2,30 @@
 
 ## Last completed work
 
-PR90 — Report document export UI + sidecar cleanup hardening.
+PR92 follow-up — deterministic PDF availability and report-document docs fix.
 
 ## What changed
 
-- Added `/report-documents` / «Документы отчетов» to the frontend navigation under «Данные и настройки».
-- The new page calls only the implemented report document endpoints:
-  - `GET /api/report-documents/status`
-  - `GET /api/report-documents`
-  - `POST /api/report-documents/reports/overview`
-- Page load and refresh are read-only. Document creation is explicit and sends `format: "markdown"` plus an optional reason.
-- The UI states clearly that Markdown is the only MVP format and PDF/DOCX are future work.
-- The documents list shows metadata returned by the backend and does not preview raw file content or offer fake download/open actions.
-- `/reports` now includes a contextual «Создать документ отчета» navigation action only; it does not create a document.
-- `ReportDocumentService` cleanup now tracks current-operation document/metadata creation separately and only unlinks metadata when this operation actually created the sidecar.
-- Added a regression test for metadata write failure before final sidecar creation; it verifies safe error, Markdown cleanup, no sidecar unlink attempt, and no business-table mutation.
+- PDF tests no longer depend on host system fonts: PDF happy-path coverage monkeypatches PDF availability and writes fake PDF bytes.
+- Backend status always includes Markdown and advertises PDF only when a local `.ttf` font exists, is parseable by the current renderer, and contains glyphs for a Russian sample string.
+- TTC font collections (`.ttc`) are not treated as supported in PR92.
+- `format: "pdf"` is rejected safely when PDF is unavailable.
+- Pair-safety, rollback, no-overwrite behavior, no business-data mutation, no backup/export snapshot creation, and no alert/purchase regeneration remain covered.
+- `docs/report-documents.md` no longer says PDF is future-only after PR92 and now describes “document file + metadata sidecar” wording.
 
 ## Manual smoke
 
-Manual browser smoke was not run in this non-interactive environment. Recommended local smoke:
-1. Start backend and frontend.
+Manual browser/PDF smoke was not run in this non-interactive environment. TestClient/httpx-dependent API tests are skipped in this environment when FastAPI TestClient dependencies are unavailable.
+
+Recommended local smoke:
+1. Start backend with a test user-data directory.
 2. Open `/report-documents`.
-3. Confirm status/list load and no document appears merely from page load.
-4. Enter `еженедельная проверка` and click «Создать Markdown-документ».
-5. Confirm the button disables while creating, success appears, and the new document appears in the list.
-6. Refresh the list and confirm the document remains listed.
-7. Open `/reports` and confirm «Создать документ отчета» only navigates to `/report-documents`.
-8. Confirm exports/backups/imports/demo/help pages still load and no backup/export/import/demo action is triggered.
+3. Confirm available formats match backend status.
+4. If PDF is unavailable, confirm only Markdown action is shown and PDF action is hidden.
+5. If PDF is available, click «Создать PDF», confirm one `.pdf` and one `.json` sidecar appear in `exports/report-documents`, then open the PDF and confirm Russian text is readable.
+6. Confirm `/reports` button only navigates to `/report-documents`.
+7. Confirm no business rows, backups, JSON exports, alerts, purchase suggestions, production batches, imports, or demo data are created.
 
 ## Next recommended PR
 
-Next implementation PR — Report PDF generation foundation, unless smoke finds UI issues. If smoke finds issues, fix the report document UI in the next implementation PR before adding PDF.
+PR93 — Report PDF UI polish / download-open workflow, unless smoke finds issues. If smoke finds issues, use PR93 for focused PDF generation follow-up fixes.

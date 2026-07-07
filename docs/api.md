@@ -689,7 +689,7 @@ When an active demo session has unsafe working references, `GET /api/demo-data/s
 
 ## Report documents API
 
-Report document endpoints are available under `/api/report-documents`. They create human-readable report documents explicitly and store them in the safe report-documents directory under the user data/export area. The post-PR90 MVP supports Markdown only. PDF and DOCX requests are rejected with a Russian message that Markdown is the only supported format.
+Report document endpoints are available under `/api/report-documents`. They create human-readable report documents explicitly and store them in the safe report-documents directory under the user data/export area. After PR92 the API supports Markdown and, when the backend finds a parseable local TTF font with Cyrillic glyphs, PDF. DOCX requests are rejected with a clear Russian message.
 
 Document generation reads backend `ReportsService` data, does not mutate business records, does not create backup/export snapshots, and does not regenerate alerts or purchase suggestions.
 
@@ -698,7 +698,7 @@ Document generation reads backend `ReportsService` data, does not mutate busines
 Returns document export availability:
 
 - `documents_dir`;
-- `available_formats` (`["markdown"]` in the MVP);
+- `available_formats` (`["markdown", "pdf"]` when a parseable local TTF font with Cyrillic glyphs is available; TTC font collections are not supported in PR92, and otherwise PDF is omitted);
 - `available_document_types` (`["workshop_overview"]` in the MVP);
 - `can_create`;
 - `documents_count`;
@@ -717,7 +717,7 @@ Response fields include:
 
 ### `POST /api/report-documents/reports/overview`
 
-Creates a Markdown “Сводка мастерской” document from `/api/reports/overview` backend data.
+Creates a Markdown or PDF “Сводка мастерской” document from `/api/reports/overview` backend data.
 
 Request:
 
@@ -728,7 +728,7 @@ Request:
 }
 ```
 
-`format` defaults to `markdown`. `reason` is optional and sanitized; it is not used as a filename.
+`format` defaults to `markdown`; `pdf` creates a PDF when advertised by status; `docx` remains unsupported. `reason` is optional and sanitized; it is not used as a filename.
 
 Response includes created document metadata and the message `Документ отчета создан.`
 

@@ -75,4 +75,4 @@ The frontend Reports UI is available at `/reports` and consumes these backend en
 
 ## Report document export foundation
 
-PR89/PR90 add an explicit Markdown document-export path for reports. The first document type is “Сводка мастерской” (`workshop_overview`) generated as Markdown from the existing overview report DTO. Creation is an explicit POST-only operation under `/api/report-documents`; opening `/reports` or using its contextual link to `/report-documents` does not create files. PDF and DOCX remain future work. See `docs/report-documents.md` for storage, safety, and metadata details.
+PR89/PR90 add an explicit document-export path for reports, and PR92 adds PDF generation foundation. The first document type is “Сводка мастерской” (`workshop_overview`) generated as Markdown or PDF from the existing overview report DTO. Creation is an explicit POST-only operation under `/api/report-documents`; opening `/reports` or using its contextual link to `/report-documents` does not create files. DOCX remains future work. See `docs/report-documents.md` for storage, safety, and metadata details.
