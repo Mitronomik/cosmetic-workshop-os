@@ -3,6 +3,7 @@
 PR95 — Settings data/status foundation is implemented.
 
 Implemented:
+- PR95 type-safety polish removed the settings `_definition()` status `type: ignore` by sharing the Settings definition status Literal type; runtime behavior is unchanged.
 - `GET /api/settings/status` returns read-only local-first app status, local data status, safe workflow capabilities, and Settings Decision Matrix.
 - `/settings` loads backend status and renders local data status, capabilities, future setting candidates, about-app info, and MVP boundaries.
 - All Settings actions remain navigation-only and do not trigger backup/export/import/demo/report-document creation actions.

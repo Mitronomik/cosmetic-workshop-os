@@ -4,6 +4,17 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+SettingsCapabilityStatus = Literal["ready", "available", "planned", "disabled"]
+SettingsDefinitionStatus = Literal[
+    "read_only_now",
+    "safe_mvp_candidate",
+    "requires_backend_rules",
+    "v2_or_later",
+    "not_mvp",
+]
+SettingsWarningSeverity = Literal["info", "warning"]
+
+
 class AppSettingResponse(BaseModel):
     key: str
     value: str
@@ -35,7 +46,7 @@ class LocalDataStatus(BaseModel):
 class SettingsCapability(BaseModel):
     id: str
     title: str
-    status: Literal["ready", "available", "planned", "disabled"]
+    status: SettingsCapabilityStatus
     route: str | None
     description: str
     mutates_from_settings: bool
@@ -44,13 +55,7 @@ class SettingsCapability(BaseModel):
 class SettingsDefinition(BaseModel):
     id: str
     title: str
-    status: Literal[
-        "read_only_now",
-        "safe_mvp_candidate",
-        "requires_backend_rules",
-        "v2_or_later",
-        "not_mvp",
-    ]
+    status: SettingsDefinitionStatus
     editable_in_pr95: bool
     affects_calculations: bool
     affects_historical_data: bool
@@ -69,7 +74,7 @@ class SettingsGroup(BaseModel):
 class SettingsWarning(BaseModel):
     code: str
     message: str
-    severity: Literal["info", "warning"] = "info"
+    severity: SettingsWarningSeverity = "info"
 
 
 class SettingsStatusResponse(BaseModel):

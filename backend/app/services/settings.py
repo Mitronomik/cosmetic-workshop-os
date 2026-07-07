@@ -9,6 +9,7 @@ from app.schemas.settings import (
     LocalDataStatus,
     SettingsCapability,
     SettingsDefinition,
+    SettingsDefinitionStatus,
     SettingsGroup,
     SettingsStatusResponse,
 )
@@ -69,11 +70,11 @@ def _capabilities() -> list[SettingsCapability]:
     ]
 
 
-def _definition(id: str, title: str, status: str, description: str, safety_note: str, *, affects_calculations: bool = False, affects_historical_data: bool = False, requires_backend_service: bool = False) -> SettingsDefinition:
+def _definition(id: str, title: str, status: SettingsDefinitionStatus, description: str, safety_note: str, *, affects_calculations: bool = False, affects_historical_data: bool = False, requires_backend_service: bool = False) -> SettingsDefinition:
     return SettingsDefinition(
         id=id,
         title=title,
-        status=status,  # type: ignore[arg-type]
+        status=status,
         editable_in_pr95=False,
         affects_calculations=affects_calculations,
         affects_historical_data=affects_historical_data,

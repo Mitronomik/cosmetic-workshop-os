@@ -645,3 +645,8 @@ Import CSV/XLSX draft backend foundation.
 - Updated `/settings` to load backend status, render local data status, capability cards, future settings groups, app info, and MVP boundaries.
 - Settings actions remain navigation-only; no editable controls, persistence, migrations, file creation, or business-data mutations were added.
 - Added `docs/settings.md` and updated API/frontend docs.
+
+## PR95 type-safety polish
+- Replaced the raw `str` status parameter in `SettingsService._definition()` with the shared Settings definition status Literal type.
+- Removed the `# type: ignore[arg-type]` from settings status construction.
+- No runtime Settings behavior, response shape, persistence, migrations, or editability changed.
