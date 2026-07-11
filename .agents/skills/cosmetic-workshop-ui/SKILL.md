@@ -60,6 +60,26 @@ Implement only approved findings or explicitly requested changes in a narrow PR.
 
 Motion requires a separate scope after layout, hierarchy, copy, and interaction states are approved. Motion must be limited, purposeful, and reduced-motion compatible. Do not introduce motion to compensate for unclear information hierarchy.
 
+## Optional project-adapted Impeccable guidance
+
+A reviewed, project-authored guidance document is available at:
+
+- `.agents/vendor/impeccable/3.9.1/GUIDANCE.md`
+
+It is not a separate Codex skill and must not be loaded by default.
+
+Consult it only for an explicitly scoped frontend audit, accessibility,
+responsive, interaction, onboarding, hardening, or polish task, and only after
+reading the required canonical project documentation.
+
+Do not read or fetch the upstream Impeccable `SKILL.md` or command references.
+Do not run upstream scripts, commands, hooks, live mode, update checks, provider
+agents, or project-context generators.
+
+When the guidance conflicts with canonical documentation, existing UI patterns,
+the approved product identity, or the explicit PR contract, preserve the project
+contract.
+
 ## Completion checklist
 
 Before finishing a UI task, verify or document:
