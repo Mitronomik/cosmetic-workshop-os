@@ -12,3 +12,11 @@ Frontend-wide rules:
 - The backend API is the source of truth for recipes, production, inventory, stock write-off, cost, tax and margin calculations.
 - Frontend forms must guide the user with clear validation messages and next actions.
 - Frontend changes require a build check; user-visible workflow changes also require relevant smoke testing.
+
+UI/UX contract references:
+
+- For frontend, visual, accessibility, responsive, or motion work, read `docs/ui-ux-contract.md`, `docs/ui-skill-policy.md`, and `.agents/skills/cosmetic-workshop-ui/SKILL.md` before changing UI.
+- Verify affected routes at desktop and narrow-screen widths when UI changes are made.
+- Changed flows must account for loading, empty, error, success, and disabled states.
+- Preserve keyboard navigation, visible focus, and reduced-motion expectations.
+- Project documentation and architecture rules override third-party design skills.
