@@ -253,6 +253,7 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
 .settings-profile-form textarea { min-height: 118px; }
 .settings-profile-form input:focus, .settings-profile-form textarea:focus, .settings-card button:focus-visible { outline: 3px solid rgba(211, 154, 122, .55); outline-offset: 2px; }
 .settings-profile-form input::placeholder, .settings-profile-form textarea::placeholder { color: #9b7466; opacity: .82; }
+.settings-profile-form input:disabled, .settings-profile-form textarea:disabled { background: #f3ece7; color: #7b6259; cursor: not-allowed; opacity: .82; }
 .settings-data-path { background: #fff8f1; border: 1px solid #ecd4c7; border-radius: 18px; display: grid; gap: 8px; margin-top: 16px; padding: 14px 16px; }
 .settings-data-path span { color: #7b6259; font-size: 13px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
 .settings-card-grid { display: grid; gap: 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
