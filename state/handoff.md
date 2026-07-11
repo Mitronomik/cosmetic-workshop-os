@@ -45,3 +45,9 @@ After smoke:
 - Failed result: prepare a focused report document integration fix first.
 
 Do not assign a new PR number until the PR is actually created.
+
+## Settings UI repair handoff
+
+Manual browser smoke found a blocking `/settings` UI defect: the Workshop profile form was not laid out as a usable vertical form and the page displayed internal planning material. The current focused repair keeps the existing branch scope narrow: runtime Settings now shows only a compact introduction, Workshop profile editing, and local data/navigation. Technical planning content is removed from the runtime Settings screen, while backend-compatible status fields are unchanged. The Workshop profile renders independently from the general Settings status request.
+
+Next step after merge: rerun isolated browser smoke for `/settings` Workshop profile states and `/report-documents` integration.

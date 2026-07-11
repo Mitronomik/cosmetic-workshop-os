@@ -242,14 +242,22 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
 .metadata-list dt { color: #7c655e; font-size: 12px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .metadata-list dd { margin: 0; overflow-wrap: anywhere; }
 
-.settings-layout { display: grid; gap: 22px; max-width: 1280px; }
+.settings-layout { display: grid; gap: 22px; max-width: 980px; overflow-x: hidden; }
 .settings-hero { max-width: none; }
-.settings-card-grid { display: grid; gap: 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.settings-hero h2 { font-size: clamp(30px, 4vw, 42px); }
+.settings-hero p { max-width: 760px; }
 .settings-card { align-content: start; display: grid; }
 .settings-card h2 { font-size: clamp(22px, 2.4vw, 28px); }
 .settings-card p { margin-bottom: 0; }
+.settings-profile-card .next-step { margin-top: 10px; }
+.settings-profile-form textarea { min-height: 118px; }
+.settings-profile-form input:focus, .settings-profile-form textarea:focus, .settings-card button:focus-visible { outline: 3px solid rgba(211, 154, 122, .55); outline-offset: 2px; }
+.settings-profile-form input::placeholder, .settings-profile-form textarea::placeholder { color: #9b7466; opacity: .82; }
+.settings-data-path { background: #fff8f1; border: 1px solid #ecd4c7; border-radius: 18px; display: grid; gap: 8px; margin-top: 16px; padding: 14px 16px; }
+.settings-data-path span { color: #7b6259; font-size: 13px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+.settings-card-grid { display: grid; gap: 22px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .settings-about-card { background: linear-gradient(135deg, rgba(255, 253, 250, .95), rgba(248, 235, 227, .95)); }
-@media (max-width: 980px) { .settings-card-grid { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .settings-layout, .settings-card-grid { grid-template-columns: 1fr; max-width: none; } }
 .settings-group { border-top: 1px solid rgba(74, 57, 49, .12); margin-top: 18px; padding-top: 18px; }
 .settings-definition-list { display: grid; gap: 14px; }
 .settings-definition h4 { margin: 0 0 6px; }
