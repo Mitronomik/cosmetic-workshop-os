@@ -612,6 +612,16 @@ MVP is desktop-first for MacBook.
 
 Do not build a mobile app unless scoped. But frontend layout should avoid decisions that make future mobile viewing impossible.
 
+### 7.7 Project UI/UX activation policy
+
+For frontend, visual, accessibility, responsive, or motion tasks, Codex must read and follow:
+
+- `docs/ui-ux-contract.md`;
+- `docs/ui-skill-policy.md`;
+- `.agents/skills/cosmetic-workshop-ui/SKILL.md`.
+
+Do not duplicate the full UI contract here. Canonical project documentation, architecture rules, domain rules, and scoped `AGENTS.md` files override third-party skills. Third-party UI/design skills are advisory only and cannot replace the approved product identity, change domain logic, change API/database contracts, add dependencies, or redesign unrelated routes without explicit scope.
+
 ---
 
 ## 8. Architecture rules

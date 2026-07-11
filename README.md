@@ -12,6 +12,8 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 - `docs/roadmap.md` - PR-based roadmap
 - `docs/domain-model.md` - domain model
 - `docs/ui-ux-contract.md` - human-friendly UI rules
+- `docs/ui-skill-policy.md` - UI skill priority and third-party skill boundaries
+- `docs/third-party-skills.md` - registry template for future third-party Codex skills
 - `docs/codex-project-structure.md` - repository memory structure
 - `docs/codex-prompting-rules.md` - Codex Web prompt rules
 - `docs/pr-testing-and-smoke-rules.md` - testing and smoke rules
