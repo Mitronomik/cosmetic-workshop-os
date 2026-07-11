@@ -24,9 +24,19 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current state: after PR90, the app has a local-first backend/API foundation with SQLite startup/migration safety, onboarding, stock foundations for ingredients/lots/movements and packaging, inventory reads and UI, recipes with versions and backend calculation, recipe UI, clients, first-class client recipes with editable/restorable composition, client wishes and append-only feedback, orders backend/UI, production readiness and confirmation backend/UI, immutable production history, alerts backend/UI, purchase suggestions backend/UI, operational dashboard, manual backup API/UI, local JSON export API/UI, CSV/XLSX import drafts with validation/readiness/apply flow for supported safe catalog targets, demo data backend/UI, refreshed onboarding checklist, static in-app Help Center, reports backend/UI, and explicit Markdown report document generation backend/UI.
+Current repository state: after PR101.
 
-Next recommended roadmap task: Next implementation PR — Report PDF generation foundation, unless PR90 local browser smoke finds report document UI issues. If smoke finds issues, fix the report document UI in the next implementation PR before adding PDF. Markdown is the only report document format in the MVP today; PDF/DOCX, download/open-file endpoints, automatic report generation, scheduled jobs, cloud sync, AI/RAG, document preview, and template editing remain future scope unless explicitly requested.
+Runtime product implementation is complete through PR98. The app includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
+
+Newly generated workshop summary documents include configured Workshop profile fields. Empty fields are omitted, an empty profile omits the whole section, and existing generated documents are not mutated.
+
+PR99-PR101 were documentation and governance changes only: the project UI/UX contract and Codex UI guidance were added, reviewed Impeccable material was adapted into safe project-owned guidance, and Taste Skill was reviewed and rejected. These PRs did not change application runtime behavior.
+
+Next immediate step: run the manual browser smoke for Workshop profile and report document integration. Save profile fields in `/settings`; generate and open new Markdown and PDF documents from `/report-documents`; confirm only non-empty profile fields appear; clear the profile; generate new documents; confirm the profile section is omitted without errors and previously generated files remain unchanged.
+
+After a clean smoke, the next focused implementation slice is Workshop profile display polish / app header integration. If smoke reveals integration issues, fix those first in a separate focused PR.
+
+Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, and unrelated business mutations out of scope unless explicitly approved.
 
 ## Developer commands
 
