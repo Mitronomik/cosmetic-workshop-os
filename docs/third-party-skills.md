@@ -21,7 +21,7 @@ Project-adapted guidance stored outside `.agents/skills/` is not an installed or
 - Forbidden use cases
 - Update policy
 
-## Planned entries
+## Registry entries
 
 ### Impeccable
 
@@ -49,21 +49,28 @@ Project-adapted guidance stored outside `.agents/skills/` is not an installed or
 
 ### Taste Skill
 
-- Status: not installed
-- Skill name: Taste Skill
-- Purpose: explicit-only critique or redesign exploration.
-- Source repository: TBD
-- Imported version or commit SHA: not imported
-- Import date: not imported
-- License: TBD before installation
-- Included scripts: none installed
-- Included hooks: none installed
-- Reviewed files: none yet
-- Local modifications: none
-- Implicit invocation policy: none unless explicitly requested by a task.
-- Approved use cases: future design critique or exploratory redesign reports when explicitly scoped.
-- Forbidden use cases: automatic redesign, replacing the approved product identity, changing unrelated routes, adding dependencies, or altering product/domain/architecture contracts.
-- Update policy: install/update only in explicit separate PR with review.
+- Status: reviewed; not approved for installation, vendoring, or copying.
+- Skill name: Taste Skill.
+- Purpose: reverse-engineer the visual design system and design trade-offs of external websites.
+- Source repository: `senlindesign/taste-skill`.
+- Reviewed upstream commit: `6dce223f2f5665d3636ca9a44ec3a7aa1322a9b8`.
+- Declared skill version: `1.1.0`.
+- Review date: 2026-07-11.
+- License status: the README claims MIT, but the repository contains no license text or legal file, GitHub does not detect a license, and no legal file exists anywhere in the reviewed Git history.
+- Imported files: none.
+- Included scripts: none imported.
+- Included hooks: none imported.
+- Included dependencies or MCP servers: none installed.
+- Review record: [`docs/taste-skill-review.md`](taste-skill-review.md).
+- Reviewed material: `SKILL.md`, `README.md`, `evals/evals.json`, `references/extract.js`, all Markdown references, repository metadata, and complete Git history for legal-file presence.
+- Decision: do not install the upstream skill, do not place it under `.agents/skills`, and do not copy its source or reference text into the project.
+- Primary blockers: incomplete licensing evidence; unpinned `@latest` Playwright MCP dependency; external browser automation; broad implicit activation; current-directory output writes; optional mutation or overwrite of AI instruction and tool configuration files.
+- Product constraint: external design analysis must not replace the approved identity and human-readable workflow of «Мастерская косметолога».
+- Implicit invocation policy: prohibited.
+- Approved use cases for the upstream skill: none.
+- Project-owned alternative: evidence-based UI audits may be designed independently under the canonical UI/UX contract without copying upstream text or code.
+- Revisit conditions: complete license text, pinned dependencies, explicit-only invocation, sandboxed outputs, no mutation of canonical instruction files, and a new security and architecture review.
+- Update policy: any reconsideration requires a new pinned-commit review in a separate PR.
 
 ### Emil design skills
 
