@@ -33,15 +33,19 @@ Third-party skills are advisory and implementation aids only. They cannot:
 
 Third-party output must be reviewed against `docs/ui-ux-contract.md` before implementation.
 
-## Intended future roles
+## Approved and planned roles
 
-These roles describe planned future use only. Installation and vendoring are out of scope until a separate PR explicitly approves them.
+Only the reviewed Impeccable provenance record and project-adapted guidance described below are currently approved. Taste Skill and Emil skills remain planned only and are not installed or vendored.
 
 ### Impeccable
 
-Intended role: audit, hierarchy, layout, typography, accessibility, responsive behavior, hardening, and final polish.
+Approved role: project-adapted advisory guidance for audit, hierarchy, layout, typography, accessibility, responsive behavior, interaction design, onboarding, hardening, and final polish.
 
-Use after the relevant route and product workflow already exist. Impeccable-style feedback must separate objective usability issues from taste-based preferences and must not broaden scope without approval.
+The reviewed source record and project-authored guidance live at `.agents/vendor/impeccable/3.9.1/` and are intentionally outside `.agents/skills/`. Raw upstream command references are not included. The directory is not an independently discoverable skill and has no vendored scripts, hooks, live mode, provider agents, or automatic update behavior.
+
+Use it only after the relevant route and product workflow already exist and only through the project-owned `cosmetic-workshop-ui` skill. Impeccable-derived feedback must separate objective usability issues from taste-based preferences and must not broaden scope without approval.
+
+Generic upstream taste rules do not override the existing project identity. In particular, the approved warm cream/off-white surfaces, deep brown typography and navigation, restrained rose-gold or soft copper accents, rounded operational surfaces, and calm visual density remain valid when used according to `docs/ui-ux-contract.md`.
 
 ### Taste Skill
 
@@ -55,12 +59,21 @@ Intended role: motion work only after layout and interaction states are approved
 
 Use only for a separate motion scope. Motion must remain limited, purposeful, and reduced-motion compatible.
 
-## Installation and review policy
+## Installation, vendoring, and review policy
 
-Third-party installation, version pinning, script review, hook review, license review, local modifications, and vendoring will happen in a separate PR. Until then:
+A third-party skill must not be installed into `.agents/skills/`, activated, or updated unless a separate PR explicitly approves that exact mode.
 
-- do not install third-party skills;
-- do not copy third-party skill content into this repository;
-- do not add `.codex/hooks.json`;
-- do not add skill scripts, hooks, npm packages, or lockfile changes;
-- document planned skills only in `docs/third-party-skills.md`.
+The currently approved Impeccable integration is limited to project-authored adapted guidance and a pinned provenance record under `.agents/vendor/`. It must remain:
+
+- outside `.agents/skills/`;
+- free of raw upstream command references;
+- non-executable;
+- free of hooks and `.codex/hooks.json`;
+- free of live-mode files and provider agents;
+- free of npm packages and lockfile changes;
+- tied to an exact reviewed upstream commit;
+- documented with source, license, reviewed scope, restrictions, and checksums.
+
+The project-owned `cosmetic-workshop-ui` skill is the only instruction layer allowed to consult `GUIDANCE.md`.
+
+Taste Skill and Emil skills remain uninstalled and unvendored. Any future third-party addition or Impeccable update requires a separate review PR.
