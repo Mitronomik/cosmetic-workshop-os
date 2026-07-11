@@ -45,7 +45,7 @@ Avoid equal-weight blocks competing for attention. Do not hide critical warnings
 
 The shell must preserve the product as an operational tool:
 
-- Main navigation labels should be Russian and stable: `Главная`, `Рецепты`, `Клиенты`, `Заказы`, `Запасы`, `Тара`, `Закупки`, `Производство`, `Отчеты`, `Импорт`, `Настройки`, plus approved supporting sections such as help, demo data, or report documents.
+- Main navigation labels should be Russian and stable: `Главная`, `Рецепты`, `Клиенты`, `Заказы`, `Склад`, `Тара`, `Закупки`, `Производство`, `Отчеты`, `Импорт`, `Настройки`, plus approved supporting sections such as help, demo data, or report documents.
 - Navigation should make current location obvious.
 - Group related data/settings routes instead of scattering them as unrelated cards.
 - Do not expose API route names, table names, internal identifiers, or implementation statuses as primary navigation copy.
