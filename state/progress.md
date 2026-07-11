@@ -1,17 +1,25 @@
 # Progress
 
 ## Current phase
-After PR98 — Workshop profile integration with report documents complete; preparing the next focused polish slice.
+
+After PR101.
+
+Runtime product implementation is complete through PR98 — Workshop profile integration with report documents. PR99-PR101 were documentation and governance changes only.
+
+The project is preparing the required manual browser smoke before the next focused implementation slice.
 
 ## Current next step
-- Workshop profile settings are implemented via backend-owned `GET /api/settings/workshop-profile` and `PUT /api/settings/workshop-profile`, persisted in `app_settings`, and editable from `/settings`.
-- Newly generated Markdown/PDF `Сводка мастерской` report documents now include configured Workshop profile fields near the top.
-- Empty profile fields are omitted; an empty profile omits the whole profile section.
-- Existing generated documents are not mutated.
-- Settings capability/copy was updated so it no longer implies all Settings are read-only.
-- Calculation-sensitive settings remain out of scope. No tax/currency/margin/unit/stock-threshold/expiry settings were added.
-- Next recommended roadmap slice: **PR99 — Workshop profile display polish / app header integration**, unless PR98 smoke finds integration issues. If smoke finds issues, make PR99 a report document integration follow-up fixes PR.
-- Keep DOCX generation, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, migration changes, and business-record mutations out of scope unless explicitly requested.
+
+- Run the manual browser smoke for Workshop profile and report document integration.
+- Save several Workshop profile fields in `/settings`, leaving at least one field empty.
+- Generate and open/download new Markdown and PDF `Сводка мастерской` documents from `/report-documents`.
+- Confirm only non-empty profile fields appear and render as plain document text.
+- Clear the profile and generate another document.
+- Confirm the profile section is omitted without errors and previously generated documents remain unchanged.
+- If smoke is clean, prepare a focused Workshop profile display polish / app header integration PR.
+- If smoke reveals an issue, prepare a narrowly scoped report document integration fix first.
+- Do not assign or reuse a historical PR number before the new PR is created.
+- Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, motion work, migrations, and unrelated business mutations out of scope.
 
 ## Done
 - Architecture draft
@@ -81,16 +89,25 @@ After PR98 — Workshop profile integration with report documents complete; prep
 - PR58 client wishes and feedback UI plus follow-up fixes preserving client-card drafts are complete.
 
 
+- PR99 documentation/governance: project UI/UX contract, project-owned Codex UI guidance, repository UI boundaries, and canonical `Склад` navigation wording.
+- PR100 documentation/governance: reviewed Impeccable provenance plus safe project-owned non-executable UI guidance; upstream skill not activated.
+- PR101 documentation/governance: Taste Skill review recorded as not approved; no upstream content, scripts, dependencies, hooks, or active skill installed.
+
 ## In progress
-- Preparing the next scoped implementation PR: PR95 — Settings data/status foundation, unless PR94 smoke finds Settings UI issues that should be fixed first.
+
+- Manual browser smoke for Workshop profile and report document integration has not yet been recorded as completed.
+- No new runtime implementation PR should start until that smoke result determines whether the next slice is polish or an integration fix.
 
 ## Blocked
 - Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
-- PR95 — Settings data/status foundation is the recommended next roadmap-scoped task.
-- If PR94 local browser smoke finds Settings navigation or copy issues, fix those issues in a Settings UI follow-up PR first.
-- Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, document preview, migration changes, and unrelated business behavior out of scope unless explicitly requested.
+
+- First: complete and record the Workshop profile/report document manual browser smoke.
+- On a clean result: Workshop profile display polish / app header integration.
+- On a failed result: narrowly scoped report document integration follow-up fixes before polish.
+- Do not assign the next PR number until the PR is actually created.
+- Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, motion work, migration changes, and unrelated business behavior out of scope unless explicitly approved.
 
 ## Important notes
 - PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.

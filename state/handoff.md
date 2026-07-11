@@ -1,23 +1,47 @@
 # Handoff
 
-PR98 integrated editable Workshop profile settings with newly generated report documents and cleaned stale Settings/state copy.
+## Repository state
+
+Runtime product implementation is complete through PR98.
+
+PR99-PR101 were documentation and governance changes only:
+- PR99 added the project UI/UX contract, project-owned Codex UI skill guidance, and related repository documentation.
+- PR100 added the reviewed project-owned Impeccable guidance and provenance record without activating the upstream skill.
+- PR101 recorded the Taste Skill review and rejection without installing, vendoring, copying, or activating upstream content.
+
+## Workshop profile behavior
+
+PR98 integrated editable Workshop profile settings with newly generated report documents and cleaned stale Settings copy.
 
 Changed behavior:
 - Newly generated Markdown `Сводка мастерской` documents include `Профиль мастерской` near the top when at least one profile field is configured.
 - Newly generated PDF overview documents use the same backend-built presentation lines, so configured profile fields are included when local PDF support is available.
 - Empty profile fields are omitted; an entirely empty/default profile omits the profile section and document generation still succeeds.
-- Profile values are rendered as plain document text and escaped/neutralized for Markdown control characters and HTML-like text.
+- Profile values are rendered as plain document text and escaped or neutralized for Markdown control characters and HTML-like text.
 - Existing generated Markdown/PDF files and metadata sidecars are not mutated.
-- `GET /api/settings/status` and `/settings` copy now say the Workshop profile is editable while calculation-sensitive settings remain out of scope.
+- `GET /api/settings/status` and `/settings` copy state that the Workshop profile is editable while calculation-sensitive settings remain out of scope.
 - `/report-documents` explains that filled Workshop profile fields are added to new Markdown/PDF summaries.
 
-Safety notes:
+Safety boundaries:
 - Profile values are display metadata only and do not affect calculations.
-- Report values still come from backend `ReportsService`; frontend does not inject profile values into generated documents.
+- Report values come from backend `ReportsService`; frontend does not inject profile values into generated documents.
 - Document generation remains explicit and backend-owned.
 - No recipes, clients, orders, production, stock, costs, taxes, margins, alerts, purchases, imports, exports, backups, demo data, or historical records are changed by this integration.
 - No tax/currency/margin/unit settings, stock-threshold settings, expiry settings, template editor, logo upload, DOCX, invoices, labels, certificates, roles/auth, cloud sync, integrations, scheduled jobs, or AI/RAG were added.
 
-Manual smoke was not run in a browser in this non-interactive environment. Recommended smoke: open `/settings`, save profile fields, open `/report-documents`, create/download Markdown, confirm only non-empty profile fields appear, create/open PDF if available, clear profile via API or UI, generate another document, and confirm no profile section/no crash and previous files remain unchanged.
+## Immediate next step
 
-Next recommended task: PR99 — Workshop profile display polish / app header integration, or PR99 — Workshop profile report document integration follow-up fixes if smoke finds issues.
+Manual browser smoke has not yet been recorded as completed.
+
+Run this smoke before starting another implementation slice:
+- Save non-empty and empty Workshop profile fields in `/settings`.
+- Generate/open new Markdown and PDF summaries from `/report-documents`.
+- Confirm only non-empty values appear.
+- Clear the profile and generate another document.
+- Confirm the profile section is omitted, generation does not crash, and previous files remain unchanged.
+
+After smoke:
+- Clean result: prepare Workshop profile display polish / app header integration.
+- Failed result: prepare a focused report document integration fix first.
+
+Do not assign a new PR number until the PR is actually created.
