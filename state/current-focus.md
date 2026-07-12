@@ -28,3 +28,7 @@ Do not jump to tax, currency, margin, unit, stock-threshold, expiry, role/auth, 
 ## Current repair focus
 
 Manual browser smoke found a blocking `/settings` UI defect: the Workshop profile form was visually broken and the runtime screen exposed internal planning/status material. The active implementation branch contains a focused Settings page repair only: compact introduction, independently rendered Workshop profile, and a concise local data section. After merge, rerun isolated browser smoke for `/settings` Workshop profile behavior and `/report-documents` integration.
+
+## Shared action-state visual contract
+
+Source and runtime audits identified system-wide inconsistency in shared action states. This branch contains only the shared visual contract for existing primary, secondary, danger, compact, action-link, and sidebar navigation focus states. No application behavior or API behavior changed. Browser smoke remains required across representative routes before merge. The next planned system-level task is shared feedback presentation and semantics.

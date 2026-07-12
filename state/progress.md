@@ -691,3 +691,11 @@ Import CSV/XLSX draft backend foundation.
 - The focused Settings repair removes future settings matrices, readiness classifications, repository metadata, and MVP-boundary planning copy from the runtime `/settings` screen.
 - The Workshop profile section now renders from its own API state instead of being hidden by the general Settings status request.
 - Next step after merge: rerun isolated browser smoke for Workshop profile saving/clearing and report-document generation integration.
+
+## Shared action-state visual contract
+
+- Source and runtime audits identified inconsistent shared action visual states across routes.
+- Current branch contains only the shared visual action-state contract in the frontend styles and minimal state notes.
+- No application behavior, API behavior, route logic, loading logic, or data behavior changed.
+- Browser smoke remains required across representative routes before merge.
+- Next planned system-level task: shared feedback presentation and semantics.
