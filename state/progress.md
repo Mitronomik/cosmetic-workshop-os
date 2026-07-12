@@ -699,3 +699,13 @@ Import CSV/XLSX draft backend foundation.
 - No application behavior, API behavior, route logic, loading logic, or data behavior changed.
 - Browser smoke remains required across representative routes before merge.
 - Next planned system-level task: shared feedback presentation and semantics.
+
+## PR105 focus contrast follow-up
+
+- Changed shared action `:focus-visible` outline color from `rgba(211, 154, 122, .75)` to `#9a5f49`; sidebar focus styling remains unchanged.
+- Browser smoke used an isolated temporary SQLite database and temporary user-data directory.
+- Tested `/settings`, `/exports`, `/report-documents`, `/alerts`, `/purchase-suggestions`, `/demo-data`, sidebar keyboard navigation, and 1440×900 plus 390×844 viewports.
+- Passed: shared action keyboard focus, hover/pressed states, disabled settings controls, `/exports` intercepted request-failure presentation, document action links, demo danger action after isolated demo install, no horizontal overflow, screenshots, and no page errors.
+- Unavailable in isolated data: alert resolve/dismiss row actions, purchase-suggestion row actions, and a disabled danger action after the safe demo install state.
+- Browser console finding: one expected 503 resource error from the intentional `/exports` request-failure interception; no unexpected console errors.
+- Frontend build passed.
