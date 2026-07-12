@@ -47,3 +47,13 @@ Current branch scope: shared feedback presentation and semantics for exactly `/s
 - Static load-error cards remain visible retry sections, not live alerts.
 - Added `aria-busy` to scoped action regions only: Workshop profile form, export create form, report document create form, import upload/apply panels, and demo install/clear confirmations.
 - Legacy feedback outside the five migrated routes remains intentionally for follow-up.
+
+## PR106 follow-up fixes
+
+Follow-up scope on the existing shared feedback PR:
+
+- Workshop profile initial load no longer renders backend GET copy as a success action result.
+- Workshop profile editing clears stale visible save/cancel/error feedback and clears persistent announcer text without re-rendering on each keystroke.
+- Persistent announcement regions are created at application startup before first action results.
+- Export, report document, import draft, and demo-data actions now distinguish mutation failure from follow-up refresh failure.
+- Import draft cancellation now follows the same action-result announcement contract.

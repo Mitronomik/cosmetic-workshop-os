@@ -75,3 +75,24 @@ This branch introduces the initial shared feedback presentation and announcement
 - Legacy feedback outside the five migrated routes remains intentionally for follow-up.
 
 Next planned system task: Scoped busy states for alerts and purchase suggestions.
+
+## PR106 follow-up handoff
+
+The existing shared feedback PR has been updated in place, not replaced.
+
+Fixes completed:
+
+- Workshop profile action-result feedback is now marked with `data-workshop-profile-result` and cleared when editing starts; state `message`/`error` and persistent announcer text are cleared without a keystroke render.
+- Initial Workshop profile load no longer displays the backend GET message as a success result.
+- Persistent announcers are created at startup via `ensureAnnouncementRegions()` before `render()`.
+- Export/report/import/demo flows no longer convert follow-up refresh failures into false mutation failures.
+- Import draft cancellation now clears stale announcers, announces cancellation success politely, and cancellation failure assertively.
+- Workshop profile cancel now announces the existing cancellation result politely without backend persistence.
+
+Verification notes:
+
+- Backend base/PR comparison is complete: both base `2265802f07b3ee3df7a1c5478bc6ae11fed096b7` and this PR branch report the same 5 failing tests and 463 passing tests for `cd backend && python3 -m pytest`.
+- Local Playwright/browser discovery found no installed browser automation path or browser binary, so required browser smoke/screenshots could not run in this environment without installing dependencies.
+- Isolated backend/frontend curl startup still passed for `/api/health` and `/settings`.
+
+Next planned system task remains: Scoped busy states for alerts and purchase suggestions.

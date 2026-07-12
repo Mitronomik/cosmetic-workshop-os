@@ -1342,16 +1342,24 @@ function submitExportCreate() {
     .then((response) => {
       exportUiState.lastCreatedExport = response.export;
       exportUiState.lastEntityCounts = response.entity_counts || {};
-      exportUiState.message = `${response.message || 'Экспорт создан.'} Файл: ${response.export.filename}`;
-      announcePolite(exportUiState.message);
-      return Promise.all([getExportStatus(), getExports()]);
-    })
-    .then(([statusResponse, list]) => {
-      exportUiState.exportStatus = statusResponse;
-      exportUiState.exports = list.exports;
-      exportUiState.status = 'ready';
-      exportUiState.actionStatus = 'idle';
-      render();
+      const successMessage = `${response.message || 'Экспорт создан.'} Файл: ${response.export.filename}`;
+      exportUiState.message = successMessage;
+      announcePolite(successMessage);
+      return Promise.all([getExportStatus(), getExports()])
+        .then(([statusResponse, list]) => {
+          exportUiState.exportStatus = statusResponse;
+          exportUiState.exports = list.exports;
+          exportUiState.status = 'ready';
+          exportUiState.actionStatus = 'idle';
+          render();
+        })
+        .catch(() => {
+          exportUiState.status = 'ready';
+          exportUiState.actionStatus = 'idle';
+          exportUiState.error = '';
+          exportUiState.message = `${successMessage} Не удалось обновить список экспортов. Нажмите «Обновить», чтобы перечитать данные.`;
+          render();
+        });
     })
     .catch(() => {
       exportUiState.actionStatus = 'idle';
@@ -1472,8 +1480,19 @@ function installDemoDataFromUi() {
   if (!demoDataUiState.demoStatus?.can_install || !demoDataUiState.installConfirmChecked || !demoDataUiState.understandDemoChecked) return;
   demoDataUiState.actionStatus = 'installing'; demoDataUiState.error = ''; demoDataUiState.message = ''; clearFeedbackAnnouncement(); render();
   installDemoData({ confirm_install: true, understand_demo_data: true })
-    .then((response) => { demoDataUiState.lastInstallResult = response; demoDataUiState.lastClearResult = null; demoDataUiState.message = response.message || 'Демо-данные установлены. Теперь можно открыть разделы и посмотреть пример работы.'; announcePolite(demoDataUiState.message); demoDataUiState.showInstallConfirm = false; demoDataUiState.installConfirmChecked = false; demoDataUiState.understandDemoChecked = false; return getDemoDataStatus(); })
-    .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
+    .then((response) => {
+      demoDataUiState.lastInstallResult = response;
+      demoDataUiState.lastClearResult = null;
+      const successMessage = response.message || 'Демо-данные установлены. Теперь можно открыть разделы и посмотреть пример работы.';
+      demoDataUiState.message = successMessage;
+      announcePolite(successMessage);
+      demoDataUiState.showInstallConfirm = false;
+      demoDataUiState.installConfirmChecked = false;
+      demoDataUiState.understandDemoChecked = false;
+      return getDemoDataStatus()
+        .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
+        .catch(() => { demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; demoDataUiState.error = ''; demoDataUiState.message = `${successMessage} Не удалось обновить статус демо-данных. Нажмите «Обновить статус», чтобы перечитать данные.`; render(); });
+    })
     .catch((error) => { const message = `Не удалось установить демо-данные. Рабочие данные не были частично изменены.${demoErrorDetails(error)}`; refreshDemoStatusAfterActionError(message); });
 }
 function clearDemoDataFromUi() {
@@ -1481,8 +1500,18 @@ function clearDemoDataFromUi() {
   if (!demoDataUiState.demoStatus?.can_clear || !demoDataUiState.clearConfirmChecked) return;
   demoDataUiState.actionStatus = 'clearing'; demoDataUiState.error = ''; demoDataUiState.message = ''; clearFeedbackAnnouncement(); render();
   clearDemoData({ confirm_clear: true })
-    .then((response) => { demoDataUiState.lastClearResult = response; demoDataUiState.lastInstallResult = null; demoDataUiState.message = response.message || 'Демо-данные очищены.'; announcePolite(demoDataUiState.message); demoDataUiState.showClearConfirm = false; demoDataUiState.clearConfirmChecked = false; return getDemoDataStatus(); })
-    .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
+    .then((response) => {
+      demoDataUiState.lastClearResult = response;
+      demoDataUiState.lastInstallResult = null;
+      const successMessage = response.message || 'Демо-данные очищены.';
+      demoDataUiState.message = successMessage;
+      announcePolite(successMessage);
+      demoDataUiState.showClearConfirm = false;
+      demoDataUiState.clearConfirmChecked = false;
+      return getDemoDataStatus()
+        .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
+        .catch(() => { demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; demoDataUiState.error = ''; demoDataUiState.message = `${successMessage} Не удалось обновить статус демо-данных. Нажмите «Обновить статус», чтобы перечитать данные.`; render(); });
+    })
     .catch((error) => { const message = `Не удалось очистить демо-данные. Реальные данные не удалялись.${demoErrorDetails(error)}`; refreshDemoStatusAfterActionError(message); });
 }
 function demoDataPage() {
@@ -1546,19 +1575,27 @@ function submitImportDraft(form: HTMLFormElement) {
   createImportDraft(file, targetType)
     .then((response) => {
       resetImportApplyState();
-      importUiState.message = response.message || 'Черновик импорта создан. Данные ещё не внесены в систему.';
-      announcePolite(importUiState.message);
+      const successMessage = response.message || 'Черновик импорта создан. Данные ещё не внесены в систему.';
+      importUiState.message = successMessage;
+      announcePolite(successMessage);
       importUiState.selectedFileName = '';
       form.reset();
-      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]);
-    })
-    .then(([list, detail]) => {
-      importUiState.drafts = list.drafts;
-      importUiState.selectedDraft = detail;
-      importUiState.selectedDraftStatus = 'ready';
-      importUiState.status = 'ready';
-      importUiState.actionStatus = 'idle';
-      render();
+      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)])
+        .then(([list, detail]) => {
+          importUiState.drafts = list.drafts;
+          importUiState.selectedDraft = detail;
+          importUiState.selectedDraftStatus = 'ready';
+          importUiState.status = 'ready';
+          importUiState.actionStatus = 'idle';
+          render();
+        })
+        .catch(() => {
+          importUiState.status = 'ready';
+          importUiState.actionStatus = 'idle';
+          importUiState.error = '';
+          importUiState.message = `${successMessage} Не удалось обновить список или открыть предпросмотр. Нажмите «Обновить», чтобы перечитать черновики.`;
+          render();
+        });
     })
     .catch((error) => {
       importUiState.actionStatus = 'idle';
@@ -1587,18 +1624,29 @@ function cancelImportDraftFromUi(id: number) {
   importUiState.actionStatus = 'cancelling';
   importUiState.error = '';
   importUiState.message = '';
+  clearFeedbackAnnouncement();
   render();
   cancelImportDraft(id)
-    .then((response) => Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]).then(([list, detail]) => ({ response, list, detail })))
-    .then(({ response, list, detail }) => {
-      importUiState.drafts = list.drafts;
-      importUiState.selectedDraft = detail;
-      importUiState.selectedDraftStatus = 'ready';
-      importUiState.actionStatus = 'idle';
-      importUiState.message = response.message || 'Черновик импорта отменён. Рабочие данные не изменены.';
-      render();
+    .then((response) => {
+      const successMessage = response.message || 'Черновик импорта отменён. Рабочие данные не изменены.';
+      importUiState.message = successMessage;
+      announcePolite(successMessage);
+      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)])
+        .then(([list, detail]) => {
+          importUiState.drafts = list.drafts;
+          importUiState.selectedDraft = detail;
+          importUiState.selectedDraftStatus = 'ready';
+          importUiState.actionStatus = 'idle';
+          render();
+        })
+        .catch(() => {
+          importUiState.actionStatus = 'idle';
+          importUiState.error = '';
+          importUiState.message = `${successMessage} Не удалось обновить список или предпросмотр. Нажмите «Обновить», чтобы перечитать черновики.`;
+          render();
+        });
     })
-    .catch((error) => { importUiState.actionStatus = 'idle'; importUiState.error = error instanceof Error && error.message !== 'API request failed' ? error.message : 'Не удалось отменить черновик импорта.'; render(); });
+    .catch((error) => { importUiState.actionStatus = 'idle'; importUiState.error = error instanceof Error && error.message !== 'API request failed' ? error.message : 'Не удалось отменить черновик импорта.'; importUiState.message = ''; announceAssertive(importUiState.error); render(); });
 }
 
 
@@ -2238,7 +2286,7 @@ function loadSettingsStatus(force = false) {
 function loadWorkshopProfile(force = false) {
   if (!force && (workshopProfileUiState.status === 'loading' || workshopProfileUiState.status === 'ready')) return;
   workshopProfileUiState.status = 'loading'; workshopProfileUiState.error = ''; render();
-  getWorkshopProfile().then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: data.message }; render(); }).catch(() => { workshopProfileUiState.status = 'error'; workshopProfileUiState.error = 'Не удалось загрузить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; render(); });
+  getWorkshopProfile().then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: '' }; render(); }).catch(() => { workshopProfileUiState.status = 'error'; workshopProfileUiState.error = 'Не удалось загрузить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; render(); });
 }
 
 function settingsPage() {
@@ -2262,8 +2310,8 @@ function settingsWorkshopProfileCard() {
   const disabled = available ? '' : 'disabled';
   const actionDisabled = dirty ? '' : 'disabled';
   const retry = state.status === 'error' && state.profile === null ? '<div class="actions"><button class="secondary-action compact" type="button" data-action="reload-workshop-profile">Повторить загрузку</button></div>' : '';
-  const message = state.message && state.status === 'ready' ? feedbackMessage('success', state.message) : '';
-  const error = state.error ? feedbackMessage(state.status === 'error' && state.profile === null ? 'error' : 'error', state.error) : '';
+  const message = state.message && state.status === 'ready' ? `<div data-workshop-profile-result>${feedbackMessage('success', state.message)}</div>` : '';
+  const error = state.error ? `<div data-workshop-profile-result>${feedbackMessage('error', state.error)}</div>` : '';
   return `<section class="card data-card settings-card settings-profile-card"><h2>Профиль мастерской</h2><p>Эти данные добавляются в новые Markdown- и PDF-документы «Сводка мастерской», которые создаются в разделе «Документы отчётов».</p><p class="next-step">Ранее созданные документы не меняются автоматически.</p><div class="actions">${settingsAction('Открыть документы отчётов', 'Документы отчетов')}</div>${loading ? '<p class="muted-text">Загружаем профиль мастерской…</p>' : ''}${error}${retry}${message}<div data-workshop-profile-dirty-notice ${dirty ? '' : 'hidden'}>${feedbackMessage('neutral', 'Есть несохранённые изменения.')}</div><form class="ingredient-form" data-form="workshop-profile" aria-busy="${saving ? 'true' : 'false'}"><div class="form-grid settings-profile-form"><label>Название мастерской<input data-workshop-profile-field="workshop_name" value="${escapeHtml(draft.workshop_name)}" maxlength="120" placeholder="Например, Мастерская Анны" ${disabled} /></label><label>Имя мастера / косметолога<input data-workshop-profile-field="master_name" value="${escapeHtml(draft.master_name)}" maxlength="120" placeholder="Например, Анна Иванова" ${disabled} /></label><label class="full-span">Контактная информация<textarea data-workshop-profile-field="workshop_contact_text" maxlength="500" rows="4" placeholder="Телефон, почта или удобный способ связи" ${disabled}>${escapeHtml(draft.workshop_contact_text)}</textarea></label><label class="full-span">Краткое описание / примечание<textarea data-workshop-profile-field="workshop_note" maxlength="500" rows="4" placeholder="Коротко о мастерской для новых сводок" ${disabled}>${escapeHtml(draft.workshop_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" data-workshop-profile-save ${actionDisabled}>${saving ? 'Сохраняем…' : 'Сохранить профиль'}</button><button class="secondary-action" type="button" data-action="cancel-workshop-profile" ${actionDisabled}>Отменить изменения</button></div></form></section>`;
 }
 
@@ -2277,8 +2325,14 @@ function syncWorkshopProfileDraftUi() {
   if (saveButton) saveButton.disabled = !dirty;
   const cancelButton = document.querySelector<HTMLButtonElement>('[data-action="cancel-workshop-profile"]');
   if (cancelButton) cancelButton.disabled = !dirty;
-  document.querySelectorAll<HTMLElement>('[data-workshop-profile-feedback]').forEach((element) => { element.hidden = true; element.textContent = ''; });
+  if (workshopProfileUiState.message || workshopProfileUiState.error) {
+    workshopProfileUiState.message = '';
+    workshopProfileUiState.error = '';
+    clearFeedbackAnnouncement();
+  }
+  document.querySelectorAll<HTMLElement>('[data-workshop-profile-result]').forEach((element) => { element.hidden = true; element.textContent = ''; });
 }
+
 
 function settingsLocalDataSection() {
   if (settingsUiState.status === 'loading' && !settingsUiState.data) {
@@ -2982,8 +3036,16 @@ function createReportDocumentFromUi(format: 'markdown' | 'pdf' = 'markdown') {
   const reason = reportDocumentsUiState.reason.trim();
   reportDocumentsUiState.actionStatus = 'creating'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = ''; clearFeedbackAnnouncement(); render();
   createOverviewReportDocument({ format, ...(reason ? { reason } : {}) })
-    .then((response) => { reportDocumentsUiState.lastCreatedDocument = response.document; reportDocumentsUiState.reason = ''; reportDocumentsUiState.message = `${response.message || 'Документ создан.'} Его можно открыть или скачать из списка ниже.`; announcePolite(reportDocumentsUiState.message); return Promise.all([getReportDocumentStatus(), getReportDocuments()]); })
-    .then(([status, list]) => { reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; render(); })
+    .then((response) => {
+      reportDocumentsUiState.lastCreatedDocument = response.document;
+      reportDocumentsUiState.reason = '';
+      const successMessage = `${response.message || 'Документ создан.'} Его можно открыть или скачать из списка ниже.`;
+      reportDocumentsUiState.message = successMessage;
+      announcePolite(successMessage);
+      return Promise.all([getReportDocumentStatus(), getReportDocuments()])
+        .then(([status, list]) => { reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; render(); })
+        .catch(() => { reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = `${successMessage} Не удалось обновить список документов. Нажмите «Обновить список», чтобы перечитать данные.`; render(); });
+    })
     .catch((error: unknown) => { const detail = error instanceof Error && error.message && error.message !== 'API request failed' ? ` ${error.message}` : ''; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = `Не удалось создать документ отчета. Данные мастерской не изменялись.${detail}`; reportDocumentsUiState.message = ''; announceAssertive(reportDocumentsUiState.error); render(); });
 }
 
@@ -3006,6 +3068,7 @@ function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!r
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
 window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); loadSectionData(activeSection); render(); });
+ensureAnnouncementRegions();
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
@@ -3017,8 +3080,9 @@ function updateWorkshopProfileDraft(event: Event) {
   const field = target.dataset.workshopProfileField as keyof WorkshopProfile | undefined;
   if (!field) return;
   workshopProfileUiState.draft = { ...workshopProfileUiState.draft, [field]: target.value };
+  if (workshopProfileUiState.error || workshopProfileUiState.message) clearFeedbackAnnouncement();
   workshopProfileUiState.error = ''; workshopProfileUiState.message = '';
   syncWorkshopProfileDraftUi();
 }
-function cancelWorkshopProfileChanges() { const profile = workshopProfileUiState.profile; if (!isWorkshopProfileFormAvailable() || profile === null || !isWorkshopProfileDirty()) return; workshopProfileUiState.draft = { ...profile }; workshopProfileUiState.error = ''; workshopProfileUiState.message = 'Несохранённые изменения отменены. Восстановлена последняя сохранённая версия.'; render(); }
+function cancelWorkshopProfileChanges() { const profile = workshopProfileUiState.profile; if (!isWorkshopProfileFormAvailable() || profile === null || !isWorkshopProfileDirty()) return; clearFeedbackAnnouncement(); workshopProfileUiState.draft = { ...profile }; workshopProfileUiState.error = ''; workshopProfileUiState.message = 'Несохранённые изменения отменены. Восстановлена последняя сохранённая версия.'; announcePolite(workshopProfileUiState.message); render(); }
 function submitWorkshopProfileForm(event: Event) { event.preventDefault(); if (!isWorkshopProfileFormAvailable() || !isWorkshopProfileDirty()) return; workshopProfileUiState.actionStatus = 'saving'; workshopProfileUiState.error = ''; workshopProfileUiState.message = ''; clearFeedbackAnnouncement(); render(); updateWorkshopProfile(workshopProfileUiState.draft).then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: 'Профиль мастерской сохранён. Эти данные будут добавлены только в новые документы «Сводка мастерской». Ранее созданные документы не изменятся.' }; announcePolite(workshopProfileUiState.message); render(); }).catch((error: Error) => { workshopProfileUiState.actionStatus = 'idle'; workshopProfileUiState.error = error.message || 'Не удалось сохранить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; announceAssertive(workshopProfileUiState.error); render(); }); }

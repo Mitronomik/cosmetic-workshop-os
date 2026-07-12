@@ -721,3 +721,13 @@ Import CSV/XLSX draft backend foundation.
 - Source inventory found remaining legacy `.page-message`, `.error-message`, and `.inline-message` uses across dashboard, alerts, purchase suggestions, backup, reports, recipes, clients, production history, stock/catalog, onboarding, and help; these remain outside this migration slice.
 - Checks: `git diff --check` passed; `cd frontend && npm run build` passed; `cd backend && python3 -m pytest` ran 468 tests with 463 passed and 5 existing backend-area failures unrelated to this frontend/state-only branch; isolated backend/frontend startup curl passed for `/api/health` and `/settings`.
 - Browser Playwright smoke and required screenshots were unavailable because Playwright is not installed and `npx --yes playwright --version` failed with npm registry 403.
+
+## PR106 follow-up — feedback semantics fixes
+
+- Fixed Workshop profile stale result feedback after editing begins: state `message`/`error`, visible result markup, and persistent announcers are cleared while the dirty notice remains controlled without full render.
+- Changed normal Workshop profile initial load to keep the action-result message empty; save/cancel remain user-action results.
+- Pre-created persistent polite/assertive announcers during startup before the first action can update text.
+- Split mutation success/failure from follow-up refresh failure for export creation, report document creation, import draft creation, demo-data install, and demo-data clear. A successful mutation with failed refresh now preserves the success result and asks the user to refresh instead of announcing a false action failure.
+- Added import draft cancellation success/failure announcements to the scoped action-result contract.
+- Backend baseline verification: base commit `2265802f07b3ee3df7a1c5478bc6ae11fed096b7` and PR branch both ran `cd backend && python3 -m pytest` with the identical 5 failing tests and 463 passing tests; no backend test failure exists only on this PR branch.
+- Playwright/local browser discovery found no local `playwright`, `playwright-core`, `@playwright/test`, Chromium, Chrome, or equivalent browser executable. Browser smoke and screenshots remain unavailable in this environment because no local browser automation tool is present and dependencies were not installed.
