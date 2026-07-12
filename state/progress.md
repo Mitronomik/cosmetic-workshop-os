@@ -731,3 +731,13 @@ Import CSV/XLSX draft backend foundation.
 - Added import draft cancellation success/failure announcements to the scoped action-result contract.
 - Backend baseline verification: base commit `2265802f07b3ee3df7a1c5478bc6ae11fed096b7` and PR branch both ran `cd backend && python3 -m pytest` with the identical 5 failing tests and 463 passing tests; no backend test failure exists only on this PR branch.
 - Playwright/local browser discovery found no local `playwright`, `playwright-core`, `@playwright/test`, Chromium, Chrome, or equivalent browser executable. Browser smoke and screenshots remain unavailable in this environment because no local browser automation tool is present and dependencies were not installed.
+
+## PR106 correction — Import Apply mutation vs refresh
+
+- Corrected the earlier broad Import-flow statement: import draft creation, import draft cancellation, and import draft application are all covered, and Apply now has its own mutation-vs-refresh separation.
+- Import Apply mutation failure remains the only path that sets `applyStatus = 'error'`, fills `applyError` / `applyErrorIssues`, announces assertively, and shows the no-partial-change statement.
+- Import Apply mutation success now immediately preserves `response.apply_result`, sets success, closes confirmation, resets Apply checkboxes, announces politely once, and replaces the stale selected draft with the backend apply response before refreshing.
+- Apply success plus failed list/detail refresh now preserves the successful mutation result and shows a refresh warning instead of `Не удалось применить черновик`.
+- Stale pre-apply detail cannot offer Apply again after successful mutation because selected draft state is replaced with the apply response before refresh.
+- Structured mutation errors still preserve row, field, code, and message details for actual Apply failures.
+- Local Hermes browser smoke remains pending local verification; this update makes no browser, responsive, keyboard, screenshot, or announcement-count claims.

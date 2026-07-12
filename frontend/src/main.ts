@@ -1660,8 +1660,33 @@ function applySelectedImportDraftFromUi() {
   if (!importUiState.applyConfirmChecked || !importUiState.backupAcknowledged || (needsWarningAck && !importUiState.allowWarnings)) { importUiState.applyError = needsWarningAck ? 'Перед применением подтвердите запись в базу, backup и разрешение применить черновик с предупреждениями.' : 'Перед применением подтвердите запись в базу и backup.'; render(); return; }
   importUiState.applyStatus = 'applying'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; clearFeedbackAnnouncement(); render();
   applyImportDraft(detail.draft.id, { confirm_apply: true, backup_acknowledged: true, allow_warnings: needsWarningAck ? true : importUiState.allowWarnings })
-    .then((response) => Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]).then(([list, refreshed]) => ({ response, list, refreshed })))
-    .then(({ response, list, refreshed }) => { importUiState.drafts = list.drafts; importUiState.selectedDraft = refreshed; importUiState.selectedDraftStatus = 'ready'; importUiState.applyStatus = 'success'; importUiState.showApplyConfirm = false; importUiState.applyMessage = response.message || 'Черновик импорта применён. Данные внесены в систему.'; announcePolite(importUiState.applyMessage); importUiState.lastApplyResult = response.apply_result || getDraftApplyResult(refreshed.draft); importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; render(); })
+    .then((response) => {
+      const successMessage = response.message || 'Черновик импорта применён. Данные внесены в систему.';
+      importUiState.selectedDraft = { ...detail, draft: response.draft };
+      importUiState.selectedDraftStatus = 'ready';
+      importUiState.applyStatus = 'success';
+      importUiState.showApplyConfirm = false;
+      importUiState.applyMessage = successMessage;
+      importUiState.applyError = '';
+      importUiState.applyErrorIssues = [];
+      importUiState.lastApplyResult = response.apply_result;
+      importUiState.applyConfirmChecked = false;
+      importUiState.backupAcknowledged = false;
+      importUiState.allowWarnings = false;
+      announcePolite(successMessage);
+      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)])
+        .then(([list, refreshed]) => {
+          importUiState.drafts = list.drafts;
+          importUiState.selectedDraft = refreshed;
+          importUiState.selectedDraftStatus = 'ready';
+          importUiState.lastApplyResult = response.apply_result || getDraftApplyResult(refreshed.draft);
+          render();
+        })
+        .catch(() => {
+          importUiState.applyMessage = 'Черновик применён, данные внесены в систему. Не удалось обновить список или предпросмотр. Нажмите «Обновить», чтобы перечитать данные.';
+          render();
+        });
+    })
     .catch((error) => { const apiError = error as ApiErrorWithDetails; importUiState.applyStatus = 'error'; importUiState.applyError = importApplyErrorMessage(error); importUiState.applyErrorIssues = Array.isArray(apiError?.issues) ? apiError.issues : []; announceAssertive(importUiState.applyError); render(); });
 }
 function importApplyErrorMessage(error: unknown) {

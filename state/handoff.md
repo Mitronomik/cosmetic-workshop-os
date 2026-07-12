@@ -96,3 +96,15 @@ Verification notes:
 - Isolated backend/frontend curl startup still passed for `/api/health` and `/settings`.
 
 Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+
+## PR106 Import Apply correction handoff
+
+Import flow coverage is now explicitly:
+
+- import draft creation;
+- import draft cancellation;
+- import draft application.
+
+Import Apply mutation and refresh failures are separated. A successful Apply followed by failed list/detail refresh preserves `response.apply_result`, keeps success state, avoids the assertive mutation-failure path, and shows a manual refresh warning. The stale pre-apply selected draft is replaced with the backend apply response before refresh so Apply cannot be triggered again from old readiness state. Structured Apply mutation errors remain preserved for actual mutation failures only.
+
+Local Hermes browser smoke is still pending local verification. No browser, responsive, keyboard, screenshot, or announcement-count claims are made for this correction. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.

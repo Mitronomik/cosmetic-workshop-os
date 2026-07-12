@@ -57,3 +57,13 @@ Follow-up scope on the existing shared feedback PR:
 - Persistent announcement regions are created at application startup before first action results.
 - Export, report document, import draft, and demo-data actions now distinguish mutation failure from follow-up refresh failure.
 - Import draft cancellation now follows the same action-result announcement contract.
+
+## PR106 Import Apply refresh semantics correction
+
+Focused correction for the existing PR:
+
+- Import draft creation, cancellation, and application are now explicitly tracked as separate mutation-vs-refresh flows.
+- Import Apply now treats `applyImportDraft()` success as the completed working-data mutation before refreshing draft list/detail.
+- If Apply succeeds but list/detail refresh fails, the UI preserves the successful apply result, does not enter the mutation-error path, and the stale pre-apply detail is replaced with the backend apply response so Apply cannot be offered again.
+- Structured Apply mutation errors remain preserved only for actual `applyImportDraft()` failures.
+- Local Hermes browser smoke remains pending local verification; no browser, responsive, keyboard, screenshot, or announcement-count claims are made here.
