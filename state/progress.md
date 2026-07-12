@@ -709,3 +709,15 @@ Import CSV/XLSX draft backend foundation.
 - Unavailable in isolated data: alert resolve/dismiss row actions, purchase-suggestion row actions, and a disabled danger action after the safe demo install state.
 - Browser console finding: one expected 503 resource error from the intentional `/exports` request-failure interception; no unexpected console errors.
 - Frontend build passed.
+
+## Initial shared feedback presentation and semantics slice
+
+- Added one shared frontend feedback helper for neutral/success/warning/error presentation.
+- Added shared CSS for readable, non-color-only feedback blocks with structured detail support and narrow-screen wrapping.
+- Added persistent hidden announcement regions outside the re-rendered app root: polite `role="status"` and assertive `role="alert"`.
+- Migrated feedback and one-time announcement behavior for `/settings`, `/exports`, `/report-documents`, `/imports`, and `/demo-data` only.
+- Preserved structured import apply errors with row number, field name where available, safe user-facing message, issue list, and no-partial-change statement.
+- Added `aria-busy` coverage for the scoped forms/panels only.
+- Source inventory found remaining legacy `.page-message`, `.error-message`, and `.inline-message` uses across dashboard, alerts, purchase suggestions, backup, reports, recipes, clients, production history, stock/catalog, onboarding, and help; these remain outside this migration slice.
+- Checks: `git diff --check` passed; `cd frontend && npm run build` passed; `cd backend && python3 -m pytest` ran 468 tests with 463 passed and 5 existing backend-area failures unrelated to this frontend/state-only branch; isolated backend/frontend startup curl passed for `/api/health` and `/settings`.
+- Browser Playwright smoke and required screenshots were unavailable because Playwright is not installed and `npx --yes playwright --version` failed with npm registry 403.

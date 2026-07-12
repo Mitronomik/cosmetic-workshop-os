@@ -59,3 +59,19 @@ Source and runtime audits identified inconsistent shared action visual states. T
 ## PR105 focus contrast follow-up handoff
 
 Shared action focus contrast was fixed by changing the `.primary-action`, `.secondary-action`, and `.danger-action` `:focus-visible` outline from `rgba(211, 154, 122, .75)` to `#9a5f49`; sidebar focus styling was intentionally left unchanged. Browser smoke ran with an isolated temporary SQLite database/user-data directory on `/settings`, `/exports`, `/report-documents`, `/alerts`, `/purchase-suggestions`, `/demo-data`, sidebar keyboard navigation, and 1440×900 plus 390×844 viewports. Passed scenarios included focus visibility, hover/pressed states, disabled settings controls, loading/error presentation, generated document links, demo danger action after isolated demo install, no horizontal overflow, screenshots, and no page errors. Alert row actions, purchase-suggestion row actions, and disabled danger action presentation were unavailable in the isolated data. The only console error was the intentional intercepted `/exports` 503 request-failure smoke. Frontend build passed.
+
+## Shared feedback semantics slice handoff
+
+This branch introduces the initial shared feedback presentation and announcement contract for exactly `/settings`, `/exports`, `/report-documents`, `/imports`, and `/demo-data`.
+
+- Visible feedback uses a shared helper with neutral, success, warning, and error tones.
+- Persistent hidden announcers are created outside `#root`: polite action results use `role="status"`; assertive action failures use `role="alert"`.
+- Visible feedback elements do not carry live-region semantics, preventing duplicate announcements when `root.innerHTML` re-renders.
+- Action handlers clear stale announcer text at the start of a new request and announce only new success/error results.
+- Static route-load errors remain visible recovery cards and are not treated as action alerts.
+- `aria-busy` is limited to the affected action region: Workshop profile form, export creation form, report document creation form, import upload/apply panels, and demo install/clear confirmation panels.
+- Import apply errors remain structured and escaped.
+- Completed checks: source searches before/after, `git diff --check`, frontend build, isolated backend/frontend curl smoke. Backend pytest currently reports 5 unrelated backend-area failures. Browser Playwright smoke/screenshots were unavailable because Playwright installation from npm was blocked by 403.
+- Legacy feedback outside the five migrated routes remains intentionally for follow-up.
+
+Next planned system task: Scoped busy states for alerts and purchase suggestions.

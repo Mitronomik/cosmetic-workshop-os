@@ -36,3 +36,14 @@ Source and runtime audits identified system-wide inconsistency in shared action 
 ## PR105 focus contrast follow-up
 
 Shared action focus outline was corrected from `rgba(211, 154, 122, .75)` to `#9a5f49` for `.primary-action`, `.secondary-action`, and `.danger-action`; the sidebar focus rule was left unchanged. Browser smoke ran against an isolated temporary SQLite database on `/settings`, `/exports`, `/report-documents`, `/alerts`, `/purchase-suggestions`, `/demo-data`, sidebar keyboard navigation, and 1440×900 plus 390×844 viewports. Passed checks covered action focus visibility, hover/pressed states, disabled styling where available, loading/error presentations, action wrapping, no horizontal overflow, screenshots, and no page errors. Row actions were unavailable for alerts and purchase suggestions in the isolated database, and disabled danger action styling was unavailable after the safe demo install state; these were not invented with unsupported data. The only console error observed was the intentionally intercepted `/exports` 503 request-failure smoke. Frontend build passed.
+
+## Initial shared feedback migration slice
+
+Current branch scope: shared feedback presentation and semantics for exactly `/settings`, `/exports`, `/report-documents`, `/imports`, and `/demo-data`.
+
+- Added shared visible feedback tones: neutral, success, warning, error.
+- Added persistent hidden polite/assertive announcers outside the `#root` render cycle.
+- Success action results announce politely once; action failures announce assertively once.
+- Static load-error cards remain visible retry sections, not live alerts.
+- Added `aria-busy` to scoped action regions only: Workshop profile form, export create form, report document create form, import upload/apply panels, and demo install/clear confirmations.
+- Legacy feedback outside the five migrated routes remains intentionally for follow-up.
