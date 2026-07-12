@@ -684,3 +684,10 @@ Import CSV/XLSX draft backend foundation.
 - Settings and report-document UI copy now reflects that Workshop profile is editable and added to new summaries.
 - Docs/state were cleaned up from stale PR94/PR95/PR96/PR97 wording.
 - No report calculations, business records, tax/currency/margin/unit/stock-threshold/expiry settings, document templates, logo upload, DOCX, invoices, labels, or certificates were added.
+
+## Settings UI repair
+
+- Manual browser smoke found a blocking Settings UI defect: profile fields flowed horizontally and the page exposed technical planning content.
+- The focused Settings repair removes future settings matrices, readiness classifications, repository metadata, and MVP-boundary planning copy from the runtime `/settings` screen.
+- The Workshop profile section now renders from its own API state instead of being hidden by the general Settings status request.
+- Next step after merge: rerun isolated browser smoke for Workshop profile saving/clearing and report-document generation integration.

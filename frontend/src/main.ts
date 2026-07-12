@@ -760,7 +760,8 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="reset-help-filters"]').forEach((button) => button.addEventListener('click', () => { helpUiState.search = ''; helpUiState.category = ''; helpUiState.selectedArticleId = 'getting-started'; render(); }));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-help-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-settings-target"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
-  root.querySelectorAll<HTMLButtonElement>('[data-action="reload-settings"]').forEach((button) => button.addEventListener('click', () => { loadSettingsStatus(true); loadWorkshopProfile(true); }));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="reload-settings-status"]').forEach((button) => button.addEventListener('click', () => loadSettingsStatus(true)));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="reload-workshop-profile"]').forEach((button) => button.addEventListener('click', () => loadWorkshopProfile(true)));
   root.querySelector<HTMLFormElement>('[data-form="workshop-profile"]')?.addEventListener('submit', submitWorkshopProfileForm);
   root.querySelector<HTMLButtonElement>('[data-action="cancel-workshop-profile"]')?.addEventListener('click', cancelWorkshopProfileChanges);
   root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-workshop-profile-field]').forEach((input) => input.addEventListener('input', updateWorkshopProfileDraft));
@@ -2188,30 +2189,60 @@ function loadWorkshopProfile(force = false) {
 }
 
 function settingsPage() {
-  const data = settingsUiState.data;
-  const loading = settingsUiState.status === 'loading' && !data;
-  const error = settingsUiState.status === 'error' && !data;
-  return `<div class="settings-layout"><section class="card data-card dashboard-hero settings-hero"><div><p class="card-kicker">Настройки</p><h2>Настройки</h2><p>Здесь собраны безопасные точки управления приложением: данные, резервные копии, импорт, экспорт, документы отчетов и справка.</p><p class="next-step">На этой странице можно редактировать профиль мастерской. Backup, импорт, экспорт, демо-данные и документы отчетов запускаются только в своих разделах.</p>${data ? `<p class="muted-text">Статус сформирован: ${formatDateTime(data.generated_at)}</p>` : ''}</div>${settingsUiState.status === 'ready' ? '<span class="pill success">Профиль редактируется</span>' : '<span class="pill muted">Загрузка</span>'}</section>${loading ? '<section class="card"><p>Загружаем настройки…</p></section>' : ''}${error ? settingsLoadErrorCard() : ''}${data ? `${settingsWorkshopProfileCard()}${settingsLocalDataCard(data)}${settingsCapabilitiesSection(data)}${settingsDecisionMatrix(data)}${settingsAboutSection(data)}${settingsBoundariesSection()}` : settingsFallbackCards()}</div>`;
+  return `<div class="settings-layout"><section class="card data-card settings-hero"><p>Здесь можно сохранить данные мастерской для новых документов и перейти к безопасной работе с локальными файлами.</p></section>${settingsWorkshopProfileCard()}${settingsLocalDataSection()}</div>`;
 }
 
-function settingsWorkshopProfileCard() { const state = workshopProfileUiState; const draft = state.draft; const saving = state.actionStatus === 'saving'; return `<section class="card data-card settings-card"><p class="card-kicker">Профиль мастерской</p><h2>Профиль мастерской</h2><p>Эти данные описывают мастерскую и добавляются в новые Markdown/PDF-сводки мастерской, если профиль заполнен. Они не меняют рецепты, склад, заказы, производство или исторические расчеты.</p><p class="next-step">Профиль мастерской не меняет старые заказы, партии, рецепты, себестоимость, налоги или складские движения.</p>${state.status === 'loading' ? '<p>Загружаем профиль…</p>' : ''}${state.error ? `<p class="form-error">${escapeHtml(state.error)}</p>` : ''}${state.message && state.status === 'ready' ? `<p class="success-message">${escapeHtml(state.message)}</p>` : ''}<form class="stacked-form" data-form="workshop-profile"><label>Название мастерской<input data-workshop-profile-field="workshop_name" value="${escapeHtml(draft.workshop_name)}" maxlength="120" /></label><label>Имя мастера / косметолога<input data-workshop-profile-field="master_name" value="${escapeHtml(draft.master_name)}" maxlength="120" /></label><label>Контактная информация<textarea data-workshop-profile-field="workshop_contact_text" maxlength="500">${escapeHtml(draft.workshop_contact_text)}</textarea></label><label>Краткое описание / примечание<textarea data-workshop-profile-field="workshop_note" maxlength="500">${escapeHtml(draft.workshop_note)}</textarea></label><div class="actions"><button class="primary-action" type="submit" ${saving ? 'disabled' : ''}>${saving ? 'Сохраняем…' : 'Сохранить профиль'}</button><button class="secondary-action" type="button" data-action="cancel-workshop-profile" ${saving ? 'disabled' : ''}>Отменить изменения</button></div></form></section>`; }
+function isWorkshopProfileDirty() {
+  const profile = workshopProfileUiState.profile;
+  const draft = workshopProfileUiState.draft;
+  return profile !== null && (draft.workshop_name !== profile.workshop_name || draft.master_name !== profile.master_name || draft.workshop_contact_text !== profile.workshop_contact_text || draft.workshop_note !== profile.workshop_note);
+}
+function isWorkshopProfileFormAvailable() { return workshopProfileUiState.status === 'ready' && workshopProfileUiState.profile !== null && workshopProfileUiState.actionStatus !== 'saving'; }
 
-function settingsLoadErrorCard() { return `<section class="card error-card"><h2>Статус недоступен</h2><p>Не удалось загрузить статус настроек. Проверьте, что локальное приложение запущено.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-settings">Обновить</button></div></section>`; }
-function settingsFallbackCards() { return `<div class="settings-card-grid">${settingsStaticCard('Локальные данные', 'Приложение работает локально. Статус будет показан после подключения к backend.', [['Открыть резервные копии', 'Резервные копии'], ['Открыть экспорт', 'Экспорт'], ['Открыть импорт', 'Импорт']])}${settingsStaticCard('Помощь', 'Справка доступна без изменения данных.', [['Открыть помощь', 'Помощь']])}</div>`; }
-function settingsStaticCard(title: string, text: string, actions: Array<[string, NavigationSection]>) { return `<section class="card data-card settings-card"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(text)}</p><div class="actions">${actions.map(([label, section]) => settingsAction(label, section)).join('')}</div></section>`; }
+function settingsWorkshopProfileCard() {
+  const state = workshopProfileUiState;
+  const draft = state.draft;
+  const saving = state.actionStatus === 'saving';
+  const loading = state.status === 'loading';
+  const available = isWorkshopProfileFormAvailable();
+  const dirty = available && isWorkshopProfileDirty();
+  const disabled = available ? '' : 'disabled';
+  const actionDisabled = dirty ? '' : 'disabled';
+  const retry = state.status === 'error' && state.profile === null ? '<div class="actions"><button class="secondary-action compact" type="button" data-action="reload-workshop-profile">Повторить загрузку</button></div>' : '';
+  const message = state.message && state.status === 'ready' ? `<p class="page-message settings-neutral-message" aria-live="polite" data-workshop-profile-feedback>${escapeHtml(state.message)}</p>` : '';
+  const error = state.error ? `<p class="form-error" data-workshop-profile-feedback>${escapeHtml(state.error)}</p>` : '';
+  return `<section class="card data-card settings-card settings-profile-card"><h2>Профиль мастерской</h2><p>Эти данные добавляются в новые Markdown- и PDF-документы «Сводка мастерской», которые создаются в разделе «Документы отчётов».</p><p class="next-step">Ранее созданные документы не меняются автоматически.</p><div class="actions">${settingsAction('Открыть документы отчётов', 'Документы отчетов')}</div>${loading ? '<p class="muted-text">Загружаем профиль мастерской…</p>' : ''}${error}${retry}${message}<p class="page-message settings-neutral-message" aria-live="polite" data-workshop-profile-dirty-notice ${dirty ? '' : 'hidden'}>Есть несохранённые изменения.</p><form class="ingredient-form" data-form="workshop-profile"><div class="form-grid settings-profile-form"><label>Название мастерской<input data-workshop-profile-field="workshop_name" value="${escapeHtml(draft.workshop_name)}" maxlength="120" placeholder="Например, Мастерская Анны" ${disabled} /></label><label>Имя мастера / косметолога<input data-workshop-profile-field="master_name" value="${escapeHtml(draft.master_name)}" maxlength="120" placeholder="Например, Анна Иванова" ${disabled} /></label><label class="full-span">Контактная информация<textarea data-workshop-profile-field="workshop_contact_text" maxlength="500" rows="4" placeholder="Телефон, почта или удобный способ связи" ${disabled}>${escapeHtml(draft.workshop_contact_text)}</textarea></label><label class="full-span">Краткое описание / примечание<textarea data-workshop-profile-field="workshop_note" maxlength="500" rows="4" placeholder="Коротко о мастерской для новых сводок" ${disabled}>${escapeHtml(draft.workshop_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" data-workshop-profile-save ${actionDisabled}>${saving ? 'Сохраняем…' : 'Сохранить профиль'}</button><button class="secondary-action" type="button" data-action="cancel-workshop-profile" ${actionDisabled}>Отменить изменения</button></div></form></section>`;
+}
+
+
+function syncWorkshopProfileDraftUi() {
+  const available = isWorkshopProfileFormAvailable();
+  const dirty = available && isWorkshopProfileDirty();
+  const dirtyNotice = document.querySelector<HTMLElement>('[data-workshop-profile-dirty-notice]');
+  if (dirtyNotice) dirtyNotice.hidden = !dirty;
+  const saveButton = document.querySelector<HTMLButtonElement>('[data-workshop-profile-save]');
+  if (saveButton) saveButton.disabled = !dirty;
+  const cancelButton = document.querySelector<HTMLButtonElement>('[data-action="cancel-workshop-profile"]');
+  if (cancelButton) cancelButton.disabled = !dirty;
+  document.querySelectorAll<HTMLElement>('[data-workshop-profile-feedback]').forEach((element) => { element.hidden = true; element.textContent = ''; });
+}
+
+function settingsLocalDataSection() {
+  if (settingsUiState.status === 'loading' && !settingsUiState.data) {
+    return `<section class="card data-card settings-card"><h2>Локальные данные</h2><p>Проверяем, где хранятся данные на этом компьютере…</p>${settingsLocalDataActions()}</section>`;
+  }
+  if (settingsUiState.status === 'error' && !settingsUiState.data) {
+    return `<section class="card data-card settings-card error-card"><h2>Локальные данные</h2><p>Не удалось показать сведения о папке данных. Профиль мастерской можно редактировать отдельно, если он загрузился.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-settings-status">Обновить сведения</button></div>${settingsLocalDataActions()}</section>`;
+  }
+  const local = settingsUiState.data?.local_data;
+  return `<section class="card data-card settings-card"><h2>Локальные данные</h2><p>Данные мастерской хранятся на этом компьютере. Для переноса или крупных изменений используйте резервные копии и экспорт.</p>${local?.user_data_path_display ? `<div class="settings-data-path"><span>Папка данных</span><strong class="path-text">${escapeHtml(local.user_data_path_display)}</strong></div>` : '<p class="muted-text">Папка данных будет показана, когда локальное приложение вернет эти сведения.</p>'}${settingsLocalDataActions()}</section>`;
+}
+
+function settingsLocalDataActions() {
+  return `<div class="actions">${settingsAction('Резервные копии', 'Резервные копии', true)}${settingsAction('Экспорт', 'Экспорт')}${settingsAction('Импорт', 'Импорт')}</div>`;
+}
+
 function settingsAction(label: string, section: NavigationSection, primary = false) { return `<button class="${primary ? 'primary-action' : 'secondary-action'} compact" type="button" data-action="navigate-settings-target" data-section="${section}">${escapeHtml(label)}</button>`; }
-function settingsLocalDataCard(data: SettingsStatusResponse) { const local = data.local_data; return `<section class="card data-card settings-card"><p class="card-kicker">Безопасность данных</p><h2>Локальные данные</h2><p>${escapeHtml(local.message)}</p><div class="overview-grid compact-overview"><div class="metric-card"><span>Данные отдельно от кода</span><strong>${yesNo(local.user_data_separate_from_code)}</strong></div><div class="metric-card"><span>Интернет обязателен</span><strong>${yesNo(data.app.internet_required)}</strong></div><div class="metric-card"><span>Backup перед миграцией</span><strong>${yesNo(local.backup_before_migration_required)}</strong></div>${local.user_data_path_display ? `<div class="metric-card wide"><span>Папка данных</span><strong class="path-text">${escapeHtml(local.user_data_path_display)}</strong></div>` : ''}</div><div class="actions">${settingsAction('Открыть резервные копии', 'Резервные копии', true)}${settingsAction('Открыть экспорт', 'Экспорт')}${settingsAction('Открыть импорт', 'Импорт')}</div></section>`; }
-function settingsCapabilitiesSection(data: SettingsStatusResponse) { return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Готовые безопасные сценарии</p><h2>Возможности</h2><p>Кнопки из настроек только открывают существующие разделы и не запускают действия.</p></div><span class="pill info">${data.capabilities.length}</span></div><div class="settings-card-grid">${data.capabilities.map(settingsCapabilityCard).join('')}</div></section>`; }
-function settingsCapabilityCard(capability: SettingsCapability) { const section = sectionForRoute(capability.route); return `<article class="card data-card settings-card"><div class="section-heading"><h3>${escapeHtml(capability.title)}</h3><span class="pill ${capability.status === 'ready' ? 'success' : 'muted'}">${settingsCapabilityStatusLabel(capability.status)}</span></div><p>${escapeHtml(capability.description)}</p><p class="muted-text">Запускает действие из настроек: ${yesNo(capability.mutates_from_settings)}</p>${section ? `<div class="actions">${settingsAction(`Открыть ${labelForSection(section).toLowerCase()}`, section)}</div>` : ''}</article>`; }
-function settingsDecisionMatrix(data: SettingsStatusResponse) { return `<section class="card data-card"><p class="card-kicker">Решение на будущее</p><h2>Матрица будущих настроек</h2><p class="next-step">На этой странице можно редактировать профиль мастерской. Backup, импорт, экспорт, демо-данные и документы отчетов запускаются только в своих разделах.</p>${data.setting_groups.map(settingsGroupMarkup).join('')}</section>`; }
-function settingsGroupMarkup(group: SettingsGroup) { return `<div class="settings-group"><h3>${escapeHtml(group.title)}</h3><p>${escapeHtml(group.description)}</p><div class="settings-definition-list">${group.items.map(settingsDefinitionMarkup).join('')}</div></div>`; }
-function settingsDefinitionMarkup(item: SettingsDefinition) { return `<article class="recipe-line settings-definition"><div class="section-heading"><div><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.description)}</p></div><span class="pill info">${settingsStatusLabel(item.status)}</span></div><p><strong>Влияет на расчеты:</strong> ${yesNo(item.affects_calculations)} · <strong>Влияет на историю:</strong> ${yesNo(item.affects_historical_data)} · <strong>Нужен backend-сервис:</strong> ${yesNo(item.requires_backend_service)}</p><p class="next-step">${escapeHtml(item.safety_note)}</p></article>`; }
-function settingsAboutSection(data: SettingsStatusResponse) { return `<section class="card data-card settings-about-card"><p class="card-kicker">О приложении</p><h2>${escapeHtml(data.app.product_name)}</h2><p>${escapeHtml(data.app.mode)} для рецептов, клиентов, заказов, склада, производства, отчетов и резервных копий.</p><div class="overview-grid compact-overview"><div class="metric-card"><span>Local-first</span><strong>${yesNo(data.app.local_first)}</strong></div><div class="metric-card"><span>Интернет обязателен</span><strong>${yesNo(data.app.internet_required)}</strong></div><div class="metric-card"><span>Репозиторий</span><strong>${escapeHtml(data.app.repository_name || 'Не указан')}</strong></div></div><p class="next-step">${escapeHtml(data.message)}</p></section>`; }
-function settingsBoundariesSection() { return `<section class="card data-card settings-card"><p class="card-kicker">Границы MVP</p><h2>Что не добавлено</h2><p>Нет редактирования налогов, валют, маржи, ролей, облака, интеграций, шаблонов, DOCX, счетов, этикеток, сертификатов, расписаний или AI/RAG.</p></section>`; }
-function sectionForRoute(route: string | null): NavigationSection | null { if (!route) return null; return navigationGroups.flatMap((group) => group.items).find((item) => item.path === route)?.section ?? null; }
-function yesNo(value: boolean) { return value ? 'Да' : 'Нет'; }
-function settingsStatusLabel(status: SettingStatus) { return ({ editable_now: 'Можно редактировать', read_only_now: 'Только просмотр', safe_mvp_candidate: 'Кандидат для MVP', requires_backend_rules: 'Нужны backend-правила', v2_or_later: 'Позже', not_mvp: 'Не MVP' } as Record<SettingStatus, string>)[status]; }
-function settingsCapabilityStatusLabel(status: SettingsCapabilityStatus) { return ({ ready: 'Готово', available: 'Доступно', planned: 'Запланировано', disabled: 'Отключено' } as Record<SettingsCapabilityStatus, string>)[status]; }
 
 function helpPage() {
   const articles = filteredHelpArticles();
@@ -2928,11 +2959,13 @@ loadOnboarding();
 loadSectionData(activeSection);
 
 function updateWorkshopProfileDraft(event: Event) {
+  if (!isWorkshopProfileFormAvailable()) return;
   const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
   const field = target.dataset.workshopProfileField as keyof WorkshopProfile | undefined;
   if (!field) return;
   workshopProfileUiState.draft = { ...workshopProfileUiState.draft, [field]: target.value };
   workshopProfileUiState.error = ''; workshopProfileUiState.message = '';
+  syncWorkshopProfileDraftUi();
 }
-function cancelWorkshopProfileChanges() { workshopProfileUiState.draft = { ...(workshopProfileUiState.profile ?? emptyWorkshopProfile()) }; workshopProfileUiState.error = ''; workshopProfileUiState.message = ''; render(); }
-function submitWorkshopProfileForm(event: Event) { event.preventDefault(); if (workshopProfileUiState.actionStatus === 'saving') return; workshopProfileUiState.actionStatus = 'saving'; workshopProfileUiState.error = ''; workshopProfileUiState.message = ''; render(); updateWorkshopProfile(workshopProfileUiState.draft).then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: 'Профиль мастерской сохранен.' }; render(); }).catch((error: Error) => { workshopProfileUiState.actionStatus = 'idle'; workshopProfileUiState.error = error.message || 'Не удалось сохранить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; render(); }); }
+function cancelWorkshopProfileChanges() { const profile = workshopProfileUiState.profile; if (!isWorkshopProfileFormAvailable() || profile === null || !isWorkshopProfileDirty()) return; workshopProfileUiState.draft = { ...profile }; workshopProfileUiState.error = ''; workshopProfileUiState.message = 'Несохранённые изменения отменены. Восстановлена последняя сохранённая версия.'; render(); }
+function submitWorkshopProfileForm(event: Event) { event.preventDefault(); if (!isWorkshopProfileFormAvailable() || !isWorkshopProfileDirty()) return; workshopProfileUiState.actionStatus = 'saving'; workshopProfileUiState.error = ''; workshopProfileUiState.message = ''; render(); updateWorkshopProfile(workshopProfileUiState.draft).then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: 'Профиль мастерской сохранён. Эти данные будут добавлены только в новые документы «Сводка мастерской». Ранее созданные документы не изменятся.' }; render(); }).catch((error: Error) => { workshopProfileUiState.actionStatus = 'idle'; workshopProfileUiState.error = error.message || 'Не удалось сохранить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; render(); }); }
