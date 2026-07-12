@@ -67,3 +67,14 @@ Focused correction for the existing PR:
 - If Apply succeeds but list/detail refresh fails, the UI preserves the successful apply result, does not enter the mutation-error path, and the stale pre-apply detail is replaced with the backend apply response so Apply cannot be offered again.
 - Structured Apply mutation errors remain preserved only for actual `applyImportDraft()` failures.
 - Local Hermes browser smoke remains pending local verification; no browser, responsive, keyboard, screenshot, or announcement-count claims are made here.
+
+## PR106 Import Apply applied-branch warning correction
+
+Focused correction for the already-applied Import Apply branch:
+
+- Added explicit `applyRefreshWarning` UI state instead of overloading `applyMessage` for refresh warnings.
+- The warning is cleared on Apply reset/open/start/failure/successful refresh paths so it cannot leak to another draft.
+- Apply success plus read-model refresh failure remains a success state and keeps the authoritative applied draft from the mutation response.
+- The `status === 'applied'` branch now renders the refresh warning with shared warning feedback, while keeping Apply unavailable.
+- No assertive failure is emitted for read-model refresh failure.
+- Local Hermes browser smoke remains pending; no browser, responsive, keyboard, screenshot, or announcement-count claim is made.

@@ -741,3 +741,13 @@ Import CSV/XLSX draft backend foundation.
 - Stale pre-apply detail cannot offer Apply again after successful mutation because selected draft state is replaced with the apply response before refresh.
 - Structured mutation errors still preserve row, field, code, and message details for actual Apply failures.
 - Local Hermes browser smoke remains pending local verification; this update makes no browser, responsive, keyboard, screenshot, or announcement-count claims.
+
+## PR106 correction — render already-applied refresh warning
+
+- Added explicit `applyRefreshWarning` state for Import Apply read-model refresh failures.
+- The previously hidden Apply refresh warning is now rendered in the `status === 'applied'` branch using `feedbackMessage('warning', importUiState.applyRefreshWarning)`.
+- Apply success plus refresh failure remains `applyStatus = 'success'`, preserves `response.apply_result`, preserves the authoritative applied draft, and tells the user to press Refresh to reread the draft list/preview.
+- Read-model refresh failure does not set `applyError`, does not populate structured mutation issues, does not show the no-partial-change statement, and does not call `announceAssertive()`.
+- Stale applied state cannot offer Apply again because selected draft is already replaced with the mutation response before refresh.
+- Warning state is cleared on Apply reset, opening another draft, starting Apply, actual Apply mutation failure, and successful post-Apply refresh.
+- Local Hermes browser smoke remains pending local verification; no browser, responsive, keyboard, screenshot, or announcement-count claims are made.

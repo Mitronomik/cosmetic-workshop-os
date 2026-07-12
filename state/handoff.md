@@ -108,3 +108,9 @@ Import flow coverage is now explicitly:
 Import Apply mutation and refresh failures are separated. A successful Apply followed by failed list/detail refresh preserves `response.apply_result`, keeps success state, avoids the assertive mutation-failure path, and shows a manual refresh warning. The stale pre-apply selected draft is replaced with the backend apply response before refresh so Apply cannot be triggered again from old readiness state. Structured Apply mutation errors remain preserved for actual mutation failures only.
 
 Local Hermes browser smoke is still pending local verification. No browser, responsive, keyboard, screenshot, or announcement-count claims are made for this correction. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+
+## PR106 applied-branch refresh-warning handoff
+
+Import Apply refresh warning now has explicit state (`applyRefreshWarning`) and is visible for an already applied draft. The `status === 'applied'` branch renders the warning with shared warning feedback, then renders the preserved Apply result. Apply success plus refresh failure remains a success state, does not emit an assertive failure, does not show mutation-error/no-partial-change copy, and keeps the authoritative applied draft so Apply cannot be offered again.
+
+Manual recovery remains the existing Import page Refresh action; it rereads the draft list/read model and does not run Apply. Local Hermes browser smoke remains pending local verification. No browser, responsive, keyboard, screenshot, or announcement-count claim is made. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
