@@ -720,7 +720,7 @@ Import CSV/XLSX draft backend foundation.
 - Added `aria-busy` coverage for the scoped forms/panels only.
 - Source inventory found remaining legacy `.page-message`, `.error-message`, and `.inline-message` uses across dashboard, alerts, purchase suggestions, backup, reports, recipes, clients, production history, stock/catalog, onboarding, and help; these remain outside this migration slice.
 - Checks: `git diff --check` passed; `cd frontend && npm run build` passed; `cd backend && python3 -m pytest` ran 468 tests with 463 passed and 5 existing backend-area failures unrelated to this frontend/state-only branch; isolated backend/frontend startup curl passed for `/api/health` and `/settings`.
-- Browser Playwright smoke and required screenshots were unavailable because Playwright is not installed and `npx --yes playwright --version` failed with npm registry 403.
+- Earlier Codex-local Playwright smoke and screenshots were unavailable in that environment because Playwright was not installed and npm registry access failed; this limitation was later superseded by the completed external Hermes audit recorded below.
 
 ## PR106 follow-up — feedback semantics fixes
 
@@ -730,7 +730,7 @@ Import CSV/XLSX draft backend foundation.
 - Split mutation success/failure from follow-up refresh failure for export creation, report document creation, import draft creation, demo-data install, and demo-data clear. A successful mutation with failed refresh now preserves the success result and asks the user to refresh instead of announcing a false action failure.
 - Added import draft cancellation success/failure announcements to the scoped action-result contract.
 - Backend baseline verification: base commit `2265802f07b3ee3df7a1c5478bc6ae11fed096b7` and PR branch both ran `cd backend && python3 -m pytest` with the identical 5 failing tests and 463 passing tests; no backend test failure exists only on this PR branch.
-- Playwright/local browser discovery found no local `playwright`, `playwright-core`, `@playwright/test`, Chromium, Chrome, or equivalent browser executable. Browser smoke and screenshots remain unavailable in this environment because no local browser automation tool is present and dependencies were not installed.
+- Playwright/local browser discovery in Codex found no local browser automation tool, so Codex itself did not run browser smoke at that time; the later external Hermes audit completed the required browser verification recorded below.
 
 ## PR106 correction — Import Apply mutation vs refresh
 
@@ -740,7 +740,7 @@ Import CSV/XLSX draft backend foundation.
 - Apply success plus failed list/detail refresh now preserves the successful mutation result and shows a refresh warning instead of `Не удалось применить черновик`.
 - Stale pre-apply detail cannot offer Apply again after successful mutation because selected draft state is replaced with the apply response before refresh.
 - Structured mutation errors still preserve row, field, code, and message details for actual Apply failures.
-- Local Hermes browser smoke remains pending local verification; this update makes no browser, responsive, keyboard, screenshot, or announcement-count claims.
+- Local pending-smoke wording is superseded by the completed external Hermes audit recorded below.
 
 ## PR106 correction — render already-applied refresh warning
 
@@ -750,4 +750,19 @@ Import CSV/XLSX draft backend foundation.
 - Read-model refresh failure does not set `applyError`, does not populate structured mutation issues, does not show the no-partial-change statement, and does not call `announceAssertive()`.
 - Stale applied state cannot offer Apply again because selected draft is already replaced with the mutation response before refresh.
 - Warning state is cleared on Apply reset, opening another draft, starting Apply, actual Apply mutation failure, and successful post-Apply refresh.
-- Local Hermes browser smoke remains pending local verification; no browser, responsive, keyboard, screenshot, or announcement-count claims are made.
+- Local pending-smoke wording is superseded by the completed external Hermes audit recorded below.
+
+
+## PR106 Hermes browser smoke completed
+
+- Canonical tested GitHub runtime head: `4a2a88d156d1516568b608b113818dfe77e32210`. External GitHub verification confirmed this was the published PR #106 head; the local Codex task checkout may use rewritten SHAs.
+- Environment: isolated temporary repository checkout at `/tmp/cwo-pr106-deterministic-20260713-092916/repository`, isolated SQLite database, isolated user-data directory, local frontend/backend plus deterministic local fault proxy, Headless Chrome, 1440×900 desktop viewport, 390×844 narrow viewport, no real user data.
+- Verdict: `PR106_DETERMINISTIC_SMOKE_PASS_WITH_NON_BLOCKING_FINDINGS`.
+- Normal Import Apply passed: draft creation returned 201, Apply returned 200, exactly one Apply POST occurred, exactly one ingredient was created, Apply result remained visible, repeat Apply became unavailable, polite success was observed, no assertive failure occurred, and `aria-busy` returned to false.
+- Apply success plus refresh failure passed: Apply mutation returned 200, the proxy intentionally returned 503 for the immediate draft detail/list refresh requests, mutation success and the applied result were preserved, the imported ingredient existed exactly once, shared warning feedback told the user to press `Обновить`, false mutation-failure text was absent, no assertive Apply failure was emitted, repeat Apply stayed unavailable, manual Refresh recovered the final state, and no second Apply POST or duplicate record occurred.
+- Structured mutation conflict passed: duplicate Apply returned 409, structured row-level details were visible, the persistent assertive `role="alert"` region received the blocking failure, no polite Apply success was emitted, no duplicate ingredient was created, no partial domain write occurred, and `applyRefreshWarning` remained empty.
+- Settings passed: initial profile load did not show action-success feedback, Cancel restored the saved value and produced polite feedback, Save produced polite feedback, editing after Save cleared stale visible success, focus remained in the field, and `aria-busy` behaved correctly during Save.
+- Responsive/keyboard smoke passed: no page-level horizontal overflow at 390×844, tested controls remained reachable, persistent announcement regions were outside `#root`, and 27 keyboard-reachable elements were observed in logical DOM order. No screen-reader certification or formal WCAG conformance claim is made.
+- Diagnostics: intentional 503 responses belonged only to the refresh-failure scenario; the expected 409 belonged only to the conflict scenario; final record counts were normal import 1, refresh-failure import 1, duplicate created by rejected conflict 0; seven PNG screenshots and seven matching metrics files were verified; repository remained clean after the audit; audit-started ports were released.
+- Non-blocking observations: MutationObserver errors came from the deterministic audit harness observing `#root` before it existed and were not an application defect; a separate narrow screenshot of the conflict draft was unavailable after scenario state transition, while required conflict workflow evidence was present.
+- All mandatory PR106 browser scenarios passed, no code blocker remains, and PR106 is ready for merge after this documentation-only commit is verified. Browser smoke does not need to be repeated for this commit because only state documentation changed.

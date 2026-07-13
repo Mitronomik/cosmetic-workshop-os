@@ -71,7 +71,7 @@ This branch introduces the initial shared feedback presentation and announcement
 - Static route-load errors remain visible recovery cards and are not treated as action alerts.
 - `aria-busy` is limited to the affected action region: Workshop profile form, export creation form, report document creation form, import upload/apply panels, and demo install/clear confirmation panels.
 - Import apply errors remain structured and escaped.
-- Completed checks: source searches before/after, `git diff --check`, frontend build, isolated backend/frontend curl smoke. Backend pytest currently reports 5 unrelated backend-area failures. Browser Playwright smoke/screenshots were unavailable because Playwright installation from npm was blocked by 403.
+- Completed checks: source searches before/after, `git diff --check`, frontend build, isolated backend/frontend curl smoke. Backend pytest currently reports 5 unrelated backend-area failures. Earlier Codex-local browser Playwright smoke/screenshots were unavailable because Playwright installation from npm was blocked by 403; the completed external Hermes audit is recorded below.
 - Legacy feedback outside the five migrated routes remains intentionally for follow-up.
 
 Next planned system task: Scoped busy states for alerts and purchase suggestions.
@@ -92,7 +92,7 @@ Fixes completed:
 Verification notes:
 
 - Backend base/PR comparison is complete: both base `2265802f07b3ee3df7a1c5478bc6ae11fed096b7` and this PR branch report the same 5 failing tests and 463 passing tests for `cd backend && python3 -m pytest`.
-- Local Playwright/browser discovery found no installed browser automation path or browser binary, so required browser smoke/screenshots could not run in this environment without installing dependencies.
+- Local Playwright/browser discovery in Codex found no installed browser automation path or browser binary, so Codex itself could not run browser smoke without installing dependencies; the later external Hermes audit completed browser verification and is recorded below.
 - Isolated backend/frontend curl startup still passed for `/api/health` and `/settings`.
 
 Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
@@ -107,10 +107,39 @@ Import flow coverage is now explicitly:
 
 Import Apply mutation and refresh failures are separated. A successful Apply followed by failed list/detail refresh preserves `response.apply_result`, keeps success state, avoids the assertive mutation-failure path, and shows a manual refresh warning. The stale pre-apply selected draft is replaced with the backend apply response before refresh so Apply cannot be triggered again from old readiness state. Structured Apply mutation errors remain preserved for actual mutation failures only.
 
-Local Hermes browser smoke is still pending local verification. No browser, responsive, keyboard, screenshot, or announcement-count claims are made for this correction. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+Local pending-smoke wording for this correction is superseded by the completed external Hermes audit recorded below. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
 
 ## PR106 applied-branch refresh-warning handoff
 
 Import Apply refresh warning now has explicit state (`applyRefreshWarning`) and is visible for an already applied draft. The `status === 'applied'` branch renders the warning with shared warning feedback, then renders the preserved Apply result. Apply success plus refresh failure remains a success state, does not emit an assertive failure, does not show mutation-error/no-partial-change copy, and keeps the authoritative applied draft so Apply cannot be offered again.
 
-Manual recovery remains the existing Import page Refresh action; it rereads the draft list/read model and does not run Apply. Local Hermes browser smoke remains pending local verification. No browser, responsive, keyboard, screenshot, or announcement-count claim is made. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+Manual recovery remains the existing Import page Refresh action; it rereads the draft list/read model and does not run Apply. The completed external Hermes audit below supersedes earlier pending-smoke wording. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+
+
+## PR106 completed Hermes browser smoke handoff
+
+External GitHub verification confirmed PR #106 was published at canonical runtime head `4a2a88d156d1516568b608b113818dfe77e32210`, which is the exact head tested by Hermes. The local Codex task checkout may have a rewritten local SHA, but no runtime commit was published after the tested head.
+
+Audit environment:
+- Isolated temporary repository checkout: `/tmp/cwo-pr106-deterministic-20260713-092916/repository`.
+- Isolated SQLite database and isolated user-data directory; no real user data was used.
+- Local frontend, backend, and deterministic local fault proxy.
+- Headless Chrome with desktop viewport 1440×900 and narrow viewport 390×844.
+
+Verdict: `PR106_DETERMINISTIC_SMOKE_PASS_WITH_NON_BLOCKING_FINDINGS`.
+
+Scenario results:
+- Normal Import Apply: draft creation returned 201; Apply returned 200; exactly one Apply POST occurred; exactly one ingredient was created; Apply result remained visible; repeat Apply became unavailable; polite success was observed; no assertive failure occurred; `aria-busy` returned to false.
+- Apply success plus refresh failure: Apply mutation returned 200; the proxy intentionally returned 503 for immediate draft detail/list refresh; mutation success and applied result remained visible; the imported ingredient existed exactly once; shared warning feedback instructed the user to press `Обновить`; false mutation-failure text was absent; no assertive Apply failure was emitted; repeat Apply remained unavailable; manual Refresh recovered final state; no second Apply POST or duplicate record occurred.
+- Structured mutation conflict: duplicate Apply returned 409; structured row-level details were visible; the persistent assertive `role="alert"` region received the blocking failure; no polite Apply success was emitted; no duplicate ingredient was created; no partial domain write occurred; `applyRefreshWarning` remained empty.
+- Settings: normal initial profile load did not appear as action-success feedback; Cancel restored the saved value and produced polite feedback; Save produced polite feedback; editing after Save cleared stale visible success; focus remained in the field; `aria-busy` behaved correctly during Save.
+- Responsive and keyboard: no page-level horizontal overflow at 390×844; tested controls remained reachable; persistent announcement regions were outside `#root`; 27 keyboard-reachable elements were observed in logical DOM order. This is DOM/browser smoke evidence, not screen-reader certification or formal WCAG conformance.
+- Diagnostics: intentional 503 responses were limited to the refresh-failure scenario; the expected 409 belonged only to the conflict scenario; final record counts were normal import 1, refresh-failure import 1, duplicate created by rejected conflict 0; seven PNG screenshots and seven matching metrics files were verified; repository remained clean after the audit; audit-started ports were released.
+
+Non-blocking observations:
+1. MutationObserver errors came from the deterministic audit harness attempting to observe `#root` before the node existed; they were not an application defect.
+2. A separate narrow screenshot of the already-failed conflict draft was unavailable after the scenario state transition; required conflict workflow and desktop evidence was present.
+
+All mandatory PR106 browser scenarios passed. No code blocker remains. PR106 is ready for merge after this documentation-only commit is verified. Browser smoke does not need to be repeated for this commit because it changes only state documentation.
+
+Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
