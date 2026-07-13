@@ -765,4 +765,14 @@ Import CSV/XLSX draft backend foundation.
 - Responsive/keyboard smoke passed: no page-level horizontal overflow at 390×844, tested controls remained reachable, persistent announcement regions were outside `#root`, and 27 keyboard-reachable elements were observed in logical DOM order. No screen-reader certification or formal WCAG conformance claim is made.
 - Diagnostics: intentional 503 responses belonged only to the refresh-failure scenario; the expected 409 belonged only to the conflict scenario; final record counts were normal import 1, refresh-failure import 1, duplicate created by rejected conflict 0; seven PNG screenshots and seven matching metrics files were verified; repository remained clean after the audit; audit-started ports were released.
 - Non-blocking observations: MutationObserver errors came from the deterministic audit harness observing `#root` before it existed and were not an application defect; a separate narrow screenshot of the conflict draft was unavailable after scenario state transition, while required conflict workflow evidence was present.
-- All mandatory PR106 browser scenarios passed, no code blocker remains, and PR106 is ready for merge after this documentation-only commit is verified. Browser smoke does not need to be repeated for this commit because only state documentation changed.
+- All mandatory PR106 browser scenarios passed, no code blocker remains, and PR #106 is now merged and verified. Browser smoke does not need to be repeated for this documentation-only plan PR because it changes only documentation/state files.
+
+## MVP product-readiness implementation plan
+
+- Added the approved active implementation plan at `docs/implementation-plan.md`.
+- The plan is derived from the current strategic roadmap, actual implementation status, and the evidence-based Hermes project audit.
+- `docs/roadmap.md` remains authoritative for product scope and strategic sequencing.
+- `docs/implementation-plan.md` now controls the current short-horizon sequence, product-readiness slices, unfinished MVP obligations, and MVP release gates.
+- PR #106 is merged and verified; its completed Hermes browser smoke remains the latest runtime verification baseline.
+- Next active runtime focus is Slice A1 — User-facing technical copy cleanup, which must be implemented in a separate focused PR with no future PR number assigned yet.
+- This documentation-only PR changed no runtime behavior, APIs, schemas, migrations, dependencies, lockfiles, CSS, frontend runtime code, or backend runtime code.

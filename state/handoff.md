@@ -95,7 +95,7 @@ Verification notes:
 - Local Playwright/browser discovery in Codex found no installed browser automation path or browser binary, so Codex itself could not run browser smoke without installing dependencies; the later external Hermes audit completed browser verification and is recorded below.
 - Isolated backend/frontend curl startup still passed for `/api/health` and `/settings`.
 
-Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+Next planned runtime task is superseded by the active implementation plan: Slice A1 — User-facing technical copy cleanup.
 
 ## PR106 Import Apply correction handoff
 
@@ -107,13 +107,13 @@ Import flow coverage is now explicitly:
 
 Import Apply mutation and refresh failures are separated. A successful Apply followed by failed list/detail refresh preserves `response.apply_result`, keeps success state, avoids the assertive mutation-failure path, and shows a manual refresh warning. The stale pre-apply selected draft is replaced with the backend apply response before refresh so Apply cannot be triggered again from old readiness state. Structured Apply mutation errors remain preserved for actual mutation failures only.
 
-Local pending-smoke wording for this correction is superseded by the completed external Hermes audit recorded below. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+Local pending-smoke wording for this correction is superseded by the completed external Hermes audit recorded below. Next planned runtime task is superseded by the active implementation plan: Slice A1 — User-facing technical copy cleanup.
 
 ## PR106 applied-branch refresh-warning handoff
 
 Import Apply refresh warning now has explicit state (`applyRefreshWarning`) and is visible for an already applied draft. The `status === 'applied'` branch renders the warning with shared warning feedback, then renders the preserved Apply result. Apply success plus refresh failure remains a success state, does not emit an assertive failure, does not show mutation-error/no-partial-change copy, and keeps the authoritative applied draft so Apply cannot be offered again.
 
-Manual recovery remains the existing Import page Refresh action; it rereads the draft list/read model and does not run Apply. The completed external Hermes audit below supersedes earlier pending-smoke wording. Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+Manual recovery remains the existing Import page Refresh action; it rereads the draft list/read model and does not run Apply. The completed external Hermes audit below supersedes earlier pending-smoke wording. Next planned runtime task is superseded by the active implementation plan: Slice A1 — User-facing technical copy cleanup.
 
 
 ## PR106 completed Hermes browser smoke handoff
@@ -140,6 +140,21 @@ Non-blocking observations:
 1. MutationObserver errors came from the deterministic audit harness attempting to observe `#root` before the node existed; they were not an application defect.
 2. A separate narrow screenshot of the already-failed conflict draft was unavailable after the scenario state transition; required conflict workflow and desktop evidence was present.
 
-All mandatory PR106 browser scenarios passed. No code blocker remains. PR106 is ready for merge after this documentation-only commit is verified. Browser smoke does not need to be repeated for this commit because it changes only state documentation.
+All mandatory PR106 browser scenarios passed. No code blocker remains. PR #106 is now merged and verified. Browser smoke does not need to be repeated for this documentation-only plan PR because it changes only documentation/state files.
 
-Next planned system task remains: Scoped busy states for alerts and purchase suggestions.
+Next planned runtime task is superseded by the active implementation plan: Slice A1 — User-facing technical copy cleanup.
+
+## MVP product-readiness plan handoff
+
+Current repository state after PR #106:
+- PR #106 is merged and verified.
+- Runtime product implementation remains the same as the PR #106 verified baseline; this branch is documentation-only.
+- The active implementation plan is now `docs/implementation-plan.md`.
+- `docs/roadmap.md` remains the strategic product roadmap and scope boundary.
+- Future Codex tasks must check both `docs/roadmap.md` and `docs/implementation-plan.md` before choosing scope.
+
+Next action:
+- Next active runtime slice: Slice A1 — User-facing technical copy cleanup.
+- Slice A1 must be created as a separate focused runtime PR.
+- No future PR number has been assigned.
+- Do not start validation-error migration, responsive table containment, dashboard work, tax/margin, restore, packaging, update behavior, cloud sync, OCR, AI/RAG, roles, or multi-user behavior as part of this documentation-only plan PR.

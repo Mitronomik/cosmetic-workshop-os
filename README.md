@@ -10,6 +10,7 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 - `docs/product-spec.md` - product specification
 - `docs/architecture.md` - architecture contract
 - `docs/roadmap.md` - PR-based roadmap
+- `docs/implementation-plan.md` - current implementation sequence, product-readiness slices, and MVP release gates
 - `docs/domain-model.md` - domain model
 - `docs/ui-ux-contract.md` - human-friendly UI rules
 - `docs/ui-skill-policy.md` - UI skill priority and third-party skill boundaries
