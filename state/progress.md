@@ -785,3 +785,11 @@ Import CSV/XLSX draft backend foundation.
 - Actual browser evidence: Playwright smoke used an isolated temporary SQLite database and user-data directory, local backend on `127.0.0.1:8010`, frontend on `127.0.0.1:5173`, and 1440×900 plus 390×844 viewports. Healthy state loaded without the positive API/backend badge or page-level overflow; `/imports` showed the corrected workflow copy; `/demo-data` showed Russian labels after demo install with no raw snake_case count keys; narrow view had no page-level overflow and keyboard focus remained visible; unavailable-state recovery text appeared with the existing repeat action and no observed polling loop. Screenshots were saved under `/tmp/cwo-a1a-screens`.
 - Limitations: backend pytest failures are unchanged baseline failures outside this frontend-copy slice; offline smoke intentionally produced failed network-resource console messages while API requests were aborted to simulate unavailable local service.
 - Merge status: branch is ready for focused review after commit/PR creation; no future PR number is assigned here.
+
+## Slice A1b1 — Demo Data and inventory movement copy cleanup
+
+- Scope: static user-facing copy only in `/demo-data`, `/ingredient-lots`, and `/stock-movements`.
+- Updated Demo Data blocking, installation, clearing, and boundary wording to avoid backend/internal terminology while keeping dynamic blocking reasons visible and escaped.
+- Updated ingredient-lot and stock-movement loading/fallback wording to describe user-visible failures without API terminology.
+- Updated stock-movement balance and safety explanations to describe movement-derived balances and outgoing movement limits in product language.
+- Preserved demo install/clear behavior, confirmation rules, disabled rules, stock calculations, backend-owned validation, request flow, CSS, dependencies, migrations, and `docs/implementation-plan.md`.

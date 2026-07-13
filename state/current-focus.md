@@ -1,33 +1,32 @@
-# Current Focus
+# Current focus — Slice A1b1
 
-## Slice A1a — focused technical copy cleanup
+Slice A1b1 is limited to static user-facing copy cleanup in exactly three runtime routes:
 
-Exact scope:
-- remove the permanent healthy local-service availability badge from normal operation;
-- keep an unavailable-state Russian recovery message without API/backend/internal wording;
-- update only the introductory `/imports` copy to describe CSV/XLSX → draft → preview/validation → confirmation → Apply → working records;
-- map visible `/demo-data` count keys to Russian product labels with unknown keys shown as «Другие данные».
+- `/demo-data`
+- `/ingredient-lots`
+- `/stock-movements`
 
 Non-goals:
-- no A1b copy cleanup for exports, backups, reports, recipes, inventory, Help, Settings, dashboard capability cards, route readiness metadata, navigation statuses, or planned modules;
-- no backend, API, schema, migration, CSS, dependency, polling, retry, import behavior, demo behavior, or state-transition changes.
 
-Tests/checks for this slice:
-- `git diff --check`;
-- `git diff --name-only`;
-- `git diff --stat`;
-- `git status --short`;
-- `cd frontend && npm run build`;
-- `cd backend && python3 -m pytest`;
-- focused source diff review for Import Apply identifiers;
-- focused browser smoke at 1440×900 and 390×844 if local browser tooling is available.
+- Do not implement A1b2 or A1b3.
+- Do not change Settings, Reports, Backups, Exports, Import, Dashboard, Recipes, Clients, Orders, Production, Packaging, navigation metadata, route readiness statuses, or onboarding copy.
+- Do not change backend files, API contracts, schemas, migrations, dependencies, lockfiles, CSS, request timing, confirmation controls, disabled rules, aria-busy, focus behavior, or stock/demo behavior.
+- Do not rewrite dynamic backend-provided messages; keep them safely escaped where currently rendered.
+- Do not assign or predict a future pull request number.
+
+Required checks before merge:
+
+- `git diff --check`
+- `git diff --name-only`
+- `git diff --stat`
+- source-diff safety review for demo install/clear and stock movement identifiers
+- scoped terminology search in `frontend/src/main.ts`
+- `cd frontend && npm run build`
+- `cd backend && python3 -m pytest`
+- focused browser smoke when browser tooling is available; otherwise mark manual focused smoke required before merge
 
 Merge gate:
-- frontend build passes;
-- backend result is reported honestly;
-- no backend files change;
-- Import Apply behavior diff remains copy-only;
-- state/progress.md and state/handoff.md are append-only;
-- repository owner reviews and approves the focused PR.
 
-No future PR number is assigned.
+- Only `frontend/src/main.ts`, `state/current-focus.md`, `state/progress.md`, and `state/handoff.md` should change unless a reviewed conflict proves otherwise.
+- No backend, CSS, dependency, lockfile, or `docs/implementation-plan.md` changes.
+- The branch must remain a focused A1b1 copy-only PR based on the latest available main baseline.

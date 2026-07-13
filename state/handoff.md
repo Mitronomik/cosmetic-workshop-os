@@ -168,3 +168,9 @@ Files changed are intentionally narrow: `frontend/src/main.ts`, `docs/implementa
 Verification completed: frontend build passed; backend pytest reported the known 5 unchanged baseline failures and 463 passing tests; Import Apply diff identifiers were reviewed and only existing context matched; focused Playwright smoke used isolated temporary data at 1440×900 and 390×844, with screenshots in `/tmp/cwo-a1a-screens`. Healthy, Import copy, Demo labels, narrow overflow, keyboard focus, and unavailable recovery checks were covered. Offline simulation intentionally aborted API requests, so failed resource console messages are expected for that scenario only.
 
 Next step: repository owner should review the focused PR diff and mergeability. Do not assign any future PR number before GitHub creates it.
+
+## Slice A1b1 handoff — Demo Data and inventory movement copy cleanup
+
+This slice is limited to copy-only cleanup for `/demo-data`, `/ingredient-lots`, and `/stock-movements`. Static runtime wording in those routes now avoids backend/API/internal English terminology and uses Russian product language for Demo Data blocking/clearing boundaries, ingredient-lot load failures, stock-movement loading/fallback states, movement-derived balance display, and outgoing movement safety.
+
+No backend, API, schema, migration, CSS, dependency, lockfile, demo install/clear behavior, stock calculation, validation, request timing, confirmation, disabled-rule, aria-busy, focus, or dynamic-message contract changes are intended. Dynamic backend-provided reasons remain rendered through the existing escaping path. Focused browser smoke should be completed when tooling is available; otherwise manual focused smoke is required before merge.
