@@ -1,35 +1,29 @@
 # Current focus
 
-## Active focus
+## Active task
 
 Slice A1 — User-facing technical copy cleanup.
 
-## Current repository state
+## Exact scope
 
-PR #106 is already merged and verified. The verified PR #106 Hermes browser smoke covered Import Apply, refresh-failure separation, structured mutation conflict, Settings save/cancel behavior, scoped announcers, responsive behavior, and keyboard reachability.
+- Remove the normal-state positive API/backend availability indicator from runtime UI.
+- Keep concise Russian recovery copy and existing manual retry actions for failed data loads.
+- Update `/imports` copy to describe file selection → draft creation → preview/validation → confirmation → Apply → working records.
+- Map `/demo-data` visible counters from backend keys to Russian product labels with a safe generic fallback.
+- Correct stale runtime route/capability copy only where current functionality already exists.
+- Update implementation/state documentation for this active branch.
 
-This documentation-only implementation-plan PR only adds and links the approved MVP product-readiness plan. It does not implement Slice A1 and must not change frontend runtime code, backend runtime code, CSS, APIs, schemas, migrations, dependencies, or lockfiles.
+## Explicit non-goals
 
-## Next runtime PR
+No backend changes, API/schema/migration changes, seed/demo behavior changes, Import mutation changes, validation-error migration, responsive table work, file-path presentation redesign, restore, polling, automatic retry, dashboard redesign, tax/margin, cloud, OCR, AI/RAG, roles, or multi-user behavior.
 
-Slice A1 must be created as a separate focused runtime PR after this documentation-only PR. No future PR number has been assigned.
+## Required checks
 
-Allowed next-runtime focus for Slice A1:
-- remove constant normal-state technical API availability copy;
-- keep clear recovery copy when the local app is unavailable;
-- remove PR/roadmap/internal planning language from runtime UI;
-- fix stale Import copy around the actual Apply flow;
-- translate internal table names on `/demo-data`;
-- fix stale route/navigation readiness metadata;
-- synchronize directly affected user/help documentation.
+- Targeted source inventory before and after edits.
+- `git diff --check`, changed-file/diff review, frontend build, backend pytest.
+- Existing frontend tests if available.
+- Browser smoke remains a merge gate. If browser automation is unavailable locally, external Hermes verification must complete it.
 
-Non-goals for Slice A1:
-- backend behavior changes;
-- new product features;
-- dashboard redesign;
-- polling;
-- arbitrary file browser;
-- broad frontend refactor;
-- validation-error migration;
-- responsive table containment;
-- tax/margin, restore, packaging, cloud, OCR, AI/RAG, roles, or multi-user behavior.
+## PR numbering
+
+No next or future PR number is assigned.
