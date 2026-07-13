@@ -176,8 +176,10 @@ This slice is limited to copy-only cleanup for `/demo-data`, `/ingredient-lots`,
 No backend, API, schema, migration, CSS, dependency, lockfile, demo install/clear behavior, stock calculation, validation, request timing, confirmation, disabled-rule, aria-busy, focus, or dynamic-message contract changes are intended. Dynamic backend-provided reasons remain rendered through the existing escaping path. Browser smoke was not run and is not required for this copy-only slice because the final diff changes static text only and does not modify HTML structure, CSS, controls, requests, state transitions, Demo Data behavior, stock behavior, or business logic.
 
 ## Slice A1b2 handoff — Backup and Export capability copy
-- Active branch: `codex/a1b2-backup-export-copy`.
+- Published pull request: PR #111.
+- Published GitHub branch before the correction: `codex-rzipfx`.
+- Published head before the correction: `b6d44e935d5e320d91b955feec97667f03c93b05`.
 - Runtime scope is limited to `frontend/src/main.ts` copy in `/backups`, `/exports`, and `dashboardBackupReminder()`; no CSS or backend changes are intended.
 - State update scope: `state/current-focus.md` rewritten for A1b2; `state/progress.md` and `state/handoff.md` appended only.
-- Verify before handoff: source-diff checks for backup/export identifiers, targeted technical-copy search, frontend build, backend pytest, and repository hygiene.
-- Browser smoke is optional, not a merge gate, if the final diff remains static strings only.
+- Verification completed: repository hygiene and focused source-diff checks passed; frontend build passed; backend pytest collected 468 tests with 463 passed and the same 5 known baseline failures; no backend files changed.
+- Browser smoke was not run and is not required because the final runtime diff changes static strings only and does not modify HTML structure, CSS, controls, requests, focus, state transitions, Backup behavior, or Export behavior.

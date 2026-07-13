@@ -25,5 +25,8 @@ Slice A1b2 is active: clean up Backup and Export user-facing capability copy onl
 - Backend pytest result must be reported honestly against the known previous baseline of 463 passed / 5 failed without fixing unrelated backend failures.
 
 ## GitHub review gate
-- Publish a focused branch named `codex/a1b2-backup-export-copy` if remote access is available.
-- Create a GitHub PR only after committing changes; do not mention Hermes or any external audit system.
+- Published pull request: PR #111.
+- Published GitHub branch: `codex-rzipfx`.
+- Published head before this correction: `b6d44e935d5e320d91b955feec97667f03c93b05`.
+- GitHub reported the pull request as mergeable before this correction.
+- Repository-owner review and approval remain the final merge gate.
