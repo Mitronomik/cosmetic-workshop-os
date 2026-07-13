@@ -1,3 +1,49 @@
+type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
+const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
+
+function feedbackMessage(tone: FeedbackTone, message: string, details = '') {
+  const safeMessage = escapeHtml(message);
+  return `<div class="feedback-message feedback-message--${tone}" data-feedback-tone="${tone}"><strong class="feedback-message__label">${feedbackToneLabels[tone]}</strong><div class="feedback-message__body"><p>${safeMessage}</p>${details}</div></div>`;
+}
+
+function ensureAnnouncementRegions() {
+  let container = document.querySelector<HTMLElement>('[data-announcement-regions]');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'visually-hidden';
+    container.dataset.announcementRegions = 'true';
+    container.innerHTML = '<div data-announcer="polite" role="status" aria-atomic="true"></div><div data-announcer="assertive" role="alert" aria-atomic="true"></div>';
+    document.body.appendChild(container);
+  }
+}
+
+function announcer(kind: 'polite' | 'assertive') {
+  ensureAnnouncementRegions();
+  return document.querySelector<HTMLElement>(`[data-announcer="${kind}"]`);
+}
+
+function clearFeedbackAnnouncement() {
+  announcer('polite')!.textContent = '';
+  announcer('assertive')!.textContent = '';
+}
+
+function announcePolite(message: string) {
+  const polite = announcer('polite');
+  const assertive = announcer('assertive');
+  if (!polite || !assertive) return;
+  assertive.textContent = '';
+  if (polite.textContent === message) return;
+  polite.textContent = message;
+}
+
+function announceAssertive(message: string) {
+  const polite = announcer('polite');
+  const assertive = announcer('assertive');
+  if (!polite || !assertive) return;
+  polite.textContent = '';
+  if (assertive.textContent === message) return;
+  assertive.textContent = message;
+}
 type HealthStatus = 'checking' | 'online' | 'offline';
 type OnboardingStatus = 'loading' | 'ready' | 'unavailable';
 type InventoryStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -163,7 +209,7 @@ type ImportDraftApplyRequest = { confirm_apply: boolean; backup_acknowledged: bo
 type ImportApplyCreatedRecordResponse = { target_type: string; row_number: number; record_id: number; label: string };
 type ImportDraftApplyResultResponse = { draft_id: number; target_type: string; applied_at: string; applied_row_count: number; created_count: number; created_records: ImportApplyCreatedRecordResponse[]; warnings: string[] };
 type ImportDraftApplyResponse = { draft: ImportDraftSummary; apply_result: ImportDraftApplyResultResponse; message: string };
-type ImportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'uploading' | 'cancelling'; applyStatus: 'idle' | 'confirming' | 'applying' | 'success' | 'error'; error: string; message: string; applyError: string; applyErrorIssues: ApiIssue[]; applyMessage: string; applyConfirmChecked: boolean; backupAcknowledged: boolean; allowWarnings: boolean; lastApplyResult: ImportDraftApplyResultResponse | null; showApplyConfirm: boolean; targets: ImportTargetResponse[]; drafts: ImportDraftSummary[]; selectedDraft: ImportDraftDetailResponse | null; selectedDraftStatus: 'idle' | 'loading' | 'ready' | 'error'; selectedDraftError: string; selectedTargetType: string; selectedFileName: string; filters: { status: string; targetType: string } };
+type ImportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'uploading' | 'cancelling'; applyStatus: 'idle' | 'confirming' | 'applying' | 'success' | 'error'; error: string; message: string; applyError: string; applyErrorIssues: ApiIssue[]; applyMessage: string; applyRefreshWarning: string; applyConfirmChecked: boolean; backupAcknowledged: boolean; allowWarnings: boolean; lastApplyResult: ImportDraftApplyResultResponse | null; showApplyConfirm: boolean; targets: ImportTargetResponse[]; drafts: ImportDraftSummary[]; selectedDraft: ImportDraftDetailResponse | null; selectedDraftStatus: 'idle' | 'loading' | 'ready' | 'error'; selectedDraftError: string; selectedTargetType: string; selectedFileName: string; filters: { status: string; targetType: string } };
 const APPLY_SUPPORTED_IMPORT_TARGETS = new Set(['ingredients', 'clients', 'recipe_templates', 'packaging_items']);
 
 
@@ -525,7 +571,7 @@ let dashboardState: DashboardState = { status: 'idle', error: '', message: '', o
 let backupUiState: BackupUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', backupStatus: null, backups: [], reason: 'manual', customReason: '', lastCreatedBackup: null };
 let exportUiState: ExportUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', exportStatus: null, exports: [], reason: 'manual', customReason: '', lastCreatedExport: null, lastEntityCounts: {} };
 let demoDataUiState: DemoDataUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', demoStatus: null, installConfirmChecked: false, understandDemoChecked: false, clearConfirmChecked: false, showInstallConfirm: false, showClearConfirm: false, lastInstallResult: null, lastClearResult: null };
-let importUiState: ImportUiState = { status: 'idle', actionStatus: 'idle', applyStatus: 'idle', error: '', message: '', applyError: '', applyErrorIssues: [], applyMessage: '', applyConfirmChecked: false, backupAcknowledged: false, allowWarnings: false, lastApplyResult: null, showApplyConfirm: false, targets: [], drafts: [], selectedDraft: null, selectedDraftStatus: 'idle', selectedDraftError: '', selectedTargetType: '', selectedFileName: '', filters: { status: '', targetType: '' } };
+let importUiState: ImportUiState = { status: 'idle', actionStatus: 'idle', applyStatus: 'idle', error: '', message: '', applyError: '', applyErrorIssues: [], applyMessage: '', applyRefreshWarning: '', applyConfirmChecked: false, backupAcknowledged: false, allowWarnings: false, lastApplyResult: null, showApplyConfirm: false, targets: [], drafts: [], selectedDraft: null, selectedDraftStatus: 'idle', selectedDraftError: '', selectedTargetType: '', selectedFileName: '', filters: { status: '', targetType: '' } };
 let alertsState: AlertsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', type: '', search: '' }, lastGeneration: null };
 let purchaseSuggestionsState: PurchaseSuggestionsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', reason: '', itemType: '', search: '' }, lastGeneration: null, showManualForm: false, manualForm: { item_type: 'ingredient', item_id: '', recommended_quantity: '', unit: 'g', notes: '' }, editingSuggestionId: null, editForm: { recommended_quantity: '', unit: '', notes: '' } };
 let ordersState: OrdersState = { items: [], clients: [], templates: [], versions: [], clientRecipes: [], packagingItems: [], formMode: 'create', form: emptyOrderForm(), showForm: false, selectedOrder: null, includeInactive: true, filters: { search: '', status: 'active' }, referenceLoading: false, referenceError: '', readinessByOrderId: {}, readinessLoadingOrderId: null, readinessError: '', productionByOrderId: {}, productionLoadingOrderId: null, productionError: '', productionConfirmingOrderId: null, productionNotesByOrderId: {} };
@@ -1290,25 +1336,36 @@ function submitExportCreate() {
   exportUiState.actionStatus = 'creating';
   exportUiState.error = '';
   exportUiState.message = '';
+  clearFeedbackAnnouncement();
   render();
   createExport({ reason })
     .then((response) => {
       exportUiState.lastCreatedExport = response.export;
       exportUiState.lastEntityCounts = response.entity_counts || {};
-      exportUiState.message = `${response.message || 'Экспорт создан.'} Файл: ${response.export.filename}`;
-      return Promise.all([getExportStatus(), getExports()]);
-    })
-    .then(([statusResponse, list]) => {
-      exportUiState.exportStatus = statusResponse;
-      exportUiState.exports = list.exports;
-      exportUiState.status = 'ready';
-      exportUiState.actionStatus = 'idle';
-      render();
+      const successMessage = `${response.message || 'Экспорт создан.'} Файл: ${response.export.filename}`;
+      exportUiState.message = successMessage;
+      announcePolite(successMessage);
+      return Promise.all([getExportStatus(), getExports()])
+        .then(([statusResponse, list]) => {
+          exportUiState.exportStatus = statusResponse;
+          exportUiState.exports = list.exports;
+          exportUiState.status = 'ready';
+          exportUiState.actionStatus = 'idle';
+          render();
+        })
+        .catch(() => {
+          exportUiState.status = 'ready';
+          exportUiState.actionStatus = 'idle';
+          exportUiState.error = '';
+          exportUiState.message = `${successMessage} Не удалось обновить список экспортов. Нажмите «Обновить», чтобы перечитать данные.`;
+          render();
+        });
     })
     .catch(() => {
       exportUiState.actionStatus = 'idle';
       exportUiState.error = 'Не удалось создать экспорт. Проверьте, что база данных существует и локальное приложение запущено.';
       exportUiState.message = '';
+      announceAssertive(exportUiState.error);
       render();
     });
 }
@@ -1322,8 +1379,8 @@ function exportPage() {
       <div><p class="card-kicker">Локальный JSON-снимок</p><h2>Экспорт данных</h2><p>Создавайте локальный JSON-снимок данных мастерской перед импортом, переносом или обращением за поддержкой.</p><p class="next-step">Экспорт не меняет рецепты, клиентов, заказы, склад и производство. Это отдельный JSON-файл в локальной папке exports.</p></div>
       <div class="actions"><button class="secondary-action" type="button" data-action="reload-exports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button><button class="primary-action" type="button" data-action="create-export" ${createDisabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div>
     </section>
-    ${exportUiState.error ? `<p class="page-message error-message">${escapeHtml(exportUiState.error)}</p>` : ''}
-    ${exportUiState.message ? `<p class="page-message">${escapeHtml(exportUiState.message)}</p>` : ''}
+    ${exportUiState.error ? feedbackMessage('error', exportUiState.error) : ''}
+    ${exportUiState.message ? feedbackMessage('success', exportUiState.message) : ''}
     ${exportUiState.status === 'error' && !status ? exportLoadErrorCard() : `${exportStatusCards()}${exportCreateCard()}${exportEntityCountsCard()}${exportHistoryCard()}${exportNonGoalsCard()}`}
   </div>`;
 }
@@ -1346,7 +1403,7 @@ function exportStatusCards() {
 function exportCreateCard() {
   const status = exportUiState.exportStatus;
   const disabled = exportUiState.actionStatus === 'creating' || exportUiState.status === 'loading' || !status?.database_exists;
-  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать экспорт</h2><p>Экспорт создаёт JSON-снимок основных данных: рецептов, клиентов, заказов, склада, производства, алертов и закупок. Файл можно использовать для проверки данных или будущего переноса, но импорт из него пока не реализован.</p>${!status?.database_exists ? '<p class="page-message error-message">Сначала запустите приложение и создайте рабочую базу данных.</p>' : ''}<form class="form-grid" data-form="export-create"><label>Причина<select name="reason" data-action="select-export-reason"><option value="manual" ${exportUiState.reason === 'manual' ? 'selected' : ''}>Обычный экспорт</option><option value="before_import" ${exportUiState.reason === 'before_import' ? 'selected' : ''}>Перед импортом</option><option value="before_update" ${exportUiState.reason === 'before_update' ? 'selected' : ''}>Перед обновлением приложения</option><option value="before_large_edit" ${exportUiState.reason === 'before_large_edit' ? 'selected' : ''}>Перед крупными изменениями</option><option value="support_snapshot" ${exportUiState.reason === 'support_snapshot' ? 'selected' : ''}>Для поддержки</option><option value="custom" ${exportUiState.reason === 'custom' ? 'selected' : ''}>Своя причина</option></select></label>${exportUiState.reason === 'custom' ? `<label>Своя причина<input name="customReason" maxlength="80" value="${escapeHtml(exportUiState.customReason)}" data-action="custom-export-reason" placeholder="Например: перед обращением в поддержку" /></label>` : ''}<div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div></form>${exportUiState.lastCreatedExport ? `<p class="next-step">Последний созданный export-файл: <strong>${escapeHtml(exportUiState.lastCreatedExport.filename)}</strong></p>` : '<p class="next-step">Создание экспорта не запускается автоматически и не меняет рабочие данные.</p>'}</section>`;
+  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать экспорт</h2><p>Экспорт создаёт JSON-снимок основных данных: рецептов, клиентов, заказов, склада, производства, алертов и закупок. Файл можно использовать для проверки данных или будущего переноса, но импорт из него пока не реализован.</p>${!status?.database_exists ? feedbackMessage('error', 'Сначала запустите приложение и создайте рабочую базу данных.') : ''}<form class="form-grid" data-form="export-create" aria-busy="${exportUiState.actionStatus === 'creating' ? 'true' : 'false'}"><label>Причина<select name="reason" data-action="select-export-reason"><option value="manual" ${exportUiState.reason === 'manual' ? 'selected' : ''}>Обычный экспорт</option><option value="before_import" ${exportUiState.reason === 'before_import' ? 'selected' : ''}>Перед импортом</option><option value="before_update" ${exportUiState.reason === 'before_update' ? 'selected' : ''}>Перед обновлением приложения</option><option value="before_large_edit" ${exportUiState.reason === 'before_large_edit' ? 'selected' : ''}>Перед крупными изменениями</option><option value="support_snapshot" ${exportUiState.reason === 'support_snapshot' ? 'selected' : ''}>Для поддержки</option><option value="custom" ${exportUiState.reason === 'custom' ? 'selected' : ''}>Своя причина</option></select></label>${exportUiState.reason === 'custom' ? `<label>Своя причина<input name="customReason" maxlength="80" value="${escapeHtml(exportUiState.customReason)}" data-action="custom-export-reason" placeholder="Например: перед обращением в поддержку" /></label>` : ''}<div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div></form>${exportUiState.lastCreatedExport ? `<p class="next-step">Последний созданный export-файл: <strong>${escapeHtml(exportUiState.lastCreatedExport.filename)}</strong></p>` : '<p class="next-step">Создание экспорта не запускается автоматически и не меняет рабочие данные.</p>'}</section>`;
 }
 function exportEntityCountsCard() {
   const entries = Object.entries(exportUiState.lastEntityCounts || {});
@@ -1412,6 +1469,7 @@ function demoErrorDetails(error: unknown) { const message = error instanceof Err
 function refreshDemoStatusAfterActionError(errorMessage: string) {
   demoDataUiState.error = errorMessage;
   demoDataUiState.message = '';
+  announceAssertive(errorMessage);
   return getDemoDataStatus()
     .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; })
     .catch(() => { if (!demoDataUiState.demoStatus) demoDataUiState.status = 'error'; })
@@ -1420,19 +1478,40 @@ function refreshDemoStatusAfterActionError(errorMessage: string) {
 function installDemoDataFromUi() {
   if (demoDataUiState.actionStatus !== 'idle') return;
   if (!demoDataUiState.demoStatus?.can_install || !demoDataUiState.installConfirmChecked || !demoDataUiState.understandDemoChecked) return;
-  demoDataUiState.actionStatus = 'installing'; demoDataUiState.error = ''; demoDataUiState.message = ''; render();
+  demoDataUiState.actionStatus = 'installing'; demoDataUiState.error = ''; demoDataUiState.message = ''; clearFeedbackAnnouncement(); render();
   installDemoData({ confirm_install: true, understand_demo_data: true })
-    .then((response) => { demoDataUiState.lastInstallResult = response; demoDataUiState.lastClearResult = null; demoDataUiState.message = response.message || 'Демо-данные установлены. Теперь можно открыть разделы и посмотреть пример работы.'; demoDataUiState.showInstallConfirm = false; demoDataUiState.installConfirmChecked = false; demoDataUiState.understandDemoChecked = false; return getDemoDataStatus(); })
-    .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
+    .then((response) => {
+      demoDataUiState.lastInstallResult = response;
+      demoDataUiState.lastClearResult = null;
+      const successMessage = response.message || 'Демо-данные установлены. Теперь можно открыть разделы и посмотреть пример работы.';
+      demoDataUiState.message = successMessage;
+      announcePolite(successMessage);
+      demoDataUiState.showInstallConfirm = false;
+      demoDataUiState.installConfirmChecked = false;
+      demoDataUiState.understandDemoChecked = false;
+      return getDemoDataStatus()
+        .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
+        .catch(() => { demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; demoDataUiState.error = ''; demoDataUiState.message = `${successMessage} Не удалось обновить статус демо-данных. Нажмите «Обновить статус», чтобы перечитать данные.`; render(); });
+    })
     .catch((error) => { const message = `Не удалось установить демо-данные. Рабочие данные не были частично изменены.${demoErrorDetails(error)}`; refreshDemoStatusAfterActionError(message); });
 }
 function clearDemoDataFromUi() {
   if (demoDataUiState.actionStatus !== 'idle') return;
   if (!demoDataUiState.demoStatus?.can_clear || !demoDataUiState.clearConfirmChecked) return;
-  demoDataUiState.actionStatus = 'clearing'; demoDataUiState.error = ''; demoDataUiState.message = ''; render();
+  demoDataUiState.actionStatus = 'clearing'; demoDataUiState.error = ''; demoDataUiState.message = ''; clearFeedbackAnnouncement(); render();
   clearDemoData({ confirm_clear: true })
-    .then((response) => { demoDataUiState.lastClearResult = response; demoDataUiState.lastInstallResult = null; demoDataUiState.message = response.message || 'Демо-данные очищены.'; demoDataUiState.showClearConfirm = false; demoDataUiState.clearConfirmChecked = false; return getDemoDataStatus(); })
-    .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
+    .then((response) => {
+      demoDataUiState.lastClearResult = response;
+      demoDataUiState.lastInstallResult = null;
+      const successMessage = response.message || 'Демо-данные очищены.';
+      demoDataUiState.message = successMessage;
+      announcePolite(successMessage);
+      demoDataUiState.showClearConfirm = false;
+      demoDataUiState.clearConfirmChecked = false;
+      return getDemoDataStatus()
+        .then((status) => { demoDataUiState.demoStatus = status; demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; render(); })
+        .catch(() => { demoDataUiState.status = 'ready'; demoDataUiState.actionStatus = 'idle'; demoDataUiState.error = ''; demoDataUiState.message = `${successMessage} Не удалось обновить статус демо-данных. Нажмите «Обновить статус», чтобы перечитать данные.`; render(); });
+    })
     .catch((error) => { const message = `Не удалось очистить демо-данные. Реальные данные не удалялись.${demoErrorDetails(error)}`; refreshDemoStatusAfterActionError(message); });
 }
 function demoDataPage() {
@@ -1440,19 +1519,19 @@ function demoDataPage() {
   const status = demoDataUiState.demoStatus;
   return `<div class="page-grid backup-page demo-data-page">
     <section class="card data-card dashboard-hero"><div><p class="card-kicker">Безопасный пример</p><h2>Демо-данные</h2><p>Включите демонстрационный набор, чтобы посмотреть, как работает мастерская: склад, рецепты, клиенты, заказы, готовность производства, алерты и закупки.</p><p class="next-step">Демо-данные не устанавливаются автоматически. Их можно добавить только вручную и только если рабочая база подходит для этого.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-demo-data" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить статус'}</button></div></section>
-    ${demoDataUiState.error ? `<p class="page-message error-message">${escapeHtml(demoDataUiState.error)}</p>` : ''}
-    ${demoDataUiState.message ? `<p class="page-message">${escapeHtml(demoDataUiState.message)}</p>` : ''}
+    ${demoDataUiState.error ? feedbackMessage('error', demoDataUiState.error) : ''}
+    ${demoDataUiState.message ? feedbackMessage('success', demoDataUiState.message) : ''}
     ${demoDataUiState.status === 'error' && !status ? demoLoadErrorCard() : `${demoStatusCards()}${demoDatasetCard()}${demoInstallCard()}${demoClearCard()}${demoCountsCard()}${demoBoundariesCard()}`}
   </div>`;
 }
 function demoLoadErrorCard() { return `<section class="card error-card"><h2>Статус недоступен</h2><p>Не удалось загрузить статус демо-данных. Проверьте, что локальное приложение запущено.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-demo-data">Повторить</button></div></section>`; }
-function demoStatusCards() { const s = demoDataUiState.demoStatus; if (demoDataUiState.status === 'loading' && !s) return '<section class="card"><p>Загружаем статус демо-режима…</p></section>'; if (!s) return ''; return `<section class="overview-grid"><div class="metric-card"><span>Статус демо-режима</span><strong>${s.is_installed ? 'Демо-данные установлены' : 'Демо-данные ещё не установлены'}</strong></div><div class="metric-card"><span>Версия демо-набора</span><strong>${escapeHtml(s.demo_version || 'Не указана')}</strong></div><div class="metric-card"><span>Можно установить</span><strong>${s.can_install ? 'Да' : 'Нет'}</strong></div><div class="metric-card"><span>Можно очистить</span><strong>${s.can_clear ? 'Да' : 'Нет'}</strong></div><div class="metric-card"><span>Рабочие данные в базе</span><strong>${s.has_business_data ? 'В базе есть рабочие данные' : 'В базе нет рабочих данных'}</strong></div><div class="metric-card"><span>Недемо-данные</span><strong>${s.has_non_demo_business_data ? 'Есть' : 'Нет'}</strong></div>${s.active_session_id ? `<div class="metric-card"><span>Активная демо-сессия</span><strong>#${s.active_session_id}</strong></div>` : ''}</section>${s.message ? `<p class="page-message">${escapeHtml(s.message)}</p>` : ''}${demoBlockingReasons(s.blocking_reasons)}`; }
+function demoStatusCards() { const s = demoDataUiState.demoStatus; if (demoDataUiState.status === 'loading' && !s) return '<section class="card"><p>Загружаем статус демо-режима…</p></section>'; if (!s) return ''; return `<section class="overview-grid"><div class="metric-card"><span>Статус демо-режима</span><strong>${s.is_installed ? 'Демо-данные установлены' : 'Демо-данные ещё не установлены'}</strong></div><div class="metric-card"><span>Версия демо-набора</span><strong>${escapeHtml(s.demo_version || 'Не указана')}</strong></div><div class="metric-card"><span>Можно установить</span><strong>${s.can_install ? 'Да' : 'Нет'}</strong></div><div class="metric-card"><span>Можно очистить</span><strong>${s.can_clear ? 'Да' : 'Нет'}</strong></div><div class="metric-card"><span>Рабочие данные в базе</span><strong>${s.has_business_data ? 'В базе есть рабочие данные' : 'В базе нет рабочих данных'}</strong></div><div class="metric-card"><span>Недемо-данные</span><strong>${s.has_non_demo_business_data ? 'Есть' : 'Нет'}</strong></div>${s.active_session_id ? `<div class="metric-card"><span>Активная демо-сессия</span><strong>#${s.active_session_id}</strong></div>` : ''}</section>${s.message ? feedbackMessage('neutral', s.message) : ''}${demoBlockingReasons(s.blocking_reasons)}`; }
 function demoBlockingReasons(reasons: string[] = []) { if (!reasons.length) return ''; return `<section class="card error-card"><h2>Backend остановил действие</h2><p>Причины блокировки:</p><ul class="issue-list">${reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul></section>`; }
 function demoDatasetCard() { return `<section class="card data-card"><p class="card-kicker">Что будет добавлено</p><h2>Пример заполненной мастерской</h2><p>Демо-набор создаёт примерные записи с префиксом «Демо ·»: компоненты, партии, движения, тару, рецепты, клиентов и заказы. Производство не запускается автоматически.</p><ul class="checklist compact-list"><li>Компоненты и партии</li><li>Тара и движения тары</li><li>Рецепты и версии</li><li>Клиенты и индивидуальный рецепт</li><li>Заказы для проверки готовности</li><li>Условия для алертов и закупок</li></ul></section>`; }
-function demoInstallCard() { const s = demoDataUiState.demoStatus; if (!s || s.is_installed) return ''; const disabled = demoDataUiState.actionStatus !== 'idle' || !s.can_install; return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Установить демо-данные</h2>${!s.can_install ? `<p class="page-message error-message">Демо-данные можно установить только в безопасной рабочей базе. Backend сейчас блокирует установку по причинам ниже.</p>${s.has_non_demo_business_data ? '<p class="warning-text">В этой базе уже есть рабочие данные. Чтобы не смешивать их с примером, установка демо-данных заблокирована.</p>' : ''}` : '<p>После установки появится примерный сценарий для знакомства с разделами приложения.</p>'}<div class="actions"><button class="primary-action" type="button" data-action="show-demo-install-confirm" ${disabled ? 'disabled' : ''}>Перейти к установке</button></div>${demoDataUiState.showInstallConfirm ? demoInstallConfirmPanel() : ''}</section>`; }
-function demoInstallConfirmPanel() { const disabled = demoDataUiState.actionStatus === 'installing' || !demoDataUiState.installConfirmChecked || !demoDataUiState.understandDemoChecked; return `<div class="confirm-panel"><h3>Подтвердите установку демо-данных</h3><p>После установки в базе появятся примерные записи с префиксом «Демо ·». Это поможет посмотреть рабочий сценарий, но не заменяет ваши реальные данные.</p><label class="checkbox-line"><input type="checkbox" name="demo_install_confirm" data-action="toggle-demo-install-check" ${demoDataUiState.installConfirmChecked ? 'checked' : ''} /> Я понимаю, что в базу будут добавлены демонстрационные записи.</label><label class="checkbox-line"><input type="checkbox" name="demo_understand" data-action="toggle-demo-install-check" ${demoDataUiState.understandDemoChecked ? 'checked' : ''} /> Я понимаю, что демо-данные не должны смешиваться с реальными рабочими данными.</label><div class="actions"><button class="primary-action" type="button" data-action="install-demo-data" ${disabled ? 'disabled' : ''}>${demoDataUiState.actionStatus === 'installing' ? 'Устанавливаем…' : 'Установить демо-данные'}</button><button class="secondary-action" type="button" data-action="hide-demo-install-confirm" ${demoDataUiState.actionStatus === 'installing' ? 'disabled' : ''}>Отмена</button></div></div>`; }
-function demoClearCard() { const s = demoDataUiState.demoStatus; if (!s || (!s.is_installed && !s.can_clear)) return ''; const disabled = demoDataUiState.actionStatus !== 'idle' || !s.can_clear; return `<section class="card data-card"><p class="card-kicker">Только отслеженные записи</p><h2>Очистить демо-данные</h2><p>Очистка удаляет только записи, которые backend отслеживает как демо-данные. Реальные записи пользователя удаляться не должны.</p>${!s.can_clear && s.is_installed ? '<p class="page-message error-message">Сейчас очистка заблокирована backend. Проверьте причины выше.</p>' : ''}<div class="actions"><button class="danger-action" type="button" data-action="show-demo-clear-confirm" ${disabled ? 'disabled' : ''}>Перейти к очистке</button></div>${demoDataUiState.showClearConfirm ? demoClearConfirmPanel() : ''}</section>`; }
-function demoClearConfirmPanel() { const disabled = demoDataUiState.actionStatus === 'clearing' || !demoDataUiState.clearConfirmChecked; return `<div class="confirm-panel"><h3>Подтвердите очистку демо-данных</h3><p>Будут удалены только отслеженные демо-записи. Если на них уже ссылаются рабочие записи, backend остановит очистку.</p><label class="checkbox-line"><input type="checkbox" name="demo_clear_confirm" data-action="toggle-demo-clear-check" ${demoDataUiState.clearConfirmChecked ? 'checked' : ''} /> Я понимаю, что будут удалены отслеженные демо-записи.</label><div class="actions"><button class="danger-action" type="button" data-action="clear-demo-data" ${disabled ? 'disabled' : ''}>${demoDataUiState.actionStatus === 'clearing' ? 'Очищаем…' : 'Очистить демо-данные'}</button><button class="secondary-action" type="button" data-action="hide-demo-clear-confirm" ${demoDataUiState.actionStatus === 'clearing' ? 'disabled' : ''}>Отмена</button></div></div>`; }
+function demoInstallCard() { const s = demoDataUiState.demoStatus; if (!s || s.is_installed) return ''; const disabled = demoDataUiState.actionStatus !== 'idle' || !s.can_install; return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Установить демо-данные</h2>${!s.can_install ? `${feedbackMessage('error', 'Демо-данные можно установить только в безопасной рабочей базе. Backend сейчас блокирует установку по причинам ниже.')}${s.has_non_demo_business_data ? '<p class="warning-text">В этой базе уже есть рабочие данные. Чтобы не смешивать их с примером, установка демо-данных заблокирована.</p>' : ''}` : '<p>После установки появится примерный сценарий для знакомства с разделами приложения.</p>'}<div class="actions"><button class="primary-action" type="button" data-action="show-demo-install-confirm" ${disabled ? 'disabled' : ''}>Перейти к установке</button></div>${demoDataUiState.showInstallConfirm ? demoInstallConfirmPanel() : ''}</section>`; }
+function demoInstallConfirmPanel() { const disabled = demoDataUiState.actionStatus === 'installing' || !demoDataUiState.installConfirmChecked || !demoDataUiState.understandDemoChecked; return `<div class="confirm-panel" aria-busy="${demoDataUiState.actionStatus === 'installing' ? 'true' : 'false'}"><h3>Подтвердите установку демо-данных</h3><p>После установки в базе появятся примерные записи с префиксом «Демо ·». Это поможет посмотреть рабочий сценарий, но не заменяет ваши реальные данные.</p><label class="checkbox-line"><input type="checkbox" name="demo_install_confirm" data-action="toggle-demo-install-check" ${demoDataUiState.installConfirmChecked ? 'checked' : ''} /> Я понимаю, что в базу будут добавлены демонстрационные записи.</label><label class="checkbox-line"><input type="checkbox" name="demo_understand" data-action="toggle-demo-install-check" ${demoDataUiState.understandDemoChecked ? 'checked' : ''} /> Я понимаю, что демо-данные не должны смешиваться с реальными рабочими данными.</label><div class="actions"><button class="primary-action" type="button" data-action="install-demo-data" ${disabled ? 'disabled' : ''}>${demoDataUiState.actionStatus === 'installing' ? 'Устанавливаем…' : 'Установить демо-данные'}</button><button class="secondary-action" type="button" data-action="hide-demo-install-confirm" ${demoDataUiState.actionStatus === 'installing' ? 'disabled' : ''}>Отмена</button></div></div>`; }
+function demoClearCard() { const s = demoDataUiState.demoStatus; if (!s || (!s.is_installed && !s.can_clear)) return ''; const disabled = demoDataUiState.actionStatus !== 'idle' || !s.can_clear; return `<section class="card data-card"><p class="card-kicker">Только отслеженные записи</p><h2>Очистить демо-данные</h2><p>Очистка удаляет только записи, которые backend отслеживает как демо-данные. Реальные записи пользователя удаляться не должны.</p>${!s.can_clear && s.is_installed ? feedbackMessage('error', 'Сейчас очистка заблокирована backend. Проверьте причины выше.') : ''}<div class="actions"><button class="danger-action" type="button" data-action="show-demo-clear-confirm" ${disabled ? 'disabled' : ''}>Перейти к очистке</button></div>${demoDataUiState.showClearConfirm ? demoClearConfirmPanel() : ''}</section>`; }
+function demoClearConfirmPanel() { const disabled = demoDataUiState.actionStatus === 'clearing' || !demoDataUiState.clearConfirmChecked; return `<div class="confirm-panel" aria-busy="${demoDataUiState.actionStatus === 'clearing' ? 'true' : 'false'}"><h3>Подтвердите очистку демо-данных</h3><p>Будут удалены только отслеженные демо-записи. Если на них уже ссылаются рабочие записи, backend остановит очистку.</p><label class="checkbox-line"><input type="checkbox" name="demo_clear_confirm" data-action="toggle-demo-clear-check" ${demoDataUiState.clearConfirmChecked ? 'checked' : ''} /> Я понимаю, что будут удалены отслеженные демо-записи.</label><div class="actions"><button class="danger-action" type="button" data-action="clear-demo-data" ${disabled ? 'disabled' : ''}>${demoDataUiState.actionStatus === 'clearing' ? 'Очищаем…' : 'Очистить демо-данные'}</button><button class="secondary-action" type="button" data-action="hide-demo-clear-confirm" ${demoDataUiState.actionStatus === 'clearing' ? 'disabled' : ''}>Отмена</button></div></div>`; }
 function demoCountsCard() { const counts = demoDataUiState.lastInstallResult?.created_counts || demoDataUiState.lastClearResult?.deleted_counts || demoDataUiState.demoStatus?.created_counts || {}; const entries = Object.entries(counts).filter(([, value]) => Number(value) > 0); if (!entries.length) return ''; const title = demoDataUiState.lastClearResult ? 'Что удалено' : 'Что создано или отслеживается'; return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Счётчики backend</p><h2>${title}</h2></div><span class="pill info">${entries.length}</span></div><div class="overview-grid compact-overview">${entries.map(([key, value]) => `<div class="metric-card"><span>${demoCountLabel(key)}</span><strong>${value}</strong></div>`).join('')}</div>${demoDataUiState.lastInstallResult ? demoSuccessNavigation() : ''}</section>`; }
 function demoSuccessNavigation() { const buttons: Array<[string, NavigationSection]> = [['Открыть компоненты', 'Компоненты'], ['Открыть склад', 'Склад'], ['Открыть рецепты', 'Рецепты'], ['Открыть клиентов', 'Клиенты'], ['Открыть заказы', 'Заказы'], ['Открыть алерты', 'Алерты'], ['Открыть закупки', 'Закупки']]; return `<p class="next-step">Демо-данные установлены. Теперь можно открыть разделы и посмотреть пример работы.</p><div class="actions">${buttons.map(([label, section]) => `<button class="secondary-action compact" type="button" data-action="navigate-demo-related" data-section="${section}">${label}</button>`).join('')}</div>`; }
 function demoBoundariesCard() { return `<section class="card data-card"><p class="card-kicker">Без скрытых действий</p><h2>Честные границы демо-режима</h2><ul class="checklist compact-list"><li>Демо-данные не устанавливаются автоматически</li><li>Демо-режим не удаляет реальные данные</li><li>Backup/export не создаются автоматически</li><li>Производство не запускается автоматически</li><li>Партии и заказы не импортируются через import apply</li><li>Cloud/OCR/PDF не относятся к демо-режиму</li></ul></section>`; }
@@ -1491,22 +1570,32 @@ function submitImportDraft(form: HTMLFormElement) {
   importUiState.actionStatus = 'uploading';
   importUiState.error = '';
   importUiState.message = '';
+  clearFeedbackAnnouncement();
   render();
   createImportDraft(file, targetType)
     .then((response) => {
       resetImportApplyState();
-      importUiState.message = response.message || 'Черновик импорта создан. Данные ещё не внесены в систему.';
+      const successMessage = response.message || 'Черновик импорта создан. Данные ещё не внесены в систему.';
+      importUiState.message = successMessage;
+      announcePolite(successMessage);
       importUiState.selectedFileName = '';
       form.reset();
-      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]);
-    })
-    .then(([list, detail]) => {
-      importUiState.drafts = list.drafts;
-      importUiState.selectedDraft = detail;
-      importUiState.selectedDraftStatus = 'ready';
-      importUiState.status = 'ready';
-      importUiState.actionStatus = 'idle';
-      render();
+      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)])
+        .then(([list, detail]) => {
+          importUiState.drafts = list.drafts;
+          importUiState.selectedDraft = detail;
+          importUiState.selectedDraftStatus = 'ready';
+          importUiState.status = 'ready';
+          importUiState.actionStatus = 'idle';
+          render();
+        })
+        .catch(() => {
+          importUiState.status = 'ready';
+          importUiState.actionStatus = 'idle';
+          importUiState.error = '';
+          importUiState.message = `${successMessage} Не удалось обновить список или открыть предпросмотр. Нажмите «Обновить», чтобы перечитать черновики.`;
+          render();
+        });
     })
     .catch((error) => {
       importUiState.actionStatus = 'idle';
@@ -1514,11 +1603,12 @@ function submitImportDraft(form: HTMLFormElement) {
         ? error.message
         : 'Не удалось создать черновик импорта. Проверьте формат CSV/XLSX и попробуйте снова.';
       importUiState.message = '';
+      announceAssertive(importUiState.error);
       render();
     });
 }
 
-function resetImportApplyState() { importUiState.applyStatus = 'idle'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; importUiState.lastApplyResult = null; importUiState.showApplyConfirm = false; }
+function resetImportApplyState() { importUiState.applyStatus = 'idle'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; importUiState.applyRefreshWarning = ''; importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; importUiState.lastApplyResult = null; importUiState.showApplyConfirm = false; }
 function openImportDraft(id: number) {
   resetImportApplyState();
   importUiState.selectedDraftStatus = 'loading';
@@ -1534,34 +1624,72 @@ function cancelImportDraftFromUi(id: number) {
   importUiState.actionStatus = 'cancelling';
   importUiState.error = '';
   importUiState.message = '';
+  clearFeedbackAnnouncement();
   render();
   cancelImportDraft(id)
-    .then((response) => Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]).then(([list, detail]) => ({ response, list, detail })))
-    .then(({ response, list, detail }) => {
-      importUiState.drafts = list.drafts;
-      importUiState.selectedDraft = detail;
-      importUiState.selectedDraftStatus = 'ready';
-      importUiState.actionStatus = 'idle';
-      importUiState.message = response.message || 'Черновик импорта отменён. Рабочие данные не изменены.';
-      render();
+    .then((response) => {
+      const successMessage = response.message || 'Черновик импорта отменён. Рабочие данные не изменены.';
+      importUiState.message = successMessage;
+      announcePolite(successMessage);
+      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)])
+        .then(([list, detail]) => {
+          importUiState.drafts = list.drafts;
+          importUiState.selectedDraft = detail;
+          importUiState.selectedDraftStatus = 'ready';
+          importUiState.actionStatus = 'idle';
+          render();
+        })
+        .catch(() => {
+          importUiState.actionStatus = 'idle';
+          importUiState.error = '';
+          importUiState.message = `${successMessage} Не удалось обновить список или предпросмотр. Нажмите «Обновить», чтобы перечитать черновики.`;
+          render();
+        });
     })
-    .catch((error) => { importUiState.actionStatus = 'idle'; importUiState.error = error instanceof Error && error.message !== 'API request failed' ? error.message : 'Не удалось отменить черновик импорта.'; render(); });
+    .catch((error) => { importUiState.actionStatus = 'idle'; importUiState.error = error instanceof Error && error.message !== 'API request failed' ? error.message : 'Не удалось отменить черновик импорта.'; importUiState.message = ''; announceAssertive(importUiState.error); render(); });
 }
 
 
-function showImportApplyConfirmation() { if (!canShowApplyButton(importUiState.selectedDraft)) return; importUiState.applyStatus = 'confirming'; importUiState.showApplyConfirm = true; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; render(); }
-function hideImportApplyConfirmation() { importUiState.showApplyConfirm = false; importUiState.applyStatus = 'idle'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; render(); }
+function showImportApplyConfirmation() { if (!canShowApplyButton(importUiState.selectedDraft)) return; importUiState.applyStatus = 'confirming'; importUiState.showApplyConfirm = true; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; importUiState.applyRefreshWarning = ''; render(); }
+function hideImportApplyConfirmation() { importUiState.showApplyConfirm = false; importUiState.applyStatus = 'idle'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; importUiState.applyRefreshWarning = ''; importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; render(); }
 function updateImportApplyChecks() { importUiState.applyConfirmChecked = Boolean(document.querySelector<HTMLInputElement>('input[name="import_apply_confirm"]')?.checked); importUiState.backupAcknowledged = Boolean(document.querySelector<HTMLInputElement>('input[name="import_backup_acknowledged"]')?.checked); importUiState.allowWarnings = Boolean(document.querySelector<HTMLInputElement>('input[name="import_allow_warnings"]')?.checked); importUiState.applyError = ''; importUiState.applyErrorIssues = []; render(); }
 function applySelectedImportDraftFromUi() {
   const detail = importUiState.selectedDraft;
   if (!detail || !canShowApplyButton(detail) || importUiState.applyStatus === 'applying') return;
   const needsWarningAck = detail.draft.apply_readiness?.status === 'ready_with_warnings';
   if (!importUiState.applyConfirmChecked || !importUiState.backupAcknowledged || (needsWarningAck && !importUiState.allowWarnings)) { importUiState.applyError = needsWarningAck ? 'Перед применением подтвердите запись в базу, backup и разрешение применить черновик с предупреждениями.' : 'Перед применением подтвердите запись в базу и backup.'; render(); return; }
-  importUiState.applyStatus = 'applying'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; render();
+  importUiState.applyStatus = 'applying'; importUiState.applyError = ''; importUiState.applyErrorIssues = []; importUiState.applyMessage = ''; importUiState.applyRefreshWarning = ''; clearFeedbackAnnouncement(); render();
   applyImportDraft(detail.draft.id, { confirm_apply: true, backup_acknowledged: true, allow_warnings: needsWarningAck ? true : importUiState.allowWarnings })
-    .then((response) => Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)]).then(([list, refreshed]) => ({ response, list, refreshed })))
-    .then(({ response, list, refreshed }) => { importUiState.drafts = list.drafts; importUiState.selectedDraft = refreshed; importUiState.selectedDraftStatus = 'ready'; importUiState.applyStatus = 'success'; importUiState.showApplyConfirm = false; importUiState.applyMessage = response.message || 'Черновик импорта применён. Данные внесены в систему.'; importUiState.lastApplyResult = response.apply_result || getDraftApplyResult(refreshed.draft); importUiState.applyConfirmChecked = false; importUiState.backupAcknowledged = false; importUiState.allowWarnings = false; render(); })
-    .catch((error) => { const apiError = error as ApiErrorWithDetails; importUiState.applyStatus = 'error'; importUiState.applyError = importApplyErrorMessage(error); importUiState.applyErrorIssues = Array.isArray(apiError?.issues) ? apiError.issues : []; render(); });
+    .then((response) => {
+      const successMessage = response.message || 'Черновик импорта применён. Данные внесены в систему.';
+      importUiState.selectedDraft = { ...detail, draft: response.draft };
+      importUiState.selectedDraftStatus = 'ready';
+      importUiState.applyStatus = 'success';
+      importUiState.showApplyConfirm = false;
+      importUiState.applyMessage = successMessage;
+      importUiState.applyError = '';
+      importUiState.applyErrorIssues = [];
+      importUiState.applyRefreshWarning = '';
+      importUiState.lastApplyResult = response.apply_result;
+      importUiState.applyConfirmChecked = false;
+      importUiState.backupAcknowledged = false;
+      importUiState.allowWarnings = false;
+      announcePolite(successMessage);
+      return Promise.all([getImportDrafts(importUiState.filters), getImportDraft(response.draft.id)])
+        .then(([list, refreshed]) => {
+          importUiState.drafts = list.drafts;
+          importUiState.selectedDraft = refreshed;
+          importUiState.selectedDraftStatus = 'ready';
+          importUiState.lastApplyResult = response.apply_result || getDraftApplyResult(refreshed.draft);
+          importUiState.applyRefreshWarning = '';
+          render();
+        })
+        .catch(() => {
+          importUiState.applyRefreshWarning = 'Черновик применён, данные внесены в систему. Не удалось обновить список или предпросмотр. Нажмите «Обновить», чтобы перечитать данные.';
+          render();
+        });
+    })
+    .catch((error) => { const apiError = error as ApiErrorWithDetails; importUiState.applyStatus = 'error'; importUiState.applyError = importApplyErrorMessage(error); importUiState.applyErrorIssues = Array.isArray(apiError?.issues) ? apiError.issues : []; importUiState.applyRefreshWarning = ''; announceAssertive(importUiState.applyError); render(); });
 }
 function importApplyErrorMessage(error: unknown) {
   const apiError = error as ApiErrorWithDetails;
@@ -1581,7 +1709,7 @@ function importApplyErrorMarkup() {
   if (!importUiState.applyError) return '';
   const issues = importUiState.applyErrorIssues || [];
   const issueList = issues.length ? `<ul class="issue-list">${issues.map((issue) => { const row = issue.row_number ? `Строка ${issue.row_number}` : 'Общий конфликт'; const field = issue.field ? ` · поле ${escapeHtml(String(issue.field))}` : ''; const code = issue.code ? ` · ${escapeHtml(String(issue.code))}` : ''; return `<li><strong>${row}${field}</strong>: ${escapeHtml(String(issue.message || 'Проверьте строку.'))}<br><small>${code}</small></li>`; }).join('')}</ul>` : '';
-  return `<div class="page-message error-message"><p>${escapeHtml(importUiState.applyError)}</p>${issueList}<p class="next-step">Рабочие данные не были частично изменены.</p></div>`;
+  return feedbackMessage('error', importUiState.applyError, `${issueList}<p class="next-step">Рабочие данные не были частично изменены.</p>`);
 }
 
 function navigateToSection(section: NavigationSection | undefined) { if (!section) return; activeSection = section; window.history.pushState({}, '', pathForSection(activeSection)); loadSectionData(activeSection); render(); }
@@ -1590,8 +1718,8 @@ function importPage() {
   const isLoading = importUiState.status === 'loading';
   return `<div class="page-grid backup-page import-page">
     <section class="card data-card dashboard-hero"><div><p class="card-kicker">Безопасный черновик</p><h2>Импорт данных</h2><p>Загрузите CSV/XLSX, чтобы создать черновик импорта, проверить строки и увидеть ошибки перед внесением данных.</p><p class="next-step">В этом разделе данные ещё не вносятся в рецепты, клиентов, склад или заказы. Сейчас создаётся только черновик для проверки.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-imports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button></div></section>
-    ${importUiState.error ? `<p class="page-message error-message">${escapeHtml(importUiState.error)}</p>` : ''}
-    ${importUiState.message ? `<p class="page-message">${escapeHtml(importUiState.message)}</p>` : ''}
+    ${importUiState.error ? feedbackMessage('error', importUiState.error) : ''}
+    ${importUiState.message ? feedbackMessage('success', importUiState.message) : ''}
     ${importUiState.status === 'error' && !importUiState.targets.length ? importLoadErrorCard() : `${importUploadCard()}${importTargetsCard()}${importBackupRecommendationCard()}${importDraftsCard()}${importDraftDetailCard()}${importNonGoalsCard()}`}
   </div>`;
 }
@@ -1599,7 +1727,7 @@ function importLoadErrorCard() { return `<section class="card error-card"><h2>С
 function importUploadCard() {
   const target = importUiState.targets.find((item) => item.type === importUiState.selectedTargetType);
   const disabled = importUiState.actionStatus === 'uploading' || importUiState.status === 'loading';
-  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать черновик импорта</h2><p>Поддерживаются CSV и XLSX. Первая непустая строка должна быть строкой заголовков.</p><form class="form-grid" data-form="import-draft"><label>Тип данных<select name="target_type" data-action="select-import-target"><option value="">Выберите раздел</option>${importUiState.targets.map((item) => `<option value="${escapeHtml(item.type)}" ${item.type === importUiState.selectedTargetType ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('')}</select></label><label>Файл CSV/XLSX<input name="file" type="file" accept=".csv,.xlsx" data-action="select-import-file" /></label><div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${importUiState.actionStatus === 'uploading' ? 'Загружаем файл…' : 'Создать черновик'}</button></div></form>${target ? `<p class="next-step">Для «${escapeHtml(target.label)}» обязательные столбцы: ${escapeHtml(target.required_columns.join(', ') || 'нет')}.</p>` : '<p class="next-step">Выберите тип данных и файл. Фронтенд не читает файл сам — проверку выполняет локальный backend.</p>'}</section>`;
+  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать черновик импорта</h2><p>Поддерживаются CSV и XLSX. Первая непустая строка должна быть строкой заголовков.</p><form class="form-grid" data-form="import-draft" aria-busy="${importUiState.actionStatus === 'uploading' ? 'true' : 'false'}"><label>Тип данных<select name="target_type" data-action="select-import-target"><option value="">Выберите раздел</option>${importUiState.targets.map((item) => `<option value="${escapeHtml(item.type)}" ${item.type === importUiState.selectedTargetType ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('')}</select></label><label>Файл CSV/XLSX<input name="file" type="file" accept=".csv,.xlsx" data-action="select-import-file" /></label><div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${importUiState.actionStatus === 'uploading' ? 'Загружаем файл…' : 'Создать черновик'}</button></div></form>${target ? `<p class="next-step">Для «${escapeHtml(target.label)}» обязательные столбцы: ${escapeHtml(target.required_columns.join(', ') || 'нет')}.</p>` : '<p class="next-step">Выберите тип данных и файл. Фронтенд не читает файл сам — проверку выполняет локальный backend.</p>'}</section>`;
 }
 function importTargetsCard() {
   if (importUiState.status === 'loading' && !importUiState.targets.length) return '<section class="card"><p>Загружаем поддерживаемые типы импорта…</p></section>';
@@ -1635,19 +1763,19 @@ function importApplySection(detail: ImportDraftDetailResponse) {
   const blockedReasons = readiness?.blocking_reasons ?? [];
   const status = draft.status;
   const success = importUiState.applyStatus === 'success' && result ? importApplyResultMarkup(result) : '';
-  if (status === 'applied') return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p class="page-message">Черновик уже применён.</p>${result ? importApplyResultMarkup(result) : ''}</div>`;
+  if (status === 'applied') { const refreshWarning = importUiState.applyRefreshWarning ? feedbackMessage('warning', importUiState.applyRefreshWarning) : ''; return `<div class="subsection apply-panel" aria-busy="${importUiState.applyStatus === 'applying' ? 'true' : 'false'}"><h3>Применение черновика</h3>${feedbackMessage('neutral', 'Черновик уже применён.')}${refreshWarning}${result ? importApplyResultMarkup(result) : ''}</div>`; }
   if (status === 'cancelled') return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p>Черновик отменён. Рабочие данные не изменены.</p></div>`;
-  if (status === 'failed') return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p class="error-message">Черновик не готов к применению из-за ошибки обработки.</p></div>`;
-  if (!readiness || readiness.can_apply === false || status === 'blocked' || readiness.status === 'blocked') return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p class="error-message">Черновик нельзя применить: сначала исправьте ошибки в файле и создайте новый черновик.</p>${blockedReasons.length ? `<p class="warning-text">${blockedReasons.map(escapeHtml).join('<br>')}</p>` : ''}</div>`;
+  if (status === 'failed') return `<div class="subsection apply-panel"><h3>Применение черновика</h3>${feedbackMessage('error', 'Черновик не готов к применению из-за ошибки обработки.')}</div>`;
+  if (!readiness || readiness.can_apply === false || status === 'blocked' || readiness.status === 'blocked') return `<div class="subsection apply-panel"><h3>Применение черновика</h3>${feedbackMessage('error', 'Черновик нельзя применить: сначала исправьте ошибки в файле и создайте новый черновик.')}${blockedReasons.length ? `<p class="warning-text">${blockedReasons.map(escapeHtml).join('<br>')}</p>` : ''}</div>`;
   if (unsupported) return `<div class="subsection apply-panel"><h3>Применение черновика</h3><p>Этот тип черновика пока нельзя применить из интерфейса.</p><p class="next-step">Применение доступно только для безопасных типов: компоненты, клиенты, карточки рецептов и тара. Партии компонентов и заказы пока остаются только на уровне черновика.</p></div>`;
   const warningCopy = readiness.status === 'ready_with_warnings' ? '<p class="warning-text">Черновик можно применить, но в нём есть предупреждения. Проверьте их перед продолжением.</p>' : '<p class="next-step">Черновик готов к применению.</p>';
-  return `<div class="subsection apply-panel"><h3>Применение черновика</h3>${importUiState.applyError ? `${importApplyErrorMarkup()}` : ''}${importUiState.applyMessage ? `<p class="page-message">${escapeHtml(importUiState.applyMessage)}</p>` : ''}${success}${warningCopy}${importUiState.showApplyConfirm ? importApplyConfirmPanel(detail) : `<div class="actions"><button class="primary-action" type="button" data-action="show-import-apply-confirm">Перейти к подтверждению</button></div>`}</div>`;
+  return `<div class="subsection apply-panel" aria-busy="${importUiState.applyStatus === 'applying' ? 'true' : 'false'}"><h3>Применение черновика</h3>${importUiState.applyError ? `${importApplyErrorMarkup()}` : ''}${importUiState.applyMessage ? feedbackMessage('success', importUiState.applyMessage) : ''}${success}${warningCopy}${importUiState.showApplyConfirm ? importApplyConfirmPanel(detail) : `<div class="actions"><button class="primary-action" type="button" data-action="show-import-apply-confirm">Перейти к подтверждению</button></div>`}</div>`;
 }
 function importApplyConfirmPanel(detail: ImportDraftDetailResponse) {
   const draft = detail.draft; const readiness = draft.apply_readiness; const needsWarningAck = readiness?.status === 'ready_with_warnings'; const disabled = importUiState.applyStatus === 'applying' || !importUiState.applyConfirmChecked || !importUiState.backupAcknowledged || (needsWarningAck && !importUiState.allowWarnings);
   return `<div class="confirm-panel"><h3>Подтвердите применение</h3><p>После применения данные из черновика будут записаны в рабочую базу. Это действие нельзя считать простым предпросмотром.</p><div class="overview-grid compact-overview"><div class="metric-card"><span>Тип импорта</span><strong>${applyTargetLabel(draft.target_type)}</strong></div><div class="metric-card"><span>Количество строк</span><strong>${draft.row_count}</strong></div><div class="metric-card"><span>Готовых строк</span><strong>${draft.valid_row_count}</strong></div><div class="metric-card"><span>Ошибок</span><strong>${draft.error_count}</strong></div><div class="metric-card"><span>Предупреждений</span><strong>${draft.warning_count}</strong></div></div><p><strong>Что будет создано:</strong> ${applyTargetActionCopy(draft.target_type)}</p><p class="warning-text">Существующие записи не обновляются автоматически. Если backend найдёт дубликаты или конфликт, применение будет отменено полностью.</p><p class="next-step">Перед применением импорта рекомендуется создать резервную копию. Система не создаёт её автоматически.</p><div class="actions"><button class="secondary-action" type="button" data-action="navigate-import-related" data-section="Резервные копии">Открыть резервные копии</button><button class="secondary-action" type="button" data-action="navigate-import-related" data-section="Экспорт">Открыть экспорт</button></div><label class="checkbox-line"><input type="checkbox" name="import_apply_confirm" data-action="toggle-import-apply-check" ${importUiState.applyConfirmChecked ? 'checked' : ''} /> Я понимаю, что это внесёт данные в рабочую базу.</label><label class="checkbox-line"><input type="checkbox" name="import_backup_acknowledged" data-action="toggle-import-apply-check" ${importUiState.backupAcknowledged ? 'checked' : ''} /> Я создал(а) резервную копию или понимаю, что применяю импорт без неё.</label>${needsWarningAck ? `<label class="checkbox-line"><input type="checkbox" name="import_allow_warnings" data-action="toggle-import-apply-check" ${importUiState.allowWarnings ? 'checked' : ''} /> Я проверил(а) предупреждения и разрешаю применить черновик с предупреждениями.</label>` : ''}<div class="actions"><button class="primary-action" type="button" data-action="apply-import-draft" ${disabled ? 'disabled' : ''}>${importUiState.applyStatus === 'applying' ? 'Применяем…' : 'Применить черновик'}</button><button class="secondary-action" type="button" data-action="hide-import-apply-confirm" ${importUiState.applyStatus === 'applying' ? 'disabled' : ''}>Вернуться к предпросмотру</button></div></div>`;
 }
-function importApplyResultMarkup(result: ImportDraftApplyResultResponse) { return `<div class="subsection"><p class="page-message">Черновик импорта применён. Данные внесены в систему.</p><p><strong>Создано записей:</strong> ${result.created_count}</p>${result.created_records.length ? `<div class="backup-list">${result.created_records.map((record) => `<article class="recipe-line"><p>Строка ${record.row_number} → ${applyTargetSingularLabel(record.target_type)} «${escapeHtml(record.label)}» #${record.record_id}</p></article>`).join('')}</div>` : '<p class="empty-hint">Backend не вернул список созданных записей.</p>'}<p class="next-step">Если нужно проверить результат, откройте соответствующий раздел: Компоненты, Клиенты, Рецепты или Тара.</p><div class="actions">${importApplyNavigationButtons(result.target_type)}</div></div>`; }
+function importApplyResultMarkup(result: ImportDraftApplyResultResponse) { return `<div class="subsection">${feedbackMessage('success', 'Черновик импорта применён. Данные внесены в систему.')}<p><strong>Создано записей:</strong> ${result.created_count}</p>${result.created_records.length ? `<div class="backup-list">${result.created_records.map((record) => `<article class="recipe-line"><p>Строка ${record.row_number} → ${applyTargetSingularLabel(record.target_type)} «${escapeHtml(record.label)}» #${record.record_id}</p></article>`).join('')}</div>` : '<p class="empty-hint">Backend не вернул список созданных записей.</p>'}<p class="next-step">Если нужно проверить результат, откройте соответствующий раздел: Компоненты, Клиенты, Рецепты или Тара.</p><div class="actions">${importApplyNavigationButtons(result.target_type)}</div></div>`; }
 function importApplyNavigationButtons(targetType: string) { const section = ({ ingredients: 'Компоненты', clients: 'Клиенты', recipe_templates: 'Рецепты', packaging_items: 'Тара' } as Record<string, NavigationSection>)[targetType]; return section ? `<button class="secondary-action" type="button" data-action="navigate-import-related" data-section="${section}">Открыть ${section.toLowerCase()}</button>` : ''; }
 function getDraftApplyResult(draft: ImportDraftSummary | null): ImportDraftApplyResultResponse | null { const value = draft?.summary?.apply_result; return value && typeof value === 'object' ? value as ImportDraftApplyResultResponse : null; }
 function canShowApplyButton(detail: ImportDraftDetailResponse | null): boolean { if (!detail) return false; const draft = detail.draft; const readiness = draft.apply_readiness; return draft.status !== 'applied' && draft.status !== 'cancelled' && draft.status !== 'failed' && draft.status !== 'blocked' && Boolean(readiness?.can_apply) && (readiness?.status === 'ready' || readiness?.status === 'ready_with_warnings') && APPLY_SUPPORTED_IMPORT_TARGETS.has(draft.target_type); }
@@ -2141,11 +2269,11 @@ function stepHint(step: string) { return onboardingStepUi[step]?.hint ?? 'Шаг
 
 function reportDocumentsPage() {
   const isLoading = reportDocumentsUiState.status === 'loading';
-  return `<div class="page-grid backup-page report-documents-page"><section class="card data-card dashboard-hero"><div><p class="card-kicker">Документы отчетов</p><h2>Документы отчетов</h2><p>Создавайте читаемые файлы отчета по сводке мастерской. Поддерживаемые backend форматы отображаются ниже и хранятся локально.</p><p class="next-step">Документы создаются только вручную. Если профиль мастерской заполнен в настройках, он будет добавлен в новые Markdown/PDF-сводки. Страница не меняет склад, заказы, производство, закупки, backup или import.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить список'}</button></div></section>${reportDocumentsUiState.error ? `<p class="page-message error-message">${escapeHtml(reportDocumentsUiState.error)}</p>` : ''}${reportDocumentsUiState.message ? `<p class="page-message">${escapeHtml(reportDocumentsUiState.message)}</p>` : ''}${reportDocumentsUiState.status === 'error' && !reportDocumentsUiState.documentStatus ? reportDocumentsLoadErrorCard() : `${reportDocumentsStatusCard()}${reportDocumentsCreateCard()}${reportDocumentsLastCreatedCard()}${reportDocumentsListCard()}${reportDocumentsBoundariesCard()}`}</div>`;
+  return `<div class="page-grid backup-page report-documents-page"><section class="card data-card dashboard-hero"><div><p class="card-kicker">Документы отчетов</p><h2>Документы отчетов</h2><p>Создавайте читаемые файлы отчета по сводке мастерской. Поддерживаемые backend форматы отображаются ниже и хранятся локально.</p><p class="next-step">Документы создаются только вручную. Если профиль мастерской заполнен в настройках, он будет добавлен в новые Markdown/PDF-сводки. Страница не меняет склад, заказы, производство, закупки, backup или import.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить список'}</button></div></section>${reportDocumentsUiState.error ? feedbackMessage('error', reportDocumentsUiState.error) : ''}${reportDocumentsUiState.message ? feedbackMessage('success', reportDocumentsUiState.message) : ''}${reportDocumentsUiState.status === 'error' && !reportDocumentsUiState.documentStatus ? reportDocumentsLoadErrorCard() : `${reportDocumentsStatusCard()}${reportDocumentsCreateCard()}${reportDocumentsLastCreatedCard()}${reportDocumentsListCard()}${reportDocumentsBoundariesCard()}`}</div>`;
 }
 function reportDocumentsLoadErrorCard() { return `<section class="card error-card"><h2>Документы недоступны</h2><p>Не удалось загрузить документы отчетов. Проверьте, что локальное приложение запущено.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents">Повторить</button></div></section>`; }
 function reportDocumentsStatusCard() { const s = reportDocumentsUiState.documentStatus; if (reportDocumentsUiState.status === 'loading' && !s) return '<section class="card"><p>Загружаем статус документов отчетов…</p></section>'; if (!s) return ''; return `<section class="overview-grid"><div class="metric-card"><span>Доступные форматы</span><strong>${escapeHtml(s.available_formats.map(reportDocumentFormatLabel).join(', ') || 'Нет')}</strong></div><div class="metric-card"><span>Тип документа</span><strong>${s.available_document_types.includes('workshop_overview') ? 'Сводка мастерской' : escapeHtml(s.available_document_types.join(', ') || 'Нет')}</strong></div><div class="metric-card"><span>Создано документов</span><strong>${s.documents_count}</strong></div><div class="metric-card"><span>Можно создать</span><strong>${s.can_create ? 'Да' : 'Нет'}</strong></div><div class="metric-card wide"><span>Сообщение backend</span><strong>${escapeHtml(s.message || 'Нет сообщения')}</strong><small class="path-text">Папка документов: ${escapeHtml(s.documents_dir)}</small></div></section>`; }
-function reportDocumentsCreateCard() { const disabled = reportDocumentsUiState.actionStatus === 'creating' || reportDocumentsUiState.status === 'loading' || !reportDocumentsUiState.documentStatus?.can_create; const formats = reportDocumentsUiState.documentStatus?.available_formats ?? ['markdown']; const canPdf = formats.includes('pdf'); const pdfUnavailable = !canPdf ? '<p class="next-step">PDF сейчас недоступен на этом устройстве. Markdown можно создать всегда.</p>' : ''; return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать сводку мастерской</h2><p>Файл будет создан из текущих backend-отчетов: склад, заказы, производство, алерты, закупки и базовые финансы.</p><p class="page-message">Markdown остается доступен. PDF создается только если backend подтвердил локальную поддержку русского текста. DOCX пока не поддерживается.</p><form class="form-grid" data-form="report-document-create"><label>Причина / заметка<input name="reason" maxlength="80" value="${escapeHtml(reportDocumentsUiState.reason)}" data-action="report-document-reason" placeholder="Например: еженедельная проверка" /></label><div class="actions"><button class="secondary-action" type="submit" data-format="markdown" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаем…' : 'Создать Markdown'}</button>${canPdf ? `<button class="primary-action" type="submit" data-format="pdf" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаем…' : 'Создать PDF'}</button>` : ''}</div></form>${pdfUnavailable}<p class="next-step">Создание не запускается на загрузке страницы: документ появляется только после нажатия кнопки.</p></section>`; }
+function reportDocumentsCreateCard() { const disabled = reportDocumentsUiState.actionStatus === 'creating' || reportDocumentsUiState.status === 'loading' || !reportDocumentsUiState.documentStatus?.can_create; const formats = reportDocumentsUiState.documentStatus?.available_formats ?? ['markdown']; const canPdf = formats.includes('pdf'); const pdfUnavailable = !canPdf ? '<p class="next-step">PDF сейчас недоступен на этом устройстве. Markdown можно создать всегда.</p>' : ''; return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать сводку мастерской</h2><p>Файл будет создан из текущих backend-отчетов: склад, заказы, производство, алерты, закупки и базовые финансы.</p>${feedbackMessage('neutral', 'Markdown остается доступен. PDF создается только если backend подтвердил локальную поддержку русского текста. DOCX пока не поддерживается.')}<form class="form-grid" data-form="report-document-create" aria-busy="${reportDocumentsUiState.actionStatus === 'creating' ? 'true' : 'false'}"><label>Причина / заметка<input name="reason" maxlength="80" value="${escapeHtml(reportDocumentsUiState.reason)}" data-action="report-document-reason" placeholder="Например: еженедельная проверка" /></label><div class="actions"><button class="secondary-action" type="submit" data-format="markdown" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаем…' : 'Создать Markdown'}</button>${canPdf ? `<button class="primary-action" type="submit" data-format="pdf" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаем…' : 'Создать PDF'}</button>` : ''}</div></form>${pdfUnavailable}<p class="next-step">Создание не запускается на загрузке страницы: документ появляется только после нажатия кнопки.</p></section>`; }
 function reportDocumentsLastCreatedCard() { const d = reportDocumentsUiState.lastCreatedDocument; if (!d) return ''; return `<section class="card data-card"><p class="card-kicker">Последний результат</p><h2>Документ создан</h2><p>Файл: <strong>${escapeHtml(d.filename)}</strong></p><p class="next-step">Документ создан. Его можно открыть или скачать из списка ниже.</p></section>`; }
 function reportDocumentsListCard() { const docs = reportDocumentsUiState.documents; if (!docs.length) return `<section class="card empty-card"><h2>Созданные документы</h2><p>Документы отчетов пока не создавались. Создайте Markdown или PDF-сводку мастерской.</p><p>Создайте сводку вручную, когда нужен файл для просмотра или передачи.</p><div class="actions"><button class="secondary-action" type="button" data-action="navigate-report-documents-related" data-section="Отчеты">Открыть отчеты</button></div></section>`; return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Локальные файлы</p><h2>Созданные документы</h2></div><span class="pill info">${docs.length}</span></div><div class="backup-list">${docs.map(reportDocumentItem).join('')}</div><p class="next-step">Открытие и скачивание идут через безопасный backend endpoint. Frontend не строит пути к локальным папкам.</p><div class="actions"><button class="secondary-action" type="button" data-action="navigate-report-documents-related" data-section="Отчеты">Открыть отчеты</button></div></section>`; }
 function reportDocumentItem(d: ReportDocumentMetadata) { return `<article class="recipe-line backup-item"><div class="section-heading"><div><h3>${escapeHtml(d.title || 'Сводка мастерской')}</h3><p><span class="pill info">${reportDocumentFormatLabel(d.format)}</span> <span class="pill muted">${formatFileSize(d.size_bytes)}</span></p></div><small>${formatDateTime(d.created_at)}</small></div><dl class="metadata-list"><div><dt>Файл</dt><dd>${escapeHtml(d.filename)}</dd></div><div><dt>Формат</dt><dd>${reportDocumentFormatLabel(d.format)}</dd></div><div><dt>Создан</dt><dd>${formatDateTime(d.created_at)}</dd></div><div><dt>Размер</dt><dd>${formatFileSize(d.size_bytes)}</dd></div><div><dt>Предупреждений</dt><dd>${d.warnings_count}</dd></div><div><dt>Источник данных</dt><dd>${escapeHtml(d.source)}${d.source_generated_at ? ` · ${formatDateTime(d.source_generated_at)}` : ''}</dd></div></dl>${reportDocumentActions(d)}</article>`; }
@@ -2185,7 +2313,7 @@ function loadSettingsStatus(force = false) {
 function loadWorkshopProfile(force = false) {
   if (!force && (workshopProfileUiState.status === 'loading' || workshopProfileUiState.status === 'ready')) return;
   workshopProfileUiState.status = 'loading'; workshopProfileUiState.error = ''; render();
-  getWorkshopProfile().then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: data.message }; render(); }).catch(() => { workshopProfileUiState.status = 'error'; workshopProfileUiState.error = 'Не удалось загрузить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; render(); });
+  getWorkshopProfile().then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: '' }; render(); }).catch(() => { workshopProfileUiState.status = 'error'; workshopProfileUiState.error = 'Не удалось загрузить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; render(); });
 }
 
 function settingsPage() {
@@ -2209,9 +2337,9 @@ function settingsWorkshopProfileCard() {
   const disabled = available ? '' : 'disabled';
   const actionDisabled = dirty ? '' : 'disabled';
   const retry = state.status === 'error' && state.profile === null ? '<div class="actions"><button class="secondary-action compact" type="button" data-action="reload-workshop-profile">Повторить загрузку</button></div>' : '';
-  const message = state.message && state.status === 'ready' ? `<p class="page-message settings-neutral-message" aria-live="polite" data-workshop-profile-feedback>${escapeHtml(state.message)}</p>` : '';
-  const error = state.error ? `<p class="form-error" data-workshop-profile-feedback>${escapeHtml(state.error)}</p>` : '';
-  return `<section class="card data-card settings-card settings-profile-card"><h2>Профиль мастерской</h2><p>Эти данные добавляются в новые Markdown- и PDF-документы «Сводка мастерской», которые создаются в разделе «Документы отчётов».</p><p class="next-step">Ранее созданные документы не меняются автоматически.</p><div class="actions">${settingsAction('Открыть документы отчётов', 'Документы отчетов')}</div>${loading ? '<p class="muted-text">Загружаем профиль мастерской…</p>' : ''}${error}${retry}${message}<p class="page-message settings-neutral-message" aria-live="polite" data-workshop-profile-dirty-notice ${dirty ? '' : 'hidden'}>Есть несохранённые изменения.</p><form class="ingredient-form" data-form="workshop-profile"><div class="form-grid settings-profile-form"><label>Название мастерской<input data-workshop-profile-field="workshop_name" value="${escapeHtml(draft.workshop_name)}" maxlength="120" placeholder="Например, Мастерская Анны" ${disabled} /></label><label>Имя мастера / косметолога<input data-workshop-profile-field="master_name" value="${escapeHtml(draft.master_name)}" maxlength="120" placeholder="Например, Анна Иванова" ${disabled} /></label><label class="full-span">Контактная информация<textarea data-workshop-profile-field="workshop_contact_text" maxlength="500" rows="4" placeholder="Телефон, почта или удобный способ связи" ${disabled}>${escapeHtml(draft.workshop_contact_text)}</textarea></label><label class="full-span">Краткое описание / примечание<textarea data-workshop-profile-field="workshop_note" maxlength="500" rows="4" placeholder="Коротко о мастерской для новых сводок" ${disabled}>${escapeHtml(draft.workshop_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" data-workshop-profile-save ${actionDisabled}>${saving ? 'Сохраняем…' : 'Сохранить профиль'}</button><button class="secondary-action" type="button" data-action="cancel-workshop-profile" ${actionDisabled}>Отменить изменения</button></div></form></section>`;
+  const message = state.message && state.status === 'ready' ? `<div data-workshop-profile-result>${feedbackMessage('success', state.message)}</div>` : '';
+  const error = state.error ? `<div data-workshop-profile-result>${feedbackMessage('error', state.error)}</div>` : '';
+  return `<section class="card data-card settings-card settings-profile-card"><h2>Профиль мастерской</h2><p>Эти данные добавляются в новые Markdown- и PDF-документы «Сводка мастерской», которые создаются в разделе «Документы отчётов».</p><p class="next-step">Ранее созданные документы не меняются автоматически.</p><div class="actions">${settingsAction('Открыть документы отчётов', 'Документы отчетов')}</div>${loading ? '<p class="muted-text">Загружаем профиль мастерской…</p>' : ''}${error}${retry}${message}<div data-workshop-profile-dirty-notice ${dirty ? '' : 'hidden'}>${feedbackMessage('neutral', 'Есть несохранённые изменения.')}</div><form class="ingredient-form" data-form="workshop-profile" aria-busy="${saving ? 'true' : 'false'}"><div class="form-grid settings-profile-form"><label>Название мастерской<input data-workshop-profile-field="workshop_name" value="${escapeHtml(draft.workshop_name)}" maxlength="120" placeholder="Например, Мастерская Анны" ${disabled} /></label><label>Имя мастера / косметолога<input data-workshop-profile-field="master_name" value="${escapeHtml(draft.master_name)}" maxlength="120" placeholder="Например, Анна Иванова" ${disabled} /></label><label class="full-span">Контактная информация<textarea data-workshop-profile-field="workshop_contact_text" maxlength="500" rows="4" placeholder="Телефон, почта или удобный способ связи" ${disabled}>${escapeHtml(draft.workshop_contact_text)}</textarea></label><label class="full-span">Краткое описание / примечание<textarea data-workshop-profile-field="workshop_note" maxlength="500" rows="4" placeholder="Коротко о мастерской для новых сводок" ${disabled}>${escapeHtml(draft.workshop_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" data-workshop-profile-save ${actionDisabled}>${saving ? 'Сохраняем…' : 'Сохранить профиль'}</button><button class="secondary-action" type="button" data-action="cancel-workshop-profile" ${actionDisabled}>Отменить изменения</button></div></form></section>`;
 }
 
 
@@ -2224,8 +2352,14 @@ function syncWorkshopProfileDraftUi() {
   if (saveButton) saveButton.disabled = !dirty;
   const cancelButton = document.querySelector<HTMLButtonElement>('[data-action="cancel-workshop-profile"]');
   if (cancelButton) cancelButton.disabled = !dirty;
-  document.querySelectorAll<HTMLElement>('[data-workshop-profile-feedback]').forEach((element) => { element.hidden = true; element.textContent = ''; });
+  if (workshopProfileUiState.message || workshopProfileUiState.error) {
+    workshopProfileUiState.message = '';
+    workshopProfileUiState.error = '';
+    clearFeedbackAnnouncement();
+  }
+  document.querySelectorAll<HTMLElement>('[data-workshop-profile-result]').forEach((element) => { element.hidden = true; element.textContent = ''; });
 }
+
 
 function settingsLocalDataSection() {
   if (settingsUiState.status === 'loading' && !settingsUiState.data) {
@@ -2927,11 +3061,19 @@ function createReportDocumentFromUi(format: 'markdown' | 'pdf' = 'markdown') {
   if (reportDocumentsUiState.actionStatus === 'creating') return;
   if (!reportDocumentsUiState.documentStatus?.can_create) { reportDocumentsUiState.error = 'Backend сейчас не разрешает создать документ отчета.'; reportDocumentsUiState.message = ''; render(); return; }
   const reason = reportDocumentsUiState.reason.trim();
-  reportDocumentsUiState.actionStatus = 'creating'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = ''; render();
+  reportDocumentsUiState.actionStatus = 'creating'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = ''; clearFeedbackAnnouncement(); render();
   createOverviewReportDocument({ format, ...(reason ? { reason } : {}) })
-    .then((response) => { reportDocumentsUiState.lastCreatedDocument = response.document; reportDocumentsUiState.reason = ''; reportDocumentsUiState.message = `${response.message || 'Документ создан.'} Его можно открыть или скачать из списка ниже.`; return Promise.all([getReportDocumentStatus(), getReportDocuments()]); })
-    .then(([status, list]) => { reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; render(); })
-    .catch((error: unknown) => { const detail = error instanceof Error && error.message && error.message !== 'API request failed' ? ` ${error.message}` : ''; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = `Не удалось создать документ отчета. Данные мастерской не изменялись.${detail}`; reportDocumentsUiState.message = ''; render(); });
+    .then((response) => {
+      reportDocumentsUiState.lastCreatedDocument = response.document;
+      reportDocumentsUiState.reason = '';
+      const successMessage = `${response.message || 'Документ создан.'} Его можно открыть или скачать из списка ниже.`;
+      reportDocumentsUiState.message = successMessage;
+      announcePolite(successMessage);
+      return Promise.all([getReportDocumentStatus(), getReportDocuments()])
+        .then(([status, list]) => { reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; render(); })
+        .catch(() => { reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = `${successMessage} Не удалось обновить список документов. Нажмите «Обновить список», чтобы перечитать данные.`; render(); });
+    })
+    .catch((error: unknown) => { const detail = error instanceof Error && error.message && error.message !== 'API request failed' ? ` ${error.message}` : ''; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = `Не удалось создать документ отчета. Данные мастерской не изменялись.${detail}`; reportDocumentsUiState.message = ''; announceAssertive(reportDocumentsUiState.error); render(); });
 }
 
 function loadReports(force = false) {
@@ -2953,6 +3095,7 @@ function loadOnboarding() { fetch('/api/onboarding').then((response) => { if (!r
 function updateOnboarding(url: string, body?: Record<string, string>) { fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; }).then((state) => { onboardingState = state; onboardingStatus = 'ready'; onboardingMessage = 'Сохранено в локальном рабочем пространстве.'; render(); }).catch(() => { onboardingStatus = 'unavailable'; onboardingMessage = ''; render(); }); }
 
 window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); loadSectionData(activeSection); render(); });
+ensureAnnouncementRegions();
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });
 loadOnboarding();
@@ -2964,8 +3107,9 @@ function updateWorkshopProfileDraft(event: Event) {
   const field = target.dataset.workshopProfileField as keyof WorkshopProfile | undefined;
   if (!field) return;
   workshopProfileUiState.draft = { ...workshopProfileUiState.draft, [field]: target.value };
+  if (workshopProfileUiState.error || workshopProfileUiState.message) clearFeedbackAnnouncement();
   workshopProfileUiState.error = ''; workshopProfileUiState.message = '';
   syncWorkshopProfileDraftUi();
 }
-function cancelWorkshopProfileChanges() { const profile = workshopProfileUiState.profile; if (!isWorkshopProfileFormAvailable() || profile === null || !isWorkshopProfileDirty()) return; workshopProfileUiState.draft = { ...profile }; workshopProfileUiState.error = ''; workshopProfileUiState.message = 'Несохранённые изменения отменены. Восстановлена последняя сохранённая версия.'; render(); }
-function submitWorkshopProfileForm(event: Event) { event.preventDefault(); if (!isWorkshopProfileFormAvailable() || !isWorkshopProfileDirty()) return; workshopProfileUiState.actionStatus = 'saving'; workshopProfileUiState.error = ''; workshopProfileUiState.message = ''; render(); updateWorkshopProfile(workshopProfileUiState.draft).then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: 'Профиль мастерской сохранён. Эти данные будут добавлены только в новые документы «Сводка мастерской». Ранее созданные документы не изменятся.' }; render(); }).catch((error: Error) => { workshopProfileUiState.actionStatus = 'idle'; workshopProfileUiState.error = error.message || 'Не удалось сохранить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; render(); }); }
+function cancelWorkshopProfileChanges() { const profile = workshopProfileUiState.profile; if (!isWorkshopProfileFormAvailable() || profile === null || !isWorkshopProfileDirty()) return; clearFeedbackAnnouncement(); workshopProfileUiState.draft = { ...profile }; workshopProfileUiState.error = ''; workshopProfileUiState.message = 'Несохранённые изменения отменены. Восстановлена последняя сохранённая версия.'; announcePolite(workshopProfileUiState.message); render(); }
+function submitWorkshopProfileForm(event: Event) { event.preventDefault(); if (!isWorkshopProfileFormAvailable() || !isWorkshopProfileDirty()) return; workshopProfileUiState.actionStatus = 'saving'; workshopProfileUiState.error = ''; workshopProfileUiState.message = ''; clearFeedbackAnnouncement(); render(); updateWorkshopProfile(workshopProfileUiState.draft).then((data) => { workshopProfileUiState = { status: 'ready', actionStatus: 'idle', profile: data.profile, draft: { ...data.profile }, error: '', message: 'Профиль мастерской сохранён. Эти данные будут добавлены только в новые документы «Сводка мастерской». Ранее созданные документы не изменятся.' }; announcePolite(workshopProfileUiState.message); render(); }).catch((error: Error) => { workshopProfileUiState.actionStatus = 'idle'; workshopProfileUiState.error = error.message || 'Не удалось сохранить профиль мастерской. Данные рецептов, склада и заказов не изменялись.'; announceAssertive(workshopProfileUiState.error); render(); }); }
