@@ -1,32 +1,35 @@
-# Current focus
+# Current Focus — Slice A1b3a Reports copy
 
-Slice A1b2 is active: clean up Backup and Export user-facing capability copy only.
+Active task: Slice A1b3a — clean up Reports and Report Documents product copy.
 
 ## Runtime scope
-- `/backups`
-- `/exports`
-- `dashboardBackupReminder()`
+- `/reports` static product copy.
+- `/report-documents` static product copy.
+- `dashboardReportsCard()` static product copy.
 
-## Exact non-goals
-- Do not change Reports, Help Center, route/navigation readiness metadata, Import, Demo Data, Settings, or other application sections.
-- Do not implement restore, import from export, CSV/XLSX/PDF export, cloud upload/sync, scheduled backups/exports, file browser, Finder integration, path redesign, or download/copy-path controls.
-- Do not change backend files, API fields, DTOs, endpoints, folder locations, filenames, request counts, disabled rules, state transitions, CSS, dependencies, or lockfiles.
-- Do not change `docs/implementation-plan.md`.
+## Non-goals
+- Do not implement A1b3b Help Center or route/navigation readiness metadata work.
+- Do not implement A1c final runtime terminology sweep.
+- Do not implement Slice A2 structured validation or any later implementation-plan slice.
+- Do not change backend files, report calculations, report-document generation, routes, navigation identifiers, CSS, dependencies, lockfiles, or documentation pages.
+- Do not change `docs/implementation-plan.md`; Slice A1 remains IN PROGRESS.
+
+## Required source-diff checks
+- Review Reports diff for request count, `Promise.all`, state, report DTO, and calculation preservation.
+- Review Report Documents diff for `can_create`, disabled rules, `aria-busy`, announcers, success/list-refresh separation, open/download controls, and format values.
+- Review navigation diff for unchanged `data-nav-section`, route, pathname, and navigation behavior.
+- Run the scoped terminology search and classify remaining matches without broad replacement.
+
+## Validation plan
+- Run repository hygiene checks: `git status --short`, `git diff --check`, `git diff --name-only`, and `git diff --stat`.
+- Run frontend build: `cd frontend && npm run build`.
+- Run backend baseline: `cd backend && python3 -m pytest`; report collected, passed, failed, exact failures, and whether failures match the known baseline.
+
+## Review and publication gate
+- Commit changes on the current branch only after checks are complete.
+- Create a focused pull request with the requested title and structured body after the commit.
+- Publication metadata must be verified by the repository owner if the environment has no GitHub remote.
 - Do not assign or predict a future pull request number.
 
-## Source checks
-- Start from the actual latest available main baseline; PR #110 merge commit `f157814358b1a461f6f63d54d46ad2dd6f3a7145` must be included.
-- Inspect `loadBackups`, `submitBackupCreate`, `loadExports`, `submitExportCreate`, `dashboardBackupReminder`, and all `/backups` and `/exports` render functions before editing.
-- Preserve dynamic filenames and raw path values exactly as returned by the application; only surrounding static labels may change.
-- Classify remaining technical-copy search hits as in-scope, identifiers, dynamic values/messages, out-of-scope, or deferred A1b3/A5 findings.
-
-## Build and backend baseline
-- Run repository hygiene checks, `git diff --check`, frontend build, and backend pytest.
-- Backend pytest result must be reported honestly against the known previous baseline of 463 passed / 5 failed without fixing unrelated backend failures.
-
-## GitHub review gate
-- Published pull request: PR #111.
-- Published GitHub branch: `codex-rzipfx`.
-- Published head before this correction: `b6d44e935d5e320d91b955feec97667f03c93b05`.
-- GitHub reported the pull request as mergeable before this correction.
-- Repository-owner review and approval remain the final merge gate.
+## Browser policy
+- Browser smoke is not required as a merge gate when the final runtime diff changes static strings only and does not modify HTML structure, CSS, controls, routes, requests, focus, state transitions, report calculations, or report-document behavior.

@@ -183,3 +183,11 @@ No backend, API, schema, migration, CSS, dependency, lockfile, demo install/clea
 - State update scope: `state/current-focus.md` rewritten for A1b2; `state/progress.md` and `state/handoff.md` appended only.
 - Verification completed: repository hygiene and focused source-diff checks passed; frontend build passed; backend pytest collected 468 tests with 463 passed and the same 5 known baseline failures; no backend files changed.
 - Browser smoke was not run and is not required because the final runtime diff changes static strings only and does not modify HTML structure, CSS, controls, requests, focus, state transitions, Backup behavior, or Export behavior.
+
+## Slice A1b3a handoff — Reports and Report Documents product copy
+- Active handoff scope: clean static Russian product copy for `/reports`, `/report-documents`, and `dashboardReportsCard()` only.
+- Preserve report requests, report-document requests, `can_create`, disabled rules, `aria-busy`, announcers, success/list-refresh-failure separation, open/download behavior, dynamic filenames, dynamic paths, escaping, routes, and navigation identifiers.
+- Do not broaden into Help Center, route readiness metadata, A1c terminology sweep, A2 validation, backend files, CSS, dependencies, docs/implementation-plan.md, docs/reports.md, or docs/report-documents.md.
+- Required checks: source-diff reviews for Reports, Report Documents, and navigation; scoped terminology classification; frontend build; backend pytest baseline; repository hygiene checks.
+- Browser smoke is not required if the final diff remains static-copy only with no structure or behavior changes.
+- Publication metadata must be verified by the repository owner. Do not claim a GitHub PR number or published branch before verification.
