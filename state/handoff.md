@@ -158,3 +158,13 @@ Next action:
 - Slice A1 must be created as a separate focused runtime PR.
 - No future PR number has been assigned.
 - Do not start validation-error migration, responsive table containment, dashboard work, tax/margin, restore, packaging, update behavior, cloud sync, OCR, AI/RAG, roles, or multi-user behavior as part of this documentation-only plan PR.
+
+## Slice A1a focused technical copy cleanup handoff
+
+This branch implements only A1a: normal healthy operation no longer renders a positive local-service availability badge, the unavailable topbar state uses Russian product recovery language, `/imports` introduction now describes CSV/XLSX draft creation, validation, confirmation, and Apply before records are added, and `/demo-data` count keys are displayed through a centralized Russian label map with «Другие данные» for unknown visible keys.
+
+Files changed are intentionally narrow: `frontend/src/main.ts`, `docs/implementation-plan.md`, `state/current-focus.md`, plus append-only updates to `state/progress.md` and this handoff. No backend, API, schema, migration, CSS, dependency, polling, retry, import Apply behavior, or demo install/clear behavior changes were made.
+
+Verification completed: frontend build passed; backend pytest reported the known 5 unchanged baseline failures and 463 passing tests; Import Apply diff identifiers were reviewed and only existing context matched; focused Playwright smoke used isolated temporary data at 1440×900 and 390×844, with screenshots in `/tmp/cwo-a1a-screens`. Healthy, Import copy, Demo labels, narrow overflow, keyboard focus, and unavailable recovery checks were covered. Offline simulation intentionally aborted API requests, so failed resource console messages are expected for that scenario only.
+
+Next step: repository owner should review the focused PR diff and mergeability. Do not assign any future PR number before GitHub creates it.

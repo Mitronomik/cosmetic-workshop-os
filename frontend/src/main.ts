@@ -717,7 +717,7 @@ function navigationMarkup() {
 function render() {
   const root = document.getElementById('root');
   if (!root) return;
-  const healthLabel = { checking: 'Проверяем локальный API…', online: 'Локальный API доступен', offline: 'Локальный API пока недоступен' }[healthStatus];
+  const healthMarkup = healthStatus === 'offline' ? '<span class="status offline"><strong>Не удалось загрузить данные</strong><small>Перезапустите «Мастерскую косметолога» и повторите попытку.</small></span>' : '';
   root.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar" aria-label="Основная навигация">
@@ -730,7 +730,7 @@ function render() {
       <main class="content">
         <header class="topbar">
           <div><p class="eyebrow">Рабочее пространство</p><h1>${labelForSection(activeSection)}</h1></div>
-          <span class="status ${healthStatus}">${healthLabel}</span>
+          ${healthMarkup}
         </header>
         ${renderActivePage(activeSection)}
       </main>
@@ -1532,10 +1532,28 @@ function demoInstallCard() { const s = demoDataUiState.demoStatus; if (!s || s.i
 function demoInstallConfirmPanel() { const disabled = demoDataUiState.actionStatus === 'installing' || !demoDataUiState.installConfirmChecked || !demoDataUiState.understandDemoChecked; return `<div class="confirm-panel" aria-busy="${demoDataUiState.actionStatus === 'installing' ? 'true' : 'false'}"><h3>Подтвердите установку демо-данных</h3><p>После установки в базе появятся примерные записи с префиксом «Демо ·». Это поможет посмотреть рабочий сценарий, но не заменяет ваши реальные данные.</p><label class="checkbox-line"><input type="checkbox" name="demo_install_confirm" data-action="toggle-demo-install-check" ${demoDataUiState.installConfirmChecked ? 'checked' : ''} /> Я понимаю, что в базу будут добавлены демонстрационные записи.</label><label class="checkbox-line"><input type="checkbox" name="demo_understand" data-action="toggle-demo-install-check" ${demoDataUiState.understandDemoChecked ? 'checked' : ''} /> Я понимаю, что демо-данные не должны смешиваться с реальными рабочими данными.</label><div class="actions"><button class="primary-action" type="button" data-action="install-demo-data" ${disabled ? 'disabled' : ''}>${demoDataUiState.actionStatus === 'installing' ? 'Устанавливаем…' : 'Установить демо-данные'}</button><button class="secondary-action" type="button" data-action="hide-demo-install-confirm" ${demoDataUiState.actionStatus === 'installing' ? 'disabled' : ''}>Отмена</button></div></div>`; }
 function demoClearCard() { const s = demoDataUiState.demoStatus; if (!s || (!s.is_installed && !s.can_clear)) return ''; const disabled = demoDataUiState.actionStatus !== 'idle' || !s.can_clear; return `<section class="card data-card"><p class="card-kicker">Только отслеженные записи</p><h2>Очистить демо-данные</h2><p>Очистка удаляет только записи, которые backend отслеживает как демо-данные. Реальные записи пользователя удаляться не должны.</p>${!s.can_clear && s.is_installed ? feedbackMessage('error', 'Сейчас очистка заблокирована backend. Проверьте причины выше.') : ''}<div class="actions"><button class="danger-action" type="button" data-action="show-demo-clear-confirm" ${disabled ? 'disabled' : ''}>Перейти к очистке</button></div>${demoDataUiState.showClearConfirm ? demoClearConfirmPanel() : ''}</section>`; }
 function demoClearConfirmPanel() { const disabled = demoDataUiState.actionStatus === 'clearing' || !demoDataUiState.clearConfirmChecked; return `<div class="confirm-panel" aria-busy="${demoDataUiState.actionStatus === 'clearing' ? 'true' : 'false'}"><h3>Подтвердите очистку демо-данных</h3><p>Будут удалены только отслеженные демо-записи. Если на них уже ссылаются рабочие записи, backend остановит очистку.</p><label class="checkbox-line"><input type="checkbox" name="demo_clear_confirm" data-action="toggle-demo-clear-check" ${demoDataUiState.clearConfirmChecked ? 'checked' : ''} /> Я понимаю, что будут удалены отслеженные демо-записи.</label><div class="actions"><button class="danger-action" type="button" data-action="clear-demo-data" ${disabled ? 'disabled' : ''}>${demoDataUiState.actionStatus === 'clearing' ? 'Очищаем…' : 'Очистить демо-данные'}</button><button class="secondary-action" type="button" data-action="hide-demo-clear-confirm" ${demoDataUiState.actionStatus === 'clearing' ? 'disabled' : ''}>Отмена</button></div></div>`; }
-function demoCountsCard() { const counts = demoDataUiState.lastInstallResult?.created_counts || demoDataUiState.lastClearResult?.deleted_counts || demoDataUiState.demoStatus?.created_counts || {}; const entries = Object.entries(counts).filter(([, value]) => Number(value) > 0); if (!entries.length) return ''; const title = demoDataUiState.lastClearResult ? 'Что удалено' : 'Что создано или отслеживается'; return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Счётчики backend</p><h2>${title}</h2></div><span class="pill info">${entries.length}</span></div><div class="overview-grid compact-overview">${entries.map(([key, value]) => `<div class="metric-card"><span>${demoCountLabel(key)}</span><strong>${value}</strong></div>`).join('')}</div>${demoDataUiState.lastInstallResult ? demoSuccessNavigation() : ''}</section>`; }
+function demoCountsCard() { const counts = demoDataUiState.lastInstallResult?.created_counts || demoDataUiState.lastClearResult?.deleted_counts || demoDataUiState.demoStatus?.created_counts || {}; const entries = Object.entries(counts).filter(([, value]) => Number(value) > 0); if (!entries.length) return ''; const title = demoDataUiState.lastClearResult ? 'Что удалено' : 'Что создано или отслеживается'; return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Состав демо-данных</p><h2>${title}</h2></div><span class="pill info">${entries.length}</span></div><div class="overview-grid compact-overview">${entries.map(([key, value]) => `<div class="metric-card"><span>${demoCountLabel(key)}</span><strong>${value}</strong></div>`).join('')}</div>${demoDataUiState.lastInstallResult ? demoSuccessNavigation() : ''}</section>`; }
 function demoSuccessNavigation() { const buttons: Array<[string, NavigationSection]> = [['Открыть компоненты', 'Компоненты'], ['Открыть склад', 'Склад'], ['Открыть рецепты', 'Рецепты'], ['Открыть клиентов', 'Клиенты'], ['Открыть заказы', 'Заказы'], ['Открыть алерты', 'Алерты'], ['Открыть закупки', 'Закупки']]; return `<p class="next-step">Демо-данные установлены. Теперь можно открыть разделы и посмотреть пример работы.</p><div class="actions">${buttons.map(([label, section]) => `<button class="secondary-action compact" type="button" data-action="navigate-demo-related" data-section="${section}">${label}</button>`).join('')}</div>`; }
 function demoBoundariesCard() { return `<section class="card data-card"><p class="card-kicker">Без скрытых действий</p><h2>Честные границы демо-режима</h2><ul class="checklist compact-list"><li>Демо-данные не устанавливаются автоматически</li><li>Демо-режим не удаляет реальные данные</li><li>Backup/export не создаются автоматически</li><li>Производство не запускается автоматически</li><li>Партии и заказы не импортируются через import apply</li><li>Cloud/OCR/PDF не относятся к демо-режиму</li></ul></section>`; }
-function demoCountLabel(key: string): string { return ({ ingredients: 'Компоненты', ingredient_lots: 'Партии компонентов', stock_movements: 'Движения сырья', packaging_items: 'Тара', packaging_stock_movements: 'Движения тары', recipe_templates: 'Рецепты', recipe_versions: 'Версии рецептов', recipe_ingredients: 'Составы рецептов', clients: 'Клиенты', client_recipes: 'Индивидуальные рецепты', orders: 'Заказы', alerts: 'Алерты', purchase_suggestions: 'Закупки' } as Record<string, string>)[key] ?? escapeHtml(key); }
+const demoCountLabels: Record<string, string> = {
+  ingredients: 'Компоненты',
+  ingredient_lots: 'Партии компонентов',
+  recipes: 'Рецепты',
+  recipe_templates: 'Рецепты',
+  recipe_versions: 'Версии рецептов',
+  recipe_ingredients: 'Составы рецептов',
+  clients: 'Клиенты',
+  client_recipes: 'Индивидуальные рецепты',
+  client_recipe_ingredients: 'Составы индивидуальных рецептов',
+  orders: 'Заказы',
+  packaging_items: 'Тара',
+  stock_movements: 'Складские движения',
+  packaging_stock_movements: 'Движения тары',
+  production_batches: 'Производство',
+  alerts: 'Алерты',
+  purchase_suggestions: 'Закупочный список',
+};
+function demoCountLabel(key: string): string { return demoCountLabels[key] ?? 'Другие данные'; }
 
 function loadImports(force = false) {
   if (!force && (importUiState.status === 'loading' || importUiState.status === 'ready')) return;
@@ -1717,7 +1735,7 @@ function navigateToSection(section: NavigationSection | undefined) { if (!sectio
 function importPage() {
   const isLoading = importUiState.status === 'loading';
   return `<div class="page-grid backup-page import-page">
-    <section class="card data-card dashboard-hero"><div><p class="card-kicker">Безопасный черновик</p><h2>Импорт данных</h2><p>Загрузите CSV/XLSX, чтобы создать черновик импорта, проверить строки и увидеть ошибки перед внесением данных.</p><p class="next-step">В этом разделе данные ещё не вносятся в рецепты, клиентов, склад или заказы. Сейчас создаётся только черновик для проверки.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-imports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button></div></section>
+    <section class="card data-card dashboard-hero"><div><p class="card-kicker">Безопасный черновик</p><h2>Импорт данных</h2><p>Сначала создайте черновик из файла CSV или XLSX. Проверьте найденные данные и ошибки. Записи будут добавлены в систему только после подтверждения и применения черновика.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-imports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button></div></section>
     ${importUiState.error ? feedbackMessage('error', importUiState.error) : ''}
     ${importUiState.message ? feedbackMessage('success', importUiState.message) : ''}
     ${importUiState.status === 'error' && !importUiState.targets.length ? importLoadErrorCard() : `${importUploadCard()}${importTargetsCard()}${importBackupRecommendationCard()}${importDraftsCard()}${importDraftDetailCard()}${importNonGoalsCard()}`}

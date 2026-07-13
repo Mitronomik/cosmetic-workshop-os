@@ -776,3 +776,12 @@ Import CSV/XLSX draft backend foundation.
 - PR #106 is merged and verified; its completed Hermes browser smoke remains the latest runtime verification baseline.
 - Next active runtime focus is Slice A1 — User-facing technical copy cleanup, which must be implemented in a separate focused PR with no future PR number assigned yet.
 - This documentation-only PR changed no runtime behavior, APIs, schemas, migrations, dependencies, lockfiles, CSS, frontend runtime code, or backend runtime code.
+
+## Slice A1a — focused technical copy cleanup
+
+- Implementation summary: removed the normal healthy local-service badge, kept a Russian unavailable recovery message, corrected the `/imports` introduction to match the existing draft/preview/confirm/Apply workflow, and centralized `/demo-data` visible count labels with «Другие данные» fallback for unknown keys.
+- Actual changed files: `frontend/src/main.ts`, `docs/implementation-plan.md`, `state/current-focus.md`, `state/progress.md`, and `state/handoff.md`.
+- Actual checks: `git diff --check` passed; `git diff --name-only`, `git diff --stat`, and `git status --short` were reviewed; `cd frontend && npm run build` passed; `cd backend && python3 -m pytest` reported the known unchanged 5 backend failures and 463 passing tests.
+- Actual browser evidence: Playwright smoke used an isolated temporary SQLite database and user-data directory, local backend on `127.0.0.1:8010`, frontend on `127.0.0.1:5173`, and 1440×900 plus 390×844 viewports. Healthy state loaded without the positive API/backend badge or page-level overflow; `/imports` showed the corrected workflow copy; `/demo-data` showed Russian labels after demo install with no raw snake_case count keys; narrow view had no page-level overflow and keyboard focus remained visible; unavailable-state recovery text appeared with the existing repeat action and no observed polling loop. Screenshots were saved under `/tmp/cwo-a1a-screens`.
+- Limitations: backend pytest failures are unchanged baseline failures outside this frontend-copy slice; offline smoke intentionally produced failed network-resource console messages while API requests were aborted to simulate unavailable local service.
+- Merge status: branch is ready for focused review after commit/PR creation; no future PR number is assigned here.
