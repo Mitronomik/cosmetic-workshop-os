@@ -803,3 +803,9 @@ Import CSV/XLSX draft backend foundation.
 - Backend baseline: 468 collected, 463 passed, and the same 5 known baseline failures; no backend files changed.
 - Publication: PR #111 was published from GitHub branch `codex-rzipfx`; the pre-correction head was `b6d44e935d5e320d91b955feec97667f03c93b05`.
 - Review status: runtime diff is static-copy only and approved for merge after this metadata correction and final GitHub mergeability check.
+
+## Slice A1b3a — Reports and Report Documents product copy
+- Started focused A1b3a runtime-copy cleanup from the local baseline that includes merge commit `06ade9372ff060a7c3ec33aaa01e50e32c5aceee` for PR #111.
+- Scope is limited to `/reports`, `/report-documents`, and `dashboardReportsCard()` static user-facing copy, plus this state update.
+- Slice A1 remains IN PROGRESS; A1b3b, A1c, A2, backend behavior, CSS, documentation rewrites, report calculations, and report-document generation remain out of scope.
+- Publication metadata must be verified by the repository owner; no future PR number is assigned here.
