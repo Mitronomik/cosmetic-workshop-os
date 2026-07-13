@@ -23,7 +23,8 @@ Required checks before merge:
 - scoped terminology search in `frontend/src/main.ts`
 - `cd frontend && npm run build`
 - `cd backend && python3 -m pytest`
-- focused browser smoke when browser tooling is available; otherwise mark manual focused smoke required before merge
+- Browser smoke is not required for this copy-only slice because the final diff changes static text only and does not change HTML structure, CSS, controls, requests, state transitions, or business behavior.
+- Frontend build, backend baseline reporting, focused source-diff review, and GitHub mergeability review are the merge gates.
 
 Merge gate:
 
