@@ -191,3 +191,11 @@ No backend, API, schema, migration, CSS, dependency, lockfile, demo install/clea
 - Required checks: source-diff reviews for Reports, Report Documents, and navigation; scoped terminology classification; frontend build; backend pytest baseline; repository hygiene checks.
 - Browser smoke is not required if the final diff remains static-copy only with no structure or behavior changes.
 - Publication metadata must be verified by the repository owner. Do not claim a GitHub PR number or published branch before verification.
+
+## Slice A1 closure handoff — Help, navigation readiness, terminology, and docs sync
+
+- Changed runtime copy only in `frontend/src/main.ts`: implemented sidebar sections are marked ready, visible labels use «Отчёты» / «Документы отчётов», the stale standalone «Готовность» navigation item and `#production-readiness` placeholder mapping were removed, Help Center copy was converted to product language, and onboarding hints now use Russian product terminology.
+- Preserved contracts: no backend files, migrations, CSS, dependencies, lockfiles, routes, API requests, request order, form payloads, form validation, disabled rules, aria-busy semantics, announcers, focus handling, Help search/category/article IDs/related-section behavior, sidebar collapse behavior, pushState/popstate routing, calculations, production readiness behavior, production confirmation, import Apply behavior, open/download behavior, paths, filenames, or escaping were intentionally changed.
+- Documentation/state updates are limited to A1 closure: `docs/implementation-plan.md` marks A1 done and A2 ready; directly affected user/help docs were synchronized; `state/progress.md` and this handoff were append-only.
+- Smoke requirement: focused browser smoke is required before merge because navigation readiness changed and the stale standalone Production Readiness item was removed.
+- Next slice: Slice A2 structured validation foundation is ready next, but no A2 implementation is included in this PR.

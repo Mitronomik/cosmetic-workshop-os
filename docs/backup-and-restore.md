@@ -1,8 +1,12 @@
-# Backup and Restore
+# Резервные копии и восстановление
 
-Default user data directory: `~/Documents/Мастерская косметолога/`.
+Папка данных пользователя по умолчанию:
 
-Expected local user-data layout:
+```text
+~/Documents/Мастерская косметолога/
+```
+
+Ожидаемая локальная структура:
 
 ```text
 ~/Documents/Мастерская косметолога/
@@ -14,24 +18,23 @@ Expected local user-data layout:
   logs/
 ```
 
-Current foundation behavior:
+## Резервные копии сейчас
 
-- Development mode still uses repository-root `.local/cosmetic_workshop.sqlite` unless `COSMETIC_WORKSHOP_DB_PATH` is set.
-- User-mode path resolution targets the default user data directory above, or `COSMETIC_WORKSHOP_USER_DATA_DIR` when explicitly overridden.
-- Directory creation and database migration are explicit startup actions, not side effects of ordinary status/read endpoints.
-- Backup creation is implemented as a backend service operation that copies an existing SQLite database file into `backups/` without modifying the original file.
-- PR73 exposes a manual backup backend API: `GET /api/backups/status`, `GET /api/backups`, and `POST /api/backups`.
-- Backup filenames include a UTC timestamp, the database filename stem, and a reason such as `before_migration`; if a generated filename already exists, the service chooses a non-overwriting suffixed filename.
-- The `backups/` directory is part of the required user-data layout and may be created by explicit user-mode startup even when no backup file is created; a direct backup operation also creates it when needed.
-- User-mode startup creates a `before_migration` backup only when the user database file already exists and pending migrations may be applied.
-- Brand-new user-mode startup may create the empty `backups/` directory as part of the user-data layout, but it does not create a backup file for a database that does not exist yet.
-- Ordinary status/settings reads and backup status/list reads must not create backup directories, backup files, databases, or migrations.
-- Manual backup creation is explicit through `POST /api/backups`; it may create the selected backup directory and copies only the current configured SQLite database.
-- Backup path selection keeps development backups next to the configured development database unless the database is the resolved user database path or `COSMETIC_WORKSHOP_USER_DATA_DIR` is explicitly set.
-- Restore, backup UI, scheduled backups, export files, CSV/XLSX export, and cloud backup are not implemented yet.
+- Резервная копия создаётся только явно пользователем в разделе `/backups` или при специальном пользовательском запуске перед миграцией существующей базы.
+- Создание копии сохраняет отдельный локальный файл в папке `backups/` и не меняет рабочие записи.
+- Файл резервной копии содержит текущее рабочее состояние данных на момент создания.
+- Имя файла формируется приложением автоматически и не перезаписывает существующие файлы.
+- Обычное чтение статуса или списка копий не создаёт файлы и не запускает обновление базы.
+- Новый первый запуск может создать пустую папку `backups/` как часть структуры данных, но не создаёт файл копии, если базы ещё нет.
 
-Developer/test safety:
+## Что не выполняется с текущего экрана
 
-- Tests and smoke checks must use temporary directories, typically through `COSMETIC_WORKSHOP_USER_DATA_DIR` and/or `COSMETIC_WORKSHOP_DB_PATH`.
-- Tests must not write to the real `~/Documents/Мастерская косметолога/` directory.
-- Backup API tests must use temporary directories and environment overrides such as `COSMETIC_WORKSHOP_DB_PATH` and `COSMETIC_WORKSHOP_USER_DATA_DIR`.
+- восстановление резервной копии;
+- резервные копии по расписанию;
+- облачная копия;
+- загрузка экспортированного JSON как восстановление;
+- выбор произвольного файла из любой папки.
+
+## Безопасность разработки и проверок
+
+Тесты и smoke-проверки должны использовать временные папки и не должны писать в реальную папку `~/Documents/Мастерская косметолога/`.
