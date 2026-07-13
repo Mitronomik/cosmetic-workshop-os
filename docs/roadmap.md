@@ -44,6 +44,14 @@
 
 ---
 
+## Current execution plan
+
+The strategic roadmap remains the product-level source of scope and sequencing.
+
+The current short-horizon implementation sequence, audit-driven hardening slices, unfinished MVP obligations, and release gates are maintained in:
+
+- [Implementation plan](implementation-plan.md)
+
 ## 2. Главный продуктовый принцип
 
 Пользователь получает не GitHub-репозиторий, не техническую админку и не таблицу рецептов.
