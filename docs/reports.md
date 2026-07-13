@@ -1,29 +1,78 @@
-# Отчёты
+# Reports backend foundation
 
-Отчёты помогают увидеть текущую сводку мастерской: склад, заказы, производство, алерты, закупки и базовые финансовые показатели.
+PR87 adds read-only backend reports for the local-first workshop app.
 
-## Назначение
+## Scope
 
-Раздел `/reports` предназначен для просмотра состояния мастерской. Это не бухгалтерская система, не налоговая декларация и не расширенная аналитика.
+Reports help the user understand the current operational state of the workshop:
 
-## Безопасность
+- inventory health;
+- order pipeline;
+- production history;
+- alerts and purchase workload;
+- a basic financial snapshot.
 
-- Просмотр и обновление отчётов не меняют рабочие записи.
-- Отчёты не создают резервные копии или экспорт.
-- Отчёты не пересоздают алерты и закупочные предложения.
-- Отчёты не создают документы сами по себе.
-- Расчётные значения показываются по данным приложения; если данных недостаточно, пользователь видит предупреждение.
+This is not advanced analytics and not an accounting module.
 
-## Финансовые ограничения
+## Safety rules
 
-Финансовая сводка является рабочим ориентиром, а не бухгалтерским отчётом.
+- Reports are read-only.
+- Report endpoints do not mutate business records.
+- Report endpoints do not create audit logs.
+- Report endpoints do not create backup or export files.
+- Report endpoints do not regenerate alerts or purchase suggestions.
+- Report endpoints do not create report persistence tables.
+- Reports work from existing SQLite data and remain offline/local-first.
 
-- Выручка считается только по известным ценам продаж.
-- Себестоимость считается только по известным производственным данным.
-- Маржа считается только там, где одновременно известны цена продажи и себестоимость.
-- Налог не придумывается отчётами и не пересчитывается вместо производственных данных.
-- Неполные данные показываются предупреждениями.
+## Finance report limits
 
-## Документы отчётов
+The finance report is an operational snapshot, not accounting or tax filing.
 
-Если нужен отдельный файл со сводкой, используйте раздел `/report-documents`. Открытие `/reports` или переход к документам не создаёт файл автоматически. Документ создаётся только после явного действия пользователя.
+- `known_revenue` is the sum of all known sale prices.
+- `known_production_cost` is the sum of all known production costs.
+- `known_margin` is calculated only from production batches where both `sale_price` and `total_cost` are known on the same row.
+- `known_margin_percent` uses the same complete paired basis as `known_margin`, not the global known revenue total.
+- `complete_finance_record_count` is the count of production batches used for margin.
+- `incomplete_margin_count` is the count of production batches excluded from margin because sale price or cost is missing.
+- Tax is not invented or recalculated by reports.
+- Missing sale prices or costs are surfaced as warnings.
+
+## Incomplete data
+
+When data is missing or ambiguous, reports return warnings instead of silently inventing values. Examples:
+
+- `missing_sale_price` — some produced orders do not have sale price.
+- `missing_production_cost` — some production batches do not have total cost.
+- `mixed_units` — produced quantities are shown by unit because grams, milliliters, and pieces cannot be safely summed together.
+- `no_production_data` — no production batches exist yet.
+- `margin_unavailable` — no production batch has both sale price and cost, so margin is not returned.
+- `partial_margin_basis` — margin is returned, but only for complete finance rows.
+
+## Endpoints
+
+All endpoints are `GET` and are mounted under `/api/reports`:
+
+- `/api/reports/overview`
+- `/api/reports/inventory`
+- `/api/reports/orders`
+- `/api/reports/production`
+- `/api/reports/finance`
+
+Each response includes:
+
+- `generated_at`;
+- explicit summary fields;
+- `warnings`.
+
+## Date filters
+
+PR87 intentionally keeps reports all-time. Date filters are not implemented in this PR to keep the backend foundation small and safe.
+
+## Future UI
+
+The frontend Reports UI is available at `/reports` and consumes these backend endpoints. The UI must keep calculations in the backend and display backend-provided warnings instead of recalculating core report values in the frontend.
+
+
+## Report document export foundation
+
+PR89/PR90 add an explicit document-export path for reports, and PR92 adds PDF generation foundation. The first document type is “Сводка мастерской” (`workshop_overview`) generated as Markdown or PDF from the existing overview report DTO. Creation is an explicit POST-only operation under `/api/report-documents`; opening `/reports` or using its contextual link to `/report-documents` does not create files. DOCX remains future work. See `docs/report-documents.md` for storage, safety, and metadata details.

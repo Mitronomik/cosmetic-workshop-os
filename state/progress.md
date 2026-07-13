@@ -810,12 +810,11 @@ Import CSV/XLSX draft backend foundation.
 - Slice A1 remains IN PROGRESS; A1b3b, A1c, A2, backend behavior, CSS, documentation rewrites, report calculations, and report-document generation remain out of scope.
 - Publication metadata must be verified by the repository owner; no future PR number is assigned here.
 
-## Slice A1 closure — Help, navigation readiness, terminology, and docs sync
+## Slice A1 closure correction — PR #113 pending review
 
-- Navigation readiness corrected for implemented sections: recipes, individual recipes, clients, orders, components, ingredient lots, stock movements, and packaging now use ready navigation metadata instead of empty-module status.
-- The stale standalone Production Readiness sidebar placeholder was removed; readiness remains contextual inside the existing Orders workflow.
-- Help Center and onboarding copy were cleaned to use Russian product language for a nontechnical workshop owner, including резервная копия, экспорт, импорт, список первых шагов, and application-owned checks instead of developer wording.
-- Final runtime terminology inventory was completed; remaining technical matches are internal identifiers/types, API helper names, valid user-facing file formats, dynamic paths/filenames, dynamic backend-provided content, CSS selectors, or intentionally preserved error sentinels.
-- Directly affected user/help documentation was synchronized for backup/export, demo data, report documents, reports, settings, and the README status boundary.
-- Build/test/smoke results for this closure PR are recorded in the PR summary; browser smoke is required because navigation metadata changed and the stale standalone readiness item was removed.
-- A1 closure recommendation: after focused browser smoke and publication metadata verification, Slice A1 can be treated as complete and Slice A2 can start as the next implementation slice.
+- Navigation readiness and Help Center cleanup are implemented in runtime: implemented modules stay marked ready, the standalone readiness placeholder stays removed, Help uses Russian product language, and onboarding terminology is cleaned.
+- Technical contract rewrites from the first PR #113 head were rejected and restored to the main baseline; the runtime Help Center remains the user-facing help surface for this PR.
+- Runtime source review is pending final confirmation on the corrected diff.
+- Required browser smoke is pending for navigation, Help, and previously cleaned A1 routes.
+- A1 is not yet closed; it remains IN PROGRESS until corrected-head review and required smoke pass.
+- A2 is not yet ready and remains blocked by A1.

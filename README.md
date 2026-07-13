@@ -25,13 +25,19 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current repository state: Slice A1 closure after the PR #112 merge baseline.
+Current repository state: after PR #112. Slice A1 closure is under review.
 
-The app includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness inside the Orders workflow, production confirmation and history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports with drafts and explicit Apply for supported targets, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
+Runtime product implementation is complete through PR98. The app includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 
-Slice A1 closes user-facing language and navigation readiness cleanup: implemented sidebar sections are treated as working modules even when their data is empty, the stale standalone Production Readiness navigation placeholder is removed, Help uses product language, and directly affected user/help documentation is synchronized.
+Newly generated workshop summary documents include configured Workshop profile fields. Empty fields are omitted, an empty profile omits the whole section, and existing generated documents are not mutated.
 
-Next implementation slice after A1 verification: Slice A2 structured form validation foundation. Keep validation-error migration, responsive table containment, dashboard redesign, tax/margin configuration, restore, packaging/installer work, cloud sync, OCR, AI/RAG, roles, and multi-user behavior out of scope unless explicitly approved.
+PR99-PR101 were documentation and governance changes only: the project UI/UX contract and Codex UI guidance were added, reviewed Impeccable material was adapted into safe project-owned guidance, and Taste Skill was reviewed and rejected. These PRs did not change application runtime behavior.
+
+Current merge gate: review the Slice A1 closure diff and complete the focused navigation, Help, and previously cleaned-route browser smoke.
+
+After Slice A1 is merged and verified, the next implementation slice is Slice A2 structured form validation foundation.
+
+Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, and unrelated business mutations out of scope unless explicitly approved.
 
 ## Developer commands
 

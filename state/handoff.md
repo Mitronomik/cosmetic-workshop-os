@@ -192,10 +192,10 @@ No backend, API, schema, migration, CSS, dependency, lockfile, demo install/clea
 - Browser smoke is not required if the final diff remains static-copy only with no structure or behavior changes.
 - Publication metadata must be verified by the repository owner. Do not claim a GitHub PR number or published branch before verification.
 
-## Slice A1 closure handoff — Help, navigation readiness, terminology, and docs sync
+## PR #113 correction handoff — A1 closure pending review
 
-- Changed runtime copy only in `frontend/src/main.ts`: implemented sidebar sections are marked ready, visible labels use «Отчёты» / «Документы отчётов», the stale standalone «Готовность» navigation item and `#production-readiness` placeholder mapping were removed, Help Center copy was converted to product language, and onboarding hints now use Russian product terminology.
-- Preserved contracts: no backend files, migrations, CSS, dependencies, lockfiles, routes, API requests, request order, form payloads, form validation, disabled rules, aria-busy semantics, announcers, focus handling, Help search/category/article IDs/related-section behavior, sidebar collapse behavior, pushState/popstate routing, calculations, production readiness behavior, production confirmation, import Apply behavior, open/download behavior, paths, filenames, or escaping were intentionally changed.
-- Documentation/state updates are limited to A1 closure: `docs/implementation-plan.md` marks A1 done and A2 ready; directly affected user/help docs were synchronized; `state/progress.md` and this handoff were append-only.
-- Smoke requirement: focused browser smoke is required before merge because navigation readiness changed and the stale standalone Production Readiness item was removed.
-- Next slice: Slice A2 structured validation foundation is ready next, but no A2 implementation is included in this PR.
+- Runtime scope remains the approved A1 closure slice: implemented navigation sections are ready, stale standalone Production Readiness navigation is removed, Help/onboarding copy uses product language, and fallback copy no longer promises already implemented modules later.
+- The seven technical contract documents changed by the first PR #113 head were restored to the main baseline and should not appear in the final PR diff.
+- Preserved contracts: no backend files, migrations, CSS, dependencies, lockfiles, new routes, request behavior, form behavior, calculations, production readiness/confirmation behavior, import Apply behavior, file open/download behavior, paths, filenames, or escaping are intended to change.
+- A1 remains IN PROGRESS; A2 remains blocked. Do not claim A1 completion until the corrected GitHub head is reviewed and focused browser smoke passes.
+- Browser smoke remains required before merge for desktop 1440×900 and narrow 390×844 navigation/Help coverage plus previously cleaned A1 routes.

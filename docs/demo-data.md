@@ -1,32 +1,58 @@
-# Демо-данные
+# Demo data mode
 
-Демо-данные помогают безопасно познакомиться с **Мастерской косметолога** без ручного заполнения справочников.
+Demo data mode started as the PR84 backend/API foundation and is exposed to users through the PR85 frontend route for showing a non-technical user a safe example workspace for **Мастерская косметолога**.
 
-## Как это работает
+## Safety contract
 
-- Демо-данные устанавливаются только после явного подтверждения пользователя.
-- Интернет не требуется: данные устанавливаются локально.
-- Установка блокируется, если в рабочем пространстве уже есть реальные данные.
-- Демо не запускается при первом старте, обновлении, импорте, экспорте или создании резервной копии.
-- Демо не создаёт резервную копию или экспорт автоматически.
-- Демо не создаёт производство и не списывает склад автоматически.
-- Демо-записи имеют видимую метку `Демо ·`, чтобы их было проще отличить от рабочих записей.
+- Demo data is installed only by an explicit API request.
+- Demo data is local-only and does not require internet access.
+- PR84 installs demo data only into an empty business workspace.
+- Demo data is never installed by migrations, startup initialization, onboarding, import, backup, or export.
+- Demo install does not create backups or exports automatically.
+- Demo install does not create production batches or write off production stock automatically.
+- Demo install does not expand import apply targets.
+- Demo records are visibly labeled with the stable prefix `Демо ·`.
+- Demo-created records are tracked by table name and record id in `demo_data_records` under a `demo_data_sessions` session.
+- Demo clear deletes only records tracked for the active demo session.
+- Demo clear blocks if untracked working records reference tracked demo records, including direct references and generic references in alerts or purchase suggestions.
+- Demo clear does not reset the database and does not delete real user data.
 
-## Очистка
+## Tracking tables
 
-Очистка демо-данных тоже запускается только явно. Приложение удаляет только записи, которые были отслежены как демо-записи активной демо-сессии.
+`demo_data_sessions` stores one install attempt/session with:
 
-Если реальные рабочие записи уже ссылаются на демо-записи, автоматическая очистка блокируется. Сначала нужно вручную разобраться с такими связями, чтобы не потерять важные данные.
+- `demo_version`;
+- `status`: `active`, `cleared`, or `failed`;
+- creation/clear timestamps;
+- JSON summary.
 
-## Что демо не делает
+`demo_data_records` stores every demo-created row by:
 
-- не удаляет реальные пользовательские данные;
-- не сбрасывает всю базу;
-- не создаёт резервные копии или экспорт;
-- не расширяет возможности импорта;
-- не подтверждает производство;
-- не списывает сырьё или тару.
+- `session_id`;
+- `table_name`;
+- `record_id`;
+- human label.
 
-## Экран в приложении
+Records are not tracked by name only. Names are user-visible labels; table/id tracking is the safety boundary.
 
-Раздел `/demo-data` находится в группе «Данные и настройки». Он показывает, можно ли установить или очистить демо-данные, объясняет блокирующие причины и требует явные подтверждения перед установкой или очисткой.
+## API
+
+- `GET /api/demo-data/status` is read-only and reports whether demo data can be installed or cleared.
+- `POST /api/demo-data/install` requires `confirm_install=true` and `understand_demo_data=true`.
+- `POST /api/demo-data/clear` requires `confirm_clear=true`.
+
+Conflict responses use Russian safety messages suitable for future UI.
+
+## PR84 backend foundation limitations
+
+- PR84 itself did not include frontend UI; PR85 exposes the safe frontend route described below.
+- Demo data can be installed only when no non-demo business data exists.
+- `GET /api/demo-data/status` returns `can_clear=false` when automatic clear is unsafe because working records still reference demo records.
+- Before clearing, the user should manually resolve or delete working records that reference demo data.
+- Alerts and purchase suggestions are not inserted directly by demo install; the dataset creates conditions that can be evaluated by existing explicit regeneration flows.
+- Orders are not produced automatically. The user can manually run production readiness and confirmation later.
+
+
+## Frontend UI route
+
+PR85 exposes demo mode through `/demo-data` in the frontend navigation under “Данные и настройки”. The page loads `GET /api/demo-data/status`, shows backend blocking reasons, and calls install/clear only after explicit confirmation checkboxes. The UI does not create demo business records directly, does not delete business records directly, and does not create backup/export files automatically.
