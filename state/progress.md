@@ -793,3 +793,9 @@ Import CSV/XLSX draft backend foundation.
 - Updated ingredient-lot and stock-movement loading/fallback wording to describe user-visible failures without API terminology.
 - Updated stock-movement balance and safety explanations to describe movement-derived balances and outgoing movement limits in product language.
 - Preserved demo install/clear behavior, confirmation rules, disabled rules, stock calculations, backend-owned validation, request flow, CSS, dependencies, migrations, and `docs/implementation-plan.md`.
+
+## Slice A1b2 — Backup and Export capability copy
+- Scope: static user-facing copy only for `/backups`, `/exports`, and `dashboardBackupReminder()`.
+- Updated wording to distinguish резервная копия from export, explain local file storage, and state that restore/import-back-from-export are not performed on these screens.
+- Preserved dynamic filenames, raw path values, request flow, disabled states, announcements, escaping, and backend-owned status/count data.
+- Deferred Reports, Help Center, route readiness metadata, path presentation redesign, and remaining A1 closure work to later focused slices.

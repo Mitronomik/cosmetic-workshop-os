@@ -174,3 +174,10 @@ Next step: repository owner should review the focused PR diff and mergeability. 
 This slice is limited to copy-only cleanup for `/demo-data`, `/ingredient-lots`, and `/stock-movements`. Static runtime wording in those routes now avoids backend/API/internal English terminology and uses Russian product language for Demo Data blocking/clearing boundaries, ingredient-lot load failures, stock-movement loading/fallback states, movement-derived balance display, and outgoing movement safety.
 
 No backend, API, schema, migration, CSS, dependency, lockfile, demo install/clear behavior, stock calculation, validation, request timing, confirmation, disabled-rule, aria-busy, focus, or dynamic-message contract changes are intended. Dynamic backend-provided reasons remain rendered through the existing escaping path. Browser smoke was not run and is not required for this copy-only slice because the final diff changes static text only and does not modify HTML structure, CSS, controls, requests, state transitions, Demo Data behavior, stock behavior, or business logic.
+
+## Slice A1b2 handoff — Backup and Export capability copy
+- Active branch: `codex/a1b2-backup-export-copy`.
+- Runtime scope is limited to `frontend/src/main.ts` copy in `/backups`, `/exports`, and `dashboardBackupReminder()`; no CSS or backend changes are intended.
+- State update scope: `state/current-focus.md` rewritten for A1b2; `state/progress.md` and `state/handoff.md` appended only.
+- Verify before handoff: source-diff checks for backup/export identifiers, targeted technical-copy search, frontend build, backend pytest, and repository hygiene.
+- Browser smoke is optional, not a merge gate, if the final diff remains static strings only.

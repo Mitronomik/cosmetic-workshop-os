@@ -1,33 +1,29 @@
-# Current focus — Slice A1b1
+# Current focus
 
-Slice A1b1 is limited to static user-facing copy cleanup in exactly three runtime routes:
+Slice A1b2 is active: clean up Backup and Export user-facing capability copy only.
 
-- `/demo-data`
-- `/ingredient-lots`
-- `/stock-movements`
+## Runtime scope
+- `/backups`
+- `/exports`
+- `dashboardBackupReminder()`
 
-Non-goals:
-
-- Do not implement A1b2 or A1b3.
-- Do not change Settings, Reports, Backups, Exports, Import, Dashboard, Recipes, Clients, Orders, Production, Packaging, navigation metadata, route readiness statuses, or onboarding copy.
-- Do not change backend files, API contracts, schemas, migrations, dependencies, lockfiles, CSS, request timing, confirmation controls, disabled rules, aria-busy, focus behavior, or stock/demo behavior.
-- Do not rewrite dynamic backend-provided messages; keep them safely escaped where currently rendered.
+## Exact non-goals
+- Do not change Reports, Help Center, route/navigation readiness metadata, Import, Demo Data, Settings, or other application sections.
+- Do not implement restore, import from export, CSV/XLSX/PDF export, cloud upload/sync, scheduled backups/exports, file browser, Finder integration, path redesign, or download/copy-path controls.
+- Do not change backend files, API fields, DTOs, endpoints, folder locations, filenames, request counts, disabled rules, state transitions, CSS, dependencies, or lockfiles.
+- Do not change `docs/implementation-plan.md`.
 - Do not assign or predict a future pull request number.
 
-Required checks before merge:
+## Source checks
+- Start from the actual latest available main baseline; PR #110 merge commit `f157814358b1a461f6f63d54d46ad2dd6f3a7145` must be included.
+- Inspect `loadBackups`, `submitBackupCreate`, `loadExports`, `submitExportCreate`, `dashboardBackupReminder`, and all `/backups` and `/exports` render functions before editing.
+- Preserve dynamic filenames and raw path values exactly as returned by the application; only surrounding static labels may change.
+- Classify remaining technical-copy search hits as in-scope, identifiers, dynamic values/messages, out-of-scope, or deferred A1b3/A5 findings.
 
-- `git diff --check`
-- `git diff --name-only`
-- `git diff --stat`
-- source-diff safety review for demo install/clear and stock movement identifiers
-- scoped terminology search in `frontend/src/main.ts`
-- `cd frontend && npm run build`
-- `cd backend && python3 -m pytest`
-- Browser smoke is not required for this copy-only slice because the final diff changes static text only and does not change HTML structure, CSS, controls, requests, state transitions, or business behavior.
-- Frontend build, backend baseline reporting, focused source-diff review, and GitHub mergeability review are the merge gates.
+## Build and backend baseline
+- Run repository hygiene checks, `git diff --check`, frontend build, and backend pytest.
+- Backend pytest result must be reported honestly against the known previous baseline of 463 passed / 5 failed without fixing unrelated backend failures.
 
-Merge gate:
-
-- Only `frontend/src/main.ts`, `state/current-focus.md`, `state/progress.md`, and `state/handoff.md` should change unless a reviewed conflict proves otherwise.
-- No backend, CSS, dependency, lockfile, or `docs/implementation-plan.md` changes.
-- The branch must remain a focused A1b1 copy-only PR based on the latest available main baseline.
+## GitHub review gate
+- Publish a focused branch named `codex/a1b2-backup-export-copy` if remote access is available.
+- Create a GitHub PR only after committing changes; do not mention Hermes or any external audit system.
