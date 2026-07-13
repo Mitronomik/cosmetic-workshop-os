@@ -717,7 +717,7 @@ function navigationMarkup() {
 function render() {
   const root = document.getElementById('root');
   if (!root) return;
-  const healthLabel = { checking: 'Проверяем локальный API…', online: 'Локальный API доступен', offline: 'Локальный API пока недоступен' }[healthStatus];
+  const healthMarkup = healthStatus === 'offline' ? '<span class="status offline"><strong>Не удалось загрузить данные</strong><small>Перезапустите «Мастерскую косметолога» и повторите попытку.</small></span>' : '';
   root.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar" aria-label="Основная навигация">
@@ -730,7 +730,7 @@ function render() {
       <main class="content">
         <header class="topbar">
           <div><p class="eyebrow">Рабочее пространство</p><h1>${labelForSection(activeSection)}</h1></div>
-          <span class="status ${healthStatus}">${healthLabel}</span>
+          ${healthMarkup}
         </header>
         ${renderActivePage(activeSection)}
       </main>
@@ -1535,7 +1535,25 @@ function demoClearConfirmPanel() { const disabled = demoDataUiState.actionStatus
 function demoCountsCard() { const counts = demoDataUiState.lastInstallResult?.created_counts || demoDataUiState.lastClearResult?.deleted_counts || demoDataUiState.demoStatus?.created_counts || {}; const entries = Object.entries(counts).filter(([, value]) => Number(value) > 0); if (!entries.length) return ''; const title = demoDataUiState.lastClearResult ? 'Что удалено' : 'Что создано или отслеживается'; return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Счётчики backend</p><h2>${title}</h2></div><span class="pill info">${entries.length}</span></div><div class="overview-grid compact-overview">${entries.map(([key, value]) => `<div class="metric-card"><span>${demoCountLabel(key)}</span><strong>${value}</strong></div>`).join('')}</div>${demoDataUiState.lastInstallResult ? demoSuccessNavigation() : ''}</section>`; }
 function demoSuccessNavigation() { const buttons: Array<[string, NavigationSection]> = [['Открыть компоненты', 'Компоненты'], ['Открыть склад', 'Склад'], ['Открыть рецепты', 'Рецепты'], ['Открыть клиентов', 'Клиенты'], ['Открыть заказы', 'Заказы'], ['Открыть алерты', 'Алерты'], ['Открыть закупки', 'Закупки']]; return `<p class="next-step">Демо-данные установлены. Теперь можно открыть разделы и посмотреть пример работы.</p><div class="actions">${buttons.map(([label, section]) => `<button class="secondary-action compact" type="button" data-action="navigate-demo-related" data-section="${section}">${label}</button>`).join('')}</div>`; }
 function demoBoundariesCard() { return `<section class="card data-card"><p class="card-kicker">Без скрытых действий</p><h2>Честные границы демо-режима</h2><ul class="checklist compact-list"><li>Демо-данные не устанавливаются автоматически</li><li>Демо-режим не удаляет реальные данные</li><li>Backup/export не создаются автоматически</li><li>Производство не запускается автоматически</li><li>Партии и заказы не импортируются через import apply</li><li>Cloud/OCR/PDF не относятся к демо-режиму</li></ul></section>`; }
-function demoCountLabel(key: string): string { return ({ ingredients: 'Компоненты', ingredient_lots: 'Партии компонентов', stock_movements: 'Движения сырья', packaging_items: 'Тара', packaging_stock_movements: 'Движения тары', recipe_templates: 'Рецепты', recipe_versions: 'Версии рецептов', recipe_ingredients: 'Составы рецептов', clients: 'Клиенты', client_recipes: 'Индивидуальные рецепты', orders: 'Заказы', alerts: 'Алерты', purchase_suggestions: 'Закупки' } as Record<string, string>)[key] ?? escapeHtml(key); }
+const demoCountLabels: Record<string, string> = {
+  ingredients: 'Компоненты',
+  ingredient_lots: 'Партии компонентов',
+  recipes: 'Рецепты',
+  recipe_templates: 'Рецепты',
+  recipe_versions: 'Версии рецептов',
+  recipe_ingredients: 'Составы рецептов',
+  clients: 'Клиенты',
+  client_recipes: 'Индивидуальные рецепты',
+  client_recipe_ingredients: 'Составы индивидуальных рецептов',
+  orders: 'Заказы',
+  packaging_items: 'Тара',
+  stock_movements: 'Складские движения',
+  packaging_stock_movements: 'Движения тары',
+  production_batches: 'Производство',
+  alerts: 'Алерты',
+  purchase_suggestions: 'Закупочный список',
+};
+function demoCountLabel(key: string): string { return demoCountLabels[key] ?? 'Другие данные'; }
 
 function loadImports(force = false) {
   if (!force && (importUiState.status === 'loading' || importUiState.status === 'ready')) return;
@@ -1717,7 +1735,7 @@ function navigateToSection(section: NavigationSection | undefined) { if (!sectio
 function importPage() {
   const isLoading = importUiState.status === 'loading';
   return `<div class="page-grid backup-page import-page">
-    <section class="card data-card dashboard-hero"><div><p class="card-kicker">Безопасный черновик</p><h2>Импорт данных</h2><p>Загрузите CSV/XLSX, чтобы создать черновик импорта, проверить строки и увидеть ошибки перед внесением данных.</p><p class="next-step">В этом разделе данные ещё не вносятся в рецепты, клиентов, склад или заказы. Сейчас создаётся только черновик для проверки.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-imports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button></div></section>
+    <section class="card data-card dashboard-hero"><div><p class="card-kicker">Безопасный черновик</p><h2>Импорт данных</h2><p>Сначала создайте черновик из файла CSV или XLSX. Проверьте найденные данные и ошибки. Записи будут добавлены в систему только после подтверждения и применения черновика.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-imports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button></div></section>
     ${importUiState.error ? feedbackMessage('error', importUiState.error) : ''}
     ${importUiState.message ? feedbackMessage('success', importUiState.message) : ''}
     ${importUiState.status === 'error' && !importUiState.targets.length ? importLoadErrorCard() : `${importUploadCard()}${importTargetsCard()}${importBackupRecommendationCard()}${importDraftsCard()}${importDraftDetailCard()}${importNonGoalsCard()}`}

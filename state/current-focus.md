@@ -1,35 +1,33 @@
-# Current focus
+# Current Focus
 
-## Active focus
+## Slice A1a — focused technical copy cleanup
 
-Slice A1 — User-facing technical copy cleanup.
+Exact scope:
+- remove the permanent healthy local-service availability badge from normal operation;
+- keep an unavailable-state Russian recovery message without API/backend/internal wording;
+- update only the introductory `/imports` copy to describe CSV/XLSX → draft → preview/validation → confirmation → Apply → working records;
+- map visible `/demo-data` count keys to Russian product labels with unknown keys shown as «Другие данные».
 
-## Current repository state
+Non-goals:
+- no A1b copy cleanup for exports, backups, reports, recipes, inventory, Help, Settings, dashboard capability cards, route readiness metadata, navigation statuses, or planned modules;
+- no backend, API, schema, migration, CSS, dependency, polling, retry, import behavior, demo behavior, or state-transition changes.
 
-PR #106 is already merged and verified. The verified PR #106 Hermes browser smoke covered Import Apply, refresh-failure separation, structured mutation conflict, Settings save/cancel behavior, scoped announcers, responsive behavior, and keyboard reachability.
+Tests/checks for this slice:
+- `git diff --check`;
+- `git diff --name-only`;
+- `git diff --stat`;
+- `git status --short`;
+- `cd frontend && npm run build`;
+- `cd backend && python3 -m pytest`;
+- focused source diff review for Import Apply identifiers;
+- focused browser smoke at 1440×900 and 390×844 if local browser tooling is available.
 
-This documentation-only implementation-plan PR only adds and links the approved MVP product-readiness plan. It does not implement Slice A1 and must not change frontend runtime code, backend runtime code, CSS, APIs, schemas, migrations, dependencies, or lockfiles.
+Merge gate:
+- frontend build passes;
+- backend result is reported honestly;
+- no backend files change;
+- Import Apply behavior diff remains copy-only;
+- state/progress.md and state/handoff.md are append-only;
+- repository owner reviews and approves the focused PR.
 
-## Next runtime PR
-
-Slice A1 must be created as a separate focused runtime PR after this documentation-only PR. No future PR number has been assigned.
-
-Allowed next-runtime focus for Slice A1:
-- remove constant normal-state technical API availability copy;
-- keep clear recovery copy when the local app is unavailable;
-- remove PR/roadmap/internal planning language from runtime UI;
-- fix stale Import copy around the actual Apply flow;
-- translate internal table names on `/demo-data`;
-- fix stale route/navigation readiness metadata;
-- synchronize directly affected user/help documentation.
-
-Non-goals for Slice A1:
-- backend behavior changes;
-- new product features;
-- dashboard redesign;
-- polling;
-- arbitrary file browser;
-- broad frontend refactor;
-- validation-error migration;
-- responsive table containment;
-- tax/margin, restore, packaging, cloud, OCR, AI/RAG, roles, or multi-user behavior.
+No future PR number is assigned.
