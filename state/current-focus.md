@@ -1,26 +1,16 @@
 # Current Focus — Slice A2 structured form validation
 
-Slice A1 implementation and verification are complete in PR #113.
+Slice A2 is IN PROGRESS — implementation PR under review.
 
-Verified runtime baseline:
+Scope for this branch:
 
-- PR: #113
-- runtime SHA: `040c90fa781edea8484eb84595745c3a3aaf5eaf`
-- deterministic browser checks: 53/53 PASS
-- targeted offline/recovery retest: PASS
-- JavaScript console errors: 0
-- real user data used: no
+- shared dependency-free frontend parser for structured form validation errors;
+- `/clients` create/edit field-level validation feedback;
+- `/ingredients` create/edit field-level validation feedback;
+- minimal styling and accessibility attributes for affected form feedback;
+- focused parser tests using Node built-in test runner;
+- no backend domain, API success payload, schema, migration, recipe, inventory, production, import Apply, backup, export, navigation, dependency, or lockfile changes.
 
-The next allowed implementation slice is Slice A2 — structured form validation foundation.
+Slice A3 remains BLOCKED A2 and must not be started in this PR.
 
-Use `docs/implementation-plan.md` as the scope contract for A2.
-
-A2 must remain a focused implementation slice:
-
-- preserve backend-owned business rules;
-- do not introduce a broad frontend refactor;
-- do not change unrelated routes or modules;
-- require tests and risk-based browser smoke;
-- do not silently change historical data or calculation behavior.
-
-No additional Slice A1 runtime work is currently required.
+A2 must remain IN PROGRESS until the published PR head is reviewed and required smoke evidence is accepted.

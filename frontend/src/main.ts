@@ -1,3 +1,4 @@
+import { clearFieldValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -197,7 +198,7 @@ type ImportApplyReadiness = { can_apply: boolean; status: string; blocking_error
 type ImportDraftSummary = { id: number; source_id: number; target_type: string; status: string; row_count: number; valid_row_count: number; invalid_row_count: number; warning_count: number; error_count: number; headers: string[]; summary?: Record<string, unknown>; apply_readiness?: ImportApplyReadiness; created_at: string; updated_at?: string | null };
 type ImportIssue = { severity: 'info' | 'warning' | 'error' | string; code: string; message: string; row_number: number | null; field: string | null };
 type ApiIssue = { severity?: string; code?: string; message?: string; row_number?: number | null; field?: string | null };
-type ApiErrorWithDetails = Error & { status?: number; issues?: ApiIssue[] };
+type ApiErrorWithDetails = Error & { status?: number; issues?: ApiIssue[]; payload?: unknown };
 type ImportPreviewRow = { id?: number; row_number: number; raw_values: Record<string, unknown>; normalized_values: Record<string, unknown>; issues: ImportIssue[]; status: string };
 type ImportDraftCreateResponse = { draft: ImportDraftSummary; preview_rows: ImportPreviewRow[]; issues: ImportIssue[]; message: string };
 type ImportDraftListParams = { status?: string; targetType?: string; limit?: number; offset?: number };
@@ -557,6 +558,9 @@ let clientsStatus: ClientsStatus = 'idle';
 let clientsState: ClientsState = { items: [], formMode: 'create', form: emptyClientForm(), includeInactive: false, showCreateForm: false, filters: { search: '', status: 'active' } };
 let clientsError = '';
 let clientsMessage = '';
+let clientValidation = emptyFormValidationState();
+let clientSubmitting = false;
+let clientSubmitToken = 0;
 let clientCardState: ClientCardState = emptyClientCardState();
 let clientRecipesStatus: ClientRecipesStatus = 'idle';
 let clientRecipesError = '';
@@ -578,6 +582,9 @@ let ingredientsStatus: IngredientsStatus = 'idle';
 let ingredientsState: IngredientsState = { items: [], formMode: 'create', form: emptyIngredientForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, showCreateForm: false, filters: emptyCatalogBrowserFilters(), assignmentDraft: emptyAssignmentDraft() };
 let ingredientsError = '';
 let ingredientsMessage = '';
+let ingredientValidation = emptyFormValidationState();
+let ingredientSubmitting = false;
+let ingredientSubmitToken = 0;
 let ingredientLotsStatus: IngredientLotsStatus = 'idle';
 let ingredientLotsState: IngredientLotsState = { lots: [], ingredients: [], formMode: 'create', form: emptyIngredientLotForm() };
 let ingredientLotsError = '';
@@ -878,6 +885,8 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient"]').forEach((button) => button.addEventListener('click', () => startEditIngredient(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient"]').forEach((button) => button.addEventListener('click', () => deactivateIngredient(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="ingredient"]')?.addEventListener('submit', submitIngredientForm);
+  root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-form="ingredient"] [name]').forEach((input) => input.addEventListener('input', () => { saveIngredientFormFromDom(); clearIngredientFieldError(input.name); }));
+  root.querySelectorAll<HTMLSelectElement>('[data-form="ingredient"] select[name]').forEach((input) => input.addEventListener('change', () => { saveIngredientFormFromDom(); clearIngredientFieldError(input.name); }));
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-category"]')?.addEventListener('submit', submitIngredientCatalogCategoryForm);
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-tag"]')?.addEventListener('submit', submitIngredientCatalogTagForm);
   root.querySelectorAll<HTMLButtonElement>('[data-action="assign-ingredient-category"]').forEach((button) => button.addEventListener('click', () => updateIngredientDraftCategory(Number(button.dataset.id), button.dataset.value ?? '')));
@@ -924,6 +933,8 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="clear-client-filter"]').forEach((button) => button.addEventListener('click', () => clearClientFilter(button.dataset.filter ?? '')));
   root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client"]').forEach((button) => button.addEventListener('click', () => deactivateClient(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="client"]')?.addEventListener('submit', submitClientForm);
+  root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-form="client"] [name]').forEach((input) => input.addEventListener('input', () => { saveClientFormFromDom(); clearClientFieldError(input.name); }));
+  root.querySelectorAll<HTMLInputElement>('[data-form="client"] input[type="date"][name]').forEach((input) => input.addEventListener('change', () => { saveClientFormFromDom(); clearClientFieldError(input.name); }));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-client-wish-form"]')?.addEventListener('click', toggleClientWishForm);
   root.querySelector<HTMLButtonElement>('[data-action="toggle-archived-client-wishes"]')?.addEventListener('click', toggleArchivedClientWishes);
   root.querySelector<HTMLFormElement>('[data-form="client-wish"]')?.addEventListener('submit', submitClientWishForm);
@@ -1008,6 +1019,7 @@ function openIngredientCreateForm() {
   ingredientsState.showCreateForm = true;
   ingredientsMessage = '';
   ingredientsError = '';
+  ingredientValidation = emptyFormValidationState();
   render();
   focusIngredientFormName();
 }
@@ -1019,6 +1031,7 @@ function hideIngredientCreateForm() {
   ingredientsState.showCreateForm = false;
   ingredientsMessage = '';
   ingredientsError = '';
+  ingredientValidation = emptyFormValidationState();
   render();
 }
 
@@ -2027,9 +2040,8 @@ function clientFilterToolbar() {
 function clientForm() {
   const form = clientsState.form;
   const isEdit = clientsState.formMode === 'edit';
-  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить карточку клиента' : 'Создать клиента'}</h2><form data-form="client" class="ingredient-form"><div class="form-grid"><label>ФИО клиента<input name="full_name" data-field="client-full-name" required maxlength="200" value="${escapeHtml(form.full_name)}" placeholder="Например, Анна Иванова" /></label><label>Телефон<input name="phone" maxlength="80" value="${escapeHtml(form.phone)}" placeholder="+7 ..." /></label><label>Email<input name="email" type="email" maxlength="160" value="${escapeHtml(form.email)}" placeholder="Необязательно" /></label><label>Дата рождения<input name="birthday" type="date" value="${escapeHtml(form.birthday ?? '')}" /></label><label class="full-span">Адрес<input name="address" maxlength="300" value="${escapeHtml(form.address)}" placeholder="Необязательно" /></label><label class="full-span">Особенности кожи<textarea name="skin_notes" rows="2" maxlength="1200" placeholder="Например, чувствительная кожа">${escapeHtml(form.skin_notes)}</textarea></label><label class="full-span">Аллергии<textarea name="allergy_notes" rows="2" maxlength="1200" placeholder="Что важно учитывать в составах">${escapeHtml(form.allergy_notes)}</textarea></label><label class="full-span">Предпочтения<textarea name="preference_notes" rows="2" maxlength="1200" placeholder="Текстуры, ароматы, упаковка">${escapeHtml(form.preference_notes)}</textarea></label><label class="full-span">Противопоказания<textarea name="contraindication_notes" rows="2" maxlength="1200" placeholder="Ограничения, которые нельзя забыть">${escapeHtml(form.contraindication_notes)}</textarea></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1600" placeholder="Рабочие заметки по клиенту">${escapeHtml(form.notes)}</textarea></label></div><p class="next-step">Аллергии, предпочтения и противопоказания помогут позже безопасно создавать индивидуальные рецепты клиента.</p><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить карточку' : 'Создать клиента'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="cancel-client-edit">Закрыть редактирование</button>' : '<button class="secondary-action" type="button" data-action="hide-client-create">Вернуться к списку</button>'}</div></form>${isEdit ? clientWishesSection() + clientFeedbackSection() : ''}</section>`;
+  return `<section class="card form-card"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить карточку клиента' : 'Создать клиента'}</h2><form data-form="client" class="ingredient-form" novalidate>${validationSummary(clientValidation, 'Проверьте форму клиента')}<div class="form-grid">${clientField(`ФИО клиента<input name="full_name" data-field="client-full-name" required maxlength="200" value="${escapeHtml(form.full_name)}" placeholder="Например, Анна Иванова"${clientFieldAttrs('full_name')} />`, 'full_name')}${clientField(`Телефон<input name="phone" maxlength="80" value="${escapeHtml(form.phone)}" placeholder="+7 ..."${clientFieldAttrs('phone')} />`, 'phone')}${clientField(`Email<input name="email" type="email" maxlength="160" value="${escapeHtml(form.email)}" placeholder="Необязательно"${clientFieldAttrs('email')} />`, 'email')}${clientField(`Дата рождения<input name="birthday" type="date" value="${escapeHtml(form.birthday ?? '')}"${clientFieldAttrs('birthday')} />`, 'birthday')}${clientField(`Адрес<input name="address" maxlength="300" value="${escapeHtml(form.address)}" placeholder="Необязательно"${clientFieldAttrs('address')} />`, 'address', true)}${clientField(`Особенности кожи<textarea name="skin_notes" rows="2" maxlength="1200" placeholder="Например, чувствительная кожа"${clientFieldAttrs('skin_notes')}>${escapeHtml(form.skin_notes)}</textarea>`, 'skin_notes', true)}${clientField(`Аллергии<textarea name="allergy_notes" rows="2" maxlength="1200" placeholder="Что важно учитывать в составах"${clientFieldAttrs('allergy_notes')}>${escapeHtml(form.allergy_notes)}</textarea>`, 'allergy_notes', true)}${clientField(`Предпочтения<textarea name="preference_notes" rows="2" maxlength="1200" placeholder="Текстуры, ароматы, упаковка"${clientFieldAttrs('preference_notes')}>${escapeHtml(form.preference_notes)}</textarea>`, 'preference_notes', true)}${clientField(`Противопоказания<textarea name="contraindication_notes" rows="2" maxlength="1200" placeholder="Ограничения, которые нельзя забыть"${clientFieldAttrs('contraindication_notes')}>${escapeHtml(form.contraindication_notes)}</textarea>`, 'contraindication_notes', true)}${clientField(`Заметки<textarea name="notes" rows="3" maxlength="1600" placeholder="Рабочие заметки по клиенту"${clientFieldAttrs('notes')}>${escapeHtml(form.notes)}</textarea>`, 'notes', true)}</div><p class="next-step">Аллергии, предпочтения и противопоказания помогут позже безопасно создавать индивидуальные рецепты клиента.</p><div class="actions"><button class="primary-action" type="submit" ${clientSubmitting ? 'disabled' : ''}>${clientSubmitting ? 'Сохраняем…' : isEdit ? 'Сохранить карточку' : 'Создать клиента'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="cancel-client-edit">Закрыть редактирование</button>' : '<button class="secondary-action" type="button" data-action="hide-client-create">Вернуться к списку</button>'}</div></form>${isEdit ? clientWishesSection() + clientFeedbackSection() : ''}</section>`;
 }
-
 
 function clientWishesSection() {
   const state = clientCardState;
@@ -2114,7 +2126,7 @@ function ingredientForm() {
   const form = ingredientsState.form;
   const isEdit = ingredientsState.formMode === 'edit';
   if (!isEdit && !ingredientsState.showCreateForm) return `<section class="card form-card collapsed-create-card"><div><p class="card-kicker">Создание</p><h2>Создать новый компонент</h2><p>Форма создания скрыта, чтобы каталог оставался первым рабочим экраном.</p></div><button class="primary-action" type="button" data-action="new-ingredient">Создать компонент</button></section>`;
-  return `<section class="card form-card" data-section="ingredient-form"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить компонент' : 'Создать компонент'}</h2><form data-form="ingredient" class="ingredient-form"><div class="form-grid"><label>Название<input name="name" required maxlength="160" value="${escapeHtml(form.name)}" placeholder="Например, масло ши" /></label><label>Категория<select name="category">${categoryOptions(form.category)}</select></label><label>Единица учета<select name="default_unit">${unitOptions(form.default_unit)}</select></label><label>Плотность<input name="density_g_per_ml" inputmode="decimal" value="${escapeHtml(form.density_g_per_ml ?? '')}" placeholder="Например, 0.950" /></label><label>Поставщик<input name="supplier_hint" maxlength="160" value="${escapeHtml(form.supplier_hint)}" placeholder="Необязательно" /></label><label>INCI<input name="inci_name" maxlength="240" value="${escapeHtml(form.inci_name)}" placeholder="Необязательно" /></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки">${escapeHtml(form.notes)}</textarea></label><label class="full-span">Ограничения и аллергены<textarea name="allergen_note" rows="2" maxlength="800" placeholder="Необязательно">${escapeHtml(form.allergen_note)}</textarea></label><label class="full-span">Применение<textarea name="usage_note" rows="2" maxlength="800" placeholder="Необязательно">${escapeHtml(form.usage_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить изменения' : 'Создать компонент'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="cancel-ingredient-edit">Отменить редактирование</button>' : '<button class="secondary-action" type="button" data-action="hide-ingredient-create-form">Вернуться к каталогу</button>'}</div></form></section>`;
+  return `<section class="card form-card" data-section="ingredient-form"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить компонент' : 'Создать компонент'}</h2><form data-form="ingredient" class="ingredient-form" novalidate>${validationSummary(ingredientValidation, 'Проверьте форму компонента')}<div class="form-grid">${ingredientField(`Название<input name="name" required maxlength="160" value="${escapeHtml(form.name)}" placeholder="Например, масло ши"${ingredientFieldAttrs('name')} />`, 'name')}${ingredientField(`Категория<select name="category"${ingredientFieldAttrs('category')}>${categoryOptions(form.category)}</select>`, 'category')}${ingredientField(`Единица учета<select name="default_unit"${ingredientFieldAttrs('default_unit')}>${unitOptions(form.default_unit)}</select>`, 'default_unit')}${ingredientField(`Плотность<input name="density_g_per_ml" inputmode="decimal" value="${escapeHtml(form.density_g_per_ml ?? '')}" placeholder="Например, 0.950"${ingredientFieldAttrs('density_g_per_ml')} />`, 'density_g_per_ml')}${ingredientField(`Поставщик<input name="supplier_hint" maxlength="160" value="${escapeHtml(form.supplier_hint)}" placeholder="Необязательно"${ingredientFieldAttrs('supplier_hint')} />`, 'supplier_hint')}${ingredientField(`INCI<input name="inci_name" maxlength="240" value="${escapeHtml(form.inci_name)}" placeholder="Необязательно"${ingredientFieldAttrs('inci_name')} />`, 'inci_name')}${ingredientField(`Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки"${ingredientFieldAttrs('notes')}>${escapeHtml(form.notes)}</textarea>`, 'notes', true)}${ingredientField(`Ограничения и аллергены<textarea name="allergen_note" rows="2" maxlength="800" placeholder="Необязательно"${ingredientFieldAttrs('allergen_note')}>${escapeHtml(form.allergen_note)}</textarea>`, 'allergen_note', true)}${ingredientField(`Применение<textarea name="usage_note" rows="2" maxlength="800" placeholder="Необязательно"${ingredientFieldAttrs('usage_note')}>${escapeHtml(form.usage_note)}</textarea>`, 'usage_note', true)}</div><div class="actions"><button class="primary-action" type="submit" ${ingredientSubmitting ? 'disabled' : ''}>${ingredientSubmitting ? 'Сохраняем…' : isEdit ? 'Сохранить изменения' : 'Создать компонент'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="cancel-ingredient-edit">Отменить редактирование</button>' : '<button class="secondary-action" type="button" data-action="hide-ingredient-create-form">Вернуться к каталогу</button>'}</div></form></section>`;
 }
 
 function ingredientCatalogPanel() {
@@ -2529,7 +2541,53 @@ function humanClientRecipeCompositionError(error: unknown) { const message = err
 
 function emptyClientRecipeForm(): ClientRecipeFormState { return { client_id: '', recipe_template_id: '', source_recipe_version_id: '', title: '', target_batch_size_value: '', target_batch_size_unit: 'g', personalization_notes: '', allergy_notes: '', preference_notes: '', contraindication_notes: '', notes: '' }; }
 
+
+const clientFieldLabels: Record<string, string> = {
+  full_name: 'ФИО клиента',
+  phone: 'Телефон',
+  email: 'Email',
+  address: 'Адрес',
+  birthday: 'Дата рождения',
+  skin_notes: 'Особенности кожи',
+  allergy_notes: 'Аллергии',
+  preference_notes: 'Предпочтения',
+  contraindication_notes: 'Противопоказания',
+  notes: 'Заметки',
+};
+const ingredientFieldLabels: Record<string, string> = {
+  name: 'Название',
+  category: 'Категория',
+  default_unit: 'Единица учета',
+  density_g_per_ml: 'Плотность',
+  notes: 'Заметки',
+  inci_name: 'INCI',
+  supplier_hint: 'Поставщик',
+  allergen_note: 'Ограничения и аллергены',
+  usage_note: 'Применение',
+};
+
+function validationSummary(state: FormValidationState, title: string) {
+  if (state.formErrors.length === 0) return '';
+  return `<div class="form-error-summary" role="alert" aria-live="assertive"><strong>${escapeHtml(title)}</strong><ul>${state.formErrors.map((message) => `<li>${escapeHtml(message)}</li>`).join('')}</ul></div>`;
+}
+function fieldErrorHtml(state: FormValidationState, field: string, id: string) {
+  const messages = state.fieldErrors[field] ?? [];
+  if (messages.length === 0) return '';
+  return `<div class="field-error" id="${id}">${messages.map((message) => `<p>${escapeHtml(message)}</p>`).join('')}</div>`;
+}
+function fieldErrorAttrs(state: FormValidationState, field: string, id: string) {
+  return (state.fieldErrors[field] ?? []).length ? ` aria-invalid="true" aria-describedby="${id}"` : '';
+}
+function clientField(control: string, field: keyof ClientPayload, span = false) { return `<label${span ? ' class="full-span"' : ''}>${control}${fieldErrorHtml(clientValidation, field, `client-${field}-error`)}</label>`; }
+function ingredientField(control: string, field: keyof IngredientPayload, span = false) { return `<label${span ? ' class="full-span"' : ''}>${control}${fieldErrorHtml(ingredientValidation, field, `ingredient-${field}-error`)}</label>`; }
+function clientFieldAttrs(field: keyof ClientPayload) { return fieldErrorAttrs(clientValidation, field, `client-${field}-error`); }
+function ingredientFieldAttrs(field: keyof IngredientPayload) { return fieldErrorAttrs(ingredientValidation, field, `ingredient-${field}-error`); }
+function clearClientFieldError(field: string) { const next = clearFieldValidation(clientValidation, field); if (next !== clientValidation) { clientValidation = next; render(); } }
+function clearIngredientFieldError(field: string) { const next = clearFieldValidation(ingredientValidation, field); if (next !== ingredientValidation) { ingredientValidation = next; render(); } }
+function apiValidationPayload(error: unknown) { return error && typeof error === 'object' && 'payload' in error ? (error as ApiErrorWithDetails).payload : error; }
+
 function emptyClientForm(): ClientFormState { return { id: null, full_name: '', phone: '', email: '', address: '', birthday: null, skin_notes: '', allergy_notes: '', preference_notes: '', contraindication_notes: '', notes: '' }; }
+function saveClientFormFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="client"]'); if (!form) return; const payload = clientPayloadFromForm(form); clientsState.form = { ...payload, id: clientsState.form.id }; }
 function clientPayloadFromForm(form: HTMLFormElement): ClientPayload { const data = new FormData(form); const birthday = String(data.get('birthday') ?? '').trim(); return { full_name: String(data.get('full_name') ?? '').trim(), phone: String(data.get('phone') ?? '').trim(), email: String(data.get('email') ?? '').trim(), address: String(data.get('address') ?? '').trim(), birthday: birthday || null, skin_notes: String(data.get('skin_notes') ?? '').trim(), allergy_notes: String(data.get('allergy_notes') ?? '').trim(), preference_notes: String(data.get('preference_notes') ?? '').trim(), contraindication_notes: String(data.get('contraindication_notes') ?? '').trim(), notes: String(data.get('notes') ?? '').trim() }; }
 function clientNotesSummary(client: Client) { const rows = [['Аллергии', client.allergy_notes], ['Предпочтения', client.preference_notes], ['Противопоказания', client.contraindication_notes]].filter(([, value]) => value); return rows.length ? `<ul>${rows.map(([label, value]) => `<li><strong>${label}:</strong> ${escapeHtml(shortText(value, 90))}</li>`).join('')}</ul>` : 'Важные ограничения пока не указаны'; }
 function shortText(value: string, maxLength: number) { const normalized = value.replace(/\s+/g, ' ').trim(); return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized; }
@@ -2541,8 +2599,8 @@ function updateClientFilterSearch(input: HTMLInputElement) { const cursor = inpu
 function updateClientStatusFilter(status: ClientStatusFilter) { clientsState.filters.status = status; clientsState.includeInactive = status !== 'active'; loadClients(true); }
 function resetClientFilters() { const shouldReload = clientsState.includeInactive; clientsState.filters = { search: '', status: 'active' }; clientsState.includeInactive = false; if (shouldReload) loadClients(true); else render(); }
 function clearClientFilter(filter: string) { if (filter === 'search') { clientsState.filters.search = ''; render(); return; } if (filter === 'status') updateClientStatusFilter('active'); }
-function openClientCreateForm() { clientsState.formMode = 'create'; clientsState.showCreateForm = true; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; render(); focusClientName(); }
-function hideClientCreateForm() { clientsState.showCreateForm = false; if (clientsState.formMode === 'create') { clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); } render(); }
+function openClientCreateForm() { clientsState.formMode = 'create'; clientsState.showCreateForm = true; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; clientValidation = emptyFormValidationState(); render(); focusClientName(); }
+function hideClientCreateForm() { clientsState.showCreateForm = false; clientValidation = emptyFormValidationState(); if (clientsState.formMode === 'create') { clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); } render(); }
 
 function emptyClientWishForm(): ClientWishFormState { return { title: '', description: '', category: 'other', priority: 'normal', client_recipe_id: '' }; }
 function emptyClientFeedbackForm(): ClientFeedbackFormState { return { feedback_type: 'note', sentiment: 'neutral', rating: '', text: '', follow_up_needed: false, follow_up_note: '', occurred_at: '', client_recipe_id: '' }; }
@@ -2603,46 +2661,56 @@ function clientWishCategoryOptions(current: string) { return ['texture','scent',
 function clientWishPriorityOptions(current: string) { return ['low','normal','high'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientWishPriorityLabel(v)}</option>`).join(''); }
 function clientFeedbackTypeOptions(current: string) { return ['note','reaction','texture','scent','effect','packaging','request','other'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientFeedbackTypeLabel(v)}</option>`).join(''); }
 function clientFeedbackSentimentOptions(current: string) { return ['positive','neutral','negative','mixed'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientFeedbackSentimentLabel(v)}</option>`).join(''); }
-function closeClientEdit() { clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; render(); }
+function closeClientEdit() { clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; clientValidation = emptyFormValidationState(); render(); }
 function focusClientName() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="client-full-name"]')?.focus()); }
 function loadClients(force = false) { if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return; clientsStatus = 'loading'; clientsError = ''; render(); getClients(clientsState.includeInactive).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; render(); }).catch(() => { clientsStatus = 'error'; clientsError = 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'; render(); }); }
-function startEditClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; loadClientCardData(id); render(); focusClientName(); }
+function startEditClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; clientValidation = emptyFormValidationState(); loadClientCardData(id); render(); focusClientName(); }
 function submitClientForm(event: SubmitEvent) {
   event.preventDefault();
+  if (clientSubmitting) return;
   const isEdit = Boolean(clientsState.formMode === 'edit' && clientsState.form.id);
   if (isEdit) syncClientCardDraftFormsFromDom();
   const payload = clientPayloadFromForm(event.currentTarget as HTMLFormElement);
-  if (!payload.full_name) {
-    if (isEdit) syncClientCardDraftFormsFromDom();
-    clientsMessage = '';
-    clientsError = 'Укажите ФИО клиента, например «Анна Иванова».';
-    render();
-    return;
-  }
+  clientsState.form = { ...payload, id: isEdit ? clientsState.form.id : null };
+  const token = ++clientSubmitToken;
+  clientSubmitting = true;
+  clientValidation = emptyFormValidationState();
+  clientsMessage = '';
+  clientsError = '';
+  render();
   const request = isEdit ? updateClient(clientsState.form.id!, payload) : createClient(payload);
   request
     .then((client) => {
+      if (token !== clientSubmitToken) return Promise.reject(new Error('stale-client-submit'));
       clientsMessage = isEdit ? 'Карточка клиента обновлена.' : 'Клиент создан.';
       clientsError = '';
+      clientValidation = emptyFormValidationState();
       clientsState.formMode = isEdit ? 'edit' : 'create';
       clientsState.showCreateForm = false;
       clientsState.form = isEdit ? { ...payload, id: client.id } : emptyClientForm();
       return getClients(clientsState.includeInactive);
     })
     .then((response) => {
+      if (token !== clientSubmitToken) return;
       if (isEdit) syncClientCardDraftFormsFromDom();
       clientsState.items = response.clients;
       clientsStatus = 'ready';
+      clientSubmitting = false;
       render();
     })
-    .catch(() => {
+    .catch((error) => {
+      if (String((error as Error).message) === 'stale-client-submit' || token !== clientSubmitToken) return;
       if (isEdit) syncClientCardDraftFormsFromDom();
+      clientSubmitting = false;
       clientsMessage = '';
-      clientsError = 'Не удалось сохранить клиента. Проверьте ФИО и контактные поля, затем попробуйте еще раз.';
+      clientsError = '';
+      clientValidation = normalizeBackendValidation(apiValidationPayload(error), clientFieldLabels, 'Не удалось сохранить клиента. Проверьте поля и попробуйте ещё раз.');
+      announceAssertive('Проверьте форму клиента. Ошибки показаны рядом с полями.');
       clientsStatus = 'ready';
       render();
     });
 }
+
 function deactivateClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return; deactivateClientRequest(id).then(() => { clientsMessage = 'Клиент архивирован.'; clientsError = ''; return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; if (clientsState.form.id === id) { clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); } render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
 
 
@@ -2700,6 +2768,7 @@ function ingredientTagChips(item: Ingredient) { const tags = item.catalog_tag_id
 function categoryLabel(category: string) { return ({ oil: 'Масло', butter: 'Баттер', wax: 'Воск', emulsifier: 'Эмульгатор', humectant: 'Увлажнитель', active: 'Актив', preservative: 'Консервант', fragrance: 'Отдушка', essential_oil: 'Эфирное масло', colorant: 'Краситель', water_phase: 'Водная фаза', additive: 'Добавка', other: 'Другое' } as Record<string, string>)[category] ?? category; }
 function categoryOptions(current: string) { return ingredientSystemCategories().map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${categoryLabel(value)}</option>`).join(''); }
 function unitOptions(current: string) { return ['g','ml','percent','pcs'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
+function saveIngredientFormFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="ingredient"]'); if (!form) return; const payload = ingredientPayloadFromForm(form); ingredientsState.form = { ...payload, id: ingredientsState.form.id }; }
 function ingredientPayloadFromForm(form: HTMLFormElement): IngredientPayload { const data = new FormData(form); const density = String(data.get('density_g_per_ml') ?? '').trim(); return { name: String(data.get('name') ?? '').trim(), category: String(data.get('category') ?? 'other'), default_unit: String(data.get('default_unit') ?? 'g'), density_g_per_ml: density || null, notes: String(data.get('notes') ?? '').trim(), inci_name: String(data.get('inci_name') ?? '').trim(), supplier_hint: String(data.get('supplier_hint') ?? '').trim(), allergen_note: String(data.get('allergen_note') ?? '').trim(), usage_note: String(data.get('usage_note') ?? '').trim() }; }
 
 function emptyRecipeTemplateForm(): RecipeTemplatePayload { return { name: '', product_type: '', description: '', notes: '' }; }
@@ -2729,18 +2798,18 @@ function startEditIngredient(id: number) {
   const item = ingredientsState.items.find((ingredient) => ingredient.id === id);
   const current = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) ?? null : null;
   if (!item || !confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, ingredientsState.assignmentDraft))) return;
-  ingredientsState.formMode = 'edit'; ingredientsState.showCreateForm = false; ingredientsState.form = { id: item.id, name: item.name, category: item.category, default_unit: item.default_unit, density_g_per_ml: item.density_g_per_ml, notes: item.notes, inci_name: item.inci_name, supplier_hint: item.supplier_hint, allergen_note: item.allergen_note, usage_note: item.usage_note }; ingredientsState.assignmentDraft = assignmentDraftFromItem(item); ingredientsMessage = ''; render();
+  ingredientsState.formMode = 'edit'; ingredientsState.showCreateForm = false; ingredientsState.form = { id: item.id, name: item.name, category: item.category, default_unit: item.default_unit, density_g_per_ml: item.density_g_per_ml, notes: item.notes, inci_name: item.inci_name, supplier_hint: item.supplier_hint, allergen_note: item.allergen_note, usage_note: item.usage_note }; ingredientsState.assignmentDraft = assignmentDraftFromItem(item); ingredientsMessage = ''; ingredientsError = ''; ingredientValidation = emptyFormValidationState(); render();
 }
 function cancelIngredientEdit() {
   const current = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) ?? null : null;
   if (!confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, ingredientsState.assignmentDraft))) return;
-  ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsState.assignmentDraft = emptyAssignmentDraft(); ingredientsState.showCreateForm = false; ingredientsMessage = ''; ingredientsError = ''; render();
+  ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsState.assignmentDraft = emptyAssignmentDraft(); ingredientsState.showCreateForm = false; ingredientsMessage = ''; ingredientsError = ''; ingredientValidation = emptyFormValidationState(); render();
 }
 
 function apiGet<T>(url: string): Promise<T> { return fetch(url).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
 function apiErrorMessage(payload: unknown) { if (typeof payload === 'string') return payload; if (payload && typeof payload === 'object' && 'detail' in payload) { const detail = (payload as { detail?: unknown }).detail; if (typeof detail === 'string') return detail; if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message?: unknown }).message ?? 'API request failed'); } return 'API request failed'; }
 function apiIssues(payload: unknown): ApiIssue[] { if (!payload || typeof payload !== 'object' || !('detail' in payload)) return []; const detail = (payload as { detail?: unknown }).detail; if (!detail || typeof detail !== 'object' || !('issues' in detail)) return []; const issues = (detail as { issues?: unknown }).issues; return Array.isArray(issues) ? issues as ApiIssue[] : []; }
-function apiErrorFromPayload(payload: unknown, status: number): ApiErrorWithDetails { const error = new Error(apiErrorMessage(payload)) as ApiErrorWithDetails; error.status = status; error.issues = apiIssues(payload); return error; }
+function apiErrorFromPayload(payload: unknown, status: number): ApiErrorWithDetails { const error = new Error(apiErrorMessage(payload)) as ApiErrorWithDetails; error.status = status; error.issues = apiIssues(payload); error.payload = payload; return error; }
 function apiSend<T>(url: string, method: 'POST' | 'PUT' | 'PATCH', body?: unknown): Promise<T> { return fetch(url, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
 function apiForm<T>(url: string, method: 'POST', formData: FormData): Promise<T> { return fetch(url, { method, body: formData }).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
 function getSettingsStatus(): Promise<SettingsStatusResponse> { return apiGet<SettingsStatusResponse>('/api/settings/status'); }
@@ -3008,11 +3077,46 @@ function loadIngredients(force = false) {
 }
 function submitIngredientForm(event: SubmitEvent) {
   event.preventDefault();
+  if (ingredientSubmitting) return;
   const form = event.currentTarget as HTMLFormElement;
+  const isEdit = Boolean(ingredientsState.formMode === 'edit' && ingredientsState.form.id);
   const payload = ingredientPayloadFromForm(form);
-  const request = ingredientsState.formMode === 'edit' && ingredientsState.form.id ? updateIngredient(ingredientsState.form.id, payload) : createIngredient(payload);
-  request.then(() => { ingredientsMessage = ingredientsState.formMode === 'edit' ? 'Компонент сохранен.' : 'Компонент создан.'; ingredientsError = ''; ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; if (recipesStatus === 'ready') setRecipeIngredientOptions(response.ingredients); ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить компонент. Проверьте обязательные поля и попробуйте еще раз.'; ingredientsStatus = 'ready'; render(); });
+  ingredientsState.form = { ...payload, id: isEdit ? ingredientsState.form.id : null };
+  const token = ++ingredientSubmitToken;
+  ingredientSubmitting = true;
+  ingredientValidation = emptyFormValidationState();
+  ingredientsMessage = '';
+  ingredientsError = '';
+  render();
+  const request = isEdit ? updateIngredient(ingredientsState.form.id!, payload) : createIngredient(payload);
+  request.then(() => {
+    if (token !== ingredientSubmitToken) return Promise.reject(new Error('stale-ingredient-submit'));
+    ingredientsMessage = isEdit ? 'Компонент сохранен.' : 'Компонент создан.';
+    ingredientsError = '';
+    ingredientValidation = emptyFormValidationState();
+    ingredientsState.formMode = 'create';
+    ingredientsState.form = emptyIngredientForm();
+    ingredientsState.showCreateForm = false;
+    return getIngredients();
+  }).then((response) => {
+    if (token !== ingredientSubmitToken) return;
+    ingredientsState.items = response.ingredients;
+    if (recipesStatus === 'ready') setRecipeIngredientOptions(response.ingredients);
+    ingredientsStatus = 'ready';
+    ingredientSubmitting = false;
+    render();
+  }).catch((error) => {
+    if (String((error as Error).message) === 'stale-ingredient-submit' || token !== ingredientSubmitToken) return;
+    ingredientSubmitting = false;
+    ingredientsMessage = '';
+    ingredientsError = '';
+    ingredientValidation = normalizeBackendValidation(apiValidationPayload(error), ingredientFieldLabels, 'Не удалось сохранить компонент. Проверьте поля и попробуйте ещё раз.');
+    announceAssertive('Проверьте форму компонента. Ошибки показаны рядом с полями.');
+    ingredientsStatus = 'ready';
+    render();
+  });
 }
+
 function submitIngredientCatalogCategoryForm(event: SubmitEvent) {
   event.preventDefault();
   const form = event.currentTarget as HTMLFormElement;

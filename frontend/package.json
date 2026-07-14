@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "npm run build && node scripts/dev-server.mjs dist",
     "build": "tsc -p tsconfig.json && node scripts/build.mjs",
-    "preview": "npm run build && node scripts/dev-server.mjs dist"
+    "preview": "npm run build && node scripts/dev-server.mjs dist",
+    "test:form-validation": "rm -rf dist-tests && tsc src/form-validation.ts --target ES2020 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --outDir dist-tests && node --test test/form-validation.test.mjs"
   },
   "dependencies": {},
   "devDependencies": {

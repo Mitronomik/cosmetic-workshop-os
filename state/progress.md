@@ -831,3 +831,13 @@ Import CSV/XLSX draft backend foundation.
 - Repository integrity and temporary-data isolation passed.
 - Slice A1 is DONE.
 - Slice A2 is READY and is the next allowed implementation slice.
+
+## Slice A2 structured form validation — PR #114 implementation under review
+
+- Implemented a shared frontend validation parser/normalizer for backend `detail`, `issues`, `field`, `loc`, `message`, `msg`, `code`, and `type` shapes.
+- Applied the validation state to `/clients` create/edit and `/ingredients` create/edit only, with explicit allow-listed Russian field labels and inline field errors.
+- Added minimal accessible feedback markup/styles: form-level summaries for unassigned errors, `aria-invalid`, `aria-describedby`, and stable error IDs.
+- Preserved draft values on rejected submits, cleared validation on retry/success/cancel/record switch/field edits, and kept duplicate-submit protection without retry logic.
+- Added dependency-free parser tests through `cd frontend && npm run test:form-validation`.
+- Backend code, schemas, migrations, domain rules, recipe calculations, inventory write-offs, production readiness/confirmation, Import Apply, backup/export behavior, navigation routes, dependencies, and lockfiles were not intentionally changed.
+- Slice A2 status remains IN PROGRESS — implementation PR under review. Slice A3 remains BLOCKED A2.
