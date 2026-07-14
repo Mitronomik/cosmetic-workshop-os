@@ -191,3 +191,24 @@ No backend, API, schema, migration, CSS, dependency, lockfile, demo install/clea
 - Required checks: source-diff reviews for Reports, Report Documents, and navigation; scoped terminology classification; frontend build; backend pytest baseline; repository hygiene checks.
 - Browser smoke is not required if the final diff remains static-copy only with no structure or behavior changes.
 - Publication metadata must be verified by the repository owner. Do not claim a GitHub PR number or published branch before verification.
+
+## PR #113 correction handoff — A1 closure pending review
+
+- Runtime scope remains the approved A1 closure slice: implemented navigation sections are ready, stale standalone Production Readiness navigation is removed, Help/onboarding copy uses product language, and fallback copy no longer promises already implemented modules later.
+- The seven technical contract documents changed by the first PR #113 head were restored to the main baseline and should not appear in the final PR diff.
+- Preserved contracts: no backend files, migrations, CSS, dependencies, lockfiles, new routes, request behavior, form behavior, calculations, production readiness/confirmation behavior, import Apply behavior, file open/download behavior, paths, filenames, or escaping are intended to change.
+- A1 remains IN PROGRESS; A2 remains blocked. Do not claim A1 completion until the corrected GitHub head is reviewed and focused browser smoke passes.
+- Browser smoke remains required before merge for desktop 1440×900 and narrow 390×844 navigation/Help coverage plus previously cleaned A1 routes.
+
+## Slice A1 final handoff — PR #113 verified
+
+- Slice A1 language and navigation cleanup is complete.
+- Verified runtime SHA: `040c90fa781edea8484eb84595745c3a3aaf5eaf`.
+- Browser smoke result: 53/53 PASS.
+- Targeted offline/recovery retest: PASS.
+- The backend was genuinely stopped and restarted against the same isolated temporary database.
+- The offline UI remained understandable and usable, exposed no raw technical errors, and recovered without a permanent technical-status message.
+- No real user data was accessed.
+- No backend, CSS, dependency, migration, route, request, form, calculation, production, inventory, import Apply, file-access, or historical-data contract was changed by this final state update.
+- Slice A1 is DONE.
+- Slice A2 structured form validation is READY and is the next implementation slice.
