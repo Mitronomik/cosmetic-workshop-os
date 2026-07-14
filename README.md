@@ -25,7 +25,7 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current repository state: after PR #112. Slice A1 closure is under review.
+Current repository state: PR #113 completes Slice A1 implementation and verification; merge is pending.
 
 Runtime product implementation is complete through PR98. The app includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 
@@ -33,9 +33,9 @@ Newly generated workshop summary documents include configured Workshop profile f
 
 PR99-PR101 were documentation and governance changes only: the project UI/UX contract and Codex UI guidance were added, reviewed Impeccable material was adapted into safe project-owned guidance, and Taste Skill was reviewed and rejected. These PRs did not change application runtime behavior.
 
-Current merge gate: review the Slice A1 closure diff and complete the focused navigation, Help, and previously cleaned-route browser smoke.
+Slice A1 browser smoke passed on runtime commit `040c90fa781edea8484eb84595745c3a3aaf5eaf`: 53 of 53 checks passed, including the targeted offline and recovery retest.
 
-After Slice A1 is merged and verified, the next implementation slice is Slice A2 structured form validation foundation.
+After PR #113 is merged, the next implementation slice is Slice A2 structured form validation foundation.
 
 Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, and unrelated business mutations out of scope unless explicitly approved.
 

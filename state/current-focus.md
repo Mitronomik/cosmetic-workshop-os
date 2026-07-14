@@ -1,13 +1,26 @@
-# Current Focus — PR #113 A1 closure correction
+# Current Focus — Slice A2 structured form validation
 
-Active task: repair PR #113 for Slice A1 closure.
+Slice A1 implementation and verification are complete in PR #113.
 
-The correction restores technical contract documents that were over-simplified in the first PR #113 head. Runtime navigation readiness, Help Center product language, onboarding terminology, and final static copy cleanup remain in scope.
+Verified runtime baseline:
 
-Slice A1 remains IN PROGRESS while PR #113 is under review and required browser smoke is pending.
+- PR: #113
+- runtime SHA: `040c90fa781edea8484eb84595745c3a3aaf5eaf`
+- deterministic browser checks: 53/53 PASS
+- targeted offline/recovery retest: PASS
+- JavaScript console errors: 0
+- real user data used: no
 
-Slice A2 remains blocked until A1 is merged, smoke-verified, and no A1 blocker remains.
+The next allowed implementation slice is Slice A2 — structured form validation foundation.
 
-Required merge gate: focused browser smoke is required because this PR changes navigation readiness metadata and removes the stale standalone Production Readiness navigation item.
+Use `docs/implementation-plan.md` as the scope contract for A2.
 
-After this correction is published, recheck GitHub publication metadata, the new published head, PR state, draft state, and mergeability.
+A2 must remain a focused implementation slice:
+
+- preserve backend-owned business rules;
+- do not introduce a broad frontend refactor;
+- do not change unrelated routes or modules;
+- require tests and risk-based browser smoke;
+- do not silently change historical data or calculation behavior.
+
+No additional Slice A1 runtime work is currently required.

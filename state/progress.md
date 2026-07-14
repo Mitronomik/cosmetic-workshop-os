@@ -818,3 +818,16 @@ Import CSV/XLSX draft backend foundation.
 - Required browser smoke is pending for navigation, Help, and previously cleaned A1 routes.
 - A1 is not yet closed; it remains IN PROGRESS until corrected-head review and required smoke pass.
 - A2 is not yet ready and remains blocked by A1.
+
+## Slice A1 closure verified — PR #113
+
+- Slice A1 runtime implementation was reviewed on published SHA `040c90fa781edea8484eb84595745c3a3aaf5eaf`.
+- Deterministic browser smoke completed with 53 of 53 checks passing.
+- Desktop and narrow navigation, Help Center, Orders readiness workflow, cleaned A1 routes, back/forward navigation, and sidebar behavior passed.
+- The original offline/recovery test infrastructure gap was not accepted as evidence; R1-R5 were replaced by a targeted retest with genuine backend termination and restart.
+- The targeted retest confirmed PID termination, an empty listening port, connection-refused health state, friendly offline UI, restart against the same temporary database, and complete browser recovery.
+- JavaScript console errors: 0.
+- Real user data and production data were not used.
+- Repository integrity and temporary-data isolation passed.
+- Slice A1 is DONE.
+- Slice A2 is READY and is the next allowed implementation slice.
