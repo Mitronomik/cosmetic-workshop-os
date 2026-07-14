@@ -220,3 +220,9 @@ This branch implements PR #114 scope for structured form validation on Clients a
 Validation lifecycle is scoped to the affected form: old validation is cleared before submit, after successful submit, when cancelling/resetting, when switching edited records, and per-field when that field changes. Rejected submits preserve entered form values. Submit buttons remain disabled while their mutation is in flight, and stale responses are ignored with request tokens.
 
 No backend runtime behavior was changed. No migrations, dependencies, lockfiles, navigation routes, recipe/inventory/production/import/backup/export behavior, or broad form migration were added. Slice A3 remains blocked until A2 is reviewed and accepted.
+
+## Slice A2 correction handoff — PR #114
+
+Correction scope stays inside Clients and Ingredients validation. Field-level stale validation is now cleared by updating the affected control/error DOM only; the application is not fully re-rendered on each corrected keystroke. In-flight create/edit contexts are guarded by disabled/guarded cancel and record-switch actions plus request-token checks. Mutation failures still show structured validation, while successful mutations followed by list-refresh failures keep truthful success feedback and show a separate refresh warning that directs the user to reload the list instead of repeating the mutation.
+
+The parser now maps only exact known fields or fields with approved transport prefixes (`body`, `query`, `path`). Nested application paths such as `profile.email` or `metadata.name` remain form-level errors. A2 remains IN PROGRESS — correction under review; A3 remains BLOCKED A2.

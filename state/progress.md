@@ -841,3 +841,11 @@ Import CSV/XLSX draft backend foundation.
 - Added dependency-free parser tests through `cd frontend && npm run test:form-validation`.
 - Backend code, schemas, migrations, domain rules, recipe calculations, inventory write-offs, production readiness/confirmation, Import Apply, backup/export behavior, navigation routes, dependencies, and lockfiles were not intentionally changed.
 - Slice A2 status remains IN PROGRESS — implementation PR under review. Slice A3 remains BLOCKED A2.
+
+## Slice A2 PR #114 correction under review
+
+- Repaired field-error clearing so typing in a corrected Clients or Ingredients field updates only that field's validation DOM and preserves focus/caret instead of re-rendering the app.
+- Guarded create/edit close and record-switch actions while the corresponding Clients or Ingredients mutation is in flight, with request tokens invalidated on safe context changes.
+- Split mutation validation failures from post-save list-refresh failures so saved records show success and a separate refresh warning instead of save-validation errors.
+- Tightened parser field-path mapping: exact known fields and approved `body`/`query`/`path` transport prefixes map inline; unknown nested paths stay in the form summary.
+- Slice A2 remains IN PROGRESS — correction under review. Slice A3 remains BLOCKED A2.
