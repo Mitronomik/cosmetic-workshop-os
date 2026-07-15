@@ -1,0 +1,106 @@
+import { type FormValidationState } from './form-validation.js';
+
+export function applyValidationToClientForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="client"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'client', 'Проверьте форму клиента');
+}
+
+export function applyValidationToIngredientForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="ingredient"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'ingredient', 'Проверьте форму компонента');
+}
+
+function applyValidationToForm(
+  form: HTMLFormElement,
+  validation: FormValidationState,
+  prefix: string,
+  summaryTitle: string,
+): void {
+  updateValidationSummary(form, validation, summaryTitle);
+  applyFieldValidationState(form, validation, prefix);
+}
+
+function updateValidationSummary(
+  form: HTMLFormElement,
+  validation: FormValidationState,
+  summaryTitle: string,
+): void {
+  const existing = form.querySelector(':scope > .form-error-summary');
+  if (validation.formErrors.length === 0) {
+    existing?.remove();
+    return;
+  }
+
+  const summary = document.createElement('div');
+  summary.className = 'form-error-summary';
+  const strong = document.createElement('strong');
+  strong.textContent = summaryTitle;
+  summary.appendChild(strong);
+
+  const ul = document.createElement('ul');
+  for (const message of validation.formErrors) {
+    const li = document.createElement('li');
+    li.textContent = message;
+    ul.appendChild(li);
+  }
+  summary.appendChild(ul);
+
+  if (existing) {
+    existing.replaceWith(summary);
+  } else {
+    form.insertBefore(summary, form.firstChild);
+  }
+}
+
+function applyFieldValidationState(
+  form: HTMLFormElement,
+  validation: FormValidationState,
+  prefix: string,
+): void {
+  const fieldNames = new Set<string>();
+  form.querySelectorAll('[name]').forEach((el) => {
+    const name = (el as HTMLElement).getAttribute('name');
+    if (name) fieldNames.add(name);
+  });
+
+  for (const field of fieldNames) {
+    const messages = validation.fieldErrors[field] ?? [];
+    const errorId = `${prefix}-${field}-error`;
+    const input = form.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+      `[name="${CSS.escape(field)}"]`,
+    );
+
+    if (messages.length > 0) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'field-error';
+      errorDiv.id = errorId;
+      for (const message of messages) {
+        const p = document.createElement('p');
+        p.textContent = message;
+        errorDiv.appendChild(p);
+      }
+
+      const existing = document.getElementById(errorId);
+      if (existing) {
+        existing.replaceWith(errorDiv);
+      } else {
+        const formField = input?.closest('.form-field');
+        if (formField) formField.appendChild(errorDiv);
+      }
+
+      if (input) {
+        input.setAttribute('aria-invalid', 'true');
+        input.setAttribute('aria-describedby', errorId);
+      }
+    } else {
+      const errorDiv = document.getElementById(errorId);
+      errorDiv?.remove();
+      input?.removeAttribute('aria-invalid');
+      if (input?.getAttribute('aria-describedby') === errorId) {
+        input.removeAttribute('aria-describedby');
+      }
+    }
+  }
+}

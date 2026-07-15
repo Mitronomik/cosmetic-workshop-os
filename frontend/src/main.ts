@@ -1,4 +1,5 @@
 import { clearFieldValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
+import { applyValidationToClientForm, applyValidationToIngredientForm } from './targeted-validation-update.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -2612,6 +2613,26 @@ function clearFieldValidationDom(prefix: 'client' | 'ingredient', field: string,
     }
   }
 }
+function disableClientFormButtons() {
+  const form = document.querySelector<HTMLFormElement>('[data-form="client"]');
+  if (form) form.querySelectorAll('button').forEach((b) => b.setAttribute('disabled', ''));
+  document.querySelector<HTMLButtonElement>('[data-action="open-client-create"]')?.setAttribute('disabled', '');
+}
+function disableIngredientFormButtons() {
+  const form = document.querySelector<HTMLFormElement>('[data-form="ingredient"]');
+  if (form) form.querySelectorAll('button').forEach((b) => b.setAttribute('disabled', ''));
+  document.querySelector<HTMLButtonElement>('[data-action="new-ingredient"]')?.setAttribute('disabled', '');
+}
+function reenableClientSubmitButtons() {
+  document.querySelector<HTMLButtonElement>('[data-action="open-client-create"]')?.removeAttribute('disabled');
+  const form = document.querySelector<HTMLFormElement>('[data-form="client"]');
+  if (form) form.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled'));
+}
+function reenableIngredientSubmitButtons() {
+  document.querySelector<HTMLButtonElement>('[data-action="new-ingredient"]')?.removeAttribute('disabled');
+  const form = document.querySelector<HTMLFormElement>('[data-form="ingredient"]');
+  if (form) form.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled'));
+}
 function apiValidationPayload(error: unknown) { return error && typeof error === 'object' && 'payload' in error ? (error as ApiErrorWithDetails).payload : error; }
 
 function emptyClientForm(): ClientFormState { return { id: null, full_name: '', phone: '', email: '', address: '', birthday: null, skin_notes: '', allergy_notes: '', preference_notes: '', contraindication_notes: '', notes: '' }; }
@@ -2691,6 +2712,7 @@ function clientFeedbackTypeOptions(current: string) { return ['note','reaction',
 function clientFeedbackSentimentOptions(current: string) { return ['positive','neutral','negative','mixed'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientFeedbackSentimentLabel(v)}</option>`).join(''); }
 function closeClientEdit() { if (clientSubmitting) return; clientSubmitToken += 1; clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); render(); }
 function focusClientName() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="client-full-name"]')?.focus()); }
+
 function loadClients(force = false) { if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return; clientsStatus = 'loading'; clientsError = ''; render(); getClients(clientsState.includeInactive).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; render(); }).catch(() => { clientsStatus = 'error'; clientsError = 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'; render(); }); }
 function startEditClient(id: number) { if (clientSubmitting) return; clientSubmitToken += 1; const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); loadClientCardData(id); render(); focusClientName(); }
 function submitClientForm(event: SubmitEvent) {
@@ -2707,7 +2729,7 @@ function submitClientForm(event: SubmitEvent) {
   clientsMessage = '';
   clientsError = '';
   clientsRefreshWarning = '';
-  render();
+  disableClientFormButtons();
   const request = isEdit ? updateClient(submittedFormId!, payload) : createClient(payload);
   request
     .then((client) => {
@@ -2746,7 +2768,8 @@ function submitClientForm(event: SubmitEvent) {
       clientsRefreshWarning = '';
       clientValidation = normalizeBackendValidation(apiValidationPayload(error), clientFieldLabels, 'Не удалось сохранить клиента. Проверьте поля и попробуйте ещё раз.');
       clientsStatus = 'ready';
-      render();
+      applyValidationToClientForm(clientValidation);
+      reenableClientSubmitButtons();
       announceAssertive('Проверьте форму клиента. Ошибки показаны рядом с полями.');
     });
 }
@@ -3133,7 +3156,7 @@ function submitIngredientForm(event: SubmitEvent) {
   ingredientsMessage = '';
   ingredientsError = '';
   ingredientsRefreshWarning = '';
-  render();
+  disableIngredientFormButtons();
   const request = isEdit ? updateIngredient(submittedFormId!, payload) : createIngredient(payload);
   request.then(() => {
     if (token !== ingredientSubmitToken) return;
@@ -3170,7 +3193,8 @@ function submitIngredientForm(event: SubmitEvent) {
     ingredientsRefreshWarning = '';
     ingredientValidation = normalizeBackendValidation(apiValidationPayload(error), ingredientFieldLabels, 'Не удалось сохранить компонент. Проверьте поля и попробуйте ещё раз.');
     ingredientsStatus = 'ready';
-    render();
+    applyValidationToIngredientForm(ingredientValidation);
+    reenableIngredientSubmitButtons();
     announceAssertive('Проверьте форму компонента. Ошибки показаны рядом с полями.');
   });
 }

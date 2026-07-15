@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeBackendValidation } from '../dist-tests/form-validation.js';
+import { normalizeBackendValidation } from '../dist-tests/form-validation/form-validation.js';
 
 const labels = { full_name: 'Имя клиента', email: 'Email', name: 'Название компонента', density_g_per_ml: 'Плотность' };
 
