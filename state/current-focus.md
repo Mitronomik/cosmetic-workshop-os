@@ -1,17 +1,24 @@
-# Current Focus — Slice A2 structured form validation
+# Current Focus — prepare Slice A3
 
-Slice A2 is IN PROGRESS — correction under review.
+Slice A2 structured form validation is DONE and verified in PR #114.
 
-Scope for this correction branch remains limited to PR #114:
+Verified runtime head:
 
-- repair `/clients` and `/ingredients` structured validation lifecycle defects;
-- preserve focus/caret while clearing stale field errors;
-- guard in-flight form context switches;
-- separate mutation failures from post-save list refresh failures;
-- make parser field-path allow-listing strict;
-- keep accessible Russian inline errors and form summaries without duplicate announcements;
-- no route expansion beyond Clients and Ingredients.
+`8eb5d0c2c116c83d4162d10895268375e0bc1e1e`
 
-Slice A3 remains BLOCKED A2 and must not be started in this PR.
+PR #114 remains open only for final state closure and merge.
 
-A2 must remain IN PROGRESS until the corrected published PR head is reviewed and required smoke evidence is accepted.
+Completed A2 scope:
+
+- structured validation for `/clients` create/edit;
+- structured validation for `/ingredients` create/edit;
+- backend remains the validation source of truth;
+- inline errors and form summaries use understandable Russian text;
+- focus, caret and original input DOM identity are preserved;
+- mutation failures are separated from post-save refresh failures;
+- stale request contexts and duplicate submits are guarded;
+- frontend validation tests remain dependency-free.
+
+Slice A3 is READY, but no A3 implementation is included in PR #114.
+
+The next task must select one focused A3 validation-migration sub-slice. Do not migrate every remaining form in one PR.

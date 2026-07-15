@@ -226,3 +226,21 @@ No backend runtime behavior was changed. No migrations, dependencies, lockfiles,
 Correction scope stays inside Clients and Ingredients validation. Field-level stale validation is now cleared by updating the affected control/error DOM only; the application is not fully re-rendered on each corrected keystroke. In-flight create/edit contexts are guarded by disabled/guarded cancel and record-switch actions plus request-token checks. Mutation failures still show structured validation, while successful mutations followed by list-refresh failures keep truthful success feedback and show a separate refresh warning that directs the user to reload the list instead of repeating the mutation.
 
 The parser now maps only exact known fields or fields with approved transport prefixes (`body`, `query`, `path`). Nested application paths such as `profile.email` or `metadata.name` remain form-level errors. A2 remains IN PROGRESS — correction under review; A3 remains BLOCKED A2.
+
+## Slice A2 final handoff — PR #114
+
+Slice A2 is complete and verified.
+
+Verified runtime head:
+
+`8eb5d0c2c116c83d4162d10895268375e0bc1e1e`
+
+The reusable structured-validation foundation is implemented for Clients and Ingredients create/edit forms.
+
+Field errors, form summaries and ARIA attributes are updated without replacing the focused input node. Mutation failures remain separate from post-save refresh failures, stale request contexts are guarded, and backend validation remains the source of truth.
+
+The final frontend test setup is dependency-free. The unused `linkedom` dependency was removed. Parser and targeted DOM tests use separate generated directories and pass when executed concurrently.
+
+PR #114 contains no Slice A3 implementation.
+
+Slice A3 is READY and must begin as a new focused task only after PR #114 is merged.

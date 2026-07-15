@@ -849,3 +849,22 @@ Import CSV/XLSX draft backend foundation.
 - Split mutation validation failures from post-save list-refresh failures so saved records show success and a separate refresh warning instead of save-validation errors.
 - Tightened parser field-path mapping: exact known fields and approved `body`/`query`/`path` transport prefixes map inline; unknown nested paths stay in the form summary.
 - Slice A2 remains IN PROGRESS — correction under review. Slice A3 remains BLOCKED A2.
+
+## Slice A2 verified closure — PR #114
+
+- Final verified runtime head: `8eb5d0c2c116c83d4162d10895268375e0bc1e1e`.
+- Structured validation foundation is complete for Clients create/edit and Ingredients create/edit.
+- Final correction preserves the original focused input DOM node, caret and selection without a global render or programmatic refocus.
+- Parser tests passed: 11/11.
+- Targeted validation DOM tests passed: 4/4.
+- Both frontend test scripts passed when executed concurrently.
+- Frontend build passed.
+- Targeted Clients and Ingredients backend tests passed: 29/29.
+- Real Firefox focus-preservation smoke passed for Clients and Ingredients.
+- Expected HTTP 422 validation responses were separated from unexpected request failures.
+- JavaScript exceptions: 0.
+- Console errors: 0.
+- Unused `linkedom` and its transitive lockfile entries were removed.
+- No backend runtime, schema, migration, domain, inventory, production, import, backup, export or navigation behavior changed.
+- Slice A2 is DONE and awaiting PR #114 merge.
+- Slice A3 is READY for a separate focused sub-slice after PR #114 is merged.
