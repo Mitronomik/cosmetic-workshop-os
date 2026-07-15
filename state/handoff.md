@@ -251,6 +251,6 @@ Implemented scope is limited to `/ingredient-lots` create/edit validation migrat
 
 Preserved contracts: backend validation remains the source of truth; no backend runtime, schema, migration, dependency, inventory calculation, stock movement, route, cloud, import, production, or historical-data behavior is intentionally changed. `/stock-movements` remains pending and unchanged.
 
-Tests run for this implementation should include frontend parser tests, targeted validation DOM tests, frontend build, focused Ingredient Lot backend tests, required repository hygiene checks, and focused browser smoke on an isolated temporary database.
+Evidence for this correction: frontend parser tests pass (11/11), targeted validation DOM tests pass (6/6), frontend build passes, concurrent frontend validation tests pass, focused Ingredient Lot backend tests pass (15/15), and isolated local API smoke passed on `/tmp/cwo-pr115-smoke.sqlite` with the expected structured `422` plus one successful lot create. Browser smoke is still pending reviewer execution and must not be reported as passed until that evidence exists.
 
 Remaining A3 sub-slices include `/stock-movements` and other critical forms not covered by A3.1. Slice A3.1 remains IN PROGRESS — implementation under review until accepted review and smoke evidence.

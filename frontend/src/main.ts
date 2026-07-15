@@ -2218,7 +2218,7 @@ function packagingItemsList(items: PackagingItem[]) {
 function ingredientLotsPage() {
   if (ingredientLotsStatus === 'idle' || ingredientLotsStatus === 'loading') return `<section class="card"><p class="card-kicker">Приходы и партии</p><h2>Загружаем приходы и партии…</h2><p>Загружаем партии компонентов.</p></section>`;
   if (ingredientLotsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Приходы и партии</p><h2>Не удалось загрузить приходы и партии</h2><p>${ingredientLotsError || 'Не удалось получить данные о партиях.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredient-lots">Повторить загрузку</button></section>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Приходы и партии</p><h2>Приходы и партии сырья</h2><p>Здесь хранится паспорт партии: компонент, поставщик, срок годности, цена и единица учета. Остаток не редактируется здесь и считается отдельными движениями сырья.</p></div><button class="secondary-action" type="button" data-action="new-ingredient-lot">Очистить форму</button></section>${ingredientLotsMessage ? `<p class="page-message">${ingredientLotsMessage}</p>` : ''}${ingredientLotsRefreshWarning ? `<p class="page-message warning-message">${ingredientLotsRefreshWarning}</p>` : ''}${ingredientLotsError ? `<p class="page-message error-message">${ingredientLotsError}</p>` : ''}${ingredientLotForm()}${ingredientLotList()}</div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Приходы и партии</p><h2>Приходы и партии сырья</h2><p>Здесь хранится паспорт партии: компонент, поставщик, срок годности, цена и единица учета. Остаток не редактируется здесь и считается отдельными движениями сырья.</p></div><button class="secondary-action" type="button" data-action="new-ingredient-lot" ${ingredientLotSubmitting ? 'disabled' : ''}>Очистить форму</button></section>${ingredientLotsMessage ? `<p class="page-message">${ingredientLotsMessage}</p>` : ''}${ingredientLotsRefreshWarning ? `<p class="page-message warning-message">${ingredientLotsRefreshWarning}</p>` : ''}${ingredientLotsError ? `<p class="page-message error-message">${ingredientLotsError}</p>` : ''}${ingredientLotForm()}${ingredientLotList()}</div>`;
 }
 
 function ingredientLotForm() {
@@ -2230,7 +2230,7 @@ function ingredientLotForm() {
 
 function ingredientLotList() {
   if (ingredientLotsState.lots.length === 0) return `<section class="card empty-card"><h2>Пока нет партий компонентов</h2><p>Создайте партию, чтобы указать поставщика, срок годности и цену закупки.</p><p class="next-step">Остаток считается по движениям склада. Чтобы добавить количество, используйте движение склада — это будет отдельный шаг.</p></section>`;
-  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Приходы и партии</h2><div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Партия</th><th>Поставщик</th><th>Ед. учета</th><th>Цена за единицу</th><th>Плотность</th><th>Дата покупки</th><th>Срок годности</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${ingredientLotsState.lots.map((lot) => `<tr><td><strong>${escapeHtml(lotIngredientName(lot.ingredient_id))}</strong></td><td>${escapeHtml(lot.lot_code || 'Без номера')}<small>${escapeHtml(lot.notes || '')}</small></td><td>${escapeHtml(lot.supplier_name || 'Не указан')}</td><td>${unitLabel(lot.unit)}</td><td>${lot.unit_cost ? escapeHtml(lot.unit_cost) : 'Не указана'}</td><td>${lot.density_g_per_ml ? `${escapeHtml(lot.density_g_per_ml)} г/мл` : 'Не указана'}</td><td>${formatDate(lot.purchased_at)}</td><td>${formatDate(lot.expires_at)}</td><td><span class="pill ${lotStatusClass(lot)}">${lotStatusLabel(lot)}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient-lot" data-id="${lot.id}">Изменить</button>${lot.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient-lot" data-id="${lot.id}">Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div><p class="next-step">Остаток партии не редактируется в этой таблице: он будет считаться по движениям склада.</p></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Приходы и партии</h2><div class="table-wrap"><table><thead><tr><th>Компонент</th><th>Партия</th><th>Поставщик</th><th>Ед. учета</th><th>Цена за единицу</th><th>Плотность</th><th>Дата покупки</th><th>Срок годности</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${ingredientLotsState.lots.map((lot) => `<tr><td><strong>${escapeHtml(lotIngredientName(lot.ingredient_id))}</strong></td><td>${escapeHtml(lot.lot_code || 'Без номера')}<small>${escapeHtml(lot.notes || '')}</small></td><td>${escapeHtml(lot.supplier_name || 'Не указан')}</td><td>${unitLabel(lot.unit)}</td><td>${lot.unit_cost ? escapeHtml(lot.unit_cost) : 'Не указана'}</td><td>${lot.density_g_per_ml ? `${escapeHtml(lot.density_g_per_ml)} г/мл` : 'Не указана'}</td><td>${formatDate(lot.purchased_at)}</td><td>${formatDate(lot.expires_at)}</td><td><span class="pill ${lotStatusClass(lot)}">${lotStatusLabel(lot)}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-ingredient-lot" data-id="${lot.id}" ${ingredientLotSubmitting ? 'disabled' : ''}>Изменить</button>${lot.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-ingredient-lot" data-id="${lot.id}" ${ingredientLotSubmitting ? 'disabled' : ''}>Деактивировать</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div><p class="next-step">Остаток партии не редактируется в этой таблице: он будет считаться по движениям склада.</p></section>`;
 }
 
 
@@ -2658,11 +2658,11 @@ function reenableIngredientSubmitButtons() {
 function disableIngredientLotFormButtons() {
   const form = document.querySelector<HTMLFormElement>('[data-form="ingredient-lot"]');
   if (form) form.querySelectorAll('button').forEach((b) => b.setAttribute('disabled', ''));
-  document.querySelector<HTMLButtonElement>('[data-action="new-ingredient-lot"]')?.setAttribute('disabled', '');
+  document.querySelectorAll<HTMLButtonElement>('[data-action="new-ingredient-lot"], [data-action="edit-ingredient-lot"], [data-action="deactivate-ingredient-lot"]').forEach((b) => b.setAttribute('disabled', ''));
   form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.replaceChildren(document.createTextNode('Сохраняем…'));
 }
 function reenableIngredientLotSubmitButtons() {
-  document.querySelector<HTMLButtonElement>('[data-action="new-ingredient-lot"]')?.removeAttribute('disabled');
+  document.querySelectorAll<HTMLButtonElement>('[data-action="new-ingredient-lot"], [data-action="edit-ingredient-lot"], [data-action="deactivate-ingredient-lot"]').forEach((b) => b.removeAttribute('disabled'));
   const form = document.querySelector<HTMLFormElement>('[data-form="ingredient-lot"]');
   if (form) form.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled'));
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
@@ -3172,6 +3172,7 @@ function submitIngredientLotForm(event: SubmitEvent) {
   const token = ++ingredientLotSubmitToken;
   ingredientLotSubmitting = true;
   ingredientLotValidation = emptyFormValidationState();
+  applyValidationToIngredientLotForm(ingredientLotValidation);
   ingredientLotsMessage = '';
   ingredientLotsError = '';
   ingredientLotsRefreshWarning = '';
@@ -3216,6 +3217,7 @@ function submitIngredientLotForm(event: SubmitEvent) {
   });
 }
 function deactivateIngredientLot(id: number) {
+  if (ingredientLotSubmitting) return;
   const lot = ingredientLotsState.lots.find((item) => item.id === id);
   if (!lot || !window.confirm(`Деактивировать партию «${lot.lot_code || lotIngredientName(lot.ingredient_id)}»? Она не будет удалена из истории.`)) return;
   deactivateIngredientLotRequest(id).then(() => { ingredientLotsMessage = 'Партия деактивирована. История склада не изменялась.'; ingredientLotsError = ''; return getIngredientLots(); }).then((response) => { ingredientLotsState.lots = response.lots; ingredientLotsStatus = 'ready'; render(); }).catch(() => { ingredientLotsMessage = ''; ingredientLotsError = 'Не удалось деактивировать партию. Попробуйте еще раз.'; ingredientLotsStatus = 'ready'; render(); });

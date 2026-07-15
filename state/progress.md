@@ -876,3 +876,10 @@ Import CSV/XLSX draft backend foundation.
 - `/stock-movements` and all other A3 candidate forms remain pending.
 - Backend runtime behavior, schemas, migrations, dependencies, inventory calculations, and stock movement behavior are not intentionally changed.
 - Slice A3.1 remains IN PROGRESS — implementation under review until PR review and accepted smoke evidence.
+
+## Slice A3.1 correction — validation lifecycle under review
+
+- Corrected Ingredient Lot submit start so empty validation is applied through the targeted updater before the request, clearing stale summary, inline errors, and validation-owned ARIA without a global render.
+- Completed in-flight action guards for submit, cancel/clear, row edit, and row deactivate actions; deactivation now also has a handler-level guard during create/update.
+- Verification: frontend parser tests, targeted validation DOM tests, frontend build, concurrent frontend tests, focused Ingredient Lot backend tests, and isolated local API smoke passed.
+- Browser smoke remains pending reviewer execution. Slice A3.1 remains IN PROGRESS — correction under review.

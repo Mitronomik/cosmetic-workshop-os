@@ -418,3 +418,59 @@ test('ingredient lot wrapper applies inline errors, summary errors, escaping, an
   assert.equal(mockDoc.activeElement, orig);
   assert.equal(orig.selectionStart, 1);
 });
+
+test('empty ingredient lot validation clears DOM state without replacing focused input', () => {
+  reset();
+
+  const clientForm = mkForm('client');
+  addField(clientForm, 'full_name');
+  mockDoc.body.appendChild(clientForm);
+
+  const ingredientForm = mkForm('ingredient');
+  addField(ingredientForm, 'name');
+  mockDoc.body.appendChild(ingredientForm);
+
+  const lotForm = mkForm('ingredient-lot');
+  const density = addField(lotForm, 'density_g_per_ml');
+  addField(lotForm, 'expires_at');
+  mockDoc.body.appendChild(lotForm);
+
+  density.value = '0.5';
+  density.focus();
+  density.setSelectionRange(1, 3);
+  const original = density;
+
+  for (let i = 0; i < 2; i += 1) {
+    mod.applyValidationToIngredientLotForm({
+      fieldErrors: {
+        density_g_per_ml: ['Плотность, г/мл: Укажите значение больше нуля.'],
+        expires_at: ['Срок годности: Проверьте дату.'],
+      },
+      formErrors: ['metadata.unit_cost: Проверьте значение.'],
+    });
+
+    assert.equal(lotForm.querySelectorAll('.field-error').length, 2);
+    assert.ok(lotForm.querySelector('.form-error-summary'));
+    assert.equal(original.getAttribute('aria-invalid'), 'true');
+    assert.equal(original.getAttribute('aria-describedby'), 'ingredient-lot-density_g_per_ml-error');
+
+    mod.applyValidationToIngredientLotForm({ fieldErrors: {}, formErrors: [] });
+
+    assert.equal(lotForm.querySelector('.form-error-summary'), null);
+    assert.equal(lotForm.querySelectorAll('.field-error').length, 0);
+    assert.equal(byId(lotForm, 'ingredient-lot-density_g_per_ml-error'), null);
+    assert.equal(byId(lotForm, 'ingredient-lot-expires_at-error'), null);
+    assert.equal(original.hasAttribute('aria-invalid'), false);
+    assert.equal(original.hasAttribute('aria-describedby'), false);
+    assert.equal(original.isConnected, true);
+    assert.equal(lotForm.querySelector('[name="density_g_per_ml"]'), original);
+    assert.equal(mockDoc.activeElement, original);
+    assert.equal(original.selectionStart, 1);
+    assert.equal(original.selectionEnd, 3);
+  }
+
+  assert.equal(clientForm.querySelector('.form-error-summary'), null);
+  assert.equal(clientForm.querySelectorAll('.field-error').length, 0);
+  assert.equal(ingredientForm.querySelector('.form-error-summary'), null);
+  assert.equal(ingredientForm.querySelectorAll('.field-error').length, 0);
+});
