@@ -349,3 +349,72 @@ test('caret advances naturally after typed characters', () => {
     assert.equal(orig.selectionStart, orig.value.length);
   }
 });
+
+test('ingredient lot wrapper applies inline errors, summary errors, escaping, and stable ARIA', () => {
+  reset();
+
+  const clientForm = mkForm('client');
+  addField(clientForm, 'full_name');
+  mockDoc.body.appendChild(clientForm);
+
+  const ingredientForm = mkForm('ingredient');
+  addField(ingredientForm, 'name');
+  mockDoc.body.appendChild(ingredientForm);
+
+  const lotForm = mkForm('ingredient-lot');
+  const inputs = {};
+  for (const f of ['ingredient_id', 'lot_code', 'supplier_name', 'purchased_at', 'expires_at', 'unit', 'unit_cost', 'total_cost', 'density_g_per_ml', 'notes']) {
+    inputs[f] = addField(lotForm, f, f === 'ingredient_id' || f === 'unit');
+  }
+  mockDoc.body.appendChild(lotForm);
+
+  const orig = inputs['density_g_per_ml'];
+  orig.value = '0<script>alert(1)</script>';
+  orig.focus();
+  orig.setSelectionRange(1, 1);
+
+  mod.applyValidationToIngredientLotForm({
+    fieldErrors: {
+      density_g_per_ml: ['Плотность, г/мл: <img src=x onerror=alert(1)> Укажите значение больше нуля.'],
+      expires_at: ['Срок годности: Дата не может быть раньше даты покупки.'],
+    },
+    formErrors: ['metadata.unit_cost: Проверьте импортированные данные.', 'unknown_field: Проверьте форму.'],
+  });
+
+  assert.equal(mockDoc.activeElement, orig);
+  assert.equal(orig.isConnected, true);
+  assert.equal(orig.selectionStart, 1);
+  assert.equal(orig.selectionEnd, 1);
+
+  const densityError = byId(lotForm, 'ingredient-lot-density_g_per_ml-error');
+  assert.ok(densityError);
+  assert.ok(densityError.textContent.includes('<img src=x onerror=alert(1)>'));
+  assert.equal(densityError.children[0].tag, 'p');
+  assert.equal(densityError.children[0].children.length, 0, 'backend HTML stays text-only');
+  assert.equal(orig.getAttribute('aria-invalid'), 'true');
+  assert.equal(orig.getAttribute('aria-describedby'), 'ingredient-lot-density_g_per_ml-error');
+
+  const summary = lotForm.querySelector('.form-error-summary');
+  assert.ok(summary);
+  assert.ok(summary.textContent.includes('metadata.unit_cost'));
+  assert.ok(summary.textContent.includes('unknown_field'));
+  assert.equal(byId(lotForm, 'ingredient-lot-unit_cost-error'), null, 'nested path is not guessed as a known field');
+
+  assert.equal(clientForm.querySelector('.form-error-summary'), null);
+  assert.equal(ingredientForm.querySelector('.form-error-summary'), null);
+
+  mod.applyValidationToIngredientLotForm({
+    fieldErrors: {
+      expires_at: ['Срок годности: Дата не может быть раньше даты покупки.'],
+    },
+    formErrors: ['metadata.unit_cost: Проверьте импортированные данные.'],
+  });
+
+  assert.equal(byId(lotForm, 'ingredient-lot-density_g_per_ml-error'), null);
+  assert.equal(orig.hasAttribute('aria-invalid'), false);
+  assert.equal(orig.hasAttribute('aria-describedby'), false);
+  assert.ok(byId(lotForm, 'ingredient-lot-expires_at-error'), 'unrelated field error remains');
+  assert.equal(lotForm.querySelectorAll('.field-error').length, 1, 'repeated apply does not duplicate error elements');
+  assert.equal(mockDoc.activeElement, orig);
+  assert.equal(orig.selectionStart, 1);
+});

@@ -1,24 +1,20 @@
-# Current Focus — prepare Slice A3
+# Current Focus — Slice A3.1 Ingredient Lots structured validation
 
-Slice A2 structured form validation is DONE and verified in PR #114.
+PR #114 is merged. Slice A2 structured form validation for `/clients` and `/ingredients` is complete.
 
-Verified runtime head:
+Current focused implementation slice: Slice A3.1 — migrate only `/ingredient-lots` create/edit to the structured frontend validation contract.
 
-`8eb5d0c2c116c83d4162d10895268375e0bc1e1e`
+Scope for this branch:
 
-PR #114 remains open only for final state closure and merge.
+- `/ingredient-lots` create form structured validation;
+- `/ingredient-lots` edit form structured validation;
+- explicit Ingredient Lot field-label allow-list;
+- inline field errors, form-level summary, focus/caret preservation, stale-response and duplicate-submit guards;
+- truthful separation of mutation success from post-save list-refresh failure;
+- focused frontend tests and browser smoke evidence.
 
-Completed A2 scope:
+Explicit non-goal: `/stock-movements` is not part of A3.1 and must remain unchanged.
 
-- structured validation for `/clients` create/edit;
-- structured validation for `/ingredients` create/edit;
-- backend remains the validation source of truth;
-- inline errors and form summaries use understandable Russian text;
-- focus, caret and original input DOM identity are preserved;
-- mutation failures are separated from post-save refresh failures;
-- stale request contexts and duplicate submits are guarded;
-- frontend validation tests remain dependency-free.
+Other A3 candidate forms remain pending and must be handled by separate focused sub-slices.
 
-Slice A3 is READY, but no A3 implementation is included in PR #114.
-
-The next task must select one focused A3 validation-migration sub-slice. Do not migrate every remaining form in one PR.
+Slice A3.1 status: IN PROGRESS — implementation under review.

@@ -244,3 +244,13 @@ The final frontend test setup is dependency-free. The unused `linkedom` dependen
 PR #114 contains no Slice A3 implementation.
 
 Slice A3 is READY and must begin as a new focused task only after PR #114 is merged.
+
+## Slice A3.1 handoff — Ingredient Lots structured validation
+
+Implemented scope is limited to `/ingredient-lots` create/edit validation migration. The form now uses the shared structured validation parser, an explicit Ingredient Lot field allow-list, inline ARIA-connected field errors, form-level summaries for unknown or nested paths, targeted DOM updates, draft preservation, duplicate-submit protection, guarded context switches, stale-response checks, and separate success-versus-refresh-warning feedback.
+
+Preserved contracts: backend validation remains the source of truth; no backend runtime, schema, migration, dependency, inventory calculation, stock movement, route, cloud, import, production, or historical-data behavior is intentionally changed. `/stock-movements` remains pending and unchanged.
+
+Tests run for this implementation should include frontend parser tests, targeted validation DOM tests, frontend build, focused Ingredient Lot backend tests, required repository hygiene checks, and focused browser smoke on an isolated temporary database.
+
+Remaining A3 sub-slices include `/stock-movements` and other critical forms not covered by A3.1. Slice A3.1 remains IN PROGRESS — implementation under review until accepted review and smoke evidence.

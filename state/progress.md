@@ -868,3 +868,11 @@ Import CSV/XLSX draft backend foundation.
 - No backend runtime, schema, migration, domain, inventory, production, import, backup, export or navigation behavior changed.
 - Slice A2 is DONE and awaiting PR #114 merge.
 - Slice A3 is READY for a separate focused sub-slice after PR #114 is merged.
+
+## Slice A3.1 Ingredient Lots structured validation — implementation under review
+
+- Began the first Slice A3 sub-slice after PR #114 merged.
+- Scope is limited to `/ingredient-lots` create/edit structured validation.
+- `/stock-movements` and all other A3 candidate forms remain pending.
+- Backend runtime behavior, schemas, migrations, dependencies, inventory calculations, and stock movement behavior are not intentionally changed.
+- Slice A3.1 remains IN PROGRESS — implementation under review until PR review and accepted smoke evidence.

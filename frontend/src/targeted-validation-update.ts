@@ -12,6 +12,12 @@ export function applyValidationToIngredientForm(validation: FormValidationState)
   applyValidationToForm(form, validation, 'ingredient', 'Проверьте форму компонента');
 }
 
+export function applyValidationToIngredientLotForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="ingredient-lot"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'ingredient-lot', 'Проверьте форму партии');
+}
+
 function applyValidationToForm(
   form: HTMLFormElement,
   validation: FormValidationState,
