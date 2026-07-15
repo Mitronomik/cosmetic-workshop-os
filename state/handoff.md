@@ -212,3 +212,35 @@ No backend, API, schema, migration, CSS, dependency, lockfile, demo install/clea
 - No backend, CSS, dependency, migration, route, request, form, calculation, production, inventory, import Apply, file-access, or historical-data contract was changed by this final state update.
 - Slice A1 is DONE.
 - Slice A2 structured form validation is READY and is the next implementation slice.
+
+## Slice A2 handoff — structured form validation foundation
+
+This branch implements PR #114 scope for structured form validation on Clients and Ingredients only. The shared parser lives in `frontend/src/form-validation.ts` and supports existing backend structured error payloads while assigning inline errors only through explicit route-specific allow-lists. `/clients` create/edit maps full_name, phone, email, address, birthday, skin_notes, allergy_notes, preference_notes, contraindication_notes, and notes. `/ingredients` create/edit maps name, category, default_unit, density_g_per_ml, notes, inci_name, supplier_hint, allergen_note, and usage_note.
+
+Validation lifecycle is scoped to the affected form: old validation is cleared before submit, after successful submit, when cancelling/resetting, when switching edited records, and per-field when that field changes. Rejected submits preserve entered form values. Submit buttons remain disabled while their mutation is in flight, and stale responses are ignored with request tokens.
+
+No backend runtime behavior was changed. No migrations, dependencies, lockfiles, navigation routes, recipe/inventory/production/import/backup/export behavior, or broad form migration were added. Slice A3 remains blocked until A2 is reviewed and accepted.
+
+## Slice A2 correction handoff — PR #114
+
+Correction scope stays inside Clients and Ingredients validation. Field-level stale validation is now cleared by updating the affected control/error DOM only; the application is not fully re-rendered on each corrected keystroke. In-flight create/edit contexts are guarded by disabled/guarded cancel and record-switch actions plus request-token checks. Mutation failures still show structured validation, while successful mutations followed by list-refresh failures keep truthful success feedback and show a separate refresh warning that directs the user to reload the list instead of repeating the mutation.
+
+The parser now maps only exact known fields or fields with approved transport prefixes (`body`, `query`, `path`). Nested application paths such as `profile.email` or `metadata.name` remain form-level errors. A2 remains IN PROGRESS — correction under review; A3 remains BLOCKED A2.
+
+## Slice A2 final handoff — PR #114
+
+Slice A2 is complete and verified.
+
+Verified runtime head:
+
+`8eb5d0c2c116c83d4162d10895268375e0bc1e1e`
+
+The reusable structured-validation foundation is implemented for Clients and Ingredients create/edit forms.
+
+Field errors, form summaries and ARIA attributes are updated without replacing the focused input node. Mutation failures remain separate from post-save refresh failures, stale request contexts are guarded, and backend validation remains the source of truth.
+
+The final frontend test setup is dependency-free. The unused `linkedom` dependency was removed. Parser and targeted DOM tests use separate generated directories and pass when executed concurrently.
+
+PR #114 contains no Slice A3 implementation.
+
+Slice A3 is READY and must begin as a new focused task only after PR #114 is merged.

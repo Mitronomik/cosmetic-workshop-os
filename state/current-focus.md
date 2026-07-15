@@ -1,26 +1,24 @@
-# Current Focus — Slice A2 structured form validation
+# Current Focus — prepare Slice A3
 
-Slice A1 implementation and verification are complete in PR #113.
+Slice A2 structured form validation is DONE and verified in PR #114.
 
-Verified runtime baseline:
+Verified runtime head:
 
-- PR: #113
-- runtime SHA: `040c90fa781edea8484eb84595745c3a3aaf5eaf`
-- deterministic browser checks: 53/53 PASS
-- targeted offline/recovery retest: PASS
-- JavaScript console errors: 0
-- real user data used: no
+`8eb5d0c2c116c83d4162d10895268375e0bc1e1e`
 
-The next allowed implementation slice is Slice A2 — structured form validation foundation.
+PR #114 remains open only for final state closure and merge.
 
-Use `docs/implementation-plan.md` as the scope contract for A2.
+Completed A2 scope:
 
-A2 must remain a focused implementation slice:
+- structured validation for `/clients` create/edit;
+- structured validation for `/ingredients` create/edit;
+- backend remains the validation source of truth;
+- inline errors and form summaries use understandable Russian text;
+- focus, caret and original input DOM identity are preserved;
+- mutation failures are separated from post-save refresh failures;
+- stale request contexts and duplicate submits are guarded;
+- frontend validation tests remain dependency-free.
 
-- preserve backend-owned business rules;
-- do not introduce a broad frontend refactor;
-- do not change unrelated routes or modules;
-- require tests and risk-based browser smoke;
-- do not silently change historical data or calculation behavior.
+Slice A3 is READY, but no A3 implementation is included in PR #114.
 
-No additional Slice A1 runtime work is currently required.
+The next task must select one focused A3 validation-migration sub-slice. Do not migrate every remaining form in one PR.

@@ -321,3 +321,14 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
 @media (max-width: 520px) {
   .feedback-message { grid-template-columns: 1fr; padding: 13px 14px; }
 }
+
+.form-error-summary { background: #fde8e2; border: 1px solid #efc0b7; border-radius: 16px; color: #9a3526; display: grid; gap: 8px; padding: 13px 16px; }
+.form-error-summary strong { color: #7f271c; }
+.form-error-summary ul { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
+.field-error { color: #9a3526; display: grid; font-size: 13px; font-weight: 800; gap: 4px; line-height: 1.35; }
+.field-error p { color: inherit; font-size: inherit; line-height: inherit; margin: 0; }
+.form-grid input[aria-invalid="true"], .form-grid select[aria-invalid="true"], .form-grid textarea[aria-invalid="true"] { border-color: #d98274; box-shadow: 0 0 0 3px rgba(217, 130, 116, .18); }
+.form-grid input[aria-invalid="true"]:focus-visible, .form-grid select[aria-invalid="true"]:focus-visible, .form-grid textarea[aria-invalid="true"]:focus-visible { outline: 3px solid rgba(154, 53, 38, .32); outline-offset: 2px; }
+@media (max-width: 520px) { .form-error-summary { padding: 12px 13px; } .field-error { font-size: 12px; } }
+.form-field { display: grid; gap: 7px; }
+.warning-message { background: #fff3d4; border-color: #efd593; color: #7a5b18; }
