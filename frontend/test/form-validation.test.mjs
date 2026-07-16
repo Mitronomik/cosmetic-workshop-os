@@ -67,3 +67,11 @@ test('keeps multiple errors for one field', () => {
 test('does not throw for unexpected payload', () => {
   assert.doesNotThrow(() => normalizeBackendValidation({ detail: [{ loc: [1, null, 'email'], msg: 7 }, { x: Symbol('x') }] }, labels));
 });
+
+test('maps explicitly approved indexed recipe fields only', () => {
+  const recipeLabels = { 'ingredients.0.amount_value': 'Строка 1: количество', title: 'Заголовок версии' };
+  const state = normalizeBackendValidation({ detail: [{ field: 'ingredients.0.amount_value', message: 'Укажите положительное количество.' }, { loc: ['body', 'ingredients', 0, 'amount_unit'], msg: 'Единица неверная.' }, { loc: ['body', 'title'], msg: 'Проверьте заголовок.' }] }, recipeLabels);
+  assert.deepEqual(state.fieldErrors['ingredients.0.amount_value'], ['Строка 1: количество: Укажите положительное количество.']);
+  assert.deepEqual(state.fieldErrors.title, ['Заголовок версии: Проверьте заголовок.']);
+  assert.deepEqual(state.formErrors, ['Единица неверная.']);
+});

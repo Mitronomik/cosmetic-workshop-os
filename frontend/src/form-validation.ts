@@ -101,6 +101,8 @@ function resolveKnownField(field: string | null, labels: FieldLabels): string | 
   const parts = field.split('.').filter(Boolean);
   if (parts.length === 0) return null;
   while (parts.length > 0 && TRANSPORT_PREFIXES.has(parts[0])) parts.shift();
+  const exact = parts.join('.');
+  if (Object.prototype.hasOwnProperty.call(labels, exact)) return exact;
   if (parts.length !== 1) return null;
   const candidate = parts[0];
   return Object.prototype.hasOwnProperty.call(labels, candidate) ? candidate : null;

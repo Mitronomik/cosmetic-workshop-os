@@ -1,23 +1,18 @@
-# Current Focus — Slice A3.2 Inventory structured validation closure
+# Current Focus — Slice A3.3 Recipe structured validation
 
-PR #114 is merged. Slice A2 structured form validation for `/clients` and `/ingredients` is complete.
+Current baseline: PR #116 / Slice A3.2 is merged at merge commit `79286f076292645b3e83dfedfccb366dee1777f6`.
 
-PR #115 / Slice A3.1 Ingredient Lots structured validation is merged into main at merge commit `8b3ea5f7ab2b880d901250d111f6f5dca369c4b4`.
+A3.2 is closed and browser-smoke verified for the inventory forms it covered. Slice A3 remains in progress because recipe and recipe-version validation are still being completed in focused sub-slices.
 
-Current focused implementation slice: Slice A3.2 — migrate the remaining existing inventory forms that are present in the frontend:
+Current focused implementation slice: Slice A3.3 — structured validation for Recipe Template creation and immutable Recipe Version creation on `/recipes`.
 
-- `/stock-movements` manual ingredient-lot Stock Movement create form;
-- `/packaging-items` Packaging Item create form;
-- `/packaging-items` Packaging Item edit form.
+Scope for A3.3:
+- migrate Recipe Template create to the shared structured-validation contract;
+- migrate immutable Recipe Version create to the same contract;
+- map only approved recipe field paths, including explicit indexed ingredient paths such as `ingredients.0.amount_value`;
+- keep unknown nested paths in the form summary;
+- preserve draft values, focus, caret, and DOM node identity after rejected submits;
+- prevent duplicate template/version POSTs and guard conflicting recipe-page actions while a mutation or required refresh is active;
+- distinguish save failure from post-save refresh failure.
 
-Scope constraints for PR116:
-
-- reuse the shared structured validation parser and targeted DOM updater from PR #114/#115;
-- keep backend inventory rules authoritative;
-- keep all stock quantity changes flowing through existing stock-movement APIs;
-- do not add migrations, new inventory architecture, direct packaging stock edits, or historical Stock Movement edit/delete actions;
-- record that the current frontend Stock Movement route supports ingredient-lot movements only, while packaging movement APIs exist separately and remain follow-up UI work.
-
-Slice A3 status: IN PROGRESS.
-Slice A3.2 status: implementation corrected in PR116; merge pending. Final correction keeps Packaging locks active through post-save refresh, terminates Stock refresh failures honestly, and preserves Packaging write mutual exclusion; browser smoke remains reviewer-required unless run separately.
-Recipe and recipe-version structured validation remain a later separate slice.
+Recipe Version edit/delete remains prohibited. Existing saved recipe versions must remain immutable; changes are made only by creating a new version through the existing backend API.

@@ -259,3 +259,36 @@ def test_recipe_template_catalog_assignments_are_visible_after_reload_and_deacti
     assert listed.catalog_tag_ids == [tag_1.id, tag_2.id]
     assert loaded.catalog_tag_ids == [tag_1.id, tag_2.id]
     assert deactivated.catalog_tag_ids == [tag_1.id, tag_2.id]
+
+def test_recipe_version_api_preserves_indexed_line_validation_and_writes_nothing(monkeypatch, tmp_path):
+    from fastapi import HTTPException
+    from app.db.config import DATABASE_PATH_ENV
+    from app.api.recipes import create_template as api_create_template, create_version as api_create_version
+    from app.schemas.recipes import RecipeIngredientCreateRequest, RecipeTemplateCreateRequest, RecipeVersionCreateRequest
+
+    database_path = tmp_path / "api-recipes-indexed-validation.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    initialize_database(DatabaseConfig(path=database_path))
+    ing = IngredientService().create_ingredient(IngredientDraft.create(name="Oil", category="oil", default_unit="g"))
+    template_id = api_create_template(RecipeTemplateCreateRequest(name="Cream")).id
+
+    before_versions = scalar(DatabaseConfig(path=database_path), "SELECT count(*) FROM recipe_versions")
+    before_lines = scalar(DatabaseConfig(path=database_path), "SELECT count(*) FROM recipe_ingredients")
+    before_audit = scalar(DatabaseConfig(path=database_path), "SELECT count(*) FROM audit_logs")
+
+    with pytest.raises(HTTPException) as exc_info:
+        api_create_version(
+            template_id,
+            RecipeVersionCreateRequest(
+                ingredients=[
+                    RecipeIngredientCreateRequest(ingredient_id=ing.id, position=1, amount_value="10", amount_unit="percent"),
+                    RecipeIngredientCreateRequest(ingredient_id=ing.id, position=2, amount_value="0", amount_unit="percent"),
+                ]
+            ),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["field"] == "ingredients.1.amount_value"
+    assert scalar(DatabaseConfig(path=database_path), "SELECT count(*) FROM recipe_versions") == before_versions
+    assert scalar(DatabaseConfig(path=database_path), "SELECT count(*) FROM recipe_ingredients") == before_lines
+    assert scalar(DatabaseConfig(path=database_path), "SELECT count(*) FROM audit_logs") == before_audit

@@ -115,7 +115,7 @@ class MockNode {
       const [, a, v] = m;
       if (v !== undefined) {
         if (a === 'id') return this._id === v;
-        return this.attrs[a] === v;
+        return this.attrs[a] === v.replace(/\\/g, '');
       }
       if (a === 'id') return this._id !== null;
       return a in this.attrs;
@@ -901,4 +901,32 @@ test('source guards cover packaging adjacent actions and stock detail stale rend
   assert.ok(loadDetail.includes('if (!stockMovementSubmitting) render()'));
   const stockDisable = mainSourceFunction('disableStockMovementSubmitControls');
   assert.ok(stockDisable.includes('mutationDisabled(document.querySelector<HTMLSelectElement>(\'[data-action="select-stock-lot"]\'))'));
+});
+
+test('recipe wrappers map template and indexed version errors without replacing focused input', () => {
+  reset();
+  const templateForm = mkForm('recipe-template');
+  const name = addField(templateForm, 'name');
+  mockDoc.body.appendChild(templateForm);
+  name.focus();
+  name.setSelectionRange(1, 3);
+  mod.applyValidationToRecipeTemplateForm({ fieldErrors: { name: ['Название рецепта обязательно.'] }, formErrors: ['Проверьте рецепт.'] });
+  assert.equal(mockDoc.activeElement, name);
+  assert.equal(name.selectionStart, 1);
+  assert.equal(name.getAttribute('aria-invalid'), 'true');
+  assert.equal(byId(templateForm, 'recipe-template-name-error').textContent, 'Название рецепта обязательно.');
+
+  const versionForm = mkForm('recipe-version');
+  const first = addField(versionForm, 'ingredients.0.amount_value');
+  const second = addField(versionForm, 'ingredients.1.amount_unit', true);
+  mockDoc.body.appendChild(versionForm);
+  first.focus();
+  first.setSelectionRange(0, 5);
+  mod.applyValidationToRecipeVersionForm({ fieldErrors: { 'ingredients.0.amount_value': ['Строка 1: количество: больше нуля.'], 'ingredients.1.amount_unit': ['Строка 2: единица: выберите единицу.'] }, formErrors: ['Неизвестное поле осталось в сводке.'] });
+  assert.equal(mockDoc.activeElement, first);
+  assert.equal(first.selectionEnd, 5);
+  assert.equal(first.getAttribute('aria-describedby'), 'recipe-version-ingredients.0.amount_value-error');
+  assert.equal(second.getAttribute('aria-describedby'), 'recipe-version-ingredients.1.amount_unit-error');
+  assert.equal(byId(versionForm, 'recipe-version-ingredients.0.amount_value-error').textContent, 'Строка 1: количество: больше нуля.');
+  assert.equal(byId(versionForm, 'recipe-version-ingredients.1.amount_unit-error').textContent, 'Строка 2: единица: выберите единицу.');
 });

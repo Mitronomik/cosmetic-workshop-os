@@ -35,7 +35,7 @@ PR99-PR101 were documentation and governance changes only: the project UI/UX con
 
 Slice A1 browser smoke passed on runtime commit `040c90fa781edea8484eb84595745c3a3aaf5eaf`: 53 of 53 checks passed, including the targeted offline and recovery retest.
 
-PR #114 is merged. Slice A2 structured form validation is complete. PR #115 / Slice A3.1 Ingredient Lots structured validation is merged at `8b3ea5f7ab2b880d901250d111f6f5dca369c4b4`; Slice A3.2 inventory structured validation closure is the current focused implementation slice in PR116, with merge pending.
+PR #116 / Slice A3.2 inventory structured validation closure is merged at `79286f076292645b3e83dfedfccb366dee1777f6`, closed, and browser-smoke verified. Slice A3.3 recipe structured validation is the current focused implementation slice; Recipe Version edit/delete remains prohibited and Slice A3 remains in progress.
 
 Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, and unrelated business mutations out of scope unless explicitly approved.
 
