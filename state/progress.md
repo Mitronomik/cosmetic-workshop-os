@@ -883,3 +883,15 @@ Import CSV/XLSX draft backend foundation.
 - Completed in-flight action guards for submit, cancel/clear, row edit, and row deactivate actions; deactivation now also has a handler-level guard during create/update.
 - Verification: frontend parser tests, targeted validation DOM tests, frontend build, concurrent frontend tests, focused Ingredient Lot backend tests, and isolated local API smoke passed.
 - Browser smoke remains pending reviewer execution. Slice A3.1 remains IN PROGRESS — correction under review.
+
+## Slice A3.2 Inventory structured validation closure — PR116 implementation
+
+- Baseline includes merged PR #115 / A3.1 at merge commit `8b3ea5f7ab2b880d901250d111f6f5dca369c4b4`.
+- Migrated existing frontend inventory forms only: `/stock-movements` manual ingredient-lot movement create, `/packaging-items` Packaging Item create, and `/packaging-items` Packaging Item edit.
+- Reused the shared structured validation parser and targeted validation DOM updater; added Stock Movement and Packaging Item wrappers, explicit field-label allow-lists, inline errors, form summaries, ARIA attributes, draft preservation, duplicate-submit guards, stale-response tokens, and success-versus-refresh-warning separation.
+- No backend code, schemas, migrations, persistent models, dependencies, direct packaging stock edits, historical Stock Movement edit/delete actions, or new inventory architecture were added.
+- Current frontend `/stock-movements` supports ingredient-lot movements only. Backend packaging movement APIs exist, but a packaging movement UI is not implemented in PR116 and remains follow-up work.
+- Verification completed in this branch: frontend form-validation tests (11/11), targeted validation DOM tests (8/8), concurrent frontend validation tests, frontend build, focused backend inventory tests (72/72), and isolated API smoke for packaging stock movement rejection/balance safety.
+- Browser/UI smoke was not run in this environment; reviewer smoke remains required before merge.
+- Slice A3 remains IN PROGRESS after A3.2; recipe and recipe-version validation remain a later separate slice.
+- A3.2 implementation complete in PR116; merge pending.

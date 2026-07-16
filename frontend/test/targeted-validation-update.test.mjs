@@ -474,3 +474,86 @@ test('empty ingredient lot validation clears DOM state without replacing focused
   assert.equal(ingredientForm.querySelector('.form-error-summary'), null);
   assert.equal(ingredientForm.querySelectorAll('.field-error').length, 0);
 });
+
+test('stock movement wrapper renders field and summary errors without replacing controls', () => {
+  reset();
+  const form = mkForm('stock-movement');
+  const controls = {};
+  for (const f of ['ingredient_lot_id', 'movement_type', 'quantity', 'unit', 'occurred_at', 'source', 'reason', 'note']) {
+    controls[f] = addField(form, f, f === 'movement_type' || f === 'source');
+  }
+  mockDoc.body.appendChild(form);
+  const qty = controls.quantity;
+  qty.value = '0<script>alert(1)</script>';
+  qty.focus();
+  qty.setSelectionRange(1, 1);
+
+  mod.applyValidationToStockMovementForm({
+    fieldErrors: {
+      quantity: ['Количество: <b>Введите количество больше нуля.</b>'],
+      reason: ['Причина: Укажите причину ручной корректировки.'],
+    },
+    formErrors: ['items.0.quantity: Недостаточно остатка для такого списания.'],
+  });
+
+  assert.equal(mockDoc.activeElement, qty);
+  assert.equal(form.querySelector('[name="quantity"]'), qty);
+  assert.equal(qty.selectionStart, 1);
+  const quantityError = byId(form, 'stock-movement-quantity-error');
+  assert.ok(quantityError);
+  assert.ok(quantityError.textContent.includes('<b>Введите количество больше нуля.</b>'));
+  assert.equal(quantityError.children[0].children.length, 0, 'backend HTML remains text');
+  assert.equal(qty.getAttribute('aria-invalid'), 'true');
+  assert.equal(qty.getAttribute('aria-describedby'), 'stock-movement-quantity-error');
+  assert.ok(form.querySelector('.form-error-summary').textContent.includes('items.0.quantity'));
+
+  mod.applyValidationToStockMovementForm({ fieldErrors: { reason: ['Причина: Укажите причину.'] }, formErrors: [] });
+  assert.equal(byId(form, 'stock-movement-quantity-error'), null);
+  assert.equal(qty.hasAttribute('aria-invalid'), false);
+  assert.ok(byId(form, 'stock-movement-reason-error'));
+  assert.equal(form.querySelectorAll('.field-error').length, 1);
+  assert.equal(mockDoc.activeElement, qty);
+});
+
+test('packaging item wrapper keeps edit input identity and clears stale validation', () => {
+  reset();
+  const form = mkForm('packaging-item');
+  const controls = {};
+  for (const f of ['name', 'kind', 'unit', 'capacity_value', 'capacity_unit', 'material', 'supplier_hint', 'unit_cost', 'notes']) {
+    controls[f] = addField(form, f, f === 'kind' || f === 'unit' || f === 'capacity_unit');
+  }
+  mockDoc.body.appendChild(form);
+  const name = controls.name;
+  name.value = 'Баночка <script>alert(1)</script>';
+  name.focus();
+  name.setSelectionRange(2, 6);
+
+  for (let i = 0; i < 2; i += 1) {
+    mod.applyValidationToPackagingItemForm({
+      fieldErrors: {
+        name: ['Название: <img src=x onerror=alert(1)> Укажите название тары.'],
+        unit_cost: ['Цена за единицу: Введите неотрицательное число.'],
+      },
+      formErrors: ['metadata.capacity.value: Проверьте объём.'],
+    });
+    assert.equal(form.querySelectorAll('.field-error').length, 2);
+    assert.equal(form.querySelector('[name="name"]'), name);
+    assert.equal(mockDoc.activeElement, name);
+    assert.equal(name.selectionStart, 2);
+    assert.equal(name.selectionEnd, 6);
+    assert.equal(name.getAttribute('aria-invalid'), 'true');
+    assert.equal(name.getAttribute('aria-describedby'), 'packaging-item-name-error');
+    const err = byId(form, 'packaging-item-name-error');
+    assert.ok(err.textContent.includes('<img src=x onerror=alert(1)>'));
+    assert.equal(err.children[0].children.length, 0);
+  }
+  assert.equal(form.querySelectorAll('.field-error').length, 2, 'repeated apply does not duplicate errors');
+
+  mod.applyValidationToPackagingItemForm({ fieldErrors: {}, formErrors: [] });
+  assert.equal(form.querySelectorAll('.field-error').length, 0);
+  assert.equal(form.querySelector('.form-error-summary'), null);
+  assert.equal(name.hasAttribute('aria-invalid'), false);
+  assert.equal(name.hasAttribute('aria-describedby'), false);
+  assert.equal(form.querySelector('[name="name"]'), name);
+  assert.equal(mockDoc.activeElement, name);
+});

@@ -1,5 +1,5 @@
 import { clearFieldValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
-import { applyValidationToClientForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm } from './targeted-validation-update.js';
+import { applyValidationToClientForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm, applyValidationToPackagingItemForm, applyValidationToStockMovementForm } from './targeted-validation-update.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -600,10 +600,18 @@ let stockMovementsStatus: StockMovementsStatus = 'idle';
 let stockMovementsState: StockMovementsState = { lots: [], ingredients: [], selectedLotId: null, balance: null, movements: [], form: emptyStockMovementForm(), detailStatus: 'idle' };
 let stockMovementsError = '';
 let stockMovementsMessage = '';
+let stockMovementsRefreshWarning = '';
+let stockMovementValidation = emptyFormValidationState();
+let stockMovementSubmitting = false;
+let stockMovementSubmitToken = 0;
 let packagingItemsStatus: PackagingItemsStatus = 'idle';
 let packagingItemsState: PackagingItemsState = { items: [], formMode: 'create', form: emptyPackagingItemForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, showCreateForm: false, filters: emptyCatalogBrowserFilters(), assignmentDraft: emptyAssignmentDraft() };
 let packagingItemsError = '';
 let packagingItemsMessage = '';
+let packagingItemsRefreshWarning = '';
+let packagingItemValidation = emptyFormValidationState();
+let packagingItemSubmitting = false;
+let packagingItemSubmitToken = 0;
 let recipesStatus: RecipesStatus = 'idle';
 let recipesError = '';
 let recipesMessage = '';
@@ -921,6 +929,8 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLButtonElement>('[data-action="reload-stock-movements"]')?.addEventListener('click', () => loadStockMovements(true));
   root.querySelector<HTMLSelectElement>('[data-action="select-stock-lot"]')?.addEventListener('change', (event) => selectStockMovementLot(Number((event.currentTarget as HTMLSelectElement).value)));
   root.querySelector<HTMLFormElement>('[data-form="stock-movement"]')?.addEventListener('submit', submitStockMovementForm);
+  root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-form="stock-movement"] [name]').forEach((input) => input.addEventListener('input', () => { saveStockMovementFormFromDom(); clearStockMovementFieldError(input.name, input); }));
+  root.querySelectorAll<HTMLSelectElement>('[data-form="stock-movement"] select[name]').forEach((input) => input.addEventListener('change', () => { saveStockMovementFormFromDom(); clearStockMovementFieldError(input.name, input); }));
   root.querySelector<HTMLButtonElement>('[data-action="reload-recipes"]')?.addEventListener('click', () => loadRecipes(true));
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-recipe-create"]').forEach((button) => button.addEventListener('click', openRecipeCreateForm));
   root.querySelectorAll<HTMLButtonElement>('[data-action="hide-recipe-create"]').forEach((button) => button.addEventListener('click', hideRecipeCreateForm));
@@ -981,6 +991,8 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-packaging-item"]').forEach((button) => button.addEventListener('click', () => startEditPackagingItem(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-packaging-item"]').forEach((button) => button.addEventListener('click', () => deactivatePackagingItem(Number(button.dataset.id))));
   root.querySelector<HTMLFormElement>('[data-form="packaging-item"]')?.addEventListener('submit', submitPackagingItemForm);
+  root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-form="packaging-item"] [name]').forEach((input) => input.addEventListener('input', () => { savePackagingItemFormFromDom(); clearPackagingItemFieldError(input.name, input); }));
+  root.querySelectorAll<HTMLSelectElement>('[data-form="packaging-item"] select[name]').forEach((input) => input.addEventListener('change', () => { savePackagingItemFormFromDom(); clearPackagingItemFieldError(input.name, input); }));
   root.querySelector<HTMLInputElement>('[data-action="filter-packaging-search"]')?.addEventListener('input', (event) => updatePackagingFilterSearch(event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLSelectElement>('[data-action="filter-packaging-category"]')?.addEventListener('change', (event) => { packagingItemsState.filters.categoryId = catalogCategoryFilterValue((event.currentTarget as HTMLSelectElement).value); render(); });
   root.querySelector<HTMLSelectElement>('[data-action="filter-packaging-kind"]')?.addEventListener('change', (event) => { packagingItemsState.filters.systemType = (event.currentTarget as HTMLSelectElement).value; render(); });
@@ -2173,14 +2185,14 @@ function packagingItemsPage() {
   const isCreateActive = packagingItemsState.formMode === 'create' && packagingItemsState.showCreateForm;
   const activeWorkspace = isEdit ? `${packagingItemForm()}${packagingCatalogPanel()}` : isCreateActive ? packagingItemForm() : '';
   const secondaryWorkspace = isEdit ? '' : isCreateActive ? packagingCatalogPanel() : `${packagingItemForm()}${packagingCatalogPanel()}`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Каталог тары</p><h2>Тара и расходники</h2><p>Сначала найдите тару по названию, группе, меткам, типу или статусу. Создание и редактирование доступны ниже, чтобы каталог оставался главным рабочим местом.</p><p class="next-step">Тип тары используется системой. Группа и метки — ваш способ организовать каталог для поиска.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-packaging-items">Обновить список</button><button class="primary-action" type="button" data-action="new-packaging-item">Создать тару</button></div></section>${packagingItemsMessage ? `<p class="page-message">${packagingItemsMessage}</p>` : ''}${packagingItemsError ? `<p class="page-message error-message">${packagingItemsError}</p>` : ''}${packagingCatalogToolbar(filtered.length)}${activeWorkspace}${packagingItemsList(filtered)}${secondaryWorkspace}</div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Каталог тары</p><h2>Тара и расходники</h2><p>Сначала найдите тару по названию, группе, меткам, типу или статусу. Создание и редактирование доступны ниже, чтобы каталог оставался главным рабочим местом.</p><p class="next-step">Тип тары используется системой. Группа и метки — ваш способ организовать каталог для поиска.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-packaging-items" ${packagingItemSubmitting ? 'disabled' : ''}>Обновить список</button><button class="primary-action" type="button" data-action="new-packaging-item" ${packagingItemSubmitting ? 'disabled' : ''}>Создать тару</button></div></section>${packagingItemsMessage ? `<p class="page-message">${packagingItemsMessage}</p>` : ''}${packagingItemsRefreshWarning ? `<p class="page-message warning-message">${packagingItemsRefreshWarning}</p>` : ''}${packagingItemsError ? `<p class="page-message error-message">${packagingItemsError}</p>` : ''}${packagingCatalogToolbar(filtered.length)}${activeWorkspace}${packagingItemsList(filtered)}${secondaryWorkspace}</div>`;
 }
 
 function packagingItemForm() {
   const form = packagingItemsState.form;
   const isEdit = packagingItemsState.formMode === 'edit';
   if (!isEdit && !packagingItemsState.showCreateForm) return `<section class="card form-card collapsed-create-card"><div><p class="card-kicker">Создание</p><h2>Создать новую тару</h2><p>Форма создания скрыта, чтобы каталог тары оставался первым рабочим экраном.</p></div><button class="primary-action" type="button" data-action="new-packaging-item">Создать тару</button></section>`;
-  return `<section class="card form-card" data-section="packaging-form"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить тару' : 'Добавить тару'}</h2><form data-form="packaging-item" class="ingredient-form"><div class="form-grid"><label>Название<input name="name" required maxlength="160" value="${escapeHtml(form.name)}" placeholder="Например, баночка 30 мл" /></label><label>Тип тары<select name="kind">${packagingKindOptions(form.kind)}</select></label><label>Единица учета<select name="unit">${packagingUnitOptions(form.unit)}</select></label><label>Объем<input name="capacity_value" inputmode="decimal" value="${escapeHtml(form.capacity_value ?? '')}" placeholder="Например, 30" /></label><label>Единица объема<select name="capacity_unit"><option value="" ${form.capacity_unit ? '' : 'selected'}>Не указана</option>${capacityUnitOptions(form.capacity_unit ?? '')}</select></label><label>Материал<input name="material" maxlength="120" value="${escapeHtml(form.material)}" placeholder="Стекло, пластик, бумага…" /></label><label>Поставщик<input name="supplier_hint" maxlength="160" value="${escapeHtml(form.supplier_hint)}" placeholder="Необязательно" /></label><label>Цена за единицу<input name="unit_cost" inputmode="decimal" value="${escapeHtml(form.unit_cost ?? '')}" placeholder="Например, 12.50" /></label><label class="full-span">Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки о таре">${escapeHtml(form.notes)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit">${isEdit ? 'Сохранить изменения' : 'Создать тару'}</button>${isEdit ? '<button class="secondary-action" type="button" data-action="cancel-packaging-edit">Закрыть редактирование</button>' : '<button class="secondary-action" type="button" data-action="hide-packaging-create-form">Вернуться к каталогу</button>'}</div><p class="next-step">Остатки, приход и списания не меняются в этой форме — для них будут отдельные складские операции.</p></form></section>`;
+  return `<section class="card form-card" data-section="packaging-form"><p class="card-kicker">${isEdit ? 'Редактирование' : 'Создание'}</p><h2>${isEdit ? 'Изменить тару' : 'Добавить тару'}</h2><form data-form="packaging-item" class="ingredient-form" novalidate>${validationSummary(packagingItemValidation, 'Проверьте форму тары')}<div class="form-grid">${packagingItemField(`Название<input name="name" required maxlength="160" value="${escapeHtml(form.name)}" placeholder="Например, баночка 30 мл" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('name')} />`, 'name')}${packagingItemField(`Тип тары<select name="kind" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('kind')}>${packagingKindOptions(form.kind)}</select>`, 'kind')}${packagingItemField(`Единица учета<select name="unit" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('unit')}>${packagingUnitOptions(form.unit)}</select>`, 'unit')}${packagingItemField(`Объем<input name="capacity_value" inputmode="decimal" value="${escapeHtml(form.capacity_value ?? '')}" placeholder="Например, 30" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('capacity_value')} />`, 'capacity_value')}${packagingItemField(`Единица объема<select name="capacity_unit" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('capacity_unit')}><option value="" ${form.capacity_unit ? '' : 'selected'}>Не указана</option>${capacityUnitOptions(form.capacity_unit ?? '')}</select>`, 'capacity_unit')}${packagingItemField(`Материал<input name="material" maxlength="120" value="${escapeHtml(form.material)}" placeholder="Стекло, пластик, бумага…" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('material')} />`, 'material')}${packagingItemField(`Поставщик<input name="supplier_hint" maxlength="160" value="${escapeHtml(form.supplier_hint)}" placeholder="Необязательно" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('supplier_hint')} />`, 'supplier_hint')}${packagingItemField(`Цена за единицу<input name="unit_cost" inputmode="decimal" value="${escapeHtml(form.unit_cost ?? '')}" placeholder="Например, 12.50" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('unit_cost')} />`, 'unit_cost')}${packagingItemField(`Заметки<textarea name="notes" rows="3" maxlength="1200" placeholder="Короткие рабочие заметки о таре" ${packagingItemSubmitting ? 'disabled' : ''}${packagingItemFieldAttrs('notes')}>${escapeHtml(form.notes)}</textarea>`, 'notes', true)}</div><div class="actions"><button class="primary-action" type="submit" ${packagingItemSubmitting ? 'disabled' : ''}>${packagingItemSubmitting ? 'Сохраняем…' : isEdit ? 'Сохранить изменения' : 'Создать тару'}</button>${isEdit ? `<button class="secondary-action" type="button" data-action="cancel-packaging-edit" ${packagingItemSubmitting ? 'disabled' : ''}>Закрыть редактирование</button>` : `<button class="secondary-action" type="button" data-action="hide-packaging-create-form" ${packagingItemSubmitting ? 'disabled' : ''}>Вернуться к каталогу</button>`}</div><p class="next-step">Остатки, приход и списания не меняются в этой форме — для них будут отдельные складские операции.</p></form></section>`;
 }
 
 function packagingCatalogPanel() {
@@ -2212,7 +2224,7 @@ function packagingCatalogToolbar(resultCount: number) {
 function packagingItemsList(items: PackagingItem[]) {
   if (packagingItemsState.items.length === 0) return `<section class="card empty-card"><h2>Тара пока не добавлена</h2><p>Создайте первую баночку, флакон или этикетку.</p><p class="next-step">Следующее действие: нажмите «Создать тару», заполните форму и сохраните карточку.</p></section>`;
   if (items.length === 0) return `<section class="card empty-card"><h2>По этим фильтрам тара не найдена.</h2><p>Попробуйте убрать часть условий поиска или вернуться к полному каталогу.</p><button class="secondary-action" type="button" data-action="reset-packaging-filters">Сбросить фильтры</button></section>`;
-  return `<section class="card data-card"><p class="card-kicker">Найденная тара</p><h2>Тара и расходники</h2><div class="table-wrap"><table class="compact-catalog-table"><thead><tr><th>Название</th><th>Тип</th><th>Ед. / объем</th><th>Группа</th><th>Метки</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${items.map((item) => { const isEditing = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id === item.id; return `<tr class="${isEditing ? 'catalog-row-selected' : ''}"><td><strong>${escapeHtml(item.name)}</strong>${isEditing ? '<small><span class="pill warning">Редактируется</span></small>' : ''}</td><td>${packagingKindLabel(item.kind)}</td><td>${unitLabel(item.unit)}${item.capacity_value && item.capacity_unit ? `<small>${packagingItemCapacityLabel(item)}</small>` : ''}</td><td>${escapeHtml(packagingCatalogCategoryLabel(item))}</td><td>${packagingTagChips(item)}</td><td><span class="pill ${item.is_active ? 'success' : 'muted'}">${item.is_active ? 'Активна' : 'Архив'}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-packaging-item" data-id="${item.id}">Изменить</button>${item.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-packaging-item" data-id="${item.id}">Деактивировать</button>` : ''}</div></td></tr>`; }).join('')}</tbody></table></div><p class="next-step">Длинные заметки, поставщик, материал и цена остаются в форме редактирования, чтобы список был компактным.</p></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Найденная тара</p><h2>Тара и расходники</h2><div class="table-wrap"><table class="compact-catalog-table"><thead><tr><th>Название</th><th>Тип</th><th>Ед. / объем</th><th>Группа</th><th>Метки</th><th>Статус</th><th>Действия</th></tr></thead><tbody>${items.map((item) => { const isEditing = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id === item.id; return `<tr class="${isEditing ? 'catalog-row-selected' : ''}"><td><strong>${escapeHtml(item.name)}</strong>${isEditing ? '<small><span class="pill warning">Редактируется</span></small>' : ''}</td><td>${packagingKindLabel(item.kind)}</td><td>${unitLabel(item.unit)}${item.capacity_value && item.capacity_unit ? `<small>${packagingItemCapacityLabel(item)}</small>` : ''}</td><td>${escapeHtml(packagingCatalogCategoryLabel(item))}</td><td>${packagingTagChips(item)}</td><td><span class="pill ${item.is_active ? 'success' : 'muted'}">${item.is_active ? 'Активна' : 'Архив'}</span></td><td><div class="row-actions"><button class="secondary-action compact" type="button" data-action="edit-packaging-item" data-id="${item.id}" ${packagingItemSubmitting ? 'disabled' : ''}>Изменить</button>${item.is_active ? `<button class="secondary-action compact danger-action" type="button" data-action="deactivate-packaging-item" data-id="${item.id}" ${packagingItemSubmitting ? 'disabled' : ''}>Деактивировать</button>` : ''}</div></td></tr>`; }).join('')}</tbody></table></div><p class="next-step">Длинные заметки, поставщик, материал и цена остаются в форме редактирования, чтобы список был компактным.</p></section>`;
 }
 
 function ingredientLotsPage() {
@@ -2237,8 +2249,8 @@ function ingredientLotList() {
 function stockMovementsPage() {
   if (stockMovementsStatus === 'idle' || stockMovementsStatus === 'loading') return `<section class="card"><p class="card-kicker">Движения сырья</p><h2>Загружаем движения…</h2><p>Загружаем партии компонентов и историю движений.</p></section>`;
   if (stockMovementsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Движения сырья</p><h2>Не удалось загрузить движения сырья</h2><p>${stockMovementsError || 'Не удалось получить данные о движениях склада.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-stock-movements">Повторить загрузку</button></section>`;
-  if (stockMovementsState.lots.length === 0) return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>История движений компонентов</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements">Обновить</button></section><section class="card empty-card"><h2>Пока нет партий для движений</h2><p>Сначала создайте компонент и партию. После этого можно будет добавить приход или списание.</p><p class="next-step">Текущий остаток нельзя ввести вручную: он появится после первого движения сырья.</p></section></div>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>Движения сырья</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements">Обновить</button></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
+  if (stockMovementsState.lots.length === 0) return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>История движений компонентов</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements" ${stockMovementSubmitting ? 'disabled' : ''}>Обновить</button></section><section class="card empty-card"><h2>Пока нет партий для движений</h2><p>Сначала создайте компонент и партию. После этого можно будет добавить приход или списание.</p><p class="next-step">Текущий остаток нельзя ввести вручную: он появится после первого движения сырья.</p></section></div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>Движения сырья</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements" ${stockMovementSubmitting ? 'disabled' : ''}>Обновить</button></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsRefreshWarning ? `<p class="page-message warning-message">${stockMovementsRefreshWarning}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
 }
 
 function stockLotSelector() {
@@ -2258,7 +2270,7 @@ function stockMovementForm() {
   const lot = selectedStockLot();
   if (!lot) return '';
   const form = stockMovementsState.form;
-  return `<section class="card form-card"><p class="card-kicker">Новое движение</p><h2>Добавить движение по выбранной партии</h2><p class="next-step">Приложение не позволит списать или вернуть больше, чем доступно в выбранной партии. История движений не редактируется и не удаляется.</p><form data-form="stock-movement" class="ingredient-form"><div class="form-grid"><label>Партия<input value="${escapeHtml(stockLotLabel(lot))}" readonly /></label><label>Тип движения<select name="movement_type">${movementTypeOptions(form.movement_type)}</select></label><label>Количество<input name="quantity" required inputmode="decimal" value="${escapeHtml(form.quantity)}" placeholder="Например, 100 или 12.500" /></label><label>Единица<input name="unit" value="${unitLabel(lot.unit)}" readonly /></label><label>Дата движения<input name="occurred_at" type="datetime-local" value="${escapeHtml(form.occurred_at)}" /></label><label>Источник<select name="source"><option value="manual" ${form.source === 'manual' ? 'selected' : ''}>Вручную</option><option value="import" ${form.source === 'import' ? 'selected' : ''}>Импорт</option><option value="system" ${form.source === 'system' ? 'selected' : ''}>Система</option></select></label><label class="full-span">Причина<input name="reason" maxlength="240" value="${escapeHtml(form.reason)}" placeholder="Например, закупка, списание просрочки" /></label><label class="full-span">Заметки<textarea name="note" rows="3" maxlength="1200" placeholder="Необязательно">${escapeHtml(form.note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit">Создать движение</button></div></form></section>`;
+  return `<section class="card form-card"><p class="card-kicker">Новое движение</p><h2>Добавить движение по выбранной партии</h2><p class="next-step">Приложение не позволит списать или вернуть больше, чем доступно в выбранной партии. История движений не редактируется и не удаляется.</p><form data-form="stock-movement" class="ingredient-form" novalidate>${validationSummary(stockMovementValidation, 'Проверьте движение склада')}<div class="form-grid">${stockMovementField(`Партия<input name="ingredient_lot_id" value="${escapeHtml(stockLotLabel(lot))}" readonly${stockMovementFieldAttrs('ingredient_lot_id')} />`, 'ingredient_lot_id')}${stockMovementField(`Тип движения<select name="movement_type" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('movement_type')}>${movementTypeOptions(form.movement_type)}</select>`, 'movement_type')}${stockMovementField(`Количество<input name="quantity" required inputmode="decimal" value="${escapeHtml(form.quantity)}" placeholder="Например, 100 или 12.500" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('quantity')} />`, 'quantity')}${stockMovementField(`Единица<input name="unit" value="${unitLabel(lot.unit)}" readonly${stockMovementFieldAttrs('unit')} />`, 'unit')}${stockMovementField(`Дата движения<input name="occurred_at" type="datetime-local" value="${escapeHtml(form.occurred_at)}" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('occurred_at')} />`, 'occurred_at')}${stockMovementField(`Источник<select name="source" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('source')}><option value="manual" ${form.source === 'manual' ? 'selected' : ''}>Вручную</option><option value="import" ${form.source === 'import' ? 'selected' : ''}>Импорт</option><option value="system" ${form.source === 'system' ? 'selected' : ''}>Система</option></select>`, 'source')}${stockMovementField(`Причина<input name="reason" maxlength="240" value="${escapeHtml(form.reason)}" placeholder="Например, закупка, списание просрочки" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('reason')} />`, 'reason', true)}${stockMovementField(`Заметки<textarea name="note" rows="3" maxlength="1200" placeholder="Необязательно" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('note')}>${escapeHtml(form.note)}</textarea>`, 'note', true)}</div><div class="actions"><button class="primary-action" type="submit" ${stockMovementSubmitting ? 'disabled' : ''}>${stockMovementSubmitting ? 'Создаём…' : 'Создать движение'}</button></div></form></section>`;
 }
 
 function stockMovementHistory() {
@@ -2490,6 +2502,7 @@ function packagingUnitOptions(current: string) { return ['pcs'].map((value) => `
 function capacityUnitOptions(current: string) { return ['ml','g'].map((value) => `<option value="${value}" ${value === current ? 'selected' : ''}>${unitLabel(value)}</option>`).join(''); }
 function packagingItemCapacityLabel(item: PackagingItem) { return item.capacity_value && item.capacity_unit ? `${escapeHtml(item.capacity_value)} ${unitLabel(item.capacity_unit)}` : 'Не указан'; }
 function packagingItemPayloadFromForm(form: HTMLFormElement): PackagingItemPayload { const data = new FormData(form); const nullable = (name: string) => { const value = String(data.get(name) ?? '').trim(); return value || null; }; return { name: String(data.get('name') ?? '').trim(), kind: String(data.get('kind') ?? 'other'), unit: String(data.get('unit') ?? 'pcs'), capacity_value: nullable('capacity_value'), capacity_unit: nullable('capacity_unit'), material: String(data.get('material') ?? '').trim(), supplier_hint: String(data.get('supplier_hint') ?? '').trim(), unit_cost: nullable('unit_cost'), notes: String(data.get('notes') ?? '').trim() }; }
+function savePackagingItemFormFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="packaging-item"]'); if (!form) return; const payload = packagingItemPayloadFromForm(form); packagingItemsState.form = { ...payload, id: packagingItemsState.form.id }; }
 
 function packagingCatalogCategoryLabel(item: PackagingItem) { return packagingItemsState.catalogCategories.find((category) => category.id === item.catalog_category_id)?.name ?? 'Не выбрана'; }
 function packagingTagChips(item: PackagingItem) { const tags = item.catalog_tag_ids.map((id) => packagingItemsState.catalogTags.find((tag) => tag.id === id)).filter((tag): tag is CatalogTag => Boolean(tag)); return tags.length ? `<div class="tag-list">${tags.map((tag) => `<span class="tag-chip readonly">${escapeHtml(tag.name)}</span>`).join('')}</div>` : 'Нет меток'; }
@@ -2598,6 +2611,27 @@ const ingredientLotFieldLabels: Record<string, string> = {
   density_g_per_ml: 'Плотность, г/мл',
   notes: 'Заметки',
 };
+const stockMovementFieldLabels: Record<string, string> = {
+  ingredient_lot_id: 'Партия',
+  movement_type: 'Тип движения',
+  quantity: 'Количество',
+  unit: 'Единица',
+  occurred_at: 'Дата движения',
+  reason: 'Причина',
+  source: 'Источник',
+  note: 'Заметки',
+};
+const packagingItemFieldLabels: Record<string, string> = {
+  name: 'Название',
+  kind: 'Тип тары',
+  unit: 'Единица учета',
+  capacity_value: 'Объем',
+  capacity_unit: 'Единица объема',
+  material: 'Материал',
+  supplier_hint: 'Поставщик',
+  unit_cost: 'Цена за единицу',
+  notes: 'Заметки',
+};
 
 function validationSummary(state: FormValidationState, title: string) {
   if (state.formErrors.length === 0) return '';
@@ -2614,13 +2648,16 @@ function fieldErrorAttrs(state: FormValidationState, field: string, id: string) 
 function clientField(control: string, field: keyof ClientPayload, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(clientValidation, field, `client-${field}-error`)}</div>`; }
 function ingredientField(control: string, field: keyof IngredientPayload, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(ingredientValidation, field, `ingredient-${field}-error`)}</div>`; }
 function ingredientLotField(control: string, field: keyof IngredientLotFormState, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(ingredientLotValidation, field, `ingredient-lot-${field}-error`)}</div>`; }
+function stockMovementField(control: string, field: keyof StockMovementFormState, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(stockMovementValidation, field, `stock-movement-${field}-error`)}</div>`; }
 function clientFieldAttrs(field: keyof ClientPayload) { return fieldErrorAttrs(clientValidation, field, `client-${field}-error`); }
 function ingredientFieldAttrs(field: keyof IngredientPayload) { return fieldErrorAttrs(ingredientValidation, field, `ingredient-${field}-error`); }
 function ingredientLotFieldAttrs(field: keyof IngredientLotFormState) { return fieldErrorAttrs(ingredientLotValidation, field, `ingredient-lot-${field}-error`); }
 function clearClientFieldError(field: string, control?: HTMLInputElement | HTMLTextAreaElement) { const next = clearFieldValidation(clientValidation, field); if (next !== clientValidation) { clientValidation = next; clearFieldValidationDom('client', field, control); } }
 function clearIngredientFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(ingredientValidation, field); if (next !== ingredientValidation) { ingredientValidation = next; clearFieldValidationDom('ingredient', field, control); } }
 function clearIngredientLotFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(ingredientLotValidation, field); if (next !== ingredientLotValidation) { ingredientLotValidation = next; clearFieldValidationDom('ingredient-lot', field, control); } }
-function clearFieldValidationDom(prefix: 'client' | 'ingredient' | 'ingredient-lot', field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+function clearStockMovementFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(stockMovementValidation, field); if (next !== stockMovementValidation) { stockMovementValidation = next; clearFieldValidationDom('stock-movement', field, control); } }
+function clearPackagingItemFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(packagingItemValidation, field); if (next !== packagingItemValidation) { packagingItemValidation = next; clearFieldValidationDom('packaging-item', field, control); } }
+function clearFieldValidationDom(prefix: 'client' | 'ingredient' | 'ingredient-lot' | 'stock-movement' | 'packaging-item', field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
   const active = document.activeElement === control;
   const start = 'selectionStart' in (control ?? {}) ? (control as HTMLInputElement | HTMLTextAreaElement).selectionStart : null;
   const end = 'selectionEnd' in (control ?? {}) ? (control as HTMLInputElement | HTMLTextAreaElement).selectionEnd : null;
@@ -2668,6 +2705,11 @@ function reenableIngredientLotSubmitButtons() {
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   if (submit) submit.textContent = ingredientLotsState.formMode === 'edit' ? 'Сохранить изменения' : 'Создать партию';
 }
+function stockMovementFieldAttrs(field: keyof StockMovementFormState) { return fieldErrorAttrs(stockMovementValidation, field, `stock-movement-${field}-error`); }
+function packagingItemField(control: string, field: keyof PackagingItemFormState, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(packagingItemValidation, field, `packaging-item-${field}-error`)}</div>`; }
+function packagingItemFieldAttrs(field: keyof PackagingItemFormState) { return fieldErrorAttrs(packagingItemValidation, field, `packaging-item-${field}-error`); }
+function reenableStockMovementSubmitButtons() { const form = document.querySelector<HTMLFormElement>('[data-form="stock-movement"]'); if (form) { form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea').forEach((el) => { if (!el.hasAttribute('readonly')) el.removeAttribute('disabled'); }); form.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled')); const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]'); if (submit) submit.textContent = 'Создать движение'; } document.querySelector<HTMLButtonElement>('[data-action="reload-stock-movements"]')?.removeAttribute('disabled'); }
+function reenablePackagingItemSubmitButtons() { const form = document.querySelector<HTMLFormElement>('[data-form="packaging-item"]'); if (form) { form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea').forEach((el) => el.removeAttribute('disabled')); form.querySelectorAll('button').forEach((b) => b.removeAttribute('disabled')); const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]'); if (submit) submit.textContent = packagingItemsState.formMode === 'edit' ? 'Сохранить изменения' : 'Создать тару'; } document.querySelectorAll<HTMLButtonElement>('[data-action="new-packaging-item"], [data-action="edit-packaging-item"], [data-action="deactivate-packaging-item"], [data-action="reload-packaging-items"]').forEach((b) => b.removeAttribute('disabled')); }
 function apiValidationPayload(error: unknown) { return error && typeof error === 'object' && 'payload' in error ? (error as ApiErrorWithDetails).payload : error; }
 
 function emptyClientForm(): ClientFormState { return { id: null, full_name: '', phone: '', email: '', address: '', birthday: null, skin_notes: '', allergy_notes: '', preference_notes: '', contraindication_notes: '', notes: '' }; }
@@ -3048,9 +3090,10 @@ function loadStockMovements(force = false) {
     if (stockMovementsState.selectedLotId) loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
   }).catch(() => { stockMovementsStatus = 'error'; stockMovementsError = 'Не удалось получить данные о движениях склада.'; render(); });
 }
-function selectStockMovementLot(lotId: number) { saveStockMovementFormFromDom(); stockMovementsState.selectedLotId = lotId || null; stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: lotId ? String(lotId) : '' }; stockMovementsMessage = ''; stockMovementsError = ''; render(); if (lotId) loadSelectedStockMovementLot(lotId); }
+function selectStockMovementLot(lotId: number) { if (stockMovementSubmitting) return; stockMovementSubmitToken += 1; saveStockMovementFormFromDom(); stockMovementsState.selectedLotId = lotId || null; stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: lotId ? String(lotId) : '' }; stockMovementValidation = emptyFormValidationState(); stockMovementsRefreshWarning = ''; stockMovementsMessage = ''; stockMovementsError = ''; render(); if (lotId) loadSelectedStockMovementLot(lotId); }
 function loadSelectedStockMovementLot(lotId: number) { stockMovementsState.detailStatus = 'loading'; stockMovementsState.balance = null; stockMovementsState.movements = []; render(); Promise.all([getIngredientLotBalance(lotId), getStockMovementsByLot(lotId)]).then(([balance, movements]) => { stockMovementsState.balance = balance; stockMovementsState.movements = movements.movements; stockMovementsState.detailStatus = 'ready'; render(); }).catch(() => { stockMovementsState.detailStatus = 'error'; stockMovementsError = 'Не удалось загрузить остаток или историю выбранной партии.'; render(); }); }
-function submitStockMovementForm(event: SubmitEvent) { event.preventDefault(); const payload = stockMovementPayloadFromForm(event.currentTarget as HTMLFormElement); if (!payload.ingredient_lot_id) return; createStockMovement(payload).then(() => { stockMovementsMessage = 'Движение создано. Текущий остаток пересчитан по истории движений.'; stockMovementsError = ''; stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: String(payload.ingredient_lot_id) }; loadSelectedStockMovementLot(payload.ingredient_lot_id); }).catch(() => { stockMovementsMessage = ''; stockMovementsError = 'Не удалось создать движение. Проверьте количество, единицу партии и что списание не делает остаток отрицательным.'; render(); }); }
+function refreshSelectedStockMovementLot(lotId: number) { return Promise.all([getIngredientLotBalance(lotId), getStockMovementsByLot(lotId)]).then(([balance, movements]) => { stockMovementsState.balance = balance; stockMovementsState.movements = movements.movements; stockMovementsState.detailStatus = 'ready'; }); }
+function submitStockMovementForm(event: SubmitEvent) { event.preventDefault(); if (stockMovementSubmitting) return; const payload = stockMovementPayloadFromForm(event.currentTarget as HTMLFormElement); stockMovementsState.form = { ingredient_lot_id: String(payload.ingredient_lot_id || ''), movement_type: payload.movement_type, quantity: payload.quantity, unit: payload.unit, occurred_at: payload.occurred_at ?? '', reason: payload.reason, source: payload.source, note: payload.note }; const token = ++stockMovementSubmitToken; stockMovementSubmitting = true; stockMovementValidation = emptyFormValidationState(); stockMovementsMessage = ''; stockMovementsError = ''; stockMovementsRefreshWarning = ''; applyValidationToStockMovementForm(stockMovementValidation); render(); if (!payload.ingredient_lot_id) { stockMovementSubmitting = false; stockMovementValidation = { fieldErrors: { ingredient_lot_id: ['Партия: выберите партию для движения.'] }, formErrors: [] }; applyValidationToStockMovementForm(stockMovementValidation); reenableStockMovementSubmitButtons(); return; } createStockMovement(payload).then(() => { if (token !== stockMovementSubmitToken) return; stockMovementsMessage = 'Движение создано. Текущий остаток пересчитан по истории движений.'; stockMovementsError = ''; stockMovementValidation = emptyFormValidationState(); stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: String(payload.ingredient_lot_id) }; render(); return refreshSelectedStockMovementLot(payload.ingredient_lot_id).then(() => { if (token !== stockMovementSubmitToken) return; stockMovementSubmitting = false; render(); }).catch(() => { if (token !== stockMovementSubmitToken) return; stockMovementSubmitting = false; stockMovementsRefreshWarning = 'Движение создано, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальный остаток.'; render(); }); }).catch((error) => { if (token !== stockMovementSubmitToken) return; stockMovementSubmitting = false; stockMovementsMessage = ''; stockMovementsError = ''; stockMovementsRefreshWarning = ''; stockMovementValidation = normalizeBackendValidation(apiValidationPayload(error), stockMovementFieldLabels, 'Не удалось создать движение. Проверьте количество, единицу и остаток выбранной партии.'); stockMovementsStatus = 'ready'; applyValidationToStockMovementForm(stockMovementValidation); reenableStockMovementSubmitButtons(); announceAssertive('Проверьте движение склада. Ошибки показаны рядом с полями.'); }); }
 
 function setRecipeIngredientOptions(ingredients: Ingredient[]) { recipesState.ingredients = ingredients.filter((i)=>i.is_active); }
 function refreshRecipeIngredientOptions(showMessage = false) {
@@ -3098,17 +3141,26 @@ function loadPackagingItems(force = false) {
   Promise.all([getPackagingItems(), getPackagingCatalogCategories(), getPackagingCatalogTags()]).then(([response, categories, tags]) => { packagingItemsState.items = response.packaging_items; packagingItemsState.catalogCategories = categories.categories; packagingItemsState.catalogTags = tags.tags; packagingItemsStatus = 'ready'; render(); }).catch(() => { packagingItemsStatus = 'error'; packagingItemsError = 'Не получилось загрузить справочник тары.'; render(); });
 }
 function startEditPackagingItem(id: number) {
+  if (packagingItemSubmitting) return;
+  packagingItemSubmitToken += 1;
+  packagingItemValidation = emptyFormValidationState();
+  packagingItemsRefreshWarning = '';
   const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === id);
   const current = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null;
   if (!item || !confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, packagingItemsState.assignmentDraft))) return;
   packagingItemsState.formMode = 'edit'; packagingItemsState.showCreateForm = false; packagingItemsState.form = { id: item.id, name: item.name, kind: item.kind, unit: item.unit, capacity_value: item.capacity_value, capacity_unit: item.capacity_unit, material: item.material, supplier_hint: item.supplier_hint, unit_cost: item.unit_cost, notes: item.notes }; packagingItemsState.assignmentDraft = assignmentDraftFromItem(item); packagingItemsMessage = ''; packagingItemsError = ''; render(); focusPackagingFormName();
 }
 function openPackagingCreateForm() {
+  if (packagingItemSubmitting) return;
   const current = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null;
   if (!confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, packagingItemsState.assignmentDraft))) return;
   packagingItemsState.formMode = 'create'; packagingItemsState.showCreateForm = true; packagingItemsState.form = emptyPackagingItemForm(); packagingItemsState.assignmentDraft = emptyAssignmentDraft(); packagingItemsMessage = ''; packagingItemsError = ''; render(); focusPackagingFormName();
 }
 function hidePackagingCreateForm() {
+  if (packagingItemSubmitting) return;
+  packagingItemSubmitToken += 1;
+  packagingItemValidation = emptyFormValidationState();
+  packagingItemsRefreshWarning = '';
   packagingItemsState.formMode = 'create'; packagingItemsState.showCreateForm = false; packagingItemsState.form = emptyPackagingItemForm(); packagingItemsState.assignmentDraft = emptyAssignmentDraft(); packagingItemsMessage = ''; packagingItemsError = ''; render();
 }
 function focusPackagingFormName() {
@@ -3119,17 +3171,67 @@ function focusPackagingFormName() {
   });
 }
 function cancelPackagingEdit() {
+  if (packagingItemSubmitting) return;
+  packagingItemSubmitToken += 1;
+  packagingItemValidation = emptyFormValidationState();
+  packagingItemsRefreshWarning = '';
   const current = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null;
   if (!confirmDiscardDirtyAssignment(assignmentDraftIsDirty(current, packagingItemsState.assignmentDraft))) return;
   packagingItemsState.formMode = 'create'; packagingItemsState.showCreateForm = false; packagingItemsState.form = emptyPackagingItemForm(); packagingItemsState.assignmentDraft = emptyAssignmentDraft(); packagingItemsMessage = ''; packagingItemsError = ''; render();
 }
 function submitPackagingItemForm(event: SubmitEvent) {
   event.preventDefault();
+  if (packagingItemSubmitting) return;
+  const isEdit = packagingItemsState.formMode === 'edit' && Boolean(packagingItemsState.form.id);
+  const submittedId = packagingItemsState.form.id;
   const payload = packagingItemPayloadFromForm(event.currentTarget as HTMLFormElement);
-  const request = packagingItemsState.formMode === 'edit' && packagingItemsState.form.id ? updatePackagingItem(packagingItemsState.form.id, payload) : createPackagingItem(payload);
-  request.then(() => { packagingItemsMessage = packagingItemsState.formMode === 'edit' ? 'Тара сохранена. Остатки не изменялись.' : 'Тара создана. Остатки добавляются отдельными складскими операциями.'; packagingItemsError = ''; packagingItemsState.formMode = 'create'; packagingItemsState.showCreateForm = false; packagingItemsState.form = emptyPackagingItemForm(); return getPackagingItems(); }).then((response) => { packagingItemsState.items = response.packaging_items; packagingItemsStatus = 'ready'; render(); }).catch(() => { packagingItemsMessage = ''; packagingItemsError = 'Не удалось сохранить тару. Проверьте название, тип, единицы и числовые поля.'; packagingItemsStatus = 'ready'; render(); });
+  packagingItemsState.form = { ...payload, id: isEdit ? submittedId : null };
+  const token = ++packagingItemSubmitToken;
+  packagingItemSubmitting = true;
+  packagingItemValidation = emptyFormValidationState();
+  packagingItemsMessage = '';
+  packagingItemsError = '';
+  packagingItemsRefreshWarning = '';
+  applyValidationToPackagingItemForm(packagingItemValidation);
+  render();
+  const request = isEdit && submittedId ? updatePackagingItem(submittedId, payload) : createPackagingItem(payload);
+  request.then((saved) => {
+    if (token !== packagingItemSubmitToken) return;
+    packagingItemsMessage = isEdit ? 'Тара сохранена. Остатки не изменялись.' : 'Тара создана. Остатки добавляются отдельными складскими операциями.';
+    packagingItemsError = '';
+    packagingItemValidation = emptyFormValidationState();
+    packagingItemsState.formMode = isEdit ? 'edit' : 'create';
+    packagingItemsState.showCreateForm = false;
+    packagingItemsState.form = isEdit ? { ...payload, id: saved.id } : emptyPackagingItemForm();
+    render();
+    return getPackagingItems().then((response) => {
+      if (token !== packagingItemSubmitToken) return;
+      packagingItemsState.items = response.packaging_items;
+      packagingItemsStatus = 'ready';
+      packagingItemSubmitting = false;
+      render();
+    }).catch(() => {
+      if (token !== packagingItemSubmitToken) return;
+      packagingItemSubmitting = false;
+      packagingItemsRefreshWarning = 'Тара сохранена, но список не обновился. Нажмите «Обновить список», чтобы увидеть актуальные данные.';
+      packagingItemsStatus = 'ready';
+      render();
+    });
+  }).catch((error) => {
+    if (token !== packagingItemSubmitToken) return;
+    packagingItemSubmitting = false;
+    packagingItemsMessage = '';
+    packagingItemsError = '';
+    packagingItemsRefreshWarning = '';
+    packagingItemValidation = normalizeBackendValidation(apiValidationPayload(error), packagingItemFieldLabels, 'Не удалось сохранить тару. Проверьте название, тип, единицы и числовые поля.');
+    packagingItemsStatus = 'ready';
+    applyValidationToPackagingItemForm(packagingItemValidation);
+    reenablePackagingItemSubmitButtons();
+    announceAssertive('Проверьте форму тары. Ошибки показаны рядом с полями.');
+  });
 }
 function deactivatePackagingItem(id: number) {
+  if (packagingItemSubmitting) return;
   const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === id);
   if (!item || !window.confirm(`Деактивировать тару «${item.name}»? Она не будет удалена из истории.`)) return;
   deactivatePackagingItemRequest(id).then(() => { packagingItemsMessage = 'Тара деактивирована. История и остатки склада не изменялись.'; packagingItemsError = ''; return getPackagingItems(); }).then((response) => { packagingItemsState.items = response.packaging_items; packagingItemsStatus = 'ready'; render(); }).catch(() => { packagingItemsMessage = ''; packagingItemsError = 'Не удалось деактивировать тару. Попробуйте еще раз.'; packagingItemsStatus = 'ready'; render(); });

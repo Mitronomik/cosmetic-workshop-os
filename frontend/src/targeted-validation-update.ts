@@ -18,6 +18,18 @@ export function applyValidationToIngredientLotForm(validation: FormValidationSta
   applyValidationToForm(form, validation, 'ingredient-lot', 'Проверьте форму партии');
 }
 
+export function applyValidationToStockMovementForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="stock-movement"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'stock-movement', 'Проверьте движение склада');
+}
+
+export function applyValidationToPackagingItemForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="packaging-item"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'packaging-item', 'Проверьте форму тары');
+}
+
 function applyValidationToForm(
   form: HTMLFormElement,
   validation: FormValidationState,
