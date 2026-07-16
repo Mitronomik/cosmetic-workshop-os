@@ -140,6 +140,17 @@ class StockMovementDraft:
         lot_id = parse_positive_ingredient_id(ingredient_lot_id)
         parsed_type = parse_movement_type(movement_type)
         parsed_direction = MOVEMENT_TYPE_DIRECTIONS[parsed_type] if direction is None else parse_direction(direction)
+        normalized_reason = normalize_optional_text(reason)
+        if parsed_type in {StockMovementType.MANUAL_ADJUSTMENT_IN, StockMovementType.MANUAL_ADJUSTMENT_OUT} and not normalized_reason:
+            raise DomainValidationError(
+                DomainIssue(
+                    DomainIssueCode.REQUIRED_FIELD,
+                    "Укажите причину ручной корректировки склада.",
+                    "reason",
+                    None,
+                    "Коротко опишите, почему вы меняете остаток вручную.",
+                )
+            )
         expected_direction = MOVEMENT_TYPE_DIRECTIONS[parsed_type]
         if parsed_direction != expected_direction:
             raise DomainValidationError(
@@ -168,7 +179,7 @@ class StockMovementDraft:
             quantity=parse_stock_quantity(quantity, unit=parsed_unit),
             unit=parsed_unit,
             direction=parsed_direction,
-            reason=normalize_optional_text(reason),
+            reason=normalized_reason,
             occurred_at=occurred_at,
             note=(note or "").strip(),
             reference_type=normalize_optional_text(reference_type) or None,

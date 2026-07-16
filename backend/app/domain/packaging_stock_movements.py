@@ -80,6 +80,9 @@ class PackagingStockMovementDraft:
     def create(cls, *, packaging_item_id: int, movement_type: PackagingStockMovementType | str, quantity: Decimal | int | str, unit: UnitCode | str, occurred_at: str | None = None, reason: str | None = "", source: str | None = "manual", notes: str | None = "") -> "PackagingStockMovementDraft":
         item_id = parse_positive_packaging_item_id(packaging_item_id)
         parsed_type = parse_packaging_movement_type(movement_type)
+        normalized_reason = normalize_optional_text(reason or "")
+        if parsed_type in {PackagingStockMovementType.MANUAL_ADJUSTMENT_IN, PackagingStockMovementType.MANUAL_ADJUSTMENT_OUT} and not normalized_reason:
+            raise DomainValidationError(DomainIssue(DomainIssueCode.REQUIRED_FIELD, "Укажите причину ручной корректировки склада.", "reason", None, "Коротко опишите, почему вы меняете остаток тары вручную."))
         parsed_unit = parse_packaging_unit(unit)
         return cls(
             packaging_item_id=item_id,
@@ -88,7 +91,7 @@ class PackagingStockMovementDraft:
             unit=parsed_unit,
             direction=PACKAGING_MOVEMENT_TYPE_DIRECTIONS[parsed_type],
             occurred_at=occurred_at,
-            reason=normalize_optional_text(reason or ""),
+            reason=normalized_reason,
             source=normalize_optional_text(source or "") or "manual",
             notes=(notes or "").strip(),
         )
