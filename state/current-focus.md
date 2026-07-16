@@ -19,5 +19,5 @@ Scope constraints for PR116:
 - record that the current frontend Stock Movement route supports ingredient-lot movements only, while packaging movement APIs exist separately and remain follow-up UI work.
 
 Slice A3 status: IN PROGRESS.
-Slice A3.2 status: implementation corrected in PR116; merge pending. Final correction closes Stock Movement detail/post-save refresh races and Packaging write mutual exclusion; browser smoke remains reviewer-required unless run separately.
+Slice A3.2 status: implementation corrected in PR116; merge pending. Final correction keeps Packaging locks active through post-save refresh, terminates Stock refresh failures honestly, and preserves Packaging write mutual exclusion; browser smoke remains reviewer-required unless run separately.
 Recipe and recipe-version structured validation remain a later separate slice.

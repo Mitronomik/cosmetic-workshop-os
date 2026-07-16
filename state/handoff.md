@@ -287,5 +287,12 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Stock Movement selected-lot balance/history reads now use a shared request-generation helper: mutation start invalidates old detail requests, post-save refresh is token-aware, and state is written only after selected-lot and submit-token freshness checks pass.
 - Packaging page writes are mutually exclusive across item save, item deactivation, catalog category/tag creation, and category/tag assignment save; context changes, filters, catalog searches, reload, and row actions are blocked while any Packaging write is active.
 - Mutation marker helpers moved into a focused frontend lifecycle helper module so tests execute the production helper rather than copying it.
-- Final verification in Codex: frontend form-validation tests 11/11, targeted validation/update lifecycle tests 15/15, concurrent frontend validation tests 11/11 and 15/15, frontend build passed, focused backend inventory tests 82/82, and isolated temporary-SQLite API smoke passed.
+- Final verification in Codex: frontend form-validation tests 11/11, targeted validation/update lifecycle tests 20/20, concurrent frontend validation tests 11/11 and 20/20, frontend build passed, focused backend inventory tests 82/82, and isolated temporary-SQLite API smoke passed.
+- Browser smoke remains pending reviewer execution. A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS.
+
+## Slice A3.2 PR116 final correction — post-save refresh lifecycle gaps
+- Packaging Item save now keeps the Packaging page mutation lock active until post-save list refresh succeeds or fails; no intermediate unlocked render is emitted before refresh completion.
+- Stock Movement post-save detail refresh failure now terminates the detail status with `error` while preserving the movement success message and separate refresh warning.
+- Added deferred Promise regression tests for Packaging lock-through-refresh, Packaging refresh failure, stale Packaging refresh, Stock refresh failure terminal state, and stale Stock refresh failure.
+- Final verification in Codex: frontend form-validation tests 11/11, targeted validation/update lifecycle tests 20/20, concurrent frontend validation tests 11/11 and 20/20, frontend build passed, focused backend inventory tests 82/82, and isolated temporary-SQLite API smoke passed.
 - Browser smoke remains pending reviewer execution. A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS.

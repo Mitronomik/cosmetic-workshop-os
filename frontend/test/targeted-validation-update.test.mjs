@@ -727,6 +727,164 @@ test('packaging page mutation mutual exclusion helper blocks overlapping writes'
   assert.equal(itemRequests, 1);
 });
 
+
+
+test('packaging submit lock remains active through deferred list refresh', async () => {
+  const state = { packagingItemSubmitting: false, catalogSaving: 'idle', catalogCreating: null, deactivatingId: null };
+  const active = () => lifecycle.packagingPageMutationActiveState(state);
+  let itemRequests = 0;
+  let assignmentRequests = 0;
+  let categoryRequests = 0;
+  let tagRequests = 0;
+  let deactivateRequests = 0;
+  let renders = 0;
+  let items = ['old'];
+  const mutation = deferred();
+  const refresh = deferred();
+  const submitItem = () => {
+    if (active()) return false;
+    state.packagingItemSubmitting = true;
+    itemRequests += 1;
+    mutation.promise.then(() => refresh.promise.then((response) => {
+      items = response.items;
+      state.packagingItemSubmitting = false;
+      renders += 1;
+    }));
+    return true;
+  };
+  const saveAssignment = () => { if (active()) return false; assignmentRequests += 1; state.catalogSaving = 'saving'; return true; };
+  const createCategory = () => { if (active()) return false; categoryRequests += 1; state.catalogCreating = 'category'; return true; };
+  const createTag = () => { if (active()) return false; tagRequests += 1; state.catalogCreating = 'tag'; return true; };
+  const deactivate = () => { if (active()) return false; deactivateRequests += 1; state.deactivatingId = 1; return true; };
+
+  assert.equal(submitItem(), true);
+  mutation.resolve({ id: 1 });
+  await Promise.resolve();
+  assert.equal(active(), true, 'lock remains active while refresh is pending');
+  assert.equal(saveAssignment(), false);
+  assert.equal(createCategory(), false);
+  assert.equal(createTag(), false);
+  assert.equal(deactivate(), false);
+  assert.equal(submitItem(), false);
+  assert.equal(itemRequests, 1);
+  assert.equal(assignmentRequests + categoryRequests + tagRequests + deactivateRequests, 0);
+  assert.equal(renders, 0, 'no unlocked intermediate render');
+
+  refresh.resolve({ items: ['fresh'] });
+  await mutation.promise;
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.deepEqual(items, ['fresh']);
+  assert.equal(state.packagingItemSubmitting, false);
+  assert.equal(active(), false);
+  assert.equal(renders, 1);
+});
+
+test('packaging refresh failure preserves save success and releases lock once', async () => {
+  const state = { packagingItemSubmitting: false, catalogSaving: 'idle', catalogCreating: null, deactivatingId: null };
+  const active = () => lifecycle.packagingPageMutationActiveState(state);
+  const refresh = deferred();
+  let itemRequests = 0;
+  let message = '';
+  let warning = '';
+  let error = '';
+  let renders = 0;
+  if (!active()) {
+    state.packagingItemSubmitting = true;
+    itemRequests += 1;
+    message = 'Тара сохранена. Остатки не изменялись.';
+    refresh.promise.catch(() => {
+      warning = 'Тара сохранена, но список не обновился.';
+      state.packagingItemSubmitting = false;
+      renders += 1;
+    });
+  }
+  refresh.reject(new Error('refresh failed'));
+  await Promise.resolve();
+  assert.equal(message.includes('сохранена'), true);
+  assert.equal(warning.includes('список не обновился'), true);
+  assert.equal(error, '');
+  assert.equal(itemRequests, 1);
+  assert.equal(state.packagingItemSubmitting, false);
+  assert.equal(active(), false);
+  assert.equal(renders, 1);
+});
+
+test('stale packaging refresh cannot overwrite newer lifecycle', async () => {
+  let token = 1;
+  let items = ['newer'];
+  let message = 'Новая операция активна';
+  let warning = '';
+  let submitting = true;
+  let renders = 0;
+  const refreshA = deferred();
+  const tokenA = token;
+  token += 1;
+  refreshA.promise.then((response) => {
+    if (tokenA !== token) return;
+    items = response.items;
+    message = 'old';
+    submitting = false;
+    renders += 1;
+  }).catch(() => {
+    if (tokenA !== token) return;
+    warning = 'old warning';
+    submitting = false;
+    renders += 1;
+  });
+  refreshA.resolve({ items: ['old'] });
+  await Promise.resolve();
+  assert.deepEqual(items, ['newer']);
+  assert.equal(message, 'Новая операция активна');
+  assert.equal(warning, '');
+  assert.equal(submitting, true);
+  assert.equal(renders, 0);
+});
+
+test('stock post-save refresh failure terminates loading state without retry', async () => {
+  const detail = lifecycle.createStockMovementLotDetailLifecycle();
+  const request = detail.begin(1, 3);
+  const state = { selectedLotId: 1, detailStatus: 'loading', submitting: true, message: 'Движение создано.', warning: '', renders: 0, posts: 1 };
+  const refresh = deferred();
+  refresh.promise.catch(() => {
+    if (!detail.isCurrent(request, state.selectedLotId, 3)) return;
+    state.submitting = false;
+    state.detailStatus = 'error';
+    state.warning = 'Движение создано, но список не обновился.';
+    state.renders += 1;
+  });
+  refresh.reject(new Error('detail refresh failed'));
+  await Promise.resolve();
+  assert.equal(state.message, 'Движение создано.');
+  assert.equal(state.warning.includes('список не обновился'), true);
+  assert.equal(state.submitting, false);
+  assert.notEqual(state.detailStatus, 'loading');
+  assert.equal(state.detailStatus, 'error');
+  assert.equal(state.posts, 1);
+  assert.equal(state.renders, 1);
+});
+
+test('stale stock post-save refresh failure does not mutate state', async () => {
+  const detail = lifecycle.createStockMovementLotDetailLifecycle();
+  const request = detail.begin(1, 4);
+  const state = { selectedLotId: 1, detailStatus: 'ready', submitting: true, warning: '', renders: 0 };
+  detail.invalidate();
+  const refresh = deferred();
+  refresh.promise.catch(() => {
+    if (!detail.isCurrent(request, state.selectedLotId, 4)) return;
+    state.submitting = false;
+    state.detailStatus = 'error';
+    state.warning = 'stale warning';
+    state.renders += 1;
+  });
+  refresh.reject(new Error('stale'));
+  await Promise.resolve();
+  assert.equal(state.warning, '');
+  assert.equal(state.detailStatus, 'ready');
+  assert.equal(state.submitting, true);
+  assert.equal(state.renders, 0);
+});
+
 test('source guards cover packaging adjacent actions and stock detail stale render token', () => {
   const disablePackaging = mainSourceFunction('disablePackagingItemSubmitControls');
   for (const action of ['filter-packaging-search', 'filter-packaging-category', 'filter-packaging-kind', 'filter-packaging-status', 'add-packaging-tag-filter', 'remove-packaging-tag-filter', 'clear-packaging-filter', 'reset-packaging-filters', 'packaging-catalog-category', 'packaging-catalog-tag', 'assign-packaging-category', 'toggle-packaging-tag', 'apply-packaging-assignment', 'reset-packaging-assignment', 'search-packaging-category', 'search-packaging-tags', 'toggle-packaging-tags', 'new-packaging-item', 'edit-packaging-item', 'deactivate-packaging-item', 'reload-packaging-items', 'hide-packaging-create-form', 'cancel-packaging-edit']) {
