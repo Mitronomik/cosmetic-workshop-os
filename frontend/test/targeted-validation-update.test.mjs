@@ -168,8 +168,13 @@ class MockDocument {
 
 const mockDoc = new MockDocument();
 globalThis.document = mockDoc;
+globalThis.HTMLInputElement = MockNode;
+globalThis.HTMLTextAreaElement = MockNode;
+globalThis.HTMLSelectElement = MockNode;
+globalThis.HTMLButtonElement = MockNode;
 globalThis.CSS = { escape: escapeCss };
 
+const lifecycle = await import('../dist-tests/targeted-validation-update/mutation-lifecycle.js');
 const mod = await import('../dist-tests/targeted-validation-update/targeted-validation-update.js');
 
 function reset() {
@@ -625,23 +630,8 @@ test('runtime mutation guard markers preserve focused nodes and legitimate disab
   name.focus();
   name.setSelectionRange(1, 3);
 
-  function mutationDisabled(element) {
-    if (!element || element.disabled) return;
-    element.disabled = true;
-    element.dataset.mutationDisabled = 'true';
-  }
-  function mutationReadonly(element) {
-    if (!element || element.readOnly || element.disabled) return;
-    element.readOnly = true;
-    element.dataset.mutationReadonly = 'true';
-  }
-  function restoreMutationGuards(root) {
-    root.querySelectorAll('[data-mutation-readonly="true"]').forEach((el) => { el.readOnly = false; delete el.dataset.mutationReadonly; });
-    root.querySelectorAll('[data-mutation-disabled="true"]').forEach((el) => { el.disabled = false; delete el.dataset.mutationDisabled; });
-  }
-
-  form.querySelectorAll('[name]').forEach((el) => { if (el.tag === 'input') mutationReadonly(el); else mutationDisabled(el); });
-  mutationDisabled(action);
+  form.querySelectorAll('[name]').forEach((el) => { if (el.tag === 'input') lifecycle.mutationReadonly(el); else lifecycle.mutationDisabled(el); });
+  lifecycle.mutationDisabled(action);
 
   assert.equal(form.querySelector('[name="name"]'), name);
   assert.equal(mockDoc.activeElement, name);
@@ -653,7 +643,7 @@ test('runtime mutation guard markers preserve focused nodes and legitimate disab
   assert.equal(action.disabled, true);
 
   mod.applyValidationToPackagingItemForm({ fieldErrors: { name: ['Название: Укажите название.'] }, formErrors: [] });
-  restoreMutationGuards(mockDoc.body);
+  lifecycle.restoreMutationGuards(mockDoc.body);
 
   assert.equal(form.querySelector('[name="name"]'), name);
   assert.equal(name.readOnly, false);
@@ -665,18 +655,91 @@ test('runtime mutation guard markers preserve focused nodes and legitimate disab
   assert.ok(byId(form, 'packaging-item-name-error'));
 });
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
+test('stock movement detail lifecycle rejects stale deferred responses before state commit', async () => {
+  const detail = lifecycle.createStockMovementLotDetailLifecycle();
+  const state = { selectedLotId: 1, balance: null, movements: [], detailStatus: 'idle', renders: 0 };
+  const old = detail.begin(1);
+  const oldRequest = deferred();
+  detail.invalidate();
+  const submitToken = 7;
+  const fresh = detail.begin(1, submitToken);
+  const freshRequest = deferred();
+
+  const commit = (request, result, token = request.submitToken) => {
+    if (!detail.isCurrent(request, state.selectedLotId, token)) return false;
+    state.balance = result.balance;
+    state.movements = result.movements;
+    state.detailStatus = 'ready';
+    state.renders += 1;
+    return true;
+  };
+
+  const oldApplied = oldRequest.promise.then((result) => commit(old, result, null));
+  const freshApplied = freshRequest.promise.then((result) => commit(fresh, result, submitToken));
+  oldRequest.resolve({ balance: { quantity: 'stale' }, movements: ['old'] });
+  assert.equal(await oldApplied, false);
+  assert.equal(state.balance, null);
+  assert.equal(state.renders, 0);
+  freshRequest.resolve({ balance: { quantity: 'fresh' }, movements: ['new'] });
+  assert.equal(await freshApplied, true);
+  assert.deepEqual(state.balance, { quantity: 'fresh' });
+  assert.deepEqual(state.movements, ['new']);
+  assert.equal(state.detailStatus, 'ready');
+  assert.equal(state.renders, 1);
+});
+
+test('packaging page mutation mutual exclusion helper blocks overlapping writes', () => {
+  const state = { packagingItemSubmitting: false, catalogSaving: 'idle', catalogCreating: null, deactivatingId: null };
+  const active = () => lifecycle.packagingPageMutationActiveState(state);
+  let itemRequests = 0;
+  let assignmentRequests = 0;
+  let categoryRequests = 0;
+  let deactivateRequests = 0;
+  const submitItem = () => { if (active()) return false; state.packagingItemSubmitting = true; itemRequests += 1; return true; };
+  const saveAssignment = () => { if (active()) return false; state.catalogSaving = 'saving'; assignmentRequests += 1; return true; };
+  const createCategory = () => { if (active()) return false; state.catalogCreating = 'category'; categoryRequests += 1; return true; };
+  const deactivate = () => { if (active()) return false; state.deactivatingId = 1; deactivateRequests += 1; return true; };
+
+  assert.equal(saveAssignment(), true);
+  assert.equal(submitItem(), false);
+  assert.equal(itemRequests, 0);
+  assert.equal(assignmentRequests, 1);
+  state.catalogSaving = 'idle';
+  assert.equal(createCategory(), true);
+  assert.equal(submitItem(), false);
+  assert.equal(categoryRequests, 1);
+  state.catalogCreating = null;
+  assert.equal(deactivate(), true);
+  assert.equal(submitItem(), false);
+  assert.equal(deactivateRequests, 1);
+  state.deactivatingId = null;
+  assert.equal(submitItem(), true);
+  assert.equal(saveAssignment(), false);
+  assert.equal(createCategory(), false);
+  assert.equal(deactivate(), false);
+  assert.equal(itemRequests, 1);
+});
+
 test('source guards cover packaging adjacent actions and stock detail stale render token', () => {
   const disablePackaging = mainSourceFunction('disablePackagingItemSubmitControls');
   for (const action of ['filter-packaging-search', 'filter-packaging-category', 'filter-packaging-kind', 'filter-packaging-status', 'add-packaging-tag-filter', 'remove-packaging-tag-filter', 'clear-packaging-filter', 'reset-packaging-filters', 'packaging-catalog-category', 'packaging-catalog-tag', 'assign-packaging-category', 'toggle-packaging-tag', 'apply-packaging-assignment', 'reset-packaging-assignment', 'search-packaging-category', 'search-packaging-tags', 'toggle-packaging-tags', 'new-packaging-item', 'edit-packaging-item', 'deactivate-packaging-item', 'reload-packaging-items', 'hide-packaging-create-form', 'cancel-packaging-edit']) {
     assert.ok(disablePackaging.includes(action), `${action} is disabled by mutation guard`);
   }
-  const restore = mainSourceFunction('restoreMutationGuards');
-  assert.ok(restore.includes('data-mutation-disabled'));
-  assert.ok(restore.includes('data-mutation-readonly'));
+  const lifecycleSource = readFileSync(new URL('../src/mutation-lifecycle.ts', import.meta.url), 'utf8');
+  assert.ok(lifecycleSource.includes('data-mutation-disabled'));
+  assert.ok(lifecycleSource.includes('data-mutation-readonly'));
+  assert.ok(lifecycleSource.includes('packagingPageMutationActiveState'));
   const loadDetail = mainSourceFunction('loadSelectedStockMovementLot');
-  assert.ok(loadDetail.includes('stockMovementDetailToken'));
+  assert.ok(loadDetail.includes('stockMovementLotDetailLifecycle.begin'));
   assert.ok(loadDetail.includes('stockMovementSubmitting'));
-  assert.ok(loadDetail.includes('stockMovementsState.selectedLotId !== lotId'));
+  assert.ok(mainSourceFunction('stockMovementLotDetailIsCurrent').includes('stockMovementsState.selectedLotId'));
   assert.ok(loadDetail.includes('if (!stockMovementSubmitting) render()'));
   const stockDisable = mainSourceFunction('disableStockMovementSubmitControls');
   assert.ok(stockDisable.includes('mutationDisabled(document.querySelector<HTMLSelectElement>(\'[data-action="select-stock-lot"]\'))'));

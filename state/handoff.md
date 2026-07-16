@@ -273,7 +273,7 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Stock Movement lot selector is disabled during an active movement mutation and re-enabled after recoverable failure.
 - Packaging create/edit/cancel context switches now clear validation, refresh warnings, and stale-response tokens only after discard confirmation succeeds; cancelled confirmations preserve the current validation state.
 - Backend domain drafts now enforce the existing manual-adjustment invariant for ingredient-lot and packaging movements: `manual_adjustment_in` and `manual_adjustment_out` require non-empty `reason` and return structured `422` with `field = "reason"` through existing APIs.
-- Verification after correction: frontend form-validation tests (11/11), targeted validation/update lifecycle tests (11/11), frontend build, focused backend inventory tests (82/82), and isolated API smoke with manual-adjustment-without-reason rejection all passed.
+- Verification after correction: frontend form-validation tests (11/11), targeted validation/update lifecycle tests (superseded; final 15/15 below), frontend build, focused backend inventory tests (82/82), and isolated API smoke with manual-adjustment-without-reason rejection all passed.
 - Browser smoke remains pending reviewer execution in an environment with browser tooling.
 - A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS.
 
@@ -282,3 +282,10 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Stock Movement selected-lot detail loading now uses a detail request token and selected-lot check, and stale detail responses do not render while a Stock Movement mutation is active.
 - Control restoration uses mutation markers so pre-existing disabled/readonly states remain intact after recoverable `422` responses.
 - A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS. Browser smoke has not been run in Codex unless a later entry records it.
+
+## Slice A3.2 PR116 final async lifecycle correction
+- Stock Movement selected-lot balance/history reads now use a shared request-generation helper: mutation start invalidates old detail requests, post-save refresh is token-aware, and state is written only after selected-lot and submit-token freshness checks pass.
+- Packaging page writes are mutually exclusive across item save, item deactivation, catalog category/tag creation, and category/tag assignment save; context changes, filters, catalog searches, reload, and row actions are blocked while any Packaging write is active.
+- Mutation marker helpers moved into a focused frontend lifecycle helper module so tests execute the production helper rather than copying it.
+- Final verification in Codex: frontend form-validation tests 11/11, targeted validation/update lifecycle tests 15/15, concurrent frontend validation tests 11/11 and 15/15, frontend build passed, focused backend inventory tests 82/82, and isolated temporary-SQLite API smoke passed.
+- Browser smoke remains pending reviewer execution. A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS.
