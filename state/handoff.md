@@ -260,9 +260,9 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Baseline includes merged PR #115 / A3.1 at merge commit `8b3ea5f7ab2b880d901250d111f6f5dca369c4b4`.
 - Migrated existing frontend inventory forms only: `/stock-movements` manual ingredient-lot movement create, `/packaging-items` Packaging Item create, and `/packaging-items` Packaging Item edit.
 - Reused the shared structured validation parser and targeted validation DOM updater; added Stock Movement and Packaging Item wrappers, explicit field-label allow-lists, inline errors, form summaries, ARIA attributes, draft preservation, duplicate-submit guards, stale-response tokens, and success-versus-refresh-warning separation.
-- No backend code, schemas, migrations, persistent models, dependencies, direct packaging stock edits, historical Stock Movement edit/delete actions, or new inventory architecture were added.
+- The initial PR116 implementation was frontend-only. The correction added focused backend domain validation for the documented manual-adjustment reason invariant, without schema, migration, persistent model, direct packaging stock edit, historical Stock Movement edit/delete action, or new inventory architecture changes.
 - Current frontend `/stock-movements` supports ingredient-lot movements only. Backend packaging movement APIs exist, but a packaging movement UI is not implemented in PR116 and remains follow-up work.
-- Verification completed in this branch: frontend form-validation tests (11/11), targeted validation DOM tests (8/8), concurrent frontend validation tests, frontend build, focused backend inventory tests (72/72), and isolated API smoke for packaging stock movement rejection/balance safety.
+- Initial verification was superseded by later PR116 correction checks; see the correction entries below for final counts.
 - Browser/UI smoke was not run in this environment; reviewer smoke remains required before merge.
 - Slice A3 remains IN PROGRESS after A3.2; recipe and recipe-version validation remain a later separate slice.
 - A3.2 implementation complete in PR116; merge pending.
@@ -276,3 +276,9 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Verification after correction: frontend form-validation tests (11/11), targeted validation/update lifecycle tests (11/11), frontend build, focused backend inventory tests (82/82), and isolated API smoke with manual-adjustment-without-reason rejection all passed.
 - Browser smoke remains pending reviewer execution in an environment with browser tooling.
 - A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS.
+
+## Slice A3.2 PR116 correction — remaining mutation lifecycle races
+- Packaging Item mutation now guards adjacent packaging filters, catalog creation, assignment, tag/category search, reload, create/edit/cancel/archive controls at both rendered/direct-DOM and handler levels so they cannot rerender over the active form during submit.
+- Stock Movement selected-lot detail loading now uses a detail request token and selected-lot check, and stale detail responses do not render while a Stock Movement mutation is active.
+- Control restoration uses mutation markers so pre-existing disabled/readonly states remain intact after recoverable `422` responses.
+- A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS. Browser smoke has not been run in Codex unless a later entry records it.

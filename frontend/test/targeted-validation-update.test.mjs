@@ -30,6 +30,14 @@ class MockNode {
 
   get className() { return this.attrs['class'] ?? ''; }
   set className(v) { this.attrs['class'] = v; }
+  get dataset() {
+    const node = this;
+    return new Proxy({}, {
+      get(_, prop) { return node.attrs[`data-${String(prop).replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`]; },
+      set(_, prop, value) { node.attrs[`data-${String(prop).replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`] = String(value); return true; },
+      deleteProperty(_, prop) { delete node.attrs[`data-${String(prop).replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`]; return true; },
+    });
+  }
 
   get id() { return this._id ?? null; }
   set id(v) { this._id = v; }
@@ -598,7 +606,78 @@ test('stock movement selector source guard disables visual lot changes during mu
   const selector = mainSourceFunction('stockLotSelector');
   assert.ok(selector.includes("data-action=\"select-stock-lot\" ${stockMovementSubmitting ? 'disabled' : ''}"));
   const disable = mainSourceFunction('disableStockMovementSubmitControls');
-  assert.ok(disable.includes("[data-action=\"select-stock-lot\"]") && disable.includes("setAttribute('disabled'"));
+  assert.ok(disable.includes("[data-action=\"select-stock-lot\"]") && disable.includes("mutationDisabled"));
   const enable = mainSourceFunction('reenableStockMovementSubmitButtons');
-  assert.ok(enable.includes("[data-action=\"select-stock-lot\"]") && enable.includes("removeAttribute('disabled'"));
+  assert.ok(enable.includes("restoreMutationGuards(document)"));
+});
+
+test('runtime mutation guard markers preserve focused nodes and legitimate disabled state', () => {
+  reset();
+  const form = mkForm('packaging-item');
+  const name = addField(form, 'name');
+  const type = addField(form, 'kind', true);
+  const alreadyDisabled = addField(form, 'unit', true);
+  alreadyDisabled.disabled = true;
+  const action = new MockNode('button');
+  action.setAttribute('data-action', 'filter-packaging-search');
+  mockDoc.body.appendChild(form);
+  mockDoc.body.appendChild(action);
+  name.focus();
+  name.setSelectionRange(1, 3);
+
+  function mutationDisabled(element) {
+    if (!element || element.disabled) return;
+    element.disabled = true;
+    element.dataset.mutationDisabled = 'true';
+  }
+  function mutationReadonly(element) {
+    if (!element || element.readOnly || element.disabled) return;
+    element.readOnly = true;
+    element.dataset.mutationReadonly = 'true';
+  }
+  function restoreMutationGuards(root) {
+    root.querySelectorAll('[data-mutation-readonly="true"]').forEach((el) => { el.readOnly = false; delete el.dataset.mutationReadonly; });
+    root.querySelectorAll('[data-mutation-disabled="true"]').forEach((el) => { el.disabled = false; delete el.dataset.mutationDisabled; });
+  }
+
+  form.querySelectorAll('[name]').forEach((el) => { if (el.tag === 'input') mutationReadonly(el); else mutationDisabled(el); });
+  mutationDisabled(action);
+
+  assert.equal(form.querySelector('[name="name"]'), name);
+  assert.equal(mockDoc.activeElement, name);
+  assert.equal(name.selectionStart, 1);
+  assert.equal(name.readOnly, true);
+  assert.equal(type.disabled, true);
+  assert.equal(alreadyDisabled.disabled, true);
+  assert.equal(alreadyDisabled.dataset.mutationDisabled, undefined, 'pre-existing disabled state is not marked');
+  assert.equal(action.disabled, true);
+
+  mod.applyValidationToPackagingItemForm({ fieldErrors: { name: ['Название: Укажите название.'] }, formErrors: [] });
+  restoreMutationGuards(mockDoc.body);
+
+  assert.equal(form.querySelector('[name="name"]'), name);
+  assert.equal(name.readOnly, false);
+  assert.equal(type.disabled, false);
+  assert.equal(action.disabled, false);
+  assert.equal(alreadyDisabled.disabled, true, 'legitimately disabled control remains disabled');
+  assert.equal(mockDoc.activeElement, name);
+  assert.equal(name.selectionStart, 1);
+  assert.ok(byId(form, 'packaging-item-name-error'));
+});
+
+test('source guards cover packaging adjacent actions and stock detail stale render token', () => {
+  const disablePackaging = mainSourceFunction('disablePackagingItemSubmitControls');
+  for (const action of ['filter-packaging-search', 'filter-packaging-category', 'filter-packaging-kind', 'filter-packaging-status', 'add-packaging-tag-filter', 'remove-packaging-tag-filter', 'clear-packaging-filter', 'reset-packaging-filters', 'packaging-catalog-category', 'packaging-catalog-tag', 'assign-packaging-category', 'toggle-packaging-tag', 'apply-packaging-assignment', 'reset-packaging-assignment', 'search-packaging-category', 'search-packaging-tags', 'toggle-packaging-tags', 'new-packaging-item', 'edit-packaging-item', 'deactivate-packaging-item', 'reload-packaging-items', 'hide-packaging-create-form', 'cancel-packaging-edit']) {
+    assert.ok(disablePackaging.includes(action), `${action} is disabled by mutation guard`);
+  }
+  const restore = mainSourceFunction('restoreMutationGuards');
+  assert.ok(restore.includes('data-mutation-disabled'));
+  assert.ok(restore.includes('data-mutation-readonly'));
+  const loadDetail = mainSourceFunction('loadSelectedStockMovementLot');
+  assert.ok(loadDetail.includes('stockMovementDetailToken'));
+  assert.ok(loadDetail.includes('stockMovementSubmitting'));
+  assert.ok(loadDetail.includes('stockMovementsState.selectedLotId !== lotId'));
+  assert.ok(loadDetail.includes('if (!stockMovementSubmitting) render()'));
+  const stockDisable = mainSourceFunction('disableStockMovementSubmitControls');
+  assert.ok(stockDisable.includes('mutationDisabled(document.querySelector<HTMLSelectElement>(\'[data-action="select-stock-lot"]\'))'));
 });
