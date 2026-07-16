@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 // ── Minimal DOM mock ──────────────────────────────────────────────
 
@@ -556,4 +557,48 @@ test('packaging item wrapper keeps edit input identity and clears stale validati
   assert.equal(name.hasAttribute('aria-describedby'), false);
   assert.equal(form.querySelector('[name="name"]'), name);
   assert.equal(mockDoc.activeElement, name);
+});
+
+
+function mainSourceFunction(name) {
+  const source = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  const start = source.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `${name} exists`);
+  const next = source.indexOf('\nfunction ', start + 1);
+  return source.slice(start, next === -1 ? undefined : next);
+}
+
+test('submit lifecycle source guard avoids global render at mutation start', () => {
+  const stockSubmit = mainSourceFunction('submitStockMovementForm');
+  const stockBeforeMutation = stockSubmit.slice(0, stockSubmit.indexOf('createStockMovement(payload)'));
+  assert.ok(stockBeforeMutation.includes('applyValidationToStockMovementForm(stockMovementValidation)'));
+  assert.ok(stockBeforeMutation.includes('disableStockMovementSubmitControls()'));
+  assert.equal(stockBeforeMutation.includes('render()'), false, 'stock submit start must not replace focused controls');
+
+  const packagingSubmit = mainSourceFunction('submitPackagingItemForm');
+  const packagingBeforeMutation = packagingSubmit.slice(0, packagingSubmit.indexOf('const request ='));
+  assert.ok(packagingBeforeMutation.includes('applyValidationToPackagingItemForm(packagingItemValidation)'));
+  assert.ok(packagingBeforeMutation.includes('disablePackagingItemSubmitControls()'));
+  assert.equal(packagingBeforeMutation.includes('render()'), false, 'packaging submit start must not replace focused controls');
+});
+
+test('packaging context source guard confirms validation clears only after discard confirmation', () => {
+  for (const name of ['startEditPackagingItem', 'openPackagingCreateForm', 'cancelPackagingEdit']) {
+    const body = mainSourceFunction(name);
+    const confirmIndex = body.indexOf('confirmDiscardDirtyAssignment');
+    const clearIndex = body.indexOf('packagingItemValidation = emptyFormValidationState()');
+    const tokenIndex = body.indexOf('packagingItemSubmitToken += 1');
+    assert.ok(confirmIndex > -1, `${name} asks before switching dirty context`);
+    assert.ok(clearIndex > confirmIndex, `${name} clears validation only after confirmation`);
+    assert.ok(tokenIndex > confirmIndex, `${name} invalidates stale responses only after confirmation`);
+  }
+});
+
+test('stock movement selector source guard disables visual lot changes during mutation', () => {
+  const selector = mainSourceFunction('stockLotSelector');
+  assert.ok(selector.includes("data-action=\"select-stock-lot\" ${stockMovementSubmitting ? 'disabled' : ''}"));
+  const disable = mainSourceFunction('disableStockMovementSubmitControls');
+  assert.ok(disable.includes("[data-action=\"select-stock-lot\"]") && disable.includes("setAttribute('disabled'"));
+  const enable = mainSourceFunction('reenableStockMovementSubmitButtons');
+  assert.ok(enable.includes("[data-action=\"select-stock-lot\"]") && enable.includes("removeAttribute('disabled'"));
 });

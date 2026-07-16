@@ -19,5 +19,5 @@ Scope constraints for PR116:
 - record that the current frontend Stock Movement route supports ingredient-lot movements only, while packaging movement APIs exist separately and remain follow-up UI work.
 
 Slice A3 status: IN PROGRESS.
-Slice A3.2 status: implementation in PR116; merge pending.
+Slice A3.2 status: implementation corrected in PR116; merge pending.
 Recipe and recipe-version structured validation remain a later separate slice.

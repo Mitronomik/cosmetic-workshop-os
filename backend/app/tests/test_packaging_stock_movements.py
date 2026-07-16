@@ -65,7 +65,7 @@ def test_valid_receipt_and_outgoing_movements_update_derived_balance(tmp_path):
     receipt = service.create_movement(PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type="receipt", quantity="100", unit="pcs"))
     assert receipt.id > 0
     assert service.calculate_packaging_item_quantity(item.id) == Decimal("100")
-    out = service.create_movement(PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type="manual_adjustment_out", quantity="25", unit="pcs"))
+    out = service.create_movement(PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type="manual_adjustment_out", quantity="25", unit="pcs", reason="inventory recount"))
     assert out.id > 0
     assert service.calculate_packaging_item_quantity(item.id) == Decimal("75")
 
@@ -86,7 +86,7 @@ def test_movement_types_affect_balance_by_direction(tmp_path, movement_type, exp
     service = PackagingStockMovementService(config)
     if movement_type not in {"receipt", "manual_adjustment_in"}:
         service.create_movement(PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type="receipt", quantity="10", unit="pcs"))
-    service.create_movement(PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type=movement_type, quantity="5" if expected == Decimal("5") else "10", unit="pcs"))
+    service.create_movement(PackagingStockMovementDraft.create(packaging_item_id=item.id, movement_type=movement_type, quantity="5" if expected == Decimal("5") else "10", unit="pcs", reason="inventory recount"))
     assert service.calculate_packaging_item_quantity(item.id) == expected
 
 
@@ -168,3 +168,37 @@ def test_packaging_stock_movement_api_route_functions(monkeypatch, tmp_path):
     with pytest.raises(HTTPException) as negative:
         create_packaging_stock_movement(PackagingStockMovementCreateRequest(packaging_item_id=item.id, movement_type="write_off", quantity="11", unit=UnitCode.PIECE))
     assert negative.value.status_code == 409
+
+@pytest.mark.parametrize("movement_type", ["manual_adjustment_in", "manual_adjustment_out"])
+@pytest.mark.parametrize("reason", ["", "   "])
+def test_packaging_manual_adjustment_requires_reason_domain(movement_type, reason):
+    with pytest.raises(DomainValidationError) as exc:
+        PackagingStockMovementDraft.create(packaging_item_id=1, movement_type=movement_type, quantity="1", unit="pcs", reason=reason)
+    assert exc.value.issue.field == "reason"
+    assert exc.value.issue.message == "Укажите причину ручной корректировки склада."
+
+
+def test_packaging_manual_adjustment_without_reason_api_is_structured_422_and_writes_nothing(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+
+    database_path = tmp_path / "api-packaging-manual-reason.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    config = DatabaseConfig(path=database_path)
+    initialize_database(config)
+    item = create_item(config)
+    client = TestClient(create_app())
+
+    receipt = client.post("/api/packaging-stock-movements", json={"packaging_item_id": item.id, "movement_type": "receipt", "quantity": "5", "unit": "pcs", "reason": "seed"})
+    assert receipt.status_code == 201
+
+    rejected = client.post("/api/packaging-stock-movements", json={"packaging_item_id": item.id, "movement_type": "manual_adjustment_out", "quantity": "1", "unit": "pcs", "reason": "   "})
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"]["field"] == "reason"
+    assert rejected.json()["detail"]["message"] == "Укажите причину ручной корректировки склада."
+    assert len(client.get(f"/api/packaging-items/{item.id}/stock-movements").json()["movements"]) == 1
+    assert client.get(f"/api/packaging-items/{item.id}/balance").json()["quantity"] == "5"
+
+    accepted = client.post("/api/packaging-stock-movements", json={"packaging_item_id": item.id, "movement_type": "manual_adjustment_out", "quantity": "1", "unit": "pcs", "reason": "inventory recount"})
+    assert accepted.status_code == 201
+    assert len(client.get(f"/api/packaging-items/{item.id}/stock-movements").json()["movements"]) == 2

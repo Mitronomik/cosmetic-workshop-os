@@ -160,3 +160,35 @@ def test_stock_movements_api_create_read_list_balance_and_validation(monkeypatch
     assert client.post("/api/stock-movements", json={"ingredient_lot_id": lot.id, "movement_type": "write_off", "quantity": "99", "unit": "g"}).status_code == 409
     assert client.post("/api/stock-movements", json={"ingredient_lot_id": 999, "movement_type": "receipt", "quantity": "1", "unit": "g"}).status_code == 404
     assert client.post("/api/stock-movements", json={"ingredient_lot_id": lot.id, "movement_type": "receipt", "quantity": 1.2, "unit": "g"}).status_code == 422
+
+@pytest.mark.parametrize("movement_type", ["manual_adjustment_in", "manual_adjustment_out"])
+@pytest.mark.parametrize("reason", ["", "   "])
+def test_manual_adjustment_requires_reason_domain(movement_type, reason):
+    with pytest.raises(DomainValidationError) as exc:
+        StockMovementDraft.create(ingredient_lot_id=1, movement_type=movement_type, quantity="1", unit="g", reason=reason)
+    assert exc.value.issue.field == "reason"
+    assert exc.value.issue.message == "Укажите причину ручной корректировки склада."
+
+
+def test_manual_adjustment_without_reason_api_is_structured_422_and_writes_nothing(monkeypatch, tmp_path):
+    database_path = tmp_path / "api-stock-manual-reason.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(database_path))
+    config = DatabaseConfig(path=database_path)
+    initialize_database(config)
+    _, lot = create_lot(config)
+    from fastapi.testclient import TestClient
+
+    client = TestClient(create_app())
+    receipt = client.post("/api/stock-movements", json={"ingredient_lot_id": lot.id, "movement_type": "receipt", "quantity": "5", "unit": "g", "reason": "seed"})
+    assert receipt.status_code == 201
+
+    rejected = client.post("/api/stock-movements", json={"ingredient_lot_id": lot.id, "movement_type": "manual_adjustment_out", "quantity": "1", "unit": "g", "reason": "   "})
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"]["field"] == "reason"
+    assert rejected.json()["detail"]["message"] == "Укажите причину ручной корректировки склада."
+    assert len(client.get(f"/api/ingredient-lots/{lot.id}/movements").json()["movements"]) == 1
+    assert client.get(f"/api/ingredient-lots/{lot.id}/balance").json()["quantity"] == "5.000"
+
+    accepted = client.post("/api/stock-movements", json={"ingredient_lot_id": lot.id, "movement_type": "manual_adjustment_out", "quantity": "1", "unit": "g", "reason": "inventory recount"})
+    assert accepted.status_code == 201
+    assert len(client.get(f"/api/ingredient-lots/{lot.id}/movements").json()["movements"]) == 2

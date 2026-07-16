@@ -895,3 +895,13 @@ Import CSV/XLSX draft backend foundation.
 - Browser/UI smoke was not run in this environment; reviewer smoke remains required before merge.
 - Slice A3 remains IN PROGRESS after A3.2; recipe and recipe-version validation remain a later separate slice.
 - A3.2 implementation complete in PR116; merge pending.
+
+## Slice A3.2 PR116 correction — validation lifecycle and manual-adjustment invariant
+
+- Corrected Stock Movement and Packaging Item submit-start lifecycle so stale validation is cleared through the targeted updater and current DOM controls/actions are guarded directly, without calling the global renderer before the mutation request.
+- Stock Movement lot selector is disabled during an active movement mutation and re-enabled after recoverable failure.
+- Packaging create/edit/cancel context switches now clear validation, refresh warnings, and stale-response tokens only after discard confirmation succeeds; cancelled confirmations preserve the current validation state.
+- Backend domain drafts now enforce the existing manual-adjustment invariant for ingredient-lot and packaging movements: `manual_adjustment_in` and `manual_adjustment_out` require non-empty `reason` and return structured `422` with `field = "reason"` through existing APIs.
+- Verification after correction: frontend form-validation tests (11/11), targeted validation/update lifecycle tests (11/11), frontend build, focused backend inventory tests (82/82), and isolated API smoke with manual-adjustment-without-reason rejection all passed.
+- Browser smoke remains pending reviewer execution in an environment with browser tooling.
+- A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS.
