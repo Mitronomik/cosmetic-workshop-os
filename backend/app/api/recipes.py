@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.domain.errors import DomainValidationError
@@ -35,13 +37,25 @@ def deactivate_template(template_id: int):
 @router.post("/recipe-templates/{template_id}/versions", response_model=RecipeVersionDetailResponse, status_code=status.HTTP_201_CREATED)
 def create_version(template_id: int, payload: RecipeVersionCreateRequest):
     try:
-        draft = RecipeVersionDraft.create(status=payload.status, title=payload.title, target_batch_size_value=payload.target_batch_size_value, target_batch_size_unit=payload.target_batch_size_unit, notes=payload.notes, change_note=payload.change_note, created_from_version_id=payload.created_from_version_id, ingredients=[RecipeIngredientDraft.create(ingredient_id=i.ingredient_id, position=i.position, amount_value=i.amount_value, amount_unit=i.amount_unit, phase=i.phase, notes=i.notes) for i in payload.ingredients])
+        draft = RecipeVersionDraft.create(status=payload.status, title=payload.title, target_batch_size_value=payload.target_batch_size_value, target_batch_size_unit=payload.target_batch_size_unit, notes=payload.notes, change_note=payload.change_note, created_from_version_id=payload.created_from_version_id, ingredients=_ingredient_drafts_with_context(payload.ingredients))
         return _detail(RecipeService().create_version(template_id, draft))
     except DomainValidationError as exc: raise HTTPException(422, detail=exc.issue.__dict__) from exc
     except RecipeTemplateNotFoundError as exc: raise HTTPException(404, detail="Recipe template was not found.") from exc
     except RecipeVersionNotFoundError as exc: raise HTTPException(404, detail="Source recipe version was not found.") from exc
     except IngredientNotFoundError as exc: raise HTTPException(404, detail="Ingredient was not found.") from exc
     except (RecipeTemplateInactiveError, RecipeIngredientInactiveError) as exc: raise HTTPException(409, detail=str(exc)) from exc
+
+def _ingredient_drafts_with_context(items: list[RecipeIngredientCreateRequest]) -> list[RecipeIngredientDraft]:
+    drafts: list[RecipeIngredientDraft] = []
+    for index, item in enumerate(items):
+        try:
+            drafts.append(RecipeIngredientDraft.create(ingredient_id=item.ingredient_id, position=item.position, amount_value=item.amount_value, amount_unit=item.amount_unit, phase=item.phase, notes=item.notes))
+        except DomainValidationError as exc:
+            field = exc.issue.field
+            if field in {"ingredient_id", "position", "phase", "amount_value", "amount_unit", "notes"}:
+                raise DomainValidationError(replace(exc.issue, field=f"ingredients.{index}.{field}")) from exc
+            raise
+    return drafts
 
 @router.get("/recipe-templates/{template_id}/versions", response_model=RecipeVersionsResponse)
 def list_versions(template_id: int):

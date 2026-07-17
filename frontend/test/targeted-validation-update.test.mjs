@@ -83,15 +83,13 @@ class MockNode {
   }
 
   querySelector(sel) {
-    for (const c of this.children) { if (c._matchSelector(sel)) return c; }
-    for (const c of this.children) { const f = c.querySelector(sel); if (f) return f; }
-    return null;
+    return this.querySelectorAll(sel)[0] ?? null;
   }
 
   querySelectorAll(sel) {
     const r = [];
-    this._querySelectorAll(sel, r);
-    return r;
+    for (const part of sel.split(',').map((x) => x.trim()).filter(Boolean)) this._querySelectorAll(part, r);
+    return [...new Set(r)];
   }
 
   _querySelectorAll(sel, r) {
@@ -101,12 +99,29 @@ class MockNode {
   _matchSelector(sel) {
     if (sel === ':scope > .form-error-summary' || sel === '.form-error-summary')
       return (this.attrs['class'] ?? '').includes('form-error-summary');
+    if (sel.includes(' ')) {
+      const pieces = sel.split(/\s+/);
+      const last = pieces.pop();
+      if (!last || !this._matchSelector(last)) return false;
+      let parent = this._parent;
+      for (let i = pieces.length - 1; i >= 0; i -= 1) {
+        while (parent && !parent._matchSelector(pieces[i])) parent = parent._parent;
+        if (!parent) return false;
+        parent = parent._parent;
+      }
+      return true;
+    }
     if (sel === '.field-error')
       return (this.attrs['class'] ?? '').includes('field-error');
     if (sel === '.form-field')
       return (this.attrs['class'] ?? '').includes('form-field');
-    if (sel === 'button')
-      return this.tag === 'button';
+    if (['input', 'textarea', 'select', 'button'].includes(sel))
+      return this.tag === sel;
+    const tagAttr = sel.match(/^([a-z]+)\[([a-z-]+)="(.+?)"\]$/);
+    if (tagAttr) {
+      const [, tag, a, v] = tagAttr;
+      return this.tag === tag && this.attrs[a] === v.replace(/\\/g, '');
+    }
     if (sel === '[name]')
       return 'name' in this.attrs;
     // [name="x"] or [data-form="x"] or [id="x"]
@@ -115,7 +130,7 @@ class MockNode {
       const [, a, v] = m;
       if (v !== undefined) {
         if (a === 'id') return this._id === v;
-        return this.attrs[a] === v;
+        return this.attrs[a] === v.replace(/\\/g, '');
       }
       if (a === 'id') return this._id !== null;
       return a in this.attrs;
@@ -901,4 +916,197 @@ test('source guards cover packaging adjacent actions and stock detail stale rend
   assert.ok(loadDetail.includes('if (!stockMovementSubmitting) render()'));
   const stockDisable = mainSourceFunction('disableStockMovementSubmitControls');
   assert.ok(stockDisable.includes('mutationDisabled(document.querySelector<HTMLSelectElement>(\'[data-action="select-stock-lot"]\'))'));
+});
+
+test('recipe wrappers map template and indexed version errors without replacing focused input', () => {
+  reset();
+  const templateForm = mkForm('recipe-template');
+  const name = addField(templateForm, 'name');
+  mockDoc.body.appendChild(templateForm);
+  name.focus();
+  name.setSelectionRange(1, 3);
+  mod.applyValidationToRecipeTemplateForm({ fieldErrors: { name: ['Название рецепта обязательно.'] }, formErrors: ['Проверьте рецепт.'] });
+  assert.equal(mockDoc.activeElement, name);
+  assert.equal(name.selectionStart, 1);
+  assert.equal(name.getAttribute('aria-invalid'), 'true');
+  assert.equal(byId(templateForm, 'recipe-template-name-error').textContent, 'Название рецепта обязательно.');
+
+  const versionForm = mkForm('recipe-version');
+  const first = addField(versionForm, 'ingredients.0.amount_value');
+  const second = addField(versionForm, 'ingredients.1.amount_unit', true);
+  mockDoc.body.appendChild(versionForm);
+  first.focus();
+  first.setSelectionRange(0, 5);
+  mod.applyValidationToRecipeVersionForm({ fieldErrors: { 'ingredients.0.amount_value': ['Строка 1: количество: больше нуля.'], 'ingredients.1.amount_unit': ['Строка 2: единица: выберите единицу.'] }, formErrors: ['Неизвестное поле осталось в сводке.'] });
+  assert.equal(mockDoc.activeElement, first);
+  assert.equal(first.selectionEnd, 5);
+  assert.equal(first.getAttribute('aria-describedby'), 'recipe-version-ingredients.0.amount_value-error');
+  assert.equal(second.getAttribute('aria-describedby'), 'recipe-version-ingredients.1.amount_unit-error');
+  assert.equal(byId(versionForm, 'recipe-version-ingredients.0.amount_value-error').textContent, 'Строка 1: количество: больше нуля.');
+  assert.equal(byId(versionForm, 'recipe-version-ingredients.1.amount_unit-error').textContent, 'Строка 2: единица: выберите единицу.');
+});
+
+test('recipe mutation guards lock live DOM controls without replacing focused nodes', () => {
+  reset();
+  const templateForm = mkForm('recipe-template');
+  const templateName = addField(templateForm, 'name');
+  const templateSubmit = mockDoc.createElement('button');
+  templateSubmit.setAttribute('type', 'submit');
+  templateSubmit.textContent = 'Создать рецепт';
+  const templateBack = mockDoc.createElement('button');
+  templateBack.setAttribute('data-action', 'hide-recipe-create');
+  templateForm.appendChild(templateSubmit);
+  templateForm.appendChild(templateBack);
+  const reload = mockDoc.createElement('button');
+  reload.setAttribute('data-action', 'reload-recipes');
+  mockDoc.body.appendChild(templateForm);
+  mockDoc.body.appendChild(reload);
+  templateName.focus();
+  templateName.setSelectionRange(2, 4);
+
+  const preDisabled = mockDoc.createElement('button');
+  preDisabled.disabled = true;
+  templateForm.appendChild(preDisabled);
+  lifecycle.disableRecipeTemplateMutationControls(mockDoc.body);
+  assert.equal(templateForm.getAttribute('aria-busy'), 'true');
+  assert.equal(mockDoc.activeElement, templateName);
+  assert.equal(templateName.selectionStart, 2);
+  assert.equal(templateName.readOnly, true);
+  assert.equal(templateSubmit.disabled, true);
+  assert.equal(templateSubmit.textContent, 'Создаём…');
+  assert.equal(templateBack.disabled, true);
+  assert.equal(reload.disabled, true);
+
+  lifecycle.restoreRecipeMutationControls(mockDoc.body);
+  assert.equal(templateName.readOnly, false);
+  assert.equal(templateSubmit.disabled, false);
+  assert.equal(templateSubmit.textContent, 'Создать рецепт');
+  assert.equal(templateForm.getAttribute('aria-busy'), null);
+  assert.equal(preDisabled.disabled, true);
+
+  reset();
+  const versionForm = mkForm('recipe-version');
+  const amount = addField(versionForm, 'ingredients.1.amount_value');
+  const unit = addField(versionForm, 'ingredients.1.amount_unit', true);
+  const versionSubmit = mockDoc.createElement('button');
+  versionSubmit.setAttribute('type', 'submit');
+  versionSubmit.textContent = 'Сохранить версию рецепта';
+  const addLine = mockDoc.createElement('button');
+  addLine.setAttribute('data-action', 'add-recipe-line');
+  const openVersion = mockDoc.createElement('button');
+  openVersion.setAttribute('data-action', 'open-version');
+  versionForm.appendChild(versionSubmit);
+  versionForm.appendChild(addLine);
+  mockDoc.body.appendChild(versionForm);
+  mockDoc.body.appendChild(openVersion);
+  amount.focus();
+  amount.setSelectionRange(1, 5);
+
+  amount.readOnly = true;
+  lifecycle.disableRecipeVersionMutationControls(mockDoc.body);
+  assert.equal(versionForm.getAttribute('aria-busy'), 'true');
+  assert.equal(mockDoc.activeElement, amount);
+  assert.equal(amount.selectionEnd, 5);
+  assert.equal(amount.readOnly, true);
+  assert.equal(unit.disabled, true);
+  assert.equal(addLine.disabled, true);
+  assert.equal(openVersion.disabled, true);
+  assert.equal(versionSubmit.textContent, 'Сохраняем…');
+  lifecycle.restoreRecipeMutationControls(mockDoc.body);
+  assert.equal(versionForm.getAttribute('aria-busy'), null);
+  assert.equal(amount.readOnly, true);
+});
+
+test('recipe source uses direct mutation guards and no render at submit start', () => {
+  const source = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  const templateStart = source.indexOf('function submitRecipeTemplateForm');
+  const templateRequest = source.indexOf('createRecipeTemplate(payload)', templateStart);
+  const templatePrefix = source.slice(templateStart, templateRequest);
+  assert.ok(templatePrefix.includes('disableRecipeTemplateMutationControls(document)'));
+  assert.equal(templatePrefix.includes('render()'), false);
+  assert.ok(templatePrefix.includes('if (recipeVersionSubmitting) return;'));
+  assert.ok(templatePrefix.includes('recipeTemplateMutationLifecycle.begin()'));
+
+  const versionStart = source.indexOf('function submitRecipeVersionForm');
+  const versionRequest = source.indexOf('createRecipeVersion(templateId', versionStart);
+  const versionPrefix = source.slice(versionStart, versionRequest);
+  assert.ok(versionPrefix.includes('disableRecipeVersionMutationControls(document)'));
+  assert.equal(versionPrefix.includes('render()'), false);
+  assert.ok(versionPrefix.includes('if (recipeTemplateSubmitting || !recipesState.selectedTemplate) return;'));
+  assert.ok(versionPrefix.includes('recipeVersionMutationLifecycle.begin()'));
+
+  assert.ok(source.includes('restoreRecipeMutationControls(document);'));
+  assert.ok(source.includes('recipesRefreshWarning = \'Рецепт создан, но список не обновился.'));
+  assert.ok(source.includes('recipesRefreshWarning = \'Версия сохранена, но список или расчёт не обновились.'));
+  assert.equal(/data-action=\"move-recipe-line/.test(source), false, 'ingredient-line reorder UI is not implemented in this route');
+});
+
+
+async function runSimulatedRecipeLifecycle({ failRefresh = false, stale = false } = {}) {
+  const state = { posts: 0, message: '', warning: '', completed: 0, staleWrites: 0 };
+  const lifecycleState = lifecycle.createRecipeMutationLifecycle();
+  const post = deferred();
+  const refresh = deferred();
+  async function submit() {
+    const token = lifecycleState.begin();
+    if (token === null) return false;
+    state.posts += 1;
+    try {
+      await post.promise;
+      if (!lifecycleState.isCurrent(token)) { state.staleWrites += 1; return false; }
+      state.message = 'Сохранено.';
+      await refresh.promise;
+      if (!lifecycleState.isCurrent(token)) { state.staleWrites += 1; return false; }
+      lifecycleState.finish(token);
+      state.completed += 1;
+      return true;
+    } catch (error) {
+      if (!lifecycleState.isCurrent(token)) { state.staleWrites += 1; return false; }
+      if (error && error.refresh) {
+        state.warning = 'Сохранено, но список не обновился.';
+        lifecycleState.finish(token);
+        state.completed += 1;
+        return true;
+      }
+      lifecycleState.finish(token);
+      throw error;
+    }
+  }
+  const first = submit();
+  const second = submit();
+  assert.equal(await second, false);
+  assert.equal(state.posts, 1);
+  assert.equal(lifecycleState.isActive(), true);
+  post.resolve({ id: 1 });
+  await Promise.resolve();
+  assert.equal(lifecycleState.isActive(), true);
+  if (stale) lifecycleState.invalidate();
+  if (failRefresh) refresh.reject({ refresh: true });
+  else refresh.resolve({ ok: true });
+  await first;
+  return { state, lifecycleState };
+}
+
+test('recipe template async lifecycle prevents duplicate POST and locks through refresh success', async () => {
+  const { state, lifecycleState } = await runSimulatedRecipeLifecycle();
+  assert.equal(state.posts, 1);
+  assert.equal(state.completed, 1);
+  assert.equal(state.message, 'Сохранено.');
+  assert.equal(lifecycleState.isActive(), false);
+});
+
+test('recipe version async lifecycle preserves success warning on refresh failure without retry', async () => {
+  const { state, lifecycleState } = await runSimulatedRecipeLifecycle({ failRefresh: true });
+  assert.equal(state.posts, 1);
+  assert.equal(state.completed, 1);
+  assert.equal(state.warning, 'Сохранено, но список не обновился.');
+  assert.equal(lifecycleState.isActive(), false);
+});
+
+test('recipe async lifecycle ignores stale refresh callbacks', async () => {
+  const { state, lifecycleState } = await runSimulatedRecipeLifecycle({ stale: true });
+  assert.equal(state.posts, 1);
+  assert.equal(state.completed, 0);
+  assert.equal(state.staleWrites, 1);
+  assert.equal(lifecycleState.isActive(), false);
 });

@@ -296,3 +296,11 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Added deferred Promise regression tests for Packaging lock-through-refresh, Packaging refresh failure, stale Packaging refresh, Stock refresh failure terminal state, and stale Stock refresh failure.
 - Final verification in Codex: frontend form-validation tests 11/11, targeted validation/update lifecycle tests 20/20, concurrent frontend validation tests 11/11 and 20/20, frontend build passed, focused backend inventory tests 82/82, and isolated temporary-SQLite API smoke passed.
 - Browser smoke remains pending reviewer execution. A3.2 implementation corrected in PR116; merge pending. A3 remains IN PROGRESS.
+
+## Slice A3.3 handoff — Recipe Template and immutable Recipe Version validation
+- PR #116 / Slice A3.2 is merged at `79286f076292645b3e83dfedfccb366dee1777f6`; A3.2 is closed and browser-smoke verified.
+- Active runtime scope is A3.3 on `/recipes`: Recipe Template creation and immutable Recipe Version creation use the shared structured-validation and mutation lifecycle foundations.
+- Recipe Version edit/delete remains prohibited. Existing saved versions and ingredients are not mutated; rejected version creates must write no partial version, ingredients, or audit event.
+- Slice A3 remains IN PROGRESS after this PR unless the repository owner explicitly closes all remaining A3 candidates.
+
+- PR #117 correction targets published branch `codex/add-structured-validation-for-recipes`; pre-correction published head was `718d8cafa62dd9bed87f8eab4e1d7896427a9a9d`. Browser smoke remains reviewer-required unless explicitly run against the published correction head.

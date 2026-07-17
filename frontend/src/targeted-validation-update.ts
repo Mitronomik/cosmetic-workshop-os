@@ -30,6 +30,18 @@ export function applyValidationToPackagingItemForm(validation: FormValidationSta
   applyValidationToForm(form, validation, 'packaging-item', 'Проверьте форму тары');
 }
 
+export function applyValidationToRecipeTemplateForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="recipe-template"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'recipe-template', 'Проверьте рецепт');
+}
+
+export function applyValidationToRecipeVersionForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="recipe-version"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'recipe-version', 'Проверьте версию рецепта');
+}
+
 function applyValidationToForm(
   form: HTMLFormElement,
   validation: FormValidationState,

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeBackendValidation } from '../dist-tests/form-validation/form-validation.js';
+import { clearFieldValidation, clearIndexedCollectionValidation, normalizeBackendValidation } from '../dist-tests/form-validation/form-validation.js';
 
 const labels = { full_name: 'Имя клиента', email: 'Email', name: 'Название компонента', density_g_per_ml: 'Плотность' };
 
@@ -66,4 +66,39 @@ test('keeps multiple errors for one field', () => {
 
 test('does not throw for unexpected payload', () => {
   assert.doesNotThrow(() => normalizeBackendValidation({ detail: [{ loc: [1, null, 'email'], msg: 7 }, { x: Symbol('x') }] }, labels));
+});
+
+test('maps explicitly approved indexed recipe fields only and keeps non-control aggregate errors in summary', () => {
+  const recipeLabels = { 'ingredients.0.amount_value': 'Строка 1: количество', 'ingredients.0.amount_unit': 'Строка 1: единица', title: 'Заголовок версии' };
+  const state = normalizeBackendValidation({ detail: [
+    { field: 'ingredients.0.amount_value', message: 'Укажите положительное количество.' },
+    { loc: ['body', 'ingredients', 0, 'amount_unit'], msg: 'Единица неверная.' },
+    { loc: ['body', 'title'], msg: 'Проверьте заголовок.' },
+    { field: 'created_from_version_id', message: 'Исходная версия должна относиться к этому же рецепту.' },
+    { field: 'ingredients', message: 'Добавьте хотя бы одну строку состава.' },
+    { field: 'ingredients.0.unknown_field', message: 'Неизвестное вложенное поле.' },
+  ] }, recipeLabels);
+  assert.deepEqual(state.fieldErrors['ingredients.0.amount_value'], ['Строка 1: количество: Укажите положительное количество.']);
+  assert.deepEqual(state.fieldErrors['ingredients.0.amount_unit'], ['Строка 1: единица: Единица неверная.']);
+  assert.deepEqual(state.fieldErrors.title, ['Заголовок версии: Проверьте заголовок.']);
+  assert.deepEqual(state.formErrors, ['Исходная версия должна относиться к этому же рецепту.', 'Добавьте хотя бы одну строку состава.', 'Неизвестное вложенное поле.']);
+});
+
+test('clears indexed recipe line validation on structural removal without moving stale row messages', () => {
+  const state = {
+    fieldErrors: {
+      'ingredients.0.amount_value': ['Строка 1: количество'],
+      'ingredients.1.amount_unit': ['Строка 2: единица'],
+      title: ['Заголовок'],
+    },
+    formErrors: ['Сводка'],
+  };
+  const corrected = clearFieldValidation(state, 'ingredients.0.amount_value');
+  assert.equal(corrected.fieldErrors['ingredients.0.amount_value'], undefined);
+  assert.deepEqual(corrected.fieldErrors['ingredients.1.amount_unit'], ['Строка 2: единица']);
+  const removedFirst = clearIndexedCollectionValidation(state, 'ingredients');
+  assert.equal(removedFirst.fieldErrors['ingredients.0.amount_value'], undefined);
+  assert.equal(removedFirst.fieldErrors['ingredients.1.amount_unit'], undefined);
+  assert.deepEqual(removedFirst.fieldErrors.title, ['Заголовок']);
+  assert.deepEqual(removedFirst.formErrors, ['Сводка']);
 });
