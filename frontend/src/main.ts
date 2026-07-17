@@ -565,6 +565,7 @@ let clientValidation = emptyFormValidationState();
 const clientWishFieldLabels = { title: 'Кратко о пожелании', description: 'Подробности', category: 'Категория', priority: 'Важность', client_recipe_id: 'Индивидуальный рецепт' };
 let clientWishValidation = emptyFormValidationState();
 const clientWishCreateLifecycle = createRecipeMutationLifecycle();
+const clientWishListRequestLifecycle = createRequestGenerationLifecycle();
 let clientWishContextToken = 0;
 let clientSubmitting = false;
 let clientSubmitToken = 0;
@@ -2988,8 +2989,33 @@ function syncClientCardDraftFormsFromDom() {
     }
   }
 }
-function loadClientCardData(clientId: number) { clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState = { ...emptyClientCardState(), clientId }; render(); refreshClientWishes(); refreshClientFeedback(); clientCardState.recipesStatus = 'loading'; getClientRecipes(true).then((response) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId); clientCardState.recipesStatus = 'ready'; render(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.recipesStatus = 'error'; render(); }); }
-function refreshClientWishes(renderLoading = true, rejectOnError = false) { const clientId = clientCardState.clientId; if (!clientId) return Promise.resolve(); syncClientCardDraftFormsFromDom(); const includeArchived = clientCardState.includeArchivedWishes; if (renderLoading) { clientCardState.wishesStatus = 'loading'; render(); } return fetchClientWishes(clientId, includeArchived).then((wishes) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.wishes = wishes; clientCardState.wishesStatus = 'ready'; render(); }).catch((error) => { syncClientCardDraftFormsFromDom(); clientCardState.wishesStatus = 'error'; clientCardState.wishError = 'Не удалось загрузить пожелания клиента. Обновите карточку и попробуйте ещё раз.'; render(); if (rejectOnError) throw error; }); }
+function loadClientCardData(clientId: number) { clientWishCreateLifecycle.invalidate(); clientWishListRequestLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState = { ...emptyClientCardState(), clientId }; render(); refreshClientWishes(); refreshClientFeedback(); clientCardState.recipesStatus = 'loading'; getClientRecipes(true).then((response) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId); clientCardState.recipesStatus = 'ready'; render(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.recipesStatus = 'error'; render(); }); }
+function refreshClientWishes(renderLoading = true, rejectOnError = false, showLoadError = true) {
+  const clientId = clientCardState.clientId;
+  if (!clientId) return Promise.resolve();
+  syncClientCardDraftFormsFromDom();
+  const includeArchived = clientCardState.includeArchivedWishes;
+  const contextToken = clientWishContextToken;
+  const requestGeneration = clientWishListRequestLifecycle.begin();
+  const isCurrentWishesRequest = () => clientWishListRequestLifecycle.isCurrent(requestGeneration) && clientCardState.clientId === clientId && contextToken === clientWishContextToken && clientCardState.includeArchivedWishes === includeArchived;
+  if (renderLoading) { clientCardState.wishesStatus = 'loading'; render(); }
+  return fetchClientWishes(clientId, includeArchived).then((wishes) => {
+    if (!isCurrentWishesRequest()) return;
+    syncClientCardDraftFormsFromDom();
+    clientCardState.wishes = wishes;
+    clientCardState.wishesStatus = 'ready';
+    render();
+  }).catch((error) => {
+    if (!isCurrentWishesRequest()) return;
+    if (showLoadError) {
+      syncClientCardDraftFormsFromDom();
+      clientCardState.wishesStatus = 'error';
+      clientCardState.wishError = 'Не удалось загрузить пожелания клиента. Обновите карточку и попробуйте ещё раз.';
+      render();
+    }
+    if (rejectOnError) throw error;
+  });
+}
 function refreshClientFeedback() { const clientId = clientCardState.clientId; if (!clientId) return Promise.resolve(); syncClientCardDraftFormsFromDom(); clientCardState.feedbackStatus = 'loading'; render(); return fetchClientFeedback(clientId).then((feedback) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.feedback = feedback; clientCardState.feedbackStatus = 'ready'; render(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.feedbackStatus = 'error'; clientCardState.feedbackError = 'Не удалось загрузить обратную связь клиента. Обновите карточку и попробуйте ещё раз.'; render(); }); }
 function toggleClientWishForm() { if (clientCardState.savingWish) return; if (clientCardState.showWishForm) syncClientCardDraftFormsFromDom(); clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = !clientCardState.showWishForm; if (clientCardState.showWishForm) clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; render(); }
 function closeClientWishForm() { if (clientCardState.savingWish) return; clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; render(); }
@@ -3003,8 +3029,8 @@ function submitClientWishForm(event: SubmitEvent) {
   if (token === null) return;
   const contextToken = clientWishContextToken;
   const isCurrentClientWishMutation = () => clientWishCreateLifecycle.isCurrent(token) && clientCardState.clientId === clientId && contextToken === clientWishContextToken;
-  const form = clientCardState.wishForm;
-  const payload: ClientWishCreatePayload = { title: form.title, description: form.description, category: form.category, priority: form.priority, client_recipe_id: nullableNumber(form.client_recipe_id) };
+  const submittedDraft: ClientWishFormState = { ...clientCardState.wishForm };
+  const payload: ClientWishCreatePayload = { title: submittedDraft.title, description: submittedDraft.description, category: submittedDraft.category, priority: submittedDraft.priority, client_recipe_id: nullableNumber(submittedDraft.client_recipe_id) };
   let createRejected = false;
   clientWishValidation = emptyFormValidationState();
   clientCardState.savingWish = true;
@@ -3027,13 +3053,7 @@ function submitClientWishForm(event: SubmitEvent) {
     restoreClientWishMutationControls(document);
     announcePolite(clientCardState.wishMessage);
     render();
-    return fetchClientWishes(clientId, clientCardState.includeArchivedWishes).then((wishes) => {
-      if (!isCurrentClientWishMutation()) return;
-      syncClientCardDraftFormsFromDom();
-      clientCardState.wishes = wishes;
-      clientCardState.wishesStatus = 'ready';
-      render();
-    }).catch(() => {
+    return refreshClientWishes(false, true, false).catch(() => {
       if (!isCurrentClientWishMutation()) return;
       clientCardState.wishError = '';
       clientCardState.wishRefreshWarning = 'Пожелание сохранено, но список не удалось обновить автоматически.';
@@ -3044,7 +3064,7 @@ function submitClientWishForm(event: SubmitEvent) {
   }).catch((error) => {
     if (!isCurrentClientWishMutation()) return;
     createRejected = true;
-    syncClientCardDraftFormsFromDom();
+    clientCardState.wishForm = submittedDraft;
     clientWishValidation = normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels, humanWishFeedbackError(error, 'Не удалось сохранить пожелание. Проверьте поля и попробуйте ещё раз.'));
     clientCardState.savingWish = false;
     clientCardState.wishError = '';
@@ -3063,8 +3083,8 @@ function submitClientWishForm(event: SubmitEvent) {
     }
   });
 }
-function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (!['open','planned','resolved'].includes(status)) return; syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = null; return refreshClientWishes(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; render(); }); }
-function archiveClientWishFromCard(wishId: number) { if (!window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = null; return refreshClientWishes(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; render(); }); }
+function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (!['open','planned','resolved'].includes(status)) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = null; return refreshClientWishes(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; render(); }); }
+function archiveClientWishFromCard(wishId: number) { if (!window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = null; return refreshClientWishes(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; render(); }); }
 function toggleClientFeedbackForm() { if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; clientCardState.feedbackError = ''; render(); }
 function closeClientFeedbackForm() { clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; render(); }
 function submitClientFeedbackForm(event: SubmitEvent) { event.preventDefault(); const clientId = clientCardState.clientId; if (!clientId) return; syncClientCardDraftFormsFromDom(); const form = clientCardState.feedbackForm; const ratingRaw = form.rating.trim(); const payload: ClientFeedbackCreatePayload = { feedback_type: form.feedback_type, sentiment: form.sentiment, rating: ratingRaw ? Number(ratingRaw) : null, text: form.text, follow_up_needed: form.follow_up_needed, follow_up_note: form.follow_up_note, occurred_at: form.occurred_at || null, client_recipe_id: nullableNumber(form.client_recipe_id) }; if (!payload.text) { clientCardState.feedbackError = 'Запишите текст отзыва клиента.'; render(); return; } clientCardState.savingFeedback = true; clientCardState.feedbackError = ''; render(); createClientFeedback(clientId, payload).then(() => { clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.savingFeedback = false; return refreshClientFeedback(); }).catch((error) => { syncClientCardDraftFormsFromDom(); clientCardState.savingFeedback = false; clientCardState.feedbackError = humanWishFeedbackError(error, 'Не удалось сохранить отзыв. Проверьте поля и попробуйте ещё раз.'); render(); }); }

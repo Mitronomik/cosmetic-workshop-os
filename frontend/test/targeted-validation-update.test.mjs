@@ -1342,22 +1342,39 @@ test('client wish source guards cover lifecycle source wiring without replacing 
   assert.ok(submit.includes('token === null'));
   assert.ok(submit.includes('contextToken !== clientWishContextToken'));
   assert.ok(submit.includes('createClientWish(clientId, payload)'));
+  assert.ok(submit.includes('const submittedDraft: ClientWishFormState = { ...clientCardState.wishForm };'));
+  assert.ok(submit.includes('clientCardState.wishForm = submittedDraft;'));
   assert.ok(submit.includes('clientCardState.wishes = [created'));
   assert.ok(submit.includes('clientCardState.showWishForm = false'));
   assert.ok(submit.includes('normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels'));
   assert.ok(submit.includes('wishRefreshWarning'));
-  const successRenderIndex = submit.indexOf('announcePolite(clientCardState.wishMessage);\n    render();\n    return fetchClientWishes');
-  assert.notEqual(successRenderIndex, -1, 'successful create renders before the follow-up wishes refresh starts');
-  const rejectedStart = submit.indexOf('clientWishValidation = normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels');
+  const successRenderIndex = submit.indexOf('announcePolite(clientCardState.wishMessage);\n    render();\n    return refreshClientWishes(false, true, false)');
+  assert.notEqual(successRenderIndex, -1, 'successful create renders before the guarded follow-up wishes refresh starts');
+  const rejectedStart = submit.indexOf('clientCardState.wishForm = submittedDraft;');
   const rejectedEnd = submit.indexOf('}).finally', rejectedStart);
   const rejectedPath = submit.slice(rejectedStart, rejectedEnd);
+  assert.ok(rejectedPath.includes('clientWishValidation = normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels'));
   assert.ok(rejectedPath.includes('applyValidationToClientWishForm(clientWishValidation);'));
   assert.ok(rejectedPath.includes('restoreClientWishMutationControls(document);'));
+  assert.equal(rejectedPath.includes('syncClientCardDraftFormsFromDom();'), false, 'rejected create path must not read disabled selects through FormData');
   assert.equal(rejectedPath.includes('render();'), false, 'rejected create path must not globally render after targeted validation');
   const finalizer = submit.slice(submit.indexOf('}).finally'));
   assert.equal(finalizer.includes('restoreClientWishMutationControls(document);\n      render();'), true, 'finalizer keeps stale/non-rejected fallback render only');
   assert.ok(finalizer.includes('if (createRejected) return;'));
   assert.equal(submit.includes('createClientFeedback'), false);
+
+  const refresh = mainSourceFunction('refreshClientWishes');
+  assert.ok(refresh.includes('clientWishListRequestLifecycle.begin()'));
+  assert.ok(refresh.includes('clientWishListRequestLifecycle.isCurrent(requestGeneration)'));
+  assert.ok(refresh.includes('clientCardState.includeArchivedWishes === includeArchived'));
+  assert.ok(refresh.includes('fetchClientWishes(clientId, includeArchived)'));
+
+  const load = mainSourceFunction('loadClientCardData');
+  assert.ok(load.includes('clientWishListRequestLifecycle.invalidate()'));
+  const status = mainSourceFunction('changeClientWishStatus');
+  assert.ok(status.includes('clientWishListRequestLifecycle.invalidate()'));
+  const archive = mainSourceFunction('archiveClientWishFromCard');
+  assert.ok(archive.includes('clientWishListRequestLifecycle.invalidate()'));
 
   const form = mainSourceFunction('clientWishForm');
   assert.ok(form.includes('novalidate'));
