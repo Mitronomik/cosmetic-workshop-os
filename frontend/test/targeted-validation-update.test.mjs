@@ -1194,3 +1194,221 @@ test('client recipe source contains structural invalidation and authoritative co
   assert.equal(submitBody.includes('getClientRecipe('), false);
   assert.equal(submitBody.includes('getClientRecipes('), false);
 });
+
+test('client recipe position remains readonly and indexed validation anchors beside it', () => {
+  reset();
+  const form = mkForm('client-recipe-composition');
+  const position = addField(form, 'ingredients.0.position');
+  position.readOnly = true;
+  const submit = mockDoc.createElement('button');
+  submit.setAttribute('type', 'submit');
+  form.appendChild(submit);
+  mockDoc.body.appendChild(form);
+  assert.equal(position.getAttribute('name'), 'ingredients.0.position');
+  assert.equal(position.readOnly, true);
+  mod.applyValidationToClientRecipeCompositionForm({ fieldErrors: { 'ingredients.0.position': ['Строка 1: позиция: проверьте порядок.'] }, formErrors: [] });
+  assert.ok(byId(form, 'client-recipe-composition-ingredients.0.position-error'));
+  lifecycle.disableClientRecipeCompositionMutationControls(mockDoc.body);
+  lifecycle.restoreClientRecipeMutationControls(mockDoc.body);
+  assert.equal(position.readOnly, true, 'position stays readonly because it was readonly before mutation guards');
+  assert.equal(position.getAttribute('name'), 'ingredients.0.position');
+});
+
+test('locked row ingredient issue is not silent when a visible exact-name anchor exists', () => {
+  reset();
+  const form = mkForm('client-recipe-composition');
+  const lockedIngredient = addField(form, 'ingredients.0.ingredient_id');
+  lockedIngredient.disabled = true;
+  mockDoc.body.appendChild(form);
+  mod.applyValidationToClientRecipeCompositionForm({ fieldErrors: { 'ingredients.0.ingredient_id': ['Строка 1: компонент: архивный компонент.'] }, formErrors: [] });
+  assert.ok(byId(form, 'client-recipe-composition-ingredients.0.ingredient_id-error'));
+  assert.equal(lockedIngredient.getAttribute('aria-invalid'), 'true');
+});
+
+async function runExecutableClientRecipeCreateLifecycle({ refreshFails = false, staleCreate = false, staleRefresh = false } = {}) {
+  const mutation = lifecycle.createRecipeMutationLifecycle();
+  const state = { busy: false, loading: false, selectedDetail: null, items: [], message: '', error: '', refreshWarning: '', posts: 0, renders: 0 };
+  const post = deferred();
+  const refresh = deferred();
+  let submitToken = 0;
+  let activeToken = null;
+  const render = () => { state.renders += 1; };
+  const submit = () => {
+    const token = mutation.begin();
+    if (token === null) return false;
+    activeToken = token;
+    const requestToken = ++submitToken;
+    state.busy = true;
+    state.loading = true;
+    state.error = '';
+    state.refreshWarning = '';
+    state.posts += 1;
+    post.promise.then((detail) => {
+      if (requestToken !== submitToken || !mutation.isCurrent(token)) return;
+      state.message = 'Индивидуальный рецепт создан.';
+      state.selectedDetail = detail;
+      return refresh.promise.then((items) => {
+        if (requestToken !== submitToken || !mutation.isCurrent(token)) return;
+        if (staleRefresh) { submitToken += 1; return; }
+        state.items = items;
+        state.busy = false;
+        state.loading = false;
+        mutation.finish(token);
+        render();
+      }).catch(() => {
+        if (requestToken !== submitToken || !mutation.isCurrent(token)) return;
+        state.refreshWarning = 'Индивидуальный рецепт создан, но список не обновился.';
+        state.busy = false;
+        state.loading = false;
+        mutation.finish(token);
+        render();
+      });
+    }).catch(() => {
+      if (requestToken !== submitToken || !mutation.isCurrent(token)) return;
+      state.error = 'Не удалось создать индивидуальный рецепт.';
+      state.busy = false;
+      state.loading = false;
+      mutation.finish(token);
+      render();
+    });
+    return true;
+  };
+  assert.equal(submit(), true);
+  assert.equal(submit(), false);
+  assert.equal(state.posts, 1);
+  assert.equal(state.renders, 0, 'busy starts without global render');
+  if (staleCreate) submitToken += 1;
+  post.resolve({ id: 1, title: 'created' });
+  await Promise.resolve();
+  if (staleCreate) return { state, mutation, post, refresh, activeToken };
+  assert.equal(state.message, 'Индивидуальный рецепт создан.');
+  assert.deepEqual(state.selectedDetail, { id: 1, title: 'created' });
+  assert.equal(mutation.isActive(), true, 'lock remains through refresh');
+  if (refreshFails) refresh.reject(new Error('503'));
+  else refresh.resolve([{ id: 1 }]);
+  await Promise.resolve();
+  await Promise.resolve();
+  return { state, mutation, post, refresh, activeToken };
+}
+
+test('executable client recipe create lifecycle covers duplicate submit, refresh success, and unlock', async () => {
+  const { state, mutation } = await runExecutableClientRecipeCreateLifecycle();
+  assert.deepEqual(state.items, [{ id: 1 }]);
+  assert.equal(state.busy, false);
+  assert.equal(state.loading, false);
+  assert.equal(mutation.isActive(), false);
+  assert.equal(state.posts, 1);
+});
+
+test('executable client recipe create refresh failure preserves success without retry and clears on manual refresh', async () => {
+  const { state, mutation } = await runExecutableClientRecipeCreateLifecycle({ refreshFails: true });
+  assert.equal(state.message, 'Индивидуальный рецепт создан.');
+  assert.deepEqual(state.selectedDetail, { id: 1, title: 'created' });
+  assert.ok(state.refreshWarning.includes('список не обновился'));
+  assert.equal(state.error, '');
+  assert.equal(state.posts, 1);
+  assert.equal(state.busy, false);
+  assert.equal(state.loading, false);
+  assert.equal(mutation.isActive(), false);
+  const manualRefresh = (items) => { state.items = items; state.refreshWarning = ''; };
+  manualRefresh([{ id: 1 }]);
+  assert.equal(state.refreshWarning, '');
+});
+
+test('executable client recipe create ignores stale mutation and stale refresh callbacks', async () => {
+  const staleCreate = await runExecutableClientRecipeCreateLifecycle({ staleCreate: true });
+  assert.equal(staleCreate.state.selectedDetail, null);
+  assert.equal(staleCreate.state.renders, 0);
+  const staleRefresh = await runExecutableClientRecipeCreateLifecycle({ staleRefresh: true });
+  assert.deepEqual(staleRefresh.state.selectedDetail, { id: 1, title: 'created' });
+  assert.deepEqual(staleRefresh.state.items, []);
+  assert.equal(staleRefresh.mutation.isActive(), true, 'stale refresh does not falsely finish newer lifecycle');
+});
+
+async function runExecutableClientRecipeCompositionLifecycle({ stale = false, switchContext = false } = {}) {
+  const mutation = lifecycle.createRecipeMutationLifecycle();
+  const state = { busy: false, saving: false, selectedId: 1, selectedDetail: { id: 1, ingredients: ['old'] }, draft: ['current draft'], message: '', error: '', puts: 0, gets: 0, listRefreshes: 0, renders: 0 };
+  const put = deferred();
+  let submitToken = 0;
+  const render = () => { state.renders += 1; };
+  const submit = () => {
+    const token = mutation.begin();
+    if (token === null) return false;
+    const requestToken = ++submitToken;
+    const contextId = state.selectedId;
+    state.busy = true;
+    state.saving = true;
+    state.puts += 1;
+    put.promise.then((detail) => {
+      if (stale) submitToken += 1;
+      if (switchContext) { state.selectedId = 2; state.selectedDetail = { id: 2, ingredients: ['newer'] }; state.draft = ['newer draft']; }
+      if (requestToken !== submitToken || !mutation.isCurrent(token) || state.selectedId !== contextId) return;
+      state.selectedDetail = detail;
+      state.draft = [];
+      state.message = 'Состав индивидуального рецепта сохранён.';
+      state.busy = false;
+      state.saving = false;
+      mutation.finish(token);
+      render();
+    }).catch(() => {
+      if (requestToken !== submitToken || !mutation.isCurrent(token) || state.selectedId !== contextId) return;
+      state.error = 'Не удалось сохранить состав.';
+      state.busy = false;
+      state.saving = false;
+      mutation.finish(token);
+      render();
+    });
+    return true;
+  };
+  assert.equal(submit(), true);
+  assert.equal(submit(), false);
+  assert.equal(state.puts, 1);
+  assert.equal(state.renders, 0, 'busy starts without global render');
+  put.resolve({ id: 1, ingredients: ['authoritative'] });
+  await Promise.resolve();
+  await Promise.resolve();
+  return { state, mutation };
+}
+
+test('executable client recipe composition lifecycle applies authoritative PUT without refresh or retry', async () => {
+  const { state, mutation } = await runExecutableClientRecipeCompositionLifecycle();
+  assert.deepEqual(state.selectedDetail, { id: 1, ingredients: ['authoritative'] });
+  assert.equal(state.gets, 0);
+  assert.equal(state.listRefreshes, 0);
+  assert.equal(state.puts, 1);
+  assert.equal(state.busy, false);
+  assert.equal(state.saving, false);
+  assert.equal(mutation.isActive(), false);
+});
+
+test('executable client recipe composition ignores stale callbacks and preserves newer context or draft', async () => {
+  const stale = await runExecutableClientRecipeCompositionLifecycle({ stale: true });
+  assert.deepEqual(stale.state.selectedDetail, { id: 1, ingredients: ['old'] });
+  assert.deepEqual(stale.state.draft, ['current draft']);
+  const switched = await runExecutableClientRecipeCompositionLifecycle({ switchContext: true });
+  assert.deepEqual(switched.state.selectedDetail, { id: 2, ingredients: ['newer'] });
+  assert.deepEqual(switched.state.draft, ['newer draft']);
+});
+
+test('executable request generations ignore stale client recipe reference responses', async () => {
+  const createRefs = lifecycle.createRequestGenerationLifecycle();
+  const versions = lifecycle.createRequestGenerationLifecycle();
+  const compositionRefs = lifecycle.createRequestGenerationLifecycle();
+  const state = { showCreate: true, activeMutation: false, depsApplied: false, selectedTemplate: 'A', versions: [], selectedRecipeId: 1, editorOpened: false };
+  const depsToken = createRefs.begin();
+  state.activeMutation = true;
+  if (createRefs.isCurrent(depsToken) && state.showCreate && !state.activeMutation) state.depsApplied = true;
+  assert.equal(state.depsApplied, false);
+
+  const tokenA = versions.begin();
+  state.selectedTemplate = 'B';
+  const tokenB = versions.begin();
+  if (versions.isCurrent(tokenB) && state.selectedTemplate === 'B') state.versions = ['B1'];
+  if (versions.isCurrent(tokenA) && state.selectedTemplate === 'A') state.versions = ['A1'];
+  assert.deepEqual(state.versions, ['B1']);
+
+  const compToken = compositionRefs.begin();
+  state.selectedRecipeId = 2;
+  if (compositionRefs.isCurrent(compToken) && state.selectedRecipeId === 1) state.editorOpened = true;
+  assert.equal(state.editorOpened, false);
+});

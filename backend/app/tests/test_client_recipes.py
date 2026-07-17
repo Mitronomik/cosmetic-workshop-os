@@ -9,7 +9,7 @@ else:
     exc = None
 
 from app.db.config import DATABASE_PATH_ENV, DatabaseConfig
-from app.domain.client_recipes import ClientRecipeDraft
+from app.domain.client_recipes import ClientRecipeDraft, ClientRecipeIngredientUpdateDraft
 from app.domain.clients import ClientDraft
 from app.domain.errors import DomainValidationError
 from app.domain.ingredients import IngredientDraft
@@ -436,6 +436,43 @@ def test_update_composition_rejects_duplicate_existing_line_ids(tmp_path):
     after = [(i.id, str(i.amount_value), i.position) for i in service.get_detail(detail.client_recipe.id).ingredients]
     assert after == before
 
+
+
+def test_update_composition_foreign_line_rejection_is_transactional_with_valid_drafts(tmp_path):
+    c = config(tmp_path)
+    client, version = seed_source(c)
+    service = ClientRecipeService(c)
+    first = service.create_from_recipe_version(draft(client.id, version.version.id, title="First"))
+    second = service.create_from_recipe_version(draft(client.id, version.version.id, title="Second"))
+    before_first = client_recipe_line_signature(first)
+    before_second = client_recipe_line_signature(second)
+    before_source = RecipeService(c).get_version_detail(version.version.id)
+    before_batches = scalar(c, "SELECT count(*) FROM production_batches")
+
+    new_ingredient_id = first.ingredients[1].ingredient_id
+    valid_but_foreign = [
+        update_line(first.ingredients[0], amount_value="77", phase="changed", notes="would update"),
+        update_line(second.ingredients[0], position=2, amount_value="18"),
+        ClientRecipeIngredientUpdateDraft.create(
+            ingredient_id=new_ingredient_id,
+            position=3,
+            phase="new",
+            amount_value="5",
+            amount_unit=first.ingredients[1].amount_unit,
+            personalization_note="would insert",
+            notes="would insert",
+        ),
+    ]
+
+    with pytest.raises(Exception) as ownership:
+        service.update_composition(first.client_recipe.id, valid_but_foreign)
+
+    assert "does not belong" in str(ownership.value)
+    assert client_recipe_line_signature(service.get_detail(first.client_recipe.id)) == before_first
+    assert client_recipe_line_signature(service.get_detail(second.client_recipe.id)) == before_second
+    after_source = RecipeService(c).get_version_detail(version.version.id)
+    assert [(line.id, str(line.amount_value), line.notes) for line in after_source.ingredients] == [(line.id, str(line.amount_value), line.notes) for line in before_source.ingredients]
+    assert scalar(c, "SELECT count(*) FROM production_batches") == before_batches
 
 def test_update_composition_rejects_archived_recipe_and_foreign_line_id(tmp_path):
     c = config(tmp_path)

@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.domain.client_recipes import ClientRecipeDraft, ClientRecipeIngredientUpdateDraft
@@ -106,7 +108,7 @@ def _ingredient_update_drafts_with_context(items: list[ClientRecipeIngredientUpd
         except DomainValidationError as exc:
             issue = exc.issue
             if issue.field in CLIENT_RECIPE_INGREDIENT_UPDATE_FIELDS:
-                raise DomainValidationError(type(issue)(issue.code, issue.message, f"ingredients.{index}.{issue.field}", issue.value, issue.next_action)) from exc
+                raise DomainValidationError(replace(issue, field=f"ingredients.{index}.{issue.field}")) from exc
             raise
     return drafts
 

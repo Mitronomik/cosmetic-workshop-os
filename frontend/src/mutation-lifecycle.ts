@@ -171,3 +171,96 @@ export function restoreClientRecipeMutationControls(root: ParentNode = document)
   const compositionSubmit = root.querySelector<HTMLButtonElement>('[data-form="client-recipe-composition"] button[type="submit"]');
   if (compositionSubmit) compositionSubmit.textContent = 'Сохранить состав';
 }
+
+export function createRequestGenerationLifecycle() {
+  let currentToken = 0;
+  return {
+    begin(): number {
+      currentToken += 1;
+      return currentToken;
+    },
+    invalidate(): number {
+      currentToken += 1;
+      return currentToken;
+    },
+    isCurrent(token: number): boolean {
+      return token === currentToken;
+    },
+    currentToken(): number {
+      return currentToken;
+    },
+  };
+}
+
+export type ClientRecipeCreateLifecycleState<TDetail = unknown, TList = unknown> = {
+  busy: boolean;
+  loading: boolean;
+  selectedDetail: TDetail | null;
+  items: TList[];
+  message: string;
+  error: string;
+  refreshWarning: string;
+  posts: number;
+  renders: number;
+};
+
+export function beginClientRecipeCreateLifecycle<TDetail, TList>(
+  state: ClientRecipeCreateLifecycleState<TDetail, TList>,
+  lifecycle: ReturnType<typeof createRecipeMutationLifecycle>,
+): number | null {
+  const token = lifecycle.begin();
+  if (token === null) return null;
+  state.busy = true;
+  state.loading = true;
+  state.error = '';
+  state.refreshWarning = '';
+  return token;
+}
+
+export function finishClientRecipeCreateLifecycle<TDetail, TList>(
+  state: ClientRecipeCreateLifecycleState<TDetail, TList>,
+  lifecycle: ReturnType<typeof createRecipeMutationLifecycle>,
+  token: number,
+): boolean {
+  if (!lifecycle.finish(token)) return false;
+  state.busy = false;
+  state.loading = false;
+  return true;
+}
+
+export type ClientRecipeCompositionLifecycleState<TDetail = unknown> = {
+  busy: boolean;
+  saving: boolean;
+  selectedId: number | null;
+  selectedDetail: TDetail | null;
+  draft: unknown[];
+  message: string;
+  error: string;
+  puts: number;
+  gets: number;
+  listRefreshes: number;
+  renders: number;
+};
+
+export function beginClientRecipeCompositionLifecycle<TDetail>(
+  state: ClientRecipeCompositionLifecycleState<TDetail>,
+  lifecycle: ReturnType<typeof createRecipeMutationLifecycle>,
+): number | null {
+  const token = lifecycle.begin();
+  if (token === null) return null;
+  state.busy = true;
+  state.saving = true;
+  state.error = '';
+  return token;
+}
+
+export function finishClientRecipeCompositionLifecycle<TDetail>(
+  state: ClientRecipeCompositionLifecycleState<TDetail>,
+  lifecycle: ReturnType<typeof createRecipeMutationLifecycle>,
+  token: number,
+): boolean {
+  if (!lifecycle.finish(token)) return false;
+  state.busy = false;
+  state.saving = false;
+  return true;
+}
