@@ -1364,13 +1364,23 @@ test('client wish source guards cover lifecycle source wiring without replacing 
   assert.equal(submit.includes('createClientFeedback'), false);
 
   const refresh = mainSourceFunction('refreshClientWishes');
+  assert.ok(refresh.includes('const cardContextToken = clientCardContextToken;'));
   assert.ok(refresh.includes('clientWishListRequestLifecycle.begin()'));
   assert.ok(refresh.includes('clientWishListRequestLifecycle.isCurrent(requestGeneration)'));
+  assert.ok(refresh.includes('cardContextToken === clientCardContextToken'));
   assert.ok(refresh.includes('clientCardState.includeArchivedWishes === includeArchived'));
   assert.ok(refresh.includes('fetchClientWishes(clientId, includeArchived)'));
 
   const load = mainSourceFunction('loadClientCardData');
   assert.ok(load.includes('clientWishListRequestLifecycle.invalidate()'));
+  assert.ok(load.includes('clientCardContextToken += 1'));
+  assert.ok(load.includes('clientWishContextToken += 1'));
+  const toggle = mainSourceFunction('toggleClientWishForm');
+  assert.ok(toggle.includes('clientWishContextToken += 1'));
+  assert.equal(toggle.includes('clientCardContextToken'), false, 'opening the Client Wish form must not stale an in-flight wishes list request');
+  const close = mainSourceFunction('closeClientWishForm');
+  assert.ok(close.includes('clientWishContextToken += 1'));
+  assert.equal(close.includes('clientCardContextToken'), false, 'closing the Client Wish form must not stale an in-flight wishes list request');
   const status = mainSourceFunction('changeClientWishStatus');
   assert.ok(status.includes('clientWishListRequestLifecycle.invalidate()'));
   const archive = mainSourceFunction('archiveClientWishFromCard');

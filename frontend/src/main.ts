@@ -566,6 +566,7 @@ const clientWishFieldLabels = { title: 'Кратко о пожелании', des
 let clientWishValidation = emptyFormValidationState();
 const clientWishCreateLifecycle = createRecipeMutationLifecycle();
 const clientWishListRequestLifecycle = createRequestGenerationLifecycle();
+let clientCardContextToken = 0;
 let clientWishContextToken = 0;
 let clientSubmitting = false;
 let clientSubmitToken = 0;
@@ -2989,15 +2990,15 @@ function syncClientCardDraftFormsFromDom() {
     }
   }
 }
-function loadClientCardData(clientId: number) { clientWishCreateLifecycle.invalidate(); clientWishListRequestLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState = { ...emptyClientCardState(), clientId }; render(); refreshClientWishes(); refreshClientFeedback(); clientCardState.recipesStatus = 'loading'; getClientRecipes(true).then((response) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId); clientCardState.recipesStatus = 'ready'; render(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.recipesStatus = 'error'; render(); }); }
+function loadClientCardData(clientId: number) { clientWishCreateLifecycle.invalidate(); clientWishListRequestLifecycle.invalidate(); clientCardContextToken += 1; clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState = { ...emptyClientCardState(), clientId }; render(); refreshClientWishes(); refreshClientFeedback(); clientCardState.recipesStatus = 'loading'; getClientRecipes(true).then((response) => { if (clientCardState.clientId !== clientId) return; syncClientCardDraftFormsFromDom(); clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId); clientCardState.recipesStatus = 'ready'; render(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.recipesStatus = 'error'; render(); }); }
 function refreshClientWishes(renderLoading = true, rejectOnError = false, showLoadError = true) {
   const clientId = clientCardState.clientId;
   if (!clientId) return Promise.resolve();
   syncClientCardDraftFormsFromDom();
   const includeArchived = clientCardState.includeArchivedWishes;
-  const contextToken = clientWishContextToken;
+  const cardContextToken = clientCardContextToken;
   const requestGeneration = clientWishListRequestLifecycle.begin();
-  const isCurrentWishesRequest = () => clientWishListRequestLifecycle.isCurrent(requestGeneration) && clientCardState.clientId === clientId && contextToken === clientWishContextToken && clientCardState.includeArchivedWishes === includeArchived;
+  const isCurrentWishesRequest = () => clientWishListRequestLifecycle.isCurrent(requestGeneration) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken && clientCardState.includeArchivedWishes === includeArchived;
   if (renderLoading) { clientCardState.wishesStatus = 'loading'; render(); }
   return fetchClientWishes(clientId, includeArchived).then((wishes) => {
     if (!isCurrentWishesRequest()) return;
