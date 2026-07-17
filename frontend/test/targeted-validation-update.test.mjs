@@ -1290,3 +1290,69 @@ test('production-linked request generations use deferred promises for stale clie
   const repeatOpenToken = versions.begin(); const repeatOpen = deferred(); state.selectedTemplate = 'B'; state.versionsStatus = 'loading'; const openCreateAgainSameContext = () => {}; openCreateAgainSameContext(); repeatOpen.promise.then((items) => { if (versions.isCurrent(repeatOpenToken) && state.selectedTemplate === 'B') { state.versions = items; state.versionsStatus = 'ready'; } }); repeatOpen.resolve(['B2']); await flush(); assert.deepEqual(state.versions, ['B2']); assert.equal(state.versionsStatus, 'ready');
   const compToken = compositionRefs.begin(); const comp = deferred(); comp.promise.then(() => { if (compositionRefs.isCurrent(compToken) && state.selectedRecipeId === 1) state.editorOpened = true; }); state.selectedRecipeId = 2; comp.resolve('ingredients'); await flush(); assert.equal(state.editorOpened, false);
 });
+
+test('client wish wrapper maps approved fields and preserves focused draft controls', () => {
+  reset();
+  const form = mkForm('client-wish');
+  const controls = {};
+  for (const f of ['title', 'description', 'category', 'priority', 'client_recipe_id']) {
+    controls[f] = addField(form, f, ['category', 'priority', 'client_recipe_id'].includes(f));
+  }
+  mockDoc.body.appendChild(form);
+  const title = controls.title;
+  title.value = 'Лёгкая текстура <script>alert(1)</script>';
+  title.focus();
+  title.setSelectionRange(2, 8);
+
+  mod.applyValidationToClientWishForm({
+    fieldErrors: {
+      title: ['Кратко о пожелании: <img src=x onerror=alert(1)> Укажите заголовок.'],
+      category: ['Категория: Выберите категорию.'],
+      priority: ['Важность: Выберите важность.'],
+      client_recipe_id: ['Индивидуальный рецепт: Рецепт не относится к клиенту.'],
+    },
+    formErrors: ['metadata.title: Остаётся в сводке.', 'client_id: Клиент не найден.'],
+  });
+
+  assert.equal(mockDoc.activeElement, title);
+  assert.equal(form.querySelector('[name="title"]'), title);
+  assert.equal(title.value, 'Лёгкая текстура <script>alert(1)</script>');
+  assert.equal(title.selectionStart, 2);
+  assert.equal(title.selectionEnd, 8);
+  assert.equal(title.getAttribute('aria-invalid'), 'true');
+  assert.equal(title.getAttribute('aria-describedby'), 'client-wish-title-error');
+  assert.ok(byId(form, 'client-wish-title-error').textContent.includes('<img src=x onerror=alert(1)>'));
+  assert.ok(byId(form, 'client-wish-category-error'));
+  assert.ok(byId(form, 'client-wish-priority-error'));
+  assert.ok(byId(form, 'client-wish-client_recipe_id-error'));
+  assert.ok(form.querySelector('.form-error-summary').textContent.includes('metadata.title'));
+
+  mod.applyValidationToClientWishForm({ fieldErrors: { priority: ['Важность: Выберите важность.'] }, formErrors: ['client_id: Клиент не найден.'] });
+  assert.equal(byId(form, 'client-wish-title-error'), null);
+  assert.equal(title.hasAttribute('aria-invalid'), false);
+  assert.ok(byId(form, 'client-wish-priority-error'));
+  assert.equal(form.querySelector('[name="title"]'), title);
+  assert.equal(mockDoc.activeElement, title);
+});
+
+test('client wish source guards cover lifecycle, duplicate prevention, refresh warning, and feedback boundary', () => {
+  const submit = mainSourceFunction('submitClientWishForm');
+  assert.ok(submit.includes('clientCardState.savingWish'));
+  assert.ok(submit.includes('clientWishCreateLifecycle.begin()'));
+  assert.ok(submit.includes('token === null'));
+  assert.ok(submit.includes('contextToken !== clientWishContextToken'));
+  assert.ok(submit.includes('createClientWish(clientId, payload)'));
+  assert.ok(submit.includes('clientCardState.wishes = [created'));
+  assert.ok(submit.includes('clientCardState.showWishForm = false'));
+  assert.ok(submit.includes('refreshClientWishes(false, true).catch'));
+  assert.ok(submit.includes('wishRefreshWarning'));
+  assert.equal(submit.includes('createClientFeedback'), false);
+
+  const form = mainSourceFunction('clientWishForm');
+  assert.ok(form.includes('novalidate'));
+  assert.ok(form.includes('validationSummary(clientWishValidation'));
+  assert.ok(form.includes('clientWishFieldAttrs'));
+
+  const feedback = mainSourceFunction('submitClientFeedbackForm');
+  assert.equal(feedback.includes('clientWishValidation'), false, 'Client Feedback remains outside A3.5 validation migration');
+});

@@ -201,6 +201,27 @@ export function createRequestGenerationLifecycle() {
   };
 }
 
+export function disableClientWishCreateMutationControls(root: ParentNode = document): void {
+  const form = root.querySelector<HTMLFormElement>('[data-form="client-wish"]');
+  if (form) {
+    form.setAttribute('aria-busy', 'true');
+    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
+    form.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
+    form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.textContent = 'Сохраняем…';
+  }
+  const guarded = '[data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="start-client-edit"], [data-action="cancel-client-edit"], [data-action="archive-client"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"]';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+export function restoreClientWishMutationControls(root: ParentNode = document): void {
+  root.querySelectorAll<HTMLFormElement>('[data-form="client-wish"]').forEach((form) => form.removeAttribute('aria-busy'));
+  restoreMutationGuards(root);
+  const submit = root.querySelector<HTMLButtonElement>('[data-form="client-wish"] button[type="submit"]');
+  if (submit) submit.textContent = 'Сохранить пожелание';
+}
+
 export type ClientRecipePageMutationState = { createSubmitting: boolean; compositionSubmitting: boolean; archiveRestoreSubmittingId: number | null };
 
 export function clientRecipePageMutationActiveState(state: ClientRecipePageMutationState): boolean {

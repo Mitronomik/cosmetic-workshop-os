@@ -943,3 +943,24 @@ Import CSV/XLSX draft backend foundation.
 - Browser smoke: NOT RUN.
 - Reason: waiting for review of the exact published GitHub PR head.
 - Slice A3 remains IN PROGRESS; Client Wishes, Client Feedback, Orders, and Production Confirmation remain separate future candidates.
+
+## 2026-07-17 — A3.5 Client Wishes structured validation branch
+
+Current phase repaired: Slice A3 remains IN PROGRESS. PR #118 / A3.4 is merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; exact published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke. A3.5 Client Wishes structured validation is the active branch. Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices.
+
+Work completed in this branch:
+- Migrated the existing Client Wish create form to shared structured backend validation with approved inline fields only.
+- Added targeted Client Wish DOM validation updates and ARIA-connected field errors.
+- Added a narrow Client Wish create mutation lifecycle with duplicate-submit prevention, context/stale-response guards, scoped busy/read-only/disabled controls, draft/focus preservation on rejected creates, and separate success-vs-refresh-warning handling.
+- Preserved Client Wish status/archive behavior and left Client Feedback behavior unchanged.
+- Updated README, implementation plan, current focus, progress, and handoff memory for A3.4 closure and A3.5 active scope.
+
+Verification reported for this branch must list only commands actually run. Browser smoke is still pending for the exact published GitHub PR head; Codex has not claimed A3.5 merge or exact-head verification.
+
+A3.5 verification run in this branch:
+- `cd frontend && npm run test:form-validation` — passed.
+- `cd frontend && npm run test:targeted-validation-update` — passed.
+- `cd frontend && npm run build` — passed.
+- Concurrent frontend form-validation and targeted-validation test execution — passed.
+- `cd backend && python3 -m pytest app/tests/test_client_wishes_feedback.py` — passed, 7 tests.
+- Browser smoke: NOT RUN in Codex because no existing browser executable or Playwright command was available (`command -v google-chrome`, `chromium`, `chromium-browser`, and `playwright` returned no path). External exact-head browser smoke remains required before merge.

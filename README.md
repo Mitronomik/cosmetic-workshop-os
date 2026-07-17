@@ -25,9 +25,9 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current repository state: PR #113 completes Slice A1 implementation and verification; merge is pending.
+Current repository state: PR #118 / Slice A3.4 Client Recipe structured validation is merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke. Slice A3 remains in progress, and Slice A3.5 Client Wishes structured validation is the current focused runtime slice.
 
-Runtime product implementation is complete through PR98. The app includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
+Runtime product implementation is complete through the merged A3.4 baseline. The app includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 
 Newly generated workshop summary documents include configured Workshop profile fields. Empty fields are omitted, an empty profile omits the whole section, and existing generated documents are not mutated.
 
@@ -35,7 +35,7 @@ PR99-PR101 were documentation and governance changes only: the project UI/UX con
 
 Slice A1 browser smoke passed on runtime commit `040c90fa781edea8484eb84595745c3a3aaf5eaf`: 53 of 53 checks passed, including the targeted offline and recovery retest.
 
-PR #116 / Slice A3.2 inventory structured validation closure is merged at `79286f076292645b3e83dfedfccb366dee1777f6`, closed, and browser-smoke verified. Slice A3.3 recipe structured validation is the current focused implementation slice; Recipe Version edit/delete remains prohibited and Slice A3 remains in progress.
+PR #116 / Slice A3.2 inventory structured validation closure is merged at `79286f076292645b3e83dfedfccb366dee1777f6`, closed, and browser-smoke verified. PR #118 / Slice A3.4 Client Recipe structured validation is merged and exact-head smoke-verified. Slice A3.5 Client Wishes structured validation is now active; Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices.
 
 Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, and unrelated business mutations out of scope unless explicitly approved.
 

@@ -314,3 +314,30 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Tests executed in this workspace: `npm run test:form-validation` (16/16), `npm run test:targeted-validation-update` (29/29), `npm run build`, and `python3 -m pytest app/tests/test_client_recipes.py` (40/40).
 - Browser smoke: NOT RUN. Reason: waiting for review of the exact published GitHub PR head.
 - Remaining A3 candidates: Client Wishes, Client Feedback, Orders, Production Readiness/Confirmation, and any other critical forms selected by the roadmap owner.
+
+## Slice A3.5 handoff — Client Wishes structured validation
+
+Scope: existing Client Wish creation inside the client card only (`POST /api/clients/{client_id}/wishes`). Visible migrated fields: `title`, `description`, `category`, `priority`, and `client_recipe_id`.
+
+Validation mapping boundary: exact approved fields and approved transport-prefixed paths such as `body.title` render inline. Hidden/aggregate/conflict paths including `client_id`, `id`, `status`, `is_active`, timestamps, malformed paths, unknown nested paths such as `metadata.title` or `items.0.title`, and non-structured/network failures remain in the Client Wish form summary. Backend messages continue through safe text rendering/escaping.
+
+Mutation lifecycle: Client Wish create uses its own request lifecycle and client-card context token. Duplicate submits while saving are ignored; the form receives scoped `aria-busy`; inputs/textareas become readonly; selects and conflicting client-card controls are disabled narrowly; stale responses from an old client context cannot update a newer card. Rejected creates keep the form open and preserve title, description, category, priority, linked Client Recipe, focused node, caret, and selection.
+
+Success versus refresh failure: the successful create response is treated as authoritative and inserted into local wishes before refresh. The create form resets/closes after success and announces success. If the follow-up wishes refresh fails, the created wish remains visible, no second POST is sent, the form is not reopened, and a separate refresh warning is shown instead of mutation-failure feedback.
+
+Preserved behavior: active/archived filtering, `Показать архивные`, status labels/actions, archive confirmation, linked Client Recipe choices including archived recipes where already loaded, backend ownership validation, audit logging, and Client Wish list rendering semantics are preserved.
+
+Client Feedback exclusion: Client Feedback create payloads, fields, append-only behavior, endpoints, and runtime validation remain unchanged; it is the next separate validation candidate after A3.5.
+
+Commands actually run will be recorded in the PR/final response. Browser smoke remains required externally against the exact published GitHub PR head before merge if no existing Codex browser automation path is available.
+
+A3.5 commands run in Codex:
+- `cd frontend && npm run test:form-validation` — passed.
+- `cd frontend && npm run test:targeted-validation-update` — passed.
+- `cd frontend && npm run build` — passed.
+- concurrent frontend validation test command from the PR prompt — passed.
+- `cd backend && python3 -m pytest app/tests/test_client_wishes_feedback.py` — passed, 7 tests.
+- `git diff --check`, `git status --short`, `git diff --name-only`, `git diff --stat` — run for repository hygiene.
+- Client Feedback scope search and stale project-state search — run and reviewed; changed Client Feedback matches are mechanical context/type references and a source guard confirming `submitClientFeedbackForm` is not migrated.
+
+Checks not run: focused browser smoke was NOT RUN in Codex because no existing browser executable or Playwright command was available without installing browser dependencies. External exact-head browser smoke remains required before merge using the checklist in the PR description.
