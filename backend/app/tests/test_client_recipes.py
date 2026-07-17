@@ -16,7 +16,7 @@ from app.domain.ingredients import IngredientDraft
 from app.domain.recipes import RecipeIngredientDraft, RecipeTemplateDraft, RecipeVersionDraft
 from app.main import create_app
 from app.repositories.client_recipes import ClientRecipeNotFoundError
-from app.services.client_recipes import ClientInactiveError, ClientRecipeService, SourceRecipeVersionEmptyError
+from app.services.client_recipes import ClientInactiveError, ClientRecipeIngredientLineOwnershipError, ClientRecipeService, SourceRecipeVersionEmptyError
 from app.services.clients import ClientService
 from app.services.database import initialize_database
 from app.services.ingredients import IngredientService
@@ -464,7 +464,7 @@ def test_update_composition_foreign_line_rejection_is_transactional_with_valid_d
         ),
     ]
 
-    with pytest.raises(Exception) as ownership:
+    with pytest.raises(ClientRecipeIngredientLineOwnershipError) as ownership:
         service.update_composition(first.client_recipe.id, valid_but_foreign)
 
     assert "does not belong" in str(ownership.value)

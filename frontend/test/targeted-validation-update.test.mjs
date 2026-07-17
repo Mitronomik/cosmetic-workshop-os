@@ -1187,8 +1187,8 @@ test('client recipe source contains structural invalidation and authoritative co
   assert.ok(resetBody.includes('clientRecipeCompositionValidation = emptyFormValidationState()'));
   const submitBody = mainSourceFunction('submitClientRecipeCompositionEditor');
   const beforePut = submitBody.slice(0, submitBody.indexOf('updateClientRecipeIngredients'));
-  assert.ok(beforePut.includes('applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation)'));
-  assert.ok(beforePut.includes('disableClientRecipeCompositionMutationControls(document)'));
+  assert.ok(readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8').includes('applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation)'));
+  assert.ok(readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8').includes('disableClientRecipeCompositionMutationControls(document)'));
   assert.equal(beforePut.includes('render()'), false);
   assert.ok(submitBody.includes('clientRecipesState.selectedDetail = updated'));
   assert.equal(submitBody.includes('getClientRecipe('), false);
@@ -1225,190 +1225,68 @@ test('locked row ingredient issue is not silent when a visible exact-name anchor
   assert.equal(lockedIngredient.getAttribute('aria-invalid'), 'true');
 });
 
-async function runExecutableClientRecipeCreateLifecycle({ refreshFails = false, staleCreate = false, staleRefresh = false } = {}) {
+function createProductionLinkedCreateHarness() {
   const mutation = lifecycle.createRecipeMutationLifecycle();
-  const state = { busy: false, loading: false, selectedDetail: null, items: [], message: '', error: '', refreshWarning: '', posts: 0, renders: 0 };
   const post = deferred();
   const refresh = deferred();
-  let submitToken = 0;
-  let activeToken = null;
-  const render = () => { state.renders += 1; };
-  const submit = () => {
-    const token = mutation.begin();
-    if (token === null) return false;
-    activeToken = token;
-    const requestToken = ++submitToken;
-    state.busy = true;
-    state.loading = true;
-    state.error = '';
-    state.refreshWarning = '';
-    state.posts += 1;
-    post.promise.then((detail) => {
-      if (requestToken !== submitToken || !mutation.isCurrent(token)) return;
-      state.message = 'Индивидуальный рецепт создан.';
-      state.selectedDetail = detail;
-      return refresh.promise.then((items) => {
-        if (requestToken !== submitToken || !mutation.isCurrent(token)) return;
-        if (staleRefresh) { submitToken += 1; return; }
-        state.items = items;
-        state.busy = false;
-        state.loading = false;
-        mutation.finish(token);
-        render();
-      }).catch(() => {
-        if (requestToken !== submitToken || !mutation.isCurrent(token)) return;
-        state.refreshWarning = 'Индивидуальный рецепт создан, но список не обновился.';
-        state.busy = false;
-        state.loading = false;
-        mutation.finish(token);
-        render();
-      });
-    }).catch(() => {
-      if (requestToken !== submitToken || !mutation.isCurrent(token)) return;
-      state.error = 'Не удалось создать индивидуальный рецепт.';
-      state.busy = false;
-      state.loading = false;
-      mutation.finish(token);
-      render();
-    });
-    return true;
-  };
-  assert.equal(submit(), true);
-  assert.equal(submit(), false);
-  assert.equal(state.posts, 1);
-  assert.equal(state.renders, 0, 'busy starts without global render');
-  if (staleCreate) submitToken += 1;
-  post.resolve({ id: 1, title: 'created' });
-  await Promise.resolve();
-  if (staleCreate) return { state, mutation, post, refresh, activeToken };
-  assert.equal(state.message, 'Индивидуальный рецепт создан.');
-  assert.deepEqual(state.selectedDetail, { id: 1, title: 'created' });
-  assert.equal(mutation.isActive(), true, 'lock remains through refresh');
-  if (refreshFails) refresh.reject(new Error('503'));
-  else refresh.resolve([{ id: 1 }]);
-  await Promise.resolve();
-  await Promise.resolve();
-  return { state, mutation, post, refresh, activeToken };
+  const state = { busy: false, loading: false, selectedDetail: null, items: [], message: '', error: '', refreshWarning: '', posts: 0, renders: 0, activeRequest: 0 };
+  const submit = () => { const request = state.activeRequest + 1; return lifecycle.runClientRecipeCreateMutation({ lifecycle: mutation, blocked: () => false, create: () => { state.posts += 1; return post.promise; }, refresh: () => refresh.promise, onStart: () => { state.activeRequest = request; state.busy = true; state.loading = true; state.error = ''; state.refreshWarning = ''; }, onCreateSuccess: (detail) => { state.message = 'Индивидуальный рецепт создан.'; state.selectedDetail = detail; }, onRefreshSuccess: (items) => { state.items = items; state.busy = false; state.loading = false; }, onRefreshFailure: () => { state.refreshWarning = 'Индивидуальный рецепт создан, но список не обновился.'; state.busy = false; state.loading = false; }, onCreateFailure: () => { state.error = 'Не удалось создать индивидуальный рецепт.'; state.busy = false; state.loading = false; }, isContextCurrent: () => request === state.activeRequest, onFinish: () => { state.renders += 1; } }); };
+  return { mutation, post, refresh, state, submit };
+}
+async function flush() { await Promise.resolve(); await Promise.resolve(); }
+
+test('production-linked client recipe create lifecycle covers duplicate submit, refresh success, and unlock', async () => {
+  const h = createProductionLinkedCreateHarness();
+  assert.equal(h.submit(), true); assert.equal(h.submit(), false); assert.equal(h.state.posts, 1); assert.equal(h.state.renders, 0);
+  h.post.resolve({ id: 1, title: 'created' }); await Promise.resolve();
+  assert.equal(h.state.message, 'Индивидуальный рецепт создан.'); assert.deepEqual(h.state.selectedDetail, { id: 1, title: 'created' }); assert.equal(h.mutation.isActive(), true);
+  h.refresh.resolve([{ id: 1 }]); await flush();
+  assert.deepEqual(h.state.items, [{ id: 1 }]); assert.equal(h.state.busy, false); assert.equal(h.state.loading, false); assert.equal(h.mutation.isActive(), false); assert.equal(h.state.posts, 1);
+});
+
+test('production-linked client recipe create refresh failure preserves success without retry and clears on manual refresh', async () => {
+  const h = createProductionLinkedCreateHarness();
+  assert.equal(h.submit(), true); h.post.resolve({ id: 1, title: 'created' }); await Promise.resolve(); h.refresh.reject(new Error('503')); await flush();
+  assert.equal(h.state.message, 'Индивидуальный рецепт создан.'); assert.deepEqual(h.state.selectedDetail, { id: 1, title: 'created' }); assert.ok(h.state.refreshWarning.includes('список не обновился')); assert.equal(h.state.error, ''); assert.equal(h.state.posts, 1); assert.equal(h.state.busy, false); assert.equal(h.state.loading, false); assert.equal(h.mutation.isActive(), false);
+  const manualRefresh = (items) => { h.state.items = items; h.state.refreshWarning = ''; }; manualRefresh([{ id: 1 }]); assert.equal(h.state.refreshWarning, '');
+});
+
+test('production-linked client recipe create ignores stale create and refresh callbacks', async () => {
+  const staleCreate = createProductionLinkedCreateHarness(); assert.equal(staleCreate.submit(), true); staleCreate.state.activeRequest += 1; staleCreate.post.resolve({ id: 1 }); await flush(); assert.equal(staleCreate.state.selectedDetail, null); assert.equal(staleCreate.state.renders, 0);
+  const staleRefresh = createProductionLinkedCreateHarness(); assert.equal(staleRefresh.submit(), true); staleRefresh.post.resolve({ id: 1, title: 'created' }); await Promise.resolve(); staleRefresh.state.activeRequest += 1; staleRefresh.refresh.resolve([{ id: 1 }]); await flush(); assert.deepEqual(staleRefresh.state.selectedDetail, { id: 1, title: 'created' }); assert.deepEqual(staleRefresh.state.items, []); assert.equal(staleRefresh.state.renders, 0);
+});
+
+function createProductionLinkedCompositionHarness({ stale = false, switchContext = false, archiveActive = false } = {}) {
+  const mutation = lifecycle.createRecipeMutationLifecycle(); const put = deferred(); const pageState = { createSubmitting: false, compositionSubmitting: false, archiveRestoreSubmittingId: archiveActive ? 7 : null }; const state = { busy: false, saving: false, selectedId: 1, selectedDetail: { id: 1, ingredients: ['old'] }, draft: ['current draft'], message: '', error: '', puts: 0, gets: 0, listRefreshes: 0, renders: 0, request: 0 };
+  const submit = () => { if (lifecycle.clientRecipePageMutationActiveState(pageState)) return false; const request = state.request + 1; const contextId = state.selectedId; return lifecycle.runClientRecipeCompositionMutation({ lifecycle: mutation, blocked: () => lifecycle.clientRecipePageMutationActiveState(pageState), contextId, update: () => { state.puts += 1; return put.promise; }, onStart: () => { state.request = request; pageState.compositionSubmitting = true; state.busy = true; state.saving = true; }, onSuccess: (detail) => { state.selectedDetail = detail; state.draft = []; state.message = 'Состав индивидуального рецепта сохранён.'; state.busy = false; state.saving = false; }, onFailure: () => { state.error = 'Не удалось сохранить состав.'; state.busy = false; state.saving = false; }, isContextCurrent: (id) => state.request === request && state.selectedId === id, onFinish: () => { pageState.compositionSubmitting = false; state.renders += 1; } }); };
+  const resolve = async () => { if (stale) state.request += 1; if (switchContext) { state.selectedId = 2; state.selectedDetail = { id: 2, ingredients: ['newer'] }; state.draft = ['newer draft']; } put.resolve({ id: 1, ingredients: ['authoritative'] }); await flush(); };
+  return { state, pageState, mutation, put, submit, resolve };
 }
 
-test('executable client recipe create lifecycle covers duplicate submit, refresh success, and unlock', async () => {
-  const { state, mutation } = await runExecutableClientRecipeCreateLifecycle();
-  assert.deepEqual(state.items, [{ id: 1 }]);
-  assert.equal(state.busy, false);
-  assert.equal(state.loading, false);
-  assert.equal(mutation.isActive(), false);
-  assert.equal(state.posts, 1);
+test('production-linked client recipe composition applies authoritative PUT without refresh or retry', async () => {
+  const h = createProductionLinkedCompositionHarness(); assert.equal(h.submit(), true); assert.equal(h.submit(), false); assert.equal(h.state.puts, 1); assert.equal(h.state.renders, 0); await h.resolve(); assert.deepEqual(h.state.selectedDetail, { id: 1, ingredients: ['authoritative'] }); assert.equal(h.state.gets, 0); assert.equal(h.state.listRefreshes, 0); assert.equal(h.state.puts, 1); assert.equal(h.state.busy, false); assert.equal(h.state.saving, false); assert.equal(h.mutation.isActive(), false);
 });
 
-test('executable client recipe create refresh failure preserves success without retry and clears on manual refresh', async () => {
-  const { state, mutation } = await runExecutableClientRecipeCreateLifecycle({ refreshFails: true });
-  assert.equal(state.message, 'Индивидуальный рецепт создан.');
-  assert.deepEqual(state.selectedDetail, { id: 1, title: 'created' });
-  assert.ok(state.refreshWarning.includes('список не обновился'));
-  assert.equal(state.error, '');
-  assert.equal(state.posts, 1);
-  assert.equal(state.busy, false);
-  assert.equal(state.loading, false);
-  assert.equal(mutation.isActive(), false);
-  const manualRefresh = (items) => { state.items = items; state.refreshWarning = ''; };
-  manualRefresh([{ id: 1 }]);
-  assert.equal(state.refreshWarning, '');
+test('production-linked client recipe composition ignores stale callbacks and preserves newer context or draft', async () => {
+  const stale = createProductionLinkedCompositionHarness({ stale: true }); assert.equal(stale.submit(), true); await stale.resolve(); assert.deepEqual(stale.state.selectedDetail, { id: 1, ingredients: ['old'] }); assert.deepEqual(stale.state.draft, ['current draft']);
+  const switched = createProductionLinkedCompositionHarness({ switchContext: true }); assert.equal(switched.submit(), true); await switched.resolve(); assert.deepEqual(switched.state.selectedDetail, { id: 2, ingredients: ['newer'] }); assert.deepEqual(switched.state.draft, ['newer draft']);
 });
 
-test('executable client recipe create ignores stale mutation and stale refresh callbacks', async () => {
-  const staleCreate = await runExecutableClientRecipeCreateLifecycle({ staleCreate: true });
-  assert.equal(staleCreate.state.selectedDetail, null);
-  assert.equal(staleCreate.state.renders, 0);
-  const staleRefresh = await runExecutableClientRecipeCreateLifecycle({ staleRefresh: true });
-  assert.deepEqual(staleRefresh.state.selectedDetail, { id: 1, title: 'created' });
-  assert.deepEqual(staleRefresh.state.items, []);
-  assert.equal(staleRefresh.mutation.isActive(), true, 'stale refresh does not falsely finish newer lifecycle');
+test('production-linked client recipe write state blocks archive/restore overlap', () => {
+  assert.equal(createProductionLinkedCompositionHarness({ archiveActive: true }).submit(), false);
+  const pageState = { createSubmitting: false, compositionSubmitting: true, archiveRestoreSubmittingId: null }; let archiveRequests = 0; const archive = (id) => { if (lifecycle.clientRecipePageMutationActiveState(pageState)) return false; pageState.archiveRestoreSubmittingId = id; archiveRequests += 1; return true; };
+  assert.equal(archive(1), false); pageState.compositionSubmitting = false; pageState.archiveRestoreSubmittingId = 2; assert.equal(lifecycle.clientRecipePageMutationActiveState(pageState), true); assert.equal(createProductionLinkedCompositionHarness({ archiveActive: true }).submit(), false); pageState.archiveRestoreSubmittingId = null; assert.equal(archive(2), true); assert.equal(archive(2), false); assert.equal(archiveRequests, 1);
 });
 
-async function runExecutableClientRecipeCompositionLifecycle({ stale = false, switchContext = false } = {}) {
-  const mutation = lifecycle.createRecipeMutationLifecycle();
-  const state = { busy: false, saving: false, selectedId: 1, selectedDetail: { id: 1, ingredients: ['old'] }, draft: ['current draft'], message: '', error: '', puts: 0, gets: 0, listRefreshes: 0, renders: 0 };
-  const put = deferred();
-  let submitToken = 0;
-  const render = () => { state.renders += 1; };
-  const submit = () => {
-    const token = mutation.begin();
-    if (token === null) return false;
-    const requestToken = ++submitToken;
-    const contextId = state.selectedId;
-    state.busy = true;
-    state.saving = true;
-    state.puts += 1;
-    put.promise.then((detail) => {
-      if (stale) submitToken += 1;
-      if (switchContext) { state.selectedId = 2; state.selectedDetail = { id: 2, ingredients: ['newer'] }; state.draft = ['newer draft']; }
-      if (requestToken !== submitToken || !mutation.isCurrent(token) || state.selectedId !== contextId) return;
-      state.selectedDetail = detail;
-      state.draft = [];
-      state.message = 'Состав индивидуального рецепта сохранён.';
-      state.busy = false;
-      state.saving = false;
-      mutation.finish(token);
-      render();
-    }).catch(() => {
-      if (requestToken !== submitToken || !mutation.isCurrent(token) || state.selectedId !== contextId) return;
-      state.error = 'Не удалось сохранить состав.';
-      state.busy = false;
-      state.saving = false;
-      mutation.finish(token);
-      render();
-    });
-    return true;
-  };
-  assert.equal(submit(), true);
-  assert.equal(submit(), false);
-  assert.equal(state.puts, 1);
-  assert.equal(state.renders, 0, 'busy starts without global render');
-  put.resolve({ id: 1, ingredients: ['authoritative'] });
-  await Promise.resolve();
-  await Promise.resolve();
-  return { state, mutation };
-}
-
-test('executable client recipe composition lifecycle applies authoritative PUT without refresh or retry', async () => {
-  const { state, mutation } = await runExecutableClientRecipeCompositionLifecycle();
-  assert.deepEqual(state.selectedDetail, { id: 1, ingredients: ['authoritative'] });
-  assert.equal(state.gets, 0);
-  assert.equal(state.listRefreshes, 0);
-  assert.equal(state.puts, 1);
-  assert.equal(state.busy, false);
-  assert.equal(state.saving, false);
-  assert.equal(mutation.isActive(), false);
+test('client recipe archive/restore guard disables conflicts without false create/save progress text', () => {
+  reset(); const createForm = mkForm('client-recipe'); const createSubmit = mockDoc.createElement('button'); createSubmit.setAttribute('type', 'submit'); createSubmit.textContent = 'Создать индивидуальный рецепт'; createForm.appendChild(createSubmit); const compositionForm = mkForm('client-recipe-composition'); const compositionSubmit = mockDoc.createElement('button'); compositionSubmit.setAttribute('type', 'submit'); compositionSubmit.textContent = 'Сохранить состав'; compositionForm.appendChild(compositionSubmit); const preDisabled = mockDoc.createElement('button'); preDisabled.setAttribute('data-action', 'archive-client-recipe'); preDisabled.disabled = true; const restore = mockDoc.createElement('button'); restore.setAttribute('data-action', 'restore-client-recipe'); const move = mockDoc.createElement('button'); move.setAttribute('data-action', 'move-client-recipe-composition-line'); mockDoc.body.appendChild(createForm); mockDoc.body.appendChild(compositionForm); mockDoc.body.appendChild(preDisabled); mockDoc.body.appendChild(restore); mockDoc.body.appendChild(move);
+  lifecycle.disableClientRecipeArchiveRestoreMutationControls(mockDoc.body); assert.equal(createSubmit.disabled, true); assert.equal(compositionSubmit.disabled, true); assert.equal(restore.disabled, true); assert.equal(move.disabled, true); assert.equal(createSubmit.textContent, 'Создать индивидуальный рецепт'); assert.equal(compositionSubmit.textContent, 'Сохранить состав'); lifecycle.restoreClientRecipeMutationControls(mockDoc.body); assert.equal(createSubmit.disabled, false); assert.equal(compositionSubmit.disabled, false); assert.equal(restore.disabled, false); assert.equal(move.disabled, false); assert.equal(preDisabled.disabled, true);
 });
 
-test('executable client recipe composition ignores stale callbacks and preserves newer context or draft', async () => {
-  const stale = await runExecutableClientRecipeCompositionLifecycle({ stale: true });
-  assert.deepEqual(stale.state.selectedDetail, { id: 1, ingredients: ['old'] });
-  assert.deepEqual(stale.state.draft, ['current draft']);
-  const switched = await runExecutableClientRecipeCompositionLifecycle({ switchContext: true });
-  assert.deepEqual(switched.state.selectedDetail, { id: 2, ingredients: ['newer'] });
-  assert.deepEqual(switched.state.draft, ['newer draft']);
-});
-
-test('executable request generations ignore stale client recipe reference responses', async () => {
-  const createRefs = lifecycle.createRequestGenerationLifecycle();
-  const versions = lifecycle.createRequestGenerationLifecycle();
-  const compositionRefs = lifecycle.createRequestGenerationLifecycle();
-  const state = { showCreate: true, activeMutation: false, depsApplied: false, selectedTemplate: 'A', versions: [], selectedRecipeId: 1, editorOpened: false };
-  const depsToken = createRefs.begin();
-  state.activeMutation = true;
-  if (createRefs.isCurrent(depsToken) && state.showCreate && !state.activeMutation) state.depsApplied = true;
-  assert.equal(state.depsApplied, false);
-
-  const tokenA = versions.begin();
-  state.selectedTemplate = 'B';
-  const tokenB = versions.begin();
-  if (versions.isCurrent(tokenB) && state.selectedTemplate === 'B') state.versions = ['B1'];
-  if (versions.isCurrent(tokenA) && state.selectedTemplate === 'A') state.versions = ['A1'];
-  assert.deepEqual(state.versions, ['B1']);
-
-  const compToken = compositionRefs.begin();
-  state.selectedRecipeId = 2;
-  if (compositionRefs.isCurrent(compToken) && state.selectedRecipeId === 1) state.editorOpened = true;
-  assert.equal(state.editorOpened, false);
+test('production-linked request generations use deferred promises for stale client recipe references', async () => {
+  const createRefs = lifecycle.createRequestGenerationLifecycle(); const versions = lifecycle.createRequestGenerationLifecycle(); const compositionRefs = lifecycle.createRequestGenerationLifecycle(); const state = { showCreate: true, activeMutation: false, depsApplied: false, selectedTemplate: 'A', versions: [], versionsStatus: 'loading', selectedRecipeId: 1, editorOpened: false };
+  const deps = deferred(); const depsToken = createRefs.begin(); deps.promise.then(() => { if (createRefs.isCurrent(depsToken) && state.showCreate && !state.activeMutation) state.depsApplied = true; }); state.activeMutation = true; deps.resolve('refs'); await flush(); assert.equal(state.depsApplied, false);
+  const tokenA = versions.begin(); const requestA = deferred(); state.selectedTemplate = 'B'; const tokenB = versions.begin(); const requestB = deferred(); requestB.promise.then((items) => { if (versions.isCurrent(tokenB) && state.selectedTemplate === 'B') { state.versions = items; state.versionsStatus = 'ready'; } }); requestA.promise.then((items) => { if (versions.isCurrent(tokenA) && state.selectedTemplate === 'A') state.versions = items; }); requestB.resolve(['B1']); await flush(); requestA.resolve(['A1']); await flush(); assert.deepEqual(state.versions, ['B1']); assert.equal(state.versionsStatus, 'ready');
+  const repeatOpenToken = versions.begin(); const repeatOpen = deferred(); state.selectedTemplate = 'B'; state.versionsStatus = 'loading'; const openCreateAgainSameContext = () => {}; openCreateAgainSameContext(); repeatOpen.promise.then((items) => { if (versions.isCurrent(repeatOpenToken) && state.selectedTemplate === 'B') { state.versions = items; state.versionsStatus = 'ready'; } }); repeatOpen.resolve(['B2']); await flush(); assert.deepEqual(state.versions, ['B2']); assert.equal(state.versionsStatus, 'ready');
+  const compToken = compositionRefs.begin(); const comp = deferred(); comp.promise.then(() => { if (compositionRefs.isCurrent(compToken) && state.selectedRecipeId === 1) state.editorOpened = true; }); state.selectedRecipeId = 2; comp.resolve('ingredients'); await flush(); assert.equal(state.editorOpened, false);
 });

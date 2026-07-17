@@ -163,6 +163,15 @@ export function disableClientRecipeCompositionMutationControls(root: ParentNode 
   root.querySelectorAll(guarded).forEach(mutationDisabled);
 }
 
+export function disableClientRecipeArchiveRestoreMutationControls(root: ParentNode = document): void {
+  const createForm = root.querySelector<HTMLFormElement>('[data-form="client-recipe"]');
+  if (createForm) { createForm.setAttribute('aria-busy', 'true'); createForm.querySelectorAll<HTMLButtonElement>('button[type="submit"]').forEach(mutationDisabled); }
+  const compositionForm = root.querySelector<HTMLFormElement>('[data-form="client-recipe-composition"]');
+  if (compositionForm) { compositionForm.setAttribute('aria-busy', 'true'); compositionForm.querySelectorAll<HTMLButtonElement>('button[type="submit"]').forEach(mutationDisabled); }
+  const guarded = '[data-action="reload-client-recipes"], [data-action="open-client-recipe-create"], [data-action="hide-client-recipe-create"], [data-action="open-client-recipe-detail"], [data-action="close-client-recipe-detail"], [data-action="archive-client-recipe"], [data-action="restore-client-recipe"], [data-action="select-client-recipe-template"], [data-action="open-client-recipe-composition-editor"], [data-action="add-client-recipe-composition-line"], [data-action="remove-client-recipe-composition-line"], [data-action="move-client-recipe-composition-line"], [data-action="reset-client-recipe-composition-editor"], [data-action="close-client-recipe-composition-editor"]';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
 export function restoreClientRecipeMutationControls(root: ParentNode = document): void {
   root.querySelectorAll<HTMLFormElement>('[data-form="client-recipe"], [data-form="client-recipe-composition"]').forEach((form) => form.removeAttribute('aria-busy'));
   restoreMutationGuards(root);
@@ -192,75 +201,56 @@ export function createRequestGenerationLifecycle() {
   };
 }
 
-export type ClientRecipeCreateLifecycleState<TDetail = unknown, TList = unknown> = {
-  busy: boolean;
-  loading: boolean;
-  selectedDetail: TDetail | null;
-  items: TList[];
-  message: string;
-  error: string;
-  refreshWarning: string;
-  posts: number;
-  renders: number;
-};
+export type ClientRecipePageMutationState = { createSubmitting: boolean; compositionSubmitting: boolean; archiveRestoreSubmittingId: number | null };
 
-export function beginClientRecipeCreateLifecycle<TDetail, TList>(
-  state: ClientRecipeCreateLifecycleState<TDetail, TList>,
-  lifecycle: ReturnType<typeof createRecipeMutationLifecycle>,
-): number | null {
-  const token = lifecycle.begin();
-  if (token === null) return null;
-  state.busy = true;
-  state.loading = true;
-  state.error = '';
-  state.refreshWarning = '';
-  return token;
+export function clientRecipePageMutationActiveState(state: ClientRecipePageMutationState): boolean {
+  return state.createSubmitting || state.compositionSubmitting || state.archiveRestoreSubmittingId !== null;
 }
 
-export function finishClientRecipeCreateLifecycle<TDetail, TList>(
-  state: ClientRecipeCreateLifecycleState<TDetail, TList>,
-  lifecycle: ReturnType<typeof createRecipeMutationLifecycle>,
-  token: number,
-): boolean {
-  if (!lifecycle.finish(token)) return false;
-  state.busy = false;
-  state.loading = false;
+export type ClientRecipeCreateMutationOptions<TDetail, TList> = { lifecycle: ReturnType<typeof createRecipeMutationLifecycle>; blocked?: () => boolean; create: () => Promise<TDetail>; refresh: () => Promise<TList[]>; onStart: (token: number) => void; onCreateSuccess: (detail: TDetail, token: number) => void; onRefreshSuccess: (items: TList[], token: number) => void; onRefreshFailure: (error: unknown, token: number) => void; onCreateFailure: (error: unknown, token: number) => void; isContextCurrent?: (token: number) => boolean; onFinish: (token: number) => void };
+
+export function runClientRecipeCreateMutation<TDetail, TList>(options: ClientRecipeCreateMutationOptions<TDetail, TList>): boolean {
+  if (options.blocked?.()) return false;
+  const token = options.lifecycle.begin();
+  if (token === null) return false;
+  const isCurrent = () => options.lifecycle.isCurrent(token) && (options.isContextCurrent?.(token) ?? true);
+  options.onStart(token);
+  options.create().then((detail) => {
+    if (!isCurrent()) return;
+    options.onCreateSuccess(detail, token);
+    return options.refresh().then((items) => {
+      if (!isCurrent()) return;
+      options.onRefreshSuccess(items, token);
+      if (options.lifecycle.finish(token)) options.onFinish(token);
+    }).catch((error) => {
+      if (!isCurrent()) return;
+      options.onRefreshFailure(error, token);
+      if (options.lifecycle.finish(token)) options.onFinish(token);
+    });
+  }).catch((error) => {
+    if (!isCurrent()) return;
+    options.onCreateFailure(error, token);
+    if (options.lifecycle.finish(token)) options.onFinish(token);
+  });
   return true;
 }
 
-export type ClientRecipeCompositionLifecycleState<TDetail = unknown> = {
-  busy: boolean;
-  saving: boolean;
-  selectedId: number | null;
-  selectedDetail: TDetail | null;
-  draft: unknown[];
-  message: string;
-  error: string;
-  puts: number;
-  gets: number;
-  listRefreshes: number;
-  renders: number;
-};
+export type ClientRecipeCompositionMutationOptions<TDetail> = { lifecycle: ReturnType<typeof createRecipeMutationLifecycle>; blocked?: () => boolean; contextId: number; update: () => Promise<TDetail>; onStart: (token: number) => void; onSuccess: (detail: TDetail, token: number) => void; onFailure: (error: unknown, token: number) => void; isContextCurrent: (contextId: number, token: number) => boolean; onFinish: (token: number) => void };
 
-export function beginClientRecipeCompositionLifecycle<TDetail>(
-  state: ClientRecipeCompositionLifecycleState<TDetail>,
-  lifecycle: ReturnType<typeof createRecipeMutationLifecycle>,
-): number | null {
-  const token = lifecycle.begin();
-  if (token === null) return null;
-  state.busy = true;
-  state.saving = true;
-  state.error = '';
-  return token;
-}
-
-export function finishClientRecipeCompositionLifecycle<TDetail>(
-  state: ClientRecipeCompositionLifecycleState<TDetail>,
-  lifecycle: ReturnType<typeof createRecipeMutationLifecycle>,
-  token: number,
-): boolean {
-  if (!lifecycle.finish(token)) return false;
-  state.busy = false;
-  state.saving = false;
+export function runClientRecipeCompositionMutation<TDetail>(options: ClientRecipeCompositionMutationOptions<TDetail>): boolean {
+  if (options.blocked?.()) return false;
+  const token = options.lifecycle.begin();
+  if (token === null) return false;
+  const isCurrent = () => options.lifecycle.isCurrent(token) && options.isContextCurrent(options.contextId, token);
+  options.onStart(token);
+  options.update().then((detail) => {
+    if (!isCurrent()) return;
+    options.onSuccess(detail, token);
+    if (options.lifecycle.finish(token)) options.onFinish(token);
+  }).catch((error) => {
+    if (!isCurrent()) return;
+    options.onFailure(error, token);
+    if (options.lifecycle.finish(token)) options.onFinish(token);
+  });
   return true;
 }

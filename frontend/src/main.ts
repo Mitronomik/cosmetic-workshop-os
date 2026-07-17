@@ -1,6 +1,6 @@
 import { clearFieldValidation, clearIndexedCollectionValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
 import { applyValidationToClientForm, applyValidationToClientRecipeCompositionForm, applyValidationToClientRecipeCreateForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm, applyValidationToPackagingItemForm, applyValidationToRecipeTemplateForm, applyValidationToRecipeVersionForm, applyValidationToStockMovementForm } from './targeted-validation-update.js';
-import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientRecipeMutationControls, restoreMutationGuards, restoreRecipeMutationControls, packagingPageMutationActiveState, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
+import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientRecipeMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -620,7 +620,7 @@ function packagingPageMutationActive() {
   return packagingPageMutationActiveState({ packagingItemSubmitting, catalogSaving: packagingItemsState.catalogSaving, catalogCreating: packagingItemsState.catalogCreating, deactivatingId: packagingItemDeactivatingId });
 }
 function recipePageMutationActive() { return recipeTemplateSubmitting || recipeVersionSubmitting; }
-function clientRecipePageMutationActive() { return clientRecipeCreateSubmitting || clientRecipeCompositionSubmitting || clientRecipeArchiveRestoreSubmittingId !== null; }
+function clientRecipePageMutationActive() { return clientRecipePageMutationActiveState({ createSubmitting: clientRecipeCreateSubmitting, compositionSubmitting: clientRecipeCompositionSubmitting, archiveRestoreSubmittingId: clientRecipeArchiveRestoreSubmittingId }); }
 let recipesStatus: RecipesStatus = 'idle';
 let recipesError = '';
 let recipesMessage = '';
@@ -2577,7 +2577,7 @@ function updateClientRecipeFilterSearch(input: HTMLInputElement) { const cursor 
 function updateClientRecipeStatusFilter(status: ClientRecipeStatusFilter) { clientRecipesState.filters.status = status; clientRecipesState.includeInactive = status !== 'active'; loadClientRecipes(true); }
 function resetClientRecipeFilters() { if (clientRecipePageMutationActive()) return; const shouldReload = clientRecipesState.includeInactive; clientRecipesState.filters = { search: '', status: 'active', clientId: '' }; clientRecipesState.includeInactive = false; if (shouldReload) loadClientRecipes(true); else render(); }
 function clearClientRecipeFilter(filter: string) { if (clientRecipePageMutationActive()) return; if (filter === 'search') { clientRecipesState.filters.search = ''; render(); return; } if (filter === 'client') { clientRecipesState.filters.clientId = ''; render(); return; } if (filter === 'status') updateClientRecipeStatusFilter('active'); }
-function openClientRecipeCreate() { if (clientRecipePageMutationActive()) return; clientRecipeDetailRequestToken += 1; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCompositionLifecycle.invalidate(); clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipeCompositionValidation = emptyFormValidationState(); if (clientRecipesState.showCreateForm) { saveClientRecipeFormFromDom(); render(); focusClientRecipeTitle(); return; } clientRecipesState.showCreateForm = true; clientRecipesState.selectedDetail = null; clientRecipesState.detailStatus = 'idle'; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; render(); focusClientRecipeTitle(); refreshClientRecipeCreateDependencies(); }
+function openClientRecipeCreate() { if (clientRecipePageMutationActive()) return; if (clientRecipesState.showCreateForm) { saveClientRecipeFormFromDom(); render(); focusClientRecipeTitle(); return; } clientRecipeDetailRequestToken += 1; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCompositionLifecycle.invalidate(); clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.showCreateForm = true; clientRecipesState.selectedDetail = null; clientRecipesState.detailStatus = 'idle'; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; render(); focusClientRecipeTitle(); refreshClientRecipeCreateDependencies(); }
 function hideClientRecipeCreate() { if (clientRecipePageMutationActive()) return; clientRecipeCreateSubmitToken += 1; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCreateLifecycle.invalidate(); clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesState.showCreateForm = false; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; render(); }
 
 function focusClientRecipeTitle() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="client-recipe-title"]')?.focus()); }
@@ -2593,62 +2593,23 @@ function selectClientRecipeTemplate(value: string) { if (clientRecipePageMutatio
 function submitClientRecipeForm(event: SubmitEvent) {
   event.preventDefault();
   if (clientRecipePageMutationActive()) return;
-  const lifecycleToken = clientRecipeCreateLifecycle.begin();
-  if (lifecycleToken === null) return;
   const form = event.currentTarget as HTMLFormElement;
   saveClientRecipeFormFromDom();
   const payload = clientRecipePayloadFromForm(form);
-  const token = ++clientRecipeCreateSubmitToken;
-  clientRecipeCreateDependenciesLifecycle.invalidate();
-  clientRecipeVersionRequestLifecycle.invalidate();
-  clientRecipeCompositionIngredientsLifecycle.invalidate();
-  clientRecipeCreateSubmitting = true;
-  clientRecipeCreateValidation = emptyFormValidationState();
-  clientRecipesMessage = '';
-  clientRecipesError = '';
-  clientRecipesRefreshWarning = '';
-  applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation);
-  disableClientRecipeCreateMutationControls(document);
-  createClientRecipe(payload).then((detail) => {
-    if (token !== clientRecipeCreateSubmitToken) return;
-    clientRecipesMessage = 'Индивидуальный рецепт создан.';
-    clientRecipesError = '';
-    clientRecipeCreateValidation = emptyFormValidationState();
-    clientRecipesState.selectedDetail = detail;
-    clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor();
-    clientRecipesState.detailStatus = 'ready';
-    clientRecipesState.showCreateForm = false;
-    clientRecipesState.form = emptyClientRecipeForm();
-    clientRecipesState.versions = [];
-    clientRecipesState.versionsStatus = 'idle';
-    clientRecipesState.selectedTemplateId = null;
-    return getClientRecipes(clientRecipesState.includeInactive).then((response) => {
-      if (token !== clientRecipeCreateSubmitToken) return;
-      clientRecipesState.items = response.client_recipes;
-      clientRecipesStatus = 'ready';
-      clientRecipeCreateSubmitting = false;
-      clientRecipeCreateLifecycle.finish(lifecycleToken);
-      render();
-    }).catch(() => {
-      if (token !== clientRecipeCreateSubmitToken) return;
-      clientRecipesStatus = 'ready';
-      clientRecipesRefreshWarning = 'Индивидуальный рецепт создан, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальные данные.';
-      clientRecipeCreateSubmitting = false;
-      clientRecipeCreateLifecycle.finish(lifecycleToken);
-      render();
-    });
-  }).catch((error) => {
-    if (token !== clientRecipeCreateSubmitToken) return;
-    clientRecipeCreateSubmitting = false;
-    clientRecipeCreateLifecycle.finish(lifecycleToken);
-    restoreClientRecipeMutationControls(document);
-    clientRecipesMessage = '';
-    clientRecipesError = '';
-    clientRecipesRefreshWarning = '';
-    clientRecipeCreateValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCreateFieldLabels, 'Не удалось создать индивидуальный рецепт. Проверьте поля и попробуйте ещё раз.');
-    clientRecipesStatus = 'ready';
-    applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation);
-    announceAssertive('Проверьте индивидуальный рецепт. Ошибки показаны рядом с полями.');
+  const token = clientRecipeCreateSubmitToken + 1;
+  let shouldRenderOnFinish = true;
+  runClientRecipeCreateMutation<ClientRecipeDetail, ClientRecipe>({
+    lifecycle: clientRecipeCreateLifecycle,
+    blocked: clientRecipePageMutationActive,
+    create: () => createClientRecipe(payload),
+    refresh: () => getClientRecipes(clientRecipesState.includeInactive).then((response) => response.client_recipes),
+    onStart: () => { clientRecipeCreateSubmitToken = token; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCreateSubmitting = true; clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation); disableClientRecipeCreateMutationControls(document); },
+    onCreateSuccess: (detail) => { clientRecipesMessage = 'Индивидуальный рецепт создан.'; clientRecipesError = ''; clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesState.selectedDetail = detail; clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipesState.detailStatus = 'ready'; clientRecipesState.showCreateForm = false; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; },
+    onRefreshSuccess: (items) => { clientRecipesState.items = items; clientRecipesStatus = 'ready'; },
+    onRefreshFailure: () => { clientRecipesStatus = 'ready'; clientRecipesRefreshWarning = 'Индивидуальный рецепт создан, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальные данные.'; },
+    onCreateFailure: (error) => { shouldRenderOnFinish = false; restoreClientRecipeMutationControls(document); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; clientRecipeCreateValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCreateFieldLabels, 'Не удалось создать индивидуальный рецепт. Проверьте поля и попробуйте ещё раз.'); clientRecipesStatus = 'ready'; applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation); announceAssertive('Проверьте индивидуальный рецепт. Ошибки показаны рядом с полями.'); },
+    isContextCurrent: () => token === clientRecipeCreateSubmitToken,
+    onFinish: () => { clientRecipeCreateSubmitting = false; if (shouldRenderOnFinish) render(); },
   });
 }
 function openClientRecipe(id: number) { if (clientRecipePageMutationActive()) return; const token = ++clientRecipeDetailRequestToken; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCreateLifecycle.invalidate(); clientRecipeCompositionLifecycle.invalidate(); clientRecipeCreateValidation = emptyFormValidationState(); clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.showCreateForm = false; clientRecipesState.selectedDetail = null; clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipesState.detailStatus = 'loading'; clientRecipesError = ''; render(); getClientRecipe(id).then((detail) => { if (token !== clientRecipeDetailRequestToken) return; clientRecipesState.selectedDetail = detail; clientRecipesState.detailStatus = 'ready'; render(); }).catch(() => { if (token !== clientRecipeDetailRequestToken) return; clientRecipesState.detailStatus = 'error'; clientRecipesError = 'Не удалось открыть индивидуальный рецепт. Обновите список и попробуйте еще раз.'; render(); }); }
@@ -2657,7 +2618,7 @@ function deactivateClientRecipe(id: number) {
   const recipe = clientRecipesState.items.find((item)=>item.id===id);
   if (!recipe || !window.confirm('Архивировать индивидуальный рецепт? Карточка останется в истории, но не будет отображаться как активная.')) return;
   clientRecipeArchiveRestoreSubmittingId = id;
-  disableClientRecipeCreateMutationControls(document);
+  disableClientRecipeArchiveRestoreMutationControls(document);
   deactivateClientRecipeRequest(id).then(() => {
     clientRecipesMessage = 'Индивидуальный рецепт архивирован.';
     clientRecipesError = '';
@@ -2681,7 +2642,7 @@ function restoreClientRecipe(id: number) {
   if (clientRecipePageMutationActive()) return;
   if (!window.confirm('Вернуть индивидуальный рецепт из архива?')) return;
   clientRecipeArchiveRestoreSubmittingId = id;
-  disableClientRecipeCreateMutationControls(document);
+  disableClientRecipeArchiveRestoreMutationControls(document);
   restoreClientRecipeRequest(id).then((restored) => {
     clientRecipesMessage = 'Индивидуальный рецепт возвращён в работу.';
     clientRecipesError = '';
@@ -2723,46 +2684,24 @@ function closeClientRecipeCompositionEditor() { if (clientRecipePageMutationActi
 function clientRecipeCompositionPayload(): ClientRecipeIngredientUpdatePayload[] { return clientRecipesState.compositionEditor.draft.map((line, index) => ({ ...(line.id ? { id: line.id } : {}), ingredient_id: Number(line.ingredient_id), position: Number(line.position || index + 1), phase: line.phase, amount_value: line.amount_value.replace(',', '.'), amount_unit: line.amount_unit, personalization_note: line.personalization_note, notes: line.notes })); }
 function submitClientRecipeCompositionEditor(event: SubmitEvent) {
   event.preventDefault();
-  if (clientRecipeCreateSubmitting || clientRecipeCompositionSubmitting) return;
+  if (clientRecipePageMutationActive()) return;
   const detail = clientRecipesState.selectedDetail;
   if (!detail) return;
-  const lifecycleToken = clientRecipeCompositionLifecycle.begin();
-  if (lifecycleToken === null) return;
   saveClientRecipeCompositionDraftFromDom();
   const contextId = detail.client_recipe.id;
-  const token = ++clientRecipeCompositionSubmitToken;
-  clientRecipeCompositionSubmitting = true;
-  clientRecipesState.compositionEditor.isSaving = true;
-  clientRecipesState.compositionEditor.error = '';
-  clientRecipeCompositionValidation = emptyFormValidationState();
-  clientRecipesMessage = '';
-  clientRecipesError = '';
-  clientRecipesRefreshWarning = '';
-  applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation);
-  disableClientRecipeCompositionMutationControls(document);
-  updateClientRecipeIngredients(contextId, clientRecipeCompositionPayload()).then((updated) => {
-    if (token !== clientRecipeCompositionSubmitToken || clientRecipesState.selectedDetail?.client_recipe.id !== contextId) return;
-    clientRecipesState.selectedDetail = updated;
-    clientRecipesState.detailStatus = 'ready';
-    clientRecipeCompositionValidation = emptyFormValidationState();
-    clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor();
-    clientRecipeCompositionSubmitting = false;
-    clientRecipeCompositionLifecycle.finish(lifecycleToken);
-    clientRecipesMessage = 'Состав индивидуального рецепта сохранён. Базовый рецепт не изменён.';
-    clientRecipesError = '';
-    render();
-  }).catch((error) => {
-    if (token !== clientRecipeCompositionSubmitToken || clientRecipesState.selectedDetail?.client_recipe.id !== contextId) return;
-    clientRecipeCompositionSubmitting = false;
-    clientRecipeCompositionLifecycle.finish(lifecycleToken);
-    clientRecipesState.compositionEditor.isSaving = false;
-    restoreClientRecipeMutationControls(document);
-    clientRecipesMessage = '';
-    clientRecipesError = '';
-    clientRecipesRefreshWarning = '';
-    clientRecipeCompositionValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCompositionFieldLabels(clientRecipesState.compositionEditor.draft), 'Не удалось сохранить состав индивидуального рецепта. Проверьте строки и попробуйте ещё раз.');
-    applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation);
-    announceAssertive('Проверьте состав индивидуального рецепта. Ошибки показаны рядом со строками.');
+  const token = clientRecipeCompositionSubmitToken + 1;
+  const payload = clientRecipeCompositionPayload();
+  let shouldRenderOnFinish = true;
+  runClientRecipeCompositionMutation<ClientRecipeDetail>({
+    lifecycle: clientRecipeCompositionLifecycle,
+    blocked: clientRecipePageMutationActive,
+    contextId,
+    update: () => updateClientRecipeIngredients(contextId, payload),
+    onStart: () => { clientRecipeCompositionSubmitToken = token; clientRecipeCompositionSubmitting = true; clientRecipesState.compositionEditor.isSaving = true; clientRecipesState.compositionEditor.error = ''; clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation); disableClientRecipeCompositionMutationControls(document); },
+    onSuccess: (updated) => { clientRecipesState.selectedDetail = updated; clientRecipesState.detailStatus = 'ready'; clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipesMessage = 'Состав индивидуального рецепта сохранён. Базовый рецепт не изменён.'; clientRecipesError = ''; },
+    onFailure: (error) => { shouldRenderOnFinish = false; clientRecipesState.compositionEditor.isSaving = false; restoreClientRecipeMutationControls(document); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; clientRecipeCompositionValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCompositionFieldLabels(clientRecipesState.compositionEditor.draft), 'Не удалось сохранить состав индивидуального рецепта. Проверьте строки и попробуйте ещё раз.'); applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation); announceAssertive('Проверьте состав индивидуального рецепта. Ошибки показаны рядом со строками.'); },
+    isContextCurrent: (id) => token === clientRecipeCompositionSubmitToken && clientRecipesState.selectedDetail?.client_recipe.id === id,
+    onFinish: () => { clientRecipeCompositionSubmitting = false; if (shouldRenderOnFinish) render(); },
   });
 }
 function humanClientRecipeCompositionError(error: unknown) { const message = error instanceof Error ? error.message : ''; if (message.includes('Archived')) return 'Архивный индивидуальный рецепт нельзя изменять.'; if (message.includes('Inactive ingredient') || message.includes('inactive')) return 'Архивный компонент нельзя добавлять или изменять. Оставьте существующую строку без изменений или удалите её.'; if (message.includes('not found') || message.includes('Not Found')) return 'Не удалось сохранить состав: индивидуальный рецепт или компонент не найден. Обновите раздел и попробуйте ещё раз.'; if (message.includes('duplicate') || message.includes('validation') || message.includes('position') || message.includes('amount')) return 'Проверьте строки состава: количество, единицы измерения и порядок строк.'; return 'Не удалось сохранить состав индивидуального рецепта. Проверьте строки и попробуйте ещё раз.'; }
