@@ -2994,7 +2994,75 @@ function refreshClientFeedback() { const clientId = clientCardState.clientId; if
 function toggleClientWishForm() { if (clientCardState.savingWish) return; if (clientCardState.showWishForm) syncClientCardDraftFormsFromDom(); clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = !clientCardState.showWishForm; if (clientCardState.showWishForm) clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; render(); }
 function closeClientWishForm() { if (clientCardState.savingWish) return; clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; render(); }
 function toggleArchivedClientWishes() { if (clientCardState.savingWish) return; clientWishValidation = emptyFormValidationState(); clientCardState.includeArchivedWishes = !clientCardState.includeArchivedWishes; refreshClientWishes(); }
-function submitClientWishForm(event: SubmitEvent) { event.preventDefault(); const clientId = clientCardState.clientId; if (!clientId || clientCardState.savingWish) return; syncClientCardDraftFormsFromDom(); const token = clientWishCreateLifecycle.begin(); if (token === null) return; const contextToken = clientWishContextToken; const form = clientCardState.wishForm; const payload: ClientWishCreatePayload = { title: form.title, description: form.description, category: form.category, priority: form.priority, client_recipe_id: nullableNumber(form.client_recipe_id) }; clientWishValidation = emptyFormValidationState(); clientCardState.savingWish = true; clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; applyValidationToClientWishForm(clientWishValidation); disableClientWishCreateMutationControls(document); clearFeedbackAnnouncement(); createClientWish(clientId, payload).then((created) => { if (!clientWishCreateLifecycle.isCurrent(token) || clientCardState.clientId !== clientId || contextToken !== clientWishContextToken) return; syncClientCardDraftFormsFromDom(); clientCardState.wishes = [created, ...clientCardState.wishes.filter((wish) => wish.id !== created.id)]; clientCardState.wishesStatus = 'ready'; clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientWishValidation = emptyFormValidationState(); clientCardState.wishMessage = 'Пожелание клиента сохранено.'; announcePolite(clientCardState.wishMessage); return refreshClientWishes(false, true).catch(() => { if (!clientWishCreateLifecycle.isCurrent(token) || clientCardState.clientId !== clientId || contextToken !== clientWishContextToken) return; clientCardState.wishError = ''; clientCardState.wishRefreshWarning = 'Пожелание сохранено, но список не удалось обновить автоматически.'; clientCardState.wishes = [created, ...clientCardState.wishes.filter((wish) => wish.id !== created.id)]; clientCardState.wishesStatus = 'ready'; render(); }); }).catch((error) => { if (!clientWishCreateLifecycle.isCurrent(token) || clientCardState.clientId !== clientId || contextToken !== clientWishContextToken) return; syncClientCardDraftFormsFromDom(); clientWishValidation = normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels, humanWishFeedbackError(error, 'Не удалось сохранить пожелание. Проверьте поля и попробуйте ещё раз.')); clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; applyValidationToClientWishForm(clientWishValidation); announceAssertive('Не удалось сохранить пожелание. Проверьте подсказки в форме.'); }).finally(() => { if (!clientWishCreateLifecycle.finish(token) || clientCardState.clientId !== clientId || contextToken !== clientWishContextToken) return; clientCardState.savingWish = false; restoreClientWishMutationControls(document); render(); }); }
+function submitClientWishForm(event: SubmitEvent) {
+  event.preventDefault();
+  const clientId = clientCardState.clientId;
+  if (!clientId || clientCardState.savingWish) return;
+  syncClientCardDraftFormsFromDom();
+  const token = clientWishCreateLifecycle.begin();
+  if (token === null) return;
+  const contextToken = clientWishContextToken;
+  const isCurrentClientWishMutation = () => clientWishCreateLifecycle.isCurrent(token) && clientCardState.clientId === clientId && contextToken === clientWishContextToken;
+  const form = clientCardState.wishForm;
+  const payload: ClientWishCreatePayload = { title: form.title, description: form.description, category: form.category, priority: form.priority, client_recipe_id: nullableNumber(form.client_recipe_id) };
+  let createRejected = false;
+  clientWishValidation = emptyFormValidationState();
+  clientCardState.savingWish = true;
+  clientCardState.wishError = '';
+  clientCardState.wishMessage = '';
+  clientCardState.wishRefreshWarning = '';
+  applyValidationToClientWishForm(clientWishValidation);
+  disableClientWishCreateMutationControls(document);
+  clearFeedbackAnnouncement();
+  createClientWish(clientId, payload).then((created) => {
+    if (!isCurrentClientWishMutation()) return;
+    syncClientCardDraftFormsFromDom();
+    clientCardState.wishes = [created, ...clientCardState.wishes.filter((wish) => wish.id !== created.id)];
+    clientCardState.wishesStatus = 'ready';
+    clientCardState.showWishForm = false;
+    clientCardState.wishForm = emptyClientWishForm();
+    clientWishValidation = emptyFormValidationState();
+    clientCardState.savingWish = false;
+    clientCardState.wishMessage = 'Пожелание клиента сохранено.';
+    restoreClientWishMutationControls(document);
+    announcePolite(clientCardState.wishMessage);
+    render();
+    return fetchClientWishes(clientId, clientCardState.includeArchivedWishes).then((wishes) => {
+      if (!isCurrentClientWishMutation()) return;
+      syncClientCardDraftFormsFromDom();
+      clientCardState.wishes = wishes;
+      clientCardState.wishesStatus = 'ready';
+      render();
+    }).catch(() => {
+      if (!isCurrentClientWishMutation()) return;
+      clientCardState.wishError = '';
+      clientCardState.wishRefreshWarning = 'Пожелание сохранено, но список не удалось обновить автоматически.';
+      clientCardState.wishes = [created, ...clientCardState.wishes.filter((wish) => wish.id !== created.id)];
+      clientCardState.wishesStatus = 'ready';
+      render();
+    });
+  }).catch((error) => {
+    if (!isCurrentClientWishMutation()) return;
+    createRejected = true;
+    syncClientCardDraftFormsFromDom();
+    clientWishValidation = normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels, humanWishFeedbackError(error, 'Не удалось сохранить пожелание. Проверьте поля и попробуйте ещё раз.'));
+    clientCardState.savingWish = false;
+    clientCardState.wishError = '';
+    clientCardState.wishMessage = '';
+    clientCardState.wishRefreshWarning = '';
+    applyValidationToClientWishForm(clientWishValidation);
+    restoreClientWishMutationControls(document);
+    announceAssertive('Не удалось сохранить пожелание. Проверьте подсказки в форме.');
+  }).finally(() => {
+    if (!clientWishCreateLifecycle.finish(token) || clientCardState.clientId !== clientId || contextToken !== clientWishContextToken) return;
+    if (createRejected) return;
+    if (clientCardState.savingWish) {
+      clientCardState.savingWish = false;
+      restoreClientWishMutationControls(document);
+      render();
+    }
+  });
+}
 function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (!['open','planned','resolved'].includes(status)) return; syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = null; return refreshClientWishes(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; render(); }); }
 function archiveClientWishFromCard(wishId: number) { if (!window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = null; return refreshClientWishes(); }).catch(() => { syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; render(); }); }
 function toggleClientFeedbackForm() { if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; clientCardState.feedbackError = ''; render(); }

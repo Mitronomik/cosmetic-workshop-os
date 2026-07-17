@@ -1335,7 +1335,7 @@ test('client wish wrapper maps approved fields and preserves focused draft contr
   assert.equal(mockDoc.activeElement, title);
 });
 
-test('client wish source guards cover lifecycle, duplicate prevention, refresh warning, and feedback boundary', () => {
+test('client wish source guards cover lifecycle source wiring without replacing browser smoke', () => {
   const submit = mainSourceFunction('submitClientWishForm');
   assert.ok(submit.includes('clientCardState.savingWish'));
   assert.ok(submit.includes('clientWishCreateLifecycle.begin()'));
@@ -1344,9 +1344,19 @@ test('client wish source guards cover lifecycle, duplicate prevention, refresh w
   assert.ok(submit.includes('createClientWish(clientId, payload)'));
   assert.ok(submit.includes('clientCardState.wishes = [created'));
   assert.ok(submit.includes('clientCardState.showWishForm = false'));
-  assert.ok(submit.includes('refreshClientWishes(false, true).catch'));
   assert.ok(submit.includes('normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels'));
   assert.ok(submit.includes('wishRefreshWarning'));
+  const successRenderIndex = submit.indexOf('announcePolite(clientCardState.wishMessage);\n    render();\n    return fetchClientWishes');
+  assert.notEqual(successRenderIndex, -1, 'successful create renders before the follow-up wishes refresh starts');
+  const rejectedStart = submit.indexOf('clientWishValidation = normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels');
+  const rejectedEnd = submit.indexOf('}).finally', rejectedStart);
+  const rejectedPath = submit.slice(rejectedStart, rejectedEnd);
+  assert.ok(rejectedPath.includes('applyValidationToClientWishForm(clientWishValidation);'));
+  assert.ok(rejectedPath.includes('restoreClientWishMutationControls(document);'));
+  assert.equal(rejectedPath.includes('render();'), false, 'rejected create path must not globally render after targeted validation');
+  const finalizer = submit.slice(submit.indexOf('}).finally'));
+  assert.equal(finalizer.includes('restoreClientWishMutationControls(document);\n      render();'), true, 'finalizer keeps stale/non-rejected fallback render only');
+  assert.ok(finalizer.includes('if (createRejected) return;'));
   assert.equal(submit.includes('createClientFeedback'), false);
 
   const form = mainSourceFunction('clientWishForm');
