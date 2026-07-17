@@ -42,6 +42,18 @@ export function applyValidationToRecipeVersionForm(validation: FormValidationSta
   applyValidationToForm(form, validation, 'recipe-version', 'Проверьте версию рецепта');
 }
 
+export function applyValidationToClientRecipeCreateForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="client-recipe"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'client-recipe', 'Проверьте индивидуальный рецепт');
+}
+
+export function applyValidationToClientRecipeCompositionForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="client-recipe-composition"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'client-recipe-composition', 'Проверьте состав индивидуального рецепта');
+}
+
 function applyValidationToForm(
   form: HTMLFormElement,
   validation: FormValidationState,

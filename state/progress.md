@@ -933,3 +933,13 @@ Import CSV/XLSX draft backend foundation.
 - Slice A3 remains IN PROGRESS after this PR unless all remaining A3 candidates are explicitly completed.
 
 - PR #117 correction targets published branch `codex/add-structured-validation-for-recipes`; pre-correction published head was `718d8cafa62dd9bed87f8eab4e1d7896427a9a9d`. Browser smoke remains reviewer-required unless explicitly run against the published correction head.
+
+
+## Slice A3.4 Client Recipe structured validation — implementation
+- Verified closure of A3.3: PR #117 is merged at `cce60e73670171717d9bfd619cd79e1c0b960fe9` and browser-smoke verified.
+- Implemented A3.4 scope for Client Recipe create and composition update: shared structured backend validation, exact indexed composition paths, targeted DOM updates, structural row-error invalidation, duplicate-submit guards, create success versus list-refresh warning separation, and authoritative composition `PUT` response handling.
+- Backend added an API adapter that safely prefixes individual composition-line `DomainValidationError` fields with `ingredients.{index}.` only for approved line fields; aggregate composition errors remain non-indexed.
+- Automated verification in this workspace: frontend form-validation tests 16/16 passed; targeted validation/update lifecycle tests 29/29 passed; frontend build passed; focused backend Client Recipe tests 40/40 passed.
+- Browser smoke: NOT RUN.
+- Reason: waiting for review of the exact published GitHub PR head.
+- Slice A3 remains IN PROGRESS; Client Wishes, Client Feedback, Orders, and Production Confirmation remain separate future candidates.

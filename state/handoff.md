@@ -304,3 +304,13 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Slice A3 remains IN PROGRESS after this PR unless the repository owner explicitly closes all remaining A3 candidates.
 
 - PR #117 correction targets published branch `codex/add-structured-validation-for-recipes`; pre-correction published head was `718d8cafa62dd9bed87f8eab4e1d7896427a9a9d`. Browser smoke remains reviewer-required unless explicitly run against the published correction head.
+
+
+## Slice A3.4 handoff — Client Recipe structured validation
+- Exact scope: `/client-recipes` Client Recipe create and composition update only. Client Wishes, Client Feedback, Orders, Production Readiness, and Production Confirmation were not included.
+- Architecture boundaries: backend domain validation remains authoritative; API handlers stay thin; no schema changes, migrations, new tables, cloud dependency, artificial composition refresh, or historical Recipe Version mutation was introduced.
+- Indexed validation behavior: visible composition fields use exact approved paths (`ingredients.{index}.ingredient_id`, `position`, `phase`, `amount_value`, `amount_unit`, `personalization_note`, `notes`). `status`, aggregate `ingredients`, generic `id`/`position`, indexed hidden `id`, malformed paths, unknown nested paths, and service-level ownership/conflict messages remain in the form summary.
+- Mutation lifecycle behavior: create and composition update use separate locks, direct DOM guards, duplicate-submit prevention, stale-context checks, targeted validation updates, create success/list-refresh warning separation, and authoritative composition `PUT` response application without follow-up refresh.
+- Tests executed in this workspace: `npm run test:form-validation` (16/16), `npm run test:targeted-validation-update` (29/29), `npm run build`, and `python3 -m pytest app/tests/test_client_recipes.py` (40/40).
+- Browser smoke: NOT RUN. Reason: waiting for review of the exact published GitHub PR head.
+- Remaining A3 candidates: Client Wishes, Client Feedback, Orders, Production Readiness/Confirmation, and any other critical forms selected by the roadmap owner.

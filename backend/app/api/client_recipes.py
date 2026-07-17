@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.domain.client_recipes import ClientRecipeDraft, ClientRecipeIngredientUpdateDraft
@@ -7,7 +9,7 @@ from app.repositories.client_recipes import ClientRecipeNotFoundError
 from app.repositories.clients import ClientNotFoundError
 from app.repositories.ingredients import IngredientNotFoundError
 from app.repositories.recipes import RecipeVersionNotFoundError
-from app.schemas.client_recipes import ClientRecipeCreateRequest, ClientRecipeDetailResponse, ClientRecipeIngredientResponse, ClientRecipeIngredientsUpdateRequest, ClientRecipeResponse, ClientRecipesResponse
+from app.schemas.client_recipes import ClientRecipeCreateRequest, ClientRecipeDetailResponse, ClientRecipeIngredientResponse, ClientRecipeIngredientUpdateRequest, ClientRecipeIngredientsUpdateRequest, ClientRecipeResponse, ClientRecipesResponse
 from app.services.client_recipes import ClientInactiveError, ClientRecipeArchivedError, ClientRecipeIngredientInactiveError, ClientRecipeIngredientLineOwnershipError, ClientRecipeRestoreClientInactiveError, ClientRecipeService, SourceRecipeVersionEmptyError
 
 router = APIRouter(tags=["client-recipes"])
@@ -48,7 +50,7 @@ def get_client_recipe(client_recipe_id: int):
 @router.put("/client-recipes/{client_recipe_id}/ingredients", response_model=ClientRecipeDetailResponse)
 def update_client_recipe_ingredients(client_recipe_id: int, payload: ClientRecipeIngredientsUpdateRequest):
     try:
-        drafts = [ClientRecipeIngredientUpdateDraft.create(**line.model_dump()) for line in payload.ingredients]
+        drafts = _ingredient_update_drafts_with_context(payload.ingredients)
         return _detail(ClientRecipeService().update_composition(client_recipe_id, drafts))
     except DomainValidationError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.issue.__dict__) from exc
@@ -93,6 +95,22 @@ def restore_client_recipe(client_recipe_id: int):
     except ClientRecipeRestoreClientInactiveError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
+
+
+CLIENT_RECIPE_INGREDIENT_UPDATE_FIELDS = {"id", "ingredient_id", "position", "phase", "amount_value", "amount_unit", "personalization_note", "notes"}
+
+
+def _ingredient_update_drafts_with_context(items: list[ClientRecipeIngredientUpdateRequest]) -> list[ClientRecipeIngredientUpdateDraft]:
+    drafts: list[ClientRecipeIngredientUpdateDraft] = []
+    for index, line in enumerate(items):
+        try:
+            drafts.append(ClientRecipeIngredientUpdateDraft.create(**line.model_dump()))
+        except DomainValidationError as exc:
+            issue = exc.issue
+            if issue.field in CLIENT_RECIPE_INGREDIENT_UPDATE_FIELDS:
+                raise DomainValidationError(replace(issue, field=f"ingredients.{index}.{issue.field}")) from exc
+            raise
+    return drafts
 
 def _recipe(recipe: ClientRecipe) -> ClientRecipeResponse:
     return ClientRecipeResponse(**{**recipe.__dict__, "target_batch_size_value": None if recipe.target_batch_size_value is None else str(recipe.target_batch_size_value)})
