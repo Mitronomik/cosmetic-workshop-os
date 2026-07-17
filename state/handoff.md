@@ -302,3 +302,5 @@ Remaining A3 sub-slices include `/stock-movements` and other critical forms not 
 - Active runtime scope is A3.3 on `/recipes`: Recipe Template creation and immutable Recipe Version creation use the shared structured-validation and mutation lifecycle foundations.
 - Recipe Version edit/delete remains prohibited. Existing saved versions and ingredients are not mutated; rejected version creates must write no partial version, ingredients, or audit event.
 - Slice A3 remains IN PROGRESS after this PR unless the repository owner explicitly closes all remaining A3 candidates.
+
+- PR #117 correction targets published branch `codex/add-structured-validation-for-recipes`; pre-correction published head was `3600c838a84b99b1337c9a18435ba253dfef424c`. Browser smoke remains reviewer-required unless explicitly run against the published correction head.

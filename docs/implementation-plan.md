@@ -279,7 +279,7 @@ A3.1 `/ingredient-lots` create/edit structured validation is merged in PR #115 a
 
 PR #116 / A3.2 is merged at `79286f076292645b3e83dfedfccb366dee1777f6`, closed, and browser-smoke verified. Current sub-slice A3.3 covers Recipe Template creation and immutable Recipe Version creation on `/recipes`. Recipe Version edit/delete remains prohibited, and Slice A3 remains in progress until all remaining A3 candidates are explicitly completed.
 
-Recipe and recipe-version structured validation remain a later separate A3 slice.
+A3.3 / PR #117 is the current Recipe Template and immutable Recipe Version structured-validation slice on `/recipes`; Recipe Version edit/delete remains prohibited, and Slice A3 remains in progress because other candidate forms remain.
 
 Разбивать на дополнительные PR, если scope становится большим.
 

@@ -25,6 +25,40 @@ export function restoreMutationGuards(root: ParentNode = document): void {
   });
 }
 
+
+export function disableRecipeTemplateMutationControls(root: ParentNode = document): void {
+  const form = root.querySelector<HTMLFormElement>('[data-form="recipe-template"]');
+  if (form) {
+    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
+    form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.textContent = 'Создаём…';
+  }
+  const guarded = '[data-action="reload-recipes"], [data-action="open-recipe-create"], [data-action="open-recipe"], [data-action="hide-recipe-create"], [data-action="filter-recipes-search"], [data-action="filter-recipes-category"], [data-action="filter-recipes-status"], [data-action="clear-recipe-filter"], [data-action="reset-recipe-filters"], [data-action="assign-recipe-category"], [data-action="toggle-recipe-tag"], [data-form="recipe-catalog-category"] input, [data-form="recipe-catalog-category"] button, [data-form="recipe-catalog-tag"] input, [data-form="recipe-catalog-tag"] button';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+export function disableRecipeVersionMutationControls(root: ParentNode = document): void {
+  const form = root.querySelector<HTMLFormElement>('[data-form="recipe-version"]');
+  if (form) {
+    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
+    form.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
+    form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.textContent = 'Сохраняем…';
+  }
+  const guarded = '[data-action="reload-recipes"], [data-action="open-recipe-create"], [data-action="open-recipe"], [data-action="close-recipe-detail"], [data-action="open-version"], [data-action="reload-recipe-ingredients"], [data-action="add-recipe-line"], [data-action="remove-recipe-line"], [data-action="filter-recipes-search"], [data-action="filter-recipes-category"], [data-action="filter-recipes-status"], [data-action="clear-recipe-filter"], [data-action="reset-recipe-filters"], [data-action="assign-recipe-category"], [data-action="toggle-recipe-tag"], [data-form="recipe-catalog-category"] input, [data-form="recipe-catalog-category"] button, [data-form="recipe-catalog-tag"] input, [data-form="recipe-catalog-tag"] button';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+export function restoreRecipeMutationControls(root: ParentNode = document): void {
+  restoreMutationGuards(root);
+  const templateSubmit = root.querySelector<HTMLButtonElement>('[data-form="recipe-template"] button[type="submit"]');
+  if (templateSubmit) templateSubmit.textContent = 'Создать рецепт';
+  const versionSubmit = root.querySelector<HTMLButtonElement>('[data-form="recipe-version"] button[type="submit"]');
+  if (versionSubmit) versionSubmit.textContent = 'Сохранить версию рецепта';
+}
+
 export type StockMovementLotDetailRequest = {
   readonly token: number;
   readonly lotId: number;

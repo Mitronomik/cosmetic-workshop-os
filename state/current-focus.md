@@ -4,7 +4,7 @@ Current baseline: PR #116 / Slice A3.2 is merged at merge commit `79286f07629264
 
 A3.2 is closed and browser-smoke verified for the inventory forms it covered. Slice A3 remains in progress because recipe and recipe-version validation are still being completed in focused sub-slices.
 
-Current focused implementation slice: Slice A3.3 — structured validation for Recipe Template creation and immutable Recipe Version creation on `/recipes`.
+Current focused implementation slice: Slice A3.3 / PR #117 — structured validation for Recipe Template creation and immutable Recipe Version creation on `/recipes`. Published PR branch is `codex/add-structured-validation-for-recipes`; pre-correction published head was `3600c838a84b99b1337c9a18435ba253dfef424c`.
 
 Scope for A3.3:
 - migrate Recipe Template create to the shared structured-validation contract;

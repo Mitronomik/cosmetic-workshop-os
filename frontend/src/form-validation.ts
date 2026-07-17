@@ -27,6 +27,29 @@ export function clearFieldValidation(state: FormValidationState, field: string):
   return { ...state, fieldErrors: nextFieldErrors };
 }
 
+
+export function reindexIndexedFieldValidation(state: FormValidationState, collection: string, removedIndex: number): FormValidationState {
+  const prefix = `${collection}.`;
+  const fieldErrors: Record<string, string[]> = {};
+  for (const [field, messages] of Object.entries(state.fieldErrors)) {
+    if (!field.startsWith(prefix)) {
+      fieldErrors[field] = messages;
+      continue;
+    }
+    const rest = field.slice(prefix.length);
+    const [indexText, ...pathParts] = rest.split('.');
+    if (!/^\d+$/.test(indexText) || pathParts.length === 0) {
+      fieldErrors[field] = messages;
+      continue;
+    }
+    const index = Number(indexText);
+    if (index === removedIndex) continue;
+    const nextIndex = index > removedIndex ? index - 1 : index;
+    fieldErrors[`${prefix}${nextIndex}.${pathParts.join('.')}`] = messages;
+  }
+  return { ...state, fieldErrors };
+}
+
 export function normalizeBackendValidation(payload: unknown, fieldLabels: FieldLabels, fallbackMessage = DEFAULT_FORM_ERROR): FormValidationState {
   try {
     const issues = extractIssues(payload);
