@@ -28,6 +28,16 @@ export function clearFieldValidation(state: FormValidationState, field: string):
 }
 
 
+
+export function clearIndexedCollectionValidation(state: FormValidationState, collection: string): FormValidationState {
+  const prefix = `${collection}.`;
+  const fieldErrors: Record<string, string[]> = {};
+  for (const [field, messages] of Object.entries(state.fieldErrors)) {
+    if (!field.startsWith(prefix)) fieldErrors[field] = messages;
+  }
+  return { ...state, fieldErrors };
+}
+
 export function reindexIndexedFieldValidation(state: FormValidationState, collection: string, removedIndex: number): FormValidationState {
   const prefix = `${collection}.`;
   const fieldErrors: Record<string, string[]> = {};

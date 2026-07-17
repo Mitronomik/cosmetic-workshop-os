@@ -964,7 +964,11 @@ test('recipe mutation guards lock live DOM controls without replacing focused no
   templateName.focus();
   templateName.setSelectionRange(2, 4);
 
+  const preDisabled = mockDoc.createElement('button');
+  preDisabled.disabled = true;
+  templateForm.appendChild(preDisabled);
   lifecycle.disableRecipeTemplateMutationControls(mockDoc.body);
+  assert.equal(templateForm.getAttribute('aria-busy'), 'true');
   assert.equal(mockDoc.activeElement, templateName);
   assert.equal(templateName.selectionStart, 2);
   assert.equal(templateName.readOnly, true);
@@ -977,6 +981,8 @@ test('recipe mutation guards lock live DOM controls without replacing focused no
   assert.equal(templateName.readOnly, false);
   assert.equal(templateSubmit.disabled, false);
   assert.equal(templateSubmit.textContent, 'Создать рецепт');
+  assert.equal(templateForm.getAttribute('aria-busy'), null);
+  assert.equal(preDisabled.disabled, true);
 
   reset();
   const versionForm = mkForm('recipe-version');
@@ -996,7 +1002,9 @@ test('recipe mutation guards lock live DOM controls without replacing focused no
   amount.focus();
   amount.setSelectionRange(1, 5);
 
+  amount.readOnly = true;
   lifecycle.disableRecipeVersionMutationControls(mockDoc.body);
+  assert.equal(versionForm.getAttribute('aria-busy'), 'true');
   assert.equal(mockDoc.activeElement, amount);
   assert.equal(amount.selectionEnd, 5);
   assert.equal(amount.readOnly, true);
@@ -1004,6 +1012,9 @@ test('recipe mutation guards lock live DOM controls without replacing focused no
   assert.equal(addLine.disabled, true);
   assert.equal(openVersion.disabled, true);
   assert.equal(versionSubmit.textContent, 'Сохраняем…');
+  lifecycle.restoreRecipeMutationControls(mockDoc.body);
+  assert.equal(versionForm.getAttribute('aria-busy'), null);
+  assert.equal(amount.readOnly, true);
 });
 
 test('recipe source uses direct mutation guards and no render at submit start', () => {
@@ -1013,17 +1024,89 @@ test('recipe source uses direct mutation guards and no render at submit start', 
   const templatePrefix = source.slice(templateStart, templateRequest);
   assert.ok(templatePrefix.includes('disableRecipeTemplateMutationControls(document)'));
   assert.equal(templatePrefix.includes('render()'), false);
-  assert.ok(templatePrefix.includes('if (recipeTemplateSubmitting || recipeVersionSubmitting) return;'));
+  assert.ok(templatePrefix.includes('if (recipeVersionSubmitting) return;'));
+  assert.ok(templatePrefix.includes('recipeTemplateMutationLifecycle.begin()'));
 
   const versionStart = source.indexOf('function submitRecipeVersionForm');
   const versionRequest = source.indexOf('createRecipeVersion(templateId', versionStart);
   const versionPrefix = source.slice(versionStart, versionRequest);
   assert.ok(versionPrefix.includes('disableRecipeVersionMutationControls(document)'));
   assert.equal(versionPrefix.includes('render()'), false);
-  assert.ok(versionPrefix.includes('if (recipeTemplateSubmitting || recipeVersionSubmitting || !recipesState.selectedTemplate) return;'));
+  assert.ok(versionPrefix.includes('if (recipeTemplateSubmitting || !recipesState.selectedTemplate) return;'));
+  assert.ok(versionPrefix.includes('recipeVersionMutationLifecycle.begin()'));
 
   assert.ok(source.includes('restoreRecipeMutationControls(document);'));
   assert.ok(source.includes('recipesRefreshWarning = \'Рецепт создан, но список не обновился.'));
   assert.ok(source.includes('recipesRefreshWarning = \'Версия сохранена, но список или расчёт не обновились.'));
   assert.equal(/data-action=\"move-recipe-line/.test(source), false, 'ingredient-line reorder UI is not implemented in this route');
+});
+
+
+async function runSimulatedRecipeLifecycle({ failRefresh = false, stale = false } = {}) {
+  const state = { posts: 0, message: '', warning: '', completed: 0, staleWrites: 0 };
+  const lifecycleState = lifecycle.createRecipeMutationLifecycle();
+  const post = deferred();
+  const refresh = deferred();
+  async function submit() {
+    const token = lifecycleState.begin();
+    if (token === null) return false;
+    state.posts += 1;
+    try {
+      await post.promise;
+      if (!lifecycleState.isCurrent(token)) { state.staleWrites += 1; return false; }
+      state.message = 'Сохранено.';
+      await refresh.promise;
+      if (!lifecycleState.isCurrent(token)) { state.staleWrites += 1; return false; }
+      lifecycleState.finish(token);
+      state.completed += 1;
+      return true;
+    } catch (error) {
+      if (!lifecycleState.isCurrent(token)) { state.staleWrites += 1; return false; }
+      if (error && error.refresh) {
+        state.warning = 'Сохранено, но список не обновился.';
+        lifecycleState.finish(token);
+        state.completed += 1;
+        return true;
+      }
+      lifecycleState.finish(token);
+      throw error;
+    }
+  }
+  const first = submit();
+  const second = submit();
+  assert.equal(await second, false);
+  assert.equal(state.posts, 1);
+  assert.equal(lifecycleState.isActive(), true);
+  post.resolve({ id: 1 });
+  await Promise.resolve();
+  assert.equal(lifecycleState.isActive(), true);
+  if (stale) lifecycleState.invalidate();
+  if (failRefresh) refresh.reject({ refresh: true });
+  else refresh.resolve({ ok: true });
+  await first;
+  return { state, lifecycleState };
+}
+
+test('recipe template async lifecycle prevents duplicate POST and locks through refresh success', async () => {
+  const { state, lifecycleState } = await runSimulatedRecipeLifecycle();
+  assert.equal(state.posts, 1);
+  assert.equal(state.completed, 1);
+  assert.equal(state.message, 'Сохранено.');
+  assert.equal(lifecycleState.isActive(), false);
+});
+
+test('recipe version async lifecycle preserves success warning on refresh failure without retry', async () => {
+  const { state, lifecycleState } = await runSimulatedRecipeLifecycle({ failRefresh: true });
+  assert.equal(state.posts, 1);
+  assert.equal(state.completed, 1);
+  assert.equal(state.warning, 'Сохранено, но список не обновился.');
+  assert.equal(lifecycleState.isActive(), false);
+});
+
+test('recipe async lifecycle ignores stale refresh callbacks', async () => {
+  const { state, lifecycleState } = await runSimulatedRecipeLifecycle({ stale: true });
+  assert.equal(state.posts, 1);
+  assert.equal(state.completed, 0);
+  assert.equal(state.staleWrites, 1);
+  assert.equal(lifecycleState.isActive(), false);
 });

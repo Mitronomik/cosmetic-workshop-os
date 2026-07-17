@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clearFieldValidation, normalizeBackendValidation, reindexIndexedFieldValidation } from '../dist-tests/form-validation/form-validation.js';
+import { clearFieldValidation, clearIndexedCollectionValidation, normalizeBackendValidation } from '../dist-tests/form-validation/form-validation.js';
 
 const labels = { full_name: 'Имя клиента', email: 'Email', name: 'Название компонента', density_g_per_ml: 'Плотность' };
 
@@ -84,7 +84,7 @@ test('maps explicitly approved indexed recipe fields only and keeps non-control 
   assert.deepEqual(state.formErrors, ['Исходная версия должна относиться к этому же рецепту.', 'Добавьте хотя бы одну строку состава.', 'Неизвестное вложенное поле.']);
 });
 
-test('clears and reindexes indexed recipe line validation safely', () => {
+test('clears indexed recipe line validation on structural removal without moving stale row messages', () => {
   const state = {
     fieldErrors: {
       'ingredients.0.amount_value': ['Строка 1: количество'],
@@ -96,8 +96,9 @@ test('clears and reindexes indexed recipe line validation safely', () => {
   const corrected = clearFieldValidation(state, 'ingredients.0.amount_value');
   assert.equal(corrected.fieldErrors['ingredients.0.amount_value'], undefined);
   assert.deepEqual(corrected.fieldErrors['ingredients.1.amount_unit'], ['Строка 2: единица']);
-  const removedFirst = reindexIndexedFieldValidation(state, 'ingredients', 0);
+  const removedFirst = clearIndexedCollectionValidation(state, 'ingredients');
   assert.equal(removedFirst.fieldErrors['ingredients.0.amount_value'], undefined);
-  assert.deepEqual(removedFirst.fieldErrors['ingredients.0.amount_unit'], ['Строка 2: единица']);
+  assert.equal(removedFirst.fieldErrors['ingredients.1.amount_unit'], undefined);
   assert.deepEqual(removedFirst.fieldErrors.title, ['Заголовок']);
+  assert.deepEqual(removedFirst.formErrors, ['Сводка']);
 });

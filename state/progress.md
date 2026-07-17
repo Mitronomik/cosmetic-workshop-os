@@ -932,4 +932,4 @@ Import CSV/XLSX draft backend foundation.
 - Recipe Version edit/delete remains prohibited; existing versions remain immutable and new formulas are created only as new versions.
 - Slice A3 remains IN PROGRESS after this PR unless all remaining A3 candidates are explicitly completed.
 
-- PR #117 correction targets published branch `codex/add-structured-validation-for-recipes`; pre-correction published head was `3600c838a84b99b1337c9a18435ba253dfef424c`. Browser smoke remains reviewer-required unless explicitly run against the published correction head.
+- PR #117 correction targets published branch `codex/add-structured-validation-for-recipes`; pre-correction published head was `718d8cafa62dd9bed87f8eab4e1d7896427a9a9d`. Browser smoke remains reviewer-required unless explicitly run against the published correction head.

@@ -29,6 +29,7 @@ export function restoreMutationGuards(root: ParentNode = document): void {
 export function disableRecipeTemplateMutationControls(root: ParentNode = document): void {
   const form = root.querySelector<HTMLFormElement>('[data-form="recipe-template"]');
   if (form) {
+    form.setAttribute('aria-busy', 'true');
     form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
     form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
@@ -41,6 +42,7 @@ export function disableRecipeTemplateMutationControls(root: ParentNode = documen
 export function disableRecipeVersionMutationControls(root: ParentNode = document): void {
   const form = root.querySelector<HTMLFormElement>('[data-form="recipe-version"]');
   if (form) {
+    form.setAttribute('aria-busy', 'true');
     form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
     form.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
     form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
@@ -52,11 +54,45 @@ export function disableRecipeVersionMutationControls(root: ParentNode = document
 }
 
 export function restoreRecipeMutationControls(root: ParentNode = document): void {
+  root.querySelectorAll<HTMLFormElement>('[data-form="recipe-template"], [data-form="recipe-version"]').forEach((form) => form.removeAttribute('aria-busy'));
   restoreMutationGuards(root);
   const templateSubmit = root.querySelector<HTMLButtonElement>('[data-form="recipe-template"] button[type="submit"]');
   if (templateSubmit) templateSubmit.textContent = 'Создать рецепт';
   const versionSubmit = root.querySelector<HTMLButtonElement>('[data-form="recipe-version"] button[type="submit"]');
   if (versionSubmit) versionSubmit.textContent = 'Сохранить версию рецепта';
+}
+
+
+export function createRecipeMutationLifecycle() {
+  let currentToken = 0;
+  let active = false;
+  return {
+    begin(): number | null {
+      if (active) return null;
+      active = true;
+      currentToken += 1;
+      return currentToken;
+    },
+    invalidate(): number {
+      active = false;
+      currentToken += 1;
+      return currentToken;
+    },
+    isCurrent(token: number): boolean {
+      return active && token === currentToken;
+    },
+    finish(token: number): boolean {
+      if (!active || token !== currentToken) return false;
+      active = false;
+      return true;
+    },
+    isActive(): boolean {
+      return active;
+    },
+    currentToken(): number {
+      return currentToken;
+    },
+  };
 }
 
 export type StockMovementLotDetailRequest = {

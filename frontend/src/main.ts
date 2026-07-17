@@ -1,6 +1,6 @@
-import { clearFieldValidation, emptyFormValidationState, normalizeBackendValidation, reindexIndexedFieldValidation, type FormValidationState } from './form-validation.js';
+import { clearFieldValidation, clearIndexedCollectionValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
 import { applyValidationToClientForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm, applyValidationToPackagingItemForm, applyValidationToRecipeTemplateForm, applyValidationToRecipeVersionForm, applyValidationToStockMovementForm } from './targeted-validation-update.js';
-import { createStockMovementLotDetailLifecycle, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreMutationGuards, restoreRecipeMutationControls, packagingPageMutationActiveState, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
+import { createRecipeMutationLifecycle, createStockMovementLotDetailLifecycle, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreMutationGuards, restoreRecipeMutationControls, packagingPageMutationActiveState, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -629,6 +629,8 @@ let recipeTemplateSubmitting = false;
 let recipeVersionSubmitting = false;
 let recipeTemplateSubmitToken = 0;
 let recipeVersionSubmitToken = 0;
+const recipeTemplateMutationLifecycle = createRecipeMutationLifecycle();
+const recipeVersionMutationLifecycle = createRecipeMutationLifecycle();
 let recipeVersionRefreshToken = 0;
 let calculationStatus: CalculationStatus = 'idle';
 let calculationError = '';
@@ -2964,9 +2966,9 @@ function updateRecipeFilterSearch(input: HTMLInputElement) { const cursor = inpu
 function clearRecipeFilter(filter: string) { if (filter === 'search') recipesState.filters.search = ''; if (filter === 'category') recipesState.filters.categoryId = ''; if (filter === 'status') recipesState.filters.status = 'active'; render(); }
 function clearableRecipeFilterChip(label: string, filter: 'search' | 'category' | 'status') { return `<span class="tag-chip selected">${label} <button type="button" data-action="clear-recipe-filter" data-filter="${filter}" aria-label="Убрать фильтр ${label}">×</button></span>`; }
 function recipeActiveFilterChips() { const f = recipesState.filters; const chips: string[] = []; if (f.search.trim()) chips.push(clearableRecipeFilterChip(`Поиск: ${escapeHtml(f.search.trim())}`, 'search')); if (f.categoryId === 'none') chips.push(clearableRecipeFilterChip('Группа: Без группы', 'category')); if (typeof f.categoryId === 'number') chips.push(clearableRecipeFilterChip(`Группа: ${escapeHtml(recipesState.catalogCategories.find((category) => category.id === f.categoryId)?.name ?? 'Выбранная группа')}`, 'category')); if (f.status !== 'active') chips.push(clearableRecipeFilterChip(`Статус: ${f.status === 'archived' ? 'Неактивные' : 'Все'}`, 'status')); return chips.join(''); }
-function openRecipeCreateForm() { if (recipePageMutationActive()) return; recipeTemplateSubmitToken += 1; recipeTemplateValidation = emptyFormValidationState(); recipesState.showCreateForm = true; recipesState.selectedTemplate = null; recipesState.versions = []; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); focusRecipeTemplateName(); }
-function hideRecipeCreateForm() { if (recipePageMutationActive()) return; recipeTemplateSubmitToken += 1; saveRecipeTemplateFormFromDom(); recipeTemplateValidation = emptyFormValidationState(); recipesState.showCreateForm = false; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); }
-function closeRecipeDetail() { if (recipePageMutationActive()) return; recipeVersionSubmitToken += 1; recipeVersionRefreshToken += 1; recipeVersionValidation = emptyFormValidationState(); recipesState.versionForm = emptyRecipeVersionForm(); recipesState.selectedTemplate = null; recipesState.versions = []; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); }
+function openRecipeCreateForm() { if (recipePageMutationActive()) return; recipeTemplateSubmitToken += 1; recipeTemplateMutationLifecycle.invalidate(); recipeTemplateValidation = emptyFormValidationState(); recipesState.showCreateForm = true; recipesState.selectedTemplate = null; recipesState.versions = []; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); focusRecipeTemplateName(); }
+function hideRecipeCreateForm() { if (recipePageMutationActive()) return; recipeTemplateSubmitToken += 1; recipeTemplateMutationLifecycle.invalidate(); saveRecipeTemplateFormFromDom(); recipeTemplateValidation = emptyFormValidationState(); recipesState.showCreateForm = false; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); }
+function closeRecipeDetail() { if (recipePageMutationActive()) return; recipeVersionSubmitToken += 1; recipeVersionMutationLifecycle.invalidate(); recipeVersionRefreshToken += 1; recipeVersionValidation = emptyFormValidationState(); recipesState.versionForm = emptyRecipeVersionForm(); recipesState.selectedTemplate = null; recipesState.versions = []; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); }
 function focusRecipeTemplateName() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="recipe-template-name"]')?.focus()); }
 function saveRecipeTemplateFormFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="recipe-template"]'); if (!form) return; recipesState.templateForm = recipeTemplatePayloadFromForm(form); }
 
@@ -2990,7 +2992,7 @@ function ingredientName(id: number) { return recipesState.ingredients.find((i)=>
 function recipeCatalogCategoryLabel(item: RecipeTemplate) { return recipesState.catalogCategories.find((category) => category.id === item.catalog_category_id)?.name ?? 'Не выбрана'; }
 function recipeTagChips(item: RecipeTemplate) { const tags = item.catalog_tag_ids.map((id) => recipesState.catalogTags.find((tag) => tag.id === id)).filter((tag): tag is CatalogTag => Boolean(tag)); return tags.length ? `<div class="tag-list">${tags.map((tag) => `<span class="tag-chip readonly">${escapeHtml(tag.name)}</span>`).join('')}</div>` : '<small>Метки: нет</small>'; }
 function addRecipeLine() { if (recipePageMutationActive()) return; saveVersionFormFromDom(); recipesState.versionForm.ingredients.push(emptyRecipeLine(recipesState.versionForm.ingredients.length + 1)); render(); }
-function removeRecipeLine(index: number) { if (recipePageMutationActive()) return; saveVersionFormFromDom(); recipesState.versionForm.ingredients.splice(index, 1); recipeVersionValidation = reindexRecipeVersionValidation(recipeVersionValidation, index); if (recipesState.versionForm.ingredients.length === 0) recipesState.versionForm.ingredients.push(emptyRecipeLine(recipesState.versionForm.ingredients.length + 1)); render(); }
+function removeRecipeLine(index: number) { if (recipePageMutationActive()) return; saveVersionFormFromDom(); recipesState.versionForm.ingredients.splice(index, 1); recipeVersionValidation = clearRecipeVersionIngredientValidation(recipeVersionValidation); if (recipesState.versionForm.ingredients.length === 0) recipesState.versionForm.ingredients.push(emptyRecipeLine(recipesState.versionForm.ingredients.length + 1)); render(); }
 function saveVersionFormFromDom() { const form=document.querySelector<HTMLFormElement>('[data-form="recipe-version"]'); if (!form) return; recipesState.versionForm = recipeVersionFormFromForm(form); }
 function draftPercentTotalNumber() { return recipesState.versionForm.ingredients.reduce((sum, line) => line.amount_unit === 'percent' && line.amount_value.trim() && /^-?\d+([.,]\d+)?$/.test(line.amount_value.trim()) ? sum + Number(line.amount_value.trim().replace(',', '.')) : sum, 0); }
 function draftPercentTotal() { const total = draftPercentTotalNumber(); return Number.isInteger(total) ? String(total) : String(Number(total.toFixed(4))); }
@@ -3001,7 +3003,7 @@ function validateRecipeVersionForm(form: RecipeVersionForm) { if (!recipesState.
 function recipeTemplatePayloadFromForm(form: HTMLFormElement): RecipeTemplatePayload { const data = new FormData(form); return { name: String(data.get('name') ?? '').trim(), product_type: String(data.get('product_type') ?? '').trim(), description: String(data.get('description') ?? '').trim(), notes: String(data.get('notes') ?? '').trim() }; }
 function recipeVersionFormFromForm(form: HTMLFormElement): RecipeVersionForm { const data = new FormData(form); const ingredients = recipesState.versionForm.ingredients.map((line, index) => ({ ingredient_id: String(data.get(`ingredients.${index}.ingredient_id`) ?? line.ingredient_id ?? ''), position: String(data.get(`ingredients.${index}.position`) ?? line.position ?? index + 1).trim(), phase: String(data.get(`ingredients.${index}.phase`) ?? line.phase ?? '').trim(), amount_value: String(data.get(`ingredients.${index}.amount_value`) ?? line.amount_value ?? '').trim(), amount_unit: String(data.get(`ingredients.${index}.amount_unit`) ?? line.amount_unit ?? 'percent'), notes: String(data.get(`ingredients.${index}.notes`) ?? line.notes ?? '').trim() })); return { title: String(data.get('title') ?? '').trim(), status: String(data.get('status') ?? recipesState.versionForm.status ?? 'draft'), target_batch_size_value: String(data.get('target_batch_size_value') ?? '').trim(), target_batch_size_unit: String(data.get('target_batch_size_unit') ?? recipesState.versionForm.target_batch_size_unit ?? 'g'), notes: String(data.get('notes') ?? '').trim(), change_note: String(data.get('change_note') ?? '').trim(), ingredients }; }
 function recipeVersionFieldLabels(form: RecipeVersionForm): Record<string, string> { const labels: Record<string, string> = { ...recipeVersionTopFieldLabels }; form.ingredients.forEach((_, index) => { labels[`ingredients.${index}.ingredient_id`] = `Строка ${index + 1}: компонент`; labels[`ingredients.${index}.position`] = `Строка ${index + 1}: позиция`; labels[`ingredients.${index}.phase`] = `Строка ${index + 1}: фаза`; labels[`ingredients.${index}.amount_value`] = `Строка ${index + 1}: количество`; labels[`ingredients.${index}.amount_unit`] = `Строка ${index + 1}: единица`; labels[`ingredients.${index}.notes`] = `Строка ${index + 1}: заметка`; }); return labels; }
-function reindexRecipeVersionValidation(state: FormValidationState, removedIndex: number): FormValidationState { return reindexIndexedFieldValidation(state, 'ingredients', removedIndex); }
+function clearRecipeVersionIngredientValidation(state: FormValidationState): FormValidationState { return clearIndexedCollectionValidation(state, 'ingredients'); }
 function recipeVersionPayload(form: RecipeVersionForm) { return { title: form.title, status: form.status, target_batch_size_value: form.target_batch_size_value || null, target_batch_size_unit: form.target_batch_size_value ? form.target_batch_size_unit : null, notes: form.notes, change_note: form.change_note, created_from_version_id: recipesState.selectedVersionDetail?.version.id ?? null, ingredients: form.ingredients.map((line, index)=>({ ingredient_id: Number(line.ingredient_id), position: Number(line.position || index + 1), phase: line.phase, amount_value: line.amount_value, amount_unit: line.amount_unit, notes: line.notes })) }; }
 
 function startEditIngredient(id: number) {
@@ -3195,7 +3197,9 @@ function openRecipeTemplate(id: number) {
   if (recipePageMutationActive()) return;
   saveRecipeTemplateFormFromDom();
   recipeTemplateSubmitToken += 1;
+  recipeTemplateMutationLifecycle.invalidate();
   recipeVersionSubmitToken += 1;
+  recipeVersionMutationLifecycle.invalidate();
   recipeVersionRefreshToken += 1;
   recipeTemplateValidation = emptyFormValidationState();
   recipeVersionValidation = emptyFormValidationState();
@@ -3207,7 +3211,9 @@ function openRecipeTemplate(id: number) {
 function openRecipeVersion(id: number) { if (recipePageMutationActive()) return; const token = ++recipeVersionRefreshToken; recipesError = ''; recipesRefreshWarning = ''; calculationError = ''; recipesState.versionDetailStatus = 'loading'; recipesState.calculation = null; calculationStatus = 'loading'; render(); getRecipeVersionDetail(id).then((detail)=>{ if (token !== recipeVersionRefreshToken) return null; recipesState.selectedVersionDetail = detail; recipesState.versionDetailStatus = 'ready'; recipesState.calculationTargetValue = detail.version.target_batch_size_value ?? ''; recipesState.calculationTargetUnit = detail.version.target_batch_size_unit === 'ml' ? 'ml' : 'g'; render(); return getRecipeCalculation(detail.version.id, recipesState.calculationTargetValue, recipesState.calculationTargetUnit); }).then((result)=>{ if (!result || token !== recipeVersionRefreshToken) return; recipesState.calculation = result; calculationStatus = 'ready'; render(); }).catch(()=>{ if (token !== recipeVersionRefreshToken) return; if (recipesState.versionDetailStatus === 'ready') { calculationStatus = 'error'; calculationError = 'Не удалось выполнить расчет. Состав версии открыт, попробуйте пересчитать позже.'; } else { recipesState.versionDetailStatus = 'error'; calculationStatus = 'idle'; recipesError = 'Не удалось загрузить версию рецепта.'; } render(); }); }
 function submitRecipeTemplateForm(event: SubmitEvent) {
   event.preventDefault();
-  if (recipeTemplateSubmitting || recipeVersionSubmitting) return;
+  if (recipeVersionSubmitting) return;
+  const lifecycleToken = recipeTemplateMutationLifecycle.begin();
+  if (lifecycleToken === null) return;
   const payload = recipeTemplatePayloadFromForm(event.currentTarget as HTMLFormElement);
   recipesState.templateForm = payload;
   const token = ++recipeTemplateSubmitToken;
@@ -3236,10 +3242,12 @@ function submitRecipeTemplateForm(event: SubmitEvent) {
       calculationStatus = 'idle';
       recipesStatus = 'ready';
       recipeTemplateSubmitting = false;
+      recipeTemplateMutationLifecycle.finish(lifecycleToken);
       render();
     }).catch(()=>{
       if (token !== recipeTemplateSubmitToken) return;
       recipeTemplateSubmitting = false;
+      recipeTemplateMutationLifecycle.finish(lifecycleToken);
       recipesRefreshWarning = 'Рецепт создан, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальные данные.';
       recipesStatus = 'ready';
       render();
@@ -3247,6 +3255,7 @@ function submitRecipeTemplateForm(event: SubmitEvent) {
   }).catch((error)=>{
     if (token !== recipeTemplateSubmitToken) return;
     recipeTemplateSubmitting = false;
+    recipeTemplateMutationLifecycle.finish(lifecycleToken);
     restoreRecipeMutationControls(document);
     recipesMessage = '';
     recipesError = '';
@@ -3264,7 +3273,9 @@ function assignRecipeCategory(recipeTemplateId: number, value: string) { if (!re
 function assignRecipeTags(recipeTemplateId: number) { if (!recipeTemplateId) return; const tagIds = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-action="toggle-recipe-tag"][data-recipe-template-id="${recipeTemplateId}"]:checked`)).map((input) => Number(input.value)); recipesState.catalogSaving = 'saving'; recipesError = ''; render(); updateRecipeCatalogTags(recipeTemplateId, tagIds).then(() => reloadRecipeCatalogData()).then(() => { recipesMessage = 'Метки рецепта сохранены.'; recipesState.catalogSaving = 'idle'; render(); }).catch(() => { recipesState.catalogSaving = 'idle'; recipesMessage = ''; recipesError = 'Не удалось сохранить метки рецепта. Проверьте, что метки активны, и попробуйте еще раз.'; render(); }); }
 function submitRecipeVersionForm(event: SubmitEvent) {
   event.preventDefault();
-  if (recipeTemplateSubmitting || recipeVersionSubmitting || !recipesState.selectedTemplate) return;
+  if (recipeTemplateSubmitting || !recipesState.selectedTemplate) return;
+  const lifecycleToken = recipeVersionMutationLifecycle.begin();
+  if (lifecycleToken === null) return;
   const templateId = recipesState.selectedTemplate.id;
   const form = recipeVersionFormFromForm(event.currentTarget as HTMLFormElement);
   recipesState.versionForm = form;
@@ -3295,16 +3306,19 @@ function submitRecipeVersionForm(event: SubmitEvent) {
       recipesState.calculation = calculation;
       calculationStatus = 'ready';
       recipeVersionSubmitting = false;
+      recipeVersionMutationLifecycle.finish(lifecycleToken);
       render();
     }).catch(()=>{
       if (token !== recipeVersionSubmitToken || refreshToken !== recipeVersionRefreshToken || recipesState.selectedTemplate?.id !== templateId) return;
       recipeVersionSubmitting = false;
+      recipeVersionMutationLifecycle.finish(lifecycleToken);
       recipesRefreshWarning = 'Версия сохранена, но список или расчёт не обновились. Нажмите «Обновить» или откройте версию из списка.';
       render();
     });
   }).catch((error)=>{
     if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) return;
     recipeVersionSubmitting = false;
+    recipeVersionMutationLifecycle.finish(lifecycleToken);
     restoreRecipeMutationControls(document);
     recipesMessage = '';
     recipesError = '';
