@@ -341,3 +341,9 @@ A3.5 commands run in Codex:
 - Client Feedback scope search and stale project-state search — run and reviewed; changed Client Feedback matches are mechanical context/type references and a source guard confirming `submitClientFeedbackForm` is not migrated.
 
 Checks not run: focused browser smoke was NOT RUN in Codex because no existing browser executable or Playwright command was available without installing browser dependencies. External exact-head browser smoke remains required before merge using the checklist in the PR description.
+
+## PR #119 A3.5 correction — Client Wish validation payload unwrapping
+
+Correction scope: Client Wish create mutation failure handling only. The failure path now unwraps `ApiErrorWithDetails.payload` through the existing shared `apiValidationPayload(error)` helper before calling `normalizeBackendValidation`, so backend structured `detail.field` / `detail.message` payloads can reach the approved Client Wish inline field mapping. No backend contract, parser, schema, Client Feedback behavior, status/archive behavior, dependencies, CSS, or unrelated runtime code was changed.
+
+Test-report boundary: frontend validation parser and targeted DOM tests are behavioral unit tests; `main.ts` wiring checks for the Client Wish submit handler and Client Feedback boundary are source guards only. Source guards do not prove browser-level POST counts, focus/caret behavior, refresh-warning rendering, or stale client-card isolation; external exact-head browser smoke for PR #119 remains required before merge.

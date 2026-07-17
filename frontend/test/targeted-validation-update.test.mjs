@@ -1345,6 +1345,7 @@ test('client wish source guards cover lifecycle, duplicate prevention, refresh w
   assert.ok(submit.includes('clientCardState.wishes = [created'));
   assert.ok(submit.includes('clientCardState.showWishForm = false'));
   assert.ok(submit.includes('refreshClientWishes(false, true).catch'));
+  assert.ok(submit.includes('normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels'));
   assert.ok(submit.includes('wishRefreshWarning'));
   assert.equal(submit.includes('createClientFeedback'), false);
 

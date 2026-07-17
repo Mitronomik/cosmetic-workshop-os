@@ -4,16 +4,15 @@
 
 Slice A3 remains IN PROGRESS. PR #118 / Slice A3.4 Client Recipe structured validation is merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; exact published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke.
 
-Current focused implementation: **A3.5 — Client Wishes structured validation**. This A3.5 branch is implemented and committed, but it is not merged, not DONE, and not exact-head smoke-verified. External browser smoke against the exact published GitHub PR head remains required before merge.
+Current focused implementation: **PR #119 / A3.5 — Client Wishes structured validation**. PR #119 is open on GitHub and is not merged. A3.5 is not DONE and has not passed exact-head browser smoke yet.
 
 Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices and are excluded from the current runtime scope.
 
 ## Current next step
 
-- Publish this A3.5 branch with a descriptive branch name and create the pull request titled `A3.5 — Client Wishes structured validation`.
-- Run external focused browser smoke against the exact published GitHub PR head before merge.
-- Do not mark A3.5 merged, DONE, or exact-head verified until that external verification and merge actually happen.
-- Keep Client Feedback, Orders, Production Readiness, Production Confirmation, schema/migration/dependency/CSS changes, browser dependency installation, CI, smoke-runner docs, and unrelated runtime behavior out of this PR.
+- Review PR #119 and run external focused browser smoke against the final published PR #119 head before merge.
+- Do not mark A3.5 merged, DONE, or exact-head verified until merge and exact-head verification actually happen.
+- Keep Client Feedback, Orders, Production Readiness, Production Confirmation, schema/migration/dependency/CSS changes, browser dependency installation, CI, smoke-runner docs, and unrelated runtime behavior out of PR #119.
 
 ## Done
 - Architecture draft
@@ -89,19 +88,16 @@ Client Feedback, Orders, Production Readiness, and Production Confirmation remai
 
 ## In progress
 
-- A3.5 Client Wishes structured validation is implemented on this branch and awaiting publication/review, external exact-head browser smoke, and merge.
+- PR #119 is open and awaiting review plus external exact-head browser smoke against the final published PR head.
 - A3.5 is not marked DONE, merged, or exact-head verified.
+- Focused backend Client Wishes/Feedback tests now pass in this PR branch; the old missing TestClient dependency note is historical and no longer an active blocker for this slice.
 - Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices.
-
-## Blocked
-- Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
 
 ## Next
 
-- Publish the current A3.5 branch with a descriptive branch name and open the pull request titled `A3.5 — Client Wishes structured validation`.
-- Before merge, run focused browser smoke against the exact published GitHub PR head and record the result.
+- Complete review of PR #119.
+- Run focused external browser smoke against the final published GitHub PR #119 head and record the result before merge.
 - After A3.5 is merged and exact-head verified, choose the next A3 candidate separately; Client Feedback is the next validation candidate, while Orders, Production Readiness, and Production Confirmation remain separate future slices.
-- Do not assign a future PR number before GitHub creates it.
 
 ## Important notes
 - PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.
