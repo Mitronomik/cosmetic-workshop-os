@@ -245,6 +245,73 @@ def test_client_recipe_api(monkeypatch, tmp_path):
     assert api.post("/api/client-recipes", json={**payload, "source_recipe_version_id": 999}).status_code == 404
 
 
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_client_recipe_composition_api_indexes_line_validation_and_keeps_aggregate_fields(monkeypatch, tmp_path):
+    db = tmp_path / "api-client-recipes-indexed-validation.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db))
+    c = DatabaseConfig(path=db)
+    initialize_database(c)
+    client, version = seed_source(c)
+    api = TestClient(create_app())
+    recipe_id = api.post("/api/client-recipes", json={"client_id": client.id, "source_recipe_version_id": version.version.id, "title": "Indexed"}).json()["client_recipe"]["id"]
+    current_lines = api.get(f"/api/client-recipes/{recipe_id}").json()["ingredients"]
+
+    invalid_second = api.put(
+        f"/api/client-recipes/{recipe_id}/ingredients",
+        json={"ingredients": [
+            {"id": current_lines[0]["id"], "ingredient_id": current_lines[0]["ingredient_id"], "position": 1, "phase": current_lines[0]["phase"], "amount_value": "80", "amount_unit": current_lines[0]["amount_unit"], "personalization_note": "", "notes": current_lines[0]["notes"]},
+            {"id": current_lines[1]["id"], "ingredient_id": current_lines[1]["ingredient_id"], "position": 2, "phase": current_lines[1]["phase"], "amount_value": "0", "amount_unit": current_lines[1]["amount_unit"], "personalization_note": "", "notes": current_lines[1]["notes"]},
+        ]},
+    )
+    assert invalid_second.status_code == 422
+    assert invalid_second.json()["detail"]["field"] == "ingredients.1.amount_value"
+
+    empty = api.put(f"/api/client-recipes/{recipe_id}/ingredients", json={"ingredients": []})
+    assert empty.status_code == 422
+    assert empty.json()["detail"]["field"] == "ingredients"
+
+    duplicate_position = api.put(
+        f"/api/client-recipes/{recipe_id}/ingredients",
+        json={"ingredients": [
+            {"id": current_lines[0]["id"], "ingredient_id": current_lines[0]["ingredient_id"], "position": 1, "phase": current_lines[0]["phase"], "amount_value": "80", "amount_unit": current_lines[0]["amount_unit"], "personalization_note": "", "notes": current_lines[0]["notes"]},
+            {"id": current_lines[1]["id"], "ingredient_id": current_lines[1]["ingredient_id"], "position": 1, "phase": current_lines[1]["phase"], "amount_value": "20", "amount_unit": current_lines[1]["amount_unit"], "personalization_note": "", "notes": current_lines[1]["notes"]},
+        ]},
+    )
+    assert duplicate_position.status_code == 422
+    assert duplicate_position.json()["detail"]["field"] == "position"
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_rejected_composition_api_update_is_transactional(monkeypatch, tmp_path):
+    db = tmp_path / "api-client-recipes-transactional-validation.sqlite"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db))
+    c = DatabaseConfig(path=db)
+    initialize_database(c)
+    client, version = seed_source(c)
+    api = TestClient(create_app())
+    first_id = api.post("/api/client-recipes", json={"client_id": client.id, "source_recipe_version_id": version.version.id, "title": "First"}).json()["client_recipe"]["id"]
+    second_id = api.post("/api/client-recipes", json={"client_id": client.id, "source_recipe_version_id": version.version.id, "title": "Second"}).json()["client_recipe"]["id"]
+    before_first = api.get(f"/api/client-recipes/{first_id}").json()
+    before_second = api.get(f"/api/client-recipes/{second_id}").json()
+    before_versions = RecipeService(c).get_version_detail(version.version.id)
+    before_production = scalar(c, "SELECT count(*) FROM production_batches")
+
+    current_lines = before_first["ingredients"]
+    response = api.put(
+        f"/api/client-recipes/{first_id}/ingredients",
+        json={"ingredients": [
+            {"id": current_lines[0]["id"], "ingredient_id": current_lines[0]["ingredient_id"], "position": 1, "phase": "changed", "amount_value": "70", "amount_unit": current_lines[0]["amount_unit"], "personalization_note": "partial", "notes": "partial"},
+            {"id": current_lines[1]["id"], "ingredient_id": current_lines[1]["ingredient_id"], "position": 2, "phase": current_lines[1]["phase"], "amount_value": "0", "amount_unit": current_lines[1]["amount_unit"], "personalization_note": "", "notes": current_lines[1]["notes"]},
+            {"ingredient_id": current_lines[1]["ingredient_id"], "position": 3, "phase": "new", "amount_value": "5", "amount_unit": current_lines[1]["amount_unit"], "personalization_note": "insert", "notes": "insert"},
+        ]},
+    )
+    assert response.status_code == 422
+    assert api.get(f"/api/client-recipes/{first_id}").json()["ingredients"] == before_first["ingredients"]
+    assert api.get(f"/api/client-recipes/{second_id}").json()["ingredients"] == before_second["ingredients"]
+    after_versions = RecipeService(c).get_version_detail(version.version.id)
+    assert [(line.id, str(line.amount_value), line.notes) for line in after_versions.ingredients] == [(line.id, str(line.amount_value), line.notes) for line in before_versions.ingredients]
+    assert scalar(c, "SELECT count(*) FROM production_batches") == before_production
+
 def update_line(line, **overrides):
     values = {
         "id": line.id,

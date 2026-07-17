@@ -102,3 +102,75 @@ test('clears indexed recipe line validation on structural removal without moving
   assert.deepEqual(removedFirst.fieldErrors.title, ['Заголовок']);
   assert.deepEqual(removedFirst.formErrors, ['Сводка']);
 });
+
+test('client recipe create fields map inline while status remains summary', () => {
+  const labels = {
+    client_id: 'Клиент',
+    source_recipe_version_id: 'Исходная версия рецепта',
+    title: 'Название индивидуального рецепта',
+    target_batch_size_value: 'Размер партии',
+    target_batch_size_unit: 'Единица размера партии',
+    personalization_notes: 'Персонализация',
+    allergy_notes: 'Аллергии',
+    preference_notes: 'Предпочтения',
+    contraindication_notes: 'Противопоказания',
+    notes: 'Заметки',
+  };
+  const state = normalizeBackendValidation({ detail: [
+    { field: 'client_id', message: 'Выберите клиента.' },
+    { field: 'body.source_recipe_version_id', message: 'Выберите версию.' },
+    { field: 'title', message: 'Укажите название.' },
+    { field: 'status', message: 'Статус недопустим.' },
+  ] }, labels);
+  assert.deepEqual(state.fieldErrors.client_id, ['Клиент: Выберите клиента.']);
+  assert.deepEqual(state.fieldErrors.source_recipe_version_id, ['Исходная версия рецепта: Выберите версию.']);
+  assert.deepEqual(state.fieldErrors.title, ['Название индивидуального рецепта: Укажите название.']);
+  assert.deepEqual(state.formErrors, ['Статус недопустим.']);
+});
+
+test('client recipe composition maps exact approved indexed fields and keeps aggregate or hidden id in summary', () => {
+  const labels = {
+    'ingredients.0.ingredient_id': 'Строка 1: компонент',
+    'ingredients.0.position': 'Строка 1: позиция',
+    'ingredients.0.phase': 'Строка 1: фаза',
+    'ingredients.0.amount_value': 'Строка 1: количество',
+    'ingredients.0.amount_unit': 'Строка 1: единица',
+    'ingredients.0.personalization_note': 'Строка 1: индивидуальное изменение',
+    'ingredients.0.notes': 'Строка 1: заметки',
+    'ingredients.1.amount_value': 'Строка 2: количество',
+  };
+  const state = normalizeBackendValidation({ detail: [
+    { loc: ['body', 'ingredients', 1, 'amount_value'], msg: 'Количество должно быть больше нуля.' },
+    { field: 'ingredients.0.ingredient_id', message: 'Выберите компонент.' },
+    { field: 'ingredients.0.id', message: 'Скрытая строка не принадлежит рецепту.' },
+    { field: 'ingredients', message: 'Добавьте строку.' },
+    { field: 'position', message: 'Позиции повторяются.' },
+    { field: 'id', message: 'Строка повторяется.' },
+    { field: 'ingredients.amount_value', message: 'Путь malformed.' },
+    { field: 'ingredients.0.unknown', message: 'Неизвестное поле.' },
+  ] }, labels);
+  assert.deepEqual(state.fieldErrors['ingredients.1.amount_value'], ['Строка 2: количество: Количество должно быть больше нуля.']);
+  assert.deepEqual(state.fieldErrors['ingredients.0.ingredient_id'], ['Строка 1: компонент: Выберите компонент.']);
+  assert.equal(state.fieldErrors['ingredients.0.id'], undefined);
+  assert.deepEqual(state.formErrors, ['Скрытая строка не принадлежит рецепту.', 'Добавьте строку.', 'Позиции повторяются.', 'Строка повторяется.', 'Путь malformed.', 'Неизвестное поле.']);
+});
+
+test('client recipe composition field and collection clearing preserves unrelated errors', () => {
+  const state = {
+    fieldErrors: {
+      title: ['top'],
+      'ingredients.0.ingredient_id': ['row 1'],
+      'ingredients.1.amount_value': ['row 2 amount'],
+      'ingredients.1.amount_unit': ['row 2 unit'],
+    },
+    formErrors: ['summary'],
+  };
+  const corrected = clearFieldValidation(state, 'ingredients.1.amount_value');
+  assert.equal(corrected.fieldErrors['ingredients.1.amount_value'], undefined);
+  assert.deepEqual(corrected.fieldErrors['ingredients.0.ingredient_id'], ['row 1']);
+  assert.deepEqual(corrected.fieldErrors['ingredients.1.amount_unit'], ['row 2 unit']);
+  assert.deepEqual(corrected.formErrors, ['summary']);
+  const structural = clearIndexedCollectionValidation(state, 'ingredients');
+  assert.deepEqual(structural.fieldErrors, { title: ['top'] });
+  assert.deepEqual(structural.formErrors, ['summary']);
+});

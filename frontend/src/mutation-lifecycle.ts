@@ -133,3 +133,41 @@ export type PackagingPageMutationState = {
 export function packagingPageMutationActiveState(state: PackagingPageMutationState): boolean {
   return state.packagingItemSubmitting || state.catalogSaving === 'saving' || state.catalogCreating !== null || state.deactivatingId !== null;
 }
+
+
+export function disableClientRecipeCreateMutationControls(root: ParentNode = document): void {
+  const form = root.querySelector<HTMLFormElement>('[data-form="client-recipe"]');
+  if (form) {
+    form.setAttribute('aria-busy', 'true');
+    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
+    form.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
+    form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.textContent = 'Создаём…';
+  }
+  const guarded = '[data-action="reload-client-recipes"], [data-action="open-client-recipe-create"], [data-action="hide-client-recipe-create"], [data-action="filter-client-recipes-search"], [data-action="filter-client-recipes-status"], [data-action="filter-client-recipes-client"], [data-action="reset-client-recipe-filters"], [data-action="clear-client-recipe-filter"], [data-action="open-client-recipe-detail"], [data-action="archive-client-recipe"], [data-action="restore-client-recipe"], [data-action="select-client-recipe-template"], [data-action="open-client-recipe-composition-editor"], [data-action="add-client-recipe-composition-line"], [data-action="remove-client-recipe-composition-line"], [data-action="move-client-recipe-composition-line"], [data-action="reset-client-recipe-composition-editor"], [data-action="close-client-recipe-composition-editor"]';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+export function disableClientRecipeCompositionMutationControls(root: ParentNode = document): void {
+  const form = root.querySelector<HTMLFormElement>('[data-form="client-recipe-composition"]');
+  if (form) {
+    form.setAttribute('aria-busy', 'true');
+    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
+    form.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
+    form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.textContent = 'Сохраняем…';
+  }
+  const guarded = '[data-action="reload-client-recipes"], [data-action="open-client-recipe-create"], [data-action="hide-client-recipe-create"], [data-action="filter-client-recipes-search"], [data-action="filter-client-recipes-status"], [data-action="filter-client-recipes-client"], [data-action="reset-client-recipe-filters"], [data-action="clear-client-recipe-filter"], [data-action="open-client-recipe-detail"], [data-action="close-client-recipe-detail"], [data-action="archive-client-recipe"], [data-action="restore-client-recipe"], [data-action="select-client-recipe-template"], [data-action="open-client-recipe-composition-editor"], [data-action="add-client-recipe-composition-line"], [data-action="remove-client-recipe-composition-line"], [data-action="move-client-recipe-composition-line"], [data-action="reset-client-recipe-composition-editor"], [data-action="close-client-recipe-composition-editor"]';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+export function restoreClientRecipeMutationControls(root: ParentNode = document): void {
+  root.querySelectorAll<HTMLFormElement>('[data-form="client-recipe"], [data-form="client-recipe-composition"]').forEach((form) => form.removeAttribute('aria-busy'));
+  restoreMutationGuards(root);
+  const createSubmit = root.querySelector<HTMLButtonElement>('[data-form="client-recipe"] button[type="submit"]');
+  if (createSubmit) createSubmit.textContent = 'Создать индивидуальный рецепт';
+  const compositionSubmit = root.querySelector<HTMLButtonElement>('[data-form="client-recipe-composition"] button[type="submit"]');
+  if (compositionSubmit) compositionSubmit.textContent = 'Сохранить состав';
+}

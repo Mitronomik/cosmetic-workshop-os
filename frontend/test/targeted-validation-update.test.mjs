@@ -1110,3 +1110,87 @@ test('recipe async lifecycle ignores stale refresh callbacks', async () => {
   assert.equal(state.staleWrites, 1);
   assert.equal(lifecycleState.isActive(), false);
 });
+
+test('client recipe wrappers apply create and row-indexed composition errors without replacing focused controls', () => {
+  reset();
+  const create = mkForm('client-recipe');
+  const title = addField(create, 'title');
+  addField(create, 'client_id', true);
+  mockDoc.body.appendChild(create);
+  title.focus();
+  title.setSelectionRange(2, 4);
+  mod.applyValidationToClientRecipeCreateForm({ fieldErrors: { title: ['Название индивидуального рецепта: Укажите название.'] }, formErrors: ['Статус недопустим.'] });
+  assert.equal(mockDoc.activeElement, title);
+  assert.equal(title.selectionStart, 2);
+  assert.ok(byId(create, 'client-recipe-title-error'));
+  assert.ok(create.querySelector('.form-error-summary').textContent.includes('Статус недопустим'));
+
+  const composition = mkForm('client-recipe-composition');
+  const row1 = addField(composition, 'ingredients.0.amount_value');
+  const row2 = addField(composition, 'ingredients.1.amount_value');
+  mockDoc.body.appendChild(composition);
+  row2.focus();
+  row2.setSelectionRange(1, 1);
+  mod.applyValidationToClientRecipeCompositionForm({ fieldErrors: { 'ingredients.1.amount_value': ['Строка 2: количество: больше нуля.'] }, formErrors: [] });
+  assert.equal(mockDoc.activeElement, row2);
+  assert.equal(composition.querySelector('[name="ingredients.1.amount_value"]'), row2);
+  assert.equal(composition.querySelector('[name="ingredients.0.amount_value"]'), row1);
+  assert.ok(byId(composition, 'client-recipe-composition-ingredients.1.amount_value-error'));
+  assert.equal(byId(composition, 'client-recipe-composition-ingredients.0.amount_value-error'), null);
+});
+
+test('client recipe mutation guards set busy state and preserve pre-existing disabled or readonly states', () => {
+  reset();
+  const form = mkForm('client-recipe-composition');
+  const amount = addField(form, 'ingredients.0.amount_value');
+  const unit = addField(form, 'ingredients.0.amount_unit', true);
+  const alreadyReadonly = addField(form, 'ingredients.0.notes');
+  alreadyReadonly.readOnly = true;
+  const alreadyDisabled = addField(form, 'ingredients.0.phase', true);
+  alreadyDisabled.disabled = true;
+  const submit = mockDoc.createElement('button');
+  submit.setAttribute('type', 'submit');
+  form.appendChild(submit);
+  const action = mockDoc.createElement('button');
+  action.setAttribute('data-action', 'remove-client-recipe-composition-line');
+  mockDoc.body.appendChild(form);
+  mockDoc.body.appendChild(action);
+  amount.focus();
+  amount.setSelectionRange(1, 3);
+
+  lifecycle.disableClientRecipeCompositionMutationControls(mockDoc.body);
+  assert.equal(form.getAttribute('aria-busy'), 'true');
+  assert.equal(amount.readOnly, true);
+  assert.equal(unit.disabled, true);
+  assert.equal(action.disabled, true);
+  assert.equal(submit.textContent, 'Сохраняем…');
+  assert.equal(alreadyReadonly.dataset.mutationReadonly, undefined);
+  assert.equal(alreadyDisabled.dataset.mutationDisabled, undefined);
+
+  lifecycle.restoreClientRecipeMutationControls(mockDoc.body);
+  assert.equal(form.getAttribute('aria-busy'), null);
+  assert.equal(amount.readOnly, false);
+  assert.equal(unit.disabled, false);
+  assert.equal(action.disabled, false);
+  assert.equal(alreadyReadonly.readOnly, true);
+  assert.equal(alreadyDisabled.disabled, true);
+  assert.equal(mockDoc.activeElement, amount);
+  assert.equal(amount.selectionStart, 1);
+});
+
+test('client recipe source contains structural invalidation and authoritative composition update without refresh', () => {
+  const removeBody = mainSourceFunction('removeClientRecipeCompositionLine');
+  const moveBody = mainSourceFunction('moveClientRecipeCompositionLine');
+  const resetBody = mainSourceFunction('resetClientRecipeCompositionEditor');
+  assert.ok(removeBody.includes("clearIndexedCollectionValidation(clientRecipeCompositionValidation, 'ingredients')"));
+  assert.ok(moveBody.includes("clearIndexedCollectionValidation(clientRecipeCompositionValidation, 'ingredients')"));
+  assert.ok(resetBody.includes('clientRecipeCompositionValidation = emptyFormValidationState()'));
+  const submitBody = mainSourceFunction('submitClientRecipeCompositionEditor');
+  const beforePut = submitBody.slice(0, submitBody.indexOf('updateClientRecipeIngredients'));
+  assert.ok(beforePut.includes('applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation)'));
+  assert.ok(beforePut.includes('disableClientRecipeCompositionMutationControls(document)'));
+  assert.equal(beforePut.includes('render()'), false);
+  assert.ok(submitBody.includes('clientRecipesState.selectedDetail = updated'));
+  assert.equal(submitBody.includes('getClientRecipe('), false);
+  assert.equal(submitBody.includes('getClientRecipes('), false);
+});
