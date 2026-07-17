@@ -1335,9 +1335,73 @@ test('client wish wrapper maps approved fields and preserves focused draft contr
   assert.equal(mockDoc.activeElement, title);
 });
 
+
+test('client wish mutation guard disables feedback controls without losing prior disabled state', () => {
+  reset();
+  const wishForm = mkForm('client-wish');
+  const title = addField(wishForm, 'title');
+  const category = addField(wishForm, 'category', true);
+  const wishSubmit = mockDoc.createElement('button');
+  wishSubmit.setAttribute('type', 'submit');
+  wishSubmit.textContent = 'Сохранить пожелание';
+  wishForm.appendChild(wishSubmit);
+
+  const feedbackForm = mkForm('client-feedback');
+  const feedbackText = addField(feedbackForm, 'text');
+  const feedbackType = addField(feedbackForm, 'feedback_type', true);
+  const feedbackSubmit = mockDoc.createElement('button');
+  feedbackSubmit.setAttribute('type', 'submit');
+  feedbackForm.appendChild(feedbackSubmit);
+  const alreadyDisabledFeedback = addField(feedbackForm, 'rating');
+  alreadyDisabledFeedback.disabled = true;
+
+  const openFeedback = mockDoc.createElement('button');
+  openFeedback.setAttribute('data-action', 'toggle-client-feedback-form');
+  const closeFeedback = mockDoc.createElement('button');
+  closeFeedback.setAttribute('data-action', 'close-client-feedback-form');
+
+  mockDoc.body.appendChild(wishForm);
+  mockDoc.body.appendChild(feedbackForm);
+  mockDoc.body.appendChild(openFeedback);
+  mockDoc.body.appendChild(closeFeedback);
+
+  title.focus();
+  title.setSelectionRange(1, 3);
+  lifecycle.disableClientWishCreateMutationControls(mockDoc.body);
+
+  assert.equal(wishForm.getAttribute('aria-busy'), 'true');
+  assert.equal(title.readOnly, true);
+  assert.equal(category.disabled, true);
+  assert.equal(wishSubmit.disabled, true);
+  assert.equal(openFeedback.disabled, true);
+  assert.equal(closeFeedback.disabled, true);
+  assert.equal(feedbackText.disabled, true);
+  assert.equal(feedbackType.disabled, true);
+  assert.equal(feedbackSubmit.disabled, true);
+  assert.equal(alreadyDisabledFeedback.disabled, true);
+  assert.equal(alreadyDisabledFeedback.dataset.mutationDisabled, undefined, 'pre-existing disabled feedback control is not restored incorrectly');
+
+  lifecycle.restoreClientWishMutationControls(mockDoc.body);
+
+  assert.equal(wishForm.hasAttribute('aria-busy'), false);
+  assert.equal(title.readOnly, false);
+  assert.equal(category.disabled, false);
+  assert.equal(wishSubmit.disabled, false);
+  assert.equal(openFeedback.disabled, false);
+  assert.equal(closeFeedback.disabled, false);
+  assert.equal(feedbackText.disabled, false);
+  assert.equal(feedbackType.disabled, false);
+  assert.equal(feedbackSubmit.disabled, false);
+  assert.equal(alreadyDisabledFeedback.disabled, true);
+  assert.equal(mockDoc.activeElement, title);
+  assert.equal(title.selectionStart, 1);
+  assert.equal(title.selectionEnd, 3);
+});
+
 test('client wish source guards cover lifecycle source wiring without replacing browser smoke', () => {
   const submit = mainSourceFunction('submitClientWishForm');
   assert.ok(submit.includes('clientCardState.savingWish'));
+  assert.ok(mainSourceFunction('clientWishFormDomLocked').includes('clientCardState.savingWish'));
   assert.ok(submit.includes('clientWishCreateLifecycle.begin()'));
   assert.ok(submit.includes('token === null'));
   assert.ok(submit.includes('contextToken !== clientWishContextToken'));
@@ -1364,6 +1428,9 @@ test('client wish source guards cover lifecycle source wiring without replacing 
   assert.equal(submit.includes('createClientFeedback'), false);
 
   const refresh = mainSourceFunction('refreshClientWishes');
+  assert.ok(refresh.includes('if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();'));
+  assert.ok(refresh.includes("if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (!clientWishFormDomLocked()) render(); }"));
+  assert.ok(refresh.includes('if (clientWishFormDomLocked()) return;'));
   assert.ok(refresh.includes('const cardContextToken = clientCardContextToken;'));
   assert.ok(refresh.includes('clientWishListRequestLifecycle.begin()'));
   assert.ok(refresh.includes('clientWishListRequestLifecycle.isCurrent(requestGeneration)'));
@@ -1372,6 +1439,7 @@ test('client wish source guards cover lifecycle source wiring without replacing 
   assert.ok(refresh.includes('fetchClientWishes(clientId, includeArchived)'));
 
   const load = mainSourceFunction('loadClientCardData');
+  assert.ok(load.includes('if (clientWishFormDomLocked()) return;'));
   assert.ok(load.includes('clientWishListRequestLifecycle.invalidate()'));
   assert.ok(load.includes('clientCardContextToken += 1'));
   assert.ok(load.includes('clientWishContextToken += 1'));
@@ -1381,16 +1449,29 @@ test('client wish source guards cover lifecycle source wiring without replacing 
   const close = mainSourceFunction('closeClientWishForm');
   assert.ok(close.includes('clientWishContextToken += 1'));
   assert.equal(close.includes('clientCardContextToken'), false, 'closing the Client Wish form must not stale an in-flight wishes list request');
+  const feedbackRefresh = mainSourceFunction('refreshClientFeedback');
+  assert.ok(feedbackRefresh.includes('if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();'));
+  assert.ok(feedbackRefresh.includes('if (clientWishFormDomLocked()) return;'));
   const status = mainSourceFunction('changeClientWishStatus');
+  assert.ok(status.includes('clientCardState.savingWish'));
+  assert.ok(status.includes('if (clientWishFormDomLocked()) return;'));
   assert.ok(status.includes('clientWishListRequestLifecycle.invalidate()'));
   const archive = mainSourceFunction('archiveClientWishFromCard');
+  assert.ok(archive.includes('clientCardState.savingWish'));
+  assert.ok(archive.includes('if (clientWishFormDomLocked()) return;'));
   assert.ok(archive.includes('clientWishListRequestLifecycle.invalidate()'));
+  const toggleFeedback = mainSourceFunction('toggleClientFeedbackForm');
+  assert.ok(toggleFeedback.includes('if (clientCardState.savingWish) return;'));
+  const closeFeedback = mainSourceFunction('closeClientFeedbackForm');
+  assert.ok(closeFeedback.includes('if (clientCardState.savingWish) return;'));
+  const submitFeedback = mainSourceFunction('submitClientFeedbackForm');
+  assert.ok(submitFeedback.includes('!clientId || clientCardState.savingWish'));
+  assert.ok(submitFeedback.includes('if (clientWishFormDomLocked()) return;'));
 
   const form = mainSourceFunction('clientWishForm');
   assert.ok(form.includes('novalidate'));
   assert.ok(form.includes('validationSummary(clientWishValidation'));
   assert.ok(form.includes('clientWishFieldAttrs'));
 
-  const feedback = mainSourceFunction('submitClientFeedbackForm');
-  assert.equal(feedback.includes('clientWishValidation'), false, 'Client Feedback remains outside A3.5 validation migration');
+  assert.equal(submitFeedback.includes('clientWishValidation'), false, 'Client Feedback remains outside A3.5 validation migration');
 });

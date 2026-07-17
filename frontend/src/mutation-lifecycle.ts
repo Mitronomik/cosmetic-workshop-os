@@ -211,7 +211,7 @@ export function disableClientWishCreateMutationControls(root: ParentNode = docum
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     if (submit) submit.textContent = 'Сохраняем…';
   }
-  const guarded = '[data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="start-client-edit"], [data-action="cancel-client-edit"], [data-action="archive-client"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"]';
+  const guarded = '[data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="start-client-edit"], [data-action="cancel-client-edit"], [data-action="archive-client"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"], [data-action="toggle-client-feedback-form"], [data-action="close-client-feedback-form"], [data-form="client-feedback"] input, [data-form="client-feedback"] textarea, [data-form="client-feedback"] select, [data-form="client-feedback"] button';
   root.querySelectorAll(guarded).forEach(mutationDisabled);
 }
 
