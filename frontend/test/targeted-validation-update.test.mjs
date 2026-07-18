@@ -1486,6 +1486,71 @@ test('client card render context guard blocks stale feedback render after reject
   assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(futureRequest), true, 'new feedback request in the current safe context can render');
 });
 
+
+test('client card render context guard protects Client Recipes and Wishes callbacks after rejected Client Wish validation', () => {
+  const captured = {
+    capturedClientId: 1,
+    currentClientId: 1,
+    capturedCardContextToken: 10,
+    currentCardContextToken: 10,
+    capturedWishContextToken: 20,
+    currentWishContextToken: 21,
+    wishFormDomLocked: false,
+  };
+  const current = { ...captured, capturedWishContextToken: 21 };
+  const switched = { ...captured, currentClientId: 2, currentCardContextToken: 11 };
+
+  const recipesState = { recipes: [], recipesStatus: 'loading', renders: 0 };
+  const applyRecipesSuccess = (guardState) => {
+    if (guardState.currentClientId !== guardState.capturedClientId || guardState.currentCardContextToken !== guardState.capturedCardContextToken) return;
+    recipesState.recipes = ['recipe'];
+    recipesState.recipesStatus = 'ready';
+    if (lifecycle.clientCardRenderAllowedForCapturedContext(guardState)) recipesState.renders += 1;
+  };
+  applyRecipesSuccess(captured);
+  assert.deepEqual(recipesState.recipes, ['recipe'], 'current-card stale-UI recipes response may update safe state');
+  assert.equal(recipesState.recipesStatus, 'ready');
+  assert.equal(recipesState.renders, 0, 'older recipes response cannot render over targeted validation');
+  applyRecipesSuccess(current);
+  assert.equal(recipesState.renders, 1, 'current-context recipes response renders normally');
+
+  const recipesErrorState = { recipesStatus: 'loading', renders: 0 };
+  const applyRecipesError = (guardState) => {
+    if (guardState.currentClientId !== guardState.capturedClientId || guardState.currentCardContextToken !== guardState.capturedCardContextToken) return;
+    recipesErrorState.recipesStatus = 'error';
+    if (lifecycle.clientCardRenderAllowedForCapturedContext(guardState)) recipesErrorState.renders += 1;
+  };
+  applyRecipesError(captured);
+  assert.equal(recipesErrorState.recipesStatus, 'error', 'current-card stale-UI recipes error may update status');
+  assert.equal(recipesErrorState.renders, 0, 'older recipes error cannot render over targeted validation');
+
+  const switchedState = { recipes: [], renders: 0 };
+  const applySwitchedRecipes = (guardState) => {
+    if (guardState.currentClientId !== guardState.capturedClientId || guardState.currentCardContextToken !== guardState.capturedCardContextToken) return;
+    switchedState.recipes = ['stale'];
+    if (lifecycle.clientCardRenderAllowedForCapturedContext(guardState)) switchedState.renders += 1;
+  };
+  applySwitchedRecipes(switched);
+  assert.deepEqual(switchedState.recipes, [], 'Client A recipes response cannot update Client B');
+  assert.equal(switchedState.renders, 0);
+
+  const wishesState = { wishes: [], wishesStatus: 'loading', renders: 0, generation: 2, includeArchived: false };
+  const applyWishesSuccess = (guardState, request = { generation: 2, includeArchived: false }) => {
+    const requestCurrent = request.generation === wishesState.generation && request.includeArchived === wishesState.includeArchived;
+    if (!requestCurrent || guardState.currentClientId !== guardState.capturedClientId || guardState.currentCardContextToken !== guardState.capturedCardContextToken) return;
+    wishesState.wishes = ['wish'];
+    wishesState.wishesStatus = 'ready';
+    if (lifecycle.clientCardRenderAllowedForCapturedContext(guardState)) wishesState.renders += 1;
+  };
+  applyWishesSuccess(captured);
+  assert.deepEqual(wishesState.wishes, ['wish'], 'current-generation stale-UI wishes response may update safe list state');
+  assert.equal(wishesState.renders, 0, 'older wishes response cannot render over targeted validation');
+  applyWishesSuccess(current);
+  assert.equal(wishesState.renders, 1, 'current-context wishes response renders normally');
+  applyWishesSuccess(current, { generation: 1, includeArchived: false });
+  assert.equal(wishesState.renders, 1, 'stale wishes generation remains ignored');
+});
+
 test('client wish source guards cover lifecycle source wiring without replacing browser smoke', () => {
   const submit = mainSourceFunction('submitClientWishForm');
   assert.ok(submit.includes('clientCardState.savingWish'));
@@ -1517,8 +1582,11 @@ test('client wish source guards cover lifecycle source wiring without replacing 
 
   const refresh = mainSourceFunction('refreshClientWishes');
   assert.ok(refresh.includes('if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();'));
-  assert.ok(refresh.includes("if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (!clientWishFormDomLocked()) render(); }"));
-  assert.ok(refresh.includes('if (clientWishFormDomLocked()) return;'));
+  assert.ok(refresh.includes('const wishContextToken = clientWishContextToken;'));
+  assert.ok(refresh.includes('const canRenderWishesResponse = () => isCurrentWishesRequest() && clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, wishContextToken);'));
+  assert.ok(refresh.includes("if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (canRenderWishesResponse()) render(); }"));
+  assert.ok(refresh.includes('if (!canRenderWishesResponse()) return;'));
+  assert.equal(refresh.includes('if (clientWishFormDomLocked()) return;'), false, 'wishes render guard must use captured Client Wish UI context, not current savingWish only');
   assert.ok(refresh.includes('const cardContextToken = clientCardContextToken;'));
   assert.ok(refresh.includes('clientWishListRequestLifecycle.begin()'));
   assert.ok(refresh.includes('clientWishListRequestLifecycle.isCurrent(requestGeneration)'));
@@ -1527,7 +1595,12 @@ test('client wish source guards cover lifecycle source wiring without replacing 
   assert.ok(refresh.includes('fetchClientWishes(clientId, includeArchived)'));
 
   const load = mainSourceFunction('loadClientCardData');
-  assert.ok(load.includes('if (clientWishFormDomLocked()) return;'));
+  assert.ok(load.includes('const cardContextToken = clientCardContextToken;'));
+  assert.ok(load.includes('const wishContextToken = clientWishContextToken;'));
+  assert.ok(load.includes('const isCurrentClientCardRecipes = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;'));
+  assert.ok(load.includes('const canRenderRecipesResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, wishContextToken);'));
+  assert.ok(load.includes('if (!canRenderRecipesResponse()) return;'));
+  assert.equal(load.includes('if (clientWishFormDomLocked()) return;'), false, 'Client Recipes callbacks must use captured Client Wish UI context, not current savingWish only');
   assert.ok(load.includes('clientWishListRequestLifecycle.invalidate()'));
   assert.ok(load.includes('clientCardContextToken += 1'));
   assert.ok(load.includes('clientWishContextToken += 1'));

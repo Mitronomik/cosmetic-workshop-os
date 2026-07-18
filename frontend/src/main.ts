@@ -3006,21 +3006,52 @@ function syncClientCardDraftFormsFromDom() {
   }
 }
 function clientWishFormDomLocked() { return clientCardState.savingWish; }
-function loadClientCardData(clientId: number) { clientWishCreateLifecycle.invalidate(); clientWishListRequestLifecycle.invalidate(); clientCardContextToken += 1; clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState = { ...emptyClientCardState(), clientId }; render(); refreshClientWishes(); refreshClientFeedback(); clientCardState.recipesStatus = 'loading'; getClientRecipes(true).then((response) => { if (clientCardState.clientId !== clientId) return; clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId); clientCardState.recipesStatus = 'ready'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }).catch(() => { if (clientCardState.clientId !== clientId) return; clientCardState.recipesStatus = 'error'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function loadClientCardData(clientId: number) {
+  clientWishCreateLifecycle.invalidate();
+  clientWishListRequestLifecycle.invalidate();
+  clientCardContextToken += 1;
+  clientWishContextToken += 1;
+  clientWishValidation = emptyFormValidationState();
+  clientCardState = { ...emptyClientCardState(), clientId };
+  render();
+  refreshClientWishes();
+  refreshClientFeedback();
+  clientCardState.recipesStatus = 'loading';
+  const cardContextToken = clientCardContextToken;
+  const wishContextToken = clientWishContextToken;
+  const isCurrentClientCardRecipes = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
+  const canRenderRecipesResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, wishContextToken);
+  getClientRecipes(true).then((response) => {
+    if (!isCurrentClientCardRecipes()) return;
+    clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId);
+    clientCardState.recipesStatus = 'ready';
+    if (!canRenderRecipesResponse()) return;
+    syncClientCardDraftFormsFromDom();
+    render();
+  }).catch(() => {
+    if (!isCurrentClientCardRecipes()) return;
+    clientCardState.recipesStatus = 'error';
+    if (!canRenderRecipesResponse()) return;
+    syncClientCardDraftFormsFromDom();
+    render();
+  });
+}
 function refreshClientWishes(renderLoading = true, rejectOnError = false, showLoadError = true) {
   const clientId = clientCardState.clientId;
   if (!clientId) return Promise.resolve();
   if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();
   const includeArchived = clientCardState.includeArchivedWishes;
   const cardContextToken = clientCardContextToken;
+  const wishContextToken = clientWishContextToken;
   const requestGeneration = clientWishListRequestLifecycle.begin();
   const isCurrentWishesRequest = () => clientWishListRequestLifecycle.isCurrent(requestGeneration) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken && clientCardState.includeArchivedWishes === includeArchived;
-  if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (!clientWishFormDomLocked()) render(); }
+  const canRenderWishesResponse = () => isCurrentWishesRequest() && clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, wishContextToken);
+  if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (canRenderWishesResponse()) render(); }
   return fetchClientWishes(clientId, includeArchived).then((wishes) => {
     if (!isCurrentWishesRequest()) return;
     clientCardState.wishes = wishes;
     clientCardState.wishesStatus = 'ready';
-    if (clientWishFormDomLocked()) return;
+    if (!canRenderWishesResponse()) return;
     syncClientCardDraftFormsFromDom();
     render();
   }).catch((error) => {
@@ -3028,7 +3059,7 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
     if (showLoadError) {
       clientCardState.wishesStatus = 'error';
       clientCardState.wishError = 'Не удалось загрузить пожелания клиента. Обновите карточку и попробуйте ещё раз.';
-      if (!clientWishFormDomLocked()) { syncClientCardDraftFormsFromDom(); render(); }
+      if (canRenderWishesResponse()) { syncClientCardDraftFormsFromDom(); render(); }
     }
     if (rejectOnError) throw error;
   });
