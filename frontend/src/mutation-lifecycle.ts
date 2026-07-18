@@ -101,15 +101,15 @@ export type ClientCardRenderContextState = {
   readonly currentClientId: number | null;
   readonly capturedCardContextToken: number;
   readonly currentCardContextToken: number;
-  readonly capturedWishContextToken: number;
-  readonly currentWishContextToken: number;
+  readonly capturedTargetedValidationToken: number;
+  readonly currentTargetedValidationToken: number;
   readonly wishFormDomLocked: boolean;
 };
 
 export function clientCardRenderAllowedForCapturedContext(state: ClientCardRenderContextState): boolean {
   return state.currentClientId === state.capturedClientId
     && state.currentCardContextToken === state.capturedCardContextToken
-    && state.currentWishContextToken === state.capturedWishContextToken
+    && state.currentTargetedValidationToken === state.capturedTargetedValidationToken
     && !state.wishFormDomLocked;
 }
 

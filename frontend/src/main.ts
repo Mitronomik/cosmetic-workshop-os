@@ -568,6 +568,7 @@ const clientWishCreateLifecycle = createRecipeMutationLifecycle();
 const clientWishListRequestLifecycle = createRequestGenerationLifecycle();
 let clientCardContextToken = 0;
 let clientWishContextToken = 0;
+let clientWishTargetedValidationToken = 0;
 let clientSubmitting = false;
 let clientSubmitToken = 0;
 let clientCardState: ClientCardState = emptyClientCardState();
@@ -3018,9 +3019,9 @@ function loadClientCardData(clientId: number) {
   refreshClientFeedback();
   clientCardState.recipesStatus = 'loading';
   const cardContextToken = clientCardContextToken;
-  const wishContextToken = clientWishContextToken;
+  const targetedValidationToken = clientWishTargetedValidationToken;
   const isCurrentClientCardRecipes = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
-  const canRenderRecipesResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, wishContextToken);
+  const canRenderRecipesResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
   getClientRecipes(true).then((response) => {
     if (!isCurrentClientCardRecipes()) return;
     clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId);
@@ -3042,10 +3043,10 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
   if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();
   const includeArchived = clientCardState.includeArchivedWishes;
   const cardContextToken = clientCardContextToken;
-  const wishContextToken = clientWishContextToken;
+  const targetedValidationToken = clientWishTargetedValidationToken;
   const requestGeneration = clientWishListRequestLifecycle.begin();
   const isCurrentWishesRequest = () => clientWishListRequestLifecycle.isCurrent(requestGeneration) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken && clientCardState.includeArchivedWishes === includeArchived;
-  const canRenderWishesResponse = () => isCurrentWishesRequest() && clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, wishContextToken);
+  const canRenderWishesResponse = () => isCurrentWishesRequest() && clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
   if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (canRenderWishesResponse()) render(); }
   return fetchClientWishes(clientId, includeArchived).then((wishes) => {
     if (!isCurrentWishesRequest()) return;
@@ -3064,14 +3065,14 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
     if (rejectOnError) throw error;
   });
 }
-function clientCardCanRenderCapturedClientWishContext(clientId: number, cardContextToken: number, wishContextToken: number) {
+function clientCardCanRenderCapturedClientWishContext(clientId: number, cardContextToken: number, targetedValidationToken: number) {
   return clientCardRenderAllowedForCapturedContext({
     capturedClientId: clientId,
     currentClientId: clientCardState.clientId,
     capturedCardContextToken: cardContextToken,
     currentCardContextToken: clientCardContextToken,
-    capturedWishContextToken: wishContextToken,
-    currentWishContextToken: clientWishContextToken,
+    capturedTargetedValidationToken: targetedValidationToken,
+    currentTargetedValidationToken: clientWishTargetedValidationToken,
     wishFormDomLocked: clientWishFormDomLocked(),
   });
 }
@@ -3079,9 +3080,9 @@ function refreshClientFeedback() {
   const clientId = clientCardState.clientId;
   if (!clientId) return Promise.resolve();
   const cardContextToken = clientCardContextToken;
-  const wishContextToken = clientWishContextToken;
+  const targetedValidationToken = clientWishTargetedValidationToken;
   const isCurrentClientCardFeedback = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
-  const canRenderFeedbackResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, wishContextToken);
+  const canRenderFeedbackResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
   if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();
   clientCardState.feedbackStatus = 'loading';
   if (canRenderFeedbackResponse()) render();
@@ -3153,7 +3154,7 @@ function submitClientWishForm(event: SubmitEvent) {
     clientCardState.wishError = '';
     clientCardState.wishMessage = '';
     clientCardState.wishRefreshWarning = '';
-    clientWishContextToken += 1;
+    clientWishTargetedValidationToken += 1;
     applyValidationToClientWishForm(clientWishValidation);
     restoreClientWishMutationControls(document);
     announceAssertive('Не удалось сохранить пожелание. Проверьте подсказки в форме.');
