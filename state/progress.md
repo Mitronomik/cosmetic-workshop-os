@@ -954,3 +954,9 @@ A3.5 verification run in this branch:
 - Concurrent frontend form-validation and targeted-validation test execution — passed.
 - `cd backend && python3 -m pytest app/tests/test_client_wishes_feedback.py` — passed, 7 tests.
 - Browser smoke: NOT RUN in Codex because no existing browser executable or Playwright command was available (`command -v google-chrome`, `chromium`, `chromium-browser`, and `playwright` returned no path). External exact-head browser smoke remains required before merge.
+
+## 2026-07-18 — A3.6 Client Feedback structured validation
+- PR #119 / A3.5 merged at `e53e7852c8b384915fb77b59345170c43671151c`.
+- Verified PR #119 runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`; complete external exact-head smoke: PASS.
+- A3.5: DONE.
+- A3.6 Client Feedback structured validation: IN PROGRESS.

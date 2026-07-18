@@ -102,3 +102,10 @@ Backend health endpoint shape:
   "version": "0.1.0"
 }
 ```
+
+### Current runtime slice — A3.6 Client Feedback structured validation
+
+- PR #119 / A3.5 was merged at `e53e7852c8b384915fb77b59345170c43671151c`.
+- The verified PR #119 runtime head was `e19229df1afa74f4470864071e91a0e94a5631cd`; complete external exact-head smoke: PASS.
+- A3.5 is DONE.
+- A3.6 Client Feedback structured validation is IN PROGRESS and is scoped to append-only Client Feedback creation in the client card.

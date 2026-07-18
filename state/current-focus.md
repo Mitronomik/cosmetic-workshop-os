@@ -15,3 +15,8 @@ Excluded from this slice:
 - schema, migration, dependency, CSS, CI, browser-dependency, and smoke-runner documentation changes.
 
 No future PR number is assigned unless GitHub has already created the PR.
+
+## 2026-07-18 — Current slice
+- A3.5 Client Wish structured validation is DONE; merged at `e53e7852c8b384915fb77b59345170c43671151c` with verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd` and complete external exact-head smoke PASS.
+- A3.6 Client Feedback structured validation is IN PROGRESS.
+- Keep Orders, Production Readiness, and Production Confirmation as separate future slices.

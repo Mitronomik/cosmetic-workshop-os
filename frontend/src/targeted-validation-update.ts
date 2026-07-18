@@ -60,6 +60,12 @@ export function applyValidationToClientWishForm(validation: FormValidationState)
   applyValidationToForm(form, validation, 'client-wish', 'Проверьте пожелание клиента');
 }
 
+export function applyValidationToClientFeedbackForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="client-feedback"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'client-feedback', 'Проверьте отзыв клиента');
+}
+
 function applyValidationToForm(
   form: HTMLFormElement,
   validation: FormValidationState,

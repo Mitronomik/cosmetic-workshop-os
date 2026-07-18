@@ -1,6 +1,6 @@
 import { clearFieldValidation, clearIndexedCollectionValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
-import { applyValidationToClientForm, applyValidationToClientRecipeCompositionForm, applyValidationToClientRecipeCreateForm, applyValidationToClientWishForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm, applyValidationToPackagingItemForm, applyValidationToRecipeTemplateForm, applyValidationToRecipeVersionForm, applyValidationToStockMovementForm } from './targeted-validation-update.js';
-import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
+import { applyValidationToClientForm, applyValidationToClientRecipeCompositionForm, applyValidationToClientRecipeCreateForm, applyValidationToClientFeedbackForm, applyValidationToClientWishForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm, applyValidationToPackagingItemForm, applyValidationToRecipeTemplateForm, applyValidationToRecipeVersionForm, applyValidationToStockMovementForm } from './targeted-validation-update.js';
+import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientDeactivationMutationControls, disableClientFeedbackCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientFeedbackMutationControls, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -257,7 +257,7 @@ type ClientFeedback = { id: number; client_id: number; client_recipe_id: number 
 type ClientFeedbackCreatePayload = { client_recipe_id: number | null; feedback_type: string; sentiment: string; rating: number | null; text: string; follow_up_needed: boolean; follow_up_note: string; occurred_at: string | null };
 type ClientWishFormState = { title: string; description: string; category: string; priority: ClientWishPriority; client_recipe_id: string };
 type ClientFeedbackFormState = { feedback_type: string; sentiment: string; rating: string; text: string; follow_up_needed: boolean; follow_up_note: string; occurred_at: string; client_recipe_id: string };
-type ClientCardState = { clientId: number | null; wishes: ClientWish[]; feedback: ClientFeedback[]; recipes: ClientRecipe[]; includeArchivedWishes: boolean; wishesStatus: 'idle' | 'loading' | 'ready' | 'error'; feedbackStatus: 'idle' | 'loading' | 'ready' | 'error'; recipesStatus: 'idle' | 'loading' | 'ready' | 'error'; showWishForm: boolean; showFeedbackForm: boolean; wishForm: ClientWishFormState; feedbackForm: ClientFeedbackFormState; wishError: string; wishMessage: string; wishRefreshWarning: string; feedbackError: string; savingWish: boolean; savingFeedback: boolean; changingWishId: number | null; archivingWishId: number | null };
+type ClientCardState = { clientId: number | null; wishes: ClientWish[]; feedback: ClientFeedback[]; recipes: ClientRecipe[]; includeArchivedWishes: boolean; wishesStatus: 'idle' | 'loading' | 'ready' | 'error'; feedbackStatus: 'idle' | 'loading' | 'ready' | 'error'; recipesStatus: 'idle' | 'loading' | 'ready' | 'error'; showWishForm: boolean; showFeedbackForm: boolean; wishForm: ClientWishFormState; feedbackForm: ClientFeedbackFormState; wishError: string; wishMessage: string; wishRefreshWarning: string; feedbackError: string; feedbackMessage: string; feedbackRefreshWarning: string; savingWish: boolean; savingFeedback: boolean; changingWishId: number | null; archivingWishId: number | null };
 type ClientRecipeStatusFilter = 'active' | 'archived' | 'all';
 type ClientRecipeVersionsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type ClientRecipesState = { items: ClientRecipe[]; clients: Client[]; templates: RecipeTemplate[]; versions: RecipeVersion[]; versionsStatus: ClientRecipeVersionsStatus; selectedTemplateId: number | null; selectedDetail: ClientRecipeDetail | null; form: ClientRecipeFormState; includeInactive: boolean; detailStatus: ClientRecipeDetailStatus; showCreateForm: boolean; filters: { search: string; status: ClientRecipeStatusFilter; clientId: string }; compositionEditor: ClientRecipeCompositionEditorState };
@@ -564,12 +564,18 @@ let clientsRefreshWarning = '';
 let clientValidation = emptyFormValidationState();
 const clientWishFieldLabels = { title: 'Кратко о пожелании', description: 'Подробности', category: 'Категория', priority: 'Важность', client_recipe_id: 'Индивидуальный рецепт' };
 let clientWishValidation = emptyFormValidationState();
+const clientFeedbackFieldLabels = { feedback_type: 'Тип отзыва', sentiment: 'Настроение', rating: 'Оценка', text: 'Текст отзыва', follow_up_needed: 'Нужно учесть в следующий раз', follow_up_note: 'Что учесть', occurred_at: 'Дата отзыва', client_recipe_id: 'Индивидуальный рецепт' };
+let clientFeedbackValidation = emptyFormValidationState();
 const clientWishCreateLifecycle = createRecipeMutationLifecycle();
 const clientWishListRequestLifecycle = createRequestGenerationLifecycle();
+const clientFeedbackCreateLifecycle = createRecipeMutationLifecycle();
+const clientFeedbackListRequestLifecycle = createRequestGenerationLifecycle();
 let clientCardContextToken = 0;
 let clientWishContextToken = 0;
-let clientWishTargetedValidationToken = 0;
+let clientCardTargetedValidationToken = 0;
 let clientSubmitting = false;
+let clientDeactivatingId: number | null = null;
+const clientDeactivationLifecycle = createRecipeMutationLifecycle();
 let clientSubmitToken = 0;
 let clientCardState: ClientCardState = emptyClientCardState();
 let clientRecipesStatus: ClientRecipesStatus = 'idle';
@@ -1003,6 +1009,8 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client-wish"]').forEach((button) => button.addEventListener('click', () => archiveClientWishFromCard(Number(button.dataset.id))));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-client-feedback-form"]')?.addEventListener('click', toggleClientFeedbackForm);
   root.querySelector<HTMLFormElement>('[data-form="client-feedback"]')?.addEventListener('submit', submitClientFeedbackForm);
+  root.querySelector<HTMLFormElement>('[data-form="client-feedback"]')?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[name]').forEach((control) => control.addEventListener('input', () => { syncClientCardDraftFormsFromDom(); clearClientFeedbackFieldError(control.getAttribute('name') ?? '', control); }));
+  root.querySelector<HTMLFormElement>('[data-form="client-feedback"]')?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('select[name], input[type="checkbox"], input[type="date"], input[type="number"]').forEach((control) => control.addEventListener('change', () => { syncClientCardDraftFormsFromDom(); clearClientFeedbackFieldError(control.getAttribute('name') ?? '', control); }));
   root.querySelector<HTMLButtonElement>('[data-action="close-client-feedback-form"]')?.addEventListener('click', closeClientFeedbackForm);
   root.querySelector<HTMLButtonElement>('[data-action="reload-client-recipes"]')?.addEventListener('click', () => { if (!clientRecipePageMutationActive()) loadClientRecipes(true); });
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-client-recipe-create"]').forEach((button) => button.addEventListener('click', openClientRecipeCreate));
@@ -2150,29 +2158,23 @@ function clientWishStatusActions(wish: ClientWish) {
 
 function clientFeedbackSection() {
   const state = clientCardState;
-  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">История после выдачи продукта</p><h2>Обратная связь</h2></div><button class="primary-action" type="button" data-action="toggle-client-feedback-form">Добавить отзыв</button></div><p>Здесь хранится история отзывов клиента после использования продукта. Эти записи не редактируются, чтобы сохранить историю.</p>${state.feedbackError ? `<p class="page-message error-message">${escapeHtml(state.feedbackError)}</p>` : ''}${state.showFeedbackForm ? clientFeedbackForm() : ''}${state.feedbackStatus === 'loading' ? '<p>Загружаем обратную связь…</p>' : state.feedback.length === 0 ? '<p class="empty-hint">Обратной связи пока нет. Добавьте отзыв после выдачи продукта или разговора с клиентом.</p>' : `<div class="recipe-lines">${state.feedback.map(clientFeedbackCard).join('')}</div>`}</section>`;
+  const disabled = clientCardFormDomLocked() ? 'disabled' : '';
+  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">История после выдачи продукта</p><h2>Обратная связь</h2></div><button class="primary-action" type="button" data-action="toggle-client-feedback-form" ${disabled}>Добавить отзыв</button></div><p>Здесь хранится история отзывов клиента после использования продукта. Эти записи не редактируются, чтобы сохранить историю.</p>${state.feedbackMessage ? `<p class="page-message success-message">${escapeHtml(state.feedbackMessage)}</p>` : ''}${state.feedbackRefreshWarning ? `<p class="page-message warning-message">${escapeHtml(state.feedbackRefreshWarning)}</p>` : ''}${state.feedbackError ? `<p class="page-message error-message">${escapeHtml(state.feedbackError)}</p>` : ''}${state.showFeedbackForm ? clientFeedbackForm() : ''}${state.feedbackStatus === 'loading' ? '<p>Загружаем обратную связь…</p>' : state.feedback.length === 0 ? '<p class="empty-hint">Обратной связи пока нет. Добавьте отзыв после выдачи продукта или разговора с клиентом.</p>' : `<div class="recipe-lines">${state.feedback.map(clientFeedbackCard).join('')}</div>`}</section>`;
 }
 
 function clientFeedbackForm() {
   const form = clientCardState.feedbackForm;
-  return `<form data-form="client-feedback" class="ingredient-form"><h3>Новая обратная связь</h3><div class="form-grid"><label>Тип отзыва<select name="feedback_type">${clientFeedbackTypeOptions(form.feedback_type)}</select></label><label>Настроение<select name="sentiment">${clientFeedbackSentimentOptions(form.sentiment)}</select></label><label>Оценка<input name="rating" type="number" min="1" max="5" value="${escapeHtml(form.rating)}" placeholder="1–5" /></label><label>Дата отзыва<input name="occurred_at" type="date" value="${escapeHtml(form.occurred_at)}" /></label>${clientRecipeLinkSelect(form.client_recipe_id)}<label class="full-span">Текст отзыва<textarea name="text" required rows="3" maxlength="2000" placeholder="Что клиенту понравилось или не подошло">${escapeHtml(form.text)}</textarea></label><label class="full-span"><input name="follow_up_needed" type="checkbox" ${form.follow_up_needed ? 'checked' : ''} /> Нужно учесть в следующий раз</label><label class="full-span">Что учесть<textarea name="follow_up_note" rows="2" maxlength="1200" placeholder="Необязательно">${escapeHtml(form.follow_up_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" ${clientCardState.savingFeedback ? 'disabled' : ''}>${clientCardState.savingFeedback ? 'Сохраняем…' : 'Сохранить отзыв'}</button><button class="secondary-action" type="button" data-action="close-client-feedback-form">Закрыть форму</button></div></form>`;
+  const busy = clientCardState.savingFeedback;
+  return `<form data-form="client-feedback" class="ingredient-form" novalidate ${busy ? 'aria-busy="true"' : ''}><h3>Новая обратная связь</h3>${validationSummary(clientFeedbackValidation, 'Проверьте отзыв клиента')}<div class="form-grid">${clientFeedbackField(`Тип отзыва<select name="feedback_type" ${busy ? 'disabled' : ''}${clientFeedbackFieldAttrs('feedback_type')}>${clientFeedbackTypeOptions(form.feedback_type)}</select>`, 'feedback_type')}${clientFeedbackField(`Настроение<select name="sentiment" ${busy ? 'disabled' : ''}${clientFeedbackFieldAttrs('sentiment')}>${clientFeedbackSentimentOptions(form.sentiment)}</select>`, 'sentiment')}${clientFeedbackField(`Оценка<input name="rating" type="number" min="1" max="5" value="${escapeHtml(form.rating)}" placeholder="1–5" ${busy ? 'readonly' : ''}${clientFeedbackFieldAttrs('rating')} />`, 'rating')}${clientFeedbackField(`Дата отзыва<input name="occurred_at" type="date" value="${escapeHtml(form.occurred_at)}" ${busy ? 'readonly' : ''}${clientFeedbackFieldAttrs('occurred_at')} />`, 'occurred_at')}${clientFeedbackRecipeLinkSelect(form.client_recipe_id, busy)}${clientFeedbackField(`Текст отзыва<textarea name="text" required rows="3" maxlength="2000" placeholder="Что клиенту понравилось или не подошло" ${busy ? 'readonly' : ''}${clientFeedbackFieldAttrs('text')}>${escapeHtml(form.text)}</textarea>`, 'text', true)}${clientFeedbackField(`<input name="follow_up_needed" type="checkbox" ${form.follow_up_needed ? 'checked' : ''} ${busy ? 'disabled' : ''}${clientFeedbackFieldAttrs('follow_up_needed')} /> Нужно учесть в следующий раз`, 'follow_up_needed', true)}${clientFeedbackField(`Что учесть<textarea name="follow_up_note" rows="2" maxlength="1200" placeholder="Необязательно" ${busy ? 'readonly' : ''}${clientFeedbackFieldAttrs('follow_up_note')}>${escapeHtml(form.follow_up_note)}</textarea>`, 'follow_up_note', true)}</div><div class="actions"><button class="primary-action" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Сохраняем…' : 'Сохранить отзыв'}</button><button class="secondary-action" type="button" data-action="close-client-feedback-form" ${busy ? 'disabled' : ''}>Закрыть форму</button></div></form>`;
 }
-
-function clientFeedbackDisplayDate(item: ClientFeedback) {
-  if (item.occurred_at) return formatClientFeedbackDateOnly(item.occurred_at);
-  return formatClientFeedbackDateTime(item.created_at);
-}
-function formatClientFeedbackDateOnly(value: string | null) {
-  if (!value) return 'Дата не указана';
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? 'Дата не указана' : new Intl.DateTimeFormat('ru-RU').format(date);
-}
+function formatClientFeedbackDateOnly(value: string | null) { const date = value ? new Date(`${value}T00:00:00`) : null; return date && !Number.isNaN(date.getTime()) ? new Intl.DateTimeFormat('ru-RU').format(date) : 'Дата не указана'; }
 function formatClientFeedbackDateTime(value: string | null) {
   if (!value) return 'Дата не указана';
   const normalized = value.includes('T') ? value : value.replace(' ', 'T');
   const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? 'Дата не указана' : new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(date);
 }
+function clientFeedbackDisplayDate(item: ClientFeedback) { return item.occurred_at ? formatClientFeedbackDateOnly(item.occurred_at) : formatClientFeedbackDateTime(item.created_at); }
 function clientFeedbackCard(item: ClientFeedback) {
   return `<article class="recipe-line"><div class="section-heading"><div><h3>${clientFeedbackTypeLabel(item.feedback_type)} · ${clientFeedbackSentimentLabel(item.sentiment)}</h3><p>${item.rating ? `Оценка: ${item.rating}/5` : 'Оценка не указана'}</p></div><small>${clientFeedbackDisplayDate(item)}</small></div><p>${escapeHtml(item.text)}</p>${item.follow_up_needed ? `<p class="next-step"><strong>Учесть в следующий раз:</strong> ${escapeHtml(item.follow_up_note || 'Да, без дополнительной заметки.')}</p>` : ''}${item.client_recipe_id ? `<p class="next-step">Связано с индивидуальным рецептом: ${escapeHtml(clientCardRecipeTitle(item.client_recipe_id))}</p>` : ''}</article>`;
 }
@@ -2845,6 +2847,7 @@ function fieldErrorAttrs(state: FormValidationState, field: string, id: string) 
 }
 function clientField(control: string, field: keyof ClientPayload, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(clientValidation, field, `client-${field}-error`)}</div>`; }
 function clientWishField(control: string, field: keyof ClientWishFormState, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(clientWishValidation, field, `client-wish-${field}-error`)}</div>`; }
+function clientFeedbackField(control: string, field: keyof ClientFeedbackFormState, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(clientFeedbackValidation, field, `client-feedback-${field}-error`)}</div>`; }
 function ingredientField(control: string, field: keyof IngredientPayload, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(ingredientValidation, field, `ingredient-${field}-error`)}</div>`; }
 function ingredientLotField(control: string, field: keyof IngredientLotFormState, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(ingredientLotValidation, field, `ingredient-lot-${field}-error`)}</div>`; }
 function stockMovementField(control: string, field: keyof StockMovementFormState, span = false) { return `<div class="form-field${span ? ' full-span' : ''}"><label>${control}</label>${fieldErrorHtml(stockMovementValidation, field, `stock-movement-${field}-error`)}</div>`; }
@@ -2857,10 +2860,12 @@ function clientRecipeCompositionFieldAttrs(field: string) { return fieldErrorAtt
 
 function clientFieldAttrs(field: keyof ClientPayload) { return fieldErrorAttrs(clientValidation, field, `client-${field}-error`); }
 function clientWishFieldAttrs(field: keyof ClientWishFormState) { return fieldErrorAttrs(clientWishValidation, field, `client-wish-${field}-error`); }
+function clientFeedbackFieldAttrs(field: keyof ClientFeedbackFormState) { return fieldErrorAttrs(clientFeedbackValidation, field, `client-feedback-${field}-error`); }
 function ingredientFieldAttrs(field: keyof IngredientPayload) { return fieldErrorAttrs(ingredientValidation, field, `ingredient-${field}-error`); }
 function ingredientLotFieldAttrs(field: keyof IngredientLotFormState) { return fieldErrorAttrs(ingredientLotValidation, field, `ingredient-lot-${field}-error`); }
 function clearClientFieldError(field: string, control?: HTMLInputElement | HTMLTextAreaElement) { const next = clearFieldValidation(clientValidation, field); if (next !== clientValidation) { clientValidation = next; clearFieldValidationDom('client', field, control); } }
 function clearClientWishFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(clientWishValidation, field); if (next !== clientWishValidation) { clientWishValidation = next; clearFieldValidationDom('client-wish', field, control); } }
+function clearClientFeedbackFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(clientFeedbackValidation, field); if (next !== clientFeedbackValidation) { clientFeedbackValidation = next; clearFieldValidationDom('client-feedback', field, control); } }
 function clearIngredientFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(ingredientValidation, field); if (next !== ingredientValidation) { ingredientValidation = next; clearFieldValidationDom('ingredient', field, control); } }
 function clearIngredientLotFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(ingredientLotValidation, field); if (next !== ingredientLotValidation) { ingredientLotValidation = next; clearFieldValidationDom('ingredient-lot', field, control); } }
 function clearStockMovementFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(stockMovementValidation, field); if (next !== stockMovementValidation) { stockMovementValidation = next; clearFieldValidationDom('stock-movement', field, control); } }
@@ -2869,7 +2874,7 @@ function clearRecipeTemplateFieldError(field: string, control?: HTMLInputElement
 function clearRecipeVersionFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(recipeVersionValidation, field); if (next !== recipeVersionValidation) { recipeVersionValidation = next; clearFieldValidationDom('recipe-version', field, control); } }
 function clearClientRecipeCreateFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(clientRecipeCreateValidation, field); if (next !== clientRecipeCreateValidation) { clientRecipeCreateValidation = next; clearFieldValidationDom('client-recipe', field, control); } }
 function clearClientRecipeCompositionFieldError(field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) { const next = clearFieldValidation(clientRecipeCompositionValidation, field); if (next !== clientRecipeCompositionValidation) { clientRecipeCompositionValidation = next; clearFieldValidationDom('client-recipe-composition', field, control); } }
-function clearFieldValidationDom(prefix: 'client' | 'client-wish' | 'ingredient' | 'ingredient-lot' | 'stock-movement' | 'packaging-item' | 'recipe-template' | 'recipe-version' | 'client-recipe' | 'client-recipe-composition', field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
+function clearFieldValidationDom(prefix: 'client' | 'client-wish' | 'ingredient' | 'ingredient-lot' | 'stock-movement' | 'packaging-item' | 'recipe-template' | 'recipe-version' | 'client-recipe' | 'client-recipe-composition' | 'client-feedback', field: string, control?: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) {
   const active = document.activeElement === control;
   const start = 'selectionStart' in (control ?? {}) ? (control as HTMLInputElement | HTMLTextAreaElement).selectionStart : null;
   const end = 'selectionEnd' in (control ?? {}) ? (control as HTMLInputElement | HTMLTextAreaElement).selectionEnd : null;
@@ -2965,16 +2970,16 @@ function filteredClients() { const search = clientsState.filters.search.trim().t
 function clientListTitle() { if (clientsState.filters.status === 'archived') return 'Архив клиентов'; if (clientsState.filters.status === 'all') return 'Все клиенты'; return 'Активные клиенты'; }
 function clientActiveFilterChips() { const chips: string[] = []; if (clientsState.filters.search.trim()) chips.push(clearableClientFilterChip(`Поиск: ${escapeHtml(clientsState.filters.search.trim())}`, 'search')); if (clientsState.filters.status !== 'active') chips.push(clearableClientFilterChip(`Статус: ${clientsState.filters.status === 'archived' ? 'Архив' : 'Все'}`, 'status')); return chips.join(''); }
 function clearableClientFilterChip(label: string, filter: 'search' | 'status') { return `<span class="tag-chip selected">${label} <button type="button" data-action="clear-client-filter" data-filter="${filter}" aria-label="Убрать фильтр ${label}">×</button></span>`; }
-function updateClientFilterSearch(input: HTMLInputElement) { const cursor = input.selectionStart ?? input.value.length; clientsState.filters.search = input.value; render(); const nextInput = document.querySelector<HTMLInputElement>('[data-action="filter-clients-search"]'); if (!nextInput) return; nextInput.focus(); const nextCursor = Math.min(cursor, nextInput.value.length); nextInput.setSelectionRange(nextCursor, nextCursor); }
-function updateClientStatusFilter(status: ClientStatusFilter) { clientsState.filters.status = status; clientsState.includeInactive = status !== 'active'; loadClients(true); }
-function resetClientFilters() { const shouldReload = clientsState.includeInactive; clientsState.filters = { search: '', status: 'active' }; clientsState.includeInactive = false; if (shouldReload) loadClients(true); else render(); }
-function clearClientFilter(filter: string) { if (filter === 'search') { clientsState.filters.search = ''; render(); return; } if (filter === 'status') updateClientStatusFilter('active'); }
-function openClientCreateForm() { if (clientSubmitting) return; clientsState.formMode = 'create'; clientsState.showCreateForm = true; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); render(); focusClientName(); }
-function hideClientCreateForm() { if (clientSubmitting) return; clientSubmitToken += 1; clientsState.showCreateForm = false; clientValidation = emptyFormValidationState(); if (clientsState.formMode === 'create') { clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); } render(); }
+function updateClientFilterSearch(input: HTMLInputElement) { if (clientPageMutationActive()) return; const cursor = input.selectionStart ?? input.value.length; clientsState.filters.search = input.value; render(); const nextInput = document.querySelector<HTMLInputElement>('[data-action="filter-clients-search"]'); if (!nextInput) return; nextInput.focus(); const nextCursor = Math.min(cursor, nextInput.value.length); nextInput.setSelectionRange(nextCursor, nextCursor); }
+function updateClientStatusFilter(status: ClientStatusFilter) { if (clientPageMutationActive()) return; clientsState.filters.status = status; clientsState.includeInactive = status !== 'active'; loadClients(true); }
+function resetClientFilters() { if (clientPageMutationActive()) return; const shouldReload = clientsState.includeInactive; clientsState.filters = { search: '', status: 'active' }; clientsState.includeInactive = false; if (shouldReload) loadClients(true); else render(); }
+function clearClientFilter(filter: string) { if (clientPageMutationActive()) return; if (filter === 'search') { clientsState.filters.search = ''; render(); return; } if (filter === 'status') updateClientStatusFilter('active'); }
+function openClientCreateForm() { if (clientPageMutationActive()) return; clientsState.formMode = 'create'; clientsState.showCreateForm = true; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); render(); focusClientName(); }
+function hideClientCreateForm() { if (clientPageMutationActive()) return; clientSubmitToken += 1; clientsState.showCreateForm = false; clientValidation = emptyFormValidationState(); if (clientsState.formMode === 'create') { clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); } render(); }
 
 function emptyClientWishForm(): ClientWishFormState { return { title: '', description: '', category: 'other', priority: 'normal', client_recipe_id: '' }; }
 function emptyClientFeedbackForm(): ClientFeedbackFormState { return { feedback_type: 'note', sentiment: 'neutral', rating: '', text: '', follow_up_needed: false, follow_up_note: '', occurred_at: '', client_recipe_id: '' }; }
-function emptyClientCardState(): ClientCardState { return { clientId: null, wishes: [], feedback: [], recipes: [], includeArchivedWishes: false, wishesStatus: 'idle', feedbackStatus: 'idle', recipesStatus: 'idle', showWishForm: false, showFeedbackForm: false, wishForm: emptyClientWishForm(), feedbackForm: emptyClientFeedbackForm(), wishError: '', wishMessage: '', wishRefreshWarning: '', feedbackError: '', savingWish: false, savingFeedback: false, changingWishId: null, archivingWishId: null }; }
+function emptyClientCardState(): ClientCardState { return { clientId: null, wishes: [], feedback: [], recipes: [], includeArchivedWishes: false, wishesStatus: 'idle', feedbackStatus: 'idle', recipesStatus: 'idle', showWishForm: false, showFeedbackForm: false, wishForm: emptyClientWishForm(), feedbackForm: emptyClientFeedbackForm(), wishError: '', wishMessage: '', wishRefreshWarning: '', feedbackError: '', feedbackMessage: '', feedbackRefreshWarning: '', savingWish: false, savingFeedback: false, changingWishId: null, archivingWishId: null }; }
 function syncClientCardDraftFormsFromDom() {
   if (clientCardState.showWishForm) {
     const form = document.querySelector<HTMLFormElement>('[data-form="client-wish"]');
@@ -3007,19 +3012,25 @@ function syncClientCardDraftFormsFromDom() {
   }
 }
 function clientWishFormDomLocked() { return clientCardState.savingWish; }
+function clientFeedbackFormDomLocked() { return clientCardState.savingFeedback; }
+function clientCardFormDomLocked() { return clientCardState.savingWish || clientCardState.savingFeedback; }
+function clientPageMutationActive() { return clientSubmitting || clientDeactivatingId !== null || clientCardState.changingWishId !== null || clientCardState.archivingWishId !== null || clientCardFormDomLocked(); }
 function loadClientCardData(clientId: number) {
   clientWishCreateLifecycle.invalidate();
   clientWishListRequestLifecycle.invalidate();
   clientCardContextToken += 1;
   clientWishContextToken += 1;
   clientWishValidation = emptyFormValidationState();
+  clientFeedbackValidation = emptyFormValidationState();
+  clientFeedbackCreateLifecycle.invalidate();
+  clientFeedbackListRequestLifecycle.invalidate();
   clientCardState = { ...emptyClientCardState(), clientId };
   render();
   refreshClientWishes();
   refreshClientFeedback();
   clientCardState.recipesStatus = 'loading';
   const cardContextToken = clientCardContextToken;
-  const targetedValidationToken = clientWishTargetedValidationToken;
+  const targetedValidationToken = clientCardTargetedValidationToken;
   const isCurrentClientCardRecipes = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
   const canRenderRecipesResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
   getClientRecipes(true).then((response) => {
@@ -3043,7 +3054,7 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
   if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();
   const includeArchived = clientCardState.includeArchivedWishes;
   const cardContextToken = clientCardContextToken;
-  const targetedValidationToken = clientWishTargetedValidationToken;
+  const targetedValidationToken = clientCardTargetedValidationToken;
   const requestGeneration = clientWishListRequestLifecycle.begin();
   const isCurrentWishesRequest = () => clientWishListRequestLifecycle.isCurrent(requestGeneration) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken && clientCardState.includeArchivedWishes === includeArchived;
   const canRenderWishesResponse = () => isCurrentWishesRequest() && clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
@@ -3072,20 +3083,20 @@ function clientCardCanRenderCapturedClientWishContext(clientId: number, cardCont
     capturedCardContextToken: cardContextToken,
     currentCardContextToken: clientCardContextToken,
     capturedTargetedValidationToken: targetedValidationToken,
-    currentTargetedValidationToken: clientWishTargetedValidationToken,
-    wishFormDomLocked: clientWishFormDomLocked(),
+    currentTargetedValidationToken: clientCardTargetedValidationToken,
+    clientCardDomLocked: clientCardFormDomLocked(),
   });
 }
-function refreshClientFeedback() {
+function refreshClientFeedback(renderLoading = true, rejectOnError = false, showLoadError = true) {
   const clientId = clientCardState.clientId;
   if (!clientId) return Promise.resolve();
   const cardContextToken = clientCardContextToken;
-  const targetedValidationToken = clientWishTargetedValidationToken;
-  const isCurrentClientCardFeedback = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
+  const targetedValidationToken = clientCardTargetedValidationToken;
+  const requestGeneration = clientFeedbackListRequestLifecycle.begin();
+  const isCurrentClientCardFeedback = () => clientFeedbackListRequestLifecycle.isCurrent(requestGeneration) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
   const canRenderFeedbackResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
-  if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();
-  clientCardState.feedbackStatus = 'loading';
-  if (canRenderFeedbackResponse()) render();
+  if (!clientCardFormDomLocked()) syncClientCardDraftFormsFromDom();
+  if (renderLoading) { clientCardState.feedbackStatus = 'loading'; if (canRenderFeedbackResponse()) render(); }
   return fetchClientFeedback(clientId).then((feedback) => {
     if (!isCurrentClientCardFeedback()) return;
     clientCardState.feedback = feedback;
@@ -3093,22 +3104,23 @@ function refreshClientFeedback() {
     if (!canRenderFeedbackResponse()) return;
     syncClientCardDraftFormsFromDom();
     render();
-  }).catch(() => {
+  }).catch((error) => {
     if (!isCurrentClientCardFeedback()) return;
-    clientCardState.feedbackStatus = 'error';
-    clientCardState.feedbackError = 'Не удалось загрузить обратную связь клиента. Обновите карточку и попробуйте ещё раз.';
-    if (!canRenderFeedbackResponse()) return;
-    syncClientCardDraftFormsFromDom();
-    render();
+    if (showLoadError) {
+      clientCardState.feedbackStatus = 'error';
+      clientCardState.feedbackError = 'Не удалось загрузить обратную связь клиента. Обновите карточку и попробуйте ещё раз.';
+      if (canRenderFeedbackResponse()) { syncClientCardDraftFormsFromDom(); render(); }
+    }
+    if (rejectOnError) throw error;
   });
 }
-function toggleClientWishForm() { if (clientCardState.savingWish) return; if (clientCardState.showWishForm) syncClientCardDraftFormsFromDom(); clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = !clientCardState.showWishForm; if (clientCardState.showWishForm) clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; render(); }
-function closeClientWishForm() { if (clientCardState.savingWish) return; clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; render(); }
-function toggleArchivedClientWishes() { if (clientCardState.savingWish) return; clientWishValidation = emptyFormValidationState(); clientCardState.includeArchivedWishes = !clientCardState.includeArchivedWishes; refreshClientWishes(); }
+function toggleClientWishForm() { if (clientPageMutationActive()) return; if (clientCardState.showWishForm) syncClientCardDraftFormsFromDom(); clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = !clientCardState.showWishForm; if (clientCardState.showWishForm) clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; render(); }
+function closeClientWishForm() { if (clientPageMutationActive()) return; clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; render(); }
+function toggleArchivedClientWishes() { if (clientPageMutationActive()) return; clientWishValidation = emptyFormValidationState(); clientCardState.includeArchivedWishes = !clientCardState.includeArchivedWishes; refreshClientWishes(); }
 function submitClientWishForm(event: SubmitEvent) {
   event.preventDefault();
   const clientId = clientCardState.clientId;
-  if (!clientId || clientCardState.savingWish) return;
+  if (!clientId || clientPageMutationActive()) return;
   syncClientCardDraftFormsFromDom();
   const token = clientWishCreateLifecycle.begin();
   if (token === null) return;
@@ -3154,7 +3166,7 @@ function submitClientWishForm(event: SubmitEvent) {
     clientCardState.wishError = '';
     clientCardState.wishMessage = '';
     clientCardState.wishRefreshWarning = '';
-    clientWishTargetedValidationToken += 1;
+    clientCardTargetedValidationToken += 1;
     applyValidationToClientWishForm(clientWishValidation);
     restoreClientWishMutationControls(document);
     announceAssertive('Не удалось сохранить пожелание. Проверьте подсказки в форме.');
@@ -3168,14 +3180,78 @@ function submitClientWishForm(event: SubmitEvent) {
     }
   });
 }
-function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (clientCardState.savingWish || !['open','planned','resolved'].includes(status)) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { clientCardState.changingWishId = null; if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientWishFormDomLocked()); }).catch(() => { clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
-function archiveClientWishFromCard(wishId: number) { if (clientCardState.savingWish || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { clientCardState.archivingWishId = null; if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientWishFormDomLocked()); }).catch(() => { clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
-function toggleClientFeedbackForm() { if (clientCardState.savingWish) return; if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; clientCardState.feedbackError = ''; render(); }
-function closeClientFeedbackForm() { if (clientCardState.savingWish) return; clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; render(); }
-function submitClientFeedbackForm(event: SubmitEvent) { event.preventDefault(); const clientId = clientCardState.clientId; if (!clientId || clientCardState.savingWish) return; syncClientCardDraftFormsFromDom(); const form = clientCardState.feedbackForm; const ratingRaw = form.rating.trim(); const payload: ClientFeedbackCreatePayload = { feedback_type: form.feedback_type, sentiment: form.sentiment, rating: ratingRaw ? Number(ratingRaw) : null, text: form.text, follow_up_needed: form.follow_up_needed, follow_up_note: form.follow_up_note, occurred_at: form.occurred_at || null, client_recipe_id: nullableNumber(form.client_recipe_id) }; if (!payload.text) { clientCardState.feedbackError = 'Запишите текст отзыва клиента.'; render(); return; } clientCardState.savingFeedback = true; clientCardState.feedbackError = ''; render(); createClientFeedback(clientId, payload).then(() => { clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.savingFeedback = false; return refreshClientFeedback(); }).catch((error) => { clientCardState.savingFeedback = false; clientCardState.feedbackError = humanWishFeedbackError(error, 'Не удалось сохранить отзыв. Проверьте поля и попробуйте ещё раз.'); if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (clientPageMutationActive() || !['open','planned','resolved'].includes(status)) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { clientCardState.changingWishId = null; if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientPageMutationActive()); }).catch(() => { clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; if (clientPageMutationActive()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function archiveClientWishFromCard(wishId: number) { if (clientPageMutationActive() || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { clientCardState.archivingWishId = null; if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientPageMutationActive()); }).catch(() => { clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; if (clientPageMutationActive()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function toggleClientFeedbackForm() { if (clientPageMutationActive()) return; if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; if (clientCardState.showFeedbackForm) clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; clientCardState.feedbackMessage = ''; clientCardState.feedbackRefreshWarning = ''; render(); }
+function closeClientFeedbackForm() { if (clientPageMutationActive()) return; clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; render(); }
+function submitClientFeedbackForm(event: SubmitEvent) {
+  event.preventDefault();
+  const clientId = clientCardState.clientId;
+  if (!clientId || clientPageMutationActive()) return;
+  syncClientCardDraftFormsFromDom();
+  const token = clientFeedbackCreateLifecycle.begin();
+  if (token === null) return;
+  const cardContextToken = clientCardContextToken;
+  const isCurrentClientFeedbackMutation = () => clientFeedbackCreateLifecycle.isCurrent(token) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
+  const submittedDraft: ClientFeedbackFormState = { ...clientCardState.feedbackForm };
+  const ratingRaw = submittedDraft.rating.trim();
+  const payload: ClientFeedbackCreatePayload = { feedback_type: submittedDraft.feedback_type, sentiment: submittedDraft.sentiment, rating: ratingRaw ? Number(ratingRaw) : null, text: submittedDraft.text, follow_up_needed: submittedDraft.follow_up_needed, follow_up_note: submittedDraft.follow_up_note, occurred_at: submittedDraft.occurred_at || null, client_recipe_id: nullableNumber(submittedDraft.client_recipe_id) };
+  let createRejected = false;
+  clientFeedbackValidation = emptyFormValidationState();
+  clientCardState.savingFeedback = true;
+  clientCardState.feedbackError = '';
+  clientCardState.feedbackMessage = '';
+  clientCardState.feedbackRefreshWarning = '';
+  applyValidationToClientFeedbackForm(clientFeedbackValidation);
+  disableClientFeedbackCreateMutationControls(document);
+  createClientFeedback(clientId, payload).then((created) => {
+    if (!isCurrentClientFeedbackMutation()) return;
+    clientCardState.feedback = [created, ...clientCardState.feedback.filter((item) => item.id !== created.id)];
+    clientCardState.feedbackStatus = 'ready';
+    clientCardState.showFeedbackForm = false;
+    clientCardState.feedbackForm = emptyClientFeedbackForm();
+    clientFeedbackValidation = emptyFormValidationState();
+    clientCardState.savingFeedback = false;
+    clientCardState.feedbackMessage = 'Отзыв клиента сохранён.';
+    clientCardState.feedbackError = '';
+    restoreClientFeedbackMutationControls(document);
+    announcePolite(clientCardState.feedbackMessage);
+    render();
+    return refreshClientFeedback(false, true, false).catch(() => {
+      if (!isCurrentClientFeedbackMutation()) return;
+      clientCardState.feedbackError = '';
+      clientCardState.feedbackRefreshWarning = 'Отзыв сохранён, но список не удалось обновить автоматически.';
+      clientCardState.feedback = [created, ...clientCardState.feedback.filter((item) => item.id !== created.id)];
+      clientCardState.feedbackStatus = 'ready';
+      render();
+    });
+  }).catch((error) => {
+    if (!isCurrentClientFeedbackMutation()) return;
+    createRejected = true;
+    clientCardState.feedbackForm = submittedDraft;
+    clientFeedbackValidation = normalizeBackendValidation(apiValidationPayload(error), clientFeedbackFieldLabels, humanWishFeedbackError(error, 'Не удалось сохранить отзыв. Проверьте поля и попробуйте ещё раз.'));
+    clientCardState.savingFeedback = false;
+    clientCardState.feedbackError = '';
+    clientCardState.feedbackMessage = '';
+    clientCardState.feedbackRefreshWarning = '';
+    clientCardTargetedValidationToken += 1;
+    applyValidationToClientFeedbackForm(clientFeedbackValidation);
+    restoreClientFeedbackMutationControls(document);
+    announceAssertive('Не удалось сохранить отзыв. Проверьте подсказки в форме.');
+  }).finally(() => {
+    if (!clientFeedbackCreateLifecycle.finish(token) || clientCardState.clientId !== clientId || cardContextToken !== clientCardContextToken) return;
+    if (createRejected) return;
+    if (clientCardState.savingFeedback) {
+      clientCardState.savingFeedback = false;
+      restoreClientFeedbackMutationControls(document);
+      render();
+    }
+  });
+}
 function nullableNumber(value: string) { const trimmed = value.trim(); return trimmed ? Number(trimmed) : null; }
 function humanWishFeedbackError(error: unknown, fallback: string) { const message = error instanceof Error ? error.message : ''; if (message.toLowerCase().includes('client') && message.toLowerCase().includes('recipe')) return 'Выбранный индивидуальный рецепт не относится к этому клиенту. Обновите карточку клиента и выберите рецепт ещё раз.'; return fallback; }
 function clientRecipeLinkSelect(current: string) { const recipes = clientCardState.recipes; const options = [`<option value="">Без связи с индивидуальным рецептом</option>`, ...recipes.map((recipe) => `<option value="${recipe.id}" ${current === String(recipe.id) ? 'selected' : ''}>${escapeHtml(recipe.title)}${recipe.is_active ? '' : ' · архив'}</option>`)]; return `<label class="full-span">Индивидуальный рецепт<select name="client_recipe_id">${options.join('')}</select></label>`; }
+function clientFeedbackRecipeLinkSelect(current: string, busy = false) { const recipes = clientCardState.recipes; const options = [`<option value="">Без связи с индивидуальным рецептом</option>`, ...recipes.map((recipe) => `<option value="${recipe.id}" ${current === String(recipe.id) ? 'selected' : ''}>${escapeHtml(recipe.title)}${recipe.is_active ? '' : ' · архив'}</option>`)]; return clientFeedbackField(`Индивидуальный рецепт<select name="client_recipe_id" ${busy ? 'disabled' : ''}${clientFeedbackFieldAttrs('client_recipe_id')}>${options.join('')}</select>`, 'client_recipe_id', true); }
 function clientWishRecipeLinkSelect(current: string, busy = false) { const recipes = clientCardState.recipes; const options = [`<option value="">Без связи с индивидуальным рецептом</option>`, ...recipes.map((recipe) => `<option value="${recipe.id}" ${current === String(recipe.id) ? 'selected' : ''}>${escapeHtml(recipe.title)}${recipe.is_active ? '' : ' · архив'}</option>`)]; return clientWishField(`Индивидуальный рецепт<select name="client_recipe_id" ${busy ? 'disabled' : ''}${clientWishFieldAttrs('client_recipe_id')}>${options.join('')}</select>`, 'client_recipe_id', true); }
 function clientCardRecipeTitle(id: number) { return clientCardState.recipes.find((recipe) => recipe.id === id)?.title ?? 'индивидуальный рецепт'; }
 function clientWishStatusLabel(value: string) { return ({ open: 'Открыто', planned: 'Запланировано', resolved: 'Учтено', archived: 'В архиве' } as Record<string,string>)[value] ?? 'Открыто'; }
@@ -3187,14 +3263,14 @@ function clientWishCategoryOptions(current: string) { return ['texture','scent',
 function clientWishPriorityOptions(current: string) { return ['low','normal','high'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientWishPriorityLabel(v)}</option>`).join(''); }
 function clientFeedbackTypeOptions(current: string) { return ['note','reaction','texture','scent','effect','packaging','request','other'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientFeedbackTypeLabel(v)}</option>`).join(''); }
 function clientFeedbackSentimentOptions(current: string) { return ['positive','neutral','negative','mixed'].map((v)=>`<option value="${v}" ${current===v?'selected':''}>${clientFeedbackSentimentLabel(v)}</option>`).join(''); }
-function closeClientEdit() { if (clientSubmitting) return; clientSubmitToken += 1; clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); render(); }
+function closeClientEdit() { if (clientPageMutationActive()) return; clientSubmitToken += 1; clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); render(); }
 function focusClientName() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="client-full-name"]')?.focus()); }
 
-function loadClients(force = false) { if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return; clientsStatus = 'loading'; clientsError = ''; render(); getClients(clientsState.includeInactive).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; render(); }).catch(() => { clientsStatus = 'error'; clientsError = 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'; render(); }); }
-function startEditClient(id: number) { if (clientSubmitting) return; clientSubmitToken += 1; const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); loadClientCardData(id); render(); focusClientName(); }
+function loadClients(force = false) { if (clientPageMutationActive()) return; if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return; clientsStatus = 'loading'; clientsError = ''; if (!clientPageMutationActive()) render(); getClients(clientsState.includeInactive).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; if (!clientPageMutationActive()) render(); }).catch(() => { clientsStatus = 'error'; clientsError = 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'; if (!clientPageMutationActive()) render(); }); }
+function startEditClient(id: number) { if (clientPageMutationActive()) return; clientSubmitToken += 1; const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); loadClientCardData(id); render(); focusClientName(); }
 function submitClientForm(event: SubmitEvent) {
   event.preventDefault();
-  if (clientSubmitting) return;
+  if (clientPageMutationActive()) return;
   const isEdit = Boolean(clientsState.formMode === 'edit' && clientsState.form.id);
   const submittedFormId = clientsState.form.id;
   if (isEdit) syncClientCardDraftFormsFromDom();
@@ -3251,7 +3327,63 @@ function submitClientForm(event: SubmitEvent) {
     });
 }
 
-function deactivateClient(id: number) { const client = clientsState.items.find((item) => item.id === id); if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return; deactivateClientRequest(id).then(() => { clientsMessage = 'Клиент архивирован.'; clientsError = ''; return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; if (clientsState.form.id === id) { clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); } render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
+function deactivateClient(id: number) {
+  if (clientPageMutationActive()) return;
+  const client = clientsState.items.find((item) => item.id === id);
+  if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return;
+  const token = clientDeactivationLifecycle.begin();
+  if (token === null) return;
+  const archivedClientId = id;
+  clientDeactivatingId = archivedClientId;
+  clientsMessage = '';
+  clientsError = '';
+  clientsRefreshWarning = '';
+  disableClientDeactivationMutationControls(document, archivedClientId);
+  const isCurrentClientDeactivation = () => clientDeactivationLifecycle.isCurrent(token) && clientDeactivatingId === archivedClientId;
+  deactivateClientRequest(archivedClientId)
+    .then((archivedClient) => {
+      if (!isCurrentClientDeactivation()) return;
+      clientsState.items = clientsState.items.map((item) => item.id === archivedClientId ? { ...item, ...archivedClient, is_active: false } : item);
+      clientsStatus = 'ready';
+      clientsMessage = 'Клиент архивирован.';
+      clientsError = '';
+      clientsRefreshWarning = '';
+      if (clientsState.form.id === archivedClientId) {
+        clientsState.formMode = 'create';
+        clientsState.showCreateForm = false;
+        clientsState.form = emptyClientForm();
+        clientCardState = emptyClientCardState();
+      }
+      return getClients(clientsState.includeInactive)
+        .then((response) => {
+          if (!isCurrentClientDeactivation()) return;
+          clientsState.items = response.clients;
+          clientsStatus = 'ready';
+          clientsMessage = 'Клиент архивирован.';
+          clientsError = '';
+          clientsRefreshWarning = '';
+        })
+        .catch(() => {
+          if (!isCurrentClientDeactivation()) return;
+          clientsStatus = 'ready';
+          clientsMessage = 'Клиент архивирован.';
+          clientsError = '';
+          clientsRefreshWarning = 'Клиент архивирован, но список не удалось обновить автоматически.';
+        });
+    }, () => {
+      if (!isCurrentClientDeactivation()) return;
+      clientsMessage = '';
+      clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.';
+      clientsRefreshWarning = '';
+      clientsStatus = 'ready';
+    })
+    .finally(() => {
+      if (!clientDeactivationLifecycle.finish(token) || clientDeactivatingId !== archivedClientId) return;
+      clientDeactivatingId = null;
+      restoreMutationGuards(document);
+      render();
+    });
+}
 
 
 function ingredientSystemCategories() { return ['oil','butter','wax','emulsifier','humectant','active','preservative','fragrance','essential_oil','colorant','water_phase','additive','other']; }

@@ -103,14 +103,15 @@ export type ClientCardRenderContextState = {
   readonly currentCardContextToken: number;
   readonly capturedTargetedValidationToken: number;
   readonly currentTargetedValidationToken: number;
-  readonly wishFormDomLocked: boolean;
+  readonly clientCardDomLocked?: boolean;
+  readonly wishFormDomLocked?: boolean;
 };
 
 export function clientCardRenderAllowedForCapturedContext(state: ClientCardRenderContextState): boolean {
   return state.currentClientId === state.capturedClientId
     && state.currentCardContextToken === state.capturedCardContextToken
     && state.currentTargetedValidationToken === state.capturedTargetedValidationToken
-    && !state.wishFormDomLocked;
+    && !(state.clientCardDomLocked ?? state.wishFormDomLocked ?? false);
 }
 
 export type StockMovementLotDetailRequest = {
@@ -219,6 +220,32 @@ export function createRequestGenerationLifecycle() {
   };
 }
 
+
+function disableClientPageContextMutationControls(root: ParentNode = document): void {
+  const clientForm = root.querySelector<HTMLFormElement>('[data-form="client"]');
+  if (clientForm) {
+    clientForm.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
+      const type = input.type || input.getAttribute('type') || 'text';
+      if (['checkbox', 'radio', 'button', 'submit', 'reset'].includes(type)) mutationDisabled(input);
+      else mutationReadonly(input);
+    });
+    clientForm.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(mutationReadonly);
+    clientForm.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
+    clientForm.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+  }
+  const guarded = '[data-action="reload-clients"], [data-action="open-client-create"], [data-action="hide-client-create"], [data-action="filter-clients-search"], [data-action="filter-clients-status"], [data-action="reset-client-filters"], [data-action="clear-client-filter"], [data-action="start-client-edit"], [data-action="archive-client"]';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+export function disableClientDeactivationMutationControls(root: ParentNode = document, clientId?: number): void {
+  disableClientPageContextMutationControls(root);
+  const guarded = '[data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"], [data-action="toggle-client-feedback-form"], [data-action="close-client-feedback-form"], [data-form="client-wish"] input, [data-form="client-wish"] textarea, [data-form="client-wish"] select, [data-form="client-wish"] button, [data-form="client-feedback"] input, [data-form="client-feedback"] textarea, [data-form="client-feedback"] select, [data-form="client-feedback"] button';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+  const archiveSelector = clientId ? `[data-action="archive-client"][data-id="${clientId}"]` : '[data-action="archive-client"]';
+  const archiveButton = root.querySelector<HTMLButtonElement>(archiveSelector);
+  if (archiveButton) archiveButton.textContent = 'Архивируем…';
+}
+
 export function disableClientWishCreateMutationControls(root: ParentNode = document): void {
   const form = root.querySelector<HTMLFormElement>('[data-form="client-wish"]');
   if (form) {
@@ -229,8 +256,36 @@ export function disableClientWishCreateMutationControls(root: ParentNode = docum
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     if (submit) submit.textContent = 'Сохраняем…';
   }
+  disableClientPageContextMutationControls(root);
   const guarded = '[data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="start-client-edit"], [data-action="cancel-client-edit"], [data-action="archive-client"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"], [data-action="toggle-client-feedback-form"], [data-action="close-client-feedback-form"], [data-form="client-feedback"] input, [data-form="client-feedback"] textarea, [data-form="client-feedback"] select, [data-form="client-feedback"] button';
   root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+
+export function disableClientFeedbackCreateMutationControls(root: ParentNode = document): void {
+  const form = root.querySelector<HTMLFormElement>('[data-form="client-feedback"]');
+  if (form) {
+    form.setAttribute('aria-busy', 'true');
+    form.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
+      if (input.type === 'checkbox') mutationDisabled(input);
+      else mutationReadonly(input);
+    });
+    form.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(mutationReadonly);
+    form.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
+    form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.textContent = 'Сохраняем…';
+  }
+  disableClientPageContextMutationControls(root);
+  const guarded = '[data-action="toggle-client-feedback-form"], [data-action="close-client-feedback-form"], [data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"], [data-action="start-client-edit"], [data-action="cancel-client-edit"], [data-action="archive-client"], [data-form="client-wish"] input, [data-form="client-wish"] textarea, [data-form="client-wish"] select, [data-form="client-wish"] button';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+export function restoreClientFeedbackMutationControls(root: ParentNode = document): void {
+  root.querySelectorAll<HTMLFormElement>('[data-form="client-feedback"]').forEach((form) => form.removeAttribute('aria-busy'));
+  restoreMutationGuards(root);
+  const submit = root.querySelector<HTMLButtonElement>('[data-form="client-feedback"] button[type="submit"]');
+  if (submit) submit.textContent = 'Сохранить отзыв';
 }
 
 export function restoreClientWishMutationControls(root: ParentNode = document): void {
