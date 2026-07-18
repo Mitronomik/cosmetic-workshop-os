@@ -140,3 +140,77 @@ def test_api_orders_endpoints(monkeypatch, tmp_path):
     assert api.get("/api/orders/999").status_code == 404
     ClientService(c).deactivate_client(client.id)
     assert api.post("/api/orders", json=payload).status_code == 409
+
+def _assert_domain_issue(response, field):
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert isinstance(detail, dict)
+    assert detail["field"] == field
+    assert detail["message"]
+    assert "code" in detail and "next_action" in detail
+
+
+def _assert_fastapi_issue(response, field):
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert isinstance(detail, list)
+    assert any(field in [str(part) for part in issue.get("loc", [])] for issue in detail)
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_api_order_write_structured_domain_validation_contract(monkeypatch, tmp_path):
+    db=tmp_path/"api-orders-domain-422.sqlite"; monkeypatch.setenv(DATABASE_PATH_ENV, str(db)); c=DatabaseConfig(path=db); initialize_database(c); client, version, _, packaging=seed(c); api=TestClient(create_app())
+    base={"client_id":client.id,"recipe_version_id":version.id,"product_name":"Крем","target_batch_size_value":"50","target_batch_size_unit":"g"}
+    cases=[
+        ({k:v for k,v in base.items() if k!="client_id"}, "client_id"),
+        ({**base,"client_id":None}, "client_id"),
+        ({**base,"recipe_version_id":None}, "recipe_source"),
+        ({**base,"client_recipe_id":1}, "recipe_source"),
+        ({**base,"target_batch_size_value":"0"}, "target_batch_size_value"),
+        ({**base,"target_batch_size_value":"-1"}, "target_batch_size_value"),
+        ({**base,"packaging_quantity":"1"}, "packaging_item_id"),
+        ({**base,"packaging_item_id":packaging.id,"packaging_quantity":"1.5"}, "packaging_quantity"),
+        ({**base,"packaging_item_id":packaging.id,"packaging_quantity":"0"}, "packaging_quantity"),
+        ({**base,"sale_price":"-0.01"}, "sale_price"),
+    ]
+    created=api.post("/api/orders", json=base); assert created.status_code == 201; order_id=created.json()["id"]
+    for payload, field in cases:
+        _assert_domain_issue(api.post("/api/orders", json=payload), field)
+        _assert_domain_issue(api.put(f"/api/orders/{order_id}", json=payload), field)
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_api_order_write_fastapi_validation_contract(monkeypatch, tmp_path):
+    db=tmp_path/"api-orders-fastapi-422.sqlite"; monkeypatch.setenv(DATABASE_PATH_ENV, str(db)); c=DatabaseConfig(path=db); initialize_database(c); client, version, _, _=seed(c); api=TestClient(create_app())
+    base={"client_id":client.id,"recipe_version_id":version.id,"product_name":"Крем","target_batch_size_value":"50","target_batch_size_unit":"g"}
+    created=api.post("/api/orders", json=base); assert created.status_code == 201; order_id=created.json()["id"]
+    cases=[({**base,"target_batch_size_unit":"kg"}, "target_batch_size_unit"), ({**base,"status":"produced"}, "status"), ({**base,"produced_at":"2026-06-30"}, "produced_at"), ({**base,"delivered_at":"2026-07-01"}, "delivered_at"), ({**base,"target_batch_size_value":1.5}, "target_batch_size_value")]
+    for payload, field in cases:
+        _assert_fastapi_issue(api.post("/api/orders", json=payload), field)
+        _assert_fastapi_issue(api.put(f"/api/orders/{order_id}", json=payload), field)
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_api_order_write_404_and_409_boundaries(monkeypatch, tmp_path):
+    db=tmp_path/"api-orders-boundaries.sqlite"; monkeypatch.setenv(DATABASE_PATH_ENV, str(db)); c=DatabaseConfig(path=db); initialize_database(c); client, version, client_recipe, packaging=seed(c); other=ClientService(c).create_client(ClientDraft.create(full_name="Мария")); api=TestClient(create_app())
+    base={"client_id":client.id,"recipe_version_id":version.id,"product_name":"Крем","target_batch_size_value":"50","target_batch_size_unit":"g"}
+    assert api.post("/api/orders", json={**base,"client_id":999999}).status_code == 404
+    assert api.post("/api/orders", json={**base,"recipe_version_id":999999}).status_code == 404
+    assert api.post("/api/orders", json={**base,"recipe_version_id":None,"client_recipe_id":999999}).status_code == 404
+    assert api.post("/api/orders", json={**base,"packaging_item_id":999999,"packaging_quantity":"1"}).status_code == 404
+    created=api.post("/api/orders", json=base); assert created.status_code == 201; order_id=created.json()["id"]
+    assert api.put(f"/api/orders/{order_id}", json={**base,"client_id":999999}).status_code == 404
+    ClientService(c).deactivate_client(client.id)
+    conflict=api.post("/api/orders", json=base); assert conflict.status_code == 409 and isinstance(conflict.json()["detail"], str)
+    sqlite3.connect(c.path).execute("UPDATE clients SET is_active=1 WHERE id=?", (client.id,)).connection.commit()
+    assert api.post("/api/orders", json={**base,"client_id":other.id,"recipe_version_id":None,"client_recipe_id":client_recipe.id}).status_code == 409
+    ClientRecipeService(c).deactivate(client_recipe.id)
+    assert api.post("/api/orders", json={**base,"recipe_version_id":None,"client_recipe_id":client_recipe.id}).status_code == 409
+    PackagingItemService(c).deactivate_packaging_item(packaging.id)
+    assert api.post("/api/orders", json={**base,"packaging_item_id":packaging.id,"packaging_quantity":"1"}).status_code == 409
+    assert api.post(f"/api/orders/{order_id}/cancel").status_code == 200
+    assert api.put(f"/api/orders/{order_id}", json=base).status_code == 409
+    archived=api.post("/api/orders", json={**base,"client_id":other.id}); assert archived.status_code == 201
+    archived_id=archived.json()["id"]
+    assert api.post(f"/api/orders/{archived_id}/archive").status_code == 200
+    assert api.put(f"/api/orders/{archived_id}", json={**base,"client_id":other.id}).status_code == 409

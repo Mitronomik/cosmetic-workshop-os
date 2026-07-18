@@ -16,13 +16,12 @@ router = APIRouter(tags=["orders"])
 
 @router.post("/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 def create_order(payload: OrderCreateRequest):
-    draft = OrderDraft.create(
+    return _handle_write(lambda: _response(OrderService().create(OrderDraft.create(
         **payload.model_dump(),
         status=OrderStatus.NEW,
         produced_at=None,
         delivered_at=None,
-    )
-    return _handle_write(lambda: _response(OrderService().create(draft)))
+    ))))
 
 
 @router.get("/orders", response_model=OrdersResponse)
@@ -47,8 +46,7 @@ def get_order(order_id: int):
 
 @router.put("/orders/{order_id}", response_model=OrderResponse)
 def update_order(order_id: int, payload: OrderUpdateRequest):
-    draft = OrderDraft.create(**payload.model_dump())
-    return _handle_write(lambda: _response(OrderService().update(order_id, draft)))
+    return _handle_write(lambda: _response(OrderService().update(order_id, OrderDraft.create(**payload.model_dump()))))
 
 
 @router.post("/orders/{order_id}/cancel", response_model=OrderResponse)

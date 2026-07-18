@@ -6,7 +6,7 @@ Slice A3 remains IN PROGRESS. Current runtime baseline is PR #120 / A3.6 Client 
 
 A3.5 Client Wishes structured validation is DONE: PR #119 merged at `e53e7852c8b384915fb77b59345170c43671151c`; verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`; exact-head smoke PASS. A3.6 Client Feedback structured validation is DONE, merged, and exact-head verified.
 
-The next focused runtime slice is **A3.7 — Orders structured validation**. This documentation-only synchronization does not implement A3.7 and assigns no future GitHub PR number. Orders, Production Readiness, and Production Confirmation remain separate runtime scopes; Production Readiness and Production Confirmation must not be silently combined.
+The current focused runtime slice is **A3.7 — Orders structured validation**. It is implemented in this pull request and remains IN PROGRESS until merge and external exact-head browser smoke. Production Readiness and Production Confirmation remain separate runtime scopes and are not included.
 
 ## Current next step
 
@@ -973,3 +973,11 @@ A3.5 verification run in this branch:
 - PR #96 / `PR96 — Workshop profile settings foundation` was reviewed as superseded by the current Workshop Profile implementation. Current main already includes backend-owned persistence, schemas, `GET`/`PUT /api/settings/workshop-profile`, length/control-character validation, unrelated-setting preservation, approved `editable_now` status, Settings UI, explicit Save/Cancel behavior, focused backend tests, current documentation, and later Markdown/PDF report-document integration that preserves existing documents. No unique required PR #96 behavior was found missing.
 - Actual GitHub state for PR #96 during this sync: `open`; closure is still pending and is not claimed here.
 - Next runtime slice: A3.7 Orders structured validation, with no future PR number assigned.
+
+## 2026-07-18 — A3.7 Orders structured validation implementation
+
+- Implemented Order create/update structured backend validation for `/api/orders` POST and `/api/orders/{order_id}` PUT.
+- Preserved PR #120 / A3.6 as DONE: merge commit `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`, verified runtime head `e148220ac9ad08a0fd952482a0b293f1f2d22bad`, exact-head smoke `PASS — FULL AUTOMATED SMOKE PASSED`.
+- PR #121 synchronized project memory at `5c1edba2ca50b4a503d7dd44df2fdf7fda60aa6c`.
+- A3.7 remains IN PROGRESS in this pull request; external exact-head browser smoke is still required before merge.
+- Production Readiness and Production Confirmation remain separate future slices.
