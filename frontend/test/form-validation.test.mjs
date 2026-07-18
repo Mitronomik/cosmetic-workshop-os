@@ -208,3 +208,17 @@ test('client wish visible fields map inline and protected fields remain summary'
     'Небезопасный путь.',
   ]);
 });
+
+test('client feedback visible fields map inline and protected fields remain summary', () => {
+  const labels = { feedback_type: 'Тип отзыва', sentiment: 'Настроение', rating: 'Оценка', text: 'Текст отзыва', follow_up_needed: 'Нужно учесть в следующий раз', follow_up_note: 'Что учесть', occurred_at: 'Дата отзыва', client_recipe_id: 'Индивидуальный рецепт' };
+  const state = normalizeBackendValidation({ detail: { issues: [
+    { field: 'text', message: 'Field required' },
+    { loc: ['body', 'rating'], msg: 'Input should be 1-5' },
+    { field: 'unknown', message: 'Unknown aggregate problem' },
+    { field: 'client_id', message: 'Hidden client mismatch' },
+  ] } }, labels);
+  assert.ok(state.fieldErrors.text[0].includes('Текст отзыва'));
+  assert.ok(state.fieldErrors.rating[0].includes('Оценка'));
+  assert.ok(state.formErrors.includes('Unknown aggregate problem'));
+  assert.ok(state.formErrors.includes('Hidden client mismatch'));
+});

@@ -347,3 +347,8 @@ Checks not run: focused browser smoke was NOT RUN in Codex because no existing b
 Correction scope: Client Wish create mutation failure handling only. The failure path now unwraps `ApiErrorWithDetails.payload` through the existing shared `apiValidationPayload(error)` helper before calling `normalizeBackendValidation`, so backend structured `detail.field` / `detail.message` payloads can reach the approved Client Wish inline field mapping. No backend contract, parser, schema, Client Feedback behavior, status/archive behavior, dependencies, CSS, or unrelated runtime code was changed.
 
 Test-report boundary: frontend validation parser and targeted DOM tests are behavioral unit tests; `main.ts` wiring checks for the Client Wish submit handler and Client Feedback boundary are source guards only. Source guards do not prove browser-level POST counts, focus/caret behavior, refresh-warning rendering, or stale client-card isolation; external exact-head browser smoke for PR #119 remains required before merge.
+
+## 2026-07-18 — A3.6 handoff
+- Baseline recorded: PR #119 / A3.5 merged at `e53e7852c8b384915fb77b59345170c43671151c`; verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`; complete external exact-head smoke PASS.
+- A3.5 is DONE. A3.6 Client Feedback structured validation is IN PROGRESS.
+- This slice is limited to Client Feedback creation in the client card; feedback remains append-only.

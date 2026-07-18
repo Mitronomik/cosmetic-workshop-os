@@ -1672,3 +1672,54 @@ test('client wish source guards cover lifecycle source wiring without replacing 
 
   assert.equal(submitFeedback.includes('clientWishValidation'), false, 'Client Feedback remains outside A3.5 validation migration');
 });
+
+test('client feedback wrapper preserves form, controls, values, focus and selection', () => {
+  reset();
+  const form = mkForm('client-feedback');
+  const controls = {};
+  for (const f of ['feedback_type', 'sentiment', 'rating', 'occurred_at', 'client_recipe_id', 'text', 'follow_up_needed', 'follow_up_note']) {
+    controls[f] = addField(form, f, ['feedback_type', 'sentiment', 'client_recipe_id'].includes(f));
+  }
+  controls.text.value = 'Очень плотный крем';
+  controls.follow_up_needed.setAttribute('type', 'checkbox');
+  controls.follow_up_needed.checked = true;
+  mockDoc.body.appendChild(form);
+  const originalForm = form;
+  const originalText = controls.text;
+  originalText.focus();
+  originalText.setSelectionRange(6, 13);
+
+  mod.applyValidationToClientFeedbackForm({
+    fieldErrors: {
+      text: ['Текст отзыва: запишите отзыв клиента.'],
+      rating: ['Оценка: укажите целое число от 1 до 5.'],
+      follow_up_note: ['Что учесть: слишком длинная заметка.'],
+    },
+    formErrors: ['Выбранный индивидуальный рецепт не относится к этому клиенту.'],
+  });
+
+  assert.equal(mockDoc.body.querySelector('[data-form="client-feedback"]'), originalForm);
+  assert.equal(form.querySelector('[name="text"]'), originalText);
+  assert.equal(mockDoc.activeElement, originalText);
+  assert.equal(originalText.value, 'Очень плотный крем');
+  assert.equal(controls.follow_up_needed.checked, true);
+  assert.equal(originalText.selectionStart, 6);
+  assert.equal(originalText.selectionEnd, 13);
+  assert.equal(originalText.getAttribute('aria-invalid'), 'true');
+  assert.equal(originalText.getAttribute('aria-describedby'), 'client-feedback-text-error');
+  assert.ok(byId(form, 'client-feedback-text-error').textContent.includes('запишите отзыв'));
+  assert.ok(byId(form, 'client-feedback-rating-error'));
+  assert.ok(byId(form, 'client-feedback-follow_up_note-error'));
+  assert.ok(form.querySelector('.form-error-summary').textContent.includes('не относится к этому клиенту'));
+
+  mod.applyValidationToClientFeedbackForm({ fieldErrors: {}, formErrors: [] });
+  assert.equal(mockDoc.body.querySelector('[data-form="client-feedback"]'), originalForm);
+  assert.equal(form.querySelector('[name="text"]'), originalText);
+  assert.equal(originalText.hasAttribute('aria-invalid'), false);
+  assert.equal(originalText.hasAttribute('aria-describedby'), false);
+  assert.equal(form.querySelectorAll('.field-error').length, 0);
+  assert.equal(form.querySelector('.form-error-summary'), null);
+  assert.equal(mockDoc.activeElement, originalText);
+  assert.equal(originalText.selectionStart, 6);
+  assert.equal(originalText.selectionEnd, 13);
+});
