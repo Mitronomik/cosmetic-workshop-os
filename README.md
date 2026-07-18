@@ -25,17 +25,15 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current repository state: PR #118 / Slice A3.4 Client Recipe structured validation is merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke. Slice A3 remains in progress, and Slice A3.5 Client Wishes structured validation is the current focused runtime slice.
+Current runtime baseline: PR #120 / Slice A3.6 Client Feedback structured validation is merged at `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`. Published PR #120 head `e148220ac9ad08a0fd952482a0b293f1f2d22bad` passed complete automated exact-head smoke with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
 
-Runtime product implementation is complete through the merged A3.4 baseline. The app includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
+PR #119 / A3.5 Client Wishes structured validation is DONE: merge commit `e53e7852c8b384915fb77b59345170c43671151c`, verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`, exact-head smoke PASS. PR #120 / A3.6 is DONE, merged, and exact-head verified.
+
+Slice A3 remains IN PROGRESS. The next focused runtime slice is **A3.7 — Orders structured validation**. This documentation-only synchronization does not implement Orders work and assigns no future GitHub PR number. Production Readiness and Production Confirmation remain separate future slices.
+
+Runtime product implementation includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 
 Newly generated workshop summary documents include configured Workshop profile fields. Empty fields are omitted, an empty profile omits the whole section, and existing generated documents are not mutated.
-
-PR99-PR101 were documentation and governance changes only: the project UI/UX contract and Codex UI guidance were added, reviewed Impeccable material was adapted into safe project-owned guidance, and Taste Skill was reviewed and rejected. These PRs did not change application runtime behavior.
-
-Slice A1 browser smoke passed on runtime commit `040c90fa781edea8484eb84595745c3a3aaf5eaf`: 53 of 53 checks passed, including the targeted offline and recovery retest.
-
-PR #116 / Slice A3.2 inventory structured validation closure is merged at `79286f076292645b3e83dfedfccb366dee1777f6`, closed, and browser-smoke verified. PR #118 / Slice A3.4 Client Recipe structured validation is merged and exact-head smoke-verified. Slice A3.5 Client Wishes structured validation is now active; Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices.
 
 Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, and unrelated business mutations out of scope unless explicitly approved.
 
@@ -102,10 +100,3 @@ Backend health endpoint shape:
   "version": "0.1.0"
 }
 ```
-
-### Current runtime slice — A3.6 Client Feedback structured validation
-
-- PR #119 / A3.5 was merged at `e53e7852c8b384915fb77b59345170c43671151c`.
-- The verified PR #119 runtime head was `e19229df1afa74f4470864071e91a0e94a5631cd`; complete external exact-head smoke: PASS.
-- A3.5 is DONE.
-- A3.6 Client Feedback structured validation is IN PROGRESS and is scoped to append-only Client Feedback creation in the client card.

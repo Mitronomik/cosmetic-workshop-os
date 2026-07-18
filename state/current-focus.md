@@ -1,22 +1,36 @@
-# Current focus — Slice A3.5 Client Wishes structured validation
+# Current focus — A3.7 Orders structured validation
 
-A3.4 / PR #118 is merged and verified: merge commit `1489b0f99602ef08fc1a11ab67549a954f80335d`, published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25`, local exact-head full automated smoke PASS.
+This documentation PR does **not** implement A3.7. It only records that A3.7 is the next separate focused runtime task after PR #120 / A3.6 was merged and exact-head smoke verified.
 
-Active slice: **A3.5 — Client Wishes structured validation**.
+No GitHub PR number exists yet for A3.7.
 
-Scope is limited to the existing Client Wish create flow inside the client card (`POST /api/clients/{client_id}/wishes`) and its visible fields: `title`, `description`, `category`, `priority`, and `client_recipe_id`.
+## Runtime scope for the next task
 
-Excluded from this slice:
-- Client Feedback validation or behavior changes;
-- Client Wish edit semantics;
-- Client Wish status/archive redesign;
-- Orders;
-- Production Readiness and Production Confirmation;
-- schema, migration, dependency, CSS, CI, browser-dependency, and smoke-runner documentation changes.
+A3.7 is limited to the existing Order create/edit forms and their safe mutation lifecycle. Backend validation remains authoritative.
 
-No future PR number is assigned unless GitHub has already created the PR.
+The next runtime PR should ensure:
 
-## 2026-07-18 — Current slice
-- A3.5 Client Wish structured validation is DONE; merged at `e53e7852c8b384915fb77b59345170c43671151c` with verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd` and complete external exact-head smoke PASS.
-- A3.6 Client Feedback structured validation is IN PROGRESS.
-- Keep Orders, Production Readiness, and Production Confirmation as separate future slices.
+- visible backend validation issues map through explicit Order field allow-lists only;
+- unknown, aggregate, hidden, malformed, or protected issue paths remain in the form summary;
+- rejected submits preserve the user's draft values, focus, caret, and selection where applicable;
+- duplicate submissions are guarded;
+- stale responses from older Order contexts cannot overwrite newer state;
+- mutation success remains separate from list-refresh failure;
+- existing orders, order history, production history, stock movements, and production batches are not silently mutated.
+
+## Explicit A3.7 non-goals
+
+- No order schema changes.
+- No migrations.
+- No status workflow redesign.
+- No Production Readiness changes.
+- No Production Confirmation changes.
+- No inventory or production write-off changes.
+- No cost, tax, or margin implementation.
+- No responsive-table redesign.
+- No dependency or CI changes.
+- No unrelated route changes.
+
+## Expected tests and smoke planning
+
+The A3.7 runtime PR should include focused frontend validation and mutation-lifecycle tests for Orders if the current tooling supports them, plus focused backend/API tests for backend-authoritative Order validation. Browser smoke should cover normal Order create/edit, structured backend `422` handling, draft/focus preservation, duplicate-submit protection, refresh-failure separation, stale-response protection, and no unintended mutation of existing order or production history.
