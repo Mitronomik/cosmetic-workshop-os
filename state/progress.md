@@ -962,7 +962,7 @@ A3.5 verification run in this branch:
 
 - PR #120 title: `A3.6 — Client Feedback structured validation`.
 - Published head: `e148220ac9ad08a0fd952482a0b293f1f2d22bad`.
-- Merge commit/current main baseline: `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`.
+- PR #120 merge commit and application runtime baseline: `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`.
 - Exact-head smoke verdict: `PASS — FULL AUTOMATED SMOKE PASSED`. Smoke evidence was generated externally and is not committed to the repository.
 - Automated checks recorded for the exact-head smoke: frontend form-validation tests `18/18 PASS`; frontend targeted-validation-update tests `61/61 PASS`; frontend build `PASS`; concurrent frontend validation tests `PASS`; focused backend Client Wishes/Feedback tests `7/7 PASS`; smoke Bash syntax check `PASS`; browser-runner Node syntax check `PASS`.
 - Browser scenarios covered: normal Client Feedback creation; backend-authoritative structured `422` validation; draft/focus/caret/selection preservation; no write after rejected validation; duplicate-submit protection; successful create followed by controlled refresh failure; stale background response protection; Client Feedback append-only boundary; exact request URL/client ID/body/count assertions; backend state verification.
