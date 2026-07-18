@@ -3014,7 +3014,7 @@ function syncClientCardDraftFormsFromDom() {
 function clientWishFormDomLocked() { return clientCardState.savingWish; }
 function clientFeedbackFormDomLocked() { return clientCardState.savingFeedback; }
 function clientCardFormDomLocked() { return clientCardState.savingWish || clientCardState.savingFeedback; }
-function clientPageMutationActive() { return clientSubmitting || clientDeactivatingId !== null || clientCardFormDomLocked(); }
+function clientPageMutationActive() { return clientSubmitting || clientDeactivatingId !== null || clientCardState.changingWishId !== null || clientCardState.archivingWishId !== null || clientCardFormDomLocked(); }
 function loadClientCardData(clientId: number) {
   clientWishCreateLifecycle.invalidate();
   clientWishListRequestLifecycle.invalidate();
@@ -3180,8 +3180,8 @@ function submitClientWishForm(event: SubmitEvent) {
     }
   });
 }
-function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (clientPageMutationActive() || !['open','planned','resolved'].includes(status)) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { clientCardState.changingWishId = null; if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientWishFormDomLocked()); }).catch(() => { clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
-function archiveClientWishFromCard(wishId: number) { if (clientPageMutationActive() || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { clientCardState.archivingWishId = null; if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientWishFormDomLocked()); }).catch(() => { clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (clientPageMutationActive() || !['open','planned','resolved'].includes(status)) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { clientCardState.changingWishId = null; if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientPageMutationActive()); }).catch(() => { clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; if (clientPageMutationActive()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function archiveClientWishFromCard(wishId: number) { if (clientPageMutationActive() || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { clientCardState.archivingWishId = null; if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientPageMutationActive()); }).catch(() => { clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; if (clientPageMutationActive()) return; syncClientCardDraftFormsFromDom(); render(); }); }
 function toggleClientFeedbackForm() { if (clientPageMutationActive()) return; if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; if (clientCardState.showFeedbackForm) clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; clientCardState.feedbackMessage = ''; clientCardState.feedbackRefreshWarning = ''; render(); }
 function closeClientFeedbackForm() { if (clientPageMutationActive()) return; clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; render(); }
 function submitClientFeedbackForm(event: SubmitEvent) {
@@ -3341,10 +3341,9 @@ function deactivateClient(id: number) {
   disableClientDeactivationMutationControls(document, archivedClientId);
   const isCurrentClientDeactivation = () => clientDeactivationLifecycle.isCurrent(token) && clientDeactivatingId === archivedClientId;
   deactivateClientRequest(archivedClientId)
-    .then(() => getClients(clientsState.includeInactive))
-    .then((response) => {
+    .then((archivedClient) => {
       if (!isCurrentClientDeactivation()) return;
-      clientsState.items = response.clients;
+      clientsState.items = clientsState.items.map((item) => item.id === archivedClientId ? { ...item, ...archivedClient, is_active: false } : item);
       clientsStatus = 'ready';
       clientsMessage = 'Клиент архивирован.';
       clientsError = '';
@@ -3355,8 +3354,23 @@ function deactivateClient(id: number) {
         clientsState.form = emptyClientForm();
         clientCardState = emptyClientCardState();
       }
-    })
-    .catch(() => {
+      return getClients(clientsState.includeInactive)
+        .then((response) => {
+          if (!isCurrentClientDeactivation()) return;
+          clientsState.items = response.clients;
+          clientsStatus = 'ready';
+          clientsMessage = 'Клиент архивирован.';
+          clientsError = '';
+          clientsRefreshWarning = '';
+        })
+        .catch(() => {
+          if (!isCurrentClientDeactivation()) return;
+          clientsStatus = 'ready';
+          clientsMessage = 'Клиент архивирован.';
+          clientsError = '';
+          clientsRefreshWarning = 'Клиент архивирован, но список не удалось обновить автоматически.';
+        });
+    }, () => {
       if (!isCurrentClientDeactivation()) return;
       clientsMessage = '';
       clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.';

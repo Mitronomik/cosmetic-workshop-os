@@ -1618,6 +1618,8 @@ test('client card source guards use card-level feedback validation contracts wit
 
   const pageMutation = mainSourceFunction('clientPageMutationActive');
   assert.ok(pageMutation.includes('clientDeactivatingId !== null'));
+  assert.ok(pageMutation.includes('clientCardState.changingWishId !== null'));
+  assert.ok(pageMutation.includes('clientCardState.archivingWishId !== null'));
 
   const deactivate = mainSourceFunction('deactivateClient');
   assert.ok(deactivate.includes('clientDeactivationLifecycle.begin()'));
@@ -1801,9 +1803,9 @@ function createClientArchiveHarness() {
   const archiveLifecycle = lifecycle.createRecipeMutationLifecycle();
   const archive = deferred();
   const refresh = deferred();
-  const state = { deactivatingId: null, clientSubmitting: false, savingWish: false, savingFeedback: false, clients: [{ id: 1, active: true }, { id: 2, active: true }], currentFormId: 1, currentCardId: 1, renders: 0, archiveRequests: 0, message: '', error: '', controlsRestored: 0, showCreate: false, filters: { search: '', status: 'active' } };
+  const state = { deactivatingId: null, clientSubmitting: false, savingWish: false, savingFeedback: false, changingWishId: null, archivingWishId: null, clients: [{ id: 1, active: true }, { id: 2, active: true }], currentFormId: 1, currentCardId: 1, renders: 0, archiveRequests: 0, message: '', error: '', warning: '', controlsRestored: 0, showCreate: false, filters: { search: '', status: 'active' } };
   const cardLocked = () => state.savingWish || state.savingFeedback;
-  const pageActive = () => state.clientSubmitting || state.deactivatingId !== null || cardLocked();
+  const pageActive = () => state.clientSubmitting || state.deactivatingId !== null || state.changingWishId !== null || state.archivingWishId !== null || cardLocked();
   const render = () => { state.renders += 1; };
   const restore = () => { state.controlsRestored += 1; };
   const startArchive = (id) => {
@@ -1813,19 +1815,33 @@ function createClientArchiveHarness() {
     state.deactivatingId = id;
     state.archiveRequests += 1;
     const isCurrent = () => archiveLifecycle.isCurrent(token) && state.deactivatingId === id;
-    archive.promise.then(() => refresh.promise).then((clients) => {
+    archive.promise.then((archivedClient = { id, active: false }) => {
       if (!isCurrent()) return;
-      state.clients = clients;
+      state.clients = state.clients.map((client) => client.id === id ? { ...client, ...archivedClient, active: false } : client);
       state.message = 'Клиент архивирован.';
       state.error = '';
+      state.warning = '';
       if (state.currentFormId === id) {
         state.currentFormId = null;
         state.currentCardId = null;
       }
-    }).catch(() => {
+      return refresh.promise.then((clients) => {
+        if (!isCurrent()) return;
+        state.clients = clients;
+        state.message = 'Клиент архивирован.';
+        state.error = '';
+        state.warning = '';
+      }).catch(() => {
+        if (!isCurrent()) return;
+        state.message = 'Клиент архивирован.';
+        state.error = '';
+        state.warning = 'Клиент архивирован, но список не удалось обновить автоматически.';
+      });
+    }, () => {
       if (!isCurrent()) return;
       state.message = '';
       state.error = 'Не удалось архивировать клиента. Попробуйте еще раз.';
+      state.warning = '';
     }).finally(() => {
       if (!archiveLifecycle.finish(token) || state.deactivatingId !== id) return;
       state.deactivatingId = null;
@@ -1849,7 +1865,7 @@ function createClientArchiveHarness() {
   };
 }
 
-test('client archive lifecycle blocks wish, feedback, client form and parent page actions until completion', async () => {
+test('client archive lifecycle separates archive success from list refresh success and blocks page actions', async () => {
   const h = createClientArchiveHarness();
   assert.equal(h.startArchive(1), true, 'ordinary archive starts');
   assert.equal(h.startArchive(1), false, 'duplicate archive is blocked');
@@ -1862,14 +1878,49 @@ test('client archive lifecycle blocks wish, feedback, client form and parent pag
   assert.equal(h.status(), false, 'archive blocks status filter');
   assert.equal(h.openCreate(), false, 'archive blocks create form');
   assert.equal(h.switchClient(2), false, 'archive blocks client switch');
-  h.archive.resolve(); await Promise.resolve();
-  h.refresh.resolve([{ id: 1, active: false }, { id: 2, active: true }]); await flush(); await flush();
+  h.archive.resolve({ id: 1, active: false }); await Promise.resolve();
+  assert.equal(h.state.currentCardId, null, 'archive success closes matching card before refresh');
+  assert.deepEqual(h.state.clients, [{ id: 1, active: false }, { id: 2, active: true }], 'local state marks client archived before refresh');
+  h.refresh.resolve([{ id: 1, active: false }, { id: 2, active: true }, { id: 3, active: true }]); await flush(); await flush();
   assert.equal(h.state.deactivatingId, null, 'archive releases page lock');
   assert.equal(h.state.controlsRestored, 1, 'archive restores controls once');
   assert.equal(h.state.currentFormId, null, 'successful archive closes matching edited card');
   assert.equal(h.state.currentCardId, null, 'successful archive clears matching client card');
   assert.equal(h.state.message, 'Клиент архивирован.');
+  assert.equal(h.state.warning, '');
+  assert.equal(h.state.error, '');
+  assert.deepEqual(h.state.clients, [{ id: 1, active: false }, { id: 2, active: true }, { id: 3, active: true }], 'successful refresh replaces clients list');
   assert.equal(h.submitFeedback(), true, 'feedback submit is available after archive unlock');
+});
+
+test('client archive success with list refresh failure keeps archive success and warning separate', async () => {
+  const h = createClientArchiveHarness();
+  assert.equal(h.startArchive(1), true);
+  h.archive.resolve({ id: 1, active: false }); await Promise.resolve();
+  assert.equal(h.state.message, 'Клиент архивирован.');
+  assert.equal(h.state.currentCardId, null, 'matching card closes immediately after archive success');
+  assert.deepEqual(h.state.clients, [{ id: 1, active: false }, { id: 2, active: true }], 'archived local state is preserved before refresh');
+  h.refresh.reject(new Error('503')); await flush(); await flush();
+  assert.equal(h.state.deactivatingId, null, 'refresh failure releases archive lock');
+  assert.equal(h.state.message, 'Клиент архивирован.');
+  assert.equal(h.state.error, '', 'no false archive error after successful archive');
+  assert.equal(h.state.warning, 'Клиент архивирован, но список не удалось обновить автоматически.');
+  assert.equal(h.state.currentCardId, null, 'matching card remains closed after refresh failure');
+  assert.deepEqual(h.state.clients, [{ id: 1, active: false }, { id: 2, active: true }], 'created archived state remains visible after refresh failure');
+  assert.equal(h.state.archiveRequests, 1, 'refresh failure does not send another archive request');
+});
+
+test('client archive API failure releases lock without success state', async () => {
+  const failed = createClientArchiveHarness();
+  assert.equal(failed.startArchive(1), true);
+  failed.archive.reject(new Error('409')); await flush(); await flush();
+  assert.equal(failed.state.deactivatingId, null, 'failed archive releases lock');
+  assert.equal(failed.state.currentCardId, 1, 'archive API failure preserves current card');
+  assert.ok(failed.state.error.includes('Не удалось архивировать клиента'));
+  assert.equal(failed.state.message, '', 'archive API failure does not show success');
+  assert.equal(failed.state.warning, '', 'archive API failure does not show refresh warning');
+  assert.deepEqual(failed.state.clients, [{ id: 1, active: true }, { id: 2, active: true }]);
+  assert.equal(failed.state.archiveRequests, 1);
 });
 
 test('client archive failure releases lock and stale callback cannot update another client', async () => {
@@ -1919,6 +1970,71 @@ test('client deactivation mutation controls restore readonly and disabled states
   assert.equal(feedbackSubmit.disabled, false);
   assert.equal(preReadonly.readOnly, true, 'pre-readonly remains unchanged');
   assert.equal(preDisabled.disabled, true, 'pre-disabled remains unchanged');
+});
+
+function createWishActionHarness() {
+  const status = deferred();
+  const archive = deferred();
+  const state = { changingWishId: null, archivingWishId: null, savingFeedback: false, savingWish: false, clientSubmitting: false, deactivatingId: null, renders: 0, wishError: '', feedbackSubmits: 0, wishSubmits: 0, archiveRequests: 0, statusRequests: 0, clientArchiveRequests: 0, clientSubmits: 0 };
+  const cardLocked = () => state.savingFeedback || state.savingWish;
+  const pageActive = () => state.clientSubmitting || state.deactivatingId !== null || state.changingWishId !== null || state.archivingWishId !== null || cardLocked();
+  const render = () => { state.renders += 1; };
+  const startStatus = (wishId) => { if (pageActive()) return false; state.changingWishId = wishId; state.statusRequests += 1; render(); status.promise.catch(() => { state.changingWishId = null; state.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; if (pageActive()) return; render(); }); return true; };
+  const startWishArchive = (wishId) => { if (pageActive()) return false; state.archivingWishId = wishId; state.archiveRequests += 1; render(); archive.promise.catch(() => { state.archivingWishId = null; state.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; if (pageActive()) return; render(); }); return true; };
+  const submitFeedback = () => { if (pageActive()) return false; state.feedbackSubmits += 1; state.savingFeedback = true; return true; };
+  const submitWish = () => { if (pageActive()) return false; state.wishSubmits += 1; state.savingWish = true; return true; };
+  const submitClientForm = () => { if (pageActive()) return false; state.clientSubmits += 1; state.clientSubmitting = true; return true; };
+  const startClientArchive = () => { if (pageActive()) return false; state.clientArchiveRequests += 1; state.deactivatingId = 1; return true; };
+  return { state, status, archive, startStatus, startWishArchive, submitFeedback, submitWish, submitClientForm, startClientArchive };
+}
+
+test('client wish status and archive pending states block feedback, wish, client form and archive actions', () => {
+  const status = createWishActionHarness();
+  assert.equal(status.startStatus(11), true, 'ordinary status mutation starts');
+  assert.equal(status.startStatus(12), false, 'duplicate/overlapping status mutation is blocked');
+  assert.equal(status.startWishArchive(11), false, 'status pending blocks wish archive');
+  assert.equal(status.submitFeedback(), false, 'status pending blocks feedback submit');
+  assert.equal(status.submitWish(), false, 'status pending blocks wish create');
+  assert.equal(status.submitClientForm(), false, 'status pending blocks client form submit');
+  assert.equal(status.startClientArchive(), false, 'status pending blocks client archive');
+  assert.equal(status.state.statusRequests, 1);
+
+  const archived = createWishActionHarness();
+  assert.equal(archived.startWishArchive(22), true, 'ordinary wish archive starts');
+  assert.equal(archived.startWishArchive(23), false, 'duplicate/overlapping archive is blocked');
+  assert.equal(archived.startStatus(22), false, 'archive pending blocks status change');
+  assert.equal(archived.submitFeedback(), false, 'archive pending blocks feedback submit');
+  assert.equal(archived.submitWish(), false, 'archive pending blocks wish create');
+  assert.equal(archived.submitClientForm(), false, 'archive pending blocks client form submit');
+  assert.equal(archived.startClientArchive(), false, 'archive pending blocks client archive');
+  assert.equal(archived.state.archiveRequests, 1);
+
+  for (const mode of ['savingFeedback', 'savingWish', 'deactivatingId']) {
+    const h = createWishActionHarness();
+    h.state[mode] = mode === 'deactivatingId' ? 1 : true;
+    assert.equal(h.startStatus(1), false, `${mode}: blocks wish status action`);
+    assert.equal(h.startWishArchive(1), false, `${mode}: blocks wish archive action`);
+  }
+});
+
+test('failed wish status or archive cannot render over live pending feedback form', async () => {
+  const status = createWishActionHarness();
+  assert.equal(status.startStatus(1), true);
+  assert.equal(status.state.renders, 1, 'status start rendered once before feedback lock');
+  status.state.savingFeedback = true;
+  status.status.reject(new Error('503')); await flush();
+  assert.equal(status.state.changingWishId, null);
+  assert.ok(status.state.wishError.includes('Не удалось изменить статус пожелания'));
+  assert.equal(status.state.renders, 1, 'status failure does not render over pending feedback form');
+
+  const archived = createWishActionHarness();
+  assert.equal(archived.startWishArchive(1), true);
+  assert.equal(archived.state.renders, 1, 'archive start rendered once before feedback lock');
+  archived.state.savingFeedback = true;
+  archived.archive.reject(new Error('503')); await flush();
+  assert.equal(archived.state.archivingWishId, null);
+  assert.ok(archived.state.wishError.includes('Не удалось архивировать пожелание'));
+  assert.equal(archived.state.renders, 1, 'archive failure does not render over pending feedback form');
 });
 
 test('client feedback mutation guard disables and restores follow-up checkbox correctly', () => {
