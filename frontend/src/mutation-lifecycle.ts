@@ -237,6 +237,15 @@ function disableClientPageContextMutationControls(root: ParentNode = document): 
   root.querySelectorAll(guarded).forEach(mutationDisabled);
 }
 
+export function disableClientDeactivationMutationControls(root: ParentNode = document, clientId?: number): void {
+  disableClientPageContextMutationControls(root);
+  const guarded = '[data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"], [data-action="toggle-client-feedback-form"], [data-action="close-client-feedback-form"], [data-form="client-wish"] input, [data-form="client-wish"] textarea, [data-form="client-wish"] select, [data-form="client-wish"] button, [data-form="client-feedback"] input, [data-form="client-feedback"] textarea, [data-form="client-feedback"] select, [data-form="client-feedback"] button';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+  const archiveSelector = clientId ? `[data-action="archive-client"][data-id="${clientId}"]` : '[data-action="archive-client"]';
+  const archiveButton = root.querySelector<HTMLButtonElement>(archiveSelector);
+  if (archiveButton) archiveButton.textContent = 'Архивируем…';
+}
+
 export function disableClientWishCreateMutationControls(root: ParentNode = document): void {
   const form = root.querySelector<HTMLFormElement>('[data-form="client-wish"]');
   if (form) {

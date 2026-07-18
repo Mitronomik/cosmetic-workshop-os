@@ -1,6 +1,6 @@
 import { clearFieldValidation, clearIndexedCollectionValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
 import { applyValidationToClientForm, applyValidationToClientRecipeCompositionForm, applyValidationToClientRecipeCreateForm, applyValidationToClientFeedbackForm, applyValidationToClientWishForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm, applyValidationToPackagingItemForm, applyValidationToRecipeTemplateForm, applyValidationToRecipeVersionForm, applyValidationToStockMovementForm } from './targeted-validation-update.js';
-import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientFeedbackCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientFeedbackMutationControls, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
+import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientDeactivationMutationControls, disableClientFeedbackCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientFeedbackMutationControls, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -574,6 +574,8 @@ let clientCardContextToken = 0;
 let clientWishContextToken = 0;
 let clientCardTargetedValidationToken = 0;
 let clientSubmitting = false;
+let clientDeactivatingId: number | null = null;
+const clientDeactivationLifecycle = createRecipeMutationLifecycle();
 let clientSubmitToken = 0;
 let clientCardState: ClientCardState = emptyClientCardState();
 let clientRecipesStatus: ClientRecipesStatus = 'idle';
@@ -3012,7 +3014,7 @@ function syncClientCardDraftFormsFromDom() {
 function clientWishFormDomLocked() { return clientCardState.savingWish; }
 function clientFeedbackFormDomLocked() { return clientCardState.savingFeedback; }
 function clientCardFormDomLocked() { return clientCardState.savingWish || clientCardState.savingFeedback; }
-function clientPageMutationActive() { return clientSubmitting || clientCardFormDomLocked(); }
+function clientPageMutationActive() { return clientSubmitting || clientDeactivatingId !== null || clientCardFormDomLocked(); }
 function loadClientCardData(clientId: number) {
   clientWishCreateLifecycle.invalidate();
   clientWishListRequestLifecycle.invalidate();
@@ -3112,13 +3114,13 @@ function refreshClientFeedback(renderLoading = true, rejectOnError = false, show
     if (rejectOnError) throw error;
   });
 }
-function toggleClientWishForm() { if (clientCardFormDomLocked()) return; if (clientCardState.showWishForm) syncClientCardDraftFormsFromDom(); clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = !clientCardState.showWishForm; if (clientCardState.showWishForm) clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; render(); }
-function closeClientWishForm() { if (clientCardFormDomLocked()) return; clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; render(); }
-function toggleArchivedClientWishes() { if (clientCardFormDomLocked()) return; clientWishValidation = emptyFormValidationState(); clientCardState.includeArchivedWishes = !clientCardState.includeArchivedWishes; refreshClientWishes(); }
+function toggleClientWishForm() { if (clientPageMutationActive()) return; if (clientCardState.showWishForm) syncClientCardDraftFormsFromDom(); clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = !clientCardState.showWishForm; if (clientCardState.showWishForm) clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; render(); }
+function closeClientWishForm() { if (clientPageMutationActive()) return; clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; render(); }
+function toggleArchivedClientWishes() { if (clientPageMutationActive()) return; clientWishValidation = emptyFormValidationState(); clientCardState.includeArchivedWishes = !clientCardState.includeArchivedWishes; refreshClientWishes(); }
 function submitClientWishForm(event: SubmitEvent) {
   event.preventDefault();
   const clientId = clientCardState.clientId;
-  if (!clientId || clientCardFormDomLocked()) return;
+  if (!clientId || clientPageMutationActive()) return;
   syncClientCardDraftFormsFromDom();
   const token = clientWishCreateLifecycle.begin();
   if (token === null) return;
@@ -3178,14 +3180,14 @@ function submitClientWishForm(event: SubmitEvent) {
     }
   });
 }
-function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (clientCardFormDomLocked() || !['open','planned','resolved'].includes(status)) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { clientCardState.changingWishId = null; if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientWishFormDomLocked()); }).catch(() => { clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
-function archiveClientWishFromCard(wishId: number) { if (clientCardFormDomLocked() || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { clientCardState.archivingWishId = null; if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientWishFormDomLocked()); }).catch(() => { clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
-function toggleClientFeedbackForm() { if (clientCardFormDomLocked()) return; if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; if (clientCardState.showFeedbackForm) clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; clientCardState.feedbackMessage = ''; clientCardState.feedbackRefreshWarning = ''; render(); }
-function closeClientFeedbackForm() { if (clientCardFormDomLocked()) return; clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; render(); }
+function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (clientPageMutationActive() || !['open','planned','resolved'].includes(status)) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { clientCardState.changingWishId = null; if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientWishFormDomLocked()); }).catch(() => { clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function archiveClientWishFromCard(wishId: number) { if (clientPageMutationActive() || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { clientCardState.archivingWishId = null; if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientWishFormDomLocked()); }).catch(() => { clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function toggleClientFeedbackForm() { if (clientPageMutationActive()) return; if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; if (clientCardState.showFeedbackForm) clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; clientCardState.feedbackMessage = ''; clientCardState.feedbackRefreshWarning = ''; render(); }
+function closeClientFeedbackForm() { if (clientPageMutationActive()) return; clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; render(); }
 function submitClientFeedbackForm(event: SubmitEvent) {
   event.preventDefault();
   const clientId = clientCardState.clientId;
-  if (!clientId || clientCardFormDomLocked()) return;
+  if (!clientId || clientPageMutationActive()) return;
   syncClientCardDraftFormsFromDom();
   const token = clientFeedbackCreateLifecycle.begin();
   if (token === null) return;
@@ -3325,7 +3327,49 @@ function submitClientForm(event: SubmitEvent) {
     });
 }
 
-function deactivateClient(id: number) { if (clientPageMutationActive()) return; const client = clientsState.items.find((item) => item.id === id); if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return; deactivateClientRequest(id).then(() => { clientsMessage = 'Клиент архивирован.'; clientsError = ''; return getClients(clientsState.includeInactive); }).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; if (clientsState.form.id === id) { clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); } render(); }).catch(() => { clientsMessage = ''; clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.'; clientsStatus = 'ready'; render(); }); }
+function deactivateClient(id: number) {
+  if (clientPageMutationActive()) return;
+  const client = clientsState.items.find((item) => item.id === id);
+  if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return;
+  const token = clientDeactivationLifecycle.begin();
+  if (token === null) return;
+  const archivedClientId = id;
+  clientDeactivatingId = archivedClientId;
+  clientsMessage = '';
+  clientsError = '';
+  clientsRefreshWarning = '';
+  disableClientDeactivationMutationControls(document, archivedClientId);
+  const isCurrentClientDeactivation = () => clientDeactivationLifecycle.isCurrent(token) && clientDeactivatingId === archivedClientId;
+  deactivateClientRequest(archivedClientId)
+    .then(() => getClients(clientsState.includeInactive))
+    .then((response) => {
+      if (!isCurrentClientDeactivation()) return;
+      clientsState.items = response.clients;
+      clientsStatus = 'ready';
+      clientsMessage = 'Клиент архивирован.';
+      clientsError = '';
+      clientsRefreshWarning = '';
+      if (clientsState.form.id === archivedClientId) {
+        clientsState.formMode = 'create';
+        clientsState.showCreateForm = false;
+        clientsState.form = emptyClientForm();
+        clientCardState = emptyClientCardState();
+      }
+    })
+    .catch(() => {
+      if (!isCurrentClientDeactivation()) return;
+      clientsMessage = '';
+      clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.';
+      clientsRefreshWarning = '';
+      clientsStatus = 'ready';
+    })
+    .finally(() => {
+      if (!clientDeactivationLifecycle.finish(token) || clientDeactivatingId !== archivedClientId) return;
+      clientDeactivatingId = null;
+      restoreMutationGuards(document);
+      render();
+    });
+}
 
 
 function ingredientSystemCategories() { return ['oil','butter','wax','emulsifier','humectant','active','preservative','fragrance','essential_oil','colorant','water_phase','additive','other']; }
