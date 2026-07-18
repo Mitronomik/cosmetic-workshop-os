@@ -239,7 +239,11 @@ export function disableClientFeedbackCreateMutationControls(root: ParentNode = d
   const form = root.querySelector<HTMLFormElement>('[data-form="client-feedback"]');
   if (form) {
     form.setAttribute('aria-busy', 'true');
-    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
+    form.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
+      if (input.type === 'checkbox') mutationDisabled(input);
+      else mutationReadonly(input);
+    });
+    form.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(mutationReadonly);
     form.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
     form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
