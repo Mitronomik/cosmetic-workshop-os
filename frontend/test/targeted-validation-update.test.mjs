@@ -1291,6 +1291,68 @@ test('production-linked request generations use deferred promises for stale clie
   const compToken = compositionRefs.begin(); const comp = deferred(); comp.promise.then(() => { if (compositionRefs.isCurrent(compToken) && state.selectedRecipeId === 1) state.editorOpened = true; }); state.selectedRecipeId = 2; comp.resolve('ingredients'); await flush(); assert.equal(state.editorOpened, false);
 });
 
+
+function clientFeedbackCardRuntime() {
+  const stripTypes = (src) => src
+    .replace(/: ClientFeedback/g, '')
+    .replace(/: string \| null/g, '')
+    .replace(/: string/g, '');
+  const code = `
+    function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char] ?? char)); }
+    function clientFeedbackTypeLabel(value) { return ({ note: 'Заметка', reaction: 'Реакция', texture: 'Текстура', scent: 'Аромат', effect: 'Эффект', packaging: 'Упаковка', request: 'Просьба', other: 'Другое' })[value] ?? 'Другое'; }
+    function clientFeedbackSentimentLabel(value) { return ({ positive: 'Положительный', neutral: 'Нейтральный', negative: 'Негативный', mixed: 'Смешанный' })[value] ?? 'Нейтральный'; }
+    function clientCardRecipeTitle() { return 'Индивидуальный рецепт'; }
+    ${stripTypes(mainSourceFunction('formatClientFeedbackDateOnly'))}
+    ${stripTypes(mainSourceFunction('formatClientFeedbackDateTime'))}
+    ${stripTypes(mainSourceFunction('clientFeedbackDisplayDate'))}
+    ${stripTypes(mainSourceFunction('clientFeedbackCard'))}
+    return { clientFeedbackCard, clientFeedbackDisplayDate };
+  `;
+  return new Function(code)();
+}
+
+function feedbackFixture(overrides = {}) {
+  return {
+    id: 1,
+    client_id: 1,
+    client_recipe_id: null,
+    feedback_type: 'note',
+    sentiment: 'neutral',
+    rating: null,
+    text: 'Клиенту понравилась текстура.',
+    follow_up_needed: false,
+    follow_up_note: '',
+    occurred_at: null,
+    created_at: '2026-07-17 14:45:02',
+    ...overrides,
+  };
+}
+
+test('client feedback card safely renders nullable occurrence dates and malformed values', () => {
+  const { clientFeedbackCard } = clientFeedbackCardRuntime();
+  const createdOnly = feedbackFixture();
+  const createdExpected = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date('2026-07-17T14:45:02'));
+
+  assert.doesNotThrow(() => clientFeedbackCard(createdOnly));
+  const createdHtml = clientFeedbackCard(createdOnly);
+  assert.ok(createdHtml.includes(createdExpected), 'created_at timestamp is used when occurred_at is null');
+  assert.ok(createdHtml.includes('Клиенту понравилась текстура.'));
+  assert.ok(mainSourceFunction('clientWishForm').includes('data-form="client-wish"'), 'Client Wish form remains renderable in source');
+  assert.ok(mainSourceFunction('clientFeedbackForm').includes('data-form="client-feedback"'), 'Client Feedback form remains renderable in source');
+
+  const explicit = feedbackFixture({ occurred_at: '2026-07-10' });
+  const explicitExpected = new Intl.DateTimeFormat('ru-RU').format(new Date('2026-07-10T00:00:00'));
+  const explicitHtml = clientFeedbackCard(explicit);
+  assert.ok(explicitHtml.includes(explicitExpected), 'explicit occurred_at date is preferred');
+  assert.equal(explicitHtml.includes(createdExpected), false, 'created_at fallback is not shown when occurrence date is present');
+
+  const malformed = feedbackFixture({ created_at: 'not-a-date' });
+  const before = structuredClone(malformed);
+  assert.doesNotThrow(() => clientFeedbackCard(malformed));
+  assert.ok(clientFeedbackCard(malformed).includes('Дата не указана'));
+  assert.deepEqual(malformed, before, 'rendering fallback does not mutate source feedback data');
+});
+
 test('client wish wrapper maps approved fields and preserves focused draft controls', () => {
   reset();
   const form = mkForm('client-wish');

@@ -2157,8 +2157,23 @@ function clientFeedbackForm() {
   return `<form data-form="client-feedback" class="ingredient-form"><h3>Новая обратная связь</h3><div class="form-grid"><label>Тип отзыва<select name="feedback_type">${clientFeedbackTypeOptions(form.feedback_type)}</select></label><label>Настроение<select name="sentiment">${clientFeedbackSentimentOptions(form.sentiment)}</select></label><label>Оценка<input name="rating" type="number" min="1" max="5" value="${escapeHtml(form.rating)}" placeholder="1–5" /></label><label>Дата отзыва<input name="occurred_at" type="date" value="${escapeHtml(form.occurred_at)}" /></label>${clientRecipeLinkSelect(form.client_recipe_id)}<label class="full-span">Текст отзыва<textarea name="text" required rows="3" maxlength="2000" placeholder="Что клиенту понравилось или не подошло">${escapeHtml(form.text)}</textarea></label><label class="full-span"><input name="follow_up_needed" type="checkbox" ${form.follow_up_needed ? 'checked' : ''} /> Нужно учесть в следующий раз</label><label class="full-span">Что учесть<textarea name="follow_up_note" rows="2" maxlength="1200" placeholder="Необязательно">${escapeHtml(form.follow_up_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" ${clientCardState.savingFeedback ? 'disabled' : ''}>${clientCardState.savingFeedback ? 'Сохраняем…' : 'Сохранить отзыв'}</button><button class="secondary-action" type="button" data-action="close-client-feedback-form">Закрыть форму</button></div></form>`;
 }
 
+function clientFeedbackDisplayDate(item: ClientFeedback) {
+  if (item.occurred_at) return formatClientFeedbackDateOnly(item.occurred_at);
+  return formatClientFeedbackDateTime(item.created_at);
+}
+function formatClientFeedbackDateOnly(value: string | null) {
+  if (!value) return 'Дата не указана';
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? 'Дата не указана' : new Intl.DateTimeFormat('ru-RU').format(date);
+}
+function formatClientFeedbackDateTime(value: string | null) {
+  if (!value) return 'Дата не указана';
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? 'Дата не указана' : new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+}
 function clientFeedbackCard(item: ClientFeedback) {
-  return `<article class="recipe-line"><div class="section-heading"><div><h3>${clientFeedbackTypeLabel(item.feedback_type)} · ${clientFeedbackSentimentLabel(item.sentiment)}</h3><p>${item.rating ? `Оценка: ${item.rating}/5` : 'Оценка не указана'}</p></div><small>${formatDate(item.occurred_at || item.created_at)}</small></div><p>${escapeHtml(item.text)}</p>${item.follow_up_needed ? `<p class="next-step"><strong>Учесть в следующий раз:</strong> ${escapeHtml(item.follow_up_note || 'Да, без дополнительной заметки.')}</p>` : ''}${item.client_recipe_id ? `<p class="next-step">Связано с индивидуальным рецептом: ${escapeHtml(clientCardRecipeTitle(item.client_recipe_id))}</p>` : ''}</article>`;
+  return `<article class="recipe-line"><div class="section-heading"><div><h3>${clientFeedbackTypeLabel(item.feedback_type)} · ${clientFeedbackSentimentLabel(item.sentiment)}</h3><p>${item.rating ? `Оценка: ${item.rating}/5` : 'Оценка не указана'}</p></div><small>${clientFeedbackDisplayDate(item)}</small></div><p>${escapeHtml(item.text)}</p>${item.follow_up_needed ? `<p class="next-step"><strong>Учесть в следующий раз:</strong> ${escapeHtml(item.follow_up_note || 'Да, без дополнительной заметки.')}</p>` : ''}${item.client_recipe_id ? `<p class="next-step">Связано с индивидуальным рецептом: ${escapeHtml(clientCardRecipeTitle(item.client_recipe_id))}</p>` : ''}</article>`;
 }
 
 function clientList() {
