@@ -12,8 +12,25 @@ export type OrderContextSnapshot = {
 };
 export type OrderContextState = OrderContextSnapshot;
 
+export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production';
+export type OrderRequestSnapshot = OrderContextSnapshot & {
+  kind: OrderRequestKind;
+  generation: number;
+  submitToken: number;
+  savedOrderId?: number | null;
+  requestedOrderId?: number | null;
+};
+export type OrderSubmitSnapshot = OrderContextSnapshot & { submitToken: number };
+
 export type OrderFormErrorOrigin = 'recipe_source' | 'recipe_version_id' | 'client_recipe_id';
 export type OrderValidationProvenance = { formErrors: Array<{ origin: OrderFormErrorOrigin; message: string }> };
+
+export type OrderWorkspaceState = {
+  formMode: OrderFormMode;
+  editedOrderId: number | null;
+  selectedOrderId: number | null;
+  showForm: boolean;
+};
 
 export function emptyOrderValidationProvenance(): OrderValidationProvenance {
   return { formErrors: [] };
@@ -26,6 +43,102 @@ export function orderReadCanRender(snapshot: OrderContextSnapshot, current: Orde
     && snapshot.editedOrderId === current.editedOrderId
     && snapshot.selectedOrderId === current.selectedOrderId
     && snapshot.showForm === current.showForm;
+}
+
+export class OrderMutationController {
+  private contextToken = 0;
+  private targetedValidationToken = 0;
+  private submitToken = 0;
+  private submitting = false;
+  private generations: Record<OrderRequestKind, number> = {
+    list: 0,
+    postSaveRefresh: 0,
+    reference: 0,
+    detail: 0,
+    readiness: 0,
+    production: 0,
+  };
+
+  snapshot(workspace: OrderWorkspaceState): OrderContextSnapshot {
+    return {
+      contextToken: this.contextToken,
+      targetedValidationToken: this.targetedValidationToken,
+      formMode: workspace.formMode,
+      editedOrderId: workspace.editedOrderId,
+      selectedOrderId: workspace.selectedOrderId,
+      showForm: workspace.showForm,
+    };
+  }
+
+  getContextToken(): number { return this.contextToken; }
+  getTargetedValidationToken(): number { return this.targetedValidationToken; }
+  isSubmitting(): boolean { return this.submitting; }
+
+  bumpContext(): number {
+    this.contextToken += 1;
+    this.invalidateRequest('detail');
+    this.invalidateRequest('readiness');
+    this.invalidateRequest('production');
+    return this.contextToken;
+  }
+
+  markTargetedValidationApplied(): number {
+    this.targetedValidationToken += 1;
+    this.invalidateRequest('list');
+    this.invalidateRequest('reference');
+    this.invalidateRequest('detail');
+    return this.targetedValidationToken;
+  }
+
+  beginSubmit(context: OrderContextSnapshot): OrderSubmitSnapshot | null {
+    if (this.submitting) return null;
+    this.submitting = true;
+    this.submitToken += 1;
+    return { ...context, submitToken: this.submitToken };
+  }
+
+  finishSubmit(snapshot: OrderSubmitSnapshot): boolean {
+    if (snapshot.submitToken !== this.submitToken) return false;
+    this.submitting = false;
+    return true;
+  }
+
+  canApplySubmit(snapshot: OrderSubmitSnapshot, current: OrderContextSnapshot): boolean {
+    return snapshot.submitToken === this.submitToken && orderReadCanRender(snapshot, current);
+  }
+
+  beginRequest(kind: OrderRequestKind, context: OrderContextSnapshot, extra: Partial<Pick<OrderRequestSnapshot, 'savedOrderId' | 'requestedOrderId'>> = {}): OrderRequestSnapshot {
+    this.generations[kind] += 1;
+    return { ...context, kind, generation: this.generations[kind], submitToken: this.submitToken, ...extra };
+  }
+
+  invalidateRequest(kind: OrderRequestKind): number {
+    this.generations[kind] += 1;
+    return this.generations[kind];
+  }
+
+  isCurrentRequest(snapshot: OrderRequestSnapshot): boolean {
+    return this.generations[snapshot.kind] === snapshot.generation;
+  }
+
+  canRenderContext(snapshot: OrderContextSnapshot, current: OrderContextSnapshot): boolean {
+    return orderReadCanRender(snapshot, current);
+  }
+
+  canApplyRequest(snapshot: OrderRequestSnapshot, current: OrderContextSnapshot): boolean {
+    return this.isCurrentRequest(snapshot) && orderReadCanRender(snapshot, current);
+  }
+
+  canApplyPostSaveRefresh(snapshot: OrderRequestSnapshot, current: OrderContextSnapshot): boolean {
+    return snapshot.kind === 'postSaveRefresh'
+      && this.isCurrentRequest(snapshot)
+      && snapshot.submitToken === this.submitToken
+      && orderReadCanRender(snapshot, current);
+  }
+}
+
+export function createOrderMutationController(): OrderMutationController {
+  return new OrderMutationController();
 }
 
 export function clearOrderSourceValidation(

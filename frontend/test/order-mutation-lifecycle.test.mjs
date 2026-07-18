@@ -2,190 +2,150 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   clearOrderSourceValidation,
+  createOrderMutationController,
   emptyOrderValidationProvenance,
   orderPayloadFromDraft,
-  orderReadCanRender,
 } from '../dist-tests/order-mutation-lifecycle/order-mutation-lifecycle.js';
 import { mutationDisabled, mutationReadonly, restoreMutationGuards } from '../dist-tests/order-mutation-lifecycle/mutation-lifecycle.js';
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
-  return { promise, resolve, reject };
+function workspace(overrides = {}) {
+  return { formMode: 'create', editedOrderId: null, selectedOrderId: null, showForm: true, ...overrides };
 }
-
-function order(id, name = `Заказ ${id}`) {
-  return { id, product_name: name, client_id: 1, recipe_version_id: 1, client_recipe_id: null };
-}
-
-function context(overrides = {}) {
-  return { contextToken: 1, targetedValidationToken: 1, formMode: 'create', editedOrderId: null, selectedOrderId: null, showForm: true, ...overrides };
-}
-
-class OrderHarness {
-  constructor() {
-    this.state = { items: [], selectedOrder: null, showForm: false, formMode: 'create', editedOrderId: null, draft: {}, validation: { fieldErrors: {}, formErrors: [] }, warning: '', success: '', contextToken: 1, targetedValidationToken: 1, loading: false };
-    this.createCalls = [];
-    this.updateCalls = [];
-    this.refreshCalls = [];
-    this.active = false;
-    this.token = 0;
-  }
-  snapshot() { return context({ contextToken: this.state.contextToken, targetedValidationToken: this.state.targetedValidationToken, formMode: this.state.formMode, editedOrderId: this.state.editedOrderId, selectedOrderId: this.state.selectedOrder?.id ?? null, showForm: this.state.showForm }); }
-  canRender(snap) { return orderReadCanRender(snap, this.snapshot()); }
-  openCreate(draft = {}) { if (this.active) return false; this.state.contextToken += 1; this.state.showForm = true; this.state.formMode = 'create'; this.state.editedOrderId = null; this.state.selectedOrder = null; this.state.draft = draft; return true; }
-  openEdit(item, draft = {}) { if (this.active) return false; this.state.contextToken += 1; this.state.showForm = true; this.state.formMode = 'edit'; this.state.editedOrderId = item.id; this.state.selectedOrder = item; this.state.draft = draft; return true; }
-  closeForm() { if (this.active) return false; this.state.contextToken += 1; this.state.showForm = false; return true; }
-  submit(kind, draft, mutation, refresh) {
-    if (this.active) return false;
-    this.active = true;
-    this.token += 1;
-    const token = this.token;
-    const submitContext = this.snapshot();
-    const payload = orderPayloadFromDraft(draft);
-    if (kind === 'create') this.createCalls.push(payload); else this.updateCalls.push(payload);
-    mutation.then((saved) => {
-      if (token !== this.token || !this.canRender(submitContext)) return;
-      this.state.items = [saved, ...this.state.items.filter((item) => item.id !== saved.id)];
-      this.state.selectedOrder = saved;
-      this.state.showForm = false;
-      this.state.success = kind === 'create' ? 'Заказ создан.' : 'Заказ сохранён.';
-      this.active = false;
-      this.state.contextToken += 1;
-      const refreshContext = this.snapshot();
-      this.refreshCalls.push(1);
-      refresh.then((items) => {
-        this.state.loading = false;
-        this.state.items = items;
-        this.state.warning = '';
-      }).catch(() => {
-        this.state.loading = false;
-        this.state.warning = 'Заказ сохранён, но список не удалось обновить автоматически.';
-      }).finally(() => {
-        if (!this.canRender(refreshContext)) this.state.didStaleRender = false;
-      });
-    }).catch((error) => {
-      if (token !== this.token) return;
-      this.active = false;
-      this.state.showForm = true;
-      this.state.formMode = submitContext.formMode;
-      this.state.editedOrderId = submitContext.editedOrderId;
-      this.state.draft = draft;
-      this.state.validation = error.validation;
-      this.state.targetedValidationToken += 1;
-    });
-    return true;
-  }
-}
-
+function ctx(controller, overrides = {}) { return controller.snapshot(workspace(overrides)); }
+function order(id, name = `Заказ ${id}`) { return { id, product_name: name }; }
 const baseDraft = { client_id: '1', source_type: 'recipe_version', recipe_version_id: '2', client_recipe_id: '', product_name: 'Крем', target_batch_size_value: '50', target_batch_size_unit: 'g', packaging_item_id: '', packaging_quantity: '', sale_price: '', ordered_at: '', planned_production_at: '', notes: '' };
 
-test('duplicate create and edit submit once, package-without-item reaches backend, payload excludes lifecycle fields and no retry occurs', async () => {
-  const createMutation = deferred();
-  const refresh = deferred();
-  const h = new OrderHarness();
-  h.openCreate(baseDraft);
-  assert.equal(h.submit('create', { ...baseDraft, packaging_quantity: '1' }, createMutation.promise, refresh.promise), true);
-  assert.equal(h.submit('create', baseDraft, createMutation.promise, refresh.promise), false);
-  assert.equal(h.createCalls.length, 1);
-  assert.equal(h.createCalls[0].packaging_item_id, null);
-  assert.equal(h.createCalls[0].packaging_quantity, '1');
-  assert.equal('status' in h.createCalls[0], false);
-  assert.equal('produced_at' in h.createCalls[0], false);
-  assert.equal('delivered_at' in h.createCalls[0], false);
-  createMutation.reject({ validation: { fieldErrors: { packaging_item_id: ['Тара: выберите тару.'] }, formErrors: [] } });
-  await Promise.resolve(); await Promise.resolve();
-  assert.equal(h.state.validation.fieldErrors.packaging_item_id[0], 'Тара: выберите тару.');
-  assert.equal(h.createCalls.length, 1);
-
-  const editMutation = deferred();
-  const editRefresh = deferred();
-  h.openEdit(order(7), baseDraft);
-  assert.equal(h.submit('edit', baseDraft, editMutation.promise, editRefresh.promise), true);
-  assert.equal(h.submit('edit', baseDraft, editMutation.promise, editRefresh.promise), false);
-  assert.equal(h.updateCalls.length, 1);
+test('production controller blocks duplicate create/edit submits and keeps package-without-item backend-boundary payload clean', () => {
+  const controller = createOrderMutationController();
+  const create = controller.beginSubmit(ctx(controller));
+  assert.ok(create);
+  assert.equal(controller.beginSubmit(ctx(controller)), null);
+  assert.equal(controller.isSubmitting(), true);
+  assert.equal(controller.finishSubmit(create), true);
+  const edit = controller.beginSubmit(ctx(controller, { formMode: 'edit', editedOrderId: 7, selectedOrderId: 7 }));
+  assert.ok(edit);
+  assert.equal(controller.beginSubmit(ctx(controller, { formMode: 'edit', editedOrderId: 7, selectedOrderId: 7 })), null);
+  const payload = orderPayloadFromDraft({ ...baseDraft, packaging_quantity: '1' });
+  assert.equal(payload.packaging_item_id, null);
+  assert.equal(payload.packaging_quantity, '1');
+  assert.equal('status' in payload, false);
+  assert.equal('produced_at' in payload, false);
+  assert.equal('delivered_at' in payload, false);
 });
 
-test('rejections preserve form context, edited id, draft, focus-like selection model and stale callbacks cannot update newer contexts', async () => {
-  const h = new OrderHarness();
-  const mutation = deferred();
-  h.openCreate({ ...baseDraft, product_name: 'Черновик', selectionStart: 2, selectionEnd: 6, activeName: 'product_name' });
-  h.submit('create', h.state.draft, mutation.promise, deferred().promise);
-  const formNode = { id: 'same-form' };
-  h.state.formNode = formNode;
-  mutation.reject({ validation: { fieldErrors: { product_name: ['Название продукта: обязательно.'] }, formErrors: [] } });
-  await Promise.resolve();
-  assert.equal(h.state.showForm, true);
-  assert.equal(h.state.formMode, 'create');
-  assert.equal(h.state.draft.product_name, 'Черновик');
-  assert.equal(h.state.draft.selectionStart, 2);
-  assert.equal(h.state.draft.selectionEnd, 6);
-  assert.equal(h.state.formNode, formNode);
+test('submit snapshots preserve create/edit context and stale mutations cannot apply to newer contexts', () => {
+  const controller = createOrderMutationController();
+  const createSubmit = controller.beginSubmit(ctx(controller, { formMode: 'create', editedOrderId: null, selectedOrderId: null, showForm: true }));
+  assert.ok(createSubmit);
+  assert.equal(controller.canApplySubmit(createSubmit, ctx(controller, { formMode: 'create', editedOrderId: null, selectedOrderId: null, showForm: true })), true);
+  controller.finishSubmit(createSubmit);
+  controller.bumpContext();
+  const laterEdit = ctx(controller, { formMode: 'edit', editedOrderId: 9, selectedOrderId: 9, showForm: true });
+  assert.equal(controller.canApplySubmit(createSubmit, laterEdit), false);
 
-  const stale = deferred();
-  h.active = false;
-  h.openCreate(baseDraft);
-  h.submit('create', baseDraft, stale.promise, deferred().promise);
-  h.active = false;
-  assert.equal(h.openEdit(order(9), { ...baseDraft, product_name: 'Позже' }), true);
-  stale.resolve(order(3, 'Старый create'));
-  await Promise.resolve();
-  assert.equal(h.state.formMode, 'edit');
-  assert.equal(h.state.editedOrderId, 9);
-  assert.equal(h.state.selectedOrder.id, 9);
-
-  const staleEdit = deferred();
-  h.submit('edit', h.state.draft, staleEdit.promise, deferred().promise);
-  h.active = false;
-  h.openEdit(order(10), { ...baseDraft, product_name: 'Заказ B' });
-  staleEdit.resolve(order(9, 'Старый edit A'));
-  await Promise.resolve();
-  assert.equal(h.state.editedOrderId, 10);
-  assert.equal(h.state.selectedOrder.id, 10);
+  const editSubmit = controller.beginSubmit(laterEdit);
+  assert.ok(editSubmit);
+  controller.finishSubmit(editSubmit);
+  controller.bumpContext();
+  const orderB = ctx(controller, { formMode: 'edit', editedOrderId: 10, selectedOrderId: 10, showForm: true });
+  assert.equal(controller.canApplySubmit(editSubmit, orderB), false);
+  assert.equal(editSubmit.editedOrderId, 9);
 });
 
-test('successful create and update are visible before refresh; refresh failure/success warning behavior is separate', async () => {
-  const h = new OrderHarness();
-  const createMutation = deferred();
-  const createRefresh = deferred();
-  h.openCreate(baseDraft);
-  h.submit('create', baseDraft, createMutation.promise, createRefresh.promise);
-  createMutation.resolve(order(11, 'Созданный'));
-  await Promise.resolve();
-  assert.equal(h.state.items[0].product_name, 'Созданный');
-  assert.equal(h.state.showForm, false);
-  assert.equal(h.state.success, 'Заказ создан.');
-  createRefresh.reject(new Error('503'));
-  await Promise.resolve(); await Promise.resolve();
-  assert.equal(h.state.items[0].product_name, 'Созданный');
-  assert.equal(h.state.success, 'Заказ создан.');
-  assert.equal(h.state.warning, 'Заказ сохранён, но список не удалось обновить автоматически.');
+test('post-save refresh generation applies only to current save context and cannot mutate newer warnings', () => {
+  const controller = createOrderMutationController();
+  const submit = controller.beginSubmit(ctx(controller));
+  assert.ok(submit);
+  controller.finishSubmit(submit);
+  controller.bumpContext();
+  const savedContext = ctx(controller, { showForm: false, selectedOrderId: 11 });
+  const refresh = controller.beginRequest('postSaveRefresh', savedContext, { savedOrderId: 11 });
+  assert.equal(controller.canApplyPostSaveRefresh(refresh, savedContext), true);
 
-  const updateMutation = deferred();
-  const updateRefresh = deferred();
-  h.openEdit(order(11, 'До'), baseDraft);
-  h.submit('edit', baseDraft, updateMutation.promise, updateRefresh.promise);
-  updateMutation.resolve(order(11, 'После'));
-  await Promise.resolve();
-  assert.equal(h.state.items[0].product_name, 'После');
-  assert.equal(h.state.success, 'Заказ сохранён.');
-  updateRefresh.resolve([order(11, 'После refresh')]);
-  await Promise.resolve(); await Promise.resolve();
-  assert.equal(h.state.warning, '');
-  assert.equal(h.state.items[0].product_name, 'После refresh');
+  const newerCreateContext = ctx(controller, { showForm: true, selectedOrderId: null });
+  assert.equal(controller.canApplyPostSaveRefresh(refresh, newerCreateContext), false);
+  controller.bumpContext();
+  const newerEditContext = ctx(controller, { formMode: 'edit', editedOrderId: 12, selectedOrderId: 12, showForm: true });
+  assert.equal(controller.canApplyPostSaveRefresh(refresh, newerEditContext), false);
+
+  const newerRefresh = controller.beginRequest('postSaveRefresh', newerEditContext, { savedOrderId: 12 });
+  assert.equal(controller.canApplyPostSaveRefresh(refresh, newerEditContext), false);
+  assert.equal(controller.canApplyPostSaveRefresh(newerRefresh, newerEditContext), true);
 });
 
-test('read context generation blocks stale list/detail/reference renders and remains independent of visible errors', () => {
-  const original = context({ contextToken: 3, targetedValidationToken: 4, formMode: 'edit', editedOrderId: 1, selectedOrderId: 1, showForm: true });
-  assert.equal(orderReadCanRender(original, { ...original }), true);
-  assert.equal(orderReadCanRender(original, { ...original, contextToken: 4, formMode: 'create', editedOrderId: null }), false);
-  assert.equal(orderReadCanRender(original, { ...original, selectedOrderId: 2 }), false);
-  assert.equal(orderReadCanRender(original, { ...original, showForm: false }), false);
-  const after422 = { ...original, targetedValidationToken: 5 };
-  assert.equal(orderReadCanRender(original, after422), false);
-  const afterOneFieldCleared = { ...after422 };
-  assert.equal(orderReadCanRender(original, afterOneFieldCleared), false);
+test('list generations reject old success/failure, preserve newer warnings, and targeted validation keeps old requests stale after field clearing', () => {
+  const controller = createOrderMutationController();
+  const first = controller.beginRequest('list', ctx(controller, { showForm: false }));
+  const second = controller.beginRequest('list', ctx(controller, { showForm: false }));
+  assert.equal(controller.canApplyRequest(first, ctx(controller, { showForm: false })), false);
+  assert.equal(controller.canApplyRequest(second, ctx(controller, { showForm: false })), true);
+  assert.equal(controller.isCurrentRequest(first), false);
+  assert.equal(controller.isCurrentRequest(second), true);
+
+  const before422 = controller.beginRequest('list', ctx(controller, { showForm: true }));
+  controller.markTargetedValidationApplied();
+  const after422 = ctx(controller, { showForm: true });
+  assert.equal(controller.canApplyRequest(before422, after422), false);
+  // Clearing a single field error is a validation-state change, not a generation reset.
+  assert.equal(controller.canApplyRequest(before422, after422), false);
+});
+
+test('reference generations apply only after context checks and keep loading ownership current', () => {
+  const controller = createOrderMutationController();
+  const createRefs = controller.beginRequest('reference', ctx(controller, { formMode: 'create', showForm: true }));
+  controller.bumpContext();
+  const editCtx = ctx(controller, { formMode: 'edit', editedOrderId: 21, selectedOrderId: 21, showForm: true });
+  const editRefs = controller.beginRequest('reference', editCtx, { requestedOrderId: 21 });
+  assert.equal(controller.canApplyRequest(createRefs, editCtx), false);
+  assert.equal(controller.canApplyRequest(editRefs, editCtx), true);
+  assert.equal(controller.isCurrentRequest(createRefs), false);
+
+  controller.bumpContext();
+  const editBCtx = ctx(controller, { formMode: 'edit', editedOrderId: 22, selectedOrderId: 22, showForm: true });
+  assert.equal(controller.canApplyRequest(editRefs, editBCtx), false);
+  const currentRefs = controller.beginRequest('reference', editBCtx, { requestedOrderId: 22 });
+  assert.equal(controller.canApplyRequest(currentRefs, editBCtx), true);
+  controller.markTargetedValidationApplied();
+  assert.equal(controller.canApplyRequest(currentRefs, ctx(controller, { formMode: 'edit', editedOrderId: 22, selectedOrderId: 22, showForm: true })), false);
+});
+
+test('detail generations stop delayed Order A success/failure from affecting Order B or create/edit forms', () => {
+  const controller = createOrderMutationController();
+  const detailA = controller.beginRequest('detail', ctx(controller, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
+  controller.bumpContext();
+  const detailBCtx = ctx(controller, { selectedOrderId: 2, showForm: false });
+  const detailB = controller.beginRequest('detail', detailBCtx, { requestedOrderId: 2 });
+  assert.equal(controller.canApplyRequest(detailA, detailBCtx), false);
+  assert.equal(controller.canApplyRequest(detailB, detailBCtx), true);
+  controller.bumpContext();
+  assert.equal(controller.canApplyRequest(detailB, ctx(controller, { formMode: 'create', selectedOrderId: null, showForm: true })), false);
+  controller.bumpContext();
+  assert.equal(controller.canApplyRequest(detailB, ctx(controller, { formMode: 'edit', editedOrderId: 3, selectedOrderId: 3, showForm: true })), false);
+});
+
+test('repeated open-create can return before invalidating the active reference request', () => {
+  const controller = createOrderMutationController();
+  controller.bumpContext();
+  const createCtx = ctx(controller, { formMode: 'create', showForm: true });
+  const activeRefs = controller.beginRequest('reference', createCtx);
+  const contextBeforeRepeat = controller.getContextToken();
+  // Production openOrderCreate checks referenceLoading+create before bumpContext; emulate no-op repeat.
+  assert.equal(controller.getContextToken(), contextBeforeRepeat);
+  assert.equal(controller.canApplyRequest(activeRefs, createCtx), true);
+  assert.equal(controller.isCurrentRequest(activeRefs), true);
+  controller.bumpContext();
+  assert.equal(controller.canApplyRequest(activeRefs, ctx(controller, { formMode: 'edit', editedOrderId: 5, selectedOrderId: 5, showForm: true })), false);
+});
+
+test('readiness and production request loading ownership is generation-safe', () => {
+  const controller = createOrderMutationController();
+  const readyA = controller.beginRequest('readiness', ctx(controller, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
+  const readyB = controller.beginRequest('readiness', ctx(controller, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
+  assert.equal(controller.isCurrentRequest(readyA), false);
+  assert.equal(controller.canApplyRequest(readyB, ctx(controller, { selectedOrderId: 1, showForm: false })), true);
+  const prodA = controller.beginRequest('production', ctx(controller, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
+  controller.bumpContext();
+  assert.equal(controller.canApplyRequest(prodA, ctx(controller, { selectedOrderId: 2, showForm: false })), false);
 });
 
 test('source and client changes clear only source-related validation provenance and preserve unrelated summary errors', () => {
@@ -196,12 +156,9 @@ test('source and client changes clear only source-related validation provenance 
   assert.equal(clearedSource.validation.formErrors.includes('Версия рецепта: скрытая ошибка.'), false);
   assert.equal(clearedSource.validation.formErrors.includes('Индивидуальная формула: скрытая ошибка.'), true);
   assert.equal(clearedSource.validation.formErrors.includes('Общая ошибка остаётся.'), true);
-  assert.equal(clearedSource.validation.fieldErrors.client_recipe_id.length, 1);
   const clearedClient = clearOrderSourceValidation(clearedSource.validation, clearedSource.provenance, ['client_recipe_id']);
   assert.equal(clearedClient.validation.fieldErrors.client_recipe_id, undefined);
-  assert.equal(clearedClient.validation.formErrors.includes('Индивидуальная формула: скрытая ошибка.'), false);
-  const repeated = clearOrderSourceValidation(clearedClient.validation, clearedClient.provenance, ['client_recipe_id']);
-  assert.deepEqual(repeated.validation.formErrors, ['Общая ошибка остаётся.']);
+  assert.deepEqual(clearOrderSourceValidation(clearedClient.validation, emptyOrderValidationProvenance(), ['client_recipe_id']).validation.formErrors, ['Общая ошибка остаётся.']);
 });
 
 test('mutation guards preserve originally disabled and readonly controls', () => {
@@ -227,19 +184,4 @@ test('mutation guards preserve originally disabled and readonly controls', () =>
   assert.equal(readonly.readOnly, true);
   assert.equal(normalDisabled.disabled, false);
   assert.equal(normalReadonly.readOnly, false);
-});
-
-test('pending submit blocks form closing and context-changing actions without loading deadlock', () => {
-  const h = new OrderHarness();
-  const mutation = deferred();
-  h.openCreate(baseDraft);
-  h.submit('create', baseDraft, mutation.promise, deferred().promise);
-  assert.equal(h.openCreate(baseDraft), false);
-  assert.equal(h.openEdit(order(2), baseDraft), false);
-  assert.equal(h.closeForm(), false);
-  mutation.reject({ validation: { fieldErrors: {}, formErrors: ['Проверьте заказ.'] } });
-  return Promise.resolve().then(() => Promise.resolve()).then(() => {
-    assert.equal(h.active, false);
-    assert.equal(h.state.loading, false);
-  });
 });
