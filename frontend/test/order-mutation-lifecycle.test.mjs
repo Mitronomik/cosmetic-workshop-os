@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canOpenOrderProductionConfirmation,
   clearOrderSourceValidation,
   createOrderMutationController,
   emptyOrderValidationProvenance,
+  orderOperationError,
+  orderOperationErrorFor,
   orderPayloadFromDraft,
+  orderProductionIsClosed,
+  orderRequestOwnerMatches,
+  ownerFromOrderRequest,
 } from '../dist-tests/order-mutation-lifecycle/order-mutation-lifecycle.js';
 import { mutationDisabled, mutationReadonly, restoreMutationGuards } from '../dist-tests/order-mutation-lifecycle/mutation-lifecycle.js';
 
@@ -146,6 +152,89 @@ test('readiness and production request loading ownership is generation-safe', ()
   const prodA = controller.beginRequest('production', ctx(controller, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
   controller.bumpContext();
   assert.equal(controller.canApplyRequest(prodA, ctx(controller, { selectedOrderId: 2, showForm: false })), false);
+});
+
+
+
+test('production confirmation guard requires current positive readiness and unlocked active order', () => {
+  const active = { is_active: true, status: 'new' };
+  assert.equal(canOpenOrderProductionConfirmation(false, active, undefined), false);
+  assert.equal(canOpenOrderProductionConfirmation(false, active, { can_produce: false, status: 'blocked' }), false);
+  assert.equal(canOpenOrderProductionConfirmation(false, active, { can_produce: false }), false);
+  assert.equal(canOpenOrderProductionConfirmation(false, active, { can_produce: true }), true);
+  assert.equal(canOpenOrderProductionConfirmation(false, { is_active: true, status: 'produced' }, { can_produce: true }), false);
+  assert.equal(canOpenOrderProductionConfirmation(false, { is_active: false, status: 'new' }, { can_produce: true }), false);
+  assert.equal(canOpenOrderProductionConfirmation(true, active, { can_produce: true }), false);
+  assert.equal(orderProductionIsClosed({ is_active: true, status: 'delivered' }), true);
+});
+
+test('readiness transient ownership is order-bound, generation-bound and clears without dropping cached results', () => {
+  const controller = createOrderMutationController();
+  const state = { readinessLoadingOrderId: null, readinessOwner: null, readinessError: null, readinessByOrderId: { 1: { can_produce: true } } };
+  const requestA = controller.beginRequest('readiness', ctx(controller, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
+  state.readinessOwner = ownerFromOrderRequest(requestA, 1, 'readiness');
+  state.readinessLoadingOrderId = 1;
+  assert.deepEqual(state.readinessOwner, { kind: 'readiness', generation: requestA.generation, orderId: 1 });
+  controller.bumpContext();
+  controller.invalidateRequest('readiness');
+  state.readinessOwner = null;
+  state.readinessLoadingOrderId = null;
+  state.readinessError = null;
+  assert.equal(state.readinessByOrderId[1].can_produce, true);
+  const orderBContext = ctx(controller, { selectedOrderId: 2, showForm: false });
+  assert.equal(controller.canApplyRequest(requestA, orderBContext), false);
+  assert.equal(orderRequestOwnerMatches(state.readinessOwner, requestA, 1, 'readiness'), false);
+
+  const requestB = controller.beginRequest('readiness', orderBContext, { requestedOrderId: 2 });
+  state.readinessOwner = ownerFromOrderRequest(requestB, 2, 'readiness');
+  state.readinessLoadingOrderId = 2;
+  assert.equal(orderRequestOwnerMatches(state.readinessOwner, requestA, 1, 'readiness'), false);
+  assert.equal(orderRequestOwnerMatches(state.readinessOwner, requestB, 2, 'readiness'), true);
+  state.readinessError = orderOperationError(2, 'Ошибка проверки B');
+  assert.equal(orderOperationErrorFor(state.readinessError, 1), '');
+  assert.equal(orderOperationErrorFor(state.readinessError, 2), 'Ошибка проверки B');
+  if (controller.canApplyRequest(requestB, orderBContext) && orderRequestOwnerMatches(state.readinessOwner, requestB, 2, 'readiness')) {
+    state.readinessLoadingOrderId = null;
+    state.readinessOwner = null;
+  }
+  assert.equal(state.readinessLoadingOrderId, null);
+});
+
+test('production and production-history ownership are separate and stale callbacks cannot navigate or clear newer loading', () => {
+  const controller = createOrderMutationController();
+  const state = { productionLoadingOrderId: null, productionOwner: null, historyOwner: null, productionError: null, productionByOrderId: { 1: { id: 101 } }, navigated: false };
+  const productionA = controller.beginRequest('production', ctx(controller, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
+  state.productionOwner = ownerFromOrderRequest(productionA, 1, 'production');
+  state.productionLoadingOrderId = 1;
+  assert.deepEqual(state.productionOwner, { kind: 'production', generation: productionA.generation, orderId: 1 });
+
+  controller.bumpContext();
+  controller.invalidateRequest('production');
+  state.productionOwner = null;
+  state.historyOwner = null;
+  state.productionLoadingOrderId = null;
+  state.productionError = null;
+  assert.equal(state.productionByOrderId[1].id, 101);
+  const orderBContext = ctx(controller, { selectedOrderId: 2, showForm: false });
+  assert.equal(controller.canApplyRequest(productionA, orderBContext), false);
+
+  const historyA = controller.beginRequest('productionHistory', orderBContext, { requestedOrderId: 2 });
+  state.historyOwner = ownerFromOrderRequest(historyA, 2, 'productionHistory');
+  state.productionLoadingOrderId = 2;
+  const productionB = controller.beginRequest('production', orderBContext, { requestedOrderId: 2 });
+  state.productionOwner = ownerFromOrderRequest(productionB, 2, 'production');
+  state.productionLoadingOrderId = 2;
+  assert.equal(controller.canApplyRequest(historyA, orderBContext), true);
+  assert.equal(orderRequestOwnerMatches(state.productionOwner, productionB, 2, 'production'), true);
+  assert.equal(orderRequestOwnerMatches(state.productionOwner, historyA, 2, 'productionHistory'), false);
+  controller.bumpContext();
+  controller.invalidateRequest('productionHistory');
+  const laterContext = ctx(controller, { selectedOrderId: 3, showForm: false });
+  if (controller.canApplyRequest(historyA, laterContext) && orderRequestOwnerMatches(state.historyOwner, historyA, 2, 'productionHistory')) state.navigated = true;
+  assert.equal(state.navigated, false);
+  state.productionError = orderOperationError(2, 'Ошибка производства B');
+  assert.equal(orderOperationErrorFor(state.productionError, 1), '');
+  assert.equal(orderOperationErrorFor(state.productionError, 2), 'Ошибка производства B');
 });
 
 test('source and client changes clear only source-related validation provenance and preserve unrelated summary errors', () => {

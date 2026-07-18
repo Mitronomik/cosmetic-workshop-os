@@ -12,7 +12,7 @@ export type OrderContextSnapshot = {
 };
 export type OrderContextState = OrderContextSnapshot;
 
-export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production';
+export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory';
 export type OrderRequestSnapshot = OrderContextSnapshot & {
   kind: OrderRequestKind;
   generation: number;
@@ -21,6 +21,15 @@ export type OrderRequestSnapshot = OrderContextSnapshot & {
   requestedOrderId?: number | null;
 };
 export type OrderSubmitSnapshot = OrderContextSnapshot & { submitToken: number };
+
+export type OrderTransientRequestOwner = {
+  kind: 'readiness' | 'production' | 'productionHistory';
+  generation: number;
+  orderId: number;
+} | null;
+export type OrderOperationError = { orderId: number; message: string } | null;
+export type OrderProductionGuardOrder = { is_active: boolean; status: string } | null | undefined;
+export type OrderProductionGuardReadiness = { can_produce?: boolean } | null | undefined;
 
 export type OrderFormErrorOrigin = 'recipe_source' | 'recipe_version_id' | 'client_recipe_id';
 export type OrderValidationProvenance = { formErrors: Array<{ origin: OrderFormErrorOrigin; message: string }> };
@@ -57,6 +66,7 @@ export class OrderMutationController {
     detail: 0,
     readiness: 0,
     production: 0,
+    productionHistory: 0,
   };
 
   snapshot(workspace: OrderWorkspaceState): OrderContextSnapshot {
@@ -79,6 +89,7 @@ export class OrderMutationController {
     this.invalidateRequest('detail');
     this.invalidateRequest('readiness');
     this.invalidateRequest('production');
+    this.invalidateRequest('productionHistory');
     return this.contextToken;
   }
 
@@ -139,6 +150,44 @@ export class OrderMutationController {
 
 export function createOrderMutationController(): OrderMutationController {
   return new OrderMutationController();
+}
+
+
+export function orderProductionIsClosed(order: OrderProductionGuardOrder): boolean {
+  return !order?.is_active || ['cancelled', 'archived', 'delivered', 'produced'].includes(order.status);
+}
+
+export function canOpenOrderProductionConfirmation(
+  mutationActive: boolean,
+  order: OrderProductionGuardOrder,
+  readiness: OrderProductionGuardReadiness,
+): boolean {
+  return !mutationActive && !orderProductionIsClosed(order) && readiness?.can_produce === true;
+}
+
+export function ownerFromOrderRequest(
+  snapshot: OrderRequestSnapshot,
+  orderId: number,
+  kind: NonNullable<OrderTransientRequestOwner>['kind'],
+): OrderTransientRequestOwner {
+  return { kind, generation: snapshot.generation, orderId };
+}
+
+export function orderRequestOwnerMatches(
+  owner: OrderTransientRequestOwner,
+  snapshot: OrderRequestSnapshot,
+  orderId: number,
+  kind: NonNullable<OrderTransientRequestOwner>['kind'],
+): boolean {
+  return owner?.kind === kind && owner.generation === snapshot.generation && owner.orderId === orderId;
+}
+
+export function orderOperationError(orderId: number, message: string): OrderOperationError {
+  return { orderId, message };
+}
+
+export function orderOperationErrorFor(error: OrderOperationError, orderId: number): string {
+  return error?.orderId === orderId ? error.message : '';
 }
 
 export function clearOrderSourceValidation(
