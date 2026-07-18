@@ -2,17 +2,17 @@
 
 ## Current phase
 
-Slice A3 remains IN PROGRESS. PR #118 / Slice A3.4 Client Recipe structured validation is merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; exact published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke.
+Slice A3 remains IN PROGRESS. Current runtime baseline is PR #120 / A3.6 Client Feedback structured validation, merged at `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`; published head `e148220ac9ad08a0fd952482a0b293f1f2d22bad` passed complete automated exact-head smoke with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
 
-Current focused implementation: **PR #119 / A3.5 — Client Wishes structured validation**. PR #119 is open on GitHub and is not merged. A3.5 is not DONE and has not passed exact-head browser smoke yet.
+A3.5 Client Wishes structured validation is DONE: PR #119 merged at `e53e7852c8b384915fb77b59345170c43671151c`; verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`; exact-head smoke PASS. A3.6 Client Feedback structured validation is DONE, merged, and exact-head verified.
 
-Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices and are excluded from the current runtime scope.
+The next focused runtime slice is **A3.7 — Orders structured validation**. This documentation-only synchronization does not implement A3.7 and assigns no future GitHub PR number. Orders, Production Readiness, and Production Confirmation remain separate runtime scopes; Production Readiness and Production Confirmation must not be silently combined.
 
 ## Current next step
 
-- Review PR #119 and run external focused browser smoke against the final published PR #119 head before merge.
-- Do not mark A3.5 merged, DONE, or exact-head verified until merge and exact-head verification actually happen.
-- Keep Client Feedback, Orders, Production Readiness, Production Confirmation, schema/migration/dependency/CSS changes, browser dependency installation, CI, smoke-runner docs, and unrelated runtime behavior out of PR #119.
+- Prepare a separate focused runtime PR for A3.7 Orders structured validation.
+- Keep A3.7 limited to existing Order create/edit form validation and safe mutation lifecycle.
+- Do not include Production Readiness, Production Confirmation, order schema/status redesign, migrations, cost/tax/margin work, responsive-table containment, dependencies, CI, or unrelated routes.
 
 ## Done
 - Architecture draft
@@ -88,16 +88,13 @@ Client Feedback, Orders, Production Readiness, and Production Confirmation remai
 
 ## In progress
 
-- PR #119 is open and awaiting review plus external exact-head browser smoke against the final published PR head.
-- A3.5 is not marked DONE, merged, or exact-head verified.
-- Focused backend Client Wishes/Feedback tests now pass in this PR branch; the old missing TestClient dependency note is historical and no longer an active blocker for this slice.
-- Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices.
+- Slice A3 remains IN PROGRESS after A3.6 because Orders, Production Readiness, and Production Confirmation remain separate future slices.
+- PR #96 is reviewed as superseded by current main; actual GitHub state is open, so closure remains pending and is not claimed here.
 
 ## Next
 
-- Complete review of PR #119.
-- Run focused external browser smoke against the final published GitHub PR #119 head and record the result before merge.
-- After A3.5 is merged and exact-head verified, choose the next A3 candidate separately; Client Feedback is the next validation candidate, while Orders, Production Readiness, and Production Confirmation remain separate future slices.
+- Prepare A3.7 Orders structured validation as a separate focused runtime PR with no future PR number assigned yet.
+- Keep Production Readiness, Production Confirmation, schema/migration/dependency/CSS changes, browser dependency installation, CI, responsive-table containment, and unrelated runtime behavior out of A3.7.
 
 ## Important notes
 - PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.
@@ -936,7 +933,7 @@ Import CSV/XLSX draft backend foundation.
 
 ## 2026-07-17 — A3.5 Client Wishes structured validation branch
 
-Current phase repaired: Slice A3 remains IN PROGRESS. PR #118 / A3.4 is merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; exact published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke. A3.5 Client Wishes structured validation is the active branch. Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices.
+Historical A3.5 branch baseline at the time: Slice A3 was still open after PR #118 / A3.4 merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; exact published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke. A3.5 Client Wishes structured validation was the active branch. Later entries supersede this historical status.
 
 Work completed in this branch:
 - Migrated the existing Client Wish create form to shared structured backend validation with approved inline fields only.
@@ -959,4 +956,20 @@ A3.5 verification run in this branch:
 - PR #119 / A3.5 merged at `e53e7852c8b384915fb77b59345170c43671151c`.
 - Verified PR #119 runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`; complete external exact-head smoke: PASS.
 - A3.5: DONE.
-- A3.6 Client Feedback structured validation: IN PROGRESS.
+- A3.6 Client Feedback structured validation: DONE in PR #120; published head `e148220ac9ad08a0fd952482a0b293f1f2d22bad`, merge commit `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`, exact-head smoke PASS.
+
+## 2026-07-18 — PR #120 A3.6 Client Feedback exact-head verification and memory sync
+
+- PR #120 title: `A3.6 — Client Feedback structured validation`.
+- Published head: `e148220ac9ad08a0fd952482a0b293f1f2d22bad`.
+- Merge commit/current main baseline: `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`.
+- Exact-head smoke verdict: `PASS — FULL AUTOMATED SMOKE PASSED`. Smoke evidence was generated externally and is not committed to the repository.
+- Automated checks recorded for the exact-head smoke: frontend form-validation tests `18/18 PASS`; frontend targeted-validation-update tests `61/61 PASS`; frontend build `PASS`; concurrent frontend validation tests `PASS`; focused backend Client Wishes/Feedback tests `7/7 PASS`; smoke Bash syntax check `PASS`; browser-runner Node syntax check `PASS`.
+- Browser scenarios covered: normal Client Feedback creation; backend-authoritative structured `422` validation; draft/focus/caret/selection preservation; no write after rejected validation; duplicate-submit protection; successful create followed by controlled refresh failure; stale background response protection; Client Feedback append-only boundary; exact request URL/client ID/body/count assertions; backend state verification.
+- Controlled failures were limited to the expected `422` validation response and expected `503` post-create refresh failure. Unexpected console errors: `0`. Unexpected network failures: `0`.
+- Exact-head worktree was clean after smoke, and final HEAD remained `e148220ac9ad08a0fd952482a0b293f1f2d22bad`.
+- Git comparison confirmed `e148220ac9ad08a0fd952482a0b293f1f2d22bad` is an ancestor of `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6` with no file-tree differences between the tested head and the merge commit.
+- Known limitation: the detailed smoke artifacts are external evidence and are not stored in the repository; this documentation entry records the durable summary only.
+- PR #96 / `PR96 — Workshop profile settings foundation` was reviewed as superseded by the current Workshop Profile implementation. Current main already includes backend-owned persistence, schemas, `GET`/`PUT /api/settings/workshop-profile`, length/control-character validation, unrelated-setting preservation, approved `editable_now` status, Settings UI, explicit Save/Cancel behavior, focused backend tests, current documentation, and later Markdown/PDF report-document integration that preserves existing documents. No unique required PR #96 behavior was found missing.
+- Actual GitHub state for PR #96 during this sync: `open`; closure is still pending and is not claimed here.
+- Next runtime slice: A3.7 Orders structured validation, with no future PR number assigned.

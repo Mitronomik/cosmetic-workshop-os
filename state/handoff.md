@@ -350,5 +350,17 @@ Test-report boundary: frontend validation parser and targeted DOM tests are beha
 
 ## 2026-07-18 — A3.6 handoff
 - Baseline recorded: PR #119 / A3.5 merged at `e53e7852c8b384915fb77b59345170c43671151c`; verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`; complete external exact-head smoke PASS.
-- A3.5 is DONE. A3.6 Client Feedback structured validation is IN PROGRESS.
-- This slice is limited to Client Feedback creation in the client card; feedback remains append-only.
+- A3.5 is DONE. A3.6 Client Feedback structured validation is DONE in PR #120; published head `e148220ac9ad08a0fd952482a0b293f1f2d22bad`, merge commit `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`, exact-head smoke PASS.
+- This slice was limited to Client Feedback creation in the client card; feedback remains append-only.
+
+## 2026-07-18 — Project memory sync after PR #120
+
+Current main SHA: `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`. PR #120 / `A3.6 — Client Feedback structured validation` is merged at that commit; published head `e148220ac9ad08a0fd952482a0b293f1f2d22bad` passed complete automated exact-head smoke with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
+
+Automated evidence recorded for PR #120: frontend form-validation `18/18 PASS`, frontend targeted-validation-update `61/61 PASS`, frontend build `PASS`, concurrent frontend validation tests `PASS`, focused backend Client Wishes/Feedback tests `7/7 PASS`, smoke Bash syntax check `PASS`, and browser-runner Node syntax check `PASS`. Browser smoke covered normal Client Feedback creation, structured backend `422`, draft/focus/caret/selection preservation, no write after rejected validation, duplicate-submit protection, successful create plus controlled refresh failure, stale background response protection, append-only boundary, exact request URL/client ID/body/count assertions, and backend state verification. Controlled failures were limited to expected `422` validation and expected `503` post-create refresh failure. Unexpected browser console errors: `0`; unexpected network failures: `0`. Exact-head repository cleanup passed. Git comparison found no file-tree difference between the tested head and merge commit. Smoke artifacts were generated externally and are not committed.
+
+PR #96 / `PR96 — Workshop profile settings foundation` was reviewed as superseded by current main. No unique required behavior is missing: current code already includes backend-owned Workshop Profile persistence, schemas, `GET`/`PUT /api/settings/workshop-profile`, validation, unrelated-setting preservation, approved editable status, Settings UI with Save/Cancel, focused tests, documentation, and Markdown/PDF report-document integration that does not mutate existing generated documents. Actual GitHub state during this handoff: `open`; closure remains pending and is not claimed.
+
+This documentation-only PR scope is limited to `README.md`, `docs/implementation-plan.md`, `state/current-focus.md`, `state/progress.md`, and `state/handoff.md`. It changes no runtime code, backend, frontend, migrations, dependencies, CI, tests, or smoke infrastructure.
+
+Next runtime task: **A3.7 — Orders structured validation**. No future PR number exists yet. A3.7 must not include order schema changes, migrations, status workflow redesign, Production Readiness, Production Confirmation, inventory/production write-offs, cost/tax/margin implementation, responsive-table redesign, dependency or CI changes, or unrelated routes.
