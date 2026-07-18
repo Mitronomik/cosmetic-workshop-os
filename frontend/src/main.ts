@@ -1,6 +1,6 @@
 import { clearFieldValidation, clearIndexedCollectionValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
 import { applyValidationToClientForm, applyValidationToClientRecipeCompositionForm, applyValidationToClientRecipeCreateForm, applyValidationToClientWishForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm, applyValidationToPackagingItemForm, applyValidationToRecipeTemplateForm, applyValidationToRecipeVersionForm, applyValidationToStockMovementForm } from './targeted-validation-update.js';
-import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
+import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -3033,7 +3033,43 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
     if (rejectOnError) throw error;
   });
 }
-function refreshClientFeedback() { const clientId = clientCardState.clientId; if (!clientId) return Promise.resolve(); if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom(); clientCardState.feedbackStatus = 'loading'; if (!clientWishFormDomLocked()) render(); return fetchClientFeedback(clientId).then((feedback) => { if (clientCardState.clientId !== clientId) return; clientCardState.feedback = feedback; clientCardState.feedbackStatus = 'ready'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }).catch(() => { if (clientCardState.clientId !== clientId) return; clientCardState.feedbackStatus = 'error'; clientCardState.feedbackError = 'Не удалось загрузить обратную связь клиента. Обновите карточку и попробуйте ещё раз.'; if (clientWishFormDomLocked()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function clientCardCanRenderCapturedClientWishContext(clientId: number, cardContextToken: number, wishContextToken: number) {
+  return clientCardRenderAllowedForCapturedContext({
+    capturedClientId: clientId,
+    currentClientId: clientCardState.clientId,
+    capturedCardContextToken: cardContextToken,
+    currentCardContextToken: clientCardContextToken,
+    capturedWishContextToken: wishContextToken,
+    currentWishContextToken: clientWishContextToken,
+    wishFormDomLocked: clientWishFormDomLocked(),
+  });
+}
+function refreshClientFeedback() {
+  const clientId = clientCardState.clientId;
+  if (!clientId) return Promise.resolve();
+  const cardContextToken = clientCardContextToken;
+  const wishContextToken = clientWishContextToken;
+  const isCurrentClientCardFeedback = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
+  const canRenderFeedbackResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, wishContextToken);
+  if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();
+  clientCardState.feedbackStatus = 'loading';
+  if (canRenderFeedbackResponse()) render();
+  return fetchClientFeedback(clientId).then((feedback) => {
+    if (!isCurrentClientCardFeedback()) return;
+    clientCardState.feedback = feedback;
+    clientCardState.feedbackStatus = 'ready';
+    if (!canRenderFeedbackResponse()) return;
+    syncClientCardDraftFormsFromDom();
+    render();
+  }).catch(() => {
+    if (!isCurrentClientCardFeedback()) return;
+    clientCardState.feedbackStatus = 'error';
+    clientCardState.feedbackError = 'Не удалось загрузить обратную связь клиента. Обновите карточку и попробуйте ещё раз.';
+    if (!canRenderFeedbackResponse()) return;
+    syncClientCardDraftFormsFromDom();
+    render();
+  });
+}
 function toggleClientWishForm() { if (clientCardState.savingWish) return; if (clientCardState.showWishForm) syncClientCardDraftFormsFromDom(); clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = !clientCardState.showWishForm; if (clientCardState.showWishForm) clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; clientCardState.wishMessage = ''; clientCardState.wishRefreshWarning = ''; render(); }
 function closeClientWishForm() { if (clientCardState.savingWish) return; clientWishCreateLifecycle.invalidate(); clientWishContextToken += 1; clientWishValidation = emptyFormValidationState(); clientCardState.showWishForm = false; clientCardState.wishForm = emptyClientWishForm(); clientCardState.wishError = ''; render(); }
 function toggleArchivedClientWishes() { if (clientCardState.savingWish) return; clientWishValidation = emptyFormValidationState(); clientCardState.includeArchivedWishes = !clientCardState.includeArchivedWishes; refreshClientWishes(); }
@@ -3086,6 +3122,7 @@ function submitClientWishForm(event: SubmitEvent) {
     clientCardState.wishError = '';
     clientCardState.wishMessage = '';
     clientCardState.wishRefreshWarning = '';
+    clientWishContextToken += 1;
     applyValidationToClientWishForm(clientWishValidation);
     restoreClientWishMutationControls(document);
     announceAssertive('Не удалось сохранить пожелание. Проверьте подсказки в форме.');

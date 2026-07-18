@@ -95,6 +95,24 @@ export function createRecipeMutationLifecycle() {
   };
 }
 
+
+export type ClientCardRenderContextState = {
+  readonly capturedClientId: number;
+  readonly currentClientId: number | null;
+  readonly capturedCardContextToken: number;
+  readonly currentCardContextToken: number;
+  readonly capturedWishContextToken: number;
+  readonly currentWishContextToken: number;
+  readonly wishFormDomLocked: boolean;
+};
+
+export function clientCardRenderAllowedForCapturedContext(state: ClientCardRenderContextState): boolean {
+  return state.currentClientId === state.capturedClientId
+    && state.currentCardContextToken === state.capturedCardContextToken
+    && state.currentWishContextToken === state.capturedWishContextToken
+    && !state.wishFormDomLocked;
+}
+
 export type StockMovementLotDetailRequest = {
   readonly token: number;
   readonly lotId: number;
