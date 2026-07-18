@@ -1608,8 +1608,12 @@ test('client card source guards use card-level feedback validation contracts wit
   assert.ok(renderGuard.includes('clientCardDomLocked: clientCardFormDomLocked()'));
   assert.equal(renderGuard.includes(obsoleteWishToken), false);
 
-  for (const name of ['startEditClient', 'closeClientEdit', 'deactivateClient', 'toggleClientWishForm', 'closeClientWishForm', 'toggleArchivedClientWishes', 'changeClientWishStatus', 'archiveClientWishFromCard', 'toggleClientFeedbackForm', 'closeClientFeedbackForm', 'submitClientWishForm', 'submitClientFeedbackForm']) {
-    assert.ok(mainSourceFunction(name).includes('clientCardFormDomLocked()'), `${name} has an event-level card DOM lock guard`);
+  for (const name of ['submitClientForm', 'loadClients', 'openClientCreateForm', 'hideClientCreateForm', 'startEditClient', 'closeClientEdit', 'deactivateClient', 'updateClientFilterSearch', 'updateClientStatusFilter', 'resetClientFilters', 'clearClientFilter', 'toggleClientWishForm', 'closeClientWishForm', 'toggleArchivedClientWishes', 'changeClientWishStatus', 'archiveClientWishFromCard', 'toggleClientFeedbackForm', 'closeClientFeedbackForm', 'submitClientWishForm', 'submitClientFeedbackForm']) {
+    const source = mainSourceFunction(name);
+    assert.ok(
+      source.includes('clientCardFormDomLocked()') || source.includes('clientPageMutationActive()'),
+      `${name} has an event-level card/page DOM lock guard`,
+    );
   }
 
   const feedbackSubmit = mainSourceFunction('submitClientFeedbackForm');
@@ -1692,6 +1696,96 @@ test('card-level targeted validation token controls delayed background renders',
   assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(captured), true, 'ordinary form open/close does not stale valid background response');
 });
 
+
+
+test('client page mutation controls lock parent Clients form and toolbar for feedback and wish creates', () => {
+  for (const mode of ['feedback', 'wish']) {
+    reset();
+    const clientForm = mkForm('client');
+    const name = addField(clientForm, 'full_name');
+    const notes = mockDoc.createElement('textarea'); notes.setAttribute('name', 'notes'); clientForm.appendChild(notes);
+    const status = mockDoc.createElement('select'); status.setAttribute('name', 'status'); clientForm.appendChild(status);
+    const preReadonly = addField(clientForm, 'pre_readonly'); preReadonly.readOnly = true;
+    const preDisabled = mockDoc.createElement('button'); preDisabled.setAttribute('data-action', 'archive-client'); preDisabled.disabled = true;
+    const submit = mockDoc.createElement('button'); submit.setAttribute('type', 'submit'); clientForm.appendChild(submit);
+    const reload = mockDoc.createElement('button'); reload.setAttribute('data-action', 'reload-clients');
+    const open = mockDoc.createElement('button'); open.setAttribute('data-action', 'open-client-create');
+    const search = mockDoc.createElement('input'); search.setAttribute('data-action', 'filter-clients-search');
+    const filter = mockDoc.createElement('select'); filter.setAttribute('data-action', 'filter-clients-status');
+    const resetFilters = mockDoc.createElement('button'); resetFilters.setAttribute('data-action', 'reset-client-filters');
+    mockDoc.body.appendChild(clientForm); mockDoc.body.appendChild(preDisabled); mockDoc.body.appendChild(reload); mockDoc.body.appendChild(open); mockDoc.body.appendChild(search); mockDoc.body.appendChild(filter); mockDoc.body.appendChild(resetFilters);
+
+    if (mode === 'feedback') lifecycle.disableClientFeedbackCreateMutationControls(mockDoc.body);
+    else lifecycle.disableClientWishCreateMutationControls(mockDoc.body);
+
+    assert.equal(name.readOnly, true, `${mode}: client text input readonly`);
+    assert.equal(notes.readOnly, true, `${mode}: client textarea readonly`);
+    assert.equal(status.disabled, true, `${mode}: client select disabled`);
+    assert.equal(submit.disabled, true, `${mode}: client form button disabled`);
+    assert.equal(reload.disabled, true, `${mode}: reload disabled`);
+    assert.equal(open.disabled, true, `${mode}: open create disabled`);
+    assert.equal(search.disabled, true, `${mode}: search disabled`);
+    assert.equal(filter.disabled, true, `${mode}: status filter disabled`);
+    assert.equal(resetFilters.disabled, true, `${mode}: reset filters disabled`);
+
+    if (mode === 'feedback') lifecycle.restoreClientFeedbackMutationControls(mockDoc.body);
+    else lifecycle.restoreClientWishMutationControls(mockDoc.body);
+
+    assert.equal(name.readOnly, false, `${mode}: helper restores client text input`);
+    assert.equal(notes.readOnly, false, `${mode}: helper restores client textarea`);
+    assert.equal(status.disabled, false, `${mode}: helper restores client select`);
+    assert.equal(submit.disabled, false, `${mode}: helper restores client button`);
+    assert.equal(reload.disabled, false, `${mode}: helper restores reload`);
+    assert.equal(open.disabled, false, `${mode}: helper restores open create`);
+    assert.equal(search.disabled, false, `${mode}: helper restores search`);
+    assert.equal(filter.disabled, false, `${mode}: helper restores status filter`);
+    assert.equal(resetFilters.disabled, false, `${mode}: helper restores reset`);
+    assert.equal(preReadonly.readOnly, true, `${mode}: pre-readonly remains readonly`);
+    assert.equal(preDisabled.disabled, true, `${mode}: pre-disabled archive remains disabled`);
+  }
+});
+
+function createClientPageHarness() {
+  const state = { clientSubmitting: false, savingWish: false, savingFeedback: false, clientsStatus: 'ready', items: ['old'], renders: 0, submits: 0, filters: { search: '', status: 'active' }, includeInactive: false, showCreate: false };
+  const locked = () => state.savingWish || state.savingFeedback;
+  const pageActive = () => state.clientSubmitting || locked();
+  const render = () => { state.renders += 1; };
+  const submitClientForm = () => { if (pageActive()) return false; state.submits += 1; state.clientSubmitting = true; return true; };
+  const action = (fn) => { if (pageActive()) return false; fn(); return true; };
+  const loadCompletion = (items) => { state.items = items; state.clientsStatus = 'ready'; if (!locked()) render(); };
+  return { state, submitClientForm, openCreate: () => action(() => { state.showCreate = true; render(); }), search: (value) => action(() => { state.filters.search = value; render(); }), status: (value) => action(() => { state.filters.status = value; state.includeInactive = value !== 'active'; }), reset: () => action(() => { state.filters = { search: '', status: 'active' }; render(); }), reload: () => action(() => { state.clientsStatus = 'loading'; render(); }), loadCompletion };
+}
+
+test('client page mutation predicate blocks parent submit/filter/reload actions while feedback or wish POST is pending', () => {
+  for (const mode of ['savingFeedback', 'savingWish']) {
+    const h = createClientPageHarness();
+    h.state[mode] = true;
+    assert.equal(h.submitClientForm(), false, `${mode}: client form submit blocked`);
+    assert.equal(h.openCreate(), false, `${mode}: open create blocked`);
+    assert.equal(h.search('anna'), false, `${mode}: search blocked`);
+    assert.equal(h.status('all'), false, `${mode}: status filter blocked`);
+    assert.equal(h.reset(), false, `${mode}: reset blocked`);
+    assert.equal(h.reload(), false, `${mode}: reload blocked`);
+    assert.equal(h.state.renders, 0, `${mode}: blocked actions do not render over locked card`);
+    h.state[mode] = false;
+    assert.equal(h.submitClientForm(), true, `${mode}: normal submit works after unlock`);
+  }
+});
+
+test('client list completion during wish or feedback POST updates safe state without replacing live card DOM', () => {
+  for (const mode of ['savingFeedback', 'savingWish']) {
+    const h = createClientPageHarness();
+    h.state.clientsStatus = 'loading';
+    h.state[mode] = true;
+    h.loadCompletion(['new']);
+    assert.deepEqual(h.state.items, ['new'], `${mode}: safe list state updates`);
+    assert.equal(h.state.clientsStatus, 'ready', `${mode}: page does not stay loading`);
+    assert.equal(h.state.renders, 0, `${mode}: no full render while card DOM is locked`);
+    h.state[mode] = false;
+    h.loadCompletion(['fresh']);
+    assert.equal(h.state.renders, 1, `${mode}: current completion can render after unlock`);
+  }
+});
 
 test('client feedback mutation guard disables and restores follow-up checkbox correctly', () => {
   reset();

@@ -220,6 +220,23 @@ export function createRequestGenerationLifecycle() {
   };
 }
 
+
+function disableClientPageContextMutationControls(root: ParentNode = document): void {
+  const clientForm = root.querySelector<HTMLFormElement>('[data-form="client"]');
+  if (clientForm) {
+    clientForm.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
+      const type = input.type || input.getAttribute('type') || 'text';
+      if (['checkbox', 'radio', 'button', 'submit', 'reset'].includes(type)) mutationDisabled(input);
+      else mutationReadonly(input);
+    });
+    clientForm.querySelectorAll<HTMLTextAreaElement>('textarea').forEach(mutationReadonly);
+    clientForm.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
+    clientForm.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+  }
+  const guarded = '[data-action="reload-clients"], [data-action="open-client-create"], [data-action="hide-client-create"], [data-action="filter-clients-search"], [data-action="filter-clients-status"], [data-action="reset-client-filters"], [data-action="clear-client-filter"], [data-action="start-client-edit"], [data-action="archive-client"]';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
 export function disableClientWishCreateMutationControls(root: ParentNode = document): void {
   const form = root.querySelector<HTMLFormElement>('[data-form="client-wish"]');
   if (form) {
@@ -230,6 +247,7 @@ export function disableClientWishCreateMutationControls(root: ParentNode = docum
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     if (submit) submit.textContent = 'Сохраняем…';
   }
+  disableClientPageContextMutationControls(root);
   const guarded = '[data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="start-client-edit"], [data-action="cancel-client-edit"], [data-action="archive-client"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"], [data-action="toggle-client-feedback-form"], [data-action="close-client-feedback-form"], [data-form="client-feedback"] input, [data-form="client-feedback"] textarea, [data-form="client-feedback"] select, [data-form="client-feedback"] button';
   root.querySelectorAll(guarded).forEach(mutationDisabled);
 }
@@ -249,6 +267,7 @@ export function disableClientFeedbackCreateMutationControls(root: ParentNode = d
     const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
     if (submit) submit.textContent = 'Сохраняем…';
   }
+  disableClientPageContextMutationControls(root);
   const guarded = '[data-action="toggle-client-feedback-form"], [data-action="close-client-feedback-form"], [data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"], [data-action="start-client-edit"], [data-action="cancel-client-edit"], [data-action="archive-client"], [data-form="client-wish"] input, [data-form="client-wish"] textarea, [data-form="client-wish"] select, [data-form="client-wish"] button';
   root.querySelectorAll(guarded).forEach(mutationDisabled);
 }
