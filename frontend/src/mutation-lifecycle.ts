@@ -95,6 +95,24 @@ export function createRecipeMutationLifecycle() {
   };
 }
 
+
+export type ClientCardRenderContextState = {
+  readonly capturedClientId: number;
+  readonly currentClientId: number | null;
+  readonly capturedCardContextToken: number;
+  readonly currentCardContextToken: number;
+  readonly capturedTargetedValidationToken: number;
+  readonly currentTargetedValidationToken: number;
+  readonly wishFormDomLocked: boolean;
+};
+
+export function clientCardRenderAllowedForCapturedContext(state: ClientCardRenderContextState): boolean {
+  return state.currentClientId === state.capturedClientId
+    && state.currentCardContextToken === state.capturedCardContextToken
+    && state.currentTargetedValidationToken === state.capturedTargetedValidationToken
+    && !state.wishFormDomLocked;
+}
+
 export type StockMovementLotDetailRequest = {
   readonly token: number;
   readonly lotId: number;
@@ -199,6 +217,27 @@ export function createRequestGenerationLifecycle() {
       return currentToken;
     },
   };
+}
+
+export function disableClientWishCreateMutationControls(root: ParentNode = document): void {
+  const form = root.querySelector<HTMLFormElement>('[data-form="client-wish"]');
+  if (form) {
+    form.setAttribute('aria-busy', 'true');
+    form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach(mutationReadonly);
+    form.querySelectorAll<HTMLSelectElement>('select').forEach(mutationDisabled);
+    form.querySelectorAll<HTMLButtonElement>('button').forEach(mutationDisabled);
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submit) submit.textContent = 'Сохраняем…';
+  }
+  const guarded = '[data-action="toggle-client-wish-form"], [data-action="close-client-wish-form"], [data-action="toggle-archived-client-wishes"], [data-action="start-client-edit"], [data-action="cancel-client-edit"], [data-action="archive-client"], [data-action="change-client-wish-status"], [data-action="archive-client-wish"], [data-action="toggle-client-feedback-form"], [data-action="close-client-feedback-form"], [data-form="client-feedback"] input, [data-form="client-feedback"] textarea, [data-form="client-feedback"] select, [data-form="client-feedback"] button';
+  root.querySelectorAll(guarded).forEach(mutationDisabled);
+}
+
+export function restoreClientWishMutationControls(root: ParentNode = document): void {
+  root.querySelectorAll<HTMLFormElement>('[data-form="client-wish"]').forEach((form) => form.removeAttribute('aria-busy'));
+  restoreMutationGuards(root);
+  const submit = root.querySelector<HTMLButtonElement>('[data-form="client-wish"] button[type="submit"]');
+  if (submit) submit.textContent = 'Сохранить пожелание';
 }
 
 export type ClientRecipePageMutationState = { createSubmitting: boolean; compositionSubmitting: boolean; archiveRestoreSubmittingId: number | null };

@@ -54,6 +54,12 @@ export function applyValidationToClientRecipeCompositionForm(validation: FormVal
   applyValidationToForm(form, validation, 'client-recipe-composition', 'Проверьте состав индивидуального рецепта');
 }
 
+export function applyValidationToClientWishForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="client-wish"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'client-wish', 'Проверьте пожелание клиента');
+}
+
 function applyValidationToForm(
   form: HTMLFormElement,
   validation: FormValidationState,

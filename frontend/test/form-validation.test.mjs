@@ -174,3 +174,37 @@ test('client recipe composition field and collection clearing preserves unrelate
   assert.deepEqual(structural.fieldErrors, { title: ['top'] });
   assert.deepEqual(structural.formErrors, ['summary']);
 });
+
+test('client wish visible fields map inline and protected fields remain summary', () => {
+  const wishLabels = {
+    title: 'Кратко о пожелании',
+    description: 'Подробности',
+    category: 'Категория',
+    priority: 'Важность',
+    client_recipe_id: 'Индивидуальный рецепт',
+  };
+  const state = normalizeBackendValidation({ detail: [
+    { field: 'title', message: 'Укажите краткое пожелание.' },
+    { field: 'body.description', message: 'Слишком длинное описание.' },
+    { loc: ['body', 'category'], msg: 'Выберите категорию из списка.' },
+    { field: 'priority', message: 'Выберите важность из списка.' },
+    { field: 'body.client_recipe_id', message: 'Выбранный рецепт недоступен.' },
+    { field: 'metadata.title', message: 'Вложенный заголовок не должен стать inline.' },
+    { field: 'items.0.title', message: 'Строка списка не является полем формы.' },
+    { field: 'client_id', message: 'Клиент не найден.' },
+    { field: 'status', message: 'Статус нельзя менять при создании.' },
+    { field: '__proto__.title', message: 'Небезопасный путь.' },
+  ] }, wishLabels);
+  assert.deepEqual(state.fieldErrors.title, ['Кратко о пожелании: Укажите краткое пожелание.']);
+  assert.deepEqual(state.fieldErrors.description, ['Подробности: Слишком длинное описание.']);
+  assert.deepEqual(state.fieldErrors.category, ['Категория: Выберите категорию из списка.']);
+  assert.deepEqual(state.fieldErrors.priority, ['Важность: Выберите важность из списка.']);
+  assert.deepEqual(state.fieldErrors.client_recipe_id, ['Индивидуальный рецепт: Выбранный рецепт недоступен.']);
+  assert.deepEqual(state.formErrors, [
+    'Вложенный заголовок не должен стать inline.',
+    'Строка списка не является полем формы.',
+    'Клиент не найден.',
+    'Статус нельзя менять при создании.',
+    'Небезопасный путь.',
+  ]);
+});

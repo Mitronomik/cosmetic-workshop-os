@@ -1290,3 +1290,385 @@ test('production-linked request generations use deferred promises for stale clie
   const repeatOpenToken = versions.begin(); const repeatOpen = deferred(); state.selectedTemplate = 'B'; state.versionsStatus = 'loading'; const openCreateAgainSameContext = () => {}; openCreateAgainSameContext(); repeatOpen.promise.then((items) => { if (versions.isCurrent(repeatOpenToken) && state.selectedTemplate === 'B') { state.versions = items; state.versionsStatus = 'ready'; } }); repeatOpen.resolve(['B2']); await flush(); assert.deepEqual(state.versions, ['B2']); assert.equal(state.versionsStatus, 'ready');
   const compToken = compositionRefs.begin(); const comp = deferred(); comp.promise.then(() => { if (compositionRefs.isCurrent(compToken) && state.selectedRecipeId === 1) state.editorOpened = true; }); state.selectedRecipeId = 2; comp.resolve('ingredients'); await flush(); assert.equal(state.editorOpened, false);
 });
+
+
+function clientFeedbackCardRuntime() {
+  const stripTypes = (src) => src
+    .replace(/: ClientFeedback/g, '')
+    .replace(/: string \| null/g, '')
+    .replace(/: string/g, '');
+  const code = `
+    function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char] ?? char)); }
+    function clientFeedbackTypeLabel(value) { return ({ note: 'Заметка', reaction: 'Реакция', texture: 'Текстура', scent: 'Аромат', effect: 'Эффект', packaging: 'Упаковка', request: 'Просьба', other: 'Другое' })[value] ?? 'Другое'; }
+    function clientFeedbackSentimentLabel(value) { return ({ positive: 'Положительный', neutral: 'Нейтральный', negative: 'Негативный', mixed: 'Смешанный' })[value] ?? 'Нейтральный'; }
+    function clientCardRecipeTitle() { return 'Индивидуальный рецепт'; }
+    ${stripTypes(mainSourceFunction('formatClientFeedbackDateOnly'))}
+    ${stripTypes(mainSourceFunction('formatClientFeedbackDateTime'))}
+    ${stripTypes(mainSourceFunction('clientFeedbackDisplayDate'))}
+    ${stripTypes(mainSourceFunction('clientFeedbackCard'))}
+    return { clientFeedbackCard, clientFeedbackDisplayDate };
+  `;
+  return new Function(code)();
+}
+
+function feedbackFixture(overrides = {}) {
+  return {
+    id: 1,
+    client_id: 1,
+    client_recipe_id: null,
+    feedback_type: 'note',
+    sentiment: 'neutral',
+    rating: null,
+    text: 'Клиенту понравилась текстура.',
+    follow_up_needed: false,
+    follow_up_note: '',
+    occurred_at: null,
+    created_at: '2026-07-17 14:45:02',
+    ...overrides,
+  };
+}
+
+test('client feedback card safely renders nullable occurrence dates and malformed values', () => {
+  const { clientFeedbackCard } = clientFeedbackCardRuntime();
+  const createdOnly = feedbackFixture();
+  const createdExpected = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date('2026-07-17T14:45:02'));
+
+  assert.doesNotThrow(() => clientFeedbackCard(createdOnly));
+  const createdHtml = clientFeedbackCard(createdOnly);
+  assert.ok(createdHtml.includes(createdExpected), 'created_at timestamp is used when occurred_at is null');
+  assert.ok(createdHtml.includes('Клиенту понравилась текстура.'));
+  assert.ok(mainSourceFunction('clientWishForm').includes('data-form="client-wish"'), 'Client Wish form remains renderable in source');
+  assert.ok(mainSourceFunction('clientFeedbackForm').includes('data-form="client-feedback"'), 'Client Feedback form remains renderable in source');
+
+  const explicit = feedbackFixture({ occurred_at: '2026-07-10' });
+  const explicitExpected = new Intl.DateTimeFormat('ru-RU').format(new Date('2026-07-10T00:00:00'));
+  const explicitHtml = clientFeedbackCard(explicit);
+  assert.ok(explicitHtml.includes(explicitExpected), 'explicit occurred_at date is preferred');
+  assert.equal(explicitHtml.includes(createdExpected), false, 'created_at fallback is not shown when occurrence date is present');
+
+  const malformed = feedbackFixture({ created_at: 'not-a-date' });
+  const before = structuredClone(malformed);
+  assert.doesNotThrow(() => clientFeedbackCard(malformed));
+  assert.ok(clientFeedbackCard(malformed).includes('Дата не указана'));
+  assert.deepEqual(malformed, before, 'rendering fallback does not mutate source feedback data');
+});
+
+test('client wish wrapper maps approved fields and preserves focused draft controls', () => {
+  reset();
+  const form = mkForm('client-wish');
+  const controls = {};
+  for (const f of ['title', 'description', 'category', 'priority', 'client_recipe_id']) {
+    controls[f] = addField(form, f, ['category', 'priority', 'client_recipe_id'].includes(f));
+  }
+  mockDoc.body.appendChild(form);
+  const title = controls.title;
+  title.value = 'Лёгкая текстура <script>alert(1)</script>';
+  title.focus();
+  title.setSelectionRange(2, 8);
+
+  mod.applyValidationToClientWishForm({
+    fieldErrors: {
+      title: ['Кратко о пожелании: <img src=x onerror=alert(1)> Укажите заголовок.'],
+      category: ['Категория: Выберите категорию.'],
+      priority: ['Важность: Выберите важность.'],
+      client_recipe_id: ['Индивидуальный рецепт: Рецепт не относится к клиенту.'],
+    },
+    formErrors: ['metadata.title: Остаётся в сводке.', 'client_id: Клиент не найден.'],
+  });
+
+  assert.equal(mockDoc.activeElement, title);
+  assert.equal(form.querySelector('[name="title"]'), title);
+  assert.equal(title.value, 'Лёгкая текстура <script>alert(1)</script>');
+  assert.equal(title.selectionStart, 2);
+  assert.equal(title.selectionEnd, 8);
+  assert.equal(title.getAttribute('aria-invalid'), 'true');
+  assert.equal(title.getAttribute('aria-describedby'), 'client-wish-title-error');
+  assert.ok(byId(form, 'client-wish-title-error').textContent.includes('<img src=x onerror=alert(1)>'));
+  assert.ok(byId(form, 'client-wish-category-error'));
+  assert.ok(byId(form, 'client-wish-priority-error'));
+  assert.ok(byId(form, 'client-wish-client_recipe_id-error'));
+  assert.ok(form.querySelector('.form-error-summary').textContent.includes('metadata.title'));
+
+  mod.applyValidationToClientWishForm({ fieldErrors: { priority: ['Важность: Выберите важность.'] }, formErrors: ['client_id: Клиент не найден.'] });
+  assert.equal(byId(form, 'client-wish-title-error'), null);
+  assert.equal(title.hasAttribute('aria-invalid'), false);
+  assert.ok(byId(form, 'client-wish-priority-error'));
+  assert.equal(form.querySelector('[name="title"]'), title);
+  assert.equal(mockDoc.activeElement, title);
+});
+
+
+test('client wish mutation guard disables feedback controls without losing prior disabled state', () => {
+  reset();
+  const wishForm = mkForm('client-wish');
+  const title = addField(wishForm, 'title');
+  const category = addField(wishForm, 'category', true);
+  const wishSubmit = mockDoc.createElement('button');
+  wishSubmit.setAttribute('type', 'submit');
+  wishSubmit.textContent = 'Сохранить пожелание';
+  wishForm.appendChild(wishSubmit);
+
+  const feedbackForm = mkForm('client-feedback');
+  const feedbackText = addField(feedbackForm, 'text');
+  const feedbackType = addField(feedbackForm, 'feedback_type', true);
+  const feedbackSubmit = mockDoc.createElement('button');
+  feedbackSubmit.setAttribute('type', 'submit');
+  feedbackForm.appendChild(feedbackSubmit);
+  const alreadyDisabledFeedback = addField(feedbackForm, 'rating');
+  alreadyDisabledFeedback.disabled = true;
+
+  const openFeedback = mockDoc.createElement('button');
+  openFeedback.setAttribute('data-action', 'toggle-client-feedback-form');
+  const closeFeedback = mockDoc.createElement('button');
+  closeFeedback.setAttribute('data-action', 'close-client-feedback-form');
+
+  mockDoc.body.appendChild(wishForm);
+  mockDoc.body.appendChild(feedbackForm);
+  mockDoc.body.appendChild(openFeedback);
+  mockDoc.body.appendChild(closeFeedback);
+
+  title.focus();
+  title.setSelectionRange(1, 3);
+  lifecycle.disableClientWishCreateMutationControls(mockDoc.body);
+
+  assert.equal(wishForm.getAttribute('aria-busy'), 'true');
+  assert.equal(title.readOnly, true);
+  assert.equal(category.disabled, true);
+  assert.equal(wishSubmit.disabled, true);
+  assert.equal(openFeedback.disabled, true);
+  assert.equal(closeFeedback.disabled, true);
+  assert.equal(feedbackText.disabled, true);
+  assert.equal(feedbackType.disabled, true);
+  assert.equal(feedbackSubmit.disabled, true);
+  assert.equal(alreadyDisabledFeedback.disabled, true);
+  assert.equal(alreadyDisabledFeedback.dataset.mutationDisabled, undefined, 'pre-existing disabled feedback control is not restored incorrectly');
+
+  lifecycle.restoreClientWishMutationControls(mockDoc.body);
+
+  assert.equal(wishForm.hasAttribute('aria-busy'), false);
+  assert.equal(title.readOnly, false);
+  assert.equal(category.disabled, false);
+  assert.equal(wishSubmit.disabled, false);
+  assert.equal(openFeedback.disabled, false);
+  assert.equal(closeFeedback.disabled, false);
+  assert.equal(feedbackText.disabled, false);
+  assert.equal(feedbackType.disabled, false);
+  assert.equal(feedbackSubmit.disabled, false);
+  assert.equal(alreadyDisabledFeedback.disabled, true);
+  assert.equal(mockDoc.activeElement, title);
+  assert.equal(title.selectionStart, 1);
+  assert.equal(title.selectionEnd, 3);
+});
+
+
+test('client card render context guard blocks stale feedback render after rejected Client Wish validation', () => {
+  const captured = {
+    capturedClientId: 1,
+    currentClientId: 1,
+    capturedCardContextToken: 10,
+    currentCardContextToken: 10,
+    capturedTargetedValidationToken: 20,
+    currentTargetedValidationToken: 20,
+    wishFormDomLocked: false,
+  };
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(captured), true, 'non-stale feedback response can render normally');
+
+  const duringMutation = { ...captured, wishFormDomLocked: true };
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(duringMutation), false, 'feedback response cannot render over a pending Client Wish mutation');
+
+  const afterRejectedValidation = { ...captured, currentTargetedValidationToken: 21, wishFormDomLocked: false };
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(afterRejectedValidation), false, 'older feedback response cannot render after targeted 422 validation advances the targeted-validation render token');
+
+  const clientSwitch = { ...captured, currentClientId: 2, currentCardContextToken: 11 };
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(clientSwitch), false, 'feedback from Client A cannot render into Client B');
+
+  const futureRequest = { ...captured, capturedTargetedValidationToken: 21, currentTargetedValidationToken: 21 };
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(futureRequest), true, 'new feedback request in the current safe context can render');
+});
+
+
+test('client wish form open and close do not stale targeted-validation render context', () => {
+  const captured = {
+    capturedClientId: 1,
+    currentClientId: 1,
+    capturedCardContextToken: 10,
+    currentCardContextToken: 10,
+    capturedTargetedValidationToken: 30,
+    currentTargetedValidationToken: 30,
+    wishFormDomLocked: false,
+  };
+  const openedFormMutationContext = 21;
+  const closedFormMutationContext = 22;
+  assert.equal(openedFormMutationContext > 20, true, 'ordinary form open may advance the mutation/form context');
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(captured), true, 'ordinary form open does not stale background render when targeted-validation token is unchanged');
+  assert.equal(closedFormMutationContext > openedFormMutationContext, true, 'ordinary form close may advance the mutation/form context');
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(captured), true, 'ordinary form close does not stale background render when targeted-validation token is unchanged');
+
+  const after422 = { ...captured, currentTargetedValidationToken: 31 };
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(after422), false, 'authoritative targeted 422 validation still stales older background renders');
+  const currentAfter422 = { ...after422, capturedTargetedValidationToken: 31 };
+  assert.equal(lifecycle.clientCardRenderAllowedForCapturedContext(currentAfter422), true, 'new current-context request after 422 can render when safe');
+});
+
+test('client card render context guard protects Client Recipes and Wishes callbacks after rejected Client Wish validation', () => {
+  const captured = {
+    capturedClientId: 1,
+    currentClientId: 1,
+    capturedCardContextToken: 10,
+    currentCardContextToken: 10,
+    capturedTargetedValidationToken: 20,
+    currentTargetedValidationToken: 21,
+    wishFormDomLocked: false,
+  };
+  const current = { ...captured, capturedTargetedValidationToken: 21 };
+  const switched = { ...captured, currentClientId: 2, currentCardContextToken: 11 };
+
+  const recipesState = { recipes: [], recipesStatus: 'loading', renders: 0 };
+  const applyRecipesSuccess = (guardState) => {
+    if (guardState.currentClientId !== guardState.capturedClientId || guardState.currentCardContextToken !== guardState.capturedCardContextToken) return;
+    recipesState.recipes = ['recipe'];
+    recipesState.recipesStatus = 'ready';
+    if (lifecycle.clientCardRenderAllowedForCapturedContext(guardState)) recipesState.renders += 1;
+  };
+  applyRecipesSuccess(captured);
+  assert.deepEqual(recipesState.recipes, ['recipe'], 'current-card stale-UI recipes response may update safe state');
+  assert.equal(recipesState.recipesStatus, 'ready');
+  assert.equal(recipesState.renders, 0, 'older recipes response cannot render over targeted validation');
+  applyRecipesSuccess(current);
+  assert.equal(recipesState.renders, 1, 'current-context recipes response renders normally');
+
+  const recipesErrorState = { recipesStatus: 'loading', renders: 0 };
+  const applyRecipesError = (guardState) => {
+    if (guardState.currentClientId !== guardState.capturedClientId || guardState.currentCardContextToken !== guardState.capturedCardContextToken) return;
+    recipesErrorState.recipesStatus = 'error';
+    if (lifecycle.clientCardRenderAllowedForCapturedContext(guardState)) recipesErrorState.renders += 1;
+  };
+  applyRecipesError(captured);
+  assert.equal(recipesErrorState.recipesStatus, 'error', 'current-card stale-UI recipes error may update status');
+  assert.equal(recipesErrorState.renders, 0, 'older recipes error cannot render over targeted validation');
+
+  const switchedState = { recipes: [], renders: 0 };
+  const applySwitchedRecipes = (guardState) => {
+    if (guardState.currentClientId !== guardState.capturedClientId || guardState.currentCardContextToken !== guardState.capturedCardContextToken) return;
+    switchedState.recipes = ['stale'];
+    if (lifecycle.clientCardRenderAllowedForCapturedContext(guardState)) switchedState.renders += 1;
+  };
+  applySwitchedRecipes(switched);
+  assert.deepEqual(switchedState.recipes, [], 'Client A recipes response cannot update Client B');
+  assert.equal(switchedState.renders, 0);
+
+  const wishesState = { wishes: [], wishesStatus: 'loading', renders: 0, generation: 2, includeArchived: false };
+  const applyWishesSuccess = (guardState, request = { generation: 2, includeArchived: false }) => {
+    const requestCurrent = request.generation === wishesState.generation && request.includeArchived === wishesState.includeArchived;
+    if (!requestCurrent || guardState.currentClientId !== guardState.capturedClientId || guardState.currentCardContextToken !== guardState.capturedCardContextToken) return;
+    wishesState.wishes = ['wish'];
+    wishesState.wishesStatus = 'ready';
+    if (lifecycle.clientCardRenderAllowedForCapturedContext(guardState)) wishesState.renders += 1;
+  };
+  applyWishesSuccess(captured);
+  assert.deepEqual(wishesState.wishes, ['wish'], 'current-generation stale-UI wishes response may update safe list state');
+  assert.equal(wishesState.renders, 0, 'older wishes response cannot render over targeted validation');
+  applyWishesSuccess(current);
+  assert.equal(wishesState.renders, 1, 'current-context wishes response renders normally');
+  applyWishesSuccess(current, { generation: 1, includeArchived: false });
+  assert.equal(wishesState.renders, 1, 'stale wishes generation remains ignored');
+});
+
+test('client wish source guards cover lifecycle source wiring without replacing browser smoke', () => {
+  const submit = mainSourceFunction('submitClientWishForm');
+  assert.ok(submit.includes('clientCardState.savingWish'));
+  assert.ok(mainSourceFunction('clientWishFormDomLocked').includes('clientCardState.savingWish'));
+  assert.ok(submit.includes('clientWishCreateLifecycle.begin()'));
+  assert.ok(submit.includes('token === null'));
+  assert.ok(submit.includes('contextToken !== clientWishContextToken'));
+  assert.ok(submit.includes('createClientWish(clientId, payload)'));
+  assert.ok(submit.includes('const submittedDraft: ClientWishFormState = { ...clientCardState.wishForm };'));
+  assert.ok(submit.includes('clientCardState.wishForm = submittedDraft;'));
+  assert.ok(submit.includes('clientCardState.wishes = [created'));
+  assert.ok(submit.includes('clientCardState.showWishForm = false'));
+  assert.ok(submit.includes('normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels'));
+  assert.ok(submit.includes('wishRefreshWarning'));
+  const successRenderIndex = submit.indexOf('announcePolite(clientCardState.wishMessage);\n    render();\n    return refreshClientWishes(false, true, false)');
+  assert.notEqual(successRenderIndex, -1, 'successful create renders before the guarded follow-up wishes refresh starts');
+  const rejectedStart = submit.indexOf('clientCardState.wishForm = submittedDraft;');
+  const rejectedEnd = submit.indexOf('}).finally', rejectedStart);
+  const rejectedPath = submit.slice(rejectedStart, rejectedEnd);
+  assert.ok(rejectedPath.includes('clientWishValidation = normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels'));
+  assert.ok(rejectedPath.includes('applyValidationToClientWishForm(clientWishValidation);'));
+  assert.ok(rejectedPath.includes('restoreClientWishMutationControls(document);'));
+  assert.equal(rejectedPath.includes('syncClientCardDraftFormsFromDom();'), false, 'rejected create path must not read disabled selects through FormData');
+  assert.equal(rejectedPath.includes('render();'), false, 'rejected create path must not globally render after targeted validation');
+  const finalizer = submit.slice(submit.indexOf('}).finally'));
+  assert.equal(finalizer.includes('restoreClientWishMutationControls(document);\n      render();'), true, 'finalizer keeps stale/non-rejected fallback render only');
+  assert.ok(finalizer.includes('if (createRejected) return;'));
+  assert.equal(submit.includes('createClientFeedback'), false);
+
+  const refresh = mainSourceFunction('refreshClientWishes');
+  assert.ok(refresh.includes('if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();'));
+  assert.ok(refresh.includes('const targetedValidationToken = clientWishTargetedValidationToken;'));
+  assert.ok(refresh.includes('const canRenderWishesResponse = () => isCurrentWishesRequest() && clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);'));
+  assert.ok(refresh.includes("if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (canRenderWishesResponse()) render(); }"));
+  assert.ok(refresh.includes('if (!canRenderWishesResponse()) return;'));
+  assert.equal(refresh.includes('if (clientWishFormDomLocked()) return;'), false, 'wishes render guard must use captured Client Wish UI context, not current savingWish only');
+  assert.ok(refresh.includes('const cardContextToken = clientCardContextToken;'));
+  assert.ok(refresh.includes('clientWishListRequestLifecycle.begin()'));
+  assert.ok(refresh.includes('clientWishListRequestLifecycle.isCurrent(requestGeneration)'));
+  assert.ok(refresh.includes('cardContextToken === clientCardContextToken'));
+  assert.ok(refresh.includes('clientCardState.includeArchivedWishes === includeArchived'));
+  assert.ok(refresh.includes('fetchClientWishes(clientId, includeArchived)'));
+
+  const load = mainSourceFunction('loadClientCardData');
+  assert.ok(load.includes('const cardContextToken = clientCardContextToken;'));
+  assert.ok(load.includes('const targetedValidationToken = clientWishTargetedValidationToken;'));
+  assert.ok(load.includes('const isCurrentClientCardRecipes = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;'));
+  assert.ok(load.includes('const canRenderRecipesResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);'));
+  assert.ok(load.includes('if (!canRenderRecipesResponse()) return;'));
+  assert.equal(load.includes('if (clientWishFormDomLocked()) return;'), false, 'Client Recipes callbacks must use captured Client Wish UI context, not current savingWish only');
+  assert.ok(load.includes('clientWishListRequestLifecycle.invalidate()'));
+  assert.ok(load.includes('clientCardContextToken += 1'));
+  assert.ok(load.includes('clientWishContextToken += 1'));
+  const toggle = mainSourceFunction('toggleClientWishForm');
+  assert.ok(toggle.includes('clientWishContextToken += 1'));
+  assert.equal(toggle.includes('clientCardContextToken'), false, 'opening the Client Wish form must not stale an in-flight wishes list request');
+  const close = mainSourceFunction('closeClientWishForm');
+  assert.ok(close.includes('clientWishContextToken += 1'));
+  assert.equal(close.includes('clientCardContextToken'), false, 'closing the Client Wish form must not stale an in-flight wishes list request');
+  const feedbackRefresh = mainSourceFunction('refreshClientFeedback');
+  assert.ok(feedbackRefresh.includes('const cardContextToken = clientCardContextToken;'));
+  assert.ok(feedbackRefresh.includes('const targetedValidationToken = clientWishTargetedValidationToken;'));
+  assert.ok(feedbackRefresh.includes('const isCurrentClientCardFeedback = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;'));
+  assert.ok(feedbackRefresh.includes('const canRenderFeedbackResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);'));
+  assert.ok(feedbackRefresh.includes('if (!canRenderFeedbackResponse()) return;'));
+  assert.ok(feedbackRefresh.includes('if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();'));
+  assert.equal(feedbackRefresh.includes('if (clientWishFormDomLocked()) return;'), false, 'feedback render guard must not rely only on current savingWish state');
+  const renderGuard = mainSourceFunction('clientCardCanRenderCapturedClientWishContext');
+  assert.ok(renderGuard.includes('clientCardRenderAllowedForCapturedContext'));
+  assert.ok(renderGuard.includes('capturedTargetedValidationToken: targetedValidationToken'));
+  assert.ok(renderGuard.includes('currentTargetedValidationToken: clientWishTargetedValidationToken'));
+  assert.ok(rejectedPath.includes('clientWishTargetedValidationToken += 1;'), 'rejected targeted validation advances the render-protection token so older background callbacks cannot render over it');
+  assert.equal(rejectedPath.includes('clientWishContextToken += 1;'), false, 'rejected targeted validation must not overload the mutation/form context token');
+  assert.equal(toggle.includes('clientWishTargetedValidationToken'), false, 'opening the Client Wish form must not stale render protection');
+  assert.equal(close.includes('clientWishTargetedValidationToken'), false, 'closing the Client Wish form must not stale render protection');
+  const status = mainSourceFunction('changeClientWishStatus');
+  assert.ok(status.includes('clientCardState.savingWish'));
+  assert.ok(status.includes('if (clientWishFormDomLocked()) return;'));
+  assert.ok(status.includes('clientWishListRequestLifecycle.invalidate()'));
+  const archive = mainSourceFunction('archiveClientWishFromCard');
+  assert.ok(archive.includes('clientCardState.savingWish'));
+  assert.ok(archive.includes('if (clientWishFormDomLocked()) return;'));
+  assert.ok(archive.includes('clientWishListRequestLifecycle.invalidate()'));
+  const toggleFeedback = mainSourceFunction('toggleClientFeedbackForm');
+  assert.ok(toggleFeedback.includes('if (clientCardState.savingWish) return;'));
+  const closeFeedback = mainSourceFunction('closeClientFeedbackForm');
+  assert.ok(closeFeedback.includes('if (clientCardState.savingWish) return;'));
+  const submitFeedback = mainSourceFunction('submitClientFeedbackForm');
+  assert.ok(submitFeedback.includes('!clientId || clientCardState.savingWish'));
+  assert.ok(submitFeedback.includes('if (clientWishFormDomLocked()) return;'));
+
+  const form = mainSourceFunction('clientWishForm');
+  assert.ok(form.includes('novalidate'));
+  assert.ok(form.includes('validationSummary(clientWishValidation'));
+  assert.ok(form.includes('clientWishFieldAttrs'));
+
+  assert.equal(submitFeedback.includes('clientWishValidation'), false, 'Client Feedback remains outside A3.5 validation migration');
+});

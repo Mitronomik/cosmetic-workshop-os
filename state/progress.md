@@ -2,24 +2,17 @@
 
 ## Current phase
 
-After PR101.
+Slice A3 remains IN PROGRESS. PR #118 / Slice A3.4 Client Recipe structured validation is merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; exact published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke.
 
-Runtime product implementation is complete through PR98 — Workshop profile integration with report documents. PR99-PR101 were documentation and governance changes only.
+Current focused implementation: **PR #119 / A3.5 — Client Wishes structured validation**. PR #119 is open on GitHub and is not merged. A3.5 is not DONE and has not passed exact-head browser smoke yet.
 
-The project is preparing the required manual browser smoke before the next focused implementation slice.
+Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices and are excluded from the current runtime scope.
 
 ## Current next step
 
-- Run the manual browser smoke for Workshop profile and report document integration.
-- Save several Workshop profile fields in `/settings`, leaving at least one field empty.
-- Generate and open/download new Markdown and PDF `Сводка мастерской` documents from `/report-documents`.
-- Confirm only non-empty profile fields appear and render as plain document text.
-- Clear the profile and generate another document.
-- Confirm the profile section is omitted without errors and previously generated documents remain unchanged.
-- If smoke is clean, prepare a focused Workshop profile display polish / app header integration PR.
-- If smoke reveals an issue, prepare a narrowly scoped report document integration fix first.
-- Do not assign or reuse a historical PR number before the new PR is created.
-- Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, motion work, migrations, and unrelated business mutations out of scope.
+- Review PR #119 and run external focused browser smoke against the final published PR #119 head before merge.
+- Do not mark A3.5 merged, DONE, or exact-head verified until merge and exact-head verification actually happen.
+- Keep Client Feedback, Orders, Production Readiness, Production Confirmation, schema/migration/dependency/CSS changes, browser dependency installation, CI, smoke-runner docs, and unrelated runtime behavior out of PR #119.
 
 ## Done
 - Architecture draft
@@ -95,19 +88,16 @@ The project is preparing the required manual browser smoke before the next focus
 
 ## In progress
 
-- Manual browser smoke for Workshop profile and report document integration has not yet been recorded as completed.
-- No new runtime implementation PR should start until that smoke result determines whether the next slice is polish or an integration fix.
-
-## Blocked
-- Full FastAPI TestClient-based checks were blocked in the Codex environment because backend test dependencies were not installed, and dependency installation was blocked by registry/proxy 403. The project uses the normal `httpx>=0.27,<1.0` test dependency; no alternate package is required.
+- PR #119 is open and awaiting review plus external exact-head browser smoke against the final published PR head.
+- A3.5 is not marked DONE, merged, or exact-head verified.
+- Focused backend Client Wishes/Feedback tests now pass in this PR branch; the old missing TestClient dependency note is historical and no longer an active blocker for this slice.
+- Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices.
 
 ## Next
 
-- First: complete and record the Workshop profile/report document manual browser smoke.
-- On a clean result: Workshop profile display polish / app header integration.
-- On a failed result: narrowly scoped report document integration follow-up fixes before polish.
-- Do not assign the next PR number until the PR is actually created.
-- Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, motion work, migration changes, and unrelated business behavior out of scope unless explicitly approved.
+- Complete review of PR #119.
+- Run focused external browser smoke against the final published GitHub PR #119 head and record the result before merge.
+- After A3.5 is merged and exact-head verified, choose the next A3 candidate separately; Client Feedback is the next validation candidate, while Orders, Production Readiness, and Production Confirmation remain separate future slices.
 
 ## Important notes
 - PR13 intentionally does not add packaging lots, purchase suggestions, production, recipes, clients, orders, import/export, frontend UI, launcher changes, or cloud/mobile/auth behavior.
@@ -943,3 +933,24 @@ Import CSV/XLSX draft backend foundation.
 - Browser smoke: NOT RUN.
 - Reason: waiting for review of the exact published GitHub PR head.
 - Slice A3 remains IN PROGRESS; Client Wishes, Client Feedback, Orders, and Production Confirmation remain separate future candidates.
+
+## 2026-07-17 — A3.5 Client Wishes structured validation branch
+
+Current phase repaired: Slice A3 remains IN PROGRESS. PR #118 / A3.4 is merged at `1489b0f99602ef08fc1a11ab67549a954f80335d`; exact published head `1a5dcce9a919e2ad2fb803dacdc1608b7ff24a25` passed local exact-head full automated smoke. A3.5 Client Wishes structured validation is the active branch. Client Feedback, Orders, Production Readiness, and Production Confirmation remain separate future slices.
+
+Work completed in this branch:
+- Migrated the existing Client Wish create form to shared structured backend validation with approved inline fields only.
+- Added targeted Client Wish DOM validation updates and ARIA-connected field errors.
+- Added a narrow Client Wish create mutation lifecycle with duplicate-submit prevention, context/stale-response guards, scoped busy/read-only/disabled controls, draft/focus preservation on rejected creates, and separate success-vs-refresh-warning handling.
+- Preserved Client Wish status/archive behavior and left Client Feedback behavior unchanged.
+- Updated README, implementation plan, current focus, progress, and handoff memory for A3.4 closure and A3.5 active scope.
+
+Verification reported for this branch must list only commands actually run. Browser smoke is still pending for the exact published GitHub PR head; Codex has not claimed A3.5 merge or exact-head verification.
+
+A3.5 verification run in this branch:
+- `cd frontend && npm run test:form-validation` — passed.
+- `cd frontend && npm run test:targeted-validation-update` — passed.
+- `cd frontend && npm run build` — passed.
+- Concurrent frontend form-validation and targeted-validation test execution — passed.
+- `cd backend && python3 -m pytest app/tests/test_client_wishes_feedback.py` — passed, 7 tests.
+- Browser smoke: NOT RUN in Codex because no existing browser executable or Playwright command was available (`command -v google-chrome`, `chromium`, `chromium-browser`, and `playwright` returned no path). External exact-head browser smoke remains required before merge.
