@@ -371,4 +371,18 @@ A3.7 is implemented in the current focused runtime branch for Order create/updat
 
 PR #120 / A3.6 remains DONE at merge commit `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`; published runtime head `e148220ac9ad08a0fd952482a0b293f1f2d22bad`; exact-head smoke `PASS — FULL AUTOMATED SMOKE PASSED`. PR #121 synchronized project memory at `5c1edba2ca50b4a503d7dd44df2fdf7fda60aa6c`.
 
-A3.7 is not DONE while this PR is open. External exact-head browser smoke for A3.7 is still required before merge. Production Readiness and Production Confirmation remain separate future slices.
+A3.7 was subsequently merged in PR #122 at `8c4a092d055fd221cb18da901cee9e90106b33a4` and is DONE. Production Readiness and Production Confirmation remain separate follow-up slices.
+
+## 2026-07-19 — A3.8 Production Readiness feedback and lifecycle handoff
+
+PR #122 / A3.7 is DONE at merge commit `8c4a092d055fd221cb18da901cee9e90106b33a4`. Its verified runtime head is `b44b80bd875ec184bbccfc376f1562ddf25fbb46`; the user-provided external smoke verdict is `PASS — FULL AUTOMATED SMOKE PASSED`. Treat that verdict as external evidence, not GitHub Actions evidence.
+
+The current scope is A3.8 only. It extends the existing Order request-generation/transient-owner architecture with explicit readiness duplicate suppression and per-order attempt/result freshness. A valid cached result survives safe navigation, while a newer failed attempt, a changed Order, a wrong-order DTO, or a stale generation prevents Production Confirmation. Order-local edit/cancel/archive/reload conflicts are guarded only while the active readiness check owns loading; switching context invalidates and releases that transient presentation.
+
+Readiness results keep backend-owned calculations and now group escaped messages by visible recipe/formula, component, lot, packaging, Order, or general context. Valid blocked results remain result DTOs. `404`, `409`, structured `422`, local connection failures, and unexpected failures use a separate retryable system-error state without raw exception, table, JSON, or internal-ID leakage.
+
+Backend readiness remains read-only. Focused snapshots verify no ProductionBatch row, ProductionBatch ingredient/packaging row, ingredient StockMovement, packaging StockMovement, or Order lifecycle mutation for ready and blocked checks. No `POST /produce`, production confirmation, inventory write-off, reservation, FEFO, cost/tax/margin rule, schema, migration, dependency, CI, responsive table, or unrelated route change is in scope.
+
+Current automated evidence: frontend form-validation `19/19 PASS`; targeted validation `62/62 PASS`; Order lifecycle `18/18 PASS`; build `PASS`; focused readiness/Orders backend `19/19 PASS`. Full backend is unchanged from clean base: branch and `8c4a092d055fd221cb18da901cee9e90106b33a4` each report `480 passed, 5 failed` with the same five pre-existing failures.
+
+Remaining gates: repository cleanup/self-review, commit and push, exact remote-head browser smoke with isolated data and exact request/write counts, then one Draft PR. A3.9 Production Confirmation remains the next separate slice; A4 remains separate.

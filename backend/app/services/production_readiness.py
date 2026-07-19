@@ -97,7 +97,7 @@ class ProductionReadinessService:
                 if unit == UnitCode.PERCENT:
                     value = order.target_batch_size_value * value / Decimal("100")
                     unit = order.target_batch_size_unit
-                rows.append((line.ingredient_id, ingredients.get(line.ingredient_id, f"Компонент #{line.ingredient_id}"), value, unit))
+                rows.append((line.ingredient_id, ingredients.get(line.ingredient_id, "Компонент из индивидуальной формулы"), value, unit))
             return rows
         blocking.append(_issue("missing_recipe_source", "blocking", "В заказе не выбран источник рецепта.", "recipe_source", "order", order.id))
         return []

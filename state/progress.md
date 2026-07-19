@@ -2,17 +2,15 @@
 
 ## Current phase
 
-Slice A3 remains IN PROGRESS. Current runtime baseline is PR #120 / A3.6 Client Feedback structured validation, merged at `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`; published head `e148220ac9ad08a0fd952482a0b293f1f2d22bad` passed complete automated exact-head smoke with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
+Slice A3 remains IN PROGRESS. Current runtime baseline is PR #122 / A3.7 Orders structured validation, merged at `8c4a092d055fd221cb18da901cee9e90106b33a4`; verified runtime head `b44b80bd875ec184bbccfc376f1562ddf25fbb46`; user-provided external smoke verdict `PASS — FULL AUTOMATED SMOKE PASSED`. This smoke verdict is external evidence, not GitHub Actions evidence.
 
-A3.5 Client Wishes structured validation is DONE: PR #119 merged at `e53e7852c8b384915fb77b59345170c43671151c`; verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`; exact-head smoke PASS. A3.6 Client Feedback structured validation is DONE, merged, and exact-head verified.
-
-The current focused runtime slice is **A3.7 — Orders structured validation**. It is implemented in this pull request and remains IN PROGRESS until merge and external exact-head browser smoke. Production Readiness and Production Confirmation remain separate runtime scopes and are not included.
+A3.7 is DONE. The current focused runtime slice is **A3.8 — Production Readiness feedback and lifecycle**. Production Confirmation remains A3.9, and responsive table containment remains A4; neither is included.
 
 ## Current next step
 
-- Prepare a separate focused runtime PR for A3.7 Orders structured validation.
-- Keep A3.7 limited to existing Order create/edit form validation and safe mutation lifecycle.
-- Do not include Production Readiness, Production Confirmation, order schema/status redesign, migrations, cost/tax/margin work, responsive-table containment, dependencies, CI, or unrelated routes.
+- Complete the focused A3.8 implementation, required checks, exact published-head browser smoke, and Draft PR.
+- Keep A3.8 limited to existing read-only Production Readiness feedback, lifecycle ownership/freshness, focused regression tests, and directly affected documentation.
+- Do not include A3.9 Production Confirmation, A4, production writes, domain calculation changes, schema/migrations, dependencies, CI, or unrelated routes.
 
 ## Done
 - Architecture draft
@@ -979,5 +977,16 @@ A3.5 verification run in this branch:
 - Implemented Order create/update structured backend validation for `/api/orders` POST and `/api/orders/{order_id}` PUT.
 - Preserved PR #120 / A3.6 as DONE: merge commit `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`, verified runtime head `e148220ac9ad08a0fd952482a0b293f1f2d22bad`, exact-head smoke `PASS — FULL AUTOMATED SMOKE PASSED`.
 - PR #121 synchronized project memory at `5c1edba2ca50b4a503d7dd44df2fdf7fda60aa6c`.
-- A3.7 remains IN PROGRESS in this pull request; external exact-head browser smoke is still required before merge.
-- Production Readiness and Production Confirmation remain separate future slices.
+- A3.7 was later merged in PR #122 at `8c4a092d055fd221cb18da901cee9e90106b33a4` and is DONE; its external exact-head evidence is recorded in the A3.8 entry below.
+- Production Readiness and Production Confirmation remained separate follow-up slices after A3.7.
+
+## 2026-07-19 — A3.8 Production Readiness feedback and lifecycle
+
+- Base is PR #122 merge commit `8c4a092d055fd221cb18da901cee9e90106b33a4`. PR #122 verified runtime head `b44b80bd875ec184bbccfc376f1562ddf25fbb46` has user-provided external smoke verdict `PASS — FULL AUTOMATED SMOKE PASSED`; this is not claimed as GitHub Actions evidence.
+- Audit preserved the existing Order request generations, context invalidation, order-bound transient ownership, stale callback guards, order-scoped errors, cached results, backend readiness service, response DTO, and Production Confirmation boundary.
+- A3.8 adds explicit duplicate readiness suppression, order-local conflicting-action guards, accessible `Проверяем…` busy semantics, safe status-specific request failure copy, contextual issue grouping without raw IDs, and per-order attempt/result freshness metadata so a failed, older, edited-order, or wrong-order result cannot authorize Production Confirmation.
+- Cached results remain stored across safe order navigation. A cached result that no longer matches the latest attempt or Order `updated_at` is visibly marked as previous/stale and cannot enable production.
+- Backend no-write snapshots now cover ProductionBatch tables, ingredient movements, packaging movements, and Order lifecycle fields for valid ready and valid blocked checks. The readiness service still performs no write or reservation.
+- Commands already run in the implementation worktree: frontend form-validation `19/19 PASS`; targeted-validation-update `62/62 PASS`; Order mutation lifecycle `18/18 PASS`; frontend build `PASS`; focused backend readiness/Orders `19/19 PASS`.
+- Full backend branch run: `480 passed, 5 failed`; clean detached base run at `8c4a092d055fd221cb18da901cee9e90106b33a4`: the same `480 passed, 5 failed` with the same backup filename, export filename, import issue-count, inventory fixture, and purchase-suggestion fixture failures. Branch-only full-suite failure delta: zero.
+- Exact published-head browser smoke is not yet claimed in this repository state entry. It remains mandatory before the Draft PR can be reported ready for human review.

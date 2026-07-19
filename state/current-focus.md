@@ -1,36 +1,42 @@
-# Current focus — A3.7 Orders structured validation
+# Current focus — A3.8 Production Readiness feedback and lifecycle
 
-A3.7 is implemented in the current focused runtime pull request. It is **not DONE** until the PR is reviewed, merged, and external exact-head browser smoke runs against the published head.
+## Goal
 
-No browser smoke has been run for A3.7 yet.
+Make the existing read-only Production Readiness check understandable, predictable, accessible, and safe before irreversible Production Confirmation. Backend calculations remain authoritative.
 
-## Runtime scope for this pull request
+## Allowed scope
 
-A3.7 is limited to the existing Order create/edit forms and their safe mutation lifecycle. Backend validation remains authoritative.
+- Existing Orders detail and Production Readiness UI.
+- Existing Order request-generation, context-invalidation, transient-owner, and cache architecture.
+- Russian contextual rendering for blocking issues, warnings, recipes/formulas, components, selected lots, packaging, order-level issues, status, and estimate limitations.
+- Separate system-failure feedback for `404`, `409`, structured `422`, local connection failures, and unexpected failures.
+- Honest `Проверяем…` busy state, duplicate readiness prevention, and narrow guards for conflicting actions on the checked order.
+- Focused frontend lifecycle tests and backend readiness no-write regression tests.
+- Directly affected documentation and state files.
 
-This runtime PR implements:
+## Non-goals
 
-- visible backend validation issues map through explicit Order field allow-lists only;
-- unknown, aggregate, hidden, malformed, or protected issue paths remain in the form summary;
-- rejected submits preserve the user's draft values, focus, caret, and selection where applicable;
-- duplicate submissions are guarded;
-- stale responses from older Order contexts cannot overwrite newer state;
-- mutation success remains separate from list-refresh failure;
-- existing orders, order history, production history, stock movements, and production batches are not silently mutated.
+- No change to `POST /api/orders/{id}/produce` or Production Confirmation behavior.
+- No production batch creation, stock movement, inventory consumption/reservation, or order status transition.
+- No FEFO, recipe, density, stock, expiration, cost, tax, margin, or eligibility calculation in the frontend.
+- No database model, migration, schema, workflow, responsive table, dependency, CI, retry/backoff, route, or framework change.
+- No A3.9, A4, or unrelated roadmap work.
 
-## Explicit A3.7 non-goals
+## Tests
 
-- No order schema changes.
-- No migrations.
-- No status workflow redesign.
-- No Production Readiness changes.
-- No Production Confirmation changes.
-- No inventory or production write-off changes.
-- No cost, tax, or margin implementation.
-- No responsive-table redesign.
-- No dependency or CI changes.
-- No unrelated route changes.
+- Frontend form-validation, targeted-validation-update, Order mutation lifecycle, and build checks.
+- Focused backend Production Readiness and Orders suites.
+- Full backend comparison against the clean `8c4a092d055fd221cb18da901cee9e90106b33a4` base when baseline failures remain.
+- Exact published-head browser smoke with isolated SQLite, ports, profile, deterministic fixtures, request counting, mutation checks, console diagnostics, and backend traceback checks.
+- Repository hygiene and diff review.
 
-## Expected tests and smoke planning
+## Acceptance criteria
 
-The A3.7 runtime PR should include focused frontend validation and mutation-lifecycle tests for Orders if the current tooling supports them, plus focused backend/API tests for backend-authoritative Order validation. Browser smoke should cover normal Order create/edit, structured backend `422` handling, draft/focus preservation, duplicate-submit protection, refresh-failure separation, stale-response protection, and no unintended mutation of existing order or production history.
+- Valid ready, warning, and blocked results remain distinct from request/system failures.
+- Backend messages are escaped and associated with the correct visible context where possible; unknown issues remain visible as general feedback.
+- Rapid repeated action produces exactly one readiness POST.
+- Loading ownership is honest and always released on completion, failure, navigation, or invalidation.
+- Delayed, stale, wrong-order, and older callbacks cannot alter a newer Order context or clear a newer request owner.
+- Cached results survive safe order navigation, but stale, failed, blocked, absent, or wrong-order results cannot enable Production Confirmation.
+- Readiness creates no production batch, ingredient or packaging stock movement, reservation, or order status mutation.
+- A3.9 Production Confirmation and A4 remain separate.

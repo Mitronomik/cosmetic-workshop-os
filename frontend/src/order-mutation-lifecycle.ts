@@ -28,8 +28,12 @@ export type OrderTransientRequestOwner = {
   orderId: number;
 } | null;
 export type OrderOperationError = { orderId: number; message: string } | null;
-export type OrderProductionGuardOrder = { is_active: boolean; status: string } | null | undefined;
-export type OrderProductionGuardReadiness = { can_produce?: boolean } | null | undefined;
+export type OrderProductionGuardOrder = { id: number; is_active: boolean; status: string; updated_at: string } | null | undefined;
+export type OrderProductionGuardReadiness = {
+  order_id: number;
+  can_produce: boolean;
+  status: 'ready' | 'blocked' | 'warning';
+} | null | undefined;
 
 export type OrderFormErrorOrigin = 'recipe_source' | 'recipe_version_id' | 'client_recipe_id';
 export type OrderValidationProvenance = { formErrors: Array<{ origin: OrderFormErrorOrigin; message: string }> };
@@ -162,7 +166,69 @@ export function canOpenOrderProductionConfirmation(
   order: OrderProductionGuardOrder,
   readiness: OrderProductionGuardReadiness,
 ): boolean {
-  return !mutationActive && !orderProductionIsClosed(order) && readiness?.can_produce === true;
+  return !mutationActive
+    && !orderProductionIsClosed(order)
+    && typeof order?.id === 'number'
+    && readiness?.order_id === order?.id
+    && readiness?.can_produce === true
+    && readiness?.status !== 'blocked';
+}
+
+export function orderReadinessRequestActive(
+  owner: OrderTransientRequestOwner,
+  loadingOrderId: number | null,
+  orderId?: number,
+): boolean {
+  if (owner?.kind !== 'readiness' || loadingOrderId === null || owner.orderId !== loadingOrderId) return false;
+  return orderId === undefined || loadingOrderId === orderId;
+}
+
+export function canStartOrderReadinessRequest(
+  mutationActive: boolean,
+  order: OrderProductionGuardOrder,
+  owner: OrderTransientRequestOwner,
+  loadingOrderId: number | null,
+  requestedOrderId: number,
+): boolean {
+  return !mutationActive
+    && order?.id === requestedOrderId
+    && !orderProductionIsClosed(order)
+    && !orderReadinessRequestActive(owner, loadingOrderId);
+}
+
+export function orderReadinessResultIsCurrent(
+  order: OrderProductionGuardOrder,
+  readiness: OrderProductionGuardReadiness,
+  latestAttemptGeneration: number | undefined,
+  resultGeneration: number | undefined,
+  checkedOrderUpdatedAt: string | undefined,
+): boolean {
+  return Boolean(
+    order
+      && readiness
+      && readiness.order_id === order.id
+      && latestAttemptGeneration !== undefined
+      && latestAttemptGeneration === resultGeneration
+      && checkedOrderUpdatedAt === order.updated_at,
+  );
+}
+
+export type ProductionReadinessFailure = {
+  status?: number;
+  message?: string;
+  networkFailure?: boolean;
+};
+
+export function productionReadinessFailureMessage(failure: ProductionReadinessFailure): string {
+  const message = failure.message?.toLocaleLowerCase('ru-RU') ?? '';
+  if (failure.status === 404 && (message.includes('recipe') || message.includes('рецепт') || message.includes('формул'))) {
+    return 'Связанный рецепт или индивидуальная формула не найдены. Обновите заказ и выберите доступную основу.';
+  }
+  if (failure.status === 404) return 'Заказ не найден. Обновите список заказов и откройте карточку снова.';
+  if (failure.status === 409) return 'Проверка недоступна для текущего состояния заказа. Обновите карточку и проверьте статус заказа.';
+  if (failure.status === 422) return 'Локальное приложение отклонило параметры проверки. Обновите заказ и проверьте его обязательные данные.';
+  if (failure.networkFailure) return 'Не удалось связаться с локальным приложением. Проверьте, что оно запущено, и повторите проверку.';
+  return 'Во время проверки произошла непредвиденная ошибка. Данные заказа и склада не изменены; повторите проверку.';
 }
 
 export function ownerFromOrderRequest(
