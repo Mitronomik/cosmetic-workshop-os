@@ -72,7 +72,7 @@ function ingredient(overrides = {}) { return { ingredient_id: 10, ingredient_nam
 function packaging(overrides = {}) { return { packaging_item_id: 30, name: 'Банка', required_quantity: '1', available_quantity: '2', missing_quantity: null, can_fulfill: true, ...overrides }; }
 function readiness(overrides = {}) { return { order_id: 1, can_produce: true, status: 'ready', blocking_issues: [], warnings: [], ingredients: [ingredient()], packaging: [packaging()], estimated_cost: '120.00', estimated_tax: null, estimated_margin: null, generated_at: '2026-07-19T10:00:00Z', ...overrides }; }
 function readinessPanel(overrides = {}) { return renderView(renderOrderReadinessPanel({ orderId: 1, closed: false, busy: false, error: '', result: readiness(), current: true, ...overrides }, formatters)); }
-function productionGate(overrides = {}) { return renderView(renderOrderProductionGate({ orderId: 1, readiness: readiness(), hasCachedReadiness: true, confirming: false, loading: false, blockedByOperation: false, persistentWriteActive: false, notes: '', error: '', ...overrides }, escapeHtml)); }
+function productionGate(overrides = {}) { return renderView(renderOrderProductionGate({ orderId: 1, readiness: readiness(), hasCachedReadiness: true, confirming: false, loading: false, blockedByOperation: false, persistentWriteActive: false, notes: '', error: '', recoveryAction: '', uncertain: false, reconciliationLoading: false, ...overrides }, escapeHtml)); }
 function lifecycleActions(overrides = {}) { return renderView(renderOrderLifecycleActions({ orderId: 1, isActive: true, status: 'new', sameOrderOperationActive: false, persistentOwner: null, ...overrides })); }
 function rowActions(overrides = {}) { return renderView(renderOrderRowActions({ orderId: 1, isActive: true, status: 'new', sameOrderOperationActive: false, persistentOwner: null, ...overrides })); }
 
@@ -224,4 +224,107 @@ test('cancel and archive controls recover after completion or failure without ch
     assert.equal(recoveredAction.getAttribute('class').split(/\s+/).includes('danger-action'), true);
     assert.equal(recoveredAction.textContent, kind === 'cancel' ? 'Отменить заказ' : 'Архивировать');
   }
+});
+
+
+test('production confirmation pending and failure states render stable controls and recovery without readiness', () => {
+  const pending = productionGate({ confirming: true, loading: true, notes: '<safe>' });
+  const section = pending.querySelector('section[data-order-production-focus-anchor="confirmation"]');
+  assert.equal(section.getAttribute('tabindex'), '-1');
+  const block = pending.querySelector('div[aria-busy="true"]');
+  assert.ok(block);
+  const confirm = pending.querySelector('button[data-action="confirm-production"]');
+  assert.equal(confirm.textContent, 'Изготавливаем…');
+  assert.equal(confirm.hasAttribute('disabled'), true);
+  assert.equal(confirm.getAttribute('aria-busy'), 'true');
+  assert.equal(pending.querySelector('textarea[data-action="production-notes"]').hasAttribute('disabled'), true);
+  assert.equal(pending.querySelector('button[data-action="cancel-production-confirmation"]').hasAttribute('disabled'), true);
+
+  const failure = productionGate({ readiness: null, error: '<b>409</b>', recoveryAction: '<reload>', uncertain: false });
+  assert.match(failure.textContent, /409/);
+  assert.match(failure.textContent, /reload/);
+  assert.equal(failure.querySelector('button[data-action="reconcile-production-outcome"]'), null);
+  assert.equal(failure.querySelector('button[data-action="open-production-confirmation"]'), null);
+  assert.equal(failure.querySelector('[data-order-production-focus-anchor="failure"]').getAttribute('tabindex'), '-1');
+
+  const uncertain = productionGate({ readiness: null, error: 'Исход неизвестен', recoveryAction: 'Проверить заказ', uncertain: true });
+  assert.equal(uncertain.querySelector('button[data-action="reconcile-production-outcome"]').textContent, 'Проверить результат изготовления');
+  assert.match(uncertain.textContent, /Исход неизвестен/);
+});
+
+
+
+test('deterministic structured 422 keeps confirmation controls without reconciliation action', () => {
+  const view = productionGate({
+    confirming: true,
+    notes: 'Проверить pH перед розливом',
+    error: 'Нужно подтвердить изготовление.',
+    recoveryAction: 'Отметьте подтверждение и повторите.',
+    uncertain: false,
+    reconciliationLoading: false,
+  });
+  const confirm = view.querySelector('button[data-action="confirm-production"]');
+  const notes = view.querySelector('textarea[data-action="production-notes"]');
+  assert.equal(view.querySelector('[data-order-production-focus-anchor="confirmation"]').getAttribute('tabindex'), '-1');
+  assert.match(view.textContent, /Нужно подтвердить изготовление/);
+  assert.match(view.textContent, /Отметьте подтверждение и повторите/);
+  assert.equal(notes.textContent, 'Проверить pH перед розливом');
+  assert.equal(notes.hasAttribute('disabled'), false);
+  assert.equal(confirm.textContent, 'Подтвердить изготовление');
+  assert.equal(confirm.hasAttribute('disabled'), false);
+  assert.equal(view.querySelector('button[data-action="cancel-production-confirmation"]').hasAttribute('disabled'), false);
+  assert.equal(view.querySelector('button[data-action="reconcile-production-outcome"]'), null);
+  assert.doesNotMatch(view.textContent, /Обновить заказ безопасно|Проверить результат изготовления/);
+});
+
+test('production failure escapes backend message and next action and never shows generic transport text', () => {
+  const view = productionGate({ readiness: null, error: '<script>Безопасное сообщение</script>', recoveryAction: '<img onerror=x>' });
+  assert.equal(view.querySelector('script'), null);
+  assert.equal(view.querySelector('img'), null);
+  assert.doesNotMatch(view.textContent, /API request failed|SELECT|Traceback|workspace|production_batches|RuntimeError|\{\"detail/);
+  assert.match(view.textContent, /Безопасное сообщение/);
+  assert.match(view.textContent, /img onerror=x/);
+});
+
+
+
+test('production reconciliation blocks open confirmation controls even with positive readiness and confirmation open', () => {
+  const view = productionGate({
+    confirming: true,
+    reconciliationLoading: true,
+    error: 'Исход неизвестен',
+    recoveryAction: 'Проверяем заказ',
+    uncertain: true,
+    notes: 'Сохранить заметку',
+  });
+  const confirm = view.querySelector('button[data-action="confirm-production"]');
+  const notes = view.querySelector('textarea[data-action="production-notes"]');
+  const cancel = view.querySelector('button[data-action="cancel-production-confirmation"]');
+  const recovery = view.querySelector('button[data-action="reconcile-production-outcome"]');
+  assert.equal(confirm.hasAttribute('disabled'), true);
+  assert.equal(confirm.textContent, 'Подтвердить изготовление');
+  assert.equal(notes.hasAttribute('disabled'), true);
+  assert.equal(notes.textContent, 'Сохранить заметку');
+  assert.equal(cancel.hasAttribute('disabled'), true);
+  assert.equal(recovery.textContent, 'Проверяем…');
+  assert.equal(recovery.hasAttribute('disabled'), true);
+  assert.equal(recovery.getAttribute('aria-busy'), 'true');
+  assert.match(view.textContent, /Исход неизвестен/);
+  assert.match(view.textContent, /Проверяем результат изготовления/);
+  assert.equal(view.querySelector('button[data-action="open-production-confirmation"]'), null);
+  const closedConfirmation = productionGate({ reconciliationLoading: true, error: 'Исход неизвестен', recoveryAction: 'Проверяем заказ', uncertain: true });
+  const open = closedConfirmation.querySelector('button[data-action="open-production-confirmation"]');
+  assert.equal(open.hasAttribute('disabled'), true);
+  assert.match(closedConfirmation.textContent, /Проверяем результат изготовления/);
+});
+
+test('production reconciliation pending disables recovery action with busy semantics', () => {
+  const view = productionGate({ readiness: null, error: 'Исход неизвестен', recoveryAction: 'Проверяем заказ', uncertain: true, reconciliationLoading: true });
+  const failure = view.querySelector('[data-order-production-focus-anchor="failure"]');
+  const button = view.querySelector('button[data-action="reconcile-production-outcome"]');
+  assert.equal(failure.getAttribute('aria-busy'), 'true');
+  assert.equal(button.textContent, 'Проверяем…');
+  assert.equal(button.hasAttribute('disabled'), true);
+  assert.equal(button.getAttribute('aria-busy'), 'true');
+  assert.match(view.textContent, /Исход неизвестен/);
 });

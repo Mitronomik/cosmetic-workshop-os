@@ -1,42 +1,38 @@
-# Current focus — A3.8 Production Readiness persistent-write presentation correction
+# Current focus
 
 ## Goal
 
-Close the remaining human-review findings on Draft PR #123 by making the existing globally serialized production/cancel/archive ownership visible and accessible across Orders, while preserving the read-only Production Readiness boundary and existing request-generation architecture.
+A3.9 — Production Confirmation structured errors and mutation safety for PR #124. Keep the existing Production Confirmation runtime slice safe, understandable, recoverable, transactional, and resistant to duplicate/stale/conflicting execution.
 
-Reviewed history: PR #123 exists and remains Draft/IN REVIEW. Reviewed published head `b6413f9b38710c1d3b8e231a52206d9a9dd7b9be` closed the readiness freshness, same-Order reverse mutual-exclusion, behavioral presentation-test, escaping, and duplicate-request findings. Human review then found that unrelated Order persistent-write controls still looked enabled while the global owner guard rejected them, and that cancel/archive had no honest pending copy. The prior exact-head smoke bundle is unavailable, and keyboard traversal was not completed against that reviewed head, so A3.8 is not DONE.
+PR #124 is the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Reviewed published head `f29d8115586e528afec6d9ee2c5efd1fc4fb0a5d` still required correction. Exact base: `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
 
-## Allowed scope
+## Allowed scope/files
 
-- Existing Orders list/detail, Production Readiness presentation, and Production Confirmation guard only.
-- Existing Order request-generation, context-invalidation, transient-owner, and per-order freshness architecture.
-- One explicit global production/cancel/archive ownership helper; no concurrent persistent Order writes.
-- Visible disabled/explanatory states for unrelated Order production, cancel, and archive controls.
-- Honest `Отменяем…` / `Архивируем…`, native disabled, and ARIA busy states on the owning action.
-- Stable readiness-region focus continuity from keyboard activation through loading and failure, without auto-focusing the retry action.
-- Focused lifecycle and behavioral rendering tests, directly affected project state, and retained external exact-head smoke evidence.
+- Backend Production Confirmation endpoint/service and focused tests.
+- Existing frontend Orders Production Confirmation lifecycle/presentation helpers and dependency-free tests.
+- Directly affected API/project-state documentation.
 
 ## Non-goals
 
-- No change to backend readiness calculations, FEFO, density conversion, inventory policy, cost, tax, margin, or eligibility rules.
-- No change to Production Confirmation domain behavior, ingredient/packaging write-off, cancellation/archive backend rules, schemas, migrations, responsive tables, dependencies, CI, or unrelated routes.
-- No generic global request manager, concurrent persistent Order writes, A3.9 work, or A4 work.
+- No FEFO, density, recipe, readiness-calculation, cost/tax/margin, schema, migration, dependency, CI, responsive table containment, partial production, production undo/rollback UI, unrelated route, or A4 work.
 
 ## Tests
 
-- Run form-validation, targeted-validation-update, Order mutation lifecycle, Order readiness presentation, and build checks. Independent frontend scripts may run concurrently only because each uses a separate `dist-tests` output directory.
-- Run focused backend Production Readiness and Orders suites plus full backend comparison with exact base `8c4a092d055fd221cb18da901cee9e90106b33a4`.
-- Run `git diff --check`, status/diff review, and critical self-review.
-- Publish the correction to the existing branch, then run full and keyboard browser smoke against the exact remote head with isolated data and exact readiness/production/cancel/archive request counts.
-- Retain the final external smoke Markdown/JSON/log/database evidence bundle in an archive outside the repository. A missing bundle is `INCONCLUSIVE — RUNNER`.
+Required corrective checks: focused frontend lifecycle/presentation tests, frontend build, focused backend Production Confirmation tests, readiness/orders backend tests, full backend suite with exact-base comparison, `git diff --check`, and repository cleanliness.
 
 ## Acceptance criteria
 
-- A valid production, cancel, or archive owner globally disables all other Order production/cancel/archive controls with visible Russian explanatory copy; it never gets overwritten by a second owner.
-- Unrelated Order navigation and read-only inspection remain available; unrelated readiness remains available when its order-bound ownership is safe.
-- Pending cancel/archive controls render the correct operation/order label, native disabled, `aria-busy="true"`, and danger styling; duplicate or synthetic dispatch starts one request.
-- Controls recover after success/failure, and stale callbacks cannot clear a newer owner.
-- Keyboard activation keeps focus in the readiness region across rerenders; Tab reaches the retry action naturally instead of restarting from `body`.
-- Production Confirmation cannot open or submit while any persistent Order write owner is valid.
-- The exact published-head smoke retains its evidence archive, proves keyboard traversal/focus with real Chrome/Chromium automation, and proves no unintended ProductionBatch, stock movement, or Order-status mutation from readiness.
-- PR #123 stays Draft/IN REVIEW. A3.9 and A4 remain separate.
+- Production errors remain visible after readiness invalidation.
+- Structured backend detail is consumed safely, including `next_action`.
+- Uncertain outcomes have an explicit authoritative Order/ProductionBatch reconciliation path.
+- Authoritative Order A success or uncertainty remains attached to A after navigating to B.
+- Success plus failed refresh remains success.
+- No blind duplicate production is possible.
+- Focus anchors exist for confirmation, failure/recovery, and success states.
+- Rollback tests prove no partial database mutation, status/timestamp mutation, or audit entry survives injected failures.
+
+## Current evidence state
+
+A3.8 is DONE: PR #123 is merged; accepted exact-head-smoked runtime head `34eeaf11dbe7fbfabb3bd36ad8aa79b9469892f5`; local merge/base commit `c6d87df635a5cf7d063b43ffc16dc02d64e08103`; final A3.8 exact-head smoke `PASS — FULL AUTOMATED SMOKE PASSED` was external local evidence, not GitHub Actions.
+
+A3.9 remains IN PROGRESS. Exact-head production browser smoke has not yet been run and must wait until this corrective head passes human code review. A4 remains separate.

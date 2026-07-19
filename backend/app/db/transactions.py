@@ -7,11 +7,11 @@ from app.db.connection import connect
 
 
 @contextmanager
-def transaction(config: DatabaseConfig | None = None) -> Iterator[sqlite3.Connection]:
+def transaction(config: DatabaseConfig | None = None, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
     """Open a SQLite transaction for service-level atomic writes."""
     connection = connect(config)
     try:
-        connection.execute("BEGIN")
+        connection.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
         yield connection
         connection.commit()
     except Exception:

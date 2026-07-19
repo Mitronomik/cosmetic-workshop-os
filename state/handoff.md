@@ -400,3 +400,27 @@ Keyboard-invoked readiness also keeps focus on a stable readiness-region anchor 
 The previous exact-head smoke artifacts were not retained, and keyboard traversal was not completed against `b6413f9b38710c1d3b8e231a52206d9a9dd7b9be`; do not reuse or report that evidence as the final correction result. After publishing the new head, run the complete exact-head browser smoke and real Chrome/Chromium keyboard scenario, retain the Markdown/JSON/request/error/log/database/repository-clean bundle in an external archive, and update Draft PR #123 with the exact evidence. Missing retained evidence is `INCONCLUSIVE — RUNNER`; an unavailable browser environment is `INCONCLUSIVE — ENVIRONMENT`.
 
 No backend readiness calculation, FEFO, density conversion, inventory policy, Production Confirmation domain behavior, production transaction, stock movement, Order backend lifecycle rule, schema, migration, dependency, CI, A3.9, or A4 change belongs in this correction.
+
+## A3.9 — Production Confirmation structured errors and mutation safety
+
+- A3.9 base SHA (managed checkout `work`): `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
+- PR #123 / A3.8 is merged in local history. Accepted and exact-head-smoked runtime head: `34eeaf11dbe7fbfabb3bd36ad8aa79b9469892f5`.
+- PR #123 merge commit resolved locally: `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
+- `gh` is unavailable in this managed environment, so PR #123 was verified by local merge history and ancestry.
+- Final A3.8 exact-head smoke: `PASS — FULL AUTOMATED SMOKE PASSED`; this was external local evidence, not GitHub Actions.
+- A3.8 is DONE.
+- A3.9 is the current focused runtime slice. It hardens existing Production Confirmation structured errors, duplicate/stale/wrong-order ownership, authoritative success after refresh failure, and rollback tests.
+- A3.9 is not DONE until review, exact-head production smoke, and merge.
+- A4 responsive table containment remains separate.
+
+## PR #124 A3.9 corrective handoff
+
+Corrective scope is limited to reviewed Production Confirmation gaps: render failures without readiness, structured error extraction with `next_action`, uncertain-outcome reconciliation, Order A result retention after navigating to Order B, focus anchors, rollback assertions, and transaction lock audit. Do not run final browser smoke until the corrective head has human code review. Keep PR #124 Draft; do not merge or enable auto-merge.
+
+## PR #124 A3.9 second corrective handoff
+
+PR #124 remains the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Previous reviewed published GitHub head `f29d8115586e528afec6d9ee2c5efd1fc4fb0a5d` still required correction. Exact base remains `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. The current correction scopes SQLite `BEGIN IMMEDIATE` to Production Confirmation, adds an Order-bound reconciliation lifecycle with loading/duplicate/stale-response protection, fixes the generic transport-message presentation test, and keeps final exact-head browser smoke pending human code review. A3.9 remains IN PROGRESS; A4 remains separate.
+
+## PR #124 A3.9 final presentation correction
+
+PR #124 remains the active A3.9 Draft PR. Reviewed published GitHub head `f29d8115586e528afec6d9ee2c5efd1fc4fb0a5d` had one remaining presentation mismatch: Production Confirmation reconciliation was guarded in request logic but some controls still looked active. This correction keeps backend and transaction behavior unchanged, treats reconciliation as same-Order transient busy presentation for Production Confirmation and Order detail actions, and keeps final browser smoke pending smoke review. A3.9 remains IN PROGRESS; A4 remains separate.

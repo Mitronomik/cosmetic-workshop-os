@@ -866,3 +866,8 @@ The endpoint trims strings, allows empty values, rejects overlong values and uns
 `POST /api/orders` and `PUT /api/orders/{order_id}` use backend-authoritative validation. Domain validation failures from Order draft construction return HTTP `422` with a structured `detail` object containing `code`, `message`, `field`, `value`, and `next_action`. Standard FastAPI/Pydantic request validation, including forbidden lifecycle fields (`status`, `produced_at`, `delivered_at`) and invalid enum/type input, keeps the standard HTTP `422` detail-list shape.
 
 Positive IDs that reference missing linked records remain `404`. Inactive, mismatched, cancelled, archived, or otherwise lifecycle-conflicting linked records remain `409`. Production Readiness and Production Confirmation validation are separate API slices and are not changed by A3.7.
+
+
+### A3.9 Production Confirmation error boundary
+
+`POST /api/orders/{order_id}/produce` keeps the explicit `{ "confirm": true }` contract. The endpoint returns the project structured error shape in `detail` with safe `code`, `message`, and optional `next_action`. Missing Orders or linked sources are `404`; missing explicit confirmation and structured validation are `422`; lifecycle/readiness/stock/existing-batch conflicts are `409`; unexpected failures are `500` with a safe recovery message and no raw internals.

@@ -19,7 +19,7 @@ import {
   orderReadinessResultIsCurrent,
   orderRequestOwnerMatches,
   ownerFromOrderRequest,
-  productionReadinessFailureMessage,
+  extractProductionApiFailure, productionConfirmationFailurePresentation, productionReadinessFailureMessage, productionResponseBelongsToOrder, finishProductionOwnerState, productionFailureForOrder, restoreOrderOperationGenerationForOwnedNonMutatingFailure,
 } from '../dist-tests/order-mutation-lifecycle/order-mutation-lifecycle.js';
 import { mutationDisabled, mutationReadonly, restoreMutationGuards } from '../dist-tests/order-mutation-lifecycle/mutation-lifecycle.js';
 
@@ -445,4 +445,230 @@ test('mutation guards preserve originally disabled and readonly controls', () =>
   assert.equal(readonly.readOnly, true);
   assert.equal(normalDisabled.disabled, false);
   assert.equal(normalReadonly.readOnly, false);
+});
+
+
+test('production confirmation failure presentation separates conflict validation missing and uncertain states safely', () => {
+  const conflict = productionConfirmationFailurePresentation(extractProductionApiFailure({ status: 409, message: 'API request failed', payload: { detail: { code: 'readiness_changed', message: 'Недостаточно компонента', next_action: 'Запустите проверку заново' } } }));
+  assert.equal(conflict.kind, 'business_conflict');
+  assert.equal(conflict.invalidateReadiness, true);
+  assert.equal(conflict.closeConfirmation, true);
+  assert.match(conflict.message, /Недостаточно компонента|изменилось/);
+  assert.equal(conflict.nextAction, 'Запустите проверку заново');
+
+  const validation = productionConfirmationFailurePresentation(extractProductionApiFailure({ status: 422, message: 'API request failed', payload: { detail: { code: 'explicit_confirmation_required', message: 'Traceback sqlite SELECT secret', next_action: 'Повторите подтверждение' } } }));
+  assert.equal(validation.kind, 'validation');
+  assert.equal(validation.closeConfirmation, false);
+  assert.doesNotMatch(validation.message, /Traceback|sqlite|SELECT/);
+
+  const missing = productionConfirmationFailurePresentation(extractProductionApiFailure({ status: 404, payload: { detail: { code: 'order_not_found', message: 'Заказ больше не найден.', next_action: 'Обновите список' } } }));
+  assert.equal(missing.kind, 'missing_record');
+  assert.equal(missing.requireRefreshBeforeRetry, true);
+
+  const network = productionConfirmationFailurePresentation({ networkFailure: true });
+  assert.equal(network.kind, 'network_uncertain');
+  assert.equal(network.requireRefreshBeforeRetry, true);
+});
+
+test('production success ownership rejects wrong-order batch responses', () => {
+  assert.equal(productionResponseBelongsToOrder({ order_id: 7 }, 7), true);
+  assert.equal(productionResponseBelongsToOrder({ order_id: 8 }, 7), false);
+  assert.equal(productionResponseBelongsToOrder(null, 7), false);
+});
+
+
+test('production API failure extractor consumes realistic structured payloads safely', () => {
+  const cases = [
+    [409, 'readiness_changed'], [409, 'readiness_blocked'], [409, 'production_conflict'],
+    [422, 'explicit_confirmation_required'], [404, 'order_not_found'], [404, 'linked_source_not_found'], [500, 'production_unexpected_failure'],
+  ];
+  for (const [status, code] of cases) {
+    const extracted = extractProductionApiFailure({ status, message: 'API request failed', payload: { detail: { code, message: `${code} безопасно`, next_action: 'Следующее действие' } } });
+    assert.equal(extracted.status, status);
+    assert.equal(extracted.code, code);
+    assert.equal(extracted.message, `${code} безопасно`);
+    assert.equal(extracted.nextAction, 'Следующее действие');
+    const presentation = productionConfirmationFailurePresentation(extracted);
+    assert.doesNotMatch(presentation.message, /API request failed|SELECT|Traceback|workspace|production_batches/);
+  }
+});
+
+
+test('structured non-mutating production 422 restores readiness generation and keeps confirmation state', () => {
+  const previousGeneration = 3;
+  const attemptedGeneration = 4;
+  const validation = productionConfirmationFailurePresentation(extractProductionApiFailure({
+    status: 422,
+    message: 'API request failed',
+    payload: { detail: { code: 'explicit_confirmation_required', message: 'Нужно подтвердить изготовление.', next_action: 'Отметьте подтверждение и повторите.' } },
+  }));
+  const state = {
+    operationGeneration: attemptedGeneration,
+    readinessAttemptOperationGeneration: previousGeneration,
+    readiness: { order_id: 1, can_produce: true, status: 'ready' },
+    confirmingOrderId: 1,
+    notesByOrderId: { 1: 'важная заметка' },
+    uncertainByOrderId: {},
+    recoveryByOrderId: {},
+  };
+  const productionController = createOrderMutationController();
+  const productionRequest = productionController.beginRequest('production', ctx(productionController, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
+  const finalized = finishProductionOwnerState({ kind: 'production', generation: productionRequest.generation, orderId: 1 }, 1, productionRequest, 1);
+  assert.equal(finalized.finished, true);
+  assert.equal(state.confirmingOrderId, 1);
+  state.operationGeneration = restoreOrderOperationGenerationForOwnedNonMutatingFailure(
+    state.operationGeneration,
+    attemptedGeneration,
+    previousGeneration,
+    !validation.invalidateReadiness && !validation.requireRefreshBeforeRetry,
+  );
+  if (validation.invalidateReadiness) state.readiness = null;
+  if (validation.closeConfirmation) state.confirmingOrderId = null;
+  if (validation.requireRefreshBeforeRetry) state.uncertainByOrderId[1] = true;
+  state.recoveryByOrderId[1] = validation.nextAction;
+  assert.equal(state.operationGeneration, previousGeneration);
+  assert.equal(state.readinessAttemptOperationGeneration, state.operationGeneration);
+  assert.equal(state.readiness.status, 'ready');
+  assert.equal(state.confirmingOrderId, 1);
+  assert.equal(state.notesByOrderId[1], 'важная заметка');
+  assert.equal(state.uncertainByOrderId[1], undefined);
+  assert.equal(state.recoveryByOrderId[1], 'Отметьте подтверждение и повторите.');
+});
+
+test('non-mutating production generation restore is ownership-safe and does not rewind newer operations', () => {
+  assert.equal(restoreOrderOperationGenerationForOwnedNonMutatingFailure(4, 4, 3, true), 3);
+  assert.equal(restoreOrderOperationGenerationForOwnedNonMutatingFailure(5, 4, 3, true), 5);
+  assert.equal(restoreOrderOperationGenerationForOwnedNonMutatingFailure(4, 4, 3, false), 4);
+});
+
+test('production delayed A success and failure are order-bound and do not mutate B presentation state', () => {
+  const stored = {};
+  const errors = {};
+  const selectedB = { id: 2, product_name: 'B' };
+  const batchA = { order_id: 1, id: 10 };
+  if (productionResponseBelongsToOrder(batchA, 1)) stored[1] = batchA;
+  assert.deepEqual(selectedB, { id: 2, product_name: 'B' });
+  assert.equal(stored[1].id, 10);
+  const failureA = productionConfirmationFailurePresentation(extractProductionApiFailure(new TypeError('network')));
+  errors[1] = failureA.message;
+  assert.equal(errors[2], undefined);
+  assert.match(errors[1], /Исход изготовления неизвестен/);
+});
+
+
+
+test('delayed production uncertainty is stored for Order A after navigation without changing Order B', () => {
+  const controller = createOrderMutationController();
+  const contextA = ctx(controller, { selectedOrderId: 1, showForm: false });
+  const requestA = controller.beginRequest('production', contextA, { requestedOrderId: 1 });
+  const state = {
+    owner: ownerFromOrderRequest(requestA, 1, 'production'),
+    selectedOrder: { id: 2, product_name: 'B' },
+    uncertainByOrderId: {},
+    errorByOrderId: {},
+    recoveryByOrderId: {},
+  };
+  controller.bumpContext();
+  const presentation = productionConfirmationFailurePresentation(extractProductionApiFailure(new TypeError('network')));
+  const ownedByA = orderRequestOwnerMatches(state.owner, requestA, 1, 'production');
+  if (ownedByA) {
+    if (presentation.requireRefreshBeforeRetry) state.uncertainByOrderId[1] = true;
+    state.errorByOrderId[1] = presentation.message;
+    state.recoveryByOrderId[1] = presentation.nextAction;
+  }
+  assert.equal(ownedByA, true);
+  assert.equal(controller.canApplyRequest(requestA, ctx(controller, { selectedOrderId: 2, showForm: false })), false);
+  assert.deepEqual(state.selectedOrder, { id: 2, product_name: 'B' });
+  assert.equal(state.uncertainByOrderId[1], true);
+  assert.match(state.errorByOrderId[1], /Исход изготовления неизвестен/);
+  assert.match(state.recoveryByOrderId[1], /безопасное обновление/);
+  assert.equal(state.uncertainByOrderId[2], undefined);
+  assert.equal(state.errorByOrderId[2], undefined);
+  const afterNavigationReset = { ...state, selectedOrder: { id: 1, product_name: 'A' }, transientProductionError: '' };
+  assert.match(productionFailureForOrder(afterNavigationReset.errorByOrderId, 1), /Исход изготовления неизвестен/);
+  assert.equal(productionFailureForOrder(afterNavigationReset.errorByOrderId, 2), '');
+});
+
+test('older delayed Order A production response cannot replace a newer Order A operation', () => {
+  const controller = createOrderMutationController();
+  const contextA = ctx(controller, { selectedOrderId: 1, showForm: false });
+  const older = controller.beginRequest('production', contextA, { requestedOrderId: 1 });
+  const newer = controller.beginRequest('production', contextA, { requestedOrderId: 1 });
+  const state = { owner: ownerFromOrderRequest(newer, 1, 'production'), uncertainByOrderId: {}, productionByOrderId: { 1: { order_id: 1, id: 22 } } };
+  const olderOwned = orderRequestOwnerMatches(state.owner, older, 1, 'production');
+  if (olderOwned) {
+    state.uncertainByOrderId[1] = true;
+    state.productionByOrderId[1] = { order_id: 1, id: 11 };
+  }
+  assert.equal(olderOwned, false);
+  assert.equal(state.productionByOrderId[1].id, 22);
+  assert.equal(state.uncertainByOrderId[1], undefined);
+});
+
+
+test('successful reconciliation clears only the matching Order production failure state', () => {
+  const state = {
+    failures: { 1: 'Исход изготовления всё ещё не подтверждён.', 2: 'Ошибка B' },
+    recovery: { 1: 'Проверьте заказ', 2: 'Проверьте B' },
+    uncertain: { 1: true, 2: true },
+    batches: {},
+  };
+  const batchA = { order_id: 1, id: 40 };
+  if (productionResponseBelongsToOrder(batchA, 1)) {
+    state.batches[1] = batchA;
+    delete state.failures[1];
+    delete state.recovery[1];
+    delete state.uncertain[1];
+  }
+  assert.equal(productionFailureForOrder(state.failures, 1), '');
+  assert.equal(state.uncertain[1], undefined);
+  assert.equal(state.recovery[1], undefined);
+  assert.equal(state.batches[1].id, 40);
+  assert.equal(productionFailureForOrder(state.failures, 2), 'Ошибка B');
+  assert.equal(state.uncertain[2], true);
+});
+
+test('production reconciliation request ownership suppresses duplicates and stale cleanup', () => {
+  const controller = createOrderMutationController();
+  const context = ctx(controller, { selectedOrderId: 1, showForm: false });
+  const state = { owner: null, loadingOrderId: null, requestPairs: 0 };
+  const start = () => {
+    if (orderBoundOperationActive([{ owner: state.owner, loadingOrderId: state.loadingOrderId }], 1)) return null;
+    const request = controller.beginRequest('productionReconciliation', context, { requestedOrderId: 1 });
+    state.owner = ownerFromOrderRequest(request, 1, 'productionReconciliation');
+    state.loadingOrderId = 1;
+    state.requestPairs += 1;
+    return request;
+  };
+  const first = start();
+  const duplicate = start();
+  assert.ok(first);
+  assert.equal(duplicate, null);
+  assert.equal(state.requestPairs, 1);
+  const newer = controller.beginRequest('productionReconciliation', context, { requestedOrderId: 1 });
+  state.owner = ownerFromOrderRequest(newer, 1, 'productionReconciliation');
+  assert.equal(orderRequestOwnerMatches(state.owner, first, 1, 'productionReconciliation'), false);
+  assert.equal(orderRequestOwnerMatches(state.owner, newer, 1, 'productionReconciliation'), true);
+});
+
+
+test('production reconciliation operation blocks same-order writes/readiness while unrelated navigation remains available and recovers', () => {
+  const controller = createOrderMutationController();
+  const context = ctx(controller, { selectedOrderId: 1, showForm: false });
+  const request = controller.beginRequest('productionReconciliation', context, { requestedOrderId: 1 });
+  const state = { owner: ownerFromOrderRequest(request, 1, 'productionReconciliation'), loadingOrderId: 1 };
+  const states = [{ owner: state.owner, loadingOrderId: state.loadingOrderId }];
+  assert.equal(orderBoundOperationActive(states, 1), true);
+  assert.equal(orderBoundOperationActive(states, 1, ['productionReconciliation']), true);
+  assert.equal(canStartOrderReadinessRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, null, null, 1, states), false);
+  assert.equal(canStartOrderWriteRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, 1, states), false);
+  assert.equal(orderBoundOperationActive(states, 2), false);
+  assert.equal(orderRequestOwnerMatches(state.owner, request, 1, 'productionReconciliation'), true);
+  const readOnlyNavigationToB = !orderBoundOperationActive(states, 2);
+  assert.equal(readOnlyNavigationToB, true);
+  state.owner = null;
+  state.loadingOrderId = null;
+  assert.equal(orderBoundOperationActive([{ owner: state.owner, loadingOrderId: state.loadingOrderId }], 1), false);
+  assert.equal(canStartOrderReadinessRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, null, null, 1, []), true);
+  assert.equal(canStartOrderWriteRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, 1, []), true);
 });

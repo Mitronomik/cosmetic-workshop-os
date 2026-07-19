@@ -12,7 +12,7 @@ export type OrderContextSnapshot = {
 };
 export type OrderContextState = OrderContextSnapshot;
 
-export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory' | 'cancel' | 'archive';
+export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory' | 'productionReconciliation' | 'cancel' | 'archive';
 export type OrderRequestSnapshot = OrderContextSnapshot & {
   kind: OrderRequestKind;
   generation: number;
@@ -23,7 +23,7 @@ export type OrderRequestSnapshot = OrderContextSnapshot & {
 export type OrderSubmitSnapshot = OrderContextSnapshot & { submitToken: number };
 
 export type OrderTransientRequestOwner = {
-  kind: 'readiness' | 'production' | 'productionHistory' | 'cancel' | 'archive';
+  kind: 'readiness' | 'production' | 'productionHistory' | 'productionReconciliation' | 'cancel' | 'archive';
   generation: number;
   orderId: number;
 } | null;
@@ -80,6 +80,7 @@ export class OrderMutationController {
     readiness: 0,
     production: 0,
     productionHistory: 0,
+    productionReconciliation: 0,
     cancel: 0,
     archive: 0,
   };
@@ -105,6 +106,7 @@ export class OrderMutationController {
     this.invalidateRequest('readiness');
     this.invalidateRequest('production');
     this.invalidateRequest('productionHistory');
+    this.invalidateRequest('productionReconciliation');
     return this.contextToken;
   }
 
@@ -305,6 +307,88 @@ export function productionReadinessFailureMessage(failure: ProductionReadinessFa
   if (failure.status === 422) return 'Локальное приложение отклонило параметры проверки. Обновите заказ и проверьте его обязательные данные.';
   if (failure.networkFailure) return 'Не удалось связаться с локальным приложением. Проверьте, что оно запущено, и повторите проверку.';
   return 'Во время проверки произошла непредвиденная ошибка. Данные заказа и склада не изменены; повторите проверку.';
+}
+
+
+export type ProductionFailureKind = 'business_conflict' | 'validation' | 'missing_record' | 'network_uncertain' | 'unexpected';
+export type ProductionFailurePresentation = { kind: ProductionFailureKind; message: string; nextAction: string; invalidateReadiness: boolean; closeConfirmation: boolean; requireRefreshBeforeRetry: boolean };
+
+export type ProductionApiFailure = { status?: number; code?: string; message?: string; nextAction?: string; networkFailure?: boolean };
+
+function safeProductionErrorText(value: string | undefined): string {
+  const text = (value ?? '').trim();
+  if (!text) return '';
+  if (/Traceback|sqlite|SQL|SELECT|INSERT|UPDATE|DELETE|production_batches|stock_movements|packaging_stock_movements|\/workspace|\.py|Error:|Exception|\{"|\[\{/i.test(text)) return '';
+  return text;
+}
+
+
+export function extractProductionApiFailure(error: unknown): ProductionApiFailure {
+  const status = typeof error === 'object' && error && 'status' in error ? Number((error as { status?: number }).status) : undefined;
+  const payload = typeof error === 'object' && error && 'payload' in error ? (error as { payload?: unknown }).payload : null;
+  const detail = payload && typeof payload === 'object' && 'detail' in payload ? (payload as { detail?: unknown }).detail : null;
+  const structured = detail && typeof detail === 'object' && !Array.isArray(detail) ? detail as { code?: unknown; message?: unknown; next_action?: unknown } : null;
+  const message = structured && typeof structured.message === 'string'
+    ? safeProductionErrorText(structured.message)
+    : error instanceof Error && error.message !== 'API request failed'
+      ? safeProductionErrorText(error.message)
+      : '';
+  const nextAction = structured && typeof structured.next_action === 'string' ? safeProductionErrorText(structured.next_action) : '';
+  return {
+    status,
+    code: structured && typeof structured.code === 'string' ? structured.code : '',
+    message,
+    nextAction,
+    networkFailure: error instanceof TypeError,
+  };
+}
+
+export function productionConfirmationFailurePresentation(failure: ProductionApiFailure): ProductionFailurePresentation {
+  const code = failure.code ?? '';
+  const safe = safeProductionErrorText(failure.message);
+  const next = safeProductionErrorText(failure.nextAction) || 'Обновите заказ и запустите проверку готовности заново.';
+  if (failure.status === 409) {
+    if (code === 'readiness_changed' || code === 'readiness_blocked') {
+      return { kind: 'business_conflict', message: safe || 'Состояние заказа или склада изменилось. Изготовление не выполнено: запустите проверку готовности ещё раз.', nextAction: next, invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: false };
+    }
+    if (safe.toLocaleLowerCase('ru-RU').includes('уже изготов')) {
+      return { kind: 'business_conflict', message: 'Заказ уже изготовлен или производственная партия уже существует. Повторное изготовление недоступно.', nextAction: next, invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: false };
+    }
+    return { kind: 'business_conflict', message: safe || 'Заказ нельзя изготовить в текущем состоянии.', nextAction: next, invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: false };
+  }
+  if (failure.status === 422) return { kind: 'validation', message: safe || 'Локальное приложение отклонило подтверждение. Проверьте форму подтверждения; заметка сохранена.', nextAction: safeProductionErrorText(failure.nextAction) || 'Проверьте подтверждение и повторите только после готовности заказа.', invalidateReadiness: false, closeConfirmation: false, requireRefreshBeforeRetry: false };
+  if (failure.status === 404) return { kind: 'missing_record', message: safe || 'Заказ или связанный рецепт больше не доступны.', nextAction: safeProductionErrorText(failure.nextAction) || 'Обновите заказ и историю производства.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: true };
+  if (failure.networkFailure) return { kind: 'network_uncertain', message: 'Связь с локальным приложением прервалась. Исход изготовления неизвестен.', nextAction: 'Проверьте заказ и производственную партию через безопасное обновление ниже.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: true };
+  return { kind: 'unexpected', message: safe || 'Неожиданная ошибка локального приложения. Исход изготовления нужно проверить.', nextAction: safeProductionErrorText(failure.nextAction) || 'Обновите заказ и историю производства перед повторной попыткой.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: true };
+}
+
+
+
+export function finishProductionOwnerState(
+  owner: OrderTransientRequestOwner,
+  loadingOrderId: number | null,
+  snapshot: OrderRequestSnapshot,
+  orderId: number,
+): { owner: OrderTransientRequestOwner; loadingOrderId: number | null; finished: boolean } {
+  if (!orderRequestOwnerMatches(owner, snapshot, orderId, 'production')) return { owner, loadingOrderId, finished: false };
+  return { owner: null, loadingOrderId: null, finished: true };
+}
+
+export function productionFailureForOrder(failures: Record<number, string>, orderId: number): string {
+  return failures[orderId] || '';
+}
+
+export function restoreOrderOperationGenerationForOwnedNonMutatingFailure(
+  currentGeneration: number,
+  attemptedGeneration: number,
+  previousGeneration: number,
+  shouldRestore: boolean,
+): number {
+  return shouldRestore && currentGeneration === attemptedGeneration ? previousGeneration : currentGeneration;
+}
+
+export function productionResponseBelongsToOrder(batch: { order_id?: number } | null | undefined, orderId: number): boolean {
+  return batch?.order_id === orderId;
 }
 
 export function ownerFromOrderRequest(

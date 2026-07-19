@@ -25,7 +25,10 @@ class ProductionConfirmationLifecycleError(ValueError):
 
 
 class ProductionConfirmationReadinessError(ValueError):
-    pass
+    def __init__(self, message: str, *, code: str = "readiness_blocked") -> None:
+        super().__init__(message)
+        self.code = code
+
 
 
 class ProductionConfirmationStaleStateError(ProductionConfirmationLifecycleError):
@@ -51,15 +54,19 @@ class ProductionConfirmationService:
         readiness = self.readiness.check_order(order_id)
         if not readiness.can_produce or readiness.blocking_issues:
             messages = "; ".join(issue.message for issue in readiness.blocking_issues) or "Заказ пока нельзя изготовить. Сначала устраните блокирующие замечания проверки."
-            raise ProductionConfirmationReadinessError(messages)
+            raise ProductionConfirmationReadinessError(messages, code="readiness_blocked")
 
-        with transaction(self.config) as connection:
+        with transaction(self.config, immediate=True) as connection:
             locked_order = self.orders.get_by_id(order_id, connection=connection)
             self._validate_lifecycle(locked_order)
             if self._critical_order_snapshot(locked_order) != readiness_order_snapshot:
-                raise ProductionConfirmationStaleStateError("Order changed before production confirmation. Run readiness check again.")
+                raise ProductionConfirmationStaleStateError("Готовность заказа изменилась перед изготовлением. Запустите проверку готовности ещё раз.")
             if self.batches.exists_for_order(order_id, connection=connection):
                 raise ProductionConfirmationLifecycleError("Заказ уже изготовлен: производственная партия уже существует.")
+            readiness = self.readiness.check_order(order_id)
+            if not readiness.can_produce or readiness.blocking_issues:
+                messages = "; ".join(issue.message for issue in readiness.blocking_issues) or "Заказ пока нельзя изготовить. Сначала устраните блокирующие замечания проверки."
+                raise ProductionConfirmationReadinessError(messages, code="readiness_changed")
             component_cost = Decimal("0")
             component_cost_known = True
             ingredient_rows=[]
