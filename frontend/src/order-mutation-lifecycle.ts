@@ -362,6 +362,16 @@ export function productionConfirmationFailurePresentation(failure: ProductionApi
   return { kind: 'unexpected', message: safe || 'Неожиданная ошибка локального приложения. Исход изготовления нужно проверить.', nextAction: safeProductionErrorText(failure.nextAction) || 'Обновите заказ и историю производства перед повторной попыткой.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: true };
 }
 
+
+export function restoreOrderOperationGenerationForOwnedNonMutatingFailure(
+  currentGeneration: number,
+  attemptedGeneration: number,
+  previousGeneration: number,
+  shouldRestore: boolean,
+): number {
+  return shouldRestore && currentGeneration === attemptedGeneration ? previousGeneration : currentGeneration;
+}
+
 export function productionResponseBelongsToOrder(batch: { order_id?: number } | null | undefined, orderId: number): boolean {
   return batch?.order_id === orderId;
 }
