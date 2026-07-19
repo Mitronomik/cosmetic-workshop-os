@@ -1031,3 +1031,10 @@ A3.5 verification run in this branch:
 - Exact base remains `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
 - Final exact-head production browser smoke has not been run in this corrective pass and remains pending human code review.
 - A3.9 remains IN PROGRESS; A4 remains separate.
+
+
+## 2026-07-19 — A4.1 responsive table containment
+
+Slice A3 is marked complete based on the product owner's confirmed A3.9 Production Confirmation tests and smoke verification. PR #124 is the completed A3.9 implementation baseline; this is external product-owner evidence, not GitHub Actions evidence.
+
+Slice A4 is now active. Current runtime work is A4.1: establish a small shared responsive table containment contract and prove it on `/ingredient-lots`. The scope is frontend layout containment only: shrinkable content/card/table-wrapper ancestors, local table scrolling, row-action reachability, and visible focus outlines. `/orders`, `/clients`, `/inventory`, and `/packaging-items` remain separate A4 follow-ups, with `/inventory` and `/packaging-items` inspected only for obvious passive shared-CSS regressions.

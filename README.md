@@ -25,9 +25,9 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current runtime baseline: PR #123 / **A3.8 — Production Readiness feedback and lifecycle** is merged at `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. Its accepted runtime head is `34eeaf11dbe7fbfabb3bd36ad8aa79b9469892f5`. The user-provided exact-head smoke verdict for that runtime head is `PASS — FULL AUTOMATED SMOKE PASSED`; this is external local evidence, not a GitHub Actions result.
+PR #124 / **A3.9 — Production Confirmation structured errors and mutation safety** is the completed Slice A3 implementation baseline based on the product owner's confirmed tests and smoke verification. Treat Slice A3 as complete; the exact evidence is external local evidence, not a GitHub Actions result.
 
-Slice A3 remains IN PROGRESS. **A3.9 — Production Confirmation structured errors and mutation safety** is the current focused runtime slice. A3.9 base SHA is `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. It hardens existing Production Confirmation without changing FEFO, calculations, partial production, or A4 responsive table containment. A4 remains separate.
+Slice A4 is now active. The current focused runtime slice is **A4.1 — Shared responsive table containment foundation for `/ingredient-lots`**. It is limited to frontend table/page containment for `/ingredient-lots`; `/orders`, `/clients`, `/inventory`, and `/packaging-items` remain separate A4 follow-ups.
 
 Runtime product implementation includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 

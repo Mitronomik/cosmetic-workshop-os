@@ -2,37 +2,25 @@
 
 ## Goal
 
-A3.9 — Production Confirmation structured errors and mutation safety for PR #124. Keep the existing Production Confirmation runtime slice safe, understandable, recoverable, transactional, and resistant to duplicate/stale/conflicting execution.
+A4.1 — Shared responsive table containment foundation for `/ingredient-lots`. Keep the Ingredient Lots page usable at desktop, tablet, and narrow viewports without document-level horizontal overflow; wide table content must stay inside a local horizontal scroll area.
 
-PR #124 is the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Reviewed published head `f29d8115586e528afec6d9ee2c5efd1fc4fb0a5d` still required correction. Exact base: `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
+## Baseline
+
+Slice A3 is complete. PR #124 / A3.9 Production Confirmation structured errors and mutation safety is the completed A3 implementation baseline based on the product owner's confirmed tests and smoke verification. This is external evidence, not GitHub Actions evidence.
 
 ## Allowed scope/files
 
-- Backend Production Confirmation endpoint/service and focused tests.
-- Existing frontend Orders Production Confirmation lifecycle/presentation helpers and dependency-free tests.
-- Directly affected API/project-state documentation.
+- Frontend CSS containment contract for shared table wrappers, shrinkable content columns/cards, safe local horizontal scrolling, and visible focus outlines.
+- Minimal `/ingredient-lots` markup only if CSS alone cannot preserve accessible table identity/status/actions.
+- Focused frontend checks, focused Ingredient Lot backend regression tests, and exact-head browser smoke with isolated SQLite/browser profile.
+- Directly affected project-state documentation.
 
 ## Non-goals
 
-- No FEFO, density, recipe, readiness-calculation, cost/tax/margin, schema, migration, dependency, CI, responsive table containment, partial production, production undo/rollback UI, unrelated route, or A4 work.
+- No `/orders`, `/clients`, `/inventory`, or `/packaging-items` route implementation changes in A4.1. They remain separate A4 follow-ups.
+- No backend API, schema, migration, domain rule, stock calculation, validation lifecycle, dependency, framework, cloud/sync/auth/OCR/analytics, or broad `frontend/src/main.ts` refactor.
+- No global `overflow-x: hidden` on `html`, `body`, or the application shell to hide layout defects.
 
-## Tests
+## Required evidence
 
-Required corrective checks: focused frontend lifecycle/presentation tests, frontend build, focused backend Production Confirmation tests, readiness/orders backend tests, full backend suite with exact-base comparison, `git diff --check`, and repository cleanliness.
-
-## Acceptance criteria
-
-- Production errors remain visible after readiness invalidation.
-- Structured backend detail is consumed safely, including `next_action`.
-- Uncertain outcomes have an explicit authoritative Order/ProductionBatch reconciliation path.
-- Authoritative Order A success or uncertainty remains attached to A after navigating to B.
-- Success plus failed refresh remains success.
-- No blind duplicate production is possible.
-- Focus anchors exist for confirmation, failure/recovery, and success states.
-- Rollback tests prove no partial database mutation, status/timestamp mutation, or audit entry survives injected failures.
-
-## Current evidence state
-
-A3.8 is DONE: PR #123 is merged; accepted exact-head-smoked runtime head `34eeaf11dbe7fbfabb3bd36ad8aa79b9469892f5`; local merge/base commit `c6d87df635a5cf7d063b43ffc16dc02d64e08103`; final A3.8 exact-head smoke `PASS — FULL AUTOMATED SMOKE PASSED` was external local evidence, not GitHub Actions.
-
-A3.9 remains IN PROGRESS. Exact-head production browser smoke has not yet been run and must wait until this corrective head passes human code review. A4 remains separate.
+Record before/after overflow metrics for `/ingredient-lots` at 1440×900, 1024×768, 768×900, and 390×844, including `documentElement`/`body` client and scroll widths plus local table wrapper client/scroll widths. Verify mouse and keyboard reach row actions, focus outlines are visible, create/edit/structured-validation/deactivate behavior remains unchanged, and `/inventory` plus `/packaging-items` have no obvious shared-CSS regressions.
