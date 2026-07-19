@@ -2120,3 +2120,44 @@ test('client feedback wrapper preserves form, controls, values, focus and select
   assert.equal(originalText.selectionStart, 6);
   assert.equal(originalText.selectionEnd, 13);
 });
+
+test('applyValidationToOrderForm preserves order form DOM, values, focus, selection, ARIA and escaped text', async () => {
+  reset();
+  const form = mkForm('order');
+  const fields = {};
+  for (const name of ['product_name', 'target_batch_size_value', 'client_id', 'source_type', 'recipe_version_id', 'packaging_item_id', 'packaging_quantity', 'ordered_at', 'planned_production_at', 'notes']) {
+    fields[name] = addField(form, name, ['client_id', 'source_type', 'recipe_version_id', 'packaging_item_id'].includes(name));
+    fields[name].value = { product_name: 'Крем <день>', target_batch_size_value: '50,5', client_id: '12', source_type: 'recipe_version', recipe_version_id: '7', packaging_item_id: '3', packaging_quantity: '1', ordered_at: '2026-07-18', planned_production_at: '2026-07-19', notes: 'Не терять заметки' }[name];
+  }
+  mockDoc.body.appendChild(form);
+  const product = fields.product_name;
+  product.focus();
+  product.setSelectionRange(2, 6);
+  mod.applyValidationToOrderForm({ fieldErrors: { product_name: ['Название продукта: <b>не HTML</b>'], source_type: ['Основа заказа: выберите основу.'], recipe_version_id: ['Версия рецепта: выберите версию.'] }, formErrors: ['Общая <script>ошибка</script>'] });
+  assert.equal(mockDoc.body.querySelector('[data-form="order"]'), form);
+  assert.equal(form.querySelector('[name="product_name"]'), product);
+  assert.equal(fields.product_name.value, 'Крем <день>');
+  assert.equal(fields.target_batch_size_value.value, '50,5');
+  assert.equal(fields.client_id.value, '12');
+  assert.equal(fields.source_type.value, 'recipe_version');
+  assert.equal(fields.recipe_version_id.value, '7');
+  assert.equal(fields.packaging_item_id.value, '3');
+  assert.equal(fields.packaging_quantity.value, '1');
+  assert.equal(fields.ordered_at.value, '2026-07-18');
+  assert.equal(fields.planned_production_at.value, '2026-07-19');
+  assert.equal(fields.notes.value, 'Не терять заметки');
+  assert.equal(mockDoc.activeElement, product);
+  assert.equal(product.selectionStart, 2);
+  assert.equal(product.selectionEnd, 6);
+  assert.equal(product.getAttribute('aria-invalid'), 'true');
+  assert.equal(product.getAttribute('aria-describedby'), 'order-product_name-error');
+  assert.ok(byId(form, 'order-product_name-error').textContent.includes('<b>не HTML</b>'));
+  assert.ok(byId(form, 'order-product_name-error'));
+  mod.applyValidationToOrderForm({ fieldErrors: { product_name: ['Название продукта: повтор.'] }, formErrors: [] });
+  assert.ok(byId(form, 'order-product_name-error'));
+  assert.equal(form.querySelector('#order-recipe_version_id-error'), null);
+  mod.applyValidationToOrderForm({ fieldErrors: {}, formErrors: [] });
+  assert.equal(mockDoc.body.querySelector('[data-form="order"]'), form);
+  assert.equal(product.hasAttribute('aria-invalid'), false);
+  assert.equal(form.querySelectorAll('.field-error').length, 0);
+});

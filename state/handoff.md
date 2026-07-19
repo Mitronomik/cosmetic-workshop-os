@@ -364,3 +364,11 @@ PR #96 / `PR96 — Workshop profile settings foundation` was reviewed as superse
 This documentation-only PR scope is limited to `README.md`, `docs/implementation-plan.md`, `state/current-focus.md`, `state/progress.md`, and `state/handoff.md`. It changes no runtime code, backend, frontend, migrations, dependencies, CI, tests, or smoke infrastructure.
 
 Next runtime task: **A3.7 — Orders structured validation**. No future PR number exists yet. A3.7 must not include order schema changes, migrations, status workflow redesign, Production Readiness, Production Confirmation, inventory/production write-offs, cost/tax/margin implementation, responsive-table redesign, dependency or CI changes, or unrelated routes.
+
+## 2026-07-18 — A3.7 Orders structured validation handoff
+
+A3.7 is implemented in the current focused runtime branch for Order create/update only. Backend `OrderDraft.create()` now runs inside the write error boundary, so domain validation returns structured `422` DomainIssue responses while FastAPI/Pydantic `422`, positive-reference `404`, and inactive/lifecycle `409` boundaries remain separate. The Orders form uses shared `FormValidationState`, Russian field labels, explicit `recipe_source → source_type` mapping, targeted validation updates, mutation guards, duplicate-submit protection, authoritative saved Order responses before list refresh, and a separate post-save refresh warning.
+
+PR #120 / A3.6 remains DONE at merge commit `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`; published runtime head `e148220ac9ad08a0fd952482a0b293f1f2d22bad`; exact-head smoke `PASS — FULL AUTOMATED SMOKE PASSED`. PR #121 synchronized project memory at `5c1edba2ca50b4a503d7dd44df2fdf7fda60aa6c`.
+
+A3.7 is not DONE while this PR is open. External exact-head browser smoke for A3.7 is still required before merge. Production Readiness and Production Confirmation remain separate future slices.

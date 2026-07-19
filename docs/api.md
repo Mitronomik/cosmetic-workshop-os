@@ -850,3 +850,9 @@ The report uses Decimal-safe string values. It does not invent tax or apply a hi
 The endpoint trims strings, allows empty values, rejects overlong values and unsafe control characters, and updates only the grouped `workshop_profile` app setting. It does not mutate business data, create files, run backup/export/import/demo/report-document actions, or recalculate reports, recipes, orders, production, stock, costs, taxes, or margins.
 
 `GET /api/settings/status` now marks only `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note` as `editable_now`; calculation-sensitive settings remain `requires_backend_rules`.
+
+## Orders write validation contract
+
+`POST /api/orders` and `PUT /api/orders/{order_id}` use backend-authoritative validation. Domain validation failures from Order draft construction return HTTP `422` with a structured `detail` object containing `code`, `message`, `field`, `value`, and `next_action`. Standard FastAPI/Pydantic request validation, including forbidden lifecycle fields (`status`, `produced_at`, `delivered_at`) and invalid enum/type input, keeps the standard HTTP `422` detail-list shape.
+
+Positive IDs that reference missing linked records remain `404`. Inactive, mismatched, cancelled, archived, or otherwise lifecycle-conflicting linked records remain `409`. Production Readiness and Production Confirmation validation are separate API slices and are not changed by A3.7.

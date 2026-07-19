@@ -1,14 +1,14 @@
 # Current focus — A3.7 Orders structured validation
 
-This documentation PR does **not** implement A3.7. It only records that A3.7 is the next separate focused runtime task after PR #120 / A3.6 was merged and exact-head smoke verified.
+A3.7 is implemented in the current focused runtime pull request. It is **not DONE** until the PR is reviewed, merged, and external exact-head browser smoke runs against the published head.
 
-No GitHub PR number exists yet for A3.7.
+No browser smoke has been run for A3.7 yet.
 
-## Runtime scope for the next task
+## Runtime scope for this pull request
 
 A3.7 is limited to the existing Order create/edit forms and their safe mutation lifecycle. Backend validation remains authoritative.
 
-The next runtime PR should ensure:
+This runtime PR implements:
 
 - visible backend validation issues map through explicit Order field allow-lists only;
 - unknown, aggregate, hidden, malformed, or protected issue paths remain in the form summary;

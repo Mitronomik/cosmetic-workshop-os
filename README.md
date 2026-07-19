@@ -29,7 +29,7 @@ Current runtime baseline: PR #120 / Slice A3.6 Client Feedback structured valida
 
 PR #119 / A3.5 Client Wishes structured validation is DONE: merge commit `e53e7852c8b384915fb77b59345170c43671151c`, verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`, exact-head smoke PASS. PR #120 / A3.6 is DONE, merged, and exact-head verified.
 
-Slice A3 remains IN PROGRESS. The next focused runtime slice is **A3.7 — Orders structured validation**. This documentation-only synchronization does not implement Orders work and assigns no future GitHub PR number. Production Readiness and Production Confirmation remain separate future slices.
+Slice A3 remains IN PROGRESS. **A3.7 — Orders structured validation** is implemented in the current focused runtime pull request and must remain IN PROGRESS until review, merge, and external exact-head browser smoke. Production Readiness and Production Confirmation remain separate future slices.
 
 Runtime product implementation includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 

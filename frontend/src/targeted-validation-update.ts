@@ -66,6 +66,12 @@ export function applyValidationToClientFeedbackForm(validation: FormValidationSt
   applyValidationToForm(form, validation, 'client-feedback', 'Проверьте отзыв клиента');
 }
 
+export function applyValidationToOrderForm(validation: FormValidationState): void {
+  const form = document.querySelector<HTMLFormElement>('[data-form="order"]');
+  if (!form) return;
+  applyValidationToForm(form, validation, 'order', 'Проверьте заказ');
+}
+
 function applyValidationToForm(
   form: HTMLFormElement,
   validation: FormValidationState,

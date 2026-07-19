@@ -222,3 +222,19 @@ test('client feedback visible fields map inline and protected fields remain summ
   assert.ok(state.formErrors.includes('Unknown aggregate problem'));
   assert.ok(state.formErrors.includes('Hidden client mismatch'));
 });
+
+test('normalizes Order visible fields and keeps protected or nested paths in summary', async () => {
+  const { normalizeBackendValidation } = await import('../dist-tests/form-validation/form-validation.js');
+  const labels = { client_id: 'Клиент', source_type: 'Основа заказа', recipe_source: 'Основа заказа', recipe_version_id: 'Версия рецепта', client_recipe_id: 'Индивидуальная формула', product_name: 'Название продукта', target_batch_size_value: 'Размер партии', target_batch_size_unit: 'Единица партии', packaging_item_id: 'Тара', packaging_quantity: 'Количество тары', sale_price: 'Цена продажи', ordered_at: 'Дата заказа', planned_production_at: 'Плановая дата производства', notes: 'Заметки' };
+  const payload = { detail: [
+    { loc: ['body', 'client_id'], msg: 'нужно выбрать клиента' },
+    { field: 'recipe_source', message: 'выберите основу' },
+    { field: 'status', message: 'нельзя менять статус' },
+    { loc: ['body', 'unknown', 'nested'], msg: '<b>не доверять HTML</b>' },
+  ] };
+  const state = normalizeBackendValidation(payload, labels);
+  assert.equal(state.fieldErrors.client_id[0], 'Клиент: нужно выбрать клиента');
+  assert.equal(state.fieldErrors.recipe_source[0], 'Основа заказа: выберите основу');
+  assert.ok(state.formErrors.includes('нельзя менять статус'));
+  assert.ok(state.formErrors.includes('<b>не доверять HTML</b>'));
+});
