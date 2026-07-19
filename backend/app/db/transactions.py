@@ -8,10 +8,15 @@ from app.db.connection import connect
 
 @contextmanager
 def transaction(config: DatabaseConfig | None = None) -> Iterator[sqlite3.Connection]:
-    """Open a SQLite transaction for service-level atomic writes."""
+    """Open a SQLite transaction for service-level atomic writes.
+
+    BEGIN IMMEDIATE takes SQLite's reserved write lock before service code runs,
+    so production can re-check readiness and then write stock movements without
+    another writer changing inventory between those steps.
+    """
     connection = connect(config)
     try:
-        connection.execute("BEGIN")
+        connection.execute("BEGIN IMMEDIATE")
         yield connection
         connection.commit()
     except Exception:

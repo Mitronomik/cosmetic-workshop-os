@@ -412,3 +412,7 @@ No backend readiness calculation, FEFO, density conversion, inventory policy, Pr
 - A3.9 is the current focused runtime slice. It hardens existing Production Confirmation structured errors, duplicate/stale/wrong-order ownership, authoritative success after refresh failure, and rollback tests.
 - A3.9 is not DONE until review, exact-head production smoke, and merge.
 - A4 responsive table containment remains separate.
+
+## PR #124 A3.9 corrective handoff
+
+Corrective scope is limited to reviewed Production Confirmation gaps: render failures without readiness, structured error extraction with `next_action`, uncertain-outcome reconciliation, Order A result retention after navigating to Order B, focus anchors, rollback assertions, and transaction lock audit. Do not run final browser smoke until the corrective head has human code review. Keep PR #124 Draft; do not merge or enable auto-merge.

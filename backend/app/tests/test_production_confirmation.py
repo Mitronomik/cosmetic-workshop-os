@@ -33,6 +33,7 @@ from app.services.production_confirmation import ProductionConfirmationLifecycle
 from app.services.production_readiness import ProductionReadinessService
 from app.services.recipes import RecipeService
 from app.services.stock_movements import StockMovementService
+from app.db.transactions import transaction
 
 
 def config(tmp_path):
@@ -68,6 +69,11 @@ def counts(c):
         "stock": scalar(c, "SELECT count(*) FROM stock_movements WHERE movement_type='write_off'"),
         "packaging": scalar(c, "SELECT count(*) FROM packaging_stock_movements WHERE movement_type='write_off'"),
     }
+
+def rollback_snapshot(c, order_id):
+    with sqlite3.connect(c.path) as con:
+        order = con.execute("SELECT status, produced_at, updated_at FROM orders WHERE id=?", (order_id,)).fetchone()
+        return {**counts(c), "order_status": order[0], "produced_at": order[1], "updated_at": order[2], "audit_logs": con.execute("SELECT count(*) FROM audit_logs").fetchone()[0]}
 
 
 def test_producing_ready_order_creates_batch_snapshots_movements_and_status(tmp_path):
@@ -155,10 +161,10 @@ def test_transaction_rolls_back_partial_writes_on_failure(tmp_path):
     *_, order = seed_ready(c)
     service = ProductionConfirmationService(c)
     service.packaging_movements = FailingPackagingMovementRepository()
+    before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
         service.produce_order(order.id, True)
-    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
-    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+    assert rollback_snapshot(c, order.id) == before
 
 
 def test_production_snapshots_are_immutable_after_source_changes(tmp_path):
@@ -239,40 +245,40 @@ def test_transaction_rolls_back_batch_repository_failures(tmp_path, fail_at):
     *_, order = seed_ready(c)
     service = ProductionConfirmationService(c)
     service.batches = FailingBatchRepository(service.batches, fail_at)
+    before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
         service.produce_order(order.id, True)
-    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
-    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+    assert rollback_snapshot(c, order.id) == before
 
 def test_transaction_rolls_back_ingredient_movement_failure(tmp_path):
     c = config(tmp_path)
     *_, order = seed_ready(c)
     service = ProductionConfirmationService(c)
     service.stock_movements = FailingStockMovementRepository()
+    before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
         service.produce_order(order.id, True)
-    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
-    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+    assert rollback_snapshot(c, order.id) == before
 
 def test_transaction_rolls_back_order_update_failure(tmp_path):
     c = config(tmp_path)
     *_, order = seed_ready(c)
     service = ProductionConfirmationService(c)
     service.orders = FailingOrderRepository(service.orders)
+    before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
         service.produce_order(order.id, True)
-    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
-    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+    assert rollback_snapshot(c, order.id) == before
 
 def test_transaction_rolls_back_audit_failure(tmp_path):
     c = config(tmp_path)
     *_, order = seed_ready(c)
     service = ProductionConfirmationService(c)
     service.audit = FailingAuditRepository()
+    before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
         service.produce_order(order.id, True)
-    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
-    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+    assert rollback_snapshot(c, order.id) == before
 
 def test_api_unexpected_failure_uses_safe_error(monkeypatch):
     class BrokenProductionService:
@@ -324,3 +330,15 @@ def test_api_produce_endpoint(monkeypatch, tmp_path):
     assert body["packaging"][0]["total_cost_snapshot"] == "10.00"
     assert api.post("/api/orders/999/produce", json={"confirm": True}).status_code == 404
     assert api.post(f"/api/orders/{order.id}/produce", json={"confirm": True}).status_code == 409
+
+
+def test_production_transaction_uses_immediate_write_lock(tmp_path):
+    c = config(tmp_path)
+    _, _, lot, _, _ = seed_ready(c)
+    with transaction(c):
+        competing = sqlite3.connect(c.path, timeout=0.05)
+        try:
+            with pytest.raises(sqlite3.OperationalError, match="locked"):
+                competing.execute("INSERT INTO stock_movements (ingredient_lot_id, movement_type, direction, quantity, unit, reason) VALUES (?, 'receipt', 'in', '1', 'g', 'competing')", (lot.id,))
+        finally:
+            competing.close()

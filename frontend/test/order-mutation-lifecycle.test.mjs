@@ -19,7 +19,7 @@ import {
   orderReadinessResultIsCurrent,
   orderRequestOwnerMatches,
   ownerFromOrderRequest,
-  productionConfirmationFailurePresentation, productionReadinessFailureMessage, productionResponseBelongsToOrder,
+  extractProductionApiFailure, productionConfirmationFailurePresentation, productionReadinessFailureMessage, productionResponseBelongsToOrder,
 } from '../dist-tests/order-mutation-lifecycle/order-mutation-lifecycle.js';
 import { mutationDisabled, mutationReadonly, restoreMutationGuards } from '../dist-tests/order-mutation-lifecycle/mutation-lifecycle.js';
 
@@ -449,18 +449,19 @@ test('mutation guards preserve originally disabled and readonly controls', () =>
 
 
 test('production confirmation failure presentation separates conflict validation missing and uncertain states safely', () => {
-  const conflict = productionConfirmationFailurePresentation({ status: 409, code: 'readiness_changed', message: 'Недостаточно компонента' });
+  const conflict = productionConfirmationFailurePresentation(extractProductionApiFailure({ status: 409, message: 'API request failed', payload: { detail: { code: 'readiness_changed', message: 'Недостаточно компонента', next_action: 'Запустите проверку заново' } } }));
   assert.equal(conflict.kind, 'business_conflict');
   assert.equal(conflict.invalidateReadiness, true);
   assert.equal(conflict.closeConfirmation, true);
   assert.match(conflict.message, /Недостаточно компонента|изменилось/);
+  assert.equal(conflict.nextAction, 'Запустите проверку заново');
 
-  const validation = productionConfirmationFailurePresentation({ status: 422, message: 'Traceback sqlite SELECT secret' });
+  const validation = productionConfirmationFailurePresentation(extractProductionApiFailure({ status: 422, message: 'API request failed', payload: { detail: { code: 'explicit_confirmation_required', message: 'Traceback sqlite SELECT secret', next_action: 'Повторите подтверждение' } } }));
   assert.equal(validation.kind, 'validation');
   assert.equal(validation.closeConfirmation, false);
   assert.doesNotMatch(validation.message, /Traceback|sqlite|SELECT/);
 
-  const missing = productionConfirmationFailurePresentation({ status: 404 });
+  const missing = productionConfirmationFailurePresentation(extractProductionApiFailure({ status: 404, payload: { detail: { code: 'order_not_found', message: 'Заказ больше не найден.', next_action: 'Обновите список' } } }));
   assert.equal(missing.kind, 'missing_record');
   assert.equal(missing.requireRefreshBeforeRetry, true);
 
@@ -473,4 +474,35 @@ test('production success ownership rejects wrong-order batch responses', () => {
   assert.equal(productionResponseBelongsToOrder({ order_id: 7 }, 7), true);
   assert.equal(productionResponseBelongsToOrder({ order_id: 8 }, 7), false);
   assert.equal(productionResponseBelongsToOrder(null, 7), false);
+});
+
+
+test('production API failure extractor consumes realistic structured payloads safely', () => {
+  const cases = [
+    [409, 'readiness_changed'], [409, 'readiness_blocked'], [409, 'production_conflict'],
+    [422, 'explicit_confirmation_required'], [404, 'order_not_found'], [404, 'linked_source_not_found'], [500, 'production_unexpected_failure'],
+  ];
+  for (const [status, code] of cases) {
+    const extracted = extractProductionApiFailure({ status, message: 'API request failed', payload: { detail: { code, message: `${code} безопасно`, next_action: 'Следующее действие' } } });
+    assert.equal(extracted.status, status);
+    assert.equal(extracted.code, code);
+    assert.equal(extracted.message, `${code} безопасно`);
+    assert.equal(extracted.nextAction, 'Следующее действие');
+    const presentation = productionConfirmationFailurePresentation(extracted);
+    assert.doesNotMatch(presentation.message, /API request failed|SELECT|Traceback|workspace|production_batches/);
+  }
+});
+
+test('production delayed A success and failure are order-bound and do not mutate B presentation state', () => {
+  const stored = {};
+  const errors = {};
+  const selectedB = { id: 2, product_name: 'B' };
+  const batchA = { order_id: 1, id: 10 };
+  if (productionResponseBelongsToOrder(batchA, 1)) stored[1] = batchA;
+  assert.deepEqual(selectedB, { id: 2, product_name: 'B' });
+  assert.equal(stored[1].id, 10);
+  const failureA = productionConfirmationFailurePresentation(extractProductionApiFailure(new TypeError('network')));
+  errors[1] = failureA.message;
+  assert.equal(errors[2], undefined);
+  assert.match(errors[1], /Исход изготовления неизвестен/);
 });

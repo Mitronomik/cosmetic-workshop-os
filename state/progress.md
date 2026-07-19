@@ -1023,3 +1023,11 @@ A3.5 verification run in this branch:
 - A3.9 is the current focused runtime slice. It hardens existing Production Confirmation structured errors, duplicate/stale/wrong-order ownership, authoritative success after refresh failure, and rollback tests.
 - A3.9 is not DONE until review, exact-head production smoke, and merge.
 - A4 responsive table containment remains separate.
+
+## PR #124 A3.9 corrective pass
+
+- PR #124 remains the active A3.9 Draft PR on managed branch `codex-l6nqu0`.
+- Reviewed published head `8ee85e2baff18e278da945a4d89634c5db9335f8` requires correction.
+- Exact base remains `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
+- Final exact-head production browser smoke has not been run in this corrective pass and remains pending human code review.
+- A3.9 remains IN PROGRESS; A4 remains separate.
