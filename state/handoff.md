@@ -424,3 +424,10 @@ PR #124 remains the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Previ
 ## PR #124 A3.9 final presentation correction
 
 PR #124 remains the active A3.9 Draft PR. Reviewed published GitHub head `f29d8115586e528afec6d9ee2c5efd1fc4fb0a5d` had one remaining presentation mismatch: Production Confirmation reconciliation was guarded in request logic but some controls still looked active. This correction keeps backend and transaction behavior unchanged, treats reconciliation as same-Order transient busy presentation for Production Confirmation and Order detail actions, and keeps final browser smoke pending smoke review. A3.9 remains IN PROGRESS; A4 remains separate.
+
+
+## 2026-07-19 — A4.1 responsive table containment
+
+Slice A3 is marked complete based on the product owner's confirmed A3.9 Production Confirmation tests and smoke verification. PR #124 is the completed A3.9 implementation baseline; this is external product-owner evidence, not GitHub Actions evidence.
+
+Slice A4 is now active. Current runtime work is A4.1: establish a small shared responsive table containment contract and prove it on `/ingredient-lots`. The scope is frontend layout containment only: shrinkable content/card/table-wrapper ancestors, local table scrolling, row-action reachability, and visible focus outlines. `/orders`, `/clients`, `/inventory`, and `/packaging-items` remain separate A4 follow-ups, with `/inventory` and `/packaging-items` inspected only for obvious passive shared-CSS regressions.
