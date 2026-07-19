@@ -363,6 +363,21 @@ export function productionConfirmationFailurePresentation(failure: ProductionApi
 }
 
 
+
+export function finishProductionOwnerState(
+  owner: OrderTransientRequestOwner,
+  loadingOrderId: number | null,
+  snapshot: OrderRequestSnapshot,
+  orderId: number,
+): { owner: OrderTransientRequestOwner; loadingOrderId: number | null; finished: boolean } {
+  if (!orderRequestOwnerMatches(owner, snapshot, orderId, 'production')) return { owner, loadingOrderId, finished: false };
+  return { owner: null, loadingOrderId: null, finished: true };
+}
+
+export function productionFailureForOrder(failures: Record<number, string>, orderId: number): string {
+  return failures[orderId] || '';
+}
+
 export function restoreOrderOperationGenerationForOwnedNonMutatingFailure(
   currentGeneration: number,
   attemptedGeneration: number,

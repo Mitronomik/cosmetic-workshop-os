@@ -19,7 +19,7 @@ import {
   orderReadinessResultIsCurrent,
   orderRequestOwnerMatches,
   ownerFromOrderRequest,
-  extractProductionApiFailure, productionConfirmationFailurePresentation, productionReadinessFailureMessage, productionResponseBelongsToOrder, restoreOrderOperationGenerationForOwnedNonMutatingFailure,
+  extractProductionApiFailure, productionConfirmationFailurePresentation, productionReadinessFailureMessage, productionResponseBelongsToOrder, finishProductionOwnerState, productionFailureForOrder, restoreOrderOperationGenerationForOwnedNonMutatingFailure,
 } from '../dist-tests/order-mutation-lifecycle/order-mutation-lifecycle.js';
 import { mutationDisabled, mutationReadonly, restoreMutationGuards } from '../dist-tests/order-mutation-lifecycle/mutation-lifecycle.js';
 
@@ -511,6 +511,11 @@ test('structured non-mutating production 422 restores readiness generation and k
     uncertainByOrderId: {},
     recoveryByOrderId: {},
   };
+  const productionController = createOrderMutationController();
+  const productionRequest = productionController.beginRequest('production', ctx(productionController, { selectedOrderId: 1, showForm: false }), { requestedOrderId: 1 });
+  const finalized = finishProductionOwnerState({ kind: 'production', generation: productionRequest.generation, orderId: 1 }, 1, productionRequest, 1);
+  assert.equal(finalized.finished, true);
+  assert.equal(state.confirmingOrderId, 1);
   state.operationGeneration = restoreOrderOperationGenerationForOwnedNonMutatingFailure(
     state.operationGeneration,
     attemptedGeneration,
@@ -579,6 +584,9 @@ test('delayed production uncertainty is stored for Order A after navigation with
   assert.match(state.recoveryByOrderId[1], /безопасное обновление/);
   assert.equal(state.uncertainByOrderId[2], undefined);
   assert.equal(state.errorByOrderId[2], undefined);
+  const afterNavigationReset = { ...state, selectedOrder: { id: 1, product_name: 'A' }, transientProductionError: '' };
+  assert.match(productionFailureForOrder(afterNavigationReset.errorByOrderId, 1), /Исход изготовления неизвестен/);
+  assert.equal(productionFailureForOrder(afterNavigationReset.errorByOrderId, 2), '');
 });
 
 test('older delayed Order A production response cannot replace a newer Order A operation', () => {
@@ -595,6 +603,29 @@ test('older delayed Order A production response cannot replace a newer Order A o
   assert.equal(olderOwned, false);
   assert.equal(state.productionByOrderId[1].id, 22);
   assert.equal(state.uncertainByOrderId[1], undefined);
+});
+
+
+test('successful reconciliation clears only the matching Order production failure state', () => {
+  const state = {
+    failures: { 1: 'Исход изготовления всё ещё не подтверждён.', 2: 'Ошибка B' },
+    recovery: { 1: 'Проверьте заказ', 2: 'Проверьте B' },
+    uncertain: { 1: true, 2: true },
+    batches: {},
+  };
+  const batchA = { order_id: 1, id: 40 };
+  if (productionResponseBelongsToOrder(batchA, 1)) {
+    state.batches[1] = batchA;
+    delete state.failures[1];
+    delete state.recovery[1];
+    delete state.uncertain[1];
+  }
+  assert.equal(productionFailureForOrder(state.failures, 1), '');
+  assert.equal(state.uncertain[1], undefined);
+  assert.equal(state.recovery[1], undefined);
+  assert.equal(state.batches[1].id, 40);
+  assert.equal(productionFailureForOrder(state.failures, 2), 'Ошибка B');
+  assert.equal(state.uncertain[2], true);
 });
 
 test('production reconciliation request ownership suppresses duplicates and stale cleanup', () => {
