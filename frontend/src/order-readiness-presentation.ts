@@ -96,7 +96,9 @@ export function renderOrderProductionGate(
   input: OrderProductionGateInput,
   escapeHtml: (value: string) => string,
 ): string {
-  const error = input.error ? `<div class="page-message error-message" data-order-production-failure="true" data-order-production-focus-anchor="failure" tabindex="-1" ${input.reconciliationLoading ? 'aria-busy="true"' : ''}><p>${escapeHtml(input.error)}</p>${input.recoveryAction ? `<p class="next-step">${escapeHtml(input.recoveryAction)}</p>` : ''}<button class="primary-action" type="button" data-action="reconcile-production-outcome" data-id="${input.orderId}" ${input.reconciliationLoading ? 'disabled aria-busy="true"' : ''}>${input.reconciliationLoading ? 'Проверяем…' : input.uncertain ? 'Проверить результат изготовления' : 'Обновить заказ безопасно'}</button></div>` : '';
+  const showReconciliationAction = input.uncertain || input.reconciliationLoading;
+  const reconciliationAction = showReconciliationAction ? `<button class="primary-action" type="button" data-action="reconcile-production-outcome" data-id="${input.orderId}" ${input.reconciliationLoading ? 'disabled aria-busy="true"' : ''}>${input.reconciliationLoading ? 'Проверяем…' : 'Проверить результат изготовления'}</button>` : '';
+  const error = input.error ? `<div class="page-message error-message" data-order-production-failure="true" data-order-production-focus-anchor="failure" tabindex="-1" ${input.reconciliationLoading ? 'aria-busy="true"' : ''}><p>${escapeHtml(input.error)}</p>${input.recoveryAction ? `<p class="next-step">${escapeHtml(input.recoveryAction)}</p>` : ''}${reconciliationAction}</div>` : '';
   if (!input.readiness) {
     if (input.error) return `<section class="card data-card" data-order-production-state="failure"><p class="card-kicker">Изготовление</p><h2>Нужно проверить результат изготовления</h2>${error}</section>`;
     return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2><p class="next-step">${input.hasCachedReadiness ? 'Текущий результат проверки отсутствует. Повторите проверку перед изготовлением.' : 'Сначала проверьте готовность изготовления.'}</p></section>`;

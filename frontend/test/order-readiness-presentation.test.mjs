@@ -243,13 +243,38 @@ test('production confirmation pending and failure states render stable controls 
   const failure = productionGate({ readiness: null, error: '<b>409</b>', recoveryAction: '<reload>', uncertain: false });
   assert.match(failure.textContent, /409/);
   assert.match(failure.textContent, /reload/);
-  assert.equal(failure.querySelector('button[data-action="reconcile-production-outcome"]').textContent, 'Обновить заказ безопасно');
+  assert.equal(failure.querySelector('button[data-action="reconcile-production-outcome"]'), null);
   assert.equal(failure.querySelector('button[data-action="open-production-confirmation"]'), null);
   assert.equal(failure.querySelector('[data-order-production-focus-anchor="failure"]').getAttribute('tabindex'), '-1');
 
   const uncertain = productionGate({ readiness: null, error: 'Исход неизвестен', recoveryAction: 'Проверить заказ', uncertain: true });
   assert.equal(uncertain.querySelector('button[data-action="reconcile-production-outcome"]').textContent, 'Проверить результат изготовления');
   assert.match(uncertain.textContent, /Исход неизвестен/);
+});
+
+
+
+test('deterministic structured 422 keeps confirmation controls without reconciliation action', () => {
+  const view = productionGate({
+    confirming: true,
+    notes: 'Проверить pH перед розливом',
+    error: 'Нужно подтвердить изготовление.',
+    recoveryAction: 'Отметьте подтверждение и повторите.',
+    uncertain: false,
+    reconciliationLoading: false,
+  });
+  const confirm = view.querySelector('button[data-action="confirm-production"]');
+  const notes = view.querySelector('textarea[data-action="production-notes"]');
+  assert.equal(view.querySelector('[data-order-production-focus-anchor="confirmation"]').getAttribute('tabindex'), '-1');
+  assert.match(view.textContent, /Нужно подтвердить изготовление/);
+  assert.match(view.textContent, /Отметьте подтверждение и повторите/);
+  assert.equal(notes.textContent, 'Проверить pH перед розливом');
+  assert.equal(notes.hasAttribute('disabled'), false);
+  assert.equal(confirm.textContent, 'Подтвердить изготовление');
+  assert.equal(confirm.hasAttribute('disabled'), false);
+  assert.equal(view.querySelector('button[data-action="cancel-production-confirmation"]').hasAttribute('disabled'), false);
+  assert.equal(view.querySelector('button[data-action="reconcile-production-outcome"]'), null);
+  assert.doesNotMatch(view.textContent, /Обновить заказ безопасно|Проверить результат изготовления/);
 });
 
 test('production failure escapes backend message and next action and never shows generic transport text', () => {
