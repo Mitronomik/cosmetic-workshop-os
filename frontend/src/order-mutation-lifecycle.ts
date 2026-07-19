@@ -307,6 +307,39 @@ export function productionReadinessFailureMessage(failure: ProductionReadinessFa
   return 'Во время проверки произошла непредвиденная ошибка. Данные заказа и склада не изменены; повторите проверку.';
 }
 
+
+export type ProductionFailureKind = 'business_conflict' | 'validation' | 'missing_record' | 'network_uncertain' | 'unexpected';
+export type ProductionFailurePresentation = { kind: ProductionFailureKind; message: string; invalidateReadiness: boolean; closeConfirmation: boolean; requireRefreshBeforeRetry: boolean };
+
+function safeProductionErrorText(value: string | undefined): string {
+  const text = (value ?? '').trim();
+  if (!text) return '';
+  if (/Traceback|sqlite|SQL|SELECT|INSERT|UPDATE|DELETE|\/workspace|\.py|Error:|Exception|\{"|\[\{/i.test(text)) return '';
+  return text;
+}
+
+export function productionConfirmationFailurePresentation(failure: { status?: number; message?: string; networkFailure?: boolean; code?: string }): ProductionFailurePresentation {
+  const code = failure.code ?? '';
+  const safe = safeProductionErrorText(failure.message);
+  if (failure.status === 409) {
+    if (code === 'readiness_changed' || code === 'readiness_blocked') {
+      return { kind: 'business_conflict', message: safe || 'Состояние заказа или склада изменилось. Изготовление не выполнено: запустите проверку готовности ещё раз.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: false };
+    }
+    if (safe.toLocaleLowerCase('ru-RU').includes('уже изготов')) {
+      return { kind: 'business_conflict', message: 'Заказ уже изготовлен или производственная партия уже существует. Повторное изготовление недоступно.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: false };
+    }
+    return { kind: 'business_conflict', message: safe || 'Заказ нельзя изготовить в текущем состоянии. Обновите заказ и проверьте готовность заново.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: false };
+  }
+  if (failure.status === 422) return { kind: 'validation', message: safe || 'Локальное приложение отклонило подтверждение. Проверьте форму подтверждения; заметка сохранена.', invalidateReadiness: false, closeConfirmation: false, requireRefreshBeforeRetry: false };
+  if (failure.status === 404) return { kind: 'missing_record', message: safe || 'Заказ или связанный рецепт больше не доступны. Обновите список заказов и откройте карточку снова.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: true };
+  if (failure.networkFailure) return { kind: 'network_uncertain', message: 'Связь с локальным приложением прервалась. Исход изготовления неизвестен: обновите заказ и историю производства перед повторной попыткой.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: true };
+  return { kind: 'unexpected', message: safe || 'Неожиданная ошибка локального приложения. Исход изготовления нужно проверить обновлением заказа перед повторной попыткой.', invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: true };
+}
+
+export function productionResponseBelongsToOrder(batch: { order_id?: number } | null | undefined, orderId: number): boolean {
+  return batch?.order_id === orderId;
+}
+
 export function ownerFromOrderRequest(
   snapshot: OrderRequestSnapshot,
   orderId: number,

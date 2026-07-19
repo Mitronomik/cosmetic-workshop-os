@@ -19,7 +19,7 @@ import {
   orderReadinessResultIsCurrent,
   orderRequestOwnerMatches,
   ownerFromOrderRequest,
-  productionReadinessFailureMessage,
+  productionConfirmationFailurePresentation, productionReadinessFailureMessage, productionResponseBelongsToOrder,
 } from '../dist-tests/order-mutation-lifecycle/order-mutation-lifecycle.js';
 import { mutationDisabled, mutationReadonly, restoreMutationGuards } from '../dist-tests/order-mutation-lifecycle/mutation-lifecycle.js';
 
@@ -445,4 +445,32 @@ test('mutation guards preserve originally disabled and readonly controls', () =>
   assert.equal(readonly.readOnly, true);
   assert.equal(normalDisabled.disabled, false);
   assert.equal(normalReadonly.readOnly, false);
+});
+
+
+test('production confirmation failure presentation separates conflict validation missing and uncertain states safely', () => {
+  const conflict = productionConfirmationFailurePresentation({ status: 409, code: 'readiness_changed', message: 'Недостаточно компонента' });
+  assert.equal(conflict.kind, 'business_conflict');
+  assert.equal(conflict.invalidateReadiness, true);
+  assert.equal(conflict.closeConfirmation, true);
+  assert.match(conflict.message, /Недостаточно компонента|изменилось/);
+
+  const validation = productionConfirmationFailurePresentation({ status: 422, message: 'Traceback sqlite SELECT secret' });
+  assert.equal(validation.kind, 'validation');
+  assert.equal(validation.closeConfirmation, false);
+  assert.doesNotMatch(validation.message, /Traceback|sqlite|SELECT/);
+
+  const missing = productionConfirmationFailurePresentation({ status: 404 });
+  assert.equal(missing.kind, 'missing_record');
+  assert.equal(missing.requireRefreshBeforeRetry, true);
+
+  const network = productionConfirmationFailurePresentation({ networkFailure: true });
+  assert.equal(network.kind, 'network_uncertain');
+  assert.equal(network.requireRefreshBeforeRetry, true);
+});
+
+test('production success ownership rejects wrong-order batch responses', () => {
+  assert.equal(productionResponseBelongsToOrder({ order_id: 7 }, 7), true);
+  assert.equal(productionResponseBelongsToOrder({ order_id: 8 }, 7), false);
+  assert.equal(productionResponseBelongsToOrder(null, 7), false);
 });

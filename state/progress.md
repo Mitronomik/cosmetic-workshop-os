@@ -1011,3 +1011,15 @@ A3.5 verification run in this branch:
 - Deterministic lifecycle and presentation coverage now includes global owner validation, no owner overwrite, unrelated readiness/navigation, production/cancel/archive cross-Order disabled states, pending copy/ARIA, one cancel/archive request, recovery, and stale-owner cleanup.
 - The prior reviewed-head exact-smoke evidence archive is unavailable and its keyboard traversal was incomplete. A new published correction head therefore requires a full exact-head smoke plus real Chrome/Chromium keyboard traversal and a retained external evidence archive before a PASS may be reported.
 - Backend readiness rules, Production Confirmation domain behavior, stock movements, Order lifecycle backend rules, schemas, migrations, dependencies, CI, A3.9, and A4 remain unchanged and separate.
+
+## A3.9 — Production Confirmation structured errors and mutation safety
+
+- A3.9 base SHA (managed checkout `work`): `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
+- PR #123 / A3.8 is merged in local history. Accepted and exact-head-smoked runtime head: `34eeaf11dbe7fbfabb3bd36ad8aa79b9469892f5`.
+- PR #123 merge commit resolved locally: `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
+- `gh` is unavailable in this managed environment, so PR #123 was verified by local merge history and ancestry.
+- Final A3.8 exact-head smoke: `PASS — FULL AUTOMATED SMOKE PASSED`; this was external local evidence, not GitHub Actions.
+- A3.8 is DONE.
+- A3.9 is the current focused runtime slice. It hardens existing Production Confirmation structured errors, duplicate/stale/wrong-order ownership, authoritative success after refresh failure, and rollback tests.
+- A3.9 is not DONE until review, exact-head production smoke, and merge.
+- A4 responsive table containment remains separate.

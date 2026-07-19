@@ -25,9 +25,9 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current runtime baseline: PR #122 / **A3.7 — Orders structured validation** is merged at `8c4a092d055fd221cb18da901cee9e90106b33a4`. Its verified runtime head is `b44b80bd875ec184bbccfc376f1562ddf25fbb46`. The user-provided external smoke verdict for that runtime head is `PASS — FULL AUTOMATED SMOKE PASSED`; this is external evidence, not a GitHub Actions result.
+Current runtime baseline: PR #123 / **A3.8 — Production Readiness feedback and lifecycle** is merged at `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. Its accepted runtime head is `34eeaf11dbe7fbfabb3bd36ad8aa79b9469892f5`. The user-provided exact-head smoke verdict for that runtime head is `PASS — FULL AUTOMATED SMOKE PASSED`; this is external local evidence, not a GitHub Actions result.
 
-Slice A3 remains IN PROGRESS. **A3.8 — Production Readiness feedback and lifecycle** is the current focused runtime slice. It improves the existing read-only readiness feedback and request lifecycle without changing backend-owned calculations or production writes. **A3.9 — Production Confirmation** and A4 responsive table containment remain separate future slices.
+Slice A3 remains IN PROGRESS. **A3.9 — Production Confirmation structured errors and mutation safety** is the current focused runtime slice. A3.9 base SHA is `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. It hardens existing Production Confirmation without changing FEFO, calculations, partial production, or A4 responsive table containment. A4 remains separate.
 
 Runtime product implementation includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 

@@ -195,12 +195,96 @@ def test_stale_order_change_after_readiness_rolls_back_without_writes(tmp_path):
     service = ProductionConfirmationService(c)
     service.readiness = MutatingReadinessService(c, order.id)
 
-    with pytest.raises(ProductionConfirmationLifecycleError, match="Order changed before production confirmation"):
+    with pytest.raises(ProductionConfirmationLifecycleError, match="Готовность заказа изменилась"):
         service.produce_order(order.id, True)
 
     assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
     assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
     assert scalar(c, "SELECT sale_price FROM orders WHERE id=?", (order.id,)) == "201"
+
+
+
+
+class FailingBatchRepository:
+    def __init__(self, real, fail_at):
+        self.real = real
+        self.fail_at = fail_at
+    def exists_for_order(self, *args, **kwargs): return self.real.exists_for_order(*args, **kwargs)
+    def create_batch(self, *args, **kwargs):
+        batch = self.real.create_batch(*args, **kwargs)
+        if self.fail_at == "after_batch": raise RuntimeError("forced after batch")
+        return batch
+    def create_ingredient(self, *args, **kwargs):
+        if self.fail_at == "ingredient_snapshot": raise RuntimeError("forced ingredient snapshot")
+        return self.real.create_ingredient(*args, **kwargs)
+    def create_packaging(self, *args, **kwargs):
+        if self.fail_at == "packaging_snapshot": raise RuntimeError("forced packaging snapshot")
+        return self.real.create_packaging(*args, **kwargs)
+    def get_detail(self, *args, **kwargs): return self.real.get_detail(*args, **kwargs)
+
+class FailingStockMovementRepository:
+    def create(self, *args, **kwargs): raise RuntimeError("forced ingredient movement")
+
+class FailingOrderRepository:
+    def __init__(self, real): self.real = real
+    def get_by_id(self, *args, **kwargs): return self.real.get_by_id(*args, **kwargs)
+    def mark_produced(self, *args, **kwargs): raise RuntimeError("forced order update")
+
+class FailingAuditRepository:
+    def create_log(self, *args, **kwargs): raise RuntimeError("forced audit")
+
+@pytest.mark.parametrize("fail_at", ["after_batch", "ingredient_snapshot", "packaging_snapshot"])
+def test_transaction_rolls_back_batch_repository_failures(tmp_path, fail_at):
+    c = config(tmp_path)
+    *_, order = seed_ready(c)
+    service = ProductionConfirmationService(c)
+    service.batches = FailingBatchRepository(service.batches, fail_at)
+    with pytest.raises(RuntimeError):
+        service.produce_order(order.id, True)
+    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
+    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+
+def test_transaction_rolls_back_ingredient_movement_failure(tmp_path):
+    c = config(tmp_path)
+    *_, order = seed_ready(c)
+    service = ProductionConfirmationService(c)
+    service.stock_movements = FailingStockMovementRepository()
+    with pytest.raises(RuntimeError):
+        service.produce_order(order.id, True)
+    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
+    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+
+def test_transaction_rolls_back_order_update_failure(tmp_path):
+    c = config(tmp_path)
+    *_, order = seed_ready(c)
+    service = ProductionConfirmationService(c)
+    service.orders = FailingOrderRepository(service.orders)
+    with pytest.raises(RuntimeError):
+        service.produce_order(order.id, True)
+    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
+    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+
+def test_transaction_rolls_back_audit_failure(tmp_path):
+    c = config(tmp_path)
+    *_, order = seed_ready(c)
+    service = ProductionConfirmationService(c)
+    service.audit = FailingAuditRepository()
+    with pytest.raises(RuntimeError):
+        service.produce_order(order.id, True)
+    assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
+    assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
+
+def test_api_unexpected_failure_uses_safe_error(monkeypatch):
+    class BrokenProductionService:
+        def produce_order(self, order_id, confirm, notes=None):
+            raise RuntimeError("sqlite SELECT /workspace traceback secret")
+    monkeypatch.setattr(production_confirmation_api, "ProductionConfirmationService", BrokenProductionService)
+    with pytest.raises(HTTPException) as exc_info:
+        production_confirmation_api.produce_order(1, ProductionConfirmRequest(confirm=True))
+    assert exc_info.value.status_code == 500
+    assert exc_info.value.detail["code"] == "production_unexpected_failure"
+    assert "sqlite" not in str(exc_info.value.detail).lower()
+    assert "workspace" not in str(exc_info.value.detail).lower()
 
 
 class ConflictProductionService:
@@ -215,7 +299,8 @@ def test_api_maps_expected_transactional_conflicts_to_409(monkeypatch):
         production_confirmation_api.produce_order(1, ProductionConfirmRequest(confirm=True))
 
     assert exc_info.value.status_code == 409
-    assert "negative" in exc_info.value.detail
+    assert exc_info.value.detail["code"] == "production_conflict"
+    assert "состояние заказа" in exc_info.value.detail["message"]
 
 
 @pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
