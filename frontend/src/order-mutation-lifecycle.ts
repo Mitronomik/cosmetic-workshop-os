@@ -27,6 +27,11 @@ export type OrderTransientRequestOwner = {
   generation: number;
   orderId: number;
 } | null;
+export type OrderPersistentWriteOwner = {
+  kind: 'production' | 'cancel' | 'archive';
+  generation: number;
+  orderId: number;
+};
 export type OrderOperationState = {
   owner: OrderTransientRequestOwner;
   loadingOrderId: number | null;
@@ -217,20 +222,32 @@ export function orderBoundOperationActive(
   ));
 }
 
+export function orderPersistentWriteOwner(
+  operations: OrderOperationState[],
+): OrderPersistentWriteOwner | null {
+  for (const { owner, loadingOrderId } of operations) {
+    if (
+      owner
+      && loadingOrderId === owner.orderId
+      && (owner.kind === 'production' || owner.kind === 'cancel' || owner.kind === 'archive')
+    ) return owner as OrderPersistentWriteOwner;
+  }
+  return null;
+}
+
+export function orderPersistentWriteActive(operations: OrderOperationState[]): boolean {
+  return orderPersistentWriteOwner(operations) !== null;
+}
+
 export function canStartOrderWriteRequest(
   mutationActive: boolean,
   order: OrderProductionGuardOrder,
   requestedOrderId: number,
   operations: OrderOperationState[],
 ): boolean {
-  const persistentWriteActive = operations.some(({ owner, loadingOrderId }) => Boolean(
-    owner
-      && loadingOrderId === owner.orderId
-      && (owner.kind === 'production' || owner.kind === 'cancel' || owner.kind === 'archive'),
-  ));
   return !mutationActive
     && order?.id === requestedOrderId
-    && !persistentWriteActive
+    && !orderPersistentWriteActive(operations)
     && !orderBoundOperationActive(operations, requestedOrderId);
 }
 

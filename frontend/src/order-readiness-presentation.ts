@@ -31,9 +31,44 @@ export type OrderProductionGateInput = {
   confirming: boolean;
   loading: boolean;
   blockedByOperation: boolean;
+  persistentWriteActive: boolean;
   notes: string;
   error: string;
 };
+
+export type OrderPersistentWritePresentationOwner = {
+  kind: 'production' | 'cancel' | 'archive';
+  orderId: number;
+} | null;
+
+export type OrderLifecycleActionsInput = {
+  orderId: number;
+  isActive: boolean;
+  status: string;
+  sameOrderOperationActive: boolean;
+  persistentOwner: OrderPersistentWritePresentationOwner;
+};
+
+export function renderOrderLifecycleActions(input: OrderLifecycleActionsInput): string {
+  if (!input.isActive || input.status === 'archived') return '';
+  const disabled = input.sameOrderOperationActive || Boolean(input.persistentOwner);
+  const cancelPending = input.persistentOwner?.kind === 'cancel' && input.persistentOwner.orderId === input.orderId;
+  const archivePending = input.persistentOwner?.kind === 'archive' && input.persistentOwner.orderId === input.orderId;
+  const cancel = `<button class="secondary-action compact danger-action" type="button" data-action="cancel-order" data-id="${input.orderId}" ${disabled ? 'disabled' : ''}${cancelPending ? ' aria-busy="true" data-order-lifecycle-pending="cancel"' : ''}>${cancelPending ? 'Отменяем…' : 'Отменить заказ'}</button>`;
+  const archive = `<button class="secondary-action compact danger-action" type="button" data-action="archive-order" data-id="${input.orderId}" ${disabled ? 'disabled' : ''}${archivePending ? ' aria-busy="true" data-order-lifecycle-pending="archive"' : ''}>${archivePending ? 'Архивируем…' : 'Архивировать'}</button>`;
+  return input.status === 'cancelled' ? archive : `${cancel}${archive}`;
+}
+
+export function renderOrderRowActions(input: OrderLifecycleActionsInput): string {
+  return `<div class="row-actions"><button class="secondary-action compact" type="button" data-action="open-order" data-id="${input.orderId}">Открыть</button>${renderOrderLifecycleActions(input)}</div>`;
+}
+
+export function renderOrderPersistentWriteNotice(active: boolean, sameOrder: boolean): string {
+  if (!active) return '';
+  return `<p class="next-step" data-order-persistent-write-notice="${sameOrder ? 'current' : 'other'}">${sameOrder
+    ? 'Дождитесь завершения текущего действия с заказом. После этого снова будут доступны изготовление, отмена и архивирование.'
+    : 'Сейчас выполняется действие с другим заказом. Карточки можно просматривать и проверять готовность, но изготовление, отмена и архивирование временно недоступны.'}</p>`;
+}
 
 export function renderOrderReadinessPanel(
   input: OrderReadinessPanelInput,
@@ -43,10 +78,10 @@ export function renderOrderReadinessPanel(
     return '<section class="card data-card"><p class="card-kicker">Проверка изготовления</p><h2>Проверка больше не нужна</h2><p class="next-step">Заказ уже изготовлен или закрыт. Повторная проверка готовности недоступна: складские списания и история партии уже фиксируются через производство.</p></section>';
   }
   if (input.busy) {
-    return '<section class="card data-card" data-order-readiness-busy="true" aria-busy="true" aria-labelledby="order-readiness-loading-title"><p class="card-kicker">Проверка изготовления</p><h2 id="order-readiness-loading-title">Проверяем…</h2><p>Сверяем рецепт, компоненты, партии и тару.</p><p class="next-step">Это только проверка. Склад не списан, партии не зарезервированы, заказ не переведён в производство.</p></section>';
+    return `<section class="card data-card" data-order-readiness-busy="true" data-order-readiness-focus-anchor="true" data-id="${input.orderId}" tabindex="-1" aria-busy="true" aria-labelledby="order-readiness-loading-title"><p class="card-kicker">Проверка изготовления</p><h2 id="order-readiness-loading-title">Проверяем…</h2><p>Сверяем рецепт, компоненты, партии и тару.</p><p class="next-step">Это только проверка. Склад не списан, партии не зарезервированы, заказ не переведён в производство.</p></section>`;
   }
   if (input.error) {
-    return `<section class="card error-card" data-order-readiness-error="true"><p class="card-kicker">Сбой проверки</p><h2>Результат готовности не получен</h2><p>${formatters.escapeHtml(input.error)}</p><p class="next-step">Это системная ошибка запроса, а не результат «производство заблокировано». Можно безопасно повторить только проверку.</p><button class="primary-action" type="button" data-action="retry-order-readiness" data-id="${input.orderId}">Повторить проверку</button></section>`;
+    return `<section class="card error-card" data-order-readiness-error="true" data-order-readiness-focus-anchor="true" data-id="${input.orderId}" tabindex="-1"><p class="card-kicker">Сбой проверки</p><h2>Результат готовности не получен</h2><p>${formatters.escapeHtml(input.error)}</p><p class="next-step">Это системная ошибка запроса, а не результат «производство заблокировано». Можно безопасно повторить только проверку.</p><button class="primary-action" type="button" data-action="retry-order-readiness" data-id="${input.orderId}">Повторить проверку</button></section>`;
   }
   if (!input.result) {
     return '<section class="card data-card"><p class="card-kicker">Проверка изготовления</p><h2>Готовность к производству</h2><p>Проверка изготовления ещё не выполнялась. Нажмите «Проверить изготовление», чтобы увидеть, хватает ли компонентов и тары.</p><p class="next-step">Это только проверка. Склад не списан, партии не зарезервированы, заказ не переведён в производство.</p></section>';
@@ -64,16 +99,21 @@ export function renderOrderProductionGate(
   if (!input.readiness.can_produce || input.readiness.status === 'blocked') {
     return '<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2><p class="next-step">Производство недоступно, пока есть блокирующие замечания.</p></section>';
   }
-  const operationNote = input.blockedByOperation
-    ? '<p class="next-step">Дождитесь завершения текущей операции с заказом. После неё повторите проверку готовности.</p>'
-    : input.readiness.status === 'warning'
-      ? '<p class="next-step">Есть предупреждения. Проверьте их перед подтверждением изготовления.</p>'
-      : '<p class="next-step">Проверка готовности разрешает изготовление. Подтвердите действие только после проверки списка компонентов и тары.</p>';
+  const operationBlocked = input.blockedByOperation || input.persistentWriteActive;
+  const operationNote = input.loading
+    ? '<p class="next-step">Изготовление выполняется… Дождитесь завершения, прежде чем запускать другое действие с заказом.</p>'
+    : input.persistentWriteActive
+      ? '<p class="next-step">Сейчас выполняется изготовление, отмена или архивирование заказа. Дождитесь завершения текущего действия.</p>'
+      : input.blockedByOperation
+        ? '<p class="next-step">Дождитесь завершения текущей операции с заказом. После неё повторите проверку готовности.</p>'
+        : input.readiness.status === 'warning'
+          ? '<p class="next-step">Есть предупреждения. Проверьте их перед подтверждением изготовления.</p>'
+          : '<p class="next-step">Проверка готовности разрешает изготовление. Подтвердите действие только после проверки списка компонентов и тары.</p>';
   const error = input.error ? `<p class="page-message error-message">${escapeHtml(input.error)}</p>` : '';
   if (input.confirming) {
-    return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${operationNote}${error}<div class="readiness-block"><h3>Подтвердите изготовление</h3><p>После подтверждения система создаст производственную партию, спишет компоненты и тару со склада и переведёт заказ в статус «Изготовлен».</p><p class="next-step">Это действие нельзя отменить в MVP.</p><label class="full-span">Заметка к партии<textarea data-action="production-notes" data-id="${input.orderId}" rows="3" maxlength="1600" placeholder="Необязательно" ${input.loading || input.blockedByOperation ? 'disabled' : ''}>${escapeHtml(input.notes)}</textarea></label><div class="actions"><button class="primary-action" type="button" data-action="confirm-production" data-id="${input.orderId}" ${input.loading || input.blockedByOperation ? 'disabled' : ''}>${input.loading ? 'Изготавливаем…' : 'Подтвердить изготовление'}</button><button class="secondary-action" type="button" data-action="cancel-production-confirmation" data-id="${input.orderId}" ${input.loading ? 'disabled' : ''}>Отмена</button></div></div></section>`;
+    return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${operationNote}${error}<div class="readiness-block"><h3>Подтвердите изготовление</h3><p>После подтверждения система создаст производственную партию, спишет компоненты и тару со склада и переведёт заказ в статус «Изготовлен».</p><p class="next-step">Это действие нельзя отменить в MVP.</p><label class="full-span">Заметка к партии<textarea data-action="production-notes" data-id="${input.orderId}" rows="3" maxlength="1600" placeholder="Необязательно" ${input.loading || operationBlocked ? 'disabled' : ''}>${escapeHtml(input.notes)}</textarea></label><div class="actions"><button class="primary-action" type="button" data-action="confirm-production" data-id="${input.orderId}" ${input.loading || operationBlocked ? 'disabled' : ''}>${input.loading ? 'Изготавливаем…' : 'Подтвердить изготовление'}</button><button class="secondary-action" type="button" data-action="cancel-production-confirmation" data-id="${input.orderId}" ${input.loading ? 'disabled' : ''}>Отмена</button></div></div></section>`;
   }
-  return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${operationNote}${error}<div class="actions"><button class="primary-action" type="button" data-action="open-production-confirmation" data-id="${input.orderId}" ${input.blockedByOperation ? 'disabled' : ''}>Изготовить</button></div></section>`;
+  return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${operationNote}${error}<div class="actions"><button class="primary-action" type="button" data-action="open-production-confirmation" data-id="${input.orderId}" ${operationBlocked ? 'disabled' : ''}>Изготовить</button></div></section>`;
 }
 
 function renderReadinessResult(
@@ -81,7 +121,7 @@ function renderReadinessResult(
   stale: boolean,
   f: OrderReadinessPresentationFormatters,
 ): string {
-  return `<section class="card data-card readiness-result" data-order-readiness-result="${stale ? 'stale' : 'current'}"><div class="section-heading"><div><p class="card-kicker">${stale ? 'Предыдущая проверка' : 'Проверка изготовления'}</p><h2>${stale ? 'Результат нужно обновить' : readinessStatusLabel(result.status)}</h2></div><span class="pill ${stale ? 'warning' : readinessStatusPill(result.status)}">${stale ? 'Не разрешает изготовление' : result.can_produce ? 'Склад выглядит достаточным' : 'Есть препятствия'}</span></div>${stale ? '<p class="page-message warning-message">После этой проверки заказ изменился или была запущена более новая проверка. Результат сохранён для справки, но изготовление по нему недоступно.</p>' : ''}<p class="next-step">Это только проверка. Склад не списан, партии не зарезервированы, заказ не переведён в производство.</p>${result.generated_at ? `<p><strong>Проверено:</strong> ${f.formatDateTime(result.generated_at)}</p>` : ''}<p>${stale ? 'Запустите проверку ещё раз, чтобы получить текущий результат.' : readinessNextAction(result.status)}</p>${readinessIssuesSection('Что мешает изготовлению', result.blocking_issues, 'Критичных препятствий нет.', result, f.escapeHtml)}${readinessIssuesSection('На что обратить внимание', result.warnings, 'Предупреждений нет.', result, f.escapeHtml)}${readinessIngredientsTable(result.ingredients, f)}${readinessPackagingTable(result.packaging, f)}${readinessEstimates(result, f)}</section>`;
+  return `<section class="card data-card readiness-result" data-order-readiness-result="${stale ? 'stale' : 'current'}" data-order-readiness-focus-anchor="true" data-id="${result.order_id}" tabindex="-1"><div class="section-heading"><div><p class="card-kicker">${stale ? 'Предыдущая проверка' : 'Проверка изготовления'}</p><h2>${stale ? 'Результат нужно обновить' : readinessStatusLabel(result.status)}</h2></div><span class="pill ${stale ? 'warning' : readinessStatusPill(result.status)}">${stale ? 'Не разрешает изготовление' : result.can_produce ? 'Склад выглядит достаточным' : 'Есть препятствия'}</span></div>${stale ? '<p class="page-message warning-message">После этой проверки заказ изменился или была запущена более новая проверка. Результат сохранён для справки, но изготовление по нему недоступно.</p>' : ''}<p class="next-step">Это только проверка. Склад не списан, партии не зарезервированы, заказ не переведён в производство.</p>${result.generated_at ? `<p><strong>Проверено:</strong> ${f.formatDateTime(result.generated_at)}</p>` : ''}<p>${stale ? 'Запустите проверку ещё раз, чтобы получить текущий результат.' : readinessNextAction(result.status)}</p>${readinessIssuesSection('Что мешает изготовлению', result.blocking_issues, 'Критичных препятствий нет.', result, f.escapeHtml)}${readinessIssuesSection('На что обратить внимание', result.warnings, 'Предупреждений нет.', result, f.escapeHtml)}${readinessIngredientsTable(result.ingredients, f)}${readinessPackagingTable(result.packaging, f)}${readinessEstimates(result, f)}</section>`;
 }
 
 function readinessStatusLabel(status: ProductionReadinessStatus) { return status === 'ready' ? 'Можно изготовить' : status === 'warning' ? 'Можно изготовить, но есть предупреждения' : 'Пока нельзя изготовить'; }

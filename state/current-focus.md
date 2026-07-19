@@ -1,40 +1,42 @@
-# Current focus — A3.8 Production Readiness feedback and lifecycle correction
+# Current focus — A3.8 Production Readiness persistent-write presentation correction
 
 ## Goal
 
-Close the human-review findings on Draft PR #123 while preserving the read-only Production Readiness boundary and the existing Order request-generation architecture.
+Close the remaining human-review findings on Draft PR #123 by making the existing globally serialized production/cancel/archive ownership visible and accessible across Orders, while preserving the read-only Production Readiness boundary and existing request-generation architecture.
 
-Reviewed history: PR #123 exists and remains Draft/IN REVIEW. Reviewed published head `69da410bccfc7bf9c852ef5a807d039b4fa4a74d` passed exact-head browser smoke as external local evidence, not GitHub Actions evidence. Human review then found reverse mutual-exclusion, readiness-revision freshness, and persistent behavioral-test gaps, so A3.8 is not DONE.
+Reviewed history: PR #123 exists and remains Draft/IN REVIEW. Reviewed published head `b6413f9b38710c1d3b8e231a52206d9a9dd7b9be` closed the readiness freshness, same-Order reverse mutual-exclusion, behavioral presentation-test, escaping, and duplicate-request findings. Human review then found that unrelated Order persistent-write controls still looked enabled while the global owner guard rejected them, and that cancel/archive had no honest pending copy. The prior exact-head smoke bundle is unavailable, and keyboard traversal was not completed against that reviewed head, so A3.8 is not DONE.
 
 ## Allowed scope
 
-- Existing Orders detail, Production Readiness presentation, and Production Confirmation guard only.
+- Existing Orders list/detail, Production Readiness presentation, and Production Confirmation guard only.
 - Existing Order request-generation, context-invalidation, transient-owner, and per-order freshness architecture.
-- Narrow same-Order exclusion between readiness and pending production/cancel/archive writes.
-- Duplicate cancel/archive protection and generation-safe owner cleanup.
-- Captured Order revision and operation generation at readiness request start.
-- A small extracted readiness presentation module and deterministic DOM/view tests without a frontend framework or dependency change.
-- Focused frontend lifecycle/presentation tests, existing backend readiness no-write regressions, and directly affected documentation/state.
+- One explicit global production/cancel/archive ownership helper; no concurrent persistent Order writes.
+- Visible disabled/explanatory states for unrelated Order production, cancel, and archive controls.
+- Honest `Отменяем…` / `Архивируем…`, native disabled, and ARIA busy states on the owning action.
+- Stable readiness-region focus continuity from keyboard activation through loading and failure, without auto-focusing the retry action.
+- Focused lifecycle and behavioral rendering tests, directly affected project state, and retained external exact-head smoke evidence.
 
 ## Non-goals
 
 - No change to backend readiness calculations, FEFO, density conversion, inventory policy, cost, tax, margin, or eligibility rules.
-- No change to Production Confirmation domain behavior, ingredient/packaging write-off, cancellation/archive domain rules, schemas, migrations, responsive tables, dependencies, CI, or unrelated routes.
-- No generic global request manager and no A3.9 or A4 work.
+- No change to Production Confirmation domain behavior, ingredient/packaging write-off, cancellation/archive backend rules, schemas, migrations, responsive tables, dependencies, CI, or unrelated routes.
+- No generic global request manager, concurrent persistent Order writes, A3.9 work, or A4 work.
 
 ## Tests
 
-- Frontend form-validation, targeted-validation-update, Order mutation lifecycle, readiness presentation, and build checks; independent frontend scripts may run concurrently only when their generated output directories do not collide.
-- Focused backend Production Readiness and Orders suites plus full backend comparison with exact base `8c4a092d055fd221cb18da901cee9e90106b33a4`.
-- `git diff --check`, clean status, and critical diff review.
-- A new corrective exact-published-head browser smoke with isolated data and exact readiness/production/cancel/archive request counts. The reviewed-head smoke cannot be reused for a corrective head.
+- Run form-validation, targeted-validation-update, Order mutation lifecycle, Order readiness presentation, and build checks. Independent frontend scripts may run concurrently only because each uses a separate `dist-tests` output directory.
+- Run focused backend Production Readiness and Orders suites plus full backend comparison with exact base `8c4a092d055fd221cb18da901cee9e90106b33a4`.
+- Run `git diff --check`, status/diff review, and critical self-review.
+- Publish the correction to the existing branch, then run full and keyboard browser smoke against the exact remote head with isolated data and exact readiness/production/cancel/archive request counts.
+- Retain the final external smoke Markdown/JSON/log/database evidence bundle in an archive outside the repository. A missing bundle is `INCONCLUSIVE — RUNNER`.
 
 ## Acceptance criteria
 
-- Readiness cannot start while production, cancel, or archive is pending for the same Order.
-- Readiness blocks conflicting Order create/update, cancel/archive, reload, and Production Confirmation while it owns the current Order context.
-- Duplicate cancel/archive actions produce one POST each; stale write callbacks cannot clear a newer owner.
-- A readiness result uses the Order revision captured at request start and is current only when no conflicting Order mutation generation changed.
-- Ready, warning, blocked, stale, loading, retryable system failure, escaping, and Production Confirmation eligibility have committed behavioral DOM/view coverage.
-- Corrected exact-head smoke proves recovered controls, no duplicates, no unintended ProductionBatch/stock/status mutation, no unexpected page/console/backend errors, and remote/tested SHA equality.
+- A valid production, cancel, or archive owner globally disables all other Order production/cancel/archive controls with visible Russian explanatory copy; it never gets overwritten by a second owner.
+- Unrelated Order navigation and read-only inspection remain available; unrelated readiness remains available when its order-bound ownership is safe.
+- Pending cancel/archive controls render the correct operation/order label, native disabled, `aria-busy="true"`, and danger styling; duplicate or synthetic dispatch starts one request.
+- Controls recover after success/failure, and stale callbacks cannot clear a newer owner.
+- Keyboard activation keeps focus in the readiness region across rerenders; Tab reaches the retry action naturally instead of restarting from `body`.
+- Production Confirmation cannot open or submit while any persistent Order write owner is valid.
+- The exact published-head smoke retains its evidence archive, proves keyboard traversal/focus with real Chrome/Chromium automation, and proves no unintended ProductionBatch, stock movement, or Order-status mutation from readiness.
 - PR #123 stays Draft/IN REVIEW. A3.9 and A4 remain separate.

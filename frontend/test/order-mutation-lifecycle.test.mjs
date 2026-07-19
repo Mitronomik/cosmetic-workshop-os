@@ -11,6 +11,8 @@ import {
   orderOperationErrorFor,
   orderBoundOperationActive,
   orderPayloadFromDraft,
+  orderPersistentWriteActive,
+  orderPersistentWriteOwner,
   orderProductionIsClosed,
   orderReadinessRequestActive,
   orderReadinessAttemptMatches,
@@ -213,18 +215,23 @@ test('readiness currentness separates blocked results, failed attempts, wrong or
   assert.equal(canOpenOrderProductionConfirmation(false, orderA, undefined), false);
 });
 
-test('readiness and Order writes are mutually exclusive for the same Order only', () => {
+test('readiness remains order-bound while production, cancel and archive ownership is globally serialized', () => {
   const active = { id: 1, is_active: true, status: 'new', updated_at: 'v1' };
   const operation = (kind, orderId = 1, generation = 1) => ({ owner: { kind, orderId, generation }, loadingOrderId: orderId });
   for (const kind of ['production', 'cancel', 'archive']) {
     const conflicting = [operation(kind)];
     assert.equal(canStartOrderReadinessRequest(false, active, null, null, 1, conflicting), false, `${kind} blocks same-order readiness`);
     assert.equal(canStartOrderReadinessRequest(false, { ...active, id: 2 }, null, null, 2, conflicting), true, `${kind} does not block unrelated Order readiness`);
+    assert.equal(orderPersistentWriteActive(conflicting), true, `${kind} is a global persistent write`);
+    assert.deepEqual(orderPersistentWriteOwner(conflicting), { kind, orderId: 1, generation: 1 });
+    assert.equal(canStartOrderWriteRequest(false, { ...active, id: 2 }, 2, conflicting), false, `${kind} prevents a second persistent owner for Order B`);
   }
   const readiness = operation('readiness');
   assert.equal(canStartOrderWriteRequest(false, active, 1, [readiness]), false);
   assert.equal(canStartOrderWriteRequest(false, { ...active, id: 2 }, 2, [readiness]), true);
-  assert.equal(canStartOrderWriteRequest(false, { ...active, id: 2 }, 2, [operation('cancel')]), false, 'a persistent write owner is not overwritten');
+  assert.equal(orderPersistentWriteActive([readiness]), false);
+  assert.equal(orderPersistentWriteOwner([readiness]), null);
+  assert.equal(orderPersistentWriteActive([{ owner: { kind: 'cancel', orderId: 1, generation: 1 }, loadingOrderId: 2 }]), false, 'mismatched loading cannot claim ownership');
   assert.equal(orderBoundOperationActive([readiness], 1), true);
   assert.equal(orderBoundOperationActive([readiness], 2), false);
 });
@@ -234,18 +241,27 @@ test('duplicate cancel and archive actions each start exactly one POST-equivalen
     const controller = createOrderMutationController();
     const active = { id: 1, is_active: true, status: 'new', updated_at: 'v1' };
     const context = ctx(controller, { selectedOrderId: 1, showForm: false });
-    const state = { owner: null, loadingOrderId: null, postCount: 0 };
+    const state = { owner: null, loadingOrderId: null, postCount: 0, request: null };
     const trigger = () => {
       if (!canStartOrderWriteRequest(false, active, 1, [{ owner: state.owner, loadingOrderId: state.loadingOrderId }])) return;
       const request = controller.beginRequest(kind, context, { requestedOrderId: 1 });
       state.owner = ownerFromOrderRequest(request, 1, kind);
       state.loadingOrderId = 1;
+      state.request = request;
       state.postCount += 1;
     };
     trigger();
     trigger();
     assert.equal(state.postCount, 1, `${kind} request count`);
     assert.equal(orderRequestOwnerMatches(state.owner, { ...state.owner, kind }, 1, kind), true);
+    assert.equal(orderPersistentWriteActive([{ owner: state.owner, loadingOrderId: state.loadingOrderId }]), true);
+
+    if (orderRequestOwnerMatches(state.owner, state.request, 1, kind)) {
+      state.owner = null;
+      state.loadingOrderId = null;
+    }
+    assert.equal(orderPersistentWriteActive([{ owner: state.owner, loadingOrderId: state.loadingOrderId }]), false, `${kind} controls recover after settlement`);
+    assert.equal(canStartOrderWriteRequest(false, active, 1, [{ owner: state.owner, loadingOrderId: state.loadingOrderId }]), true);
   }
 });
 
