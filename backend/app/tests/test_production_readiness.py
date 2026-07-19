@@ -70,9 +70,14 @@ def snapshot(c, order_id):
     return {
         "stock": scalar(c, "SELECT count(*) FROM stock_movements"),
         "packaging": scalar(c, "SELECT count(*) FROM packaging_stock_movements"),
+        "production_batches": scalar(c, "SELECT count(*) FROM production_batches"),
+        "production_batch_ingredients": scalar(c, "SELECT count(*) FROM production_batch_ingredients"),
+        "production_batch_packaging": scalar(c, "SELECT count(*) FROM production_batch_packaging"),
+        "audit_logs": scalar(c, "SELECT count(*) FROM audit_logs"),
         "status": scalar(c, "SELECT status FROM orders WHERE id=?", (order_id,)),
         "produced_at": scalar(c, "SELECT produced_at FROM orders WHERE id=?", (order_id,)),
         "delivered_at": scalar(c, "SELECT delivered_at FROM orders WHERE id=?", (order_id,)),
+        "updated_at": scalar(c, "SELECT updated_at FROM orders WHERE id=?", (order_id,)),
         "tables": table_names(c),
     }
 
@@ -103,10 +108,12 @@ def test_missing_ingredient_blocks_readiness(tmp_path):
     c = config(tmp_path)
     _, _, _, packaging, order = seed_base(c)
     add_packaging(c, packaging.id, "1")
+    before = snapshot(c, order.id)
     result = ProductionReadinessService(c).check_order(order.id)
     assert result.can_produce is False
     assert any(issue.code == "ingredient_lot_missing" for issue in result.blocking_issues)
     assert result.ingredients[0].missing_quantity == "50.000"
+    assert snapshot(c, order.id) == before
 
 
 def test_insufficient_ingredient_returns_missing_quantity(tmp_path):

@@ -48,7 +48,17 @@ Read-only boundary:
 - The endpoint does not create production batch rows.
 - The endpoint does not mutate order status, `produced_at`, `delivered_at`, recipe versions, client recipes, ingredient lots, or packaging items.
 
-Current limitations: this foundation does not confirm production, reserve stock, write off ingredients or packaging, generate alerts, generate purchase suggestions, change order lifecycle status, or add frontend UI.
+HTTP boundaries:
+
+- `200` — a valid readiness DTO, including legitimate `blocked` or `warning` results;
+- `404` — the order or its linked Recipe Version / Client Recipe was not found;
+- `409` — the current order lifecycle does not allow readiness checking;
+- `422` — backend-authoritative domain validation rejected the check inputs;
+- `500` — an unexpected system failure only.
+
+A blocked readiness DTO is not a request failure. Conversely, a transport or HTTP failure is not a valid blocked-readiness result and must be presented separately by clients.
+
+Current limitations: the Orders frontend presents this read-only check, but the readiness operation itself does not confirm production, reserve stock, write off ingredients or packaging, create a `ProductionBatch`, generate or mutate alerts or purchase suggestions, or change the Order lifecycle status.
 
 ## Production confirmation
 

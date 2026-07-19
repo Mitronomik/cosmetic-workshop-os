@@ -25,11 +25,9 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Current runtime baseline: PR #120 / Slice A3.6 Client Feedback structured validation is merged at `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`. Published PR #120 head `e148220ac9ad08a0fd952482a0b293f1f2d22bad` passed complete automated exact-head smoke with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
+Current runtime baseline: PR #122 / **A3.7 — Orders structured validation** is merged at `8c4a092d055fd221cb18da901cee9e90106b33a4`. Its verified runtime head is `b44b80bd875ec184bbccfc376f1562ddf25fbb46`. The user-provided external smoke verdict for that runtime head is `PASS — FULL AUTOMATED SMOKE PASSED`; this is external evidence, not a GitHub Actions result.
 
-PR #119 / A3.5 Client Wishes structured validation is DONE: merge commit `e53e7852c8b384915fb77b59345170c43671151c`, verified runtime head `e19229df1afa74f4470864071e91a0e94a5631cd`, exact-head smoke PASS. PR #120 / A3.6 is DONE, merged, and exact-head verified.
-
-Slice A3 remains IN PROGRESS. **A3.7 — Orders structured validation** is implemented in the current focused runtime pull request and must remain IN PROGRESS until review, merge, and external exact-head browser smoke. Production Readiness and Production Confirmation remain separate future slices.
+Slice A3 remains IN PROGRESS. **A3.8 — Production Readiness feedback and lifecycle** is the current focused runtime slice. It improves the existing read-only readiness feedback and request lifecycle without changing backend-owned calculations or production writes. **A3.9 — Production Confirmation** and A4 responsive table containment remain separate future slices.
 
 Runtime product implementation includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 

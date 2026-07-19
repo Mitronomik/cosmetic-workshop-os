@@ -371,4 +371,32 @@ A3.7 is implemented in the current focused runtime branch for Order create/updat
 
 PR #120 / A3.6 remains DONE at merge commit `4553536d2300ac93cb780cc07d3fe8a38ec1b5a6`; published runtime head `e148220ac9ad08a0fd952482a0b293f1f2d22bad`; exact-head smoke `PASS — FULL AUTOMATED SMOKE PASSED`. PR #121 synchronized project memory at `5c1edba2ca50b4a503d7dd44df2fdf7fda60aa6c`.
 
-A3.7 is not DONE while this PR is open. External exact-head browser smoke for A3.7 is still required before merge. Production Readiness and Production Confirmation remain separate future slices.
+A3.7 was subsequently merged in PR #122 at `8c4a092d055fd221cb18da901cee9e90106b33a4` and is DONE. Production Readiness and Production Confirmation remain separate follow-up slices.
+
+## 2026-07-19 — A3.8 Production Readiness feedback and lifecycle handoff
+
+PR #122 / A3.7 is DONE at merge commit `8c4a092d055fd221cb18da901cee9e90106b33a4`. Its verified runtime head is `b44b80bd875ec184bbccfc376f1562ddf25fbb46`; the user-provided external smoke verdict is `PASS — FULL AUTOMATED SMOKE PASSED`. Treat that verdict as external evidence, not GitHub Actions evidence.
+
+The current scope is A3.8 only. It extends the existing Order request-generation/transient-owner architecture with explicit readiness duplicate suppression and per-order attempt/result freshness. A valid cached result survives safe navigation, while a newer failed attempt, a changed Order, a wrong-order DTO, or a stale generation prevents Production Confirmation. Order-local edit/cancel/archive/reload conflicts are guarded only while the active readiness check owns loading; switching context invalidates and releases that transient presentation.
+
+Readiness results keep backend-owned calculations and now group escaped messages by visible recipe/formula, component, lot, packaging, Order, or general context. Valid blocked results remain result DTOs. `404`, `409`, structured `422`, local connection failures, and unexpected failures use a separate retryable system-error state without raw exception, table, JSON, or internal-ID leakage.
+
+Backend readiness remains read-only. Focused snapshots verify no ProductionBatch row, ProductionBatch ingredient/packaging row, ingredient StockMovement, packaging StockMovement, or Order lifecycle mutation for ready and blocked checks. No `POST /produce`, production confirmation, inventory write-off, reservation, FEFO, cost/tax/margin rule, schema, migration, dependency, CI, responsive table, or unrelated route change is in scope.
+
+Pre-review automated evidence at published head `69da410bccfc7bf9c852ef5a807d039b4fa4a74d`: frontend form-validation `19/19 PASS`; targeted validation `62/62 PASS`; Order lifecycle `18/18 PASS`; build `PASS`; focused readiness/Orders backend `19/19 PASS`. Full backend matched clean base `8c4a092d055fd221cb18da901cee9e90106b33a4` at `480 passed, 5 failed`. That reviewed head also passed exact-head browser smoke as external local evidence, not GitHub Actions evidence.
+
+Draft PR #123 now exists and remains IN REVIEW; A3.8 is not DONE. Human review found that readiness did not exclude already-pending production/cancel/archive writes in the reverse direction, readiness success borrowed `updated_at` at response completion, and readiness presentation lacked committed behavioral DOM/view coverage.
+
+The correction stays on `codex/a3.8-production-readiness-lifecycle`: use explicit same-Order owners for production/cancel/archive, keep stale owner cleanup generation-safe, capture readiness Order revision/operation generation at request start, and test the extracted presentation without a new framework or dependency. A corrected published head must receive a completely new exact-head smoke; the earlier smoke cannot verify the correction. Keep PR #123 Draft. A3.9 Production Confirmation and A4 remain separate.
+
+## 2026-07-19 — PR #123 persistent-write presentation follow-up
+
+Reviewed published head `b6413f9b38710c1d3b8e231a52206d9a9dd7b9be` successfully closed the earlier readiness freshness, reverse same-Order exclusion, presentation test, escaping, and duplicate-request findings. Human review retained PR #123 in Draft because production/cancel/archive ownership was safely global in the start guard but unrelated Order controls still looked enabled, and cancel/archive did not expose honest pending copy or ARIA busy state.
+
+The current correction preserves that global serialization. A single valid-owner helper now drives the persistent write guard, Order row/detail lifecycle rendering, Production Confirmation opening/submission, and explanatory text. A production/cancel/archive owner on Order A disables production/cancel/archive controls for Order B without disabling read-only navigation or safe unrelated readiness. The owning cancel/archive action renders `Отменяем…` / `Архивируем…`, native disabled, `aria-busy="true"`, and the existing danger style. Generation-bound cleanup still prevents stale callbacks from clearing a newer owner.
+
+Keyboard-invoked readiness also keeps focus on a stable readiness-region anchor while the initiating control is disabled and after a system failure. It does not auto-focus the retry button; the next Tab reaches `Повторить проверку` without dropping back to `body`.
+
+The previous exact-head smoke artifacts were not retained, and keyboard traversal was not completed against `b6413f9b38710c1d3b8e231a52206d9a9dd7b9be`; do not reuse or report that evidence as the final correction result. After publishing the new head, run the complete exact-head browser smoke and real Chrome/Chromium keyboard scenario, retain the Markdown/JSON/request/error/log/database/repository-clean bundle in an external archive, and update Draft PR #123 with the exact evidence. Missing retained evidence is `INCONCLUSIVE — RUNNER`; an unavailable browser environment is `INCONCLUSIVE — ENVIRONMENT`.
+
+No backend readiness calculation, FEFO, density conversion, inventory policy, Production Confirmation domain behavior, production transaction, stock movement, Order backend lifecycle rule, schema, migration, dependency, CI, A3.9, or A4 change belongs in this correction.

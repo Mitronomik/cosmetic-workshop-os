@@ -12,7 +12,7 @@ export type OrderContextSnapshot = {
 };
 export type OrderContextState = OrderContextSnapshot;
 
-export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory';
+export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory' | 'cancel' | 'archive';
 export type OrderRequestSnapshot = OrderContextSnapshot & {
   kind: OrderRequestKind;
   generation: number;
@@ -23,13 +23,26 @@ export type OrderRequestSnapshot = OrderContextSnapshot & {
 export type OrderSubmitSnapshot = OrderContextSnapshot & { submitToken: number };
 
 export type OrderTransientRequestOwner = {
-  kind: 'readiness' | 'production' | 'productionHistory';
+  kind: 'readiness' | 'production' | 'productionHistory' | 'cancel' | 'archive';
   generation: number;
   orderId: number;
 } | null;
+export type OrderPersistentWriteOwner = {
+  kind: 'production' | 'cancel' | 'archive';
+  generation: number;
+  orderId: number;
+};
+export type OrderOperationState = {
+  owner: OrderTransientRequestOwner;
+  loadingOrderId: number | null;
+};
 export type OrderOperationError = { orderId: number; message: string } | null;
-export type OrderProductionGuardOrder = { is_active: boolean; status: string } | null | undefined;
-export type OrderProductionGuardReadiness = { can_produce?: boolean } | null | undefined;
+export type OrderProductionGuardOrder = { id: number; is_active: boolean; status: string; updated_at: string } | null | undefined;
+export type OrderProductionGuardReadiness = {
+  order_id: number;
+  can_produce: boolean;
+  status: 'ready' | 'blocked' | 'warning';
+} | null | undefined;
 
 export type OrderFormErrorOrigin = 'recipe_source' | 'recipe_version_id' | 'client_recipe_id';
 export type OrderValidationProvenance = { formErrors: Array<{ origin: OrderFormErrorOrigin; message: string }> };
@@ -67,6 +80,8 @@ export class OrderMutationController {
     readiness: 0,
     production: 0,
     productionHistory: 0,
+    cancel: 0,
+    archive: 0,
   };
 
   snapshot(workspace: OrderWorkspaceState): OrderContextSnapshot {
@@ -162,7 +177,134 @@ export function canOpenOrderProductionConfirmation(
   order: OrderProductionGuardOrder,
   readiness: OrderProductionGuardReadiness,
 ): boolean {
-  return !mutationActive && !orderProductionIsClosed(order) && readiness?.can_produce === true;
+  return !mutationActive
+    && !orderProductionIsClosed(order)
+    && typeof order?.id === 'number'
+    && readiness?.order_id === order?.id
+    && readiness?.can_produce === true
+    && readiness?.status !== 'blocked';
+}
+
+export function orderReadinessRequestActive(
+  owner: OrderTransientRequestOwner,
+  loadingOrderId: number | null,
+  orderId?: number,
+): boolean {
+  if (owner?.kind !== 'readiness' || loadingOrderId === null || owner.orderId !== loadingOrderId) return false;
+  return orderId === undefined || loadingOrderId === orderId;
+}
+
+export function canStartOrderReadinessRequest(
+  mutationActive: boolean,
+  order: OrderProductionGuardOrder,
+  owner: OrderTransientRequestOwner,
+  loadingOrderId: number | null,
+  requestedOrderId: number,
+  conflictingOperations: OrderOperationState[] = [],
+): order is Exclude<OrderProductionGuardOrder, null | undefined> {
+  return !mutationActive
+    && order?.id === requestedOrderId
+    && !orderProductionIsClosed(order)
+    && !orderReadinessRequestActive(owner, loadingOrderId)
+    && !orderBoundOperationActive(conflictingOperations, requestedOrderId);
+}
+
+export function orderBoundOperationActive(
+  operations: OrderOperationState[],
+  orderId: number,
+  kinds?: NonNullable<OrderTransientRequestOwner>['kind'][],
+): boolean {
+  return operations.some(({ owner, loadingOrderId }) => Boolean(
+    owner
+      && owner.orderId === orderId
+      && loadingOrderId === orderId
+      && (!kinds || kinds.includes(owner.kind)),
+  ));
+}
+
+export function orderPersistentWriteOwner(
+  operations: OrderOperationState[],
+): OrderPersistentWriteOwner | null {
+  for (const { owner, loadingOrderId } of operations) {
+    if (
+      owner
+      && loadingOrderId === owner.orderId
+      && (owner.kind === 'production' || owner.kind === 'cancel' || owner.kind === 'archive')
+    ) return owner as OrderPersistentWriteOwner;
+  }
+  return null;
+}
+
+export function orderPersistentWriteActive(operations: OrderOperationState[]): boolean {
+  return orderPersistentWriteOwner(operations) !== null;
+}
+
+export function canStartOrderWriteRequest(
+  mutationActive: boolean,
+  order: OrderProductionGuardOrder,
+  requestedOrderId: number,
+  operations: OrderOperationState[],
+): boolean {
+  return !mutationActive
+    && order?.id === requestedOrderId
+    && !orderPersistentWriteActive(operations)
+    && !orderBoundOperationActive(operations, requestedOrderId);
+}
+
+export function orderReadinessAttemptMatches(
+  order: OrderProductionGuardOrder,
+  requestedOrderId: number,
+  capturedOrderUpdatedAt: string | undefined,
+  capturedOperationGeneration: number | undefined,
+  currentOperationGeneration: number | undefined,
+): boolean {
+  return Boolean(
+    order
+      && order.id === requestedOrderId
+      && capturedOrderUpdatedAt !== undefined
+      && order.updated_at === capturedOrderUpdatedAt
+      && capturedOperationGeneration !== undefined
+      && capturedOperationGeneration === currentOperationGeneration,
+  );
+}
+
+export function orderReadinessResultIsCurrent(
+  order: OrderProductionGuardOrder,
+  readiness: OrderProductionGuardReadiness,
+  latestAttemptGeneration: number | undefined,
+  resultGeneration: number | undefined,
+  capturedOrderUpdatedAt: string | undefined,
+  capturedOperationGeneration: number | undefined,
+  currentOperationGeneration: number | undefined,
+): boolean {
+  return Boolean(
+    order
+      && readiness
+      && readiness.order_id === order.id
+      && latestAttemptGeneration !== undefined
+      && latestAttemptGeneration === resultGeneration
+      && capturedOrderUpdatedAt === order.updated_at
+      && capturedOperationGeneration !== undefined
+      && capturedOperationGeneration === currentOperationGeneration,
+  );
+}
+
+export type ProductionReadinessFailure = {
+  status?: number;
+  message?: string;
+  networkFailure?: boolean;
+};
+
+export function productionReadinessFailureMessage(failure: ProductionReadinessFailure): string {
+  const message = failure.message?.toLocaleLowerCase('ru-RU') ?? '';
+  if (failure.status === 404 && (message.includes('recipe') || message.includes('рецепт') || message.includes('формул'))) {
+    return 'Связанный рецепт или индивидуальная формула не найдены. Обновите заказ и выберите доступную основу.';
+  }
+  if (failure.status === 404) return 'Заказ не найден. Обновите список заказов и откройте карточку снова.';
+  if (failure.status === 409) return 'Проверка недоступна для текущего состояния заказа. Обновите карточку и проверьте статус заказа.';
+  if (failure.status === 422) return 'Локальное приложение отклонило параметры проверки. Обновите заказ и проверьте его обязательные данные.';
+  if (failure.networkFailure) return 'Не удалось связаться с локальным приложением. Проверьте, что оно запущено, и повторите проверку.';
+  return 'Во время проверки произошла непредвиденная ошибка. Данные заказа и склада не изменены; повторите проверку.';
 }
 
 export function ownerFromOrderRequest(
