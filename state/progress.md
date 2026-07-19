@@ -1027,7 +1027,7 @@ A3.5 verification run in this branch:
 ## PR #124 A3.9 corrective pass
 
 - PR #124 remains the active A3.9 Draft PR on managed branch `codex-l6nqu0`.
-- Reviewed published head `1a1a26fcc8fa3836ba4b56a2cb02db5a20dad764` still required correction.
+- Reviewed published head `f29d8115586e528afec6d9ee2c5efd1fc4fb0a5d` still required correction.
 - Exact base remains `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
 - Final exact-head production browser smoke has not been run in this corrective pass and remains pending human code review.
 - A3.9 remains IN PROGRESS; A4 remains separate.

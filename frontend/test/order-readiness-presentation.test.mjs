@@ -262,6 +262,37 @@ test('production failure escapes backend message and next action and never shows
 });
 
 
+
+test('production reconciliation blocks open confirmation controls even with positive readiness and confirmation open', () => {
+  const view = productionGate({
+    confirming: true,
+    reconciliationLoading: true,
+    error: 'Исход неизвестен',
+    recoveryAction: 'Проверяем заказ',
+    uncertain: true,
+    notes: 'Сохранить заметку',
+  });
+  const confirm = view.querySelector('button[data-action="confirm-production"]');
+  const notes = view.querySelector('textarea[data-action="production-notes"]');
+  const cancel = view.querySelector('button[data-action="cancel-production-confirmation"]');
+  const recovery = view.querySelector('button[data-action="reconcile-production-outcome"]');
+  assert.equal(confirm.hasAttribute('disabled'), true);
+  assert.equal(confirm.textContent, 'Подтвердить изготовление');
+  assert.equal(notes.hasAttribute('disabled'), true);
+  assert.equal(notes.textContent, 'Сохранить заметку');
+  assert.equal(cancel.hasAttribute('disabled'), true);
+  assert.equal(recovery.textContent, 'Проверяем…');
+  assert.equal(recovery.hasAttribute('disabled'), true);
+  assert.equal(recovery.getAttribute('aria-busy'), 'true');
+  assert.match(view.textContent, /Исход неизвестен/);
+  assert.match(view.textContent, /Проверяем результат изготовления/);
+  assert.equal(view.querySelector('button[data-action="open-production-confirmation"]'), null);
+  const closedConfirmation = productionGate({ reconciliationLoading: true, error: 'Исход неизвестен', recoveryAction: 'Проверяем заказ', uncertain: true });
+  const open = closedConfirmation.querySelector('button[data-action="open-production-confirmation"]');
+  assert.equal(open.hasAttribute('disabled'), true);
+  assert.match(closedConfirmation.textContent, /Проверяем результат изготовления/);
+});
+
 test('production reconciliation pending disables recovery action with busy semantics', () => {
   const view = productionGate({ readiness: null, error: 'Исход неизвестен', recoveryAction: 'Проверяем заказ', uncertain: true, reconciliationLoading: true });
   const failure = view.querySelector('[data-order-production-focus-anchor="failure"]');

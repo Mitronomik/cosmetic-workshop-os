@@ -104,18 +104,20 @@ export function renderOrderProductionGate(
   if (!input.readiness.can_produce || input.readiness.status === 'blocked') {
     return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${error}<p class="next-step">Производство недоступно, пока есть блокирующие замечания.</p></section>`;
   }
-  const operationBlocked = input.blockedByOperation || input.persistentWriteActive;
+  const operationBlocked = input.blockedByOperation || input.persistentWriteActive || input.reconciliationLoading;
   const operationNote = input.loading
     ? '<p class="next-step">Изготовление выполняется… Дождитесь завершения, прежде чем запускать другое действие с заказом.</p>'
     : input.persistentWriteActive
       ? '<p class="next-step">Сейчас выполняется изготовление, отмена или архивирование заказа. Дождитесь завершения текущего действия.</p>'
-      : input.blockedByOperation
+      : input.reconciliationLoading
+        ? '<p class="next-step">Проверяем результат изготовления… Дождитесь завершения безопасной проверки перед новым действием.</p>'
+        : input.blockedByOperation
         ? '<p class="next-step">Дождитесь завершения текущей операции с заказом. После неё повторите проверку готовности.</p>'
         : input.readiness.status === 'warning'
           ? '<p class="next-step">Есть предупреждения. Проверьте их перед подтверждением изготовления.</p>'
           : '<p class="next-step">Проверка готовности разрешает изготовление. Подтвердите действие только после проверки списка компонентов и тары.</p>';
   if (input.confirming) {
-    return `<section class="card data-card" data-order-production-focus-anchor="confirmation" tabindex="-1"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${operationNote}${error}<div class="readiness-block" ${input.loading ? 'aria-busy="true"' : ''}><h3>Подтвердите изготовление</h3><p>После подтверждения система создаст производственную партию, спишет компоненты и тару со склада и переведёт заказ в статус «Изготовлен».</p><p class="next-step">Это действие нельзя отменить в MVP.</p><label class="full-span">Заметка к партии<textarea data-action="production-notes" data-id="${input.orderId}" rows="3" maxlength="1600" placeholder="Необязательно" ${input.loading || operationBlocked ? 'disabled' : ''}>${escapeHtml(input.notes)}</textarea></label><div class="actions"><button class="primary-action" type="button" data-action="confirm-production" data-id="${input.orderId}" ${input.loading ? 'aria-busy="true"' : ''} ${input.loading || operationBlocked ? 'disabled' : ''}>${input.loading ? 'Изготавливаем…' : 'Подтвердить изготовление'}</button><button class="secondary-action" type="button" data-action="cancel-production-confirmation" data-id="${input.orderId}" ${input.loading ? 'disabled' : ''}>Отмена</button></div></div></section>`;
+    return `<section class="card data-card" data-order-production-focus-anchor="confirmation" tabindex="-1"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${operationNote}${error}<div class="readiness-block" ${input.loading ? 'aria-busy="true"' : ''}><h3>Подтвердите изготовление</h3><p>После подтверждения система создаст производственную партию, спишет компоненты и тару со склада и переведёт заказ в статус «Изготовлен».</p><p class="next-step">Это действие нельзя отменить в MVP.</p><label class="full-span">Заметка к партии<textarea data-action="production-notes" data-id="${input.orderId}" rows="3" maxlength="1600" placeholder="Необязательно" ${input.loading || operationBlocked ? 'disabled' : ''}>${escapeHtml(input.notes)}</textarea></label><div class="actions"><button class="primary-action" type="button" data-action="confirm-production" data-id="${input.orderId}" ${input.loading ? 'aria-busy="true"' : ''} ${input.loading || operationBlocked ? 'disabled' : ''}>${input.loading ? 'Изготавливаем…' : 'Подтвердить изготовление'}</button><button class="secondary-action" type="button" data-action="cancel-production-confirmation" data-id="${input.orderId}" ${input.loading || operationBlocked ? 'disabled' : ''}>Отмена</button></div></div></section>`;
   }
   return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${operationNote}${error}<div class="actions"><button class="primary-action" type="button" data-action="open-production-confirmation" data-id="${input.orderId}" ${operationBlocked ? 'disabled' : ''}>Изготовить</button></div></section>`;
 }

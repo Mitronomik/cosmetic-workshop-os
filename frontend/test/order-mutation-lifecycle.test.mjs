@@ -530,3 +530,25 @@ test('production reconciliation request ownership suppresses duplicates and stal
   assert.equal(orderRequestOwnerMatches(state.owner, first, 1, 'productionReconciliation'), false);
   assert.equal(orderRequestOwnerMatches(state.owner, newer, 1, 'productionReconciliation'), true);
 });
+
+
+test('production reconciliation operation blocks same-order writes/readiness while unrelated navigation remains available and recovers', () => {
+  const controller = createOrderMutationController();
+  const context = ctx(controller, { selectedOrderId: 1, showForm: false });
+  const request = controller.beginRequest('productionReconciliation', context, { requestedOrderId: 1 });
+  const state = { owner: ownerFromOrderRequest(request, 1, 'productionReconciliation'), loadingOrderId: 1 };
+  const states = [{ owner: state.owner, loadingOrderId: state.loadingOrderId }];
+  assert.equal(orderBoundOperationActive(states, 1), true);
+  assert.equal(orderBoundOperationActive(states, 1, ['productionReconciliation']), true);
+  assert.equal(canStartOrderReadinessRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, null, null, 1, states), false);
+  assert.equal(canStartOrderWriteRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, 1, states), false);
+  assert.equal(orderBoundOperationActive(states, 2), false);
+  assert.equal(orderRequestOwnerMatches(state.owner, request, 1, 'productionReconciliation'), true);
+  const readOnlyNavigationToB = !orderBoundOperationActive(states, 2);
+  assert.equal(readOnlyNavigationToB, true);
+  state.owner = null;
+  state.loadingOrderId = null;
+  assert.equal(orderBoundOperationActive([{ owner: state.owner, loadingOrderId: state.loadingOrderId }], 1), false);
+  assert.equal(canStartOrderReadinessRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, null, null, 1, []), true);
+  assert.equal(canStartOrderWriteRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, 1, []), true);
+});

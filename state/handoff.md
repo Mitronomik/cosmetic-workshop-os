@@ -419,4 +419,8 @@ Corrective scope is limited to reviewed Production Confirmation gaps: render fai
 
 ## PR #124 A3.9 second corrective handoff
 
-PR #124 remains the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Previous reviewed published GitHub head `1a1a26fcc8fa3836ba4b56a2cb02db5a20dad764` still required correction. Exact base remains `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. The current correction scopes SQLite `BEGIN IMMEDIATE` to Production Confirmation, adds an Order-bound reconciliation lifecycle with loading/duplicate/stale-response protection, fixes the generic transport-message presentation test, and keeps final exact-head browser smoke pending human code review. A3.9 remains IN PROGRESS; A4 remains separate.
+PR #124 remains the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Previous reviewed published GitHub head `f29d8115586e528afec6d9ee2c5efd1fc4fb0a5d` still required correction. Exact base remains `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. The current correction scopes SQLite `BEGIN IMMEDIATE` to Production Confirmation, adds an Order-bound reconciliation lifecycle with loading/duplicate/stale-response protection, fixes the generic transport-message presentation test, and keeps final exact-head browser smoke pending human code review. A3.9 remains IN PROGRESS; A4 remains separate.
+
+## PR #124 A3.9 final presentation correction
+
+PR #124 remains the active A3.9 Draft PR. Reviewed published GitHub head `f29d8115586e528afec6d9ee2c5efd1fc4fb0a5d` had one remaining presentation mismatch: Production Confirmation reconciliation was guarded in request logic but some controls still looked active. This correction keeps backend and transaction behavior unchanged, treats reconciliation as same-Order transient busy presentation for Production Confirmation and Order detail actions, and keeps final browser smoke pending smoke review. A3.9 remains IN PROGRESS; A4 remains separate.
