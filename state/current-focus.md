@@ -4,7 +4,7 @@
 
 A3.9 — Production Confirmation structured errors and mutation safety for PR #124. Keep the existing Production Confirmation runtime slice safe, understandable, recoverable, transactional, and resistant to duplicate/stale/conflicting execution.
 
-PR #124 is the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Reviewed published head `8ee85e2baff18e278da945a4d89634c5db9335f8` requires correction. Exact base: `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
+PR #124 is the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Reviewed published head `1a1a26fcc8fa3836ba4b56a2cb02db5a20dad764` still required correction. Exact base: `c6d87df635a5cf7d063b43ffc16dc02d64e08103`.
 
 ## Allowed scope/files
 

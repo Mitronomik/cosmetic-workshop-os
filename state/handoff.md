@@ -416,3 +416,7 @@ No backend readiness calculation, FEFO, density conversion, inventory policy, Pr
 ## PR #124 A3.9 corrective handoff
 
 Corrective scope is limited to reviewed Production Confirmation gaps: render failures without readiness, structured error extraction with `next_action`, uncertain-outcome reconciliation, Order A result retention after navigating to Order B, focus anchors, rollback assertions, and transaction lock audit. Do not run final browser smoke until the corrective head has human code review. Keep PR #124 Draft; do not merge or enable auto-merge.
+
+## PR #124 A3.9 second corrective handoff
+
+PR #124 remains the active A3.9 Draft PR on managed branch `codex-l6nqu0`. Previous reviewed published GitHub head `1a1a26fcc8fa3836ba4b56a2cb02db5a20dad764` still required correction. Exact base remains `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. The current correction scopes SQLite `BEGIN IMMEDIATE` to Production Confirmation, adds an Order-bound reconciliation lifecycle with loading/duplicate/stale-response protection, fixes the generic transport-message presentation test, and keeps final exact-head browser smoke pending human code review. A3.9 remains IN PROGRESS; A4 remains separate.

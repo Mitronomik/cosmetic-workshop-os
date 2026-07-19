@@ -12,7 +12,7 @@ export type OrderContextSnapshot = {
 };
 export type OrderContextState = OrderContextSnapshot;
 
-export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory' | 'cancel' | 'archive';
+export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory' | 'productionReconciliation' | 'cancel' | 'archive';
 export type OrderRequestSnapshot = OrderContextSnapshot & {
   kind: OrderRequestKind;
   generation: number;
@@ -23,7 +23,7 @@ export type OrderRequestSnapshot = OrderContextSnapshot & {
 export type OrderSubmitSnapshot = OrderContextSnapshot & { submitToken: number };
 
 export type OrderTransientRequestOwner = {
-  kind: 'readiness' | 'production' | 'productionHistory' | 'cancel' | 'archive';
+  kind: 'readiness' | 'production' | 'productionHistory' | 'productionReconciliation' | 'cancel' | 'archive';
   generation: number;
   orderId: number;
 } | null;
@@ -80,6 +80,7 @@ export class OrderMutationController {
     readiness: 0,
     production: 0,
     productionHistory: 0,
+    productionReconciliation: 0,
     cancel: 0,
     archive: 0,
   };
@@ -105,6 +106,7 @@ export class OrderMutationController {
     this.invalidateRequest('readiness');
     this.invalidateRequest('production');
     this.invalidateRequest('productionHistory');
+    this.invalidateRequest('productionReconciliation');
     return this.contextToken;
   }
 

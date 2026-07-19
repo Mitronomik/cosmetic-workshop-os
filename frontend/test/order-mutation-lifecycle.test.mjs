@@ -506,3 +506,27 @@ test('production delayed A success and failure are order-bound and do not mutate
   assert.equal(errors[2], undefined);
   assert.match(errors[1], /Исход изготовления неизвестен/);
 });
+
+
+test('production reconciliation request ownership suppresses duplicates and stale cleanup', () => {
+  const controller = createOrderMutationController();
+  const context = ctx(controller, { selectedOrderId: 1, showForm: false });
+  const state = { owner: null, loadingOrderId: null, requestPairs: 0 };
+  const start = () => {
+    if (orderBoundOperationActive([{ owner: state.owner, loadingOrderId: state.loadingOrderId }], 1)) return null;
+    const request = controller.beginRequest('productionReconciliation', context, { requestedOrderId: 1 });
+    state.owner = ownerFromOrderRequest(request, 1, 'productionReconciliation');
+    state.loadingOrderId = 1;
+    state.requestPairs += 1;
+    return request;
+  };
+  const first = start();
+  const duplicate = start();
+  assert.ok(first);
+  assert.equal(duplicate, null);
+  assert.equal(state.requestPairs, 1);
+  const newer = controller.beginRequest('productionReconciliation', context, { requestedOrderId: 1 });
+  state.owner = ownerFromOrderRequest(newer, 1, 'productionReconciliation');
+  assert.equal(orderRequestOwnerMatches(state.owner, first, 1, 'productionReconciliation'), false);
+  assert.equal(orderRequestOwnerMatches(state.owner, newer, 1, 'productionReconciliation'), true);
+});

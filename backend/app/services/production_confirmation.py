@@ -56,7 +56,7 @@ class ProductionConfirmationService:
             messages = "; ".join(issue.message for issue in readiness.blocking_issues) or "Заказ пока нельзя изготовить. Сначала устраните блокирующие замечания проверки."
             raise ProductionConfirmationReadinessError(messages, code="readiness_blocked")
 
-        with transaction(self.config) as connection:
+        with transaction(self.config, immediate=True) as connection:
             locked_order = self.orders.get_by_id(order_id, connection=connection)
             self._validate_lifecycle(locked_order)
             if self._critical_order_snapshot(locked_order) != readiness_order_snapshot:

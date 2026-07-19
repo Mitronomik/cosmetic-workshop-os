@@ -334,11 +334,44 @@ def test_api_produce_endpoint(monkeypatch, tmp_path):
 
 def test_production_transaction_uses_immediate_write_lock(tmp_path):
     c = config(tmp_path)
-    _, _, lot, _, _ = seed_ready(c)
-    with transaction(c):
+    _, ingredient, lot, _, _ = seed_ready(c)
+    with transaction(c, immediate=True):
         competing = sqlite3.connect(c.path, timeout=0.05)
         try:
             with pytest.raises(sqlite3.OperationalError, match="locked"):
-                competing.execute("INSERT INTO stock_movements (ingredient_lot_id, movement_type, direction, quantity, unit, reason) VALUES (?, 'receipt', 'in', '1', 'g', 'competing')", (lot.id,))
+                competing.execute("INSERT INTO stock_movements (ingredient_lot_id, ingredient_id, movement_type, direction, quantity, unit, reason) VALUES (?, ?, 'receipt', 'in', '1', 'g', 'competing')", (lot.id, ingredient.id,))
         finally:
             competing.close()
+
+
+def test_default_transaction_keeps_deferred_mode_until_write(tmp_path):
+    c = config(tmp_path)
+    _, ingredient, lot, _, _ = seed_ready(c)
+    with transaction(c):
+        competing = sqlite3.connect(c.path, timeout=0.05)
+        try:
+            competing.execute("INSERT INTO stock_movements (ingredient_lot_id, ingredient_id, movement_type, direction, quantity, unit, reason) VALUES (?, ?, 'receipt', 'in', '1', 'g', 'deferred')", (lot.id, ingredient.id,))
+            competing.commit()
+        finally:
+            competing.close()
+
+def test_immediate_transaction_allows_competing_reader_and_releases_after_commit(tmp_path):
+    c = config(tmp_path)
+    _, ingredient, lot, _, _ = seed_ready(c)
+    with transaction(c, immediate=True):
+        reader = sqlite3.connect(c.path, timeout=0.05)
+        try:
+            assert reader.execute("SELECT count(*) FROM stock_movements").fetchone()[0] >= 1
+        finally:
+            reader.close()
+    with sqlite3.connect(c.path, timeout=0.05) as writer:
+        writer.execute("INSERT INTO stock_movements (ingredient_lot_id, ingredient_id, movement_type, direction, quantity, unit, reason) VALUES (?, ?, 'receipt', 'in', '1', 'g', 'after commit')", (lot.id, ingredient.id,))
+
+def test_immediate_transaction_releases_after_rollback(tmp_path):
+    c = config(tmp_path)
+    _, ingredient, lot, _, _ = seed_ready(c)
+    with pytest.raises(RuntimeError):
+        with transaction(c, immediate=True):
+            raise RuntimeError("rollback")
+    with sqlite3.connect(c.path, timeout=0.05) as writer:
+        writer.execute("INSERT INTO stock_movements (ingredient_lot_id, ingredient_id, movement_type, direction, quantity, unit, reason) VALUES (?, ?, 'receipt', 'in', '1', 'g', 'after rollback')", (lot.id, ingredient.id,))

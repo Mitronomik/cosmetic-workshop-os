@@ -72,7 +72,7 @@ function ingredient(overrides = {}) { return { ingredient_id: 10, ingredient_nam
 function packaging(overrides = {}) { return { packaging_item_id: 30, name: 'Банка', required_quantity: '1', available_quantity: '2', missing_quantity: null, can_fulfill: true, ...overrides }; }
 function readiness(overrides = {}) { return { order_id: 1, can_produce: true, status: 'ready', blocking_issues: [], warnings: [], ingredients: [ingredient()], packaging: [packaging()], estimated_cost: '120.00', estimated_tax: null, estimated_margin: null, generated_at: '2026-07-19T10:00:00Z', ...overrides }; }
 function readinessPanel(overrides = {}) { return renderView(renderOrderReadinessPanel({ orderId: 1, closed: false, busy: false, error: '', result: readiness(), current: true, ...overrides }, formatters)); }
-function productionGate(overrides = {}) { return renderView(renderOrderProductionGate({ orderId: 1, readiness: readiness(), hasCachedReadiness: true, confirming: false, loading: false, blockedByOperation: false, persistentWriteActive: false, notes: '', error: '', recoveryAction: '', uncertain: false, ...overrides }, escapeHtml)); }
+function productionGate(overrides = {}) { return renderView(renderOrderProductionGate({ orderId: 1, readiness: readiness(), hasCachedReadiness: true, confirming: false, loading: false, blockedByOperation: false, persistentWriteActive: false, notes: '', error: '', recoveryAction: '', uncertain: false, reconciliationLoading: false, ...overrides }, escapeHtml)); }
 function lifecycleActions(overrides = {}) { return renderView(renderOrderLifecycleActions({ orderId: 1, isActive: true, status: 'new', sameOrderOperationActive: false, persistentOwner: null, ...overrides })); }
 function rowActions(overrides = {}) { return renderView(renderOrderRowActions({ orderId: 1, isActive: true, status: 'new', sameOrderOperationActive: false, persistentOwner: null, ...overrides })); }
 
@@ -253,9 +253,22 @@ test('production confirmation pending and failure states render stable controls 
 });
 
 test('production failure escapes backend message and next action and never shows generic transport text', () => {
-  const view = productionGate({ readiness: null, error: '<script>API request failed</script>', recoveryAction: '<img onerror=x>' });
+  const view = productionGate({ readiness: null, error: '<script>Безопасное сообщение</script>', recoveryAction: '<img onerror=x>' });
   assert.equal(view.querySelector('script'), null);
   assert.equal(view.querySelector('img'), null);
-  assert.match(view.textContent, /API request failed/);
+  assert.doesNotMatch(view.textContent, /API request failed|SELECT|Traceback|workspace|production_batches|RuntimeError|\{\"detail/);
+  assert.match(view.textContent, /Безопасное сообщение/);
   assert.match(view.textContent, /img onerror=x/);
+});
+
+
+test('production reconciliation pending disables recovery action with busy semantics', () => {
+  const view = productionGate({ readiness: null, error: 'Исход неизвестен', recoveryAction: 'Проверяем заказ', uncertain: true, reconciliationLoading: true });
+  const failure = view.querySelector('[data-order-production-focus-anchor="failure"]');
+  const button = view.querySelector('button[data-action="reconcile-production-outcome"]');
+  assert.equal(failure.getAttribute('aria-busy'), 'true');
+  assert.equal(button.textContent, 'Проверяем…');
+  assert.equal(button.hasAttribute('disabled'), true);
+  assert.equal(button.getAttribute('aria-busy'), 'true');
+  assert.match(view.textContent, /Исход неизвестен/);
 });
