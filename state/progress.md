@@ -990,3 +990,13 @@ A3.5 verification run in this branch:
 - Commands already run in the implementation worktree: frontend form-validation `19/19 PASS`; targeted-validation-update `62/62 PASS`; Order mutation lifecycle `18/18 PASS`; frontend build `PASS`; focused backend readiness/Orders `19/19 PASS`.
 - Full backend branch run: `480 passed, 5 failed`; clean detached base run at `8c4a092d055fd221cb18da901cee9e90106b33a4`: the same `480 passed, 5 failed` with the same backup filename, export filename, import issue-count, inventory fixture, and purchase-suggestion fixture failures. Branch-only full-suite failure delta: zero.
 - Exact published-head browser smoke is not yet claimed in this repository state entry. It remains mandatory before the Draft PR can be reported ready for human review.
+
+## 2026-07-19 — Draft PR #123 human-review correction
+
+- Draft PR #123 exists on `codex/a3.8-production-readiness-lifecycle` and remains IN REVIEW; A3.8 is not DONE.
+- The reviewed published head was `69da410bccfc7bf9c852ef5a807d039b4fa4a74d`. Its exact-head browser smoke passed as external local evidence, not GitHub Actions evidence.
+- Human review accepted the read-only backend direction but found incomplete reverse mutual exclusion, response-time borrowing of a potentially newer Order `updated_at`, and missing committed behavioral readiness-presentation tests.
+- The correction keeps the existing Order controller and adds narrow same-Order write ownership for production/cancel/archive, duplicate lifecycle-action suppression, generation-safe stale callback cleanup, and readiness freshness captured at request start.
+- Readiness presentation is extracted into a small dependency-free module so ready, warning, blocked, stale, loading, system-error/retry, escaping, and Production Confirmation eligibility are inspected through a behavioral DOM/view harness rather than source-string guards.
+- `docs/api.md` now reflects that an Orders frontend exists while retaining the no-confirmation, no-reservation, no-write, no-batch, and no-lifecycle-mutation API boundary.
+- A new corrective published head requires a complete new exact-head browser smoke. The reviewed-head smoke is historical evidence only. A3.9 and A4 remain separate.

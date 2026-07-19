@@ -58,7 +58,7 @@ HTTP boundaries:
 
 A blocked readiness DTO is not a request failure. Conversely, a transport or HTTP failure is not a valid blocked-readiness result and must be presented separately by clients.
 
-Current limitations: this foundation does not confirm production, reserve stock, write off ingredients or packaging, generate alerts, generate purchase suggestions, change order lifecycle status, or add frontend UI.
+Current limitations: the Orders frontend presents this read-only check, but the readiness operation itself does not confirm production, reserve stock, write off ingredients or packaging, create a `ProductionBatch`, generate or mutate alerts or purchase suggestions, or change the Order lifecycle status.
 
 ## Production confirmation
 

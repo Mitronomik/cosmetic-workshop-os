@@ -12,7 +12,7 @@ export type OrderContextSnapshot = {
 };
 export type OrderContextState = OrderContextSnapshot;
 
-export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory';
+export type OrderRequestKind = 'list' | 'postSaveRefresh' | 'reference' | 'detail' | 'readiness' | 'production' | 'productionHistory' | 'cancel' | 'archive';
 export type OrderRequestSnapshot = OrderContextSnapshot & {
   kind: OrderRequestKind;
   generation: number;
@@ -23,10 +23,14 @@ export type OrderRequestSnapshot = OrderContextSnapshot & {
 export type OrderSubmitSnapshot = OrderContextSnapshot & { submitToken: number };
 
 export type OrderTransientRequestOwner = {
-  kind: 'readiness' | 'production' | 'productionHistory';
+  kind: 'readiness' | 'production' | 'productionHistory' | 'cancel' | 'archive';
   generation: number;
   orderId: number;
 } | null;
+export type OrderOperationState = {
+  owner: OrderTransientRequestOwner;
+  loadingOrderId: number | null;
+};
 export type OrderOperationError = { orderId: number; message: string } | null;
 export type OrderProductionGuardOrder = { id: number; is_active: boolean; status: string; updated_at: string } | null | undefined;
 export type OrderProductionGuardReadiness = {
@@ -71,6 +75,8 @@ export class OrderMutationController {
     readiness: 0,
     production: 0,
     productionHistory: 0,
+    cancel: 0,
+    archive: 0,
   };
 
   snapshot(workspace: OrderWorkspaceState): OrderContextSnapshot {
@@ -189,11 +195,60 @@ export function canStartOrderReadinessRequest(
   owner: OrderTransientRequestOwner,
   loadingOrderId: number | null,
   requestedOrderId: number,
-): boolean {
+  conflictingOperations: OrderOperationState[] = [],
+): order is Exclude<OrderProductionGuardOrder, null | undefined> {
   return !mutationActive
     && order?.id === requestedOrderId
     && !orderProductionIsClosed(order)
-    && !orderReadinessRequestActive(owner, loadingOrderId);
+    && !orderReadinessRequestActive(owner, loadingOrderId)
+    && !orderBoundOperationActive(conflictingOperations, requestedOrderId);
+}
+
+export function orderBoundOperationActive(
+  operations: OrderOperationState[],
+  orderId: number,
+  kinds?: NonNullable<OrderTransientRequestOwner>['kind'][],
+): boolean {
+  return operations.some(({ owner, loadingOrderId }) => Boolean(
+    owner
+      && owner.orderId === orderId
+      && loadingOrderId === orderId
+      && (!kinds || kinds.includes(owner.kind)),
+  ));
+}
+
+export function canStartOrderWriteRequest(
+  mutationActive: boolean,
+  order: OrderProductionGuardOrder,
+  requestedOrderId: number,
+  operations: OrderOperationState[],
+): boolean {
+  const persistentWriteActive = operations.some(({ owner, loadingOrderId }) => Boolean(
+    owner
+      && loadingOrderId === owner.orderId
+      && (owner.kind === 'production' || owner.kind === 'cancel' || owner.kind === 'archive'),
+  ));
+  return !mutationActive
+    && order?.id === requestedOrderId
+    && !persistentWriteActive
+    && !orderBoundOperationActive(operations, requestedOrderId);
+}
+
+export function orderReadinessAttemptMatches(
+  order: OrderProductionGuardOrder,
+  requestedOrderId: number,
+  capturedOrderUpdatedAt: string | undefined,
+  capturedOperationGeneration: number | undefined,
+  currentOperationGeneration: number | undefined,
+): boolean {
+  return Boolean(
+    order
+      && order.id === requestedOrderId
+      && capturedOrderUpdatedAt !== undefined
+      && order.updated_at === capturedOrderUpdatedAt
+      && capturedOperationGeneration !== undefined
+      && capturedOperationGeneration === currentOperationGeneration,
+  );
 }
 
 export function orderReadinessResultIsCurrent(
@@ -201,7 +256,9 @@ export function orderReadinessResultIsCurrent(
   readiness: OrderProductionGuardReadiness,
   latestAttemptGeneration: number | undefined,
   resultGeneration: number | undefined,
-  checkedOrderUpdatedAt: string | undefined,
+  capturedOrderUpdatedAt: string | undefined,
+  capturedOperationGeneration: number | undefined,
+  currentOperationGeneration: number | undefined,
 ): boolean {
   return Boolean(
     order
@@ -209,7 +266,9 @@ export function orderReadinessResultIsCurrent(
       && readiness.order_id === order.id
       && latestAttemptGeneration !== undefined
       && latestAttemptGeneration === resultGeneration
-      && checkedOrderUpdatedAt === order.updated_at,
+      && capturedOrderUpdatedAt === order.updated_at
+      && capturedOperationGeneration !== undefined
+      && capturedOperationGeneration === currentOperationGeneration,
   );
 }
 

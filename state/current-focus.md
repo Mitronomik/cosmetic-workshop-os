@@ -1,42 +1,40 @@
-# Current focus — A3.8 Production Readiness feedback and lifecycle
+# Current focus — A3.8 Production Readiness feedback and lifecycle correction
 
 ## Goal
 
-Make the existing read-only Production Readiness check understandable, predictable, accessible, and safe before irreversible Production Confirmation. Backend calculations remain authoritative.
+Close the human-review findings on Draft PR #123 while preserving the read-only Production Readiness boundary and the existing Order request-generation architecture.
+
+Reviewed history: PR #123 exists and remains Draft/IN REVIEW. Reviewed published head `69da410bccfc7bf9c852ef5a807d039b4fa4a74d` passed exact-head browser smoke as external local evidence, not GitHub Actions evidence. Human review then found reverse mutual-exclusion, readiness-revision freshness, and persistent behavioral-test gaps, so A3.8 is not DONE.
 
 ## Allowed scope
 
-- Existing Orders detail and Production Readiness UI.
-- Existing Order request-generation, context-invalidation, transient-owner, and cache architecture.
-- Russian contextual rendering for blocking issues, warnings, recipes/formulas, components, selected lots, packaging, order-level issues, status, and estimate limitations.
-- Separate system-failure feedback for `404`, `409`, structured `422`, local connection failures, and unexpected failures.
-- Honest `Проверяем…` busy state, duplicate readiness prevention, and narrow guards for conflicting actions on the checked order.
-- Focused frontend lifecycle tests and backend readiness no-write regression tests.
-- Directly affected documentation and state files.
+- Existing Orders detail, Production Readiness presentation, and Production Confirmation guard only.
+- Existing Order request-generation, context-invalidation, transient-owner, and per-order freshness architecture.
+- Narrow same-Order exclusion between readiness and pending production/cancel/archive writes.
+- Duplicate cancel/archive protection and generation-safe owner cleanup.
+- Captured Order revision and operation generation at readiness request start.
+- A small extracted readiness presentation module and deterministic DOM/view tests without a frontend framework or dependency change.
+- Focused frontend lifecycle/presentation tests, existing backend readiness no-write regressions, and directly affected documentation/state.
 
 ## Non-goals
 
-- No change to `POST /api/orders/{id}/produce` or Production Confirmation behavior.
-- No production batch creation, stock movement, inventory consumption/reservation, or order status transition.
-- No FEFO, recipe, density, stock, expiration, cost, tax, margin, or eligibility calculation in the frontend.
-- No database model, migration, schema, workflow, responsive table, dependency, CI, retry/backoff, route, or framework change.
-- No A3.9, A4, or unrelated roadmap work.
+- No change to backend readiness calculations, FEFO, density conversion, inventory policy, cost, tax, margin, or eligibility rules.
+- No change to Production Confirmation domain behavior, ingredient/packaging write-off, cancellation/archive domain rules, schemas, migrations, responsive tables, dependencies, CI, or unrelated routes.
+- No generic global request manager and no A3.9 or A4 work.
 
 ## Tests
 
-- Frontend form-validation, targeted-validation-update, Order mutation lifecycle, and build checks.
-- Focused backend Production Readiness and Orders suites.
-- Full backend comparison against the clean `8c4a092d055fd221cb18da901cee9e90106b33a4` base when baseline failures remain.
-- Exact published-head browser smoke with isolated SQLite, ports, profile, deterministic fixtures, request counting, mutation checks, console diagnostics, and backend traceback checks.
-- Repository hygiene and diff review.
+- Frontend form-validation, targeted-validation-update, Order mutation lifecycle, readiness presentation, and build checks; independent frontend scripts may run concurrently only when their generated output directories do not collide.
+- Focused backend Production Readiness and Orders suites plus full backend comparison with exact base `8c4a092d055fd221cb18da901cee9e90106b33a4`.
+- `git diff --check`, clean status, and critical diff review.
+- A new corrective exact-published-head browser smoke with isolated data and exact readiness/production/cancel/archive request counts. The reviewed-head smoke cannot be reused for a corrective head.
 
 ## Acceptance criteria
 
-- Valid ready, warning, and blocked results remain distinct from request/system failures.
-- Backend messages are escaped and associated with the correct visible context where possible; unknown issues remain visible as general feedback.
-- Rapid repeated action produces exactly one readiness POST.
-- Loading ownership is honest and always released on completion, failure, navigation, or invalidation.
-- Delayed, stale, wrong-order, and older callbacks cannot alter a newer Order context or clear a newer request owner.
-- Cached results survive safe order navigation, but stale, failed, blocked, absent, or wrong-order results cannot enable Production Confirmation.
-- Readiness creates no production batch, ingredient or packaging stock movement, reservation, or order status mutation.
-- A3.9 Production Confirmation and A4 remain separate.
+- Readiness cannot start while production, cancel, or archive is pending for the same Order.
+- Readiness blocks conflicting Order create/update, cancel/archive, reload, and Production Confirmation while it owns the current Order context.
+- Duplicate cancel/archive actions produce one POST each; stale write callbacks cannot clear a newer owner.
+- A readiness result uses the Order revision captured at request start and is current only when no conflicting Order mutation generation changed.
+- Ready, warning, blocked, stale, loading, retryable system failure, escaping, and Production Confirmation eligibility have committed behavioral DOM/view coverage.
+- Corrected exact-head smoke proves recovered controls, no duplicates, no unintended ProductionBatch/stock/status mutation, no unexpected page/console/backend errors, and remote/tested SHA equality.
+- PR #123 stays Draft/IN REVIEW. A3.9 and A4 remain separate.

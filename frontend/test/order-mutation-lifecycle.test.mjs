@@ -3,14 +3,17 @@ import assert from 'node:assert/strict';
 import {
   canOpenOrderProductionConfirmation,
   canStartOrderReadinessRequest,
+  canStartOrderWriteRequest,
   clearOrderSourceValidation,
   createOrderMutationController,
   emptyOrderValidationProvenance,
   orderOperationError,
   orderOperationErrorFor,
+  orderBoundOperationActive,
   orderPayloadFromDraft,
   orderProductionIsClosed,
   orderReadinessRequestActive,
+  orderReadinessAttemptMatches,
   orderReadinessResultIsCurrent,
   orderRequestOwnerMatches,
   ownerFromOrderRequest,
@@ -197,13 +200,69 @@ test('readiness currentness separates blocked results, failed attempts, wrong or
   const orderA = { id: 1, is_active: true, status: 'new', updated_at: 'v1' };
   const blocked = { order_id: 1, can_produce: false, status: 'blocked' };
   const ready = { order_id: 1, can_produce: true, status: 'ready' };
-  assert.equal(orderReadinessResultIsCurrent(orderA, blocked, 4, 4, 'v1'), true);
-  assert.equal(orderReadinessResultIsCurrent(orderA, ready, 4, 4, 'v1'), true);
-  assert.equal(orderReadinessResultIsCurrent(orderA, ready, 5, 4, 'v1'), false);
-  assert.equal(orderReadinessResultIsCurrent(orderA, { ...ready, order_id: 2 }, 4, 4, 'v1'), false);
-  assert.equal(orderReadinessResultIsCurrent({ ...orderA, updated_at: 'v2' }, ready, 4, 4, 'v1'), false);
+  assert.equal(orderReadinessResultIsCurrent(orderA, blocked, 4, 4, 'v1', 7, 7), true);
+  assert.equal(orderReadinessResultIsCurrent(orderA, ready, 4, 4, 'v1', 7, 7), true);
+  assert.equal(orderReadinessResultIsCurrent(orderA, ready, 5, 4, 'v1', 7, 7), false);
+  assert.equal(orderReadinessResultIsCurrent(orderA, { ...ready, order_id: 2 }, 4, 4, 'v1', 7, 7), false);
+  assert.equal(orderReadinessResultIsCurrent({ ...orderA, updated_at: 'v2' }, ready, 4, 4, 'v1', 7, 7), false);
+  assert.equal(orderReadinessResultIsCurrent(orderA, ready, 4, 4, 'v1', 7, 8), false);
+  assert.equal(orderReadinessAttemptMatches(orderA, 1, 'v1', 7, 7), true);
+  assert.equal(orderReadinessAttemptMatches({ ...orderA, updated_at: 'v2' }, 1, 'v1', 7, 7), false);
+  assert.equal(orderReadinessAttemptMatches(orderA, 1, 'v1', 7, 8), false);
   assert.equal(canOpenOrderProductionConfirmation(false, orderA, blocked), false);
   assert.equal(canOpenOrderProductionConfirmation(false, orderA, undefined), false);
+});
+
+test('readiness and Order writes are mutually exclusive for the same Order only', () => {
+  const active = { id: 1, is_active: true, status: 'new', updated_at: 'v1' };
+  const operation = (kind, orderId = 1, generation = 1) => ({ owner: { kind, orderId, generation }, loadingOrderId: orderId });
+  for (const kind of ['production', 'cancel', 'archive']) {
+    const conflicting = [operation(kind)];
+    assert.equal(canStartOrderReadinessRequest(false, active, null, null, 1, conflicting), false, `${kind} blocks same-order readiness`);
+    assert.equal(canStartOrderReadinessRequest(false, { ...active, id: 2 }, null, null, 2, conflicting), true, `${kind} does not block unrelated Order readiness`);
+  }
+  const readiness = operation('readiness');
+  assert.equal(canStartOrderWriteRequest(false, active, 1, [readiness]), false);
+  assert.equal(canStartOrderWriteRequest(false, { ...active, id: 2 }, 2, [readiness]), true);
+  assert.equal(canStartOrderWriteRequest(false, { ...active, id: 2 }, 2, [operation('cancel')]), false, 'a persistent write owner is not overwritten');
+  assert.equal(orderBoundOperationActive([readiness], 1), true);
+  assert.equal(orderBoundOperationActive([readiness], 2), false);
+});
+
+test('duplicate cancel and archive actions each start exactly one POST-equivalent request', () => {
+  for (const kind of ['cancel', 'archive']) {
+    const controller = createOrderMutationController();
+    const active = { id: 1, is_active: true, status: 'new', updated_at: 'v1' };
+    const context = ctx(controller, { selectedOrderId: 1, showForm: false });
+    const state = { owner: null, loadingOrderId: null, postCount: 0 };
+    const trigger = () => {
+      if (!canStartOrderWriteRequest(false, active, 1, [{ owner: state.owner, loadingOrderId: state.loadingOrderId }])) return;
+      const request = controller.beginRequest(kind, context, { requestedOrderId: 1 });
+      state.owner = ownerFromOrderRequest(request, 1, kind);
+      state.loadingOrderId = 1;
+      state.postCount += 1;
+    };
+    trigger();
+    trigger();
+    assert.equal(state.postCount, 1, `${kind} request count`);
+    assert.equal(orderRequestOwnerMatches(state.owner, { ...state.owner, kind }, 1, kind), true);
+  }
+});
+
+test('stale cancel, archive and production callbacks cannot clear a newer operation owner', () => {
+  const controller = createOrderMutationController();
+  const context = ctx(controller, { selectedOrderId: 1, showForm: false });
+  for (const kind of ['cancel', 'archive', 'production']) {
+    const older = controller.beginRequest(kind, context, { requestedOrderId: 1 });
+    const newer = controller.beginRequest(kind, context, { requestedOrderId: 1 });
+    const state = { owner: ownerFromOrderRequest(newer, 1, kind), loadingOrderId: 1 };
+    if (orderRequestOwnerMatches(state.owner, older, 1, kind)) {
+      state.owner = null;
+      state.loadingOrderId = null;
+    }
+    assert.equal(state.loadingOrderId, 1, `${kind} newer loading remains`);
+    assert.equal(orderRequestOwnerMatches(state.owner, newer, 1, kind), true, `${kind} newer owner remains`);
+  }
 });
 
 test('readiness system failures are distinct from a valid blocked result and never leak backend details', () => {
