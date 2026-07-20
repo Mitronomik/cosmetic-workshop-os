@@ -333,3 +333,73 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
 @media (max-width: 520px) { .form-error-summary { padding: 12px 13px; } .field-error { font-size: 12px; } }
 .form-field { display: grid; gap: 7px; }
 .warning-message { background: #fff3d4; border-color: #efd593; color: #7a5b18; }
+
+/* A4.3: scoped responsive containment for the Clients working center. */
+.clients-workspace,
+.clients-workspace > *,
+.clients-workspace .card,
+.clients-workspace .form-grid,
+.clients-workspace .form-field,
+.clients-workspace .ingredient-form,
+.clients-workspace .recipe-lines,
+.clients-workspace .recipe-line,
+.clients-workspace .section-heading,
+.clients-workspace .section-heading > *,
+.clients-workspace .actions,
+.clients-workspace .tag-chip,
+.clients-workspace .feedback-message,
+.clients-workspace .next-step,
+.clients-workspace .page-message,
+.clients-workspace .form-error-summary,
+.clients-workspace .table-wrap {
+  min-width: 0;
+}
+
+.clients-workspace,
+.clients-workspace .card,
+.clients-workspace p,
+.clients-workspace h2,
+.clients-workspace h3,
+.clients-workspace strong,
+.clients-workspace small,
+.clients-workspace td,
+.clients-workspace th,
+.clients-workspace label,
+.clients-workspace .pill,
+.clients-workspace .tag-chip,
+.clients-workspace .field-error,
+.clients-workspace .form-error-summary {
+  overflow-wrap: anywhere;
+}
+
+.clients-workspace .section-heading {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.clients-workspace .section-heading .actions {
+  margin-top: 0;
+}
+
+.clients-workspace .recipe-line {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.clients-list-table-wrap table {
+  min-width: 760px;
+}
+
+@media (max-width: 620px) {
+  .clients-workspace .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .clients-workspace .actions > button,
+  .clients-workspace .actions > a {
+    width: 100%;
+  }
+}

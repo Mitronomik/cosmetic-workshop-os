@@ -435,3 +435,11 @@ Slice A4 is now active. Current runtime work is A4.1: establish a small shared r
 ## A4.2 responsive Orders containment handoff
 
 A4.1 is merged and DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08`, runtime head `effb5ee270c9fbddc777e57c41ad0b53acd77f9d`). The active focused slice is A4.2 for `/orders` responsive containment. This slice must remain presentation-only: no Order lifecycle, readiness, production confirmation, reconciliation, cancellation, archiving, backend, API, schema, migration, stock, FEFO, cost, tax, or margin changes. `/clients`, `/inventory`, and `/packaging-items` remain future A4 follow-ups.
+
+## 2026-07-20 — A4.3 Clients responsive containment handoff
+
+PR #126 / A4.2 is merged and DONE. Merge commit: `4487e4044d89d88538226c5b36543e6009f279f9`; runtime head: `010bd1bf3791dd6a6d754ea2ed0efdcd2ab564d3`. Product-owner manual responsive verification passed at `1440×900`, `1024×768`, `768×900`, and `390×844`.
+
+The active focused slice is A4.3 for `/clients` responsive containment. Keep it presentation-only: no Client API payload changes, backend/domain/schema/migration changes, wish/feedback lifecycle changes, ClientRecipe semantics changes, mutation guard changes, audit behavior changes, or unrelated route implementation changes.
+
+`/inventory` and `/packaging-items` remain future A4 follow-ups. Slice A4 is not complete yet.
