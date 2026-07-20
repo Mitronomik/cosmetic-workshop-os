@@ -1053,3 +1053,11 @@ Slice A4 is now active. Current runtime work is A4.1: establish a small shared r
 - A4.2 is DONE with product-owner manual responsive verification passed at `1440×900`, `1024×768`, `768×900`, and `390×844`.
 - A4.3 `/clients` is now the active focused runtime slice.
 - `/inventory` and `/packaging-items` remain future A4 follow-ups; Slice A4 is not complete yet.
+
+## 2026-07-20 — A4.4a Inventory responsive containment started
+
+- PR #127 / A4.3 is merged and DONE. A4.3 runtime head: `1f6930d8f2e3367372a384a51e7d04a3a7c96bee`; merge commit: `255703d26d9e166f00f2c9ba3030cf4bc41fe044`.
+- Product-owner manual exact-head smoke for A4.3 passed.
+- A4.4a `/inventory` is active and scoped to responsive containment of the read-only Inventory workspace.
+- `/packaging-items` remains a separate A4.4b task.
+- Slice A4 remains incomplete.
