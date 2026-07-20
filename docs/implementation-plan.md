@@ -47,19 +47,13 @@
 
 ## 3. Текущая базовая точка
 
-На момент активации плана:
+Текущая runtime baseline для A5 начинается с exact main `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` (`Merge pull request #130 from Mitronomik/codex-ozds60`). Внешняя GitHub-проверка подтвердила, что remote `main` всё ещё указывает на этот SHA; локальная рабочая копия начиналась с этого же SHA.
 
-- core MVP feature implementation is complete through PR98;
-- PR99–PR101 относятся к документации и UI-governance;
-- PR105 ввёл общий визуальный контракт действий и прошёл focused browser smoke;
-- PR106 ввёл shared feedback и announcement semantics для `/settings`, `/exports`, `/report-documents`, `/imports`, `/demo-data`;
-- PR106 уже merged и verified, merge commit: `bff2fae219640ded411abc3db08f0c1ba419cee3`;
-- обязательный Hermes browser smoke завершён с verdict `PR106_DETERMINISTIC_SMOKE_PASS_WITH_NON_BLOCKING_FINDINGS`;
-- canonical tested runtime head и merged verification зафиксированы в `state/progress.md` и `state/handoff.md`;
-- PR #107 активирует этот implementation plan без изменения runtime behavior;
-- следующий runtime slice: Slice A1 — очистка пользовательского технического текста.
+Slice A4 responsive containment is DONE. Финальный внешний exact-main cross-route smoke против `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` завершился с результатом `PASS — A4 CROSS-ROUTE EXACT-MAIN REGRESSION PASSED`. Проверялись `/ingredient-lots`, `/orders`, `/clients`, `/inventory`, `/packaging-items`, passive `/ingredients`, passive `/recipes`, passive `/client-recipes`; подтверждены отсутствие document-level horizontal overflow, локальная прокрутка таблиц, reachability первого/последнего столбца и действий, responsive create/edit/detail states, keyboard focus, отсутствие неожиданных browser/request/page/HTTP failures, отсутствие SQLite mutations during passive verification и exact-main postflight integrity. Это внешнее product-owner evidence, не GitHub Actions.
 
----
+Slice A5 is ACTIVE. Текущий focused implementation — human-readable local artifacts and data-location presentation для `/backups`, `/exports`, `/report-documents` и связанной local-data presentation на `/settings`.
+
+A5 сохраняет backend storage behavior, API response contracts, local-first operation и user-data separation. Полные абсолютные пути остаются доступны как secondary support information, но не должны быть основной идентичностью файла. Restore, filesystem browsing, backup scheduling, cloud upload/sync, schema/migrations and backend behavior changes are out of scope.
 
 ## 4. Неизменяемые продуктовые правила
 

@@ -1,5 +1,13 @@
 # Handoff
 
+## A5 active handoff — local artifacts and data-location presentation
+
+Slice A4 is complete. The final external exact-main smoke against `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` passed with no document-level horizontal overflow, local table scrolling, reachable first/final columns and actions, responsive create/edit/detail states, keyboard focus, no unexpected browser/request/page/HTTP failures, no SQLite mutations during passive verification, and exact-main postflight integrity.
+
+Slice A5 is active in this branch. Scope is limited to `/backups`, `/exports`, `/report-documents`, and directly related `/settings` local-data presentation. Backend storage behavior and API response contracts remain unchanged. Restore, arbitrary filesystem browsing, file management, schema/migrations, report calculations, PDF internals, import behavior, launcher behavior, cloud sync, OCR, AI/RAG, roles/auth, and unrelated routes remain out of scope.
+
+A5 should present locally generated files through user-language metadata: filename, artifact type, creation date, reason or explicit absence, formatted size, `Сохранено локально`, and a human-readable application folder label. Full absolute paths are retained only as secondary technical support information. User data remains separate from application code.
+
 ## Repository state
 
 Runtime product implementation is complete through PR98.

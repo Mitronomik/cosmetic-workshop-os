@@ -1,19 +1,34 @@
 # Current focus
 
-Slice A4 is active.
+Slice A4 is DONE. Slice A5 is ACTIVE.
 
 ## Active task
 
-**A4.4b — Contain responsive Packaging Items workspace**
+**A5 — Human-readable local artifacts and data-location presentation**
 
-Goal: contain the complete `/packaging-items` working workspace inside the application content area at `1440×900`, `1024×768`, `768×900`, and `390×844` without document-level horizontal overflow, while keeping the seven-column Packaging Items table usable through local horizontal scrolling.
+Current focused implementation: present locally generated artifacts and the local data folder in user language on `/backups`, `/exports`, `/report-documents`, and the directly related local-data area of `/settings`.
 
-Allowed files for this focused PR are `frontend/src/main.ts`, `frontend/src/styles.css`, `README.md`, `docs/implementation-plan.md`, `state/current-focus.md`, `state/progress.md`, and `state/handoff.md` unless evidence proves another directly related file is required.
+Starting baseline is exact main `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` (`Merge pull request #130 from Mitronomik/codex-ozds60`). The product owner supplied external GitHub verification that remote `main` still resolves to this SHA; the local working copy started from the same clean HEAD.
 
-Non-goals: no backend, API, schema, migration, inventory balance, stock movement, order, production, mutation lifecycle, targeted validation, catalog semantics, `/ingredients` behavior, cloud, OCR, roles, analytics, or final cross-route A4 regression changes.
+## A4 completion gate
 
-Required checks: frontend form-validation tests, targeted-validation-update tests, frontend build, focused Packaging/Catalog/Inventory backend tests, exact-base full backend suite, exact-head full backend suite, repository hygiene, and exact published-head browser smoke.
+Slice A4 responsive containment is complete. Final external exact-main cross-route smoke against `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` returned `PASS — A4 CROSS-ROUTE EXACT-MAIN REGRESSION PASSED`. Verified routes included `/ingredient-lots`, `/orders`, `/clients`, `/inventory`, `/packaging-items`, passive `/ingredients`, passive `/recipes`, and passive `/client-recipes`. Evidence confirmed no document-level horizontal overflow, local table scrolling, first/final column reachability, action reachability, responsive create/edit/detail states, keyboard focus, no unexpected browser/request/page/HTTP failures, no SQLite mutations during passive verification, and exact-main postflight integrity.
 
-Browser smoke must use an isolated SQLite database and browser profile, cover loaded long-content Packaging data, active filters, create and edit forms, classification and create controls, structured validation presentation, first/final table columns, keyboard focus, passive mutation safety, and passive `/ingredients` regression at all required viewports.
+## Scope
 
-Next step after A4.4b merge: run the separate final cross-route A4 responsive regression before marking Slice A4 complete.
+A5 changes only frontend presentation and project state for:
+
+- `/backups`;
+- `/exports`;
+- `/report-documents`;
+- the directly related local-data presentation on `/settings`.
+
+The UI should emphasize filenames, artifact type, creation date, reason, size, `Сохранено локально`, and a human-readable application folder label. Full absolute paths remain available only as secondary technical support information.
+
+## Non-goals
+
+Do not implement restore, arbitrary file browsing, file move/rename/delete, backup scheduling, cloud upload/sync, new download behavior, backend storage changes, API schema changes, database schema changes, migrations, report calculation changes, PDF internals, import behavior, launcher behavior, or unrelated routes.
+
+## Required verification
+
+Run focused frontend presentation tests, existing relevant frontend tests, frontend build, focused backend tests for backups/exports/report documents/settings/profile, full backend exact-base and exact-head suites using local Git objects, repository hygiene checks, and browser smoke where the environment permits. Exact published-head smoke is required before marking the Draft PR ready; if the runner cannot publish or lacks a browser, report the limitation honestly.
