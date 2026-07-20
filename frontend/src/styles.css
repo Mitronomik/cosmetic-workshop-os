@@ -578,3 +578,10 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
     max-width: calc(100% + 8px);
   }
 }
+.local-artifact-card h3 { overflow-wrap: anywhere; word-break: break-word; }
+.local-artifact-summary dd { overflow-wrap: anywhere; word-break: break-word; }
+.technical-details { border-top: 1px solid rgba(74, 57, 49, .12); margin-top: 12px; max-width: 100%; overflow-x: auto; padding-top: 10px; }
+.technical-details summary { color: #6d5146; cursor: pointer; font-weight: 900; outline-offset: 3px; }
+.technical-details summary:focus-visible { outline: 3px solid rgba(154, 95, 73, .75); }
+.technical-details p { margin: 10px 0 0; }
+.settings-technical-details { background: #fff8f1; border: 1px solid #ecd4c7; border-radius: 16px; padding: 12px 14px; }

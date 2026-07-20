@@ -2,15 +2,15 @@
 
 ## Current phase
 
-Slice A3 remains IN PROGRESS. Current runtime baseline is PR #122 / A3.7 Orders structured validation, merged at `8c4a092d055fd221cb18da901cee9e90106b33a4`; verified runtime head `b44b80bd875ec184bbccfc376f1562ddf25fbb46`; user-provided external smoke verdict `PASS — FULL AUTOMATED SMOKE PASSED`. This smoke verdict is external evidence, not GitHub Actions evidence.
+Slice A4 is DONE. Final external exact-main A4 cross-route smoke against `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` returned `PASS — A4 CROSS-ROUTE EXACT-MAIN REGRESSION PASSED` and verified responsive containment across `/ingredient-lots`, `/orders`, `/clients`, `/inventory`, `/packaging-items`, passive `/ingredients`, passive `/recipes`, and passive `/client-recipes`.
 
-A3.7 is DONE. The current focused runtime slice is **A3.8 — Production Readiness feedback and lifecycle**. Production Confirmation remains A3.9, and responsive table containment remains A4; neither is included.
+Slice A5 is ACTIVE. The current focused implementation is human-readable local artifact and local-data folder presentation for `/backups`, `/exports`, `/report-documents`, and `/settings` local-data information. Backend storage behavior, API schemas, migrations, restore, and filesystem browsing remain unchanged/out of scope.
 
 ## Current next step
 
-- Complete the focused persistent-write presentation correction, required checks, push to the existing PR #123 branch, retained exact published-head browser/keyboard smoke, and Draft PR evidence update.
-- Keep A3.8 limited to existing read-only Production Readiness feedback, lifecycle ownership/freshness/pending presentation, focused regression tests, and directly affected documentation.
-- Do not include A3.9 Production Confirmation, A4, production writes, domain calculation changes, schema/migrations, dependencies, CI, or unrelated routes.
+- Complete the focused A5 frontend presentation PR from exact local base `490b9506158c2a26d1fab9c85d0ba9f4c904cbae`.
+- Keep full absolute paths secondary under technical details while preserving them for support/recovery.
+- Run focused frontend tests, frontend build, focused backend regressions, full backend base/head comparison, repository hygiene, and browser smoke where available.
 
 ## Done
 - Architecture draft
