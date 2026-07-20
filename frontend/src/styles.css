@@ -484,3 +484,97 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
     width: 100%;
   }
 }
+
+/* A4.4b: scoped responsive containment for the Packaging Items workspace. */
+.packaging-items-workspace,
+.packaging-items-workspace > *,
+.packaging-items-workspace .card,
+.packaging-items-workspace .catalog-intro,
+.packaging-items-workspace .catalog-intro > *,
+.packaging-items-workspace .catalog-browser,
+.packaging-items-workspace .catalog-toolbar,
+.packaging-items-workspace .catalog-toolbar > *,
+.packaging-items-workspace .form-grid,
+.packaging-items-workspace .form-field,
+.packaging-items-workspace .ingredient-form,
+.packaging-items-workspace .catalog-classification,
+.packaging-items-workspace .catalog-picker,
+.packaging-items-workspace .catalog-create-grid,
+.packaging-items-workspace .catalog-create-form,
+.packaging-items-workspace .active-filter-row,
+.packaging-items-workspace .catalog-summary,
+.packaging-items-workspace .actions,
+.packaging-items-workspace .table-wrap {
+  min-width: 0;
+}
+
+.packaging-items-workspace .card,
+.packaging-items-workspace p,
+.packaging-items-workspace h2,
+.packaging-items-workspace h3,
+.packaging-items-workspace strong,
+.packaging-items-workspace small,
+.packaging-items-workspace label,
+.packaging-items-workspace .tag-chip,
+.packaging-items-workspace .field-error,
+.packaging-items-workspace .form-error-summary,
+.packaging-items-workspace td,
+.packaging-items-workspace th {
+  overflow-wrap: anywhere;
+}
+
+.packaging-items-workspace .catalog-option,
+.packaging-items-workspace .catalog-classification select,
+.packaging-items-workspace .catalog-picker input[type="search"] {
+  max-width: 100%;
+  min-width: 0;
+  width: min(100%, 420px);
+}
+
+.packaging-items-workspace .tag-chip {
+  white-space: normal;
+}
+
+.packaging-items-workspace .packaging-items-table-wrap {
+  border-radius: 18px;
+}
+
+.packaging-items-workspace .packaging-items-table {
+  min-width: 860px;
+}
+
+.packaging-items-workspace .packaging-items-table th,
+.packaging-items-workspace .packaging-items-table td {
+  max-width: 220px;
+}
+
+.packaging-items-workspace .packaging-items-table th:first-child,
+.packaging-items-workspace .packaging-items-table td:first-child {
+  min-width: 210px;
+}
+
+.packaging-items-workspace .packaging-items-table th:last-child,
+.packaging-items-workspace .packaging-items-table td:last-child {
+  min-width: 180px;
+}
+
+.packaging-items-workspace .packaging-items-table .pill {
+  white-space: normal;
+}
+
+@media (max-width: 520px) {
+  .packaging-items-workspace .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .packaging-items-workspace .actions > button,
+  .packaging-items-workspace .actions > a {
+    width: 100%;
+  }
+
+  .packaging-items-workspace .packaging-items-table-wrap {
+    margin-inline: -4px;
+    max-width: calc(100% + 8px);
+  }
+}

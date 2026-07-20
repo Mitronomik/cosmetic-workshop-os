@@ -1061,3 +1061,11 @@ Slice A4 is now active. Current runtime work is A4.1: establish a small shared r
 - A4.4a `/inventory` is active and scoped to responsive containment of the read-only Inventory workspace.
 - `/packaging-items` remains a separate A4.4b task.
 - Slice A4 remains incomplete.
+
+## 2026-07-20 — A4.4b Packaging Items responsive containment started
+
+- PR #128 / A4.4a `/inventory` is merged and exact-head-smoked with `PASS — FULL AUTOMATED EXACT-HEAD SMOKE PASSED` (merge commit `b89a40f2651f3e2ae7174cfdb7989ddf03a6221e`; runtime head `4a39c815ac8fdb73bc0c7dd5f88d0779e9eb6dd5`).
+- PR #129 is merged as a test-only Inventory read-model baseline repair (merge commit `bc5082f6b6e1e3796f269ec317fcbb1184ca5c83`; runtime head `413ae2d5e94f7efc0e7c8c9dc6a86f6aa1a511f6`).
+- A4.4b `/packaging-items` is now the active focused runtime containment slice.
+- Full backend baseline is known to have four unrelated failures in backups, exports, imports, and manual purchase suggestions tests.
+- Slice A4 remains incomplete; the final cross-route responsive regression remains after A4.4b.
