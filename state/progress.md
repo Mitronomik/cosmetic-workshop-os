@@ -1046,3 +1046,10 @@ Slice A4 is now active. Current runtime work is A4.1: establish a small shared r
 - A4.1 runtime head: `effb5ee270c9fbddc777e57c41ad0b53acd77f9d`.
 - A4.2 `/orders` is the active focused slice.
 - `/clients`, `/inventory`, and `/packaging-items` remain future A4 follow-ups; do not mark all of A4 complete.
+
+## 2026-07-20 — A4.3 Clients responsive containment started
+
+- PR #126 / A4.2 — Contain responsive Orders tables is merged at `4487e4044d89d88538226c5b36543e6009f279f9`; runtime head `010bd1bf3791dd6a6d754ea2ed0efdcd2ab564d3`.
+- A4.2 is DONE with product-owner manual responsive verification passed at `1440×900`, `1024×768`, `768×900`, and `390×844`.
+- A4.3 `/clients` is now the active focused runtime slice.
+- `/inventory` and `/packaging-items` remain future A4 follow-ups; Slice A4 is not complete yet.
