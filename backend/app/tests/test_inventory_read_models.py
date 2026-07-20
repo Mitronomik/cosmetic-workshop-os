@@ -79,7 +79,15 @@ def test_ingredient_lot_balances_are_derived_from_movements_and_filters(tmp_path
     service = InventoryService(config)
     assert service.list_ingredient_lot_balances()[0].balance_quantity == "0"
     StockMovementService(config).create_movement(StockMovementDraft.create(ingredient_lot_id=lot.id, movement_type="receipt", quantity="100.125", unit="g"))
-    StockMovementService(config).create_movement(StockMovementDraft.create(ingredient_lot_id=lot.id, movement_type="manual_adjustment_out", quantity="40.025", unit="g"))
+    StockMovementService(config).create_movement(
+        StockMovementDraft.create(
+            ingredient_lot_id=lot.id,
+            movement_type="manual_adjustment_out",
+            quantity="40.025",
+            unit="g",
+            reason="inventory balance reconciliation",
+        )
+    )
     balances = service.list_ingredient_lot_balances()
     assert [row.lot_id for row in balances] == [lot.id]
     assert balances[0].balance_quantity == "60.100"
