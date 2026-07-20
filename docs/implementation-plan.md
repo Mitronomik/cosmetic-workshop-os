@@ -315,6 +315,8 @@ Import Apply сохраняет отдельный structured-error contract и 
 
 A4.1 must not change `/orders`, `/clients`, `/inventory`, or `/packaging-items` route implementations. Those routes remain separate A4 follow-ups except for unavoidable passive effects from a shared CSS containment correction, which must be inspected and reported.
 
+A4.1 is DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08`; runtime head `effb5ee270c9fbddc777e57c41ad0b53acd77f9d`). A4.2 is the active focused runtime slice for `/orders` table containment. `/clients`, `/inventory`, and `/packaging-items` remain future A4 follow-ups.
+
 ### Требования
 
 - overflow таблицы ограничен локальным scroll-container;

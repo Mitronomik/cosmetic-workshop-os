@@ -431,3 +431,7 @@ PR #124 remains the active A3.9 Draft PR. Reviewed published GitHub head `f29d81
 Slice A3 is marked complete based on the product owner's confirmed A3.9 Production Confirmation tests and smoke verification. PR #124 is the completed A3.9 implementation baseline; this is external product-owner evidence, not GitHub Actions evidence.
 
 Slice A4 is now active. Current runtime work is A4.1: establish a small shared responsive table containment contract and prove it on `/ingredient-lots`. The scope is frontend layout containment only: shrinkable content/card/table-wrapper ancestors, local table scrolling, row-action reachability, and visible focus outlines. `/orders`, `/clients`, `/inventory`, and `/packaging-items` remain separate A4 follow-ups, with `/inventory` and `/packaging-items` inspected only for obvious passive shared-CSS regressions.
+
+## A4.2 responsive Orders containment handoff
+
+A4.1 is merged and DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08`, runtime head `effb5ee270c9fbddc777e57c41ad0b53acd77f9d`). The active focused slice is A4.2 for `/orders` responsive containment. This slice must remain presentation-only: no Order lifecycle, readiness, production confirmation, reconciliation, cancellation, archiving, backend, API, schema, migration, stock, FEFO, cost, tax, or margin changes. `/clients`, `/inventory`, and `/packaging-items` remain future A4 follow-ups.
