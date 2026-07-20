@@ -47,7 +47,7 @@
 
 ## 3. Текущая базовая точка
 
-Текущая runtime baseline для A5 начинается с exact main `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` (`Merge pull request #130 from Mitronomik/codex-ozds60`). Внешняя GitHub-проверка подтвердила, что remote `main` всё ещё указывает на этот SHA; локальный runner подтвердил совпадающий чистый HEAD, но не смог выполнить HTTPS fetch из-за `CONNECT tunnel failed, response 403`.
+Текущая runtime baseline для A5 начинается с exact main `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` (`Merge pull request #130 from Mitronomik/codex-ozds60`). Внешняя GitHub-проверка подтвердила, что remote `main` всё ещё указывает на этот SHA; локальная рабочая копия начиналась с этого же SHA.
 
 Slice A4 responsive containment is DONE. Финальный внешний exact-main cross-route smoke против `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` завершился с результатом `PASS — A4 CROSS-ROUTE EXACT-MAIN REGRESSION PASSED`. Проверялись `/ingredient-lots`, `/orders`, `/clients`, `/inventory`, `/packaging-items`, passive `/ingredients`, passive `/recipes`, passive `/client-recipes`; подтверждены отсутствие document-level horizontal overflow, локальная прокрутка таблиц, reachability первого/последнего столбца и действий, responsive create/edit/detail states, keyboard focus, отсутствие неожиданных browser/request/page/HTTP failures, отсутствие SQLite mutations during passive verification и exact-main postflight integrity. Это внешнее product-owner evidence, не GitHub Actions.
 

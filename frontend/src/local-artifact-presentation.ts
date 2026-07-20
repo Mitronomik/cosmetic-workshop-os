@@ -52,7 +52,8 @@ export function artifactReason(reason: string | null | undefined): string {
 export function artifactDate(value: string | null | undefined): string {
   const raw = textOrEmpty(value);
   if (!raw) return DATE_FALLBACK;
-  const date = new Date(raw);
+  const parseable = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const date = new Date(parseable);
   if (Number.isNaN(date.getTime())) return DATE_FALLBACK;
   return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(date);
 }
@@ -82,7 +83,7 @@ export function localArtifactPresentation(input: LocalArtifactInput): LocalArtif
     sizeLabel: artifactSize(input.sizeBytes),
     localStatusLabel: 'Сохранено локально',
     folderLabel: artifactFolderLabel(input.folderKind),
-    technicalPath: textOrEmpty(input.path) || null,
+    technicalPath: textOrEmpty(input.path) ? input.path ?? null : null,
   };
 }
 

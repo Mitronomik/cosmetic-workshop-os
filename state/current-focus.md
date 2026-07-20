@@ -8,7 +8,7 @@ Slice A4 is DONE. Slice A5 is ACTIVE.
 
 Current focused implementation: present locally generated artifacts and the local data folder in user language on `/backups`, `/exports`, `/report-documents`, and the directly related local-data area of `/settings`.
 
-Starting baseline is exact main `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` (`Merge pull request #130 from Mitronomik/codex-ozds60`). The product owner supplied external GitHub verification that remote `main` still resolves to this SHA; the local runner independently matched the same clean HEAD but could not fetch through its HTTPS proxy (`CONNECT tunnel failed, response 403`).
+Starting baseline is exact main `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` (`Merge pull request #130 from Mitronomik/codex-ozds60`). The product owner supplied external GitHub verification that remote `main` still resolves to this SHA; the local working copy started from the same clean HEAD.
 
 ## A4 completion gate
 

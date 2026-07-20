@@ -33,6 +33,13 @@ test('date-unavailable presentation is honest', () => {
   assert.equal(artifactDate('not-a-date'), 'Дата недоступна');
 });
 
+test('SQLite-style timestamp with a space is parsed as available date', () => {
+  const label = artifactDate('2026-07-20 12:34:56');
+  assert.notEqual(label, 'Дата недоступна');
+  assert.equal(typeof label, 'string');
+  assert.ok(label.length > 0);
+});
+
 test('size-unavailable presentation is honest', () => {
   assert.equal(artifactSize(undefined), 'Размер недоступен');
   assert.equal(artifactSize(-1), 'Размер недоступен');
@@ -48,6 +55,24 @@ test('human-readable folder labels are stable', () => {
 test('technical path remains unchanged when displayed', () => {
   const path = '/tmp/cwo/backups/backup.json';
   const presentation = localArtifactPresentation({ path, folderKind: 'backups' });
+  assert.equal(presentation.technicalPath, path);
+});
+
+test('technical path preserves meaningful leading and trailing whitespace byte-for-byte', () => {
+  const path = '  /tmp/cwo/backups/backup with spaces.json  ';
+  const presentation = localArtifactPresentation({ path, folderKind: 'backups' });
+  assert.equal(presentation.technicalPath, path);
+});
+
+test('empty or whitespace-only technical path becomes null', () => {
+  assert.equal(localArtifactPresentation({ path: '', folderKind: 'exports' }).technicalPath, null);
+  assert.equal(localArtifactPresentation({ path: '   ', folderKind: 'exports' }).technicalPath, null);
+});
+
+test('basename fallback uses normalized path text without changing technical path', () => {
+  const path = '  /tmp/cwo/exports/export.json  ';
+  const presentation = localArtifactPresentation({ path, folderKind: 'exports' });
+  assert.equal(presentation.filename, 'export.json');
   assert.equal(presentation.technicalPath, path);
 });
 
