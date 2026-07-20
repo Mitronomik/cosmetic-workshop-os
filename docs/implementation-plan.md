@@ -315,7 +315,7 @@ Import Apply сохраняет отдельный structured-error contract и 
 
 A4.1 must not change `/orders`, `/clients`, `/inventory`, or `/packaging-items` route implementations. Those routes remain separate A4 follow-ups except for unavoidable passive effects from a shared CSS containment correction, which must be inspected and reported.
 
-A4.1 is DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08`; runtime head `effb5ee270c9fbddc777e57c41ad0b53acd77f9d`). PR #126 / A4.2 is DONE (merge commit `4487e4044d89d88538226c5b36543e6009f279f9`; runtime head `010bd1bf3791dd6a6d754ea2ed0efdcd2ab564d3`) with product-owner manual responsive verification passed at `1440×900`, `1024×768`, `768×900`, and `390×844`. A4.3 `/clients` is the active focused runtime slice. `/inventory` and `/packaging-items` remain future A4 follow-ups. Slice A4 is not complete yet.
+A4.1 is DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08`; runtime head `effb5ee270c9fbddc777e57c41ad0b53acd77f9d`). PR #126 / A4.2 is DONE (merge commit `4487e4044d89d88538226c5b36543e6009f279f9`; runtime head `010bd1bf3791dd6a6d754ea2ed0efdcd2ab564d3`) with product-owner manual responsive verification passed at `1440×900`, `1024×768`, `768×900`, and `390×844`. PR #127 / A4.3 is DONE (merge commit `255703d26d9e166f00f2c9ba3030cf4bc41fe044`; runtime head `1f6930d8f2e3367372a384a51e7d04a3a7c96bee`) with product-owner manual exact-head smoke passed. A4.4a `/inventory` is the active focused runtime slice. `/packaging-items` remains a separate A4.4b follow-up. Slice A4 is not complete yet.
 
 ### Требования
 

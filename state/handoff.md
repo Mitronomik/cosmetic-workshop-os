@@ -443,3 +443,11 @@ PR #126 / A4.2 is merged and DONE. Merge commit: `4487e4044d89d88538226c5b36543e
 The active focused slice is A4.3 for `/clients` responsive containment. Keep it presentation-only: no Client API payload changes, backend/domain/schema/migration changes, wish/feedback lifecycle changes, ClientRecipe semantics changes, mutation guard changes, audit behavior changes, or unrelated route implementation changes.
 
 `/inventory` and `/packaging-items` remain future A4 follow-ups. Slice A4 is not complete yet.
+
+## 2026-07-20 — A4.4a Inventory responsive containment started
+
+- PR #127 / A4.3 is merged and DONE. A4.3 runtime head: `1f6930d8f2e3367372a384a51e7d04a3a7c96bee`; merge commit: `255703d26d9e166f00f2c9ba3030cf4bc41fe044`.
+- Product-owner manual exact-head smoke for A4.3 passed.
+- A4.4a `/inventory` is active and scoped to responsive containment of the read-only Inventory workspace.
+- `/packaging-items` remains a separate A4.4b task.
+- Slice A4 remains incomplete.
