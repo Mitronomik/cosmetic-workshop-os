@@ -2,30 +2,18 @@
 
 Slice A4 is active.
 
-## Active slice
+## Active task
 
-**A4.4a — Contain responsive Inventory workspace**
+**A4.4b — Contain responsive Packaging Items workspace**
 
-Runtime scope: frontend presentation containment for the existing read-only `/inventory` workspace only.
+Goal: contain the complete `/packaging-items` working workspace inside the application content area at `1440×900`, `1024×768`, `768×900`, and `390×844` without document-level horizontal overflow, while keeping the seven-column Packaging Items table usable through local horizontal scrolling.
 
-## Baseline memory
+Allowed files for this focused PR are `frontend/src/main.ts`, `frontend/src/styles.css`, `README.md`, `docs/implementation-plan.md`, `state/current-focus.md`, `state/progress.md`, and `state/handoff.md` unless evidence proves another directly related file is required.
 
-- PR #125 / A4.1 is merged and DONE.
-- A4.1 merge commit: `50c44ff0919401d51c165d6ebec1266c688bfb08`.
-- A4.1 runtime head: `effb5ee270c9fbddc777e57c41ad0b53acd77f9d`.
-- PR #126 / A4.2 — Contain responsive Orders tables is merged and DONE.
-- A4.2 merge commit: `4487e4044d89d88538226c5b36543e6009f279f9`.
-- A4.2 runtime head: `010bd1bf3791dd6a6d754ea2ed0efdcd2ab564d3`.
-- Product-owner manual responsive verification for A4.2 passed at `1440×900`, `1024×768`, `768×900`, and `390×844`.
-- PR #127 / A4.3 — Contain responsive Clients workspace is merged and DONE.
-- A4.3 merge commit: `255703d26d9e166f00f2c9ba3030cf4bc41fe044`.
-- A4.3 runtime head: `1f6930d8f2e3367372a384a51e7d04a3a7c96bee`.
-- Product-owner manual exact-head smoke for A4.3 passed.
+Non-goals: no backend, API, schema, migration, inventory balance, stock movement, order, production, mutation lifecycle, targeted validation, catalog semantics, `/ingredients` behavior, cloud, OCR, roles, analytics, or final cross-route A4 regression changes.
 
-## Boundaries
+Required checks: frontend form-validation tests, targeted-validation-update tests, frontend build, focused Packaging/Catalog/Inventory backend tests, exact-base full backend suite, exact-head full backend suite, repository hygiene, and exact published-head browser smoke.
 
-- Preserve existing Inventory overview metrics, ingredient-lot balance information, packaging balance information, and read-only behavior.
-- No backend, API, schema, migration, stock movement, lot, packaging balance, FEFO, production, order, alert, purchase, or inventory-domain changes.
-- Prefer CSS-only containment; minimal Inventory-specific markup hooks are allowed when needed for scoped selectors.
-- `/packaging-items` remains a separate A4.4b follow-up.
-- Do not mark all of A4 complete.
+Browser smoke must use an isolated SQLite database and browser profile, cover loaded long-content Packaging data, active filters, create and edit forms, classification and create controls, structured validation presentation, first/final table columns, keyboard focus, passive mutation safety, and passive `/ingredients` regression at all required viewports.
+
+Next step after A4.4b merge: run the separate final cross-route A4 responsive regression before marking Slice A4 complete.

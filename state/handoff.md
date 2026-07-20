@@ -451,3 +451,12 @@ The active focused slice is A4.3 for `/clients` responsive containment. Keep it 
 - A4.4a `/inventory` is active and scoped to responsive containment of the read-only Inventory workspace.
 - `/packaging-items` remains a separate A4.4b task.
 - Slice A4 remains incomplete.
+
+## 2026-07-20 — A4.4b Packaging Items responsive containment handoff
+
+- Exact current base SHA: `bc5082f6b6e1e3796f269ec317fcbb1184ca5c83` (PR #129 merge commit).
+- A4.4a accepted `/inventory` runtime head: `4a39c815ac8fdb73bc0c7dd5f88d0779e9eb6dd5`; merge commit: `b89a40f2651f3e2ae7174cfdb7989ddf03a6221e`; exact-head responsive smoke passed.
+- PR #129 baseline repair runtime head: `413ae2d5e94f7efc0e7c8c9dc6a86f6aa1a511f6`; merge commit: `bc5082f6b6e1e3796f269ec317fcbb1184ca5c83`.
+- A4.4b scope is presentation-only responsive containment for `/packaging-items`: stable route hook, route-scoped CSS containment, safe wrapping for long Packaging catalog content, and preserved local table scrolling/reachability.
+- Pending evidence for the A4.4b PR: exact published-head browser smoke against the GitHub PR head with isolated database/profile and passive `/ingredients` regression.
+- Next task after A4.4b merge: run the separate final cross-route A4 responsive regression before marking Slice A4 complete.
