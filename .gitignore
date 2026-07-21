@@ -11,3 +11,6 @@ frontend/dist/
 
 # Python packaging artifacts
 *.egg-info/
+
+# Focused frontend TypeScript test output
+/frontend/dist-tests/

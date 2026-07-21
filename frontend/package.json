@@ -7,10 +7,10 @@
     "dev": "npm run build && node scripts/dev-server.mjs dist",
     "build": "tsc -p tsconfig.json && node scripts/build.mjs",
     "preview": "npm run build && node scripts/dev-server.mjs dist",
-    "test:form-validation": "rm -rf dist-tests/form-validation && tsc src/form-validation.ts --target ES2020 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --outDir dist-tests/form-validation && node --test test/form-validation.test.mjs",
-    "test:targeted-validation-update": "rm -rf dist-tests/targeted-validation-update && tsc src/form-validation.ts src/targeted-validation-update.ts src/mutation-lifecycle.ts --target ES2020 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --outDir dist-tests/targeted-validation-update && node --test test/targeted-validation-update.test.mjs",
-    "test:order-mutation-lifecycle": "rm -rf dist-tests/order-mutation-lifecycle && tsc src/form-validation.ts src/mutation-lifecycle.ts src/order-mutation-lifecycle.ts --target ES2020 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --outDir dist-tests/order-mutation-lifecycle && node --test test/order-mutation-lifecycle.test.mjs",
-    "test:order-readiness-presentation": "rm -rf dist-tests/order-readiness-presentation && tsc src/order-readiness-presentation.ts --target ES2020 --module ESNext --moduleResolution Bundler --strict --skipLibCheck --outDir dist-tests/order-readiness-presentation && node --test test/order-readiness-presentation.test.mjs"
+    "test:form-validation": "rm -rf dist-tests/form-validation && tsc -p tsconfig.test.form-validation.json && node --test test/form-validation.test.mjs",
+    "test:targeted-validation-update": "rm -rf dist-tests/targeted-validation-update && tsc -p tsconfig.test.targeted-validation-update.json && node --test test/targeted-validation-update.test.mjs",
+    "test:order-mutation-lifecycle": "rm -rf dist-tests/order-mutation-lifecycle && tsc -p tsconfig.test.order-mutation-lifecycle.json && node --test test/order-mutation-lifecycle.test.mjs",
+    "test:order-readiness-presentation": "rm -rf dist-tests/order-readiness-presentation && tsc -p tsconfig.test.order-readiness-presentation.json && node --test test/order-readiness-presentation.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

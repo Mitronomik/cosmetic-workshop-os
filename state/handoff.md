@@ -1,12 +1,14 @@
 # Handoff
 
-## A5 active handoff — local artifacts and data-location presentation
+## Frontend focused-test infrastructure repair handoff
 
-Slice A4 is complete. The final external exact-main smoke against `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` passed with no document-level horizontal overflow, local table scrolling, reachable first/final columns and actions, responsive create/edit/detail states, keyboard focus, no unexpected browser/request/page/HTTP failures, no SQLite mutations during passive verification, and exact-main postflight integrity.
+Slice A5 is DONE. PR #131 merged at `62d372644d00fab38ccb1d652ab44556d8241b6a` (`Merge pull request #131 from Mitronomik/codex/implement-a5-local-artifact-presentation`).
 
-Slice A5 is active in this branch. Scope is limited to `/backups`, `/exports`, `/report-documents`, and directly related `/settings` local-data presentation. Backend storage behavior and API response contracts remain unchanged. Restore, arbitrary filesystem browsing, file management, schema/migrations, report calculations, PDF internals, import behavior, launcher behavior, cloud sync, OCR, AI/RAG, roles/auth, and unrelated routes remain out of scope.
+The B1/B2 diagnostic audit found no fixture/backend implementation defect requiring a correction PR: demo-data installation is explicit, duplicate install is safely rejected, alert regeneration and purchase-suggestion regeneration are stable, operational source data is meaningful, and passive database reads do not mutate data. No B1 backend/fixture correction and no B2 backend read-model correction is active. B2 browser presentation was not fully verified by that diagnostic audit.
 
-A5 should present locally generated files through user-language metadata: filename, artifact type, creation date, reason or explicit absence, formatted size, `Сохранено локально`, and a human-readable application folder label. Full absolute paths are retained only as secondary technical support information. User data remains separate from application code.
+The current focused task repairs frontend focused-test TypeScript infrastructure only. The four repaired scripts must remain suite-isolated, use repository-local TypeScript project compilation, emit under `frontend/dist-tests/`, remove stale suite output before each run, and execute the existing Node `.mjs` tests. Do not change runtime behavior.
+
+Next runtime slice after this repair: B3.1 — Shared feedback for Dashboard, Onboarding and Help. Do not assign a future PR number before GitHub creates it.
 
 ## Repository state
 

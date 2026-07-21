@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist-tests/order-readiness-presentation",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "files": ["src/order-readiness-presentation.ts"]
+}

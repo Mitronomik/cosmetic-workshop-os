@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist-tests/form-validation",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "files": ["src/form-validation.ts"]
+}

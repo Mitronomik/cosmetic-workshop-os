@@ -1,34 +1,25 @@
 # Current focus
 
-Slice A4 is DONE. Slice A5 is ACTIVE.
+Slice A5 is DONE. PR #131 merged at `62d372644d00fab38ccb1d652ab44556d8241b6a` (`Merge pull request #131 from Mitronomik/codex/implement-a5-local-artifact-presentation`).
 
 ## Active task
 
-**A5 — Human-readable local artifacts and data-location presentation**
+**Frontend focused-test infrastructure repair**
 
-Current focused implementation: present locally generated artifacts and the local data folder in user language on `/backups`, `/exports`, `/report-documents`, and the directly related local-data area of `/settings`.
+Repair the four focused frontend TypeScript test scripts so they compile only their intended source modules through repository-local TypeScript project configs, emit temporary JavaScript only under `frontend/dist-tests/`, clean stale suite output before each run, and then execute the existing Node `.mjs` tests.
 
-Starting baseline is exact main `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` (`Merge pull request #130 from Mitronomik/codex-ozds60`). The product owner supplied external GitHub verification that remote `main` still resolves to this SHA; the local working copy started from the same clean HEAD.
+## Diagnostic baseline
 
-## A4 completion gate
+The B1/B2 diagnostic audit found no fixture/backend implementation defect requiring a correction PR. It confirmed explicit demo-data installation, safe duplicate-install rejection, stable alert regeneration, stable purchase-suggestion regeneration, meaningful operational source data, and no passive database mutations. No B1 backend/fixture correction and no B2 backend read-model correction is currently required.
 
-Slice A4 responsive containment is complete. Final external exact-main cross-route smoke against `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` returned `PASS — A4 CROSS-ROUTE EXACT-MAIN REGRESSION PASSED`. Verified routes included `/ingredient-lots`, `/orders`, `/clients`, `/inventory`, `/packaging-items`, passive `/ingredients`, passive `/recipes`, and passive `/client-recipes`. Evidence confirmed no document-level horizontal overflow, local table scrolling, first/final column reachability, action reachability, responsive create/edit/detail states, keyboard focus, no unexpected browser/request/page/HTTP failures, no SQLite mutations during passive verification, and exact-main postflight integrity.
-
-## Scope
-
-A5 changes only frontend presentation and project state for:
-
-- `/backups`;
-- `/exports`;
-- `/report-documents`;
-- the directly related local-data presentation on `/settings`.
-
-The UI should emphasize filenames, artifact type, creation date, reason, size, `Сохранено локально`, and a human-readable application folder label. Full absolute paths remain available only as secondary technical support information.
+B2 browser presentation was not fully verified by that diagnostic audit, so do not overstate browser evidence.
 
 ## Non-goals
 
-Do not implement restore, arbitrary file browsing, file move/rename/delete, backup scheduling, cloud upload/sync, new download behavior, backend storage changes, API schema changes, database schema changes, migrations, report calculation changes, PDF internals, import behavior, launcher behavior, or unrelated routes.
+Do not change runtime frontend behavior, user-visible copy, CSS, routes, API requests, backend code, tests, database schema, migrations, dependencies, demo data, alerts, purchase suggestions, Dashboard, onboarding, Help Center, or B3.1 runtime behavior. Do not fix the known backend baseline failures in this task.
 
-## Required verification
+## Next runtime slice
 
-Run focused frontend presentation tests, existing relevant frontend tests, frontend build, focused backend tests for backups/exports/report documents/settings/profile, full backend exact-base and exact-head suites using local Git objects, repository hygiene checks, and browser smoke where the environment permits. Exact published-head smoke is required before marking the Draft PR ready; if the runner cannot publish or lacks a browser, report the limitation honestly.
+B3.1 — Shared feedback for Dashboard, Onboarding and Help.
+
+No B1 or B2 implementation PR is active. Do not assign a future PR number before GitHub creates it.

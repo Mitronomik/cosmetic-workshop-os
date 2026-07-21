@@ -2,15 +2,16 @@
 
 ## Current phase
 
-Slice A4 is DONE. Final external exact-main A4 cross-route smoke against `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` returned `PASS — A4 CROSS-ROUTE EXACT-MAIN REGRESSION PASSED` and verified responsive containment across `/ingredient-lots`, `/orders`, `/clients`, `/inventory`, `/packaging-items`, passive `/ingredients`, passive `/recipes`, and passive `/client-recipes`.
+Slice A5 is DONE. PR #131 merged at `62d372644d00fab38ccb1d652ab44556d8241b6a` (`Merge pull request #131 from Mitronomik/codex/implement-a5-local-artifact-presentation`).
 
-Slice A5 is ACTIVE. The current focused implementation is human-readable local artifact and local-data folder presentation for `/backups`, `/exports`, `/report-documents`, and `/settings` local-data information. Backend storage behavior, API schemas, migrations, restore, and filesystem browsing remain unchanged/out of scope.
+The B1/B2 diagnostic audit found no demo-fixture or backend Dashboard read-model implementation defect requiring a correction PR. It confirmed explicit demo-data installation, safe duplicate-install rejection, stable alert and purchase-suggestion regeneration, meaningful operational source data, and no passive database mutations. B2 browser presentation was not fully verified by that diagnostic audit.
 
 ## Current next step
 
-- Complete the focused A5 frontend presentation PR from exact local base `490b9506158c2a26d1fab9c85d0ba9f4c904cbae`.
-- Keep full absolute paths secondary under technical details while preserving them for support/recovery.
-- Run focused frontend tests, frontend build, focused backend regressions, full backend base/head comparison, repository hygiene, and browser smoke where available.
+- Complete the focused frontend test-infrastructure repair for the four focused TypeScript/Node test scripts.
+- Keep the task runtime-neutral: no frontend runtime source, CSS, backend, schema, migration, dependency, demo-data, alert, purchase-suggestion, Dashboard, onboarding, Help Center, or B3.1 behavior changes.
+- After this repair, start B3.1 — Shared feedback for Dashboard, Onboarding and Help.
+- No B1 or B2 implementation PR is active, and no future PR number is assigned.
 
 ## Done
 - Architecture draft
