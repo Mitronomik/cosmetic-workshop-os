@@ -470,3 +470,39 @@ The active focused slice is A4.3 for `/clients` responsive containment. Keep it 
 - A4.4b scope is presentation-only responsive containment for `/packaging-items`: stable route hook, route-scoped CSS containment, safe wrapping for long Packaging catalog content, and preserved local table scrolling/reachability.
 - Pending evidence for the A4.4b PR: exact published-head browser smoke against the GitHub PR head with isolated database/profile and passive `/ingredients` regression.
 - Next task after A4.4b merge: run the separate final cross-route A4 responsive regression before marking Slice A4 complete.
+
+## 2026-07-21 — B3.1 Dashboard and Onboarding feedback handoff
+
+Current branch implements the first small batch of Slice B3 from baseline `2ce5a4d7ba099603b733e7f2836f417da0614605` (PR #132 merge). Remote fetch was unavailable because no `origin` remote is configured in this runner; the clean local object matched the expected SHA and merge message before work began.
+
+Implemented scope:
+
+- Dashboard initial load and manual refresh now use a small dependency-free lifecycle helper for active request ownership, duplicate refresh rejection, stale response rejection, stale feedback clearing, silent initial success, polite manual-refresh success, assertive load/refresh failure, and refresh-warning separation while preserving previously loaded cards.
+- Onboarding start, complete-step, skip, and reset mutations use the same helper boundary for duplicate mutation rejection, busy/disabled controls, authoritative mutation responses, separate mutation error versus refresh warning state, polite success, assertive failure, and controlled focus recovery when the triggering control disappears.
+- Help remains passive. The new dependency-free Help regression helper covers search, category filtering, reset, article selection, and related-section navigation as non-mutating/non-feedback-owning behavior.
+
+Verification in this runner:
+
+- Frontend focused suites passed, including the new B3.1 Dashboard/Onboarding and Help suites run independently and twice.
+- Frontend production build passed.
+- Focused backend read/mutation tests relevant to onboarding, orders, alerts, purchases, production history, and backup status matched the known baseline failures in backup sanitization and manual purchase-suggestion smoke.
+- Full backend suite on exact base and final head both collected 496 tests with 492 passed and the same 4 failures: backup reason sanitization, export reason sanitization, import draft error count, and manual purchase suggestion smoke. Branch-only backend failure delta: 0.
+- Browser smoke was not completed in this runner because no Chrome/Chromium/Playwright browser executable is available. Do not claim B2 browser presentation complete or B3.1 ready-for-merge until exact published-head browser smoke passes externally.
+
+Next step after this PR: B3.2 — Alerts and Purchases feedback migration. Do not broaden B3.1 into other route groups.
+
+## 2026-07-21 — B3.1 correction pass review gaps
+
+Correction pass for PR #133 keeps B3.1 ACTIVE and not merge-ready until external exact published-head browser smoke passes. It closes review findings around stale onboarding feedback, onboarding GET ownership, stale-readable onboarding state, valid empty Dashboard snapshots, route-owned announcements/focus, real focus-policy tests, real stale Dashboard/onboarding callback tests, and runtime-backed Help helper usage.
+
+Automated evidence in this correction pass: focused frontend suites passed sequentially (`form-validation` 19/19, `targeted-validation-update` 62/62, `order-mutation-lifecycle` 32/32, `order-readiness-presentation` 15/15, `dashboard-onboarding-feedback` 15/15, `help-passive-regression` 3/3), the two new B3.1 suites passed a second time, and `npm --prefix frontend run build` passed. Full backend suite on base `2ce5a4d7ba099603b733e7f2836f417da0614605` and corrected head both collected 496 tests with 492 passed and the same 4 known baseline failures; branch-only backend failure delta is 0.
+
+Browser smoke is intentionally pending for the next separate step after review corrections. B2 browser presentation evidence remains incomplete until that exact published-head smoke passes. B3.2 Alerts and Purchases remains next after B3.1 merge. No future PR number is recorded.
+
+## 2026-07-21 — B3.1 retry-control wiring correction handoff
+
+External exact-head smoke against PR #133 published head `fb7a4e5c2dd4757b61fd4be07c8c49003188b35b` found one product failure: Desktop Dashboard initial-load failure rendered an explicit `Повторить` retry button, but clicking it did not send the expected five Dashboard source GET requests.
+
+The confirmed root cause was narrow event binding in `bindEvents`: multiple controls can render with `data-action="reload-dashboard"` (header refresh plus initial-error retry/stale retry), while a single `querySelector` only attached the handler to the first one. This correction adds a small shared action-control binding helper and uses it for every rendered Dashboard reload/retry control and every rendered onboarding refresh control. The Dashboard and onboarding lifecycle helper remains responsible for duplicate-request rejection, stale ownership, route-owned announcements, and safe stale readable data.
+
+B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun externally against the new published PR #133 head after this correction is pushed. B3.2 Alerts and Purchases remains next after B3.1 merge; do not begin it inside B3.1.

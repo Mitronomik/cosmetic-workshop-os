@@ -1070,3 +1070,25 @@ Slice A4 is now active. Current runtime work is A4.1: establish a small shared r
 - A4.4b `/packaging-items` is now the active focused runtime containment slice.
 - Full backend baseline is known to have four unrelated failures in backups, exports, imports, and manual purchase suggestions tests.
 - Slice A4 remains incomplete; the final cross-route responsive regression remains after A4.4b.
+
+## 2026-07-21 — B3.1 Dashboard and Onboarding feedback branch
+
+PR #132 is DONE at merge commit `2ce5a4d7ba099603b733e7f2836f417da0614605`; focused frontend test-compilation hardening is complete. The B1/B2 diagnostic audit still requires no fixture/backend implementation and no Dashboard backend read-model implementation. B3.1 is active in this branch and is scoped to Dashboard refresh feedback, Dashboard-rendered onboarding mutations, and passive Help regression coverage.
+
+This branch adds a small dependency-free Dashboard/Onboarding feedback lifecycle helper plus focused tests. Dashboard manual refresh preserves previously loaded operational cards on refresh failure and reports a warning instead of a false empty state. Onboarding start, complete-step, skip, and reset share duplicate-request, stale-response, busy, announcement, and focus-recovery behavior while keeping backend responses authoritative. Help remains static/passive and does not own Dashboard or onboarding feedback.
+
+B3.1 is not DONE until merge and required exact published-head verification. B3.2 Alerts and Purchases feedback migration remains next. No future PR number is recorded here.
+
+## 2026-07-21 — B3.1 correction pass
+
+PR #133 correction pass addressed Dashboard/onboarding feedback lifecycle review gaps without backend, schema, migration, dependency, CSS, or unrelated route changes. Dashboard now tracks a loaded snapshot independently from record counts, so valid empty data remains readable after refresh failure. Onboarding load now distinguishes initial load from manual refresh, blocks conflicting refresh/mutation work, clears stale feedback on explicit refresh, preserves prior state on refresh failure, and avoids unsupported post-mutation follow-up refresh behavior. Route ownership suppresses Dashboard/onboarding transient feedback, announcements, and focus after navigation, while authoritative data may still update silently.
+
+Focused B3.1 tests now cover valid empty Dashboard snapshots, stale Dashboard callbacks, onboarding stale feedback clearing, stale-state refresh failure, refresh/mutation conflicts, stale mutation callbacks, route ownership, real focus policy, and Help helper logic used by runtime. Browser smoke remains pending and PR #133 is not merge-ready until external exact published-head smoke passes. B3.2 remains next after B3.1 merge.
+
+## 2026-07-21 — B3.1 retry-control wiring correction
+
+Exact-head browser smoke on published PR #133 head `fb7a4e5c2dd4757b61fd4be07c8c49003188b35b` found a product failure in the Desktop Dashboard initial-load retry scenario: the explicit `Повторить` button inside the initial-load error card was rendered but did not start the Dashboard retry request sequence.
+
+Root cause: Dashboard rendered multiple `data-action="reload-dashboard"` controls, but runtime event binding used a single `querySelector`, wiring only the first matching control. The correction binds every rendered Dashboard reload/retry control and every rendered onboarding refresh control while preserving the existing B3.1 lifecycle helper ownership and duplicate-request protection.
+
+B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser smoke is rerun against the new published head and passes. B3.2 Alerts and Purchases remains next after B3.1 merge.

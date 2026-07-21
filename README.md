@@ -98,3 +98,7 @@ Backend health endpoint shape:
   "version": "0.1.0"
 }
 ```
+
+## Current implementation focus
+
+PR #132 is recorded as DONE at merge commit `2ce5a4d7ba099603b733e7f2836f417da0614605`; the focused frontend TypeScript test-compilation hardening is complete. The active runtime slice is B3.1: shared feedback lifecycle for Dashboard refresh and Dashboard-rendered onboarding mutations, with passive Help Center regression coverage. B3.2 Alerts and Purchases remains the next route batch.

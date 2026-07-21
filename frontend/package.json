@@ -10,7 +10,9 @@
     "test:form-validation": "rm -rf dist-tests/form-validation && tsc -p tsconfig.test.form-validation.json && node --test test/form-validation.test.mjs",
     "test:targeted-validation-update": "rm -rf dist-tests/targeted-validation-update && tsc -p tsconfig.test.targeted-validation-update.json && node --test test/targeted-validation-update.test.mjs",
     "test:order-mutation-lifecycle": "rm -rf dist-tests/order-mutation-lifecycle && tsc -p tsconfig.test.order-mutation-lifecycle.json && node --test test/order-mutation-lifecycle.test.mjs",
-    "test:order-readiness-presentation": "rm -rf dist-tests/order-readiness-presentation && tsc -p tsconfig.test.order-readiness-presentation.json && node --test test/order-readiness-presentation.test.mjs"
+    "test:order-readiness-presentation": "rm -rf dist-tests/order-readiness-presentation && tsc -p tsconfig.test.order-readiness-presentation.json && node --test test/order-readiness-presentation.test.mjs",
+    "test:dashboard-onboarding-feedback": "rm -rf dist-tests/dashboard-onboarding-feedback && tsc -p tsconfig.test.dashboard-onboarding-feedback.json && node --test test/dashboard-onboarding-feedback.test.mjs",
+    "test:help-passive-regression": "rm -rf dist-tests/help-passive-regression && tsc -p tsconfig.test.help-passive-regression.json && node --test test/help-passive-regression.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.3"
