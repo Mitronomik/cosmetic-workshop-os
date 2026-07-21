@@ -47,13 +47,11 @@
 
 ## 3. Текущая базовая точка
 
-Текущая runtime baseline для A5 начинается с exact main `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` (`Merge pull request #130 from Mitronomik/codex-ozds60`). Внешняя GitHub-проверка подтвердила, что remote `main` всё ещё указывает на этот SHA; локальная рабочая копия начиналась с этого же SHA.
+Slice A5 is DONE. PR #131 merged at `62d372644d00fab38ccb1d652ab44556d8241b6a` (`Merge pull request #131 from Mitronomik/codex/implement-a5-local-artifact-presentation`).
 
-Slice A4 responsive containment is DONE. Финальный внешний exact-main cross-route smoke против `490b9506158c2a26d1fab9c85d0ba9f4c904cbae` завершился с результатом `PASS — A4 CROSS-ROUTE EXACT-MAIN REGRESSION PASSED`. Проверялись `/ingredient-lots`, `/orders`, `/clients`, `/inventory`, `/packaging-items`, passive `/ingredients`, passive `/recipes`, passive `/client-recipes`; подтверждены отсутствие document-level horizontal overflow, локальная прокрутка таблиц, reachability первого/последнего столбца и действий, responsive create/edit/detail states, keyboard focus, отсутствие неожиданных browser/request/page/HTTP failures, отсутствие SQLite mutations during passive verification и exact-main postflight integrity. Это внешнее product-owner evidence, не GitHub Actions.
+The B1/B2 diagnostic audit found no demo-fixture or backend Dashboard read-model implementation defect requiring a correction PR. It confirmed explicit demo-data installation, safe duplicate-install rejection, stable alert regeneration, stable purchase-suggestion regeneration, meaningful operational source data, and no passive database mutations. No B1 backend/fixture correction and no B2 backend read-model correction is currently required.
 
-Slice A5 is ACTIVE. Текущий focused implementation — human-readable local artifacts and data-location presentation для `/backups`, `/exports`, `/report-documents` и связанной local-data presentation на `/settings`.
-
-A5 сохраняет backend storage behavior, API response contracts, local-first operation и user-data separation. Полные абсолютные пути остаются доступны как secondary support information, но не должны быть основной идентичностью файла. Restore, filesystem browsing, backup scheduling, cloud upload/sync, schema/migrations and backend behavior changes are out of scope.
+B2 browser presentation was not fully verified by that diagnostic audit. The current focused task is frontend focused-test infrastructure repair, with no runtime product behavior changes. B3.1 — Shared feedback for Dashboard, Onboarding and Help — remains the next runtime slice after this repair. No B1 or B2 implementation PR is active, and no future PR number is assigned.
 
 ## 4. Неизменяемые продуктовые правила
 
