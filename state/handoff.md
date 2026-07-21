@@ -498,3 +498,11 @@ Correction pass for PR #133 keeps B3.1 ACTIVE and not merge-ready until external
 Automated evidence in this correction pass: focused frontend suites passed sequentially (`form-validation` 19/19, `targeted-validation-update` 62/62, `order-mutation-lifecycle` 32/32, `order-readiness-presentation` 15/15, `dashboard-onboarding-feedback` 15/15, `help-passive-regression` 3/3), the two new B3.1 suites passed a second time, and `npm --prefix frontend run build` passed. Full backend suite on base `2ce5a4d7ba099603b733e7f2836f417da0614605` and corrected head both collected 496 tests with 492 passed and the same 4 known baseline failures; branch-only backend failure delta is 0.
 
 Browser smoke is intentionally pending for the next separate step after review corrections. B2 browser presentation evidence remains incomplete until that exact published-head smoke passes. B3.2 Alerts and Purchases remains next after B3.1 merge. No future PR number is recorded.
+
+## 2026-07-21 — B3.1 retry-control wiring correction handoff
+
+External exact-head smoke against PR #133 published head `fb7a4e5c2dd4757b61fd4be07c8c49003188b35b` found one product failure: Desktop Dashboard initial-load failure rendered an explicit `Повторить` retry button, but clicking it did not send the expected five Dashboard source GET requests.
+
+The confirmed root cause was narrow event binding in `bindEvents`: multiple controls can render with `data-action="reload-dashboard"` (header refresh plus initial-error retry/stale retry), while a single `querySelector` only attached the handler to the first one. This correction adds a small shared action-control binding helper and uses it for every rendered Dashboard reload/retry control and every rendered onboarding refresh control. The Dashboard and onboarding lifecycle helper remains responsible for duplicate-request rejection, stale ownership, route-owned announcements, and safe stale readable data.
+
+B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun externally against the new published PR #133 head after this correction is pushed. B3.2 Alerts and Purchases remains next after B3.1 merge; do not begin it inside B3.1.

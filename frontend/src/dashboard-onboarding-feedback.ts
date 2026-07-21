@@ -9,6 +9,16 @@ export type StartResult = { accepted: boolean; requestId: number; announceClear:
 export type FocusCandidateKind = 'previous' | 'heading' | 'primary' | 'live-region';
 export type FocusCandidate = { key: string; kind: FocusCandidateKind; enabled: boolean; attached: boolean };
 
+
+export type ActionControl = { addEventListener: (type: 'click', listener: () => void) => void };
+export type ActionControlRoot<TControl extends ActionControl = ActionControl> = { querySelectorAll: (selector: string) => Iterable<TControl> };
+
+export function bindActionControls<TControl extends ActionControl>(root: ActionControlRoot<TControl>, selector: string, callback: () => void): number {
+  const controls = Array.from(root.querySelectorAll(selector));
+  controls.forEach((control) => control.addEventListener('click', callback));
+  return controls.length;
+}
+
 export type FeedbackSnapshot<TData, TOnboarding> = {
   dashboard: {
     status: 'idle' | 'loading' | 'ready' | 'error';

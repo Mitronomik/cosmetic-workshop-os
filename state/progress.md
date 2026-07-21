@@ -1084,3 +1084,11 @@ B3.1 is not DONE until merge and required exact published-head verification. B3.
 PR #133 correction pass addressed Dashboard/onboarding feedback lifecycle review gaps without backend, schema, migration, dependency, CSS, or unrelated route changes. Dashboard now tracks a loaded snapshot independently from record counts, so valid empty data remains readable after refresh failure. Onboarding load now distinguishes initial load from manual refresh, blocks conflicting refresh/mutation work, clears stale feedback on explicit refresh, preserves prior state on refresh failure, and avoids unsupported post-mutation follow-up refresh behavior. Route ownership suppresses Dashboard/onboarding transient feedback, announcements, and focus after navigation, while authoritative data may still update silently.
 
 Focused B3.1 tests now cover valid empty Dashboard snapshots, stale Dashboard callbacks, onboarding stale feedback clearing, stale-state refresh failure, refresh/mutation conflicts, stale mutation callbacks, route ownership, real focus policy, and Help helper logic used by runtime. Browser smoke remains pending and PR #133 is not merge-ready until external exact published-head smoke passes. B3.2 remains next after B3.1 merge.
+
+## 2026-07-21 — B3.1 retry-control wiring correction
+
+Exact-head browser smoke on published PR #133 head `fb7a4e5c2dd4757b61fd4be07c8c49003188b35b` found a product failure in the Desktop Dashboard initial-load retry scenario: the explicit `Повторить` button inside the initial-load error card was rendered but did not start the Dashboard retry request sequence.
+
+Root cause: Dashboard rendered multiple `data-action="reload-dashboard"` controls, but runtime event binding used a single `querySelector`, wiring only the first matching control. The correction binds every rendered Dashboard reload/retry control and every rendered onboarding refresh control while preserving the existing B3.1 lifecycle helper ownership and duplicate-request protection.
+
+B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser smoke is rerun against the new published head and passes. B3.2 Alerts and Purchases remains next after B3.1 merge.
