@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-tests/dashboard-onboarding-feedback",
+    "rootDir": "src",
+    "noEmit": false
+  },
+  "include": ["src/dashboard-onboarding-feedback.ts"]
+}

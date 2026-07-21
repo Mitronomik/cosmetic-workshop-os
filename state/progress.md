@@ -1070,3 +1070,11 @@ Slice A4 is now active. Current runtime work is A4.1: establish a small shared r
 - A4.4b `/packaging-items` is now the active focused runtime containment slice.
 - Full backend baseline is known to have four unrelated failures in backups, exports, imports, and manual purchase suggestions tests.
 - Slice A4 remains incomplete; the final cross-route responsive regression remains after A4.4b.
+
+## 2026-07-21 — B3.1 Dashboard and Onboarding feedback branch
+
+PR #132 is DONE at merge commit `2ce5a4d7ba099603b733e7f2836f417da0614605`; focused frontend test-compilation hardening is complete. The B1/B2 diagnostic audit still requires no fixture/backend implementation and no Dashboard backend read-model implementation. B3.1 is active in this branch and is scoped to Dashboard refresh feedback, Dashboard-rendered onboarding mutations, and passive Help regression coverage.
+
+This branch adds a small dependency-free Dashboard/Onboarding feedback lifecycle helper plus focused tests. Dashboard manual refresh preserves previously loaded operational cards on refresh failure and reports a warning instead of a false empty state. Onboarding start, complete-step, skip, and reset share duplicate-request, stale-response, busy, announcement, and focus-recovery behavior while keeping backend responses authoritative. Help remains static/passive and does not own Dashboard or onboarding feedback.
+
+B3.1 is not DONE until merge and required exact published-head verification. B3.2 Alerts and Purchases feedback migration remains next. No future PR number is recorded here.
