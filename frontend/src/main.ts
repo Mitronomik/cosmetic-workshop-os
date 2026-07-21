@@ -3,7 +3,8 @@ import { applyValidationToClientForm, applyValidationToClientRecipeCompositionFo
 import { canOpenOrderProductionConfirmation, canStartOrderReadinessRequest, canStartOrderWriteRequest, clearOrderSourceValidation, createOrderMutationController, emptyOrderValidationProvenance, orderBoundOperationActive, orderOperationError, orderOperationErrorFor, orderPayloadFromDraft, orderPersistentWriteActive, orderPersistentWriteOwner, orderProductionIsClosed, orderReadinessAttemptMatches, orderReadinessRequestActive, orderReadinessResultIsCurrent, orderRequestOwnerMatches, ownerFromOrderRequest, extractProductionApiFailure, productionConfirmationFailurePresentation, productionFailureForOrder, productionReadinessFailureMessage, productionResponseBelongsToOrder, finishProductionOwnerState, restoreOrderOperationGenerationForOwnedNonMutatingFailure, type OrderContextSnapshot, type OrderOperationError, type OrderOperationState, type OrderRequestSnapshot, type OrderTransientRequestOwner, type OrderValidationProvenance } from './order-mutation-lifecycle.js';
 import { renderOrderLifecycleActions, renderOrderPersistentWriteNotice, renderOrderProductionGate, renderOrderReadinessPanel, renderOrderRowActions, type OrderLifecycleActionsInput, type ProductionReadinessResponse } from './order-readiness-presentation.js';
 import { artifactFolderLabel, artifactReason, artifactSize, localArtifactPresentation } from './local-artifact-presentation.js';
-import { DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, type OnboardingAction } from './dashboard-onboarding-feedback.js';
+import { DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, selectOnboardingFocusTarget, type FocusCandidate, type OnboardingAction } from './dashboard-onboarding-feedback.js';
+import { filterHelpArticles as filterHelpArticlesForState, helpRelatedNavigation, resetHelpFilters as resetHelpFilterState, selectHelpArticle as selectHelpArticleState } from './help-passive-regression.js';
 import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientDeactivationMutationControls, disableClientFeedbackCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientFeedbackMutationControls, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
@@ -172,7 +173,7 @@ type ProductionBatchListItem = { id: number; order_id: number; product_name: str
 type ProductionHistoryState = { batches: ProductionBatchListItem[]; selectedBatch: ProductionBatchDetailResponse | null; status: ProductionStatus; detailStatus: ProductionStatus; error: string; detailError: string; filters: { search: string } };
 type DashboardStatus = 'idle' | 'loading' | 'ready' | 'error';
 type DashboardData = { orders: Order[]; clients: Client[]; alerts: AlertResponse[]; purchaseSuggestions: PurchaseSuggestionResponse[]; productionBatches: ProductionBatchListItem[] };
-type DashboardState = DashboardData & { status: DashboardStatus; error: string; message: string; warning: string };
+type DashboardState = DashboardData & { status: DashboardStatus; error: string; message: string; warning: string; hasLoadedSnapshot: boolean };
 type BackupFileResponse = { filename: string; path: string; created_at: string | null; reason: string | null; size_bytes: number };
 type BackupStatusResponse = { database_path: string; database_exists: boolean; database_size_bytes: number | null; backup_dir: string; backup_dir_exists: boolean; backup_count: number; latest_backup: BackupFileResponse | null };
 type BackupListResponse = { backups: BackupFileResponse[]; backup_dir: string };
@@ -553,7 +554,7 @@ let onboardingState: OnboardingState | null = null;
 let onboardingMessage = '';
 let onboardingError = '';
 let onboardingRefreshWarning = '';
-let onboardingActionStatus: 'idle' | 'mutating' = 'idle';
+let onboardingActionStatus: 'idle' | 'loading' | 'mutating' = 'idle';
 let inventoryStatus: InventoryStatus = 'idle';
 let inventoryState: InventoryState = { overview: null, ingredientLots: [], packagingItems: [] };
 let inventoryError = '';
@@ -588,7 +589,8 @@ let ordersStatus: OrdersStatus = 'idle';
 let ordersError = '';
 let ordersMessage = '';
 let productionHistoryState: ProductionHistoryState = { batches: [], selectedBatch: null, status: 'idle', detailStatus: 'idle', error: '', detailError: '', filters: { search: '' } };
-let dashboardState: DashboardState = { status: 'idle', error: '', message: '', warning: '', orders: [], clients: [], alerts: [], purchaseSuggestions: [], productionBatches: [] };
+let dashboardState: DashboardState = { status: 'idle', error: '', message: '', warning: '', hasLoadedSnapshot: false, orders: [], clients: [], alerts: [], purchaseSuggestions: [], productionBatches: [] };
+let routePresentationGeneration = 0;
 const dashboardOnboardingLifecycle = new DashboardOnboardingFeedbackLifecycle<DashboardData, OnboardingState>();
 let backupUiState: BackupUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', backupStatus: null, backups: [], reason: 'manual', customReason: '', lastCreatedBackup: null };
 let exportUiState: ExportUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', exportStatus: null, exports: [], reason: 'manual', customReason: '', lastCreatedExport: null, lastEntityCounts: {} };
@@ -824,10 +826,7 @@ function bindEvents(root: HTMLElement) {
   });
   root.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
-      activeSection = (button.dataset.section as NavigationSection | undefined) ?? 'Главная';
-      window.history.pushState({}, '', pathForSection(activeSection));
-      loadSectionData(activeSection);
-      render();
+      navigateToSection((button.dataset.section as NavigationSection | undefined) ?? 'Главная');
     });
   });
   root.querySelector<HTMLButtonElement>('[data-action="reload-dashboard"]')?.addEventListener('click', () => loadDashboard(true));
@@ -877,9 +876,9 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLInputElement>('[data-action="custom-backup-reason"]')?.addEventListener('input', (event) => { backupUiState.customReason = (event.currentTarget as HTMLInputElement).value.slice(0, 80); });
   root.querySelector<HTMLInputElement>('[data-action="filter-help-search"]')?.addEventListener('input', (event) => updateHelpSearch(event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLSelectElement>('[data-action="filter-help-category"]')?.addEventListener('change', (event) => { helpUiState.category = (event.currentTarget as HTMLSelectElement).value; render(); });
-  root.querySelectorAll<HTMLButtonElement>('[data-action="open-help-article"]').forEach((button) => button.addEventListener('click', () => { helpUiState.selectedArticleId = button.dataset.id || 'getting-started'; render(); }));
-  root.querySelectorAll<HTMLButtonElement>('[data-action="reset-help-filters"]').forEach((button) => button.addEventListener('click', () => { helpUiState.search = ''; helpUiState.category = ''; helpUiState.selectedArticleId = 'getting-started'; render(); }));
-  root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-help-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="open-help-article"]').forEach((button) => button.addEventListener('click', () => { helpUiState = selectHelpArticleState(helpUiState, button.dataset.id || 'getting-started'); render(); }));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="reset-help-filters"]').forEach((button) => button.addEventListener('click', () => { helpUiState = resetHelpFilterState(); render(); }));
+  root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-help-related"]').forEach((button) => button.addEventListener('click', () => { const nav = helpRelatedNavigation(button.dataset.section || ''); navigateToSection(nav.section as NavigationSection | undefined); }));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-settings-target"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
   root.querySelectorAll<HTMLButtonElement>('[data-action="reload-settings-status"]').forEach((button) => button.addEventListener('click', () => loadSettingsStatus(true)));
   root.querySelectorAll<HTMLButtonElement>('[data-action="reload-workshop-profile"]').forEach((button) => button.addEventListener('click', () => loadWorkshopProfile(true)));
@@ -887,10 +886,7 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLButtonElement>('[data-action="cancel-workshop-profile"]')?.addEventListener('click', cancelWorkshopProfileChanges);
   root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-workshop-profile-field]').forEach((input) => input.addEventListener('input', updateWorkshopProfileDraft));
   root.querySelectorAll<HTMLButtonElement>('[data-nav-section]').forEach((button) => button.addEventListener('click', () => {
-    activeSection = (button.dataset.navSection as NavigationSection | undefined) ?? 'Главная';
-    window.history.pushState({}, '', pathForSection(activeSection));
-    loadSectionData(activeSection);
-    render();
+    navigateToSection((button.dataset.navSection as NavigationSection | undefined) ?? 'Главная');
   }));
   root.querySelector<HTMLButtonElement>('[data-action="start-onboarding"]')?.addEventListener('click', () => updateOnboarding('start', '/api/onboarding/start'));
   root.querySelector<HTMLButtonElement>('[data-action="complete-step"]')?.addEventListener('click', (event) => {
@@ -1275,11 +1271,14 @@ function applyDashboardLifecycleState() {
   dashboardState.error = source.error;
   dashboardState.message = source.message;
   dashboardState.warning = source.warning;
+  dashboardState.hasLoadedSnapshot = source.hasLoadedSnapshot;
   if (source.data) dashboardState = { ...dashboardState, ...source.data };
 }
 
+function dashboardOwnsPresentation(ownerGeneration: number) { return activeSection === 'Главная' && ownerGeneration === routePresentationGeneration; }
 function loadDashboard(force = false) {
   const kind = force ? 'refresh' : 'initial';
+  const ownerGeneration = routePresentationGeneration;
   if (!force && (dashboardState.status === 'loading' || dashboardState.status === 'ready')) return;
   const started = dashboardOnboardingLifecycle.startDashboardLoad(kind);
   if (!started.accepted) return;
@@ -1299,13 +1298,13 @@ function loadDashboard(force = false) {
       alerts: alerts.alerts,
       purchaseSuggestions: purchaseSuggestions.purchase_suggestions,
       productionBatches: productionBatches.production_batches,
-    });
+    }, dashboardOwnsPresentation(ownerGeneration));
     if (!result.accepted) return;
     applyDashboardLifecycleState();
     if (result.announcement === 'polite' && result.message) announcePolite(result.message);
     render();
   }).catch(() => {
-    const result = dashboardOnboardingLifecycle.finishDashboardFailure(started.requestId);
+    const result = dashboardOnboardingLifecycle.finishDashboardFailure(started.requestId, dashboardOwnsPresentation(ownerGeneration));
     if (!result.accepted) return;
     applyDashboardLifecycleState();
     if (result.message) announceAssertive(result.message);
@@ -1323,7 +1322,7 @@ function dashboardPage() {
 }
 
 function dashboardHeader() { const isLoading = dashboardState.status === 'loading'; return `<section class="card data-card dashboard-hero"><div><p class="card-kicker">Сегодня в мастерской</p><h2>Сегодня в мастерской</h2><p>Короткий обзор того, что требует внимания: заказы, алерты, закупки и последние партии.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-dashboard" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить обзор'}</button></div></section>`; }
-function dashboardHasData() { return dashboardState.orders.length > 0 || dashboardState.clients.length > 0 || dashboardState.alerts.length > 0 || dashboardState.purchaseSuggestions.length > 0 || dashboardState.productionBatches.length > 0; }
+function dashboardHasData() { return dashboardState.hasLoadedSnapshot; }
 function dashboardCanShowOverview() { return dashboardState.status === 'ready' || (dashboardState.status === 'loading' && dashboardHasData()) || (dashboardState.status === 'error' && dashboardHasData()); }
 function dashboardLoadingCard() { return '<section class="card"><p>Загружаем обзор мастерской…</p></section>'; }
 function dashboardMessage() { return `<p class="page-message">${escapeHtml(dashboardState.message)}</p>`; }
@@ -1858,7 +1857,17 @@ function importApplyErrorMarkup() {
   return feedbackMessage('error', importUiState.applyError, `${issueList}<p class="next-step">Рабочие данные не были частично изменены.</p>`);
 }
 
-function navigateToSection(section: NavigationSection | undefined) { if (!section) return; activeSection = section; window.history.pushState({}, '', pathForSection(activeSection)); loadSectionData(activeSection); render(); }
+function clearRouteOwnedFeedbackOnNavigation(nextSection: NavigationSection) {
+  routePresentationGeneration += 1;
+  clearFeedbackAnnouncement();
+  if (nextSection !== 'Главная') {
+    dashboardOnboardingLifecycle.clearDashboardTransientFeedback();
+    dashboardOnboardingLifecycle.clearOnboardingTransientFeedback();
+    applyDashboardLifecycleState();
+    applyOnboardingLifecycleState();
+  }
+}
+function navigateToSection(section: NavigationSection | undefined) { if (!section) return; activeSection = section; clearRouteOwnedFeedbackOnNavigation(activeSection); window.history.pushState({}, '', pathForSection(activeSection)); loadSectionData(activeSection); render(); }
 
 function importPage() {
   const isLoading = importUiState.status === 'loading';
@@ -2582,8 +2591,8 @@ function onboardingCard() {
   const started = onboardingState?.has_started ?? false;
   const steps = onboardingState?.available_steps ?? Object.keys(stepLabels);
   const doneCount = steps.filter((step) => onboardingState?.completed_steps.includes(step)).length;
-  if (onboardingState?.is_completed) return `<section class="card onboarding-card" data-onboarding-region aria-busy="${onboardingActionStatus === 'mutating' ? 'true' : 'false'}"><p class="card-kicker">Первичная настройка</p><h2 tabindex="-1" data-onboarding-stable-heading>Базовая настройка завершена</h2>${onboardingFeedbackMarkup()}<p>Базовая настройка завершена. Вы можете вернуться к списку первых шагов в любой момент, если хотите проверить путь ещё раз.</p><p class="next-step">Список первых шагов не меняет рецепты, склад, заказы и производство. Он только отмечает ваш прогресс.</p><div class="actions"><button class="secondary-action" type="button" data-action="reset-onboarding" ${onboardingActionStatus === 'mutating' ? 'disabled' : ''}>${onboardingActionStatus === 'mutating' ? 'Сохраняем…' : 'Проверить путь ещё раз'}</button><button class="secondary-action compact" type="button" data-action="refresh-onboarding" ${onboardingActionStatus === 'mutating' ? 'disabled' : ''}>Обновить шаги</button></div></section>`;
-  const busy = onboardingActionStatus === 'mutating'; return `<section class="card onboarding-card" data-onboarding-region aria-busy="${busy ? 'true' : 'false'}"><p class="card-kicker">Первый запуск</p><h2 tabindex="-1" data-onboarding-stable-heading>Настройте мастерскую по шагам</h2><p>Пройдите короткий путь: подготовьте склад, рецепты, клиентов, заказ, производство и защиту данных. Список первых шагов ничего не создаёт сам — он только помогает не пропустить важные разделы.</p><div class="onboarding-note"><strong>Безопасно:</strong> список первых шагов не меняет рецепты, склад, заказы и производство. Он только отмечает ваш прогресс и открывает нужные разделы.</div><p class="onboarding-progress">Выполнено ${doneCount} из ${steps.length}</p>${onboardingFeedbackMarkup()}<ol class="checklist">${steps.map((step) => checklistItem(step, currentStep, busy)).join('')}</ol><div class="actions" aria-busy="${busy ? 'true' : 'false'}">${started ? `<button class="primary-action" type="button" data-action="complete-step" data-step="${currentStep}" ${busy ? 'disabled' : ''}>${busy ? 'Сохраняем…' : 'Отметить текущий шаг'}</button>` : `<button class="primary-action" type="button" data-action="start-onboarding" ${busy ? 'disabled' : ''}>${busy ? 'Сохраняем…' : 'Начать настройку'}</button>`}<button class="secondary-action" type="button" data-action="skip-onboarding" ${busy ? 'disabled' : ''}>Пропустить пока</button><button class="secondary-action compact" type="button" data-action="refresh-onboarding" ${busy ? 'disabled' : ''}>Обновить шаги</button></div></section>`;
+  if (onboardingState?.is_completed) return `<section class="card onboarding-card" data-onboarding-region aria-busy="${onboardingActionStatus !== 'idle' ? 'true' : 'false'}"><p class="card-kicker">Первичная настройка</p><h2 tabindex="-1" data-onboarding-stable-heading>Базовая настройка завершена</h2>${onboardingFeedbackMarkup()}<p>Базовая настройка завершена. Вы можете вернуться к списку первых шагов в любой момент, если хотите проверить путь ещё раз.</p><p class="next-step">Список первых шагов не меняет рецепты, склад, заказы и производство. Он только отмечает ваш прогресс.</p><div class="actions"><button class="secondary-action" type="button" data-action="reset-onboarding" ${onboardingActionStatus !== 'idle' ? 'disabled' : ''}>${onboardingActionStatus !== 'idle' ? 'Обновляем…' : 'Проверить путь ещё раз'}</button><button class="secondary-action compact" type="button" data-action="refresh-onboarding" ${onboardingActionStatus !== 'idle' ? 'disabled' : ''}>Обновить шаги</button></div></section>`;
+  const busy = onboardingActionStatus !== 'idle'; return `<section class="card onboarding-card" data-onboarding-region aria-busy="${busy ? 'true' : 'false'}"><p class="card-kicker">Первый запуск</p><h2 tabindex="-1" data-onboarding-stable-heading>Настройте мастерскую по шагам</h2><p>Пройдите короткий путь: подготовьте склад, рецепты, клиентов, заказ, производство и защиту данных. Список первых шагов ничего не создаёт сам — он только помогает не пропустить важные разделы.</p><div class="onboarding-note"><strong>Безопасно:</strong> список первых шагов не меняет рецепты, склад, заказы и производство. Он только отмечает ваш прогресс и открывает нужные разделы.</div><p class="onboarding-progress">Выполнено ${doneCount} из ${steps.length}</p>${onboardingFeedbackMarkup()}<ol class="checklist">${steps.map((step) => checklistItem(step, currentStep, busy)).join('')}</ol><div class="actions" aria-busy="${busy ? 'true' : 'false'}">${started ? `<button class="primary-action" type="button" data-action="complete-step" data-step="${currentStep}" ${busy ? 'disabled' : ''}>${busy ? 'Сохраняем…' : 'Отметить текущий шаг'}</button>` : `<button class="primary-action" type="button" data-action="start-onboarding" ${busy ? 'disabled' : ''}>${busy ? 'Сохраняем…' : 'Начать настройку'}</button>`}<button class="secondary-action" type="button" data-action="skip-onboarding" ${busy ? 'disabled' : ''}>Пропустить пока</button><button class="secondary-action compact" type="button" data-action="refresh-onboarding" ${busy ? 'disabled' : ''}>Обновить шаги</button></div></section>`;
 }
 function onboardingFeedbackMarkup() { return `${onboardingError ? feedbackMessage('error', onboardingError) : ''}${onboardingMessage ? feedbackMessage('success', onboardingMessage) : ''}${onboardingRefreshWarning ? feedbackMessage('warning', onboardingRefreshWarning, '<p class="next-step"><button class="secondary-action compact" type="button" data-action="refresh-onboarding">Обновить шаги</button></p>') : ''}`; }
 function checklistItem(step: string, currentStep: string, busy = false) { const isDone = onboardingState?.completed_steps.includes(step); const isCurrent = step === currentStep && !isDone; const marker = isDone ? '✓' : isCurrent ? '•' : '○'; const sections = onboardingStepUi[step]?.sections ?? []; const links = sections.map((section) => `<button class="secondary-action compact" type="button" data-action="navigate-onboarding-step" data-section="${section}" ${busy ? 'disabled' : ''}>Открыть ${labelForSection(section).toLowerCase()}</button>`).join(''); return `<li class="${isDone ? 'done' : ''} ${isCurrent ? 'current' : ''}"><span>${marker}</span><div><strong>${stepLabels[step] ?? step}</strong><small>${stepHint(step)}</small>${links ? `<div class="checklist-links">${links}</div>` : ''}</div></li>`; }
@@ -2707,10 +2716,7 @@ function helpPage() {
   const selected = helpArticles.find((article) => article.id === helpUiState.selectedArticleId) ?? articles[0] ?? helpArticles[0];
   return `<div class="help-layout"><section class="card data-card help-hero"><p class="card-kicker">Справка</p><h2>Помощь по мастерской</h2><p>Короткие подсказки по основным разделам: склад, рецепты, клиенты, заказы, производство, импорт и безопасность данных.</p><p class="next-step">Раздел помощи ничего не меняет в данных. Он только объясняет, как пользоваться приложением.</p></section>${helpFilters()}<div class="help-content-grid">${helpArticleList(articles)}${helpArticleDetail(selected)}</div></div>`;
 }
-function filteredHelpArticles() {
-  const q = normalizeSearchText(helpUiState.search);
-  return helpArticles.filter((article) => (!helpUiState.category || article.category === helpUiState.category) && (!q || normalizeSearchText([article.title, article.category, article.summary, article.body.join(' '), article.warning ?? ''].join(' ')).includes(q)));
-}
+function filteredHelpArticles() { return filterHelpArticlesForState(helpArticles, helpUiState); }
 function helpFilters() {
   return `<section class="card filter-card"><div class="catalog-toolbar"><label>Поиск<input data-action="filter-help-search" type="search" value="${escapeHtml(helpUiState.search)}" placeholder="Найти: рецепт, партия, импорт, резервная копия…" /></label><label>Категория<select data-action="filter-help-category"><option value="">Все категории</option>${helpCategories.map((category) => `<option value="${escapeHtml(category)}" ${helpUiState.category === category ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}</select></label></div><div class="actions"><button class="secondary-action compact" type="button" data-action="reset-help-filters">Сбросить фильтр</button></div></section>`;
 }
@@ -4338,32 +4344,38 @@ function applyOnboardingLifecycleState() {
   onboardingMessage = source.message;
   onboardingError = source.error;
   onboardingRefreshWarning = source.warning;
-  onboardingActionStatus = source.active ? 'mutating' : 'idle';
+  onboardingActionStatus = source.mutationActive ? 'mutating' : source.loadActive ? 'loading' : 'idle';
 }
+function onboardingOwnsPresentation(ownerGeneration: number) { return activeSection === 'Главная' && ownerGeneration === routePresentationGeneration; }
 
 function loadOnboarding(force = false) {
   if (!force && onboardingStatus === 'ready') return;
-  const started = dashboardOnboardingLifecycle.startOnboardingLoad();
+  const ownerGeneration = routePresentationGeneration;
+  const started = dashboardOnboardingLifecycle.startOnboardingLoad(force ? 'refresh' : 'initial');
+  if (!started.accepted) return;
+  if (started.announceClear) clearFeedbackAnnouncement();
   applyOnboardingLifecycleState();
   render();
   fetch('/api/onboarding')
     .then((response) => { if (!response.ok) throw new Error('Onboarding is unavailable'); return response.json() as Promise<OnboardingState>; })
     .then((state) => {
-      const result = dashboardOnboardingLifecycle.finishOnboardingLoadSuccess(started.requestId, state);
+      const result = dashboardOnboardingLifecycle.finishOnboardingLoadSuccess(started.requestId, state, onboardingOwnsPresentation(ownerGeneration));
       if (!result.accepted) return;
       applyOnboardingLifecycleState();
+      if (result.announcement === 'polite' && result.message) announcePolite(result.message);
       render();
     })
     .catch(() => {
-      const result = dashboardOnboardingLifecycle.finishOnboardingLoadFailure(started.requestId);
+      const result = dashboardOnboardingLifecycle.finishOnboardingLoadFailure(started.requestId, onboardingOwnsPresentation(ownerGeneration));
       if (!result.accepted) return;
       applyOnboardingLifecycleState();
-      announceAssertive(result.message);
+      if (result.announcement === 'assertive' && result.message) announceAssertive(result.message);
       render();
     });
 }
 function updateOnboarding(action: OnboardingAction, url: string, body?: Record<string, string>) {
-  const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const ownerGeneration = routePresentationGeneration;
+  const triggerKey = document.activeElement instanceof HTMLElement ? onboardingFocusKeyForElement(document.activeElement) : null;
   const started = dashboardOnboardingLifecycle.startOnboardingMutation(action);
   if (!started.accepted) return;
   clearFeedbackAnnouncement();
@@ -4372,31 +4384,44 @@ function updateOnboarding(action: OnboardingAction, url: string, body?: Record<s
   fetch(url, { method: 'POST', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined })
     .then((response) => { if (!response.ok) throw new Error('Onboarding update failed'); return response.json() as Promise<OnboardingState>; })
     .then((state) => {
-      const result = dashboardOnboardingLifecycle.finishOnboardingMutationSuccess(started.requestId, state, onboardingSuccessMessage(action));
+      const owns = onboardingOwnsPresentation(ownerGeneration);
+      const result = dashboardOnboardingLifecycle.finishOnboardingMutationSuccess(started.requestId, state, onboardingSuccessMessage(action), owns);
       if (!result.accepted) return;
       applyOnboardingLifecycleState();
-      announcePolite(result.message);
+      if (result.announcement === 'polite' && result.message) announcePolite(result.message);
       render();
-      restoreOnboardingFocus(trigger);
+      restoreOnboardingFocus(triggerKey, owns);
     })
     .catch(() => {
-      const result = dashboardOnboardingLifecycle.finishOnboardingMutationFailure(started.requestId, onboardingFailureMessage(action));
+      const owns = onboardingOwnsPresentation(ownerGeneration);
+      const result = dashboardOnboardingLifecycle.finishOnboardingMutationFailure(started.requestId, onboardingFailureMessage(action), owns);
       if (!result.accepted) return;
       applyOnboardingLifecycleState();
-      announceAssertive(result.message);
+      if (result.announcement === 'assertive' && result.message) announceAssertive(result.message);
       render();
-      restoreOnboardingFocus(trigger);
+      restoreOnboardingFocus(triggerKey, owns);
     });
 }
-function restoreOnboardingFocus(previous: HTMLElement | null) {
+function onboardingFocusKeyForElement(element: HTMLElement) { return element.dataset.onboardingFocusKey || element.dataset.action || null; }
+function onboardingFocusCandidates(): FocusCandidate[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-onboarding-focus-key], [data-onboarding-stable-heading], [data-action="start-onboarding"], [data-action="complete-step"], [data-action="reset-onboarding"]'))
+    .map((element) => {
+      const key = onboardingFocusKeyForElement(element) || (element.hasAttribute('data-onboarding-stable-heading') ? 'onboarding-heading' : '');
+      const kind = element.hasAttribute('data-onboarding-stable-heading') ? 'heading' : element.classList.contains('primary-action') ? 'primary' : 'previous';
+      return { key, kind, enabled: !element.hasAttribute('disabled'), attached: document.body.contains(element) } as FocusCandidate;
+    })
+    .filter((candidate) => candidate.key);
+}
+function restoreOnboardingFocus(previousKey: string | null, ownsPresentation: boolean) {
   requestAnimationFrame(() => {
-    if (previous && document.body.contains(previous) && !previous.hasAttribute('disabled')) { previous.focus(); return; }
-    const target = document.querySelector<HTMLElement>('[data-onboarding-stable-heading], [data-action="start-onboarding"], [data-action="complete-step"], [data-action="reset-onboarding"]');
+    const key = selectOnboardingFocusTarget(ownsPresentation, previousKey, onboardingFocusCandidates());
+    if (!key) return;
+    const target = document.querySelector<HTMLElement>(`[data-onboarding-focus-key="${key}"], [data-action="${key}"], ${key === 'onboarding-heading' ? '[data-onboarding-stable-heading]' : '[data-never-match]'}`);
     target?.focus();
   });
 }
 
-window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); loadSectionData(activeSection); render(); });
+window.addEventListener('popstate', () => { activeSection = sectionFromLocation(); clearRouteOwnedFeedbackOnNavigation(activeSection); loadSectionData(activeSection); render(); });
 ensureAnnouncementRegions();
 render();
 fetch('/api/health').then((response) => { healthStatus = response.ok ? 'online' : 'offline'; render(); }).catch(() => { healthStatus = 'offline'; render(); });

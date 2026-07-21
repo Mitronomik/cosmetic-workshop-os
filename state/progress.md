@@ -1078,3 +1078,9 @@ PR #132 is DONE at merge commit `2ce5a4d7ba099603b733e7f2836f417da0614605`; focu
 This branch adds a small dependency-free Dashboard/Onboarding feedback lifecycle helper plus focused tests. Dashboard manual refresh preserves previously loaded operational cards on refresh failure and reports a warning instead of a false empty state. Onboarding start, complete-step, skip, and reset share duplicate-request, stale-response, busy, announcement, and focus-recovery behavior while keeping backend responses authoritative. Help remains static/passive and does not own Dashboard or onboarding feedback.
 
 B3.1 is not DONE until merge and required exact published-head verification. B3.2 Alerts and Purchases feedback migration remains next. No future PR number is recorded here.
+
+## 2026-07-21 — B3.1 correction pass
+
+PR #133 correction pass addressed Dashboard/onboarding feedback lifecycle review gaps without backend, schema, migration, dependency, CSS, or unrelated route changes. Dashboard now tracks a loaded snapshot independently from record counts, so valid empty data remains readable after refresh failure. Onboarding load now distinguishes initial load from manual refresh, blocks conflicting refresh/mutation work, clears stale feedback on explicit refresh, preserves prior state on refresh failure, and avoids unsupported post-mutation follow-up refresh behavior. Route ownership suppresses Dashboard/onboarding transient feedback, announcements, and focus after navigation, while authoritative data may still update silently.
+
+Focused B3.1 tests now cover valid empty Dashboard snapshots, stale Dashboard callbacks, onboarding stale feedback clearing, stale-state refresh failure, refresh/mutation conflicts, stale mutation callbacks, route ownership, real focus policy, and Help helper logic used by runtime. Browser smoke remains pending and PR #133 is not merge-ready until external exact published-head smoke passes. B3.2 remains next after B3.1 merge.

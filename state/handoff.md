@@ -490,3 +490,11 @@ Verification in this runner:
 - Browser smoke was not completed in this runner because no Chrome/Chromium/Playwright browser executable is available. Do not claim B2 browser presentation complete or B3.1 ready-for-merge until exact published-head browser smoke passes externally.
 
 Next step after this PR: B3.2 — Alerts and Purchases feedback migration. Do not broaden B3.1 into other route groups.
+
+## 2026-07-21 — B3.1 correction pass review gaps
+
+Correction pass for PR #133 keeps B3.1 ACTIVE and not merge-ready until external exact published-head browser smoke passes. It closes review findings around stale onboarding feedback, onboarding GET ownership, stale-readable onboarding state, valid empty Dashboard snapshots, route-owned announcements/focus, real focus-policy tests, real stale Dashboard/onboarding callback tests, and runtime-backed Help helper usage.
+
+Automated evidence in this correction pass: focused frontend suites passed sequentially (`form-validation` 19/19, `targeted-validation-update` 62/62, `order-mutation-lifecycle` 32/32, `order-readiness-presentation` 15/15, `dashboard-onboarding-feedback` 15/15, `help-passive-regression` 3/3), the two new B3.1 suites passed a second time, and `npm --prefix frontend run build` passed. Full backend suite on base `2ce5a4d7ba099603b733e7f2836f417da0614605` and corrected head both collected 496 tests with 492 passed and the same 4 known baseline failures; branch-only backend failure delta is 0.
+
+Browser smoke is intentionally pending for the next separate step after review corrections. B2 browser presentation evidence remains incomplete until that exact published-head smoke passes. B3.2 Alerts and Purchases remains next after B3.1 merge. No future PR number is recorded.
