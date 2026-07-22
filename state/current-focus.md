@@ -1,34 +1,35 @@
 # Current focus
 
 ## Active slice
-- B3.2a Alerts: merged.
-- B3.2b Purchases: active.
+- Existing PR: #135 — Add Purchases shared-feedback lifecycle (B3.2b).
+- Existing published branch: `codex/add-purchases-shared-feedback-lifecycle`.
+- Reviewed starting head: `cc74c3a2e3d6773c1feac96726c486204d16fd40`.
 - Base: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
+- B3.2a Alerts: merged.
+- B3.2b Purchases: active correction.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
-## Goal
-Implement a Purchases-only shared-feedback lifecycle for `/purchase-suggestions` covering request ownership, snapshot/filter truth, local search, mutation identity, detached settlement, authoritative DTO handling, and reconciliation.
+## Correction goal
+Complete the real `/purchase-suggestions` runtime migration so production actions use the Purchases lifecycle/runtime coordinator instead of the old direct request chains.
 
-## Allowed scope
+## Allowed files
 - `frontend/src/main.ts`
 - `frontend/src/purchase-suggestions-feedback.ts`
 - `frontend/src/purchase-suggestions-runtime.ts`
-- Focused Purchases lifecycle tests and frontend package test script.
-- Current implementation/state documentation for the temporary Block B smoke sequencing decision.
+- `frontend/test/purchase-suggestions-feedback.test.mjs`
+- `frontend/tsconfig.test.purchase-suggestions-feedback.json`
+- `frontend/package.json`
+- `docs/implementation-plan.md`
+- `state/current-focus.md`
+- `state/handoff.md`
+- `state/progress.md`
 
 ## Non-goals
-- No backend purchase business-rule changes.
-- No migrations or schema changes.
-- No supplier management, online ordering, invoices, payment tracking, forecasts, PDFs, or stock receipt automation.
-- No Alerts runtime behavior changes.
-- No generic app-wide request framework.
+- No backend API/service/repository changes.
+- No migrations, schemas, dependencies, lock files, supplier features, stock receipt automation, Alerts runtime changes, unrelated route changes, or per-PR browser smoke.
 
 ## Required tests
 - Focused Purchases suite twice.
-- Existing Alerts lifecycle suite.
-- Dashboard/onboarding, validation, order, help regression suites.
+- Existing Alerts, Dashboard/Onboarding, validation, Orders, Help suites.
 - Frontend build.
-- Focused backend purchase suite and complete backend suite comparison when feasible.
-
-## Acceptance
-The slice is acceptable only if Purchases feedback is understandable and safe, no browser-smoke pass is claimed, backend-owned purchase rules remain backend-owned, and Block B integration smoke remains scheduled after all B slices.
+- Focused backend Purchases suite and complete backend suite with branch-only failure delta 0.

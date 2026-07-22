@@ -558,3 +558,15 @@ Automated evidence collected on this branch:
 Browser smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE. This is not a browser-smoke pass; a full Block B integration browser smoke remains mandatory after all B slices.
 
 Next expected step: human review of this focused B3.2b PR, then continue remaining Block B slices; do not run per-PR external browser smoke for this slice unless the product owner changes the temporary sequencing decision.
+
+## B3.2b PR #135 runtime correction handoff
+The first reviewed PR #135 head was blocked because it added Purchases lifecycle modules but did not migrate the real `/purchase-suggestions` runtime. The route still used legacy direct list/mutation Promise chains, coupled list loading to reference data, and allowed reconciliation behavior that could run while the route was away.
+
+Correction work now wires the Purchases runtime coordinator into `frontend/src/main.ts`, routes Purchases list reads and mutations through lifecycle ownership, derives busy state from lifecycle presentation, detaches active mutations on route leave, keeps reconciliation route-owned, and separates manual-form reference loading from list loading. Mark purchased still only closes the recommendation and does not create stock records.
+
+Current automated evidence on the correction head:
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 1: 8 passed.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 2: 8 passed.
+- `npm --prefix frontend run build`: passed.
+
+Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE. This is not a browser-smoke pass.

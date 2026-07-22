@@ -1130,3 +1130,9 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Added deterministic focused frontend suite `test:purchase-suggestions-feedback` and ran it twice successfully: 8 tests passed on each run.
 - Kept backend production files unchanged. Focused backend purchase suite was run and matched the known baseline failure `app/tests/test_purchase_suggestions.py::test_manual_api_smoke` with 10 passed / 1 failed.
 - Product-owner browser-smoke status for this B slice: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## B3.2b PR #135 correction progress
+- Corrected the initial PR #135 defect where the Purchases lifecycle existed but the production route still used the old direct request chains.
+- Wired `createPurchaseSuggestionsRuntime` into `frontend/src/main.ts`, routed Purchases list reads and mutations through lifecycle ownership, removed the old chained refresh helper, separated list reads from reference loading, and made route leave detach active mutations.
+- Ran `npm --prefix frontend run test:purchase-suggestions-feedback` twice successfully after correction: 8 passed on each run.
+- Ran `npm --prefix frontend run build` successfully after correction.
