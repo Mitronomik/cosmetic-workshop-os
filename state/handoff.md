@@ -520,3 +520,10 @@ B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun 
 - Tests actually run: full required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks were run locally; branch-only backend failure delta is zero.
 - Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
 - Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2a second correction handoff for PR #134
+- Scope: corrective update for PR #134 only; Alerts leave-and-return active-operation races, regeneration follow-up ownership, and busy reset controls.
+- Implementation summary: re-entering Alerts invalidates stale owners and requires current-visit reconciliation; regeneration follow-up presentation is based on the follow-up read result; empty-state reset buttons receive the busy disabled state.
+- Tests actually run: full required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks were run locally; branch-only backend failure delta is zero.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.

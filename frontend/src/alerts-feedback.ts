@@ -18,7 +18,7 @@ export type AlertsSnapshot<TAlert extends AlertLike = AlertLike> = { items: TAle
 export type AlertsLifecycleState<TAlert extends AlertLike = AlertLike> = {
   routeGeneration: number; snapshot: AlertsSnapshot<TAlert> | null; read: ReadOwner; mutation: MutationOwner; lastGeneration: AlertGenerationLike | null;
   feedback: { tone: FeedbackTone; message: string; refreshWarning: string; mutationError: string };
-  pendingFilters: AlertFilters | null; search: string;
+  pendingFilters: AlertFilters | null; search: string; reentryNeedsReconcile: boolean;
 };
 
 export const ALERT_MUTATION_UNCERTAIN_MESSAGE = 'Не удалось подтвердить результат обновления алертов. Обновите список перед повторным действием.';
@@ -34,8 +34,9 @@ export function alertBelongsToServerFilters(alert: AlertLike, filters: AlertFilt
 
 export class AlertsFeedbackLifecycle<TAlert extends AlertLike = AlertLike> {
   private readId = 0; private mutationId = 0;
-  readonly state: AlertsLifecycleState<TAlert> = { routeGeneration: 0, snapshot: null, read: null, mutation: null, lastGeneration: null, feedback: { tone: 'none', message: '', refreshWarning: '', mutationError: '' }, pendingFilters: null, search: '' };
-  enterRoute() { this.state.routeGeneration += 1; return this.state.routeGeneration; }
+  readonly state: AlertsLifecycleState<TAlert> = { routeGeneration: 0, snapshot: null, read: null, mutation: null, lastGeneration: null, feedback: { tone: 'none', message: '', refreshWarning: '', mutationError: '' }, pendingFilters: null, search: '', reentryNeedsReconcile: false };
+  enterRoute() { const hadOperation = this.activeServerOperation(); this.state.routeGeneration += 1; if (hadOperation) { this.readId += 1; this.mutationId += 1; this.state.read = null; this.state.mutation = null; this.state.pendingFilters = null; this.state.reentryNeedsReconcile = true; } return this.state.routeGeneration; }
+  consumeReentryReconcile() { const value = this.state.reentryNeedsReconcile; this.state.reentryNeedsReconcile = false; return value; }
   leaveRoute() { this.state.routeGeneration += 1; return this.state.routeGeneration; }
   ownsRoute(routeGeneration: number) { return routeGeneration === this.state.routeGeneration; }
   displayedFilters(): AlertFilters { return this.state.snapshot ? { ...this.state.snapshot.filters, search: this.state.search } : { ...DEFAULT_FILTERS, search: this.state.search }; }

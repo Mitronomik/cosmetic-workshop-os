@@ -1106,3 +1106,8 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - PR #134 correction targets existing branch `codex/implement-alerts-feedback-lifecycle` from base `70bbc783452a373afba76bcd8f6fe94c1e7ac75b` and previous published head `931d15c573cb821459fc4ef426cca88632c23f59`.
 - Correction scope: wire Alerts route ownership to startup/navigation/popstate, run focus recovery after final resolve/dismiss render, release current mutation owners on invalid authoritative DTOs, preserve regeneration success plus refresh-warning announcement, and replace placeholder Alerts tests with real behavioral coverage.
 - Browser smoke remains pending after publication; B3.2b Purchases remains a separate next slice.
+
+## B3.2a second correction for PR #134
+- PR #134 remains active on `codex/implement-alerts-feedback-lifecycle`; base is `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`, first implementation head was `931d15c573cb821459fc4ef426cca88632c23f59`, and first correction head was `461c0d2a3b9e736a568b482af2e61883b694f855`.
+- Correction scope: Alerts route re-entry during active operations, regeneration follow-up ownership after route loss, and disabled reset controls in empty-state rendering.
+- Browser smoke remains pending; B3.2b Purchases remains separate.

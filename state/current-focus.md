@@ -10,7 +10,8 @@
 ## Active task
 - PR #134 is the active B3.2a Alerts shared feedback lifecycle correction PR.
 - Previous published head under review: `931d15c573cb821459fc4ef426cca88632c23f59`.
-- Current correction status: implemented locally; publication is blocked in this runner because no `origin` remote is configured.
+- First correction published head: `461c0d2a3b9e736a568b482af2e61883b694f855`.
+- Current correction status: second correction in progress for leave-and-return active-operation races, regeneration follow-up ownership, and busy empty-state reset controls.
 - Browser smoke remains pending after publication; PR #134 is not merge-ready until human review and external exact-published-head browser smoke pass.
 
 ## Scope
