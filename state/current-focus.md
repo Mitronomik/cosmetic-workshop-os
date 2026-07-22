@@ -1,28 +1,40 @@
 # Current focus
 
-## Baseline
-- B3.1 shared feedback for Dashboard and Onboarding: DONE.
-- Accepted B3.1 runtime head: `4eed8c2f64d7524607cf25fc696dd964c25213cc`.
-- Merge commit / B3.2a base: `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`.
-- External exact-head smoke for B3.1: PASS — FULL AUTOMATED SMOKE PASSED.
-- B1/B2 diagnostic conclusions remain authoritative.
+## Active slice
+- Existing PR: #135 — Add Purchases shared-feedback lifecycle (B3.2b).
+- Existing published branch: `codex/add-purchases-shared-feedback-lifecycle`.
+- Reviewed starting head: `9a95b310d4e3d414052e2f565eecf1efd938f450`.
+- Base: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
+- B3.2a Alerts: merged.
+- B3.2b Purchases: active correction.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
-## Active task
-- PR #134 is the active B3.2a Alerts shared feedback lifecycle correction PR.
-- Initial implementation head: `931d15c573cb821459fc4ef426cca88632c23f59`.
-- First correction head: `461c0d2a3b9e736a568b482af2e61883b694f855`.
-- Second correction head: `4b94a236037c458907b20fb425fea76e94114492`.
-- Settlement-order correction head: `871b6666dc854ccc3cfd0072dc85dc2ce8e7d589`.
-- Current work: identity-owned detached Alerts mutation correction.
-- Browser smoke remains pending after publication; PR #134 is not merge-ready until human review and external exact-published-head browser smoke pass.
+## Correction goal
+Complete the PR #135 correction for production-composed Purchases test evidence that wires manual/edit form state to runtime callbacks, verifies reference side-effect isolation against the real lifecycle/form state, covers Settings target navigation, and preserves accepted neutral-feedback behavior.
 
-## Scope
-- Alerts-only shared feedback lifecycle for `/alerts`: route ownership, list reads, refreshes, filters, regeneration, resolve, dismiss, visible feedback, announcements, final focus recovery, invalid authoritative response recovery, identity-owned detached mutation settlement, settlement-ordered re-entry reconciliation, all-control binding, and focused tests.
+## Allowed files
+- `frontend/src/main.ts`
+- `frontend/src/purchase-suggestions-feedback.ts`
+- `frontend/src/purchase-suggestions-runtime.ts`
+- `frontend/src/purchase-suggestions-route.ts`
+- `frontend/src/purchase-suggestions-reference-data.ts`
+- `frontend/src/purchase-suggestions-bindings.ts`
+- `frontend/src/purchase-suggestions-form-state.ts`
+- `frontend/src/purchase-suggestions-presentation.ts`
+- `frontend/test/purchase-suggestions-feedback.test.mjs`
+- `frontend/tsconfig.test.purchase-suggestions-feedback.json`
+- `frontend/package.json`
+- `docs/implementation-plan.md`
+- `state/current-focus.md`
+- `state/handoff.md`
+- `state/progress.md`
 
 ## Non-goals
-- Do not implement `/purchase-suggestions` in this slice.
-- Do not change backend alert rules, repositories, schemas, migrations, imports, backups, stock, orders, production, recipes, clients, or demo fixtures.
-- Do not merge PR #134 or claim browser-smoke PASS in this correction.
+- No backend API/service/repository changes.
+- No migrations, schemas, dependencies, lock files, supplier features, stock receipt automation, Alerts runtime changes, unrelated route changes, or per-PR browser smoke.
 
-## Next runtime slice
-- B3.2b Purchases shared feedback lifecycle: NEXT separate slice after B3.2a review, publication, and smoke acceptance.
+## Required tests
+- Focused Purchases suite twice.
+- Existing Alerts, Dashboard/Onboarding, validation, Orders, Help suites.
+- Frontend build.
+- Focused backend Purchases suite and complete backend suite with branch-only failure delta 0.

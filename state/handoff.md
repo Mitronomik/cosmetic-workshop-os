@@ -541,3 +541,67 @@ B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun 
 - Tests actually run: focused Alerts tests include asynchronous callback-routing races with injected GET/POST counters plus the required frontend regression suites, build, backend base/head comparison, and repository hygiene checks.
 - Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
 - Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2b Purchases shared-feedback lifecycle handoff
+B3.2a Alerts is merged into main. Accepted Alerts head: `ac8656c2357b50fa755fef58349501d072e298a7`; merge commit / B3.2b base: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
+
+Current B3.2b scope adds a Purchases-only shared-feedback lifecycle module and a small Purchases runtime coordinator. The lifecycle owns read request identity, snapshot server filters, local search, identity-bearing active/detached mutations, authoritative DTO validation, mutation-vs-refresh separation, and durable reconciliation obligations. Marking purchased remains explicit UI feedback only and does not create stock receipt, ingredient lots, packaging movements, or order changes.
+
+Automated evidence collected on this branch:
+- `npm --prefix frontend run test:purchase-suggestions-feedback` — run 1: obsolete eight-test suite passed.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` — run 2: obsolete eight-test suite passed.
+- `npm --prefix frontend run test:alerts-feedback` — 56 passed.
+- Related frontend suites run: dashboard/onboarding 17 passed; form-validation 19 passed; targeted-validation-update 62 passed; order-mutation-lifecycle 32 passed; order-readiness-presentation 15 passed; help-passive-regression 3 passed.
+- `npm --prefix frontend run build` passed.
+- `cd backend && pytest -q app/tests/test_purchase_suggestions.py` matched known baseline failure: 10 passed, 1 failed (`test_manual_api_smoke`).
+
+Browser smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE. This is not a browser-smoke pass; a full Block B integration browser smoke remains mandatory after all B slices.
+
+Next expected step: human review of this focused B3.2b PR, then continue remaining Block B slices; do not run per-PR external browser smoke for this slice unless the product owner changes the temporary sequencing decision.
+
+## B3.2b PR #135 runtime correction handoff
+The first reviewed PR #135 head was blocked because it added Purchases lifecycle modules but did not migrate the real `/purchase-suggestions` runtime. The route still used legacy direct list/mutation Promise chains, coupled list loading to reference data, and allowed reconciliation behavior that could run while the route was away.
+
+Correction work now wires the Purchases runtime coordinator into `frontend/src/main.ts`, routes Purchases list reads and mutations through lifecycle ownership, derives busy state from lifecycle presentation, detaches active mutations on route leave, keeps reconciliation route-owned, and separates manual-form reference loading from list loading. Mark purchased still only closes the recommendation and does not create stock records.
+
+Current automated evidence on the correction head:
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 1: obsolete eight-test suite passed.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 2: obsolete eight-test suite passed.
+- `npm --prefix frontend run build`: passed.
+
+Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE. This is not a browser-smoke pass.
+
+## B3.2b PR #135 route-ownership and test-evidence correction handoff
+The reviewed PR #135 head `0cf2992329b5586d898da09c5de4b9fb820da056` had connected the Purchases runtime to primary list and mutation flows, but missed production `leave()` across all navigation paths and retained shared-state announcement reconstruction plus the rejected eight-test omnibus suite.
+
+This correction adds one Purchases route-transition helper used by runtime navigation, browser `popstate`, and initial route ownership. The transition calls Purchases `enter()` only on non-Purchases → Purchases, calls `leave()` only on Purchases → non-Purchases, and preserves same-section/non-Purchases transitions without duplicate route generations. Purchases reference ownership is separated into a production-shared controller with independent ingredient and packaging owners; reference failures preserve the purchase list and manual draft. Purchases control binding is moved behind a production-shared helper that binds every rendered duplicate control while honoring disabled states.
+
+Completion feedback is now result-owned: lifecycle finish results carry the exact message for that completion, and the runtime announces only `result.message` instead of rebuilding announcements from retained visual feedback fields. Detached and stale completions do not announce or focus, and reconciliation remains route-owned.
+
+Automated evidence on the correction head:
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 1: 84 passed, 0 failed, 0 skipped.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 2: 84 passed, 0 failed, 0 skipped.
+- Related frontend regressions passed: Alerts 56, Dashboard/Onboarding 17, form-validation 19, targeted-validation-update 62, order-mutation-lifecycle 32, order-readiness-presentation 15, help-passive-regression 3.
+- `npm --prefix frontend run build` passed.
+- Focused backend Purchases suite matched known baseline: 10 passed, 1 failed (`app/tests/test_purchase_suggestions.py::test_manual_api_smoke`).
+- Complete backend suite matched known baseline: 492 passed, 4 failed, 0 skipped.
+
+Publication note: shell GitHub verification was unavailable because `gh` is not installed and this checkout has no usable GitHub remote. Block B smoke remains deferred: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+
+## B3.2b PR #135 neutral-feedback ownership correction handoff
+The reviewed published head `5dc1f247f5520737930a31e2dae5b48e1d06d1ed` still allowed the Purchases neutral message `Завершаем предыдущее действие и проверяем список…` to persist after detached settlement or reconciliation terminal states. It also contained focused tests with names that overstated direct production evidence.
+
+This correction clears detached/reconciliation neutral feedback at detached settlement, reconciliation success, and reconciliation failure without clearing retryable reconciliation obligations. The Purchases runtime still announces only result-owned completion messages. Production now uses shared helpers for feedback item presentation and form-state completion/guard behavior, so tests can verify rendered neutral disappearance and complete manual/edit draft preservation without duplicating runtime logic.
+
+Focused Purchases tests were expanded to 108 independently named checks. New coverage includes rendered neutral disappearance, retryable reconciliation failure then success, stale reconciliation protection, source-level navigation wiring evidence, production form-state draft preservation/cleanup, public reference-controller older/newer ownership sequences, and corrected binding rerender behavior. Frontend regression suites and build passed; backend verification matched the accepted baseline with branch-only failure delta 0.
+
+Publication note: this local environment still lacks `gh` and a usable GitHub `origin`, so shell publication could not verify a new published head. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+
+## B3.2b PR #135 composition-evidence correction handoff
+The reviewed published head `9a95b310d4e3d414052e2f565eecf1efd938f450` still had several focused tests whose form/reference assertions used disconnected local objects. This correction replaces those cases with a composed Purchases harness that connects `PurchaseSuggestionsFeedbackLifecycle`, `createPurchaseSuggestionsRuntime`, shared manual/edit form state, `completeManualPurchaseDraft`, `completeEditPurchaseDraft`, reference-data ownership, route ownership, deferred requests, and render/announce/focus counters.
+
+Manual and edit failure, invalid DTO, stale newer-draft, detached settlement, and valid success tests now assert the connected production form state that the runtime callbacks can actually mutate. Reference side-effect tests now assert the real lifecycle snapshot, applied filters, local search, mutation owner, reconciliation obligation, and manual draft while ingredient/packaging requests fail or settle. Settings target navigation now has source-contract coverage through `navigateToSection`.
+
+Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
