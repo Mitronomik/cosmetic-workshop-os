@@ -16,8 +16,8 @@ export type PurchaseSuggestionRuntimeDeps<T extends PurchaseSuggestionLike> = {
   render: () => void;
   announce: (text: string, kind: "polite" | "assertive") => void;
   focus: (key: string | null) => void;
-  onValidCreate?: () => void;
-  onValidUpdate?: () => void;
+  onValidCreate?: (payload: any) => void;
+  onValidUpdate?: (id: number, payload: any) => void;
 };
 export function createPurchaseSuggestionsRuntime<
   T extends PurchaseSuggestionLike,
@@ -111,8 +111,8 @@ export function createPurchaseSuggestionsRuntime<
           );
           return;
         }
-        if (r.valid && kind === "create-manual") deps.onValidCreate?.();
-        if (r.valid && kind === "update") deps.onValidUpdate?.();
+        if (r.valid && kind === "create-manual") deps.onValidCreate?.(owner.payload);
+        if (r.valid && kind === "update") deps.onValidUpdate?.(owner.owner.suggestionId, owner.payload);
         present(r);
       })
       .catch(() => {
@@ -232,7 +232,7 @@ export function createPurchaseSuggestionsRuntime<
       });
       if (s.accepted) {
         if (deps.ownsRoute()) deps.render();
-        mutation("create-manual", deps.create(payload), s);
+        mutation("create-manual", deps.create(payload), { ...s, payload });
       }
       return s;
     },
@@ -242,7 +242,7 @@ export function createPurchaseSuggestionsRuntime<
       });
       if (s.accepted) {
         if (deps.ownsRoute()) deps.render();
-        mutation("update", deps.update(id, payload), s);
+        mutation("update", deps.update(id, payload), { ...s, payload });
       }
       return s;
     },

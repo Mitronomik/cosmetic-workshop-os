@@ -26,3 +26,19 @@ export function transitionPurchaseSuggestionsRouteOwnership({
   }
   return "none" as const;
 }
+
+
+export type PurchaseNavigationCoordinatorDeps = {
+  runtime: PurchaseRouteRuntime;
+  referenceController: { leaveRoute: () => unknown };
+};
+
+export function createPurchaseSuggestionsNavigationCoordinator({ runtime, referenceController }: PurchaseNavigationCoordinatorDeps) {
+  return {
+    transition(previousSection: string | null | undefined, nextSection: string | null | undefined) {
+      const action = transitionPurchaseSuggestionsRouteOwnership({ previousSection, nextSection, runtime });
+      if (action === 'leave') referenceController.leaveRoute();
+      return action;
+    },
+  };
+}

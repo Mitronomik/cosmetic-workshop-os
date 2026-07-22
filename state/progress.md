@@ -1127,14 +1127,14 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 ## B3.2b Purchases shared-feedback lifecycle — implementation progress
 - Started from logical main baseline `4692bdfa4d5171fb270687cb385a37571a8e9e2d` containing merged B3.2a Alerts lifecycle.
 - Added focused Purchases feedback lifecycle and Purchases runtime coordinator modules with request-owned reads, identity-bearing mutations, detached settlement, authoritative DTO validation, snapshot/filter truth, local search, and reconciliation tests.
-- Added deterministic focused frontend suite `test:purchase-suggestions-feedback` and ran it twice successfully: 8 tests passed on each run.
+- Added deterministic focused frontend suite `test:purchase-suggestions-feedback` and ran it twice successfully: obsolete eight-test suite passed on each run.
 - Kept backend production files unchanged. Focused backend purchase suite was run and matched the known baseline failure `app/tests/test_purchase_suggestions.py::test_manual_api_smoke` with 10 passed / 1 failed.
 - Product-owner browser-smoke status for this B slice: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
 ## B3.2b PR #135 correction progress
 - Corrected the initial PR #135 defect where the Purchases lifecycle existed but the production route still used the old direct request chains.
 - Wired `createPurchaseSuggestionsRuntime` into `frontend/src/main.ts`, routed Purchases list reads and mutations through lifecycle ownership, removed the old chained refresh helper, separated list reads from reference loading, and made route leave detach active mutations.
-- Ran `npm --prefix frontend run test:purchase-suggestions-feedback` twice successfully after correction: 8 passed on each run.
+- Ran `npm --prefix frontend run test:purchase-suggestions-feedback` twice successfully after correction: obsolete eight-test suite passed on each run.
 - Ran `npm --prefix frontend run build` successfully after correction.
 
 ## B3.2b PR #135 route ownership, result-owned feedback, and real focused tests
@@ -1143,5 +1143,14 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Extracted Purchases reference-data ownership and Purchases control binding into production-shared modules imported by runtime code and focused tests.
 - Replaced the rejected eight-test focused suite with 84 independently named route/runtime/message/reference/binding tests using deferred injected requests and production-shared helpers.
 - Verification completed: focused Purchases suite passed twice (84/84 both runs); related frontend suites passed (Alerts 56/56, Dashboard/Onboarding 17/17, form-validation 19/19, targeted-validation-update 62/62, order-mutation-lifecycle 32/32, order-readiness-presentation 15/15, Help 3/3); frontend build passed.
+- Backend verification matched the accepted baseline: focused Purchases suite 10 passed / 1 known failed (`test_manual_api_smoke`), complete backend suite 492 passed / 4 known failed, branch-only backend failure delta 0.
+- Browser smoke status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+
+## B3.2b PR #135 neutral feedback and evidence correction
+- Corrected stale Purchases neutral feedback by clearing detached/reconciliation progress copy at terminal detached settlement and reconciliation success/failure while preserving retryable reconciliation obligations.
+- Added production-shared Purchases feedback presentation and form-state helpers used by `main.ts` and focused tests.
+- Replaced/renamed misleading focused tests and expanded the suite to 108 checks covering rendered neutral disappearance, route wiring evidence, complete manual/edit draft state, public reference ownership sequences, and binding rerender ownership.
+- Verification completed: focused Purchases suite passed twice (108/108 both runs); related frontend suites passed (Alerts 56/56, Dashboard/Onboarding 17/17, form-validation 19/19, targeted-validation-update 62/62, order-mutation-lifecycle 32/32, order-readiness-presentation 15/15, Help 3/3); frontend build passed.
 - Backend verification matched the accepted baseline: focused Purchases suite 10 passed / 1 known failed (`test_manual_api_smoke`), complete backend suite 492 passed / 4 known failed, branch-only backend failure delta 0.
 - Browser smoke status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

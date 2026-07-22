@@ -548,8 +548,8 @@ B3.2a Alerts is merged into main. Accepted Alerts head: `ac8656c2357b50fa755fef5
 Current B3.2b scope adds a Purchases-only shared-feedback lifecycle module and a small Purchases runtime coordinator. The lifecycle owns read request identity, snapshot server filters, local search, identity-bearing active/detached mutations, authoritative DTO validation, mutation-vs-refresh separation, and durable reconciliation obligations. Marking purchased remains explicit UI feedback only and does not create stock receipt, ingredient lots, packaging movements, or order changes.
 
 Automated evidence collected on this branch:
-- `npm --prefix frontend run test:purchase-suggestions-feedback` — run 1: 8 passed.
-- `npm --prefix frontend run test:purchase-suggestions-feedback` — run 2: 8 passed.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` — run 1: obsolete eight-test suite passed.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` — run 2: obsolete eight-test suite passed.
 - `npm --prefix frontend run test:alerts-feedback` — 56 passed.
 - Related frontend suites run: dashboard/onboarding 17 passed; form-validation 19 passed; targeted-validation-update 62 passed; order-mutation-lifecycle 32 passed; order-readiness-presentation 15 passed; help-passive-regression 3 passed.
 - `npm --prefix frontend run build` passed.
@@ -565,8 +565,8 @@ The first reviewed PR #135 head was blocked because it added Purchases lifecycle
 Correction work now wires the Purchases runtime coordinator into `frontend/src/main.ts`, routes Purchases list reads and mutations through lifecycle ownership, derives busy state from lifecycle presentation, detaches active mutations on route leave, keeps reconciliation route-owned, and separates manual-form reference loading from list loading. Mark purchased still only closes the recommendation and does not create stock records.
 
 Current automated evidence on the correction head:
-- `npm --prefix frontend run test:purchase-suggestions-feedback` run 1: 8 passed.
-- `npm --prefix frontend run test:purchase-suggestions-feedback` run 2: 8 passed.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 1: obsolete eight-test suite passed.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 2: obsolete eight-test suite passed.
 - `npm --prefix frontend run build`: passed.
 
 Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE. This is not a browser-smoke pass.
@@ -587,3 +587,13 @@ Automated evidence on the correction head:
 - Complete backend suite matched known baseline: 492 passed, 4 failed, 0 skipped.
 
 Publication note: shell GitHub verification was unavailable because `gh` is not installed and this checkout has no usable GitHub remote. Block B smoke remains deferred: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+
+## B3.2b PR #135 neutral-feedback ownership correction handoff
+The reviewed published head `5dc1f247f5520737930a31e2dae5b48e1d06d1ed` still allowed the Purchases neutral message `Завершаем предыдущее действие и проверяем список…` to persist after detached settlement or reconciliation terminal states. It also contained focused tests with names that overstated direct production evidence.
+
+This correction clears detached/reconciliation neutral feedback at detached settlement, reconciliation success, and reconciliation failure without clearing retryable reconciliation obligations. The Purchases runtime still announces only result-owned completion messages. Production now uses shared helpers for feedback item presentation and form-state completion/guard behavior, so tests can verify rendered neutral disappearance and complete manual/edit draft preservation without duplicating runtime logic.
+
+Focused Purchases tests were expanded to 108 independently named checks. New coverage includes rendered neutral disappearance, retryable reconciliation failure then success, stale reconciliation protection, source-level navigation wiring evidence, production form-state draft preservation/cleanup, public reference-controller older/newer ownership sequences, and corrected binding rerender behavior. Frontend regression suites and build passed; backend verification matched the accepted baseline with branch-only failure delta 0.
+
+Publication note: this local environment still lacks `gh` and a usable GitHub `origin`, so shell publication could not verify a new published head. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

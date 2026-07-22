@@ -201,8 +201,8 @@ export class PurchaseSuggestionsFeedbackLifecycle<
   };
   enterRoute() {
     this.state.routeGeneration += 1;
-    if (this.state.detachedMutation)
-      this.state.feedback.neutral = PURCHASE_RECONCILE_MESSAGE;
+    if (this.state.detachedMutation) this.state.feedback.neutral = PURCHASE_RECONCILE_MESSAGE;
+    else this.state.feedback.neutral = '';
     return this.state.routeGeneration;
   }
   leaveRoute() {
@@ -307,6 +307,7 @@ export class PurchaseSuggestionsFeedbackLifecycle<
     };
     this.state.pendingFilters = null;
     this.state.feedback.refreshWarning = "";
+    if (r.kind === "reconciliation") this.state.feedback.neutral = "";
     if (
       r.kind === "reconciliation" &&
       r.reconciliationOperationId === this.state.reconciliationOperationId
@@ -337,6 +338,7 @@ export class PurchaseSuggestionsFeedbackLifecycle<
     const present = routeGeneration === this.state.routeGeneration;
     this.state.read = null;
     this.state.pendingFilters = null;
+    this.state.feedback.neutral = '';
     if (!this.state.snapshot) {
       this.state.feedback.tone = "error";
       this.state.feedback.mutationError =
@@ -454,6 +456,7 @@ export class PurchaseSuggestionsFeedbackLifecycle<
     const o = this.state.detachedMutation;
     if (!this.exact(o, requestId, kind, suggestionId)) return reject();
     this.state.detachedMutation = null;
+    this.state.feedback.neutral = '';
     this.makeReconcile(o!);
     return { ...ok(false, "none", null, ""), settledDetached: true };
   }
@@ -489,6 +492,7 @@ export class PurchaseSuggestionsFeedbackLifecycle<
     const o = this.state.detachedMutation;
     if (!this.exact(o, requestId, "regenerate", null)) return reject();
     this.state.detachedMutation = null;
+    this.state.feedback.neutral = '';
     this.state.lastGeneration = result;
     this.makeReconcile(o!);
     return { ...ok(false, "none", null, ""), settledDetached: true };
@@ -543,6 +547,7 @@ export class PurchaseSuggestionsFeedbackLifecycle<
     const o = this.state.detachedMutation;
     if (!this.exact(o, requestId, kind, suggestionId)) return reject();
     this.state.detachedMutation = null;
+    this.state.feedback.neutral = '';
     if (this.validFor(o!, response)) this.applyAuthoritative(response);
     this.makeReconcile(o!);
     return {
