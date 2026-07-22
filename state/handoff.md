@@ -506,3 +506,38 @@ External exact-head smoke against PR #133 published head `fb7a4e5c2dd4757b61fd4b
 The confirmed root cause was narrow event binding in `bindEvents`: multiple controls can render with `data-action="reload-dashboard"` (header refresh plus initial-error retry/stale retry), while a single `querySelector` only attached the handler to the first one. This correction adds a small shared action-control binding helper and uses it for every rendered Dashboard reload/retry control and every rendered onboarding refresh control. The Dashboard and onboarding lifecycle helper remains responsible for duplicate-request rejection, stale ownership, route-owned announcements, and safe stale readable data.
 
 B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun externally against the new published PR #133 head after this correction is pushed. B3.2 Alerts and Purchases remains next after B3.1 merge; do not begin it inside B3.1.
+
+## B3.2a Alerts shared feedback lifecycle handoff
+- Scope: Alerts-only shared feedback lifecycle for `/alerts`, including list reads, refreshes, filters, regeneration, resolve/dismiss actions, route ownership, visible feedback, announcements, final focus recovery, and all reload-control binding.
+- Implementation summary: added a dependency-free Alerts lifecycle module used by runtime and focused tests; kept backend alert generation and mutation rules authoritative; applied resolve/dismiss DTOs locally without an automatic list GET.
+- Tests actually run: `npm --prefix frontend run test:alerts-feedback`; `npm --prefix frontend run build`.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED AFTER PUBLICATION.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2a correction handoff for PR #134
+- Scope: corrective update for PR #134 only; Alerts route ownership, final focus recovery, invalid DTO recovery, regeneration refresh-warning announcement, and real focused tests.
+- Implementation summary: route ownership is centralized for startup/navigation/popstate; resolve/dismiss focus selection happens after final render; wrong current-owner DTOs clear the lock with refresh-before-retry copy; stale DTOs remain ignored.
+- Tests actually run: full required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks were run locally; branch-only backend failure delta is zero.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2a second correction handoff for PR #134
+- Scope: corrective update for PR #134 only; Alerts leave-and-return active-operation races, regeneration follow-up ownership, and busy reset controls.
+- Implementation summary: re-entering Alerts invalidates stale owners and requires current-visit reconciliation; regeneration follow-up presentation is based on the follow-up read result; empty-state reset buttons receive the busy disabled state.
+- Tests actually run: full required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks were run locally; branch-only backend failure delta is zero.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2a final settlement-order correction handoff for PR #134
+- Scope: corrective update for PR #134 only; detached Alerts reads versus detached mutations, settlement-ordered re-entry reconciliation, away-settled operation reconciliation, and busy reset presentation evidence.
+- Implementation summary: re-entering Alerts during a detached mutation now waits in a neutral busy state until that mutation settles, then consumes exactly one reconciliation GET for the current visit or the next Alerts entry; detached reads remain safe for immediate fresh GETs.
+- Tests actually run: required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks are recorded in the PR evidence for this correction.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2a identity-owned detached mutation handoff for PR #134
+- Scope: corrective update for PR #134 only; identity-bearing detached Alerts mutation ownership, stale-read isolation, lossless reconciliation, regeneration counter preservation, and double-GET prevention.
+- Implementation summary: leaving Alerts moves the exact active mutation owner into detached state; only a matching request ID, kind, and alert ID can settle it; read callbacks cannot settle mutations; reconciliation is consumed only by an accepted current-visit GET.
+- Tests actually run: focused Alerts tests include asynchronous callback-routing races with injected GET/POST counters plus the required frontend regression suites, build, backend base/head comparison, and repository hygiene checks.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.

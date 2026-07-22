@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist-tests/alerts-feedback",
+    "noEmit": false
+  },
+  "include": ["src/alerts-feedback.ts"]
+}

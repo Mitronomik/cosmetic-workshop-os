@@ -1,25 +1,28 @@
 # Current focus
 
 ## Baseline
-
-PR #132 is DONE. It merged as `2ce5a4d7ba099603b733e7f2836f417da0614605` (`Merge pull request #132 from Mitronomik/codex/repair-focused-frontend-test-scripts`) and completed the focused frontend TypeScript test-compilation hardening. Focused frontend suites now compile their intended source modules with repository-local `tsc -p` configs, emit only under `frontend/dist-tests/`, and clean stale output before each run.
-
-The B1/B2 diagnostic audit remains authoritative: no demo-fixture correction is required, no backend Dashboard read-model correction is required, demo installation is explicit, duplicate demo installation is rejected safely, alert regeneration and purchase-suggestion regeneration are stable, operational source data is meaningful, and passive source reads do not mutate business data.
-
-B2 browser presentation evidence is not marked complete here unless the B3.1 exact published-head smoke passes.
+- B3.1 shared feedback for Dashboard and Onboarding: DONE.
+- Accepted B3.1 runtime head: `4eed8c2f64d7524607cf25fc696dd964c25213cc`.
+- Merge commit / B3.2a base: `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`.
+- External exact-head smoke for B3.1: PASS — FULL AUTOMATED SMOKE PASSED.
+- B1/B2 diagnostic conclusions remain authoritative.
 
 ## Active task
+- PR #134 is the active B3.2a Alerts shared feedback lifecycle correction PR.
+- Initial implementation head: `931d15c573cb821459fc4ef426cca88632c23f59`.
+- First correction head: `461c0d2a3b9e736a568b482af2e61883b694f855`.
+- Second correction head: `4b94a236037c458907b20fb425fea76e94114492`.
+- Settlement-order correction head: `871b6666dc854ccc3cfd0072dc85dc2ce8e7d589`.
+- Current work: identity-owned detached Alerts mutation correction.
+- Browser smoke remains pending after publication; PR #134 is not merge-ready until human review and external exact-published-head browser smoke pass.
 
-**B3.1 — Shared feedback for Dashboard and Onboarding** is active on the current branch.
+## Scope
+- Alerts-only shared feedback lifecycle for `/alerts`: route ownership, list reads, refreshes, filters, regeneration, resolve, dismiss, visible feedback, announcements, final focus recovery, invalid authoritative response recovery, identity-owned detached mutation settlement, settlement-ordered re-entry reconciliation, all-control binding, and focused tests.
 
-Scope is limited to:
-
-- `/` Dashboard load/manual refresh feedback and stale-data lifecycle;
-- the onboarding workspace rendered on Dashboard for start, complete step, skip, and reset mutations;
-- passive regression coverage for `/help`.
-
-Backend endpoints, backend data models, migrations, demo fixtures, alert generation, purchase-suggestion generation, orders, production, backups, reports, and unrelated routes are out of scope.
+## Non-goals
+- Do not implement `/purchase-suggestions` in this slice.
+- Do not change backend alert rules, repositories, schemas, migrations, imports, backups, stock, orders, production, recipes, clients, or demo fixtures.
+- Do not merge PR #134 or claim browser-smoke PASS in this correction.
 
 ## Next runtime slice
-
-B3.2 — Alerts and Purchases feedback migration remains next. Do not assign a future pull request number before GitHub creates it.
+- B3.2b Purchases shared feedback lifecycle: NEXT separate slice after B3.2a review, publication, and smoke acceptance.
