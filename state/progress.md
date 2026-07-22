@@ -1101,3 +1101,8 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Started from clean local exact base `70bbc783452a373afba76bcd8f6fe94c1e7ac75b` after product-owner GitHub baseline verification.
 - Implemented Alerts-only lifecycle module and focused test wiring locally for human diff review.
 - B3.2b Purchases remains the next separate slice.
+
+## B3.2a correction for PR #134
+- PR #134 correction targets existing branch `codex/implement-alerts-feedback-lifecycle` from base `70bbc783452a373afba76bcd8f6fe94c1e7ac75b` and previous published head `931d15c573cb821459fc4ef426cca88632c23f59`.
+- Correction scope: wire Alerts route ownership to startup/navigation/popstate, run focus recovery after final resolve/dismiss render, release current mutation owners on invalid authoritative DTOs, preserve regeneration success plus refresh-warning announcement, and replace placeholder Alerts tests with real behavioral coverage.
+- Browser smoke remains pending after publication; B3.2b Purchases remains a separate next slice.

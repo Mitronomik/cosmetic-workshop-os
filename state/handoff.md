@@ -513,3 +513,10 @@ B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun 
 - Tests actually run: `npm --prefix frontend run test:alerts-feedback`; `npm --prefix frontend run build`.
 - Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED AFTER PUBLICATION.
 - Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2a correction handoff for PR #134
+- Scope: corrective update for PR #134 only; Alerts route ownership, final focus recovery, invalid DTO recovery, regeneration refresh-warning announcement, and real focused tests.
+- Implementation summary: route ownership is centralized for startup/navigation/popstate; resolve/dismiss focus selection happens after final render; wrong current-owner DTOs clear the lock with refresh-before-retry copy; stale DTOs remain ignored.
+- Tests actually run: full required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks were run locally; branch-only backend failure delta is zero.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.

@@ -55,7 +55,7 @@ B2 browser presentation was not fully verified by that diagnostic audit. The cur
 
 
 ## B3.2 — Shared feedback lifecycle split
-- B3.2a Alerts shared feedback lifecycle: ACTIVE for local implementation and human diff review.
+- B3.2a Alerts shared feedback lifecycle: ACTIVE in PR #134 correction; current work addresses route ownership, final focus recovery, invalid DTO recovery, and real behavioral tests.
 - B3.2b Purchases shared feedback lifecycle: NEXT separate slice; purchases runtime is intentionally unchanged in B3.2a.
 - Scope split is narrow: each sub-slice must preserve backend-owned business rules and route-specific lifecycle ownership.
 - Each published sub-slice requires its own external exact-published-head browser smoke after publication.
