@@ -53,6 +53,13 @@ The B1/B2 diagnostic audit found no demo-fixture or backend Dashboard read-model
 
 B2 browser presentation was not fully verified by that diagnostic audit. The current focused task is frontend focused-test infrastructure repair, with no runtime product behavior changes. B3.1 — Shared feedback for Dashboard, Onboarding and Help — remains the next runtime slice after this repair. No B1 or B2 implementation PR is active, and no future PR number is assigned.
 
+
+## B3.2 — Shared feedback lifecycle split
+- B3.2a Alerts shared feedback lifecycle: ACTIVE for local implementation and human diff review.
+- B3.2b Purchases shared feedback lifecycle: NEXT separate slice; purchases runtime is intentionally unchanged in B3.2a.
+- Scope split is narrow: each sub-slice must preserve backend-owned business rules and route-specific lifecycle ownership.
+- Each published sub-slice requires its own external exact-published-head browser smoke after publication.
+
 ## 4. Неизменяемые продуктовые правила
 
 Каждый slice обязан сохранять:
@@ -699,7 +706,7 @@ Base SHA: `c6d87df635a5cf7d063b43ffc16dc02d64e08103`. PR #123 / A3.8 is merged w
 
 ## B3.1 — Shared feedback for Dashboard and Onboarding
 
-Status: ACTIVE in branch; not DONE until merge and exact published-head verification.
+Status: DONE — runtime head `4eed8c2f64d7524607cf25fc696dd964c25213cc`, merge commit `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`, external exact-head smoke PASS.
 
 Baseline: PR #132 is DONE at merge commit `2ce5a4d7ba099603b733e7f2836f417da0614605`; focused frontend test-compilation hardening is complete.
 

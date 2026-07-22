@@ -1,25 +1,24 @@
 # Current focus
 
 ## Baseline
-
-PR #132 is DONE. It merged as `2ce5a4d7ba099603b733e7f2836f417da0614605` (`Merge pull request #132 from Mitronomik/codex/repair-focused-frontend-test-scripts`) and completed the focused frontend TypeScript test-compilation hardening. Focused frontend suites now compile their intended source modules with repository-local `tsc -p` configs, emit only under `frontend/dist-tests/`, and clean stale output before each run.
-
-The B1/B2 diagnostic audit remains authoritative: no demo-fixture correction is required, no backend Dashboard read-model correction is required, demo installation is explicit, duplicate demo installation is rejected safely, alert regeneration and purchase-suggestion regeneration are stable, operational source data is meaningful, and passive source reads do not mutate business data.
-
-B2 browser presentation evidence is not marked complete here unless the B3.1 exact published-head smoke passes.
+- B3.1 shared feedback for Dashboard and Onboarding: DONE.
+- Accepted B3.1 runtime head: `4eed8c2f64d7524607cf25fc696dd964c25213cc`.
+- Merge commit / local implementation base: `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`.
+- External exact-head smoke for B3.1: PASS — FULL AUTOMATED SMOKE PASSED.
+- B1/B2 diagnostic conclusions remain authoritative.
+- Managed runner had no `origin` remote; product owner independently verified GitHub `main` is identical to `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`.
 
 ## Active task
+- B3.2a Alerts shared feedback lifecycle: ACTIVE for local implementation and human diff review.
+- No future PR number is assigned.
 
-**B3.1 — Shared feedback for Dashboard and Onboarding** is active on the current branch.
+## Scope
+- Alerts-only shared feedback lifecycle for `/alerts`: list reads, refreshes, filters, regeneration, resolve, dismiss, route ownership, visible feedback, announcements, focus recovery, all-control binding, and focused tests.
 
-Scope is limited to:
-
-- `/` Dashboard load/manual refresh feedback and stale-data lifecycle;
-- the onboarding workspace rendered on Dashboard for start, complete step, skip, and reset mutations;
-- passive regression coverage for `/help`.
-
-Backend endpoints, backend data models, migrations, demo fixtures, alert generation, purchase-suggestion generation, orders, production, backups, reports, and unrelated routes are out of scope.
+## Non-goals
+- Do not implement `/purchase-suggestions` in this slice.
+- Do not change backend alert rules, repositories, schemas, migrations, imports, backups, stock, orders, production, recipes, clients, or demo fixtures.
+- Do not push, create a PR, call `make_pr`, or claim exact-published-head smoke.
 
 ## Next runtime slice
-
-B3.2 — Alerts and Purchases feedback migration remains next. Do not assign a future pull request number before GitHub creates it.
+- B3.2b Purchases shared feedback lifecycle: NEXT separate slice after B3.2a human review/publication.

@@ -506,3 +506,10 @@ External exact-head smoke against PR #133 published head `fb7a4e5c2dd4757b61fd4b
 The confirmed root cause was narrow event binding in `bindEvents`: multiple controls can render with `data-action="reload-dashboard"` (header refresh plus initial-error retry/stale retry), while a single `querySelector` only attached the handler to the first one. This correction adds a small shared action-control binding helper and uses it for every rendered Dashboard reload/retry control and every rendered onboarding refresh control. The Dashboard and onboarding lifecycle helper remains responsible for duplicate-request rejection, stale ownership, route-owned announcements, and safe stale readable data.
 
 B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun externally against the new published PR #133 head after this correction is pushed. B3.2 Alerts and Purchases remains next after B3.1 merge; do not begin it inside B3.1.
+
+## B3.2a Alerts shared feedback lifecycle handoff
+- Scope: Alerts-only shared feedback lifecycle for `/alerts`, including list reads, refreshes, filters, regeneration, resolve/dismiss actions, route ownership, visible feedback, announcements, final focus recovery, and all reload-control binding.
+- Implementation summary: added a dependency-free Alerts lifecycle module used by runtime and focused tests; kept backend alert generation and mutation rules authoritative; applied resolve/dismiss DTOs locally without an automatic list GET.
+- Tests actually run: `npm --prefix frontend run test:alerts-feedback`; `npm --prefix frontend run build`.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED AFTER PUBLICATION.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.

@@ -1092,3 +1092,12 @@ Exact-head browser smoke on published PR #133 head `fb7a4e5c2dd4757b61fd4be07c8c
 Root cause: Dashboard rendered multiple `data-action="reload-dashboard"` controls, but runtime event binding used a single `querySelector`, wiring only the first matching control. The correction binds every rendered Dashboard reload/retry control and every rendered onboarding refresh control while preserving the existing B3.1 lifecycle helper ownership and duplicate-request protection.
 
 B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser smoke is rerun against the new published head and passes. B3.2 Alerts and Purchases remains next after B3.1 merge.
+
+## B3.1 shared feedback completion evidence
+- B3.1 Dashboard and Onboarding shared feedback lifecycle is DONE at runtime head `4eed8c2f64d7524607cf25fc696dd964c25213cc` and merge commit `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`.
+- External exact-head browser smoke for B3.1 passed: PASS — FULL AUTOMATED SMOKE PASSED.
+
+## B3.2a Alerts shared feedback lifecycle local implementation evidence
+- Started from clean local exact base `70bbc783452a373afba76bcd8f6fe94c1e7ac75b` after product-owner GitHub baseline verification.
+- Implemented Alerts-only lifecycle module and focused test wiring locally for human diff review.
+- B3.2b Purchases remains the next separate slice.
