@@ -1123,3 +1123,10 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Completed local Alerts-only correction replaces boolean detached mutation state with identity-bearing ownership, exact detached settlement checks, read/mutation completion separation, and lossless accepted-read reconciliation consumption.
 - Focused Alerts tests include asynchronous race coverage for stale reads plus detached resolve/dismiss/regeneration, regeneration route orders, duplicate callbacks, wrong identity, invalid DTOs, and preservation of detached regeneration counters.
 - Browser smoke remains pending; B3.2b Purchases remains separate and blocked until B3.2a acceptance.
+
+## B3.2b Purchases shared-feedback lifecycle — implementation progress
+- Started from logical main baseline `4692bdfa4d5171fb270687cb385a37571a8e9e2d` containing merged B3.2a Alerts lifecycle.
+- Added focused Purchases feedback lifecycle and Purchases runtime coordinator modules with request-owned reads, identity-bearing mutations, detached settlement, authoritative DTO validation, snapshot/filter truth, local search, and reconciliation tests.
+- Added deterministic focused frontend suite `test:purchase-suggestions-feedback` and ran it twice successfully: 8 tests passed on each run.
+- Kept backend production files unchanged. Focused backend purchase suite was run and matched the known baseline failure `app/tests/test_purchase_suggestions.py::test_manual_api_smoke` with 10 passed / 1 failed.
+- Product-owner browser-smoke status for this B slice: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

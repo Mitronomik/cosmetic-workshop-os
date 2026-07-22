@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist-tests/purchase-suggestions-feedback", "noEmit": false },
+  "include": ["src/purchase-suggestions-feedback.ts", "src/purchase-suggestions-runtime.ts"]
+}

@@ -1,28 +1,34 @@
 # Current focus
 
-## Baseline
-- B3.1 shared feedback for Dashboard and Onboarding: DONE.
-- Accepted B3.1 runtime head: `4eed8c2f64d7524607cf25fc696dd964c25213cc`.
-- Merge commit / B3.2a base: `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`.
-- External exact-head smoke for B3.1: PASS — FULL AUTOMATED SMOKE PASSED.
-- B1/B2 diagnostic conclusions remain authoritative.
+## Active slice
+- B3.2a Alerts: merged.
+- B3.2b Purchases: active.
+- Base: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
-## Active task
-- PR #134 is the active B3.2a Alerts shared feedback lifecycle correction PR.
-- Initial implementation head: `931d15c573cb821459fc4ef426cca88632c23f59`.
-- First correction head: `461c0d2a3b9e736a568b482af2e61883b694f855`.
-- Second correction head: `4b94a236037c458907b20fb425fea76e94114492`.
-- Settlement-order correction head: `871b6666dc854ccc3cfd0072dc85dc2ce8e7d589`.
-- Current work: identity-owned detached Alerts mutation correction.
-- Browser smoke remains pending after publication; PR #134 is not merge-ready until human review and external exact-published-head browser smoke pass.
+## Goal
+Implement a Purchases-only shared-feedback lifecycle for `/purchase-suggestions` covering request ownership, snapshot/filter truth, local search, mutation identity, detached settlement, authoritative DTO handling, and reconciliation.
 
-## Scope
-- Alerts-only shared feedback lifecycle for `/alerts`: route ownership, list reads, refreshes, filters, regeneration, resolve, dismiss, visible feedback, announcements, final focus recovery, invalid authoritative response recovery, identity-owned detached mutation settlement, settlement-ordered re-entry reconciliation, all-control binding, and focused tests.
+## Allowed scope
+- `frontend/src/main.ts`
+- `frontend/src/purchase-suggestions-feedback.ts`
+- `frontend/src/purchase-suggestions-runtime.ts`
+- Focused Purchases lifecycle tests and frontend package test script.
+- Current implementation/state documentation for the temporary Block B smoke sequencing decision.
 
 ## Non-goals
-- Do not implement `/purchase-suggestions` in this slice.
-- Do not change backend alert rules, repositories, schemas, migrations, imports, backups, stock, orders, production, recipes, clients, or demo fixtures.
-- Do not merge PR #134 or claim browser-smoke PASS in this correction.
+- No backend purchase business-rule changes.
+- No migrations or schema changes.
+- No supplier management, online ordering, invoices, payment tracking, forecasts, PDFs, or stock receipt automation.
+- No Alerts runtime behavior changes.
+- No generic app-wide request framework.
 
-## Next runtime slice
-- B3.2b Purchases shared feedback lifecycle: NEXT separate slice after B3.2a review, publication, and smoke acceptance.
+## Required tests
+- Focused Purchases suite twice.
+- Existing Alerts lifecycle suite.
+- Dashboard/onboarding, validation, order, help regression suites.
+- Frontend build.
+- Focused backend purchase suite and complete backend suite comparison when feasible.
+
+## Acceptance
+The slice is acceptable only if Purchases feedback is understandable and safe, no browser-smoke pass is claimed, backend-owned purchase rules remain backend-owned, and Block B integration smoke remains scheduled after all B slices.

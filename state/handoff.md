@@ -541,3 +541,20 @@ B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun 
 - Tests actually run: focused Alerts tests include asynchronous callback-routing races with injected GET/POST counters plus the required frontend regression suites, build, backend base/head comparison, and repository hygiene checks.
 - Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
 - Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2b Purchases shared-feedback lifecycle handoff
+B3.2a Alerts is merged into main. Accepted Alerts head: `ac8656c2357b50fa755fef58349501d072e298a7`; merge commit / B3.2b base: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
+
+Current B3.2b scope adds a Purchases-only shared-feedback lifecycle module and a small Purchases runtime coordinator. The lifecycle owns read request identity, snapshot server filters, local search, identity-bearing active/detached mutations, authoritative DTO validation, mutation-vs-refresh separation, and durable reconciliation obligations. Marking purchased remains explicit UI feedback only and does not create stock receipt, ingredient lots, packaging movements, or order changes.
+
+Automated evidence collected on this branch:
+- `npm --prefix frontend run test:purchase-suggestions-feedback` — run 1: 8 passed.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` — run 2: 8 passed.
+- `npm --prefix frontend run test:alerts-feedback` — 56 passed.
+- Related frontend suites run: dashboard/onboarding 17 passed; form-validation 19 passed; targeted-validation-update 62 passed; order-mutation-lifecycle 32 passed; order-readiness-presentation 15 passed; help-passive-regression 3 passed.
+- `npm --prefix frontend run build` passed.
+- `cd backend && pytest -q app/tests/test_purchase_suggestions.py` matched known baseline failure: 10 passed, 1 failed (`test_manual_api_smoke`).
+
+Browser smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE. This is not a browser-smoke pass; a full Block B integration browser smoke remains mandatory after all B slices.
+
+Next expected step: human review of this focused B3.2b PR, then continue remaining Block B slices; do not run per-PR external browser smoke for this slice unless the product owner changes the temporary sequencing decision.

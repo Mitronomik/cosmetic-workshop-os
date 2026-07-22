@@ -54,7 +54,17 @@ The B1/B2 diagnostic audit found no demo-fixture or backend Dashboard read-model
 B2 browser presentation was not fully verified by that diagnostic audit. The current focused task is frontend focused-test infrastructure repair, with no runtime product behavior changes. B3.1 — Shared feedback for Dashboard, Onboarding and Help — remains the next runtime slice after this repair. No B1 or B2 implementation PR is active, and no future PR number is assigned.
 
 
-## B3.2 — Shared feedback lifecycle split
+##
+### B3.2 Alerts and Purchases shared-feedback lifecycle status
+- B3.2a Alerts: DONE.
+- PR #134 merged.
+- Accepted Alerts head: `ac8656c2357b50fa755fef58349501d072e298a7`.
+- Main merge commit: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
+- B3.2b Purchases: active.
+- Product-owner temporary sequencing decision: per-PR browser smoke for the remaining B slices is deferred.
+- Required smoke gate remains: one full Block B integration browser smoke after all B slices are implemented.
+
+B3.2 — Shared feedback lifecycle split
 - B3.2a Alerts shared feedback lifecycle: ACTIVE in PR #134 correction; current work addresses route ownership, final focus recovery, invalid DTO recovery, and real behavioral tests.
 - B3.2b Purchases shared feedback lifecycle: NEXT separate slice; purchases runtime is intentionally unchanged in B3.2a.
 - Scope split is narrow: each sub-slice must preserve backend-owned business rules and route-specific lifecycle ownership.
