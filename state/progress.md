@@ -1136,3 +1136,12 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Wired `createPurchaseSuggestionsRuntime` into `frontend/src/main.ts`, routed Purchases list reads and mutations through lifecycle ownership, removed the old chained refresh helper, separated list reads from reference loading, and made route leave detach active mutations.
 - Ran `npm --prefix frontend run test:purchase-suggestions-feedback` twice successfully after correction: 8 passed on each run.
 - Ran `npm --prefix frontend run build` successfully after correction.
+
+## B3.2b PR #135 route ownership, result-owned feedback, and real focused tests
+- Corrected the reviewed PR #135 head `0cf2992329b5586d898da09c5de4b9fb820da056` by adding a production-shared Purchases route transition, removing duplicate Purchases entry from `loadSectionData`, wiring normal navigation, browser `popstate`, and initial boot through that route transition, and keeping Purchases reference ownership invalidated on route leave.
+- Replaced shared-state announcement reconstruction with result-owned lifecycle messages; the runtime now announces only the exact message returned by the accepted completion result.
+- Extracted Purchases reference-data ownership and Purchases control binding into production-shared modules imported by runtime code and focused tests.
+- Replaced the rejected eight-test focused suite with 84 independently named route/runtime/message/reference/binding tests using deferred injected requests and production-shared helpers.
+- Verification completed: focused Purchases suite passed twice (84/84 both runs); related frontend suites passed (Alerts 56/56, Dashboard/Onboarding 17/17, form-validation 19/19, targeted-validation-update 62/62, order-mutation-lifecycle 32/32, order-readiness-presentation 15/15, Help 3/3); frontend build passed.
+- Backend verification matched the accepted baseline: focused Purchases suite 10 passed / 1 known failed (`test_manual_api_smoke`), complete backend suite 492 passed / 4 known failed, branch-only backend failure delta 0.
+- Browser smoke status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

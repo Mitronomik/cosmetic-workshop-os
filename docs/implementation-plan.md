@@ -60,6 +60,7 @@ B2 browser presentation was not fully verified by that diagnostic audit. The cur
 - Accepted Alerts head: `ac8656c2357b50fa755fef58349501d072e298a7`.
 - Main merge commit: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
 - B3.2b Purchases: ACTIVE in PR #135.
+- Current PR #135 correction: route ownership, result-owned feedback and real focused route/runtime/reference/binding tests.
 - Product-owner temporary sequencing decision: per-PR browser smoke for the remaining B slices is deferred.
 - Required smoke gate remains: one full Block B integration browser smoke after all Block B slices are implemented.
 - Scope split is narrow: each sub-slice must preserve backend-owned business rules and route-specific lifecycle ownership.

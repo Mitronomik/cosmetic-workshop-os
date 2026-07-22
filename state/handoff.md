@@ -570,3 +570,20 @@ Current automated evidence on the correction head:
 - `npm --prefix frontend run build`: passed.
 
 Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE. This is not a browser-smoke pass.
+
+## B3.2b PR #135 route-ownership and test-evidence correction handoff
+The reviewed PR #135 head `0cf2992329b5586d898da09c5de4b9fb820da056` had connected the Purchases runtime to primary list and mutation flows, but missed production `leave()` across all navigation paths and retained shared-state announcement reconstruction plus the rejected eight-test omnibus suite.
+
+This correction adds one Purchases route-transition helper used by runtime navigation, browser `popstate`, and initial route ownership. The transition calls Purchases `enter()` only on non-Purchases → Purchases, calls `leave()` only on Purchases → non-Purchases, and preserves same-section/non-Purchases transitions without duplicate route generations. Purchases reference ownership is separated into a production-shared controller with independent ingredient and packaging owners; reference failures preserve the purchase list and manual draft. Purchases control binding is moved behind a production-shared helper that binds every rendered duplicate control while honoring disabled states.
+
+Completion feedback is now result-owned: lifecycle finish results carry the exact message for that completion, and the runtime announces only `result.message` instead of rebuilding announcements from retained visual feedback fields. Detached and stale completions do not announce or focus, and reconciliation remains route-owned.
+
+Automated evidence on the correction head:
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 1: 84 passed, 0 failed, 0 skipped.
+- `npm --prefix frontend run test:purchase-suggestions-feedback` run 2: 84 passed, 0 failed, 0 skipped.
+- Related frontend regressions passed: Alerts 56, Dashboard/Onboarding 17, form-validation 19, targeted-validation-update 62, order-mutation-lifecycle 32, order-readiness-presentation 15, help-passive-regression 3.
+- `npm --prefix frontend run build` passed.
+- Focused backend Purchases suite matched known baseline: 10 passed, 1 failed (`app/tests/test_purchase_suggestions.py::test_manual_api_smoke`).
+- Complete backend suite matched known baseline: 492 passed, 4 failed, 0 skipped.
+
+Publication note: shell GitHub verification was unavailable because `gh` is not installed and this checkout has no usable GitHub remote. Block B smoke remains deferred: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

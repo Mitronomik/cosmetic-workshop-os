@@ -3,19 +3,22 @@
 ## Active slice
 - Existing PR: #135 — Add Purchases shared-feedback lifecycle (B3.2b).
 - Existing published branch: `codex/add-purchases-shared-feedback-lifecycle`.
-- Reviewed starting head: `cc74c3a2e3d6773c1feac96726c486204d16fd40`.
+- Reviewed starting head: `0cf2992329b5586d898da09c5de4b9fb820da056`.
 - Base: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
 - B3.2a Alerts: merged.
 - B3.2b Purchases: active correction.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
 ## Correction goal
-Complete the real `/purchase-suggestions` runtime migration so production actions use the Purchases lifecycle/runtime coordinator instead of the old direct request chains.
+Complete the PR #135 correction for centralized Purchases route ownership, result-owned completion messages, production-shared reference-data ownership, production-shared control binding, and real focused tests that replace the rejected eight-test suite.
 
 ## Allowed files
 - `frontend/src/main.ts`
 - `frontend/src/purchase-suggestions-feedback.ts`
 - `frontend/src/purchase-suggestions-runtime.ts`
+- `frontend/src/purchase-suggestions-route.ts`
+- `frontend/src/purchase-suggestions-reference-data.ts`
+- `frontend/src/purchase-suggestions-bindings.ts`
 - `frontend/test/purchase-suggestions-feedback.test.mjs`
 - `frontend/tsconfig.test.purchase-suggestions-feedback.json`
 - `frontend/package.json`
