@@ -3,14 +3,14 @@
 ## Active slice
 - Existing PR: #135 — Add Purchases shared-feedback lifecycle (B3.2b).
 - Existing published branch: `codex/add-purchases-shared-feedback-lifecycle`.
-- Reviewed starting head: `5dc1f247f5520737930a31e2dae5b48e1d06d1ed`.
+- Reviewed starting head: `9a95b310d4e3d414052e2f565eecf1efd938f450`.
 - Base: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
 - B3.2a Alerts: merged.
 - B3.2b Purchases: active correction.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
 ## Correction goal
-Complete the PR #135 correction for non-sticky neutral feedback ownership, retryable reconciliation without stale in-progress copy, production-shared route/form/render/reference evidence, and corrected focused tests that replace misleading placeholder-style assertions.
+Complete the PR #135 correction for production-composed Purchases test evidence that wires manual/edit form state to runtime callbacks, verifies reference side-effect isolation against the real lifecycle/form state, covers Settings target navigation, and preserves accepted neutral-feedback behavior.
 
 ## Allowed files
 - `frontend/src/main.ts`

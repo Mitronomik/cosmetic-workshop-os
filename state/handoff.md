@@ -597,3 +597,11 @@ This correction clears detached/reconciliation neutral feedback at detached sett
 Focused Purchases tests were expanded to 108 independently named checks. New coverage includes rendered neutral disappearance, retryable reconciliation failure then success, stale reconciliation protection, source-level navigation wiring evidence, production form-state draft preservation/cleanup, public reference-controller older/newer ownership sequences, and corrected binding rerender behavior. Frontend regression suites and build passed; backend verification matched the accepted baseline with branch-only failure delta 0.
 
 Publication note: this local environment still lacks `gh` and a usable GitHub `origin`, so shell publication could not verify a new published head. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+
+## B3.2b PR #135 composition-evidence correction handoff
+The reviewed published head `9a95b310d4e3d414052e2f565eecf1efd938f450` still had several focused tests whose form/reference assertions used disconnected local objects. This correction replaces those cases with a composed Purchases harness that connects `PurchaseSuggestionsFeedbackLifecycle`, `createPurchaseSuggestionsRuntime`, shared manual/edit form state, `completeManualPurchaseDraft`, `completeEditPurchaseDraft`, reference-data ownership, route ownership, deferred requests, and render/announce/focus counters.
+
+Manual and edit failure, invalid DTO, stale newer-draft, detached settlement, and valid success tests now assert the connected production form state that the runtime callbacks can actually mutate. Reference side-effect tests now assert the real lifecycle snapshot, applied filters, local search, mutation owner, reconciliation obligation, and manual draft while ingredient/packaging requests fail or settle. Settings target navigation now has source-contract coverage through `navigateToSection`.
+
+Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

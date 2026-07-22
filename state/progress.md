@@ -1154,3 +1154,10 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Verification completed: focused Purchases suite passed twice (108/108 both runs); related frontend suites passed (Alerts 56/56, Dashboard/Onboarding 17/17, form-validation 19/19, targeted-validation-update 62/62, order-mutation-lifecycle 32/32, order-readiness-presentation 15/15, Help 3/3); frontend build passed.
 - Backend verification matched the accepted baseline: focused Purchases suite 10 passed / 1 known failed (`test_manual_api_smoke`), complete backend suite 492 passed / 4 known failed, branch-only backend failure delta 0.
 - Browser smoke status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+
+## B3.2b PR #135 production-composition test evidence
+- Replaced remaining disconnected Purchases form/reference tests with a composed harness that wires runtime callbacks to real shared form state and reference requests to the real lifecycle/form state under test.
+- Added Settings target navigation source-contract coverage for `[data-action="navigate-settings-target"]` through `navigateToSection`.
+- Verification completed: focused Purchases suite passed twice with 116/116 checks; related frontend suites and build passed; backend verification matched the accepted baseline with branch-only failure delta 0.
+- Browser smoke status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
