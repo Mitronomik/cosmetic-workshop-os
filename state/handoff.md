@@ -605,3 +605,29 @@ The reviewed published head `9a95b310d4e3d414052e2f565eecf1efd938f450` still had
 Manual and edit failure, invalid DTO, stale newer-draft, detached settlement, and valid success tests now assert the connected production form state that the runtime callbacks can actually mutate. Reference side-effect tests now assert the real lifecycle snapshot, applied filters, local search, mutation owner, reconciliation obligation, and manual draft while ingredient/packaging requests fail or settle. Settings target navigation now has source-contract coverage through `navigateToSection`.
 
 Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-22 — B3.3 handoff: local artifacts and reports shared-feedback lifecycle
+
+### Route contract matrix
+
+| Route | Initial reads | Refresh reads | Mutations | Follow-up reads | Retained result behavior |
+|---|---|---|---|---|---|
+| Backups | `GET /api/backups/status` + `GET /api/backups` | same GET pair | `POST /api/backups` | same GET pair after accepted create | previous list/status remain on refresh failure; returned backup remains as last-created |
+| Exports | `GET /api/exports/status` + `GET /api/exports` | same GET pair | `POST /api/exports` | same GET pair after accepted create | previous list/status remain on refresh failure; returned export remains as last-created |
+| Report Documents | `GET /api/report-documents/status` + `GET /api/report-documents` | same GET pair | `POST /api/report-documents/reports/overview` for Markdown/PDF | same GET pair after accepted generation | previous documents/status remain on refresh failure; returned document remains as last-created |
+| Reports | five read-only report GETs: overview, inventory, orders, production, finance | same five GETs | none | none | previous report snapshot remains on refresh failure |
+
+### Implemented ownership model
+
+- `frontend/src/local-artifacts-reports-feedback.ts` owns shared request IDs, route generations, read owners, mutation owners, detached settlement safety, loaded snapshots, retained last-created artifacts, refresh warnings, and result-owned completion messages.
+- `frontend/src/main.ts` wires Backups, Exports, Report Documents, and Reports into the shared route-ownership transition used by app navigation, `popstate`, startup/direct route, Help/settings/onboarding related navigation, sidebar, and `data-nav-section` actions.
+- Successful mutation followed by failed refresh remains success plus warning; recovery refresh uses GET only and does not repeat POST/generation.
+- Detached mutation settlement does not render, announce, or move focus for an absent route.
+- Reports remains read-only; route entry and refresh do not regenerate alerts, purchases, documents, backups, or exports.
+
+### Verification notes
+
+- Known backend baseline failures remain: `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`, `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`, `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`, `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`.
+- Local head/published head must be verified after push; this runner had no GitHub remote or `gh`.
+- Next slice: B3.4 — Recipes and Clients shared-feedback lifecycle.
+- Block B smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

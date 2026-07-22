@@ -3,6 +3,7 @@ import { applyValidationToClientForm, applyValidationToClientRecipeCompositionFo
 import { canOpenOrderProductionConfirmation, canStartOrderReadinessRequest, canStartOrderWriteRequest, clearOrderSourceValidation, createOrderMutationController, emptyOrderValidationProvenance, orderBoundOperationActive, orderOperationError, orderOperationErrorFor, orderPayloadFromDraft, orderPersistentWriteActive, orderPersistentWriteOwner, orderProductionIsClosed, orderReadinessAttemptMatches, orderReadinessRequestActive, orderReadinessResultIsCurrent, orderRequestOwnerMatches, ownerFromOrderRequest, extractProductionApiFailure, productionConfirmationFailurePresentation, productionFailureForOrder, productionReadinessFailureMessage, productionResponseBelongsToOrder, finishProductionOwnerState, restoreOrderOperationGenerationForOwnedNonMutatingFailure, type OrderContextSnapshot, type OrderOperationError, type OrderOperationState, type OrderRequestSnapshot, type OrderTransientRequestOwner, type OrderValidationProvenance } from './order-mutation-lifecycle.js';
 import { renderOrderLifecycleActions, renderOrderPersistentWriteNotice, renderOrderProductionGate, renderOrderReadinessPanel, renderOrderRowActions, type OrderLifecycleActionsInput, type ProductionReadinessResponse } from './order-readiness-presentation.js';
 import { artifactFolderLabel, artifactReason, artifactSize, localArtifactPresentation } from './local-artifact-presentation.js';
+import { bindEveryActionControl, LocalArtifactsReportsFeedbackLifecycle, transitionLocalArtifactRouteOwnership, type LocalArtifactRouteKey } from './local-artifacts-reports-feedback.js';
 import { bindActionControls, DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, selectOnboardingFocusTarget, type FocusCandidate, type OnboardingAction } from './dashboard-onboarding-feedback.js';
 import { ALERT_REGENERATION_REFRESH_WARNING_ANNOUNCEMENT, AlertsFeedbackLifecycle, alertsPresentation, bindAlertsActionControls, filterDisplayedAlerts, selectAlertFocusTarget, transitionAlertsRouteOwnership, type AlertFilters } from './alerts-feedback.js';
 import { PurchaseSuggestionsFeedbackLifecycle, purchaseSuggestionsPresentation, DEFAULT_PURCHASE_FILTERS, type PurchaseSuggestionFilters as LifecyclePurchaseSuggestionFilters } from './purchase-suggestions-feedback.js';
@@ -693,6 +694,16 @@ let packagingCatalogControls: CatalogControlState = { categorySearch: '', tagSea
 let helpUiState: HelpUiState = { search: '', category: '', selectedArticleId: 'getting-started' };
 let reportsUiState: ReportsUiState = { status: 'idle', selectedReport: 'overview', error: '', message: '', overview: null, inventory: null, orders: null, production: null, finance: null };
 let reportDocumentsUiState: ReportDocumentsUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', documentStatus: null, documents: [], lastCreatedDocument: null, reason: '' };
+
+type BackupReadSnapshot = { status: BackupStatusResponse; list: BackupListResponse };
+type ExportReadSnapshot = { status: ExportStatusResponse; list: ExportListResponse };
+type ReportDocumentReadSnapshot = { status: ReportDocumentStatusResponse; list: ReportDocumentListResponse };
+type ReportsReadSnapshot = { overview: OverviewReportResponse; inventory: InventoryReportResponse; orders: OrdersReportResponse; production: ProductionReportResponse; finance: FinanceReportResponse };
+
+const backupLifecycle = new LocalArtifactsReportsFeedbackLifecycle<BackupReadSnapshot, BackupFileResponse>({ route: 'backups', messages: { loading: 'Загружаем сведения о резервных копиях…', refreshing: 'Обновляем список резервных копий…', initialError: 'Не удалось загрузить сведения о резервных копиях. Проверьте, что локальное приложение запущено, и попробуйте снова.', refreshError: 'Не удалось обновить список резервных копий. Предыдущие сведения оставлены на экране.', refreshSuccess: 'Список резервных копий обновлён.', mutationBusy: 'Создаём резервную копию…', mutationSuccess: 'Резервная копия создана.', mutationError: 'Не удалось создать резервную копию. Проверьте, что база данных существует и локальное приложение запущено.', mutationAmbiguous: 'Не удалось получить ответ о создании резервной копии. Перед повторным созданием обновите список: файл мог быть создан локально.', invalidMutationResponse: 'Ответ о резервной копии неполный. Обновите список перед повторной попыткой.', mutationRefreshWarning: 'Резервная копия создана, но список не удалось обновить. Нажмите «Обновить», чтобы перечитать данные.' }, validateCreated: (b) => Boolean(b && b.filename && b.path) });
+const exportLifecycle = new LocalArtifactsReportsFeedbackLifecycle<ExportReadSnapshot, ExportFileResponse>({ route: 'exports', messages: { loading: 'Загружаем сведения об экспортах…', refreshing: 'Обновляем список экспортов…', initialError: 'Не удалось загрузить сведения об экспортах. Проверьте, что локальное приложение запущено, и попробуйте снова.', refreshError: 'Не удалось обновить список экспортов. Предыдущие сведения оставлены на экране.', refreshSuccess: 'Список экспортов обновлён.', mutationBusy: 'Создаём экспорт…', mutationSuccess: 'Экспорт создан.', mutationError: 'Не удалось создать экспорт. Проверьте, что база данных существует и локальное приложение запущено.', mutationAmbiguous: 'Не удалось получить ответ о создании экспорта. Перед повторным созданием обновите список: файл мог быть создан локально.', invalidMutationResponse: 'Ответ об экспорте неполный. Обновите список перед повторной попыткой.', mutationRefreshWarning: 'Экспорт создан, но список не удалось обновить. Нажмите «Обновить», чтобы перечитать данные.' }, validateCreated: (e) => Boolean(e && e.filename && e.path) });
+const reportDocumentsLifecycle = new LocalArtifactsReportsFeedbackLifecycle<ReportDocumentReadSnapshot, ReportDocumentMetadata>({ route: 'reportDocuments', messages: { loading: 'Загружаем документы отчётов…', refreshing: 'Обновляем список документов отчётов…', initialError: 'Не удалось загрузить документы отчётов. Проверьте, что приложение запущено, и попробуйте снова.', refreshError: 'Не удалось обновить список документов отчётов. Предыдущие сведения оставлены на экране.', refreshSuccess: 'Список документов отчётов обновлён.', mutationBusy: 'Создаём документ отчёта…', mutationSuccess: 'Документ создан. Его можно открыть или скачать из списка ниже.', mutationError: 'Не удалось создать документ отчёта. Данные мастерской не изменялись.', mutationAmbiguous: 'Не удалось получить ответ о создании документа. Перед повторной генерацией обновите список: файл мог быть создан локально.', invalidMutationResponse: 'Ответ о документе неполный. Обновите список перед повторной попыткой.', mutationRefreshWarning: 'Документ создан, но список не удалось обновить. Нажмите «Обновить список», чтобы перечитать данные.' }, validateCreated: (d) => Boolean(d && d.id && d.filename && d.format) });
+const reportsLifecycle = new LocalArtifactsReportsFeedbackLifecycle<ReportsReadSnapshot, never>({ route: 'reports', messages: { loading: 'Загружаем отчёты…', refreshing: 'Обновляем отчёты…', initialError: 'Не удалось загрузить отчёты. Проверьте, что приложение запущено, и попробуйте снова.', refreshError: 'Не удалось обновить отчёты. Предыдущая сводка оставлена на экране.', refreshSuccess: 'Отчёты обновлены. Показаны актуальные данные мастерской.', mutationBusy: '', mutationSuccess: '', mutationError: '', mutationAmbiguous: '', invalidMutationResponse: '', mutationRefreshWarning: '' } });
 let settingsUiState: SettingsUiState = { status: 'idle', data: null, error: '' };
 const emptyWorkshopProfile = (): WorkshopProfile => ({ workshop_name: '', master_name: '', workshop_contact_text: '', workshop_note: '' });
 let workshopProfileUiState: WorkshopProfileUiState = { status: 'idle', actionStatus: 'idle', profile: null, draft: emptyWorkshopProfile(), error: '', message: '' };
@@ -843,15 +854,15 @@ function bindEvents(root: HTMLElement) {
     });
   });
   bindActionControls(root, '[data-action="reload-dashboard"]', () => loadDashboard(true));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-reports"]')?.addEventListener('click', () => loadReports(true));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-report-documents"]')?.addEventListener('click', () => loadReportDocuments(true));
+  bindEveryActionControl(root, '[data-action="reload-reports"]', () => loadReports(true));
+  bindEveryActionControl(root, '[data-action="reload-report-documents"]', () => loadReportDocuments(true));
   root.querySelector<HTMLFormElement>('[data-form="report-document-create"]')?.addEventListener('submit', submitReportDocumentCreateForm);
   root.querySelector<HTMLInputElement>('[data-action="report-document-reason"]')?.addEventListener('input', (event) => { reportDocumentsUiState.reason = (event.currentTarget as HTMLInputElement).value.slice(0, 80); });
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-report-documents-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
   root.querySelectorAll<HTMLButtonElement>('[data-action="select-report-tab"]').forEach((button) => button.addEventListener('click', () => { reportsUiState.selectedReport = (button.dataset.report as ReportTab | undefined) ?? 'overview'; render(); }));
   root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-report-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-backups"]')?.addEventListener('click', () => loadBackups(true));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-exports"]')?.addEventListener('click', () => loadExports(true));
+  bindEveryActionControl(root, '[data-action="reload-backups"]', () => loadBackups(true));
+  bindEveryActionControl(root, '[data-action="reload-exports"]', () => loadExports(true));
   root.querySelector<HTMLButtonElement>('[data-action="reload-imports"]')?.addEventListener('click', () => loadImports(true));
   root.querySelector<HTMLButtonElement>('[data-action="reload-demo-data"]')?.addEventListener('click', () => loadDemoDataStatus(true));
   root.querySelector<HTMLButtonElement>('[data-action="show-demo-install-confirm"]')?.addEventListener('click', showDemoInstallConfirm);
@@ -1393,29 +1404,28 @@ function productionPage() {
 function productionHistoryToolbar() { return `<section class="card filter-card"><label>Поиск по истории<input data-action="filter-production-search" value="${escapeHtml(productionHistoryState.filters.search)}" placeholder="Продукт, клиент, заметка, номер заказа или партии" /></label></section>`; }
 function filteredProductionBatches() { const q=productionHistoryState.filters.search.trim().toLowerCase(); if(!q) return productionHistoryState.batches; return productionHistoryState.batches.filter((b)=>[b.product_name,b.client_name??'',b.notes,String(b.order_id),String(b.id)].some((v)=>v.toLowerCase().includes(q))); }
 function loadBackups(force = false) {
-  if (!force && (backupUiState.status === 'loading' || backupUiState.status === 'ready')) return;
-  backupUiState.status = 'loading';
-  backupUiState.error = '';
-  if (force) backupUiState.message = '';
+  const started = backupLifecycle.startRead(force || backupLifecycle.state.snapshot ? 'refresh' : 'initial');
+  if (!started.accepted) return;
+  if (force) clearFeedbackAnnouncement();
+  applyBackupLifecycleState();
   render();
   Promise.all([getBackupStatus(), getBackups()])
     .then(([status, list]) => {
-      backupUiState.status = 'ready';
-      backupUiState.backupStatus = status;
-      backupUiState.backups = list.backups;
-      backupUiState.error = '';
+      const result = backupLifecycle.finishReadSuccess(started, { status, list });
+      applyBackupLifecycleState();
+      handleLifecycleFinish(result);
       render();
     })
     .catch(() => {
-      backupUiState.status = 'error';
-      backupUiState.error = 'Не удалось загрузить сведения о резервных копиях. Проверьте, что локальное приложение запущено, и попробуйте снова.';
+      const result = backupLifecycle.finishReadFailure(started);
+      applyBackupLifecycleState();
+      handleLifecycleFinish(result);
       render();
     });
 }
 
 function submitBackupCreateForm(event: SubmitEvent) { event.preventDefault(); submitBackupCreate(); }
 function submitBackupCreate() {
-  if (backupUiState.actionStatus === 'creating') return;
   const status = backupUiState.backupStatus;
   if (!status?.database_exists) {
     backupUiState.error = 'База данных пока не найдена. Сначала запустите приложение и создайте рабочие данные.';
@@ -1423,112 +1433,73 @@ function submitBackupCreate() {
     render();
     return;
   }
+  const started = backupLifecycle.startMutation('create-backup');
+  if (!started.accepted) return;
   const rawReason = backupUiState.reason === 'custom' ? backupUiState.customReason.trim() : backupUiState.reason;
   const reason = rawReason || 'manual';
-  backupUiState.actionStatus = 'creating';
-  backupUiState.error = '';
-  backupUiState.message = '';
   clearFeedbackAnnouncement();
+  applyBackupLifecycleState();
   render();
   createBackup({ reason })
     .then((response) => {
-      backupUiState.lastCreatedBackup = response.backup;
-      backupUiState.message = `${response.message || 'Резервная копия создана.'} Файл: ${response.backup.filename}`;
-      announcePolite(backupUiState.message);
-      return Promise.all([getBackupStatus(), getBackups()])
-        .then(([statusResponse, list]) => {
-          backupUiState.backupStatus = statusResponse;
-          backupUiState.backups = list.backups;
-          backupUiState.status = 'ready';
-          backupUiState.actionStatus = 'idle';
-          render();
-        })
-        .catch(() => {
-          backupUiState.status = 'ready';
-          backupUiState.actionStatus = 'idle';
-          backupUiState.error = '';
-          backupUiState.message = `${backupUiState.message} Не удалось обновить список резервных копий. Нажмите «Обновить», чтобы перечитать данные.`;
-          render();
-        });
+      const successMessage = `${response.message || 'Резервная копия создана.'} Файл: ${response.backup?.filename ?? ''}`.trim();
+      const result = backupLifecycle.finishMutationSuccess(started, response.backup, successMessage);
+      applyBackupLifecycleState();
+      handleLifecycleFinish(result);
+      render();
+      if (result.accepted && result.needsRefresh) refreshBackupsAfterMutation();
     })
-    .catch(() => {
-      backupUiState.actionStatus = 'idle';
-      backupUiState.error = 'Не удалось создать резервную копию. Проверьте, что база данных существует и локальное приложение запущено.';
-      backupUiState.message = '';
-      announceAssertive(backupUiState.error);
+    .catch((error: unknown) => {
+      const ambiguous = error instanceof TypeError;
+      const result = backupLifecycle.finishMutationFailure(started, ambiguous);
+      applyBackupLifecycleState();
+      handleLifecycleFinish(result);
       render();
     });
 }
-
+function refreshBackupsAfterMutation() {
+  const started = backupLifecycle.startRead('mutation-refresh');
+  if (!started.accepted) return;
+  Promise.all([getBackupStatus(), getBackups()])
+    .then(([status, list]) => { const result = backupLifecycle.finishReadSuccess(started, { status, list }); applyBackupLifecycleState(); handleLifecycleFinish(result); render(); })
+    .catch(() => { const result = backupLifecycle.finishReadFailure(started); applyBackupLifecycleState(); handleLifecycleFinish(result); render(); });
+}
 
 function loadExports(force = false) {
-  if (!force && (exportUiState.status === 'loading' || exportUiState.status === 'ready')) return;
-  exportUiState.status = 'loading';
-  exportUiState.error = '';
-  if (force) exportUiState.message = '';
+  const started = exportLifecycle.startRead(force || exportLifecycle.state.snapshot ? 'refresh' : 'initial');
+  if (!started.accepted) return;
+  if (force) clearFeedbackAnnouncement();
+  applyExportLifecycleState();
   render();
   Promise.all([getExportStatus(), getExports()])
-    .then(([status, list]) => {
-      exportUiState.status = 'ready';
-      exportUiState.exportStatus = status;
-      exportUiState.exports = list.exports;
-      exportUiState.error = '';
-      render();
-    })
-    .catch(() => {
-      exportUiState.status = 'error';
-      exportUiState.error = 'Не удалось загрузить сведения об экспортах. Проверьте, что локальное приложение запущено, и попробуйте снова.';
-      render();
-    });
+    .then(([status, list]) => { const result = exportLifecycle.finishReadSuccess(started, { status, list }); applyExportLifecycleState(); handleLifecycleFinish(result); render(); })
+    .catch(() => { const result = exportLifecycle.finishReadFailure(started); applyExportLifecycleState(); handleLifecycleFinish(result); render(); });
 }
-
 function submitExportCreateForm(event: SubmitEvent) { event.preventDefault(); submitExportCreate(); }
 function submitExportCreate() {
-  if (exportUiState.actionStatus === 'creating') return;
   const status = exportUiState.exportStatus;
-  if (!status?.database_exists) {
-    exportUiState.error = 'База данных пока не найдена. Сначала запустите приложение и создайте рабочие данные.';
-    exportUiState.message = '';
-    render();
-    return;
-  }
+  if (!status?.database_exists) { exportUiState.error = 'База данных пока не найдена. Сначала запустите приложение и создайте рабочие данные.'; exportUiState.message = ''; render(); return; }
+  const started = exportLifecycle.startMutation('create-export');
+  if (!started.accepted) return;
   const rawReason = exportUiState.reason === 'custom' ? exportUiState.customReason.trim() : exportUiState.reason;
   const reason = rawReason || 'manual';
-  exportUiState.actionStatus = 'creating';
-  exportUiState.error = '';
-  exportUiState.message = '';
-  clearFeedbackAnnouncement();
-  render();
+  clearFeedbackAnnouncement(); applyExportLifecycleState(); render();
   createExport({ reason })
     .then((response) => {
-      exportUiState.lastCreatedExport = response.export;
       exportUiState.lastEntityCounts = response.entity_counts || {};
-      const successMessage = `${response.message || 'Экспорт создан.'} Файл: ${response.export.filename}`;
-      exportUiState.message = successMessage;
-      announcePolite(successMessage);
-      return Promise.all([getExportStatus(), getExports()])
-        .then(([statusResponse, list]) => {
-          exportUiState.exportStatus = statusResponse;
-          exportUiState.exports = list.exports;
-          exportUiState.status = 'ready';
-          exportUiState.actionStatus = 'idle';
-          render();
-        })
-        .catch(() => {
-          exportUiState.status = 'ready';
-          exportUiState.actionStatus = 'idle';
-          exportUiState.error = '';
-          exportUiState.message = `${successMessage} Не удалось обновить список экспортов. Нажмите «Обновить», чтобы перечитать данные.`;
-          render();
-        });
+      const successMessage = `${response.message || 'Экспорт создан.'} Файл: ${response.export?.filename ?? ''}`.trim();
+      const result = exportLifecycle.finishMutationSuccess(started, response.export, successMessage);
+      applyExportLifecycleState(); handleLifecycleFinish(result); render();
+      if (result.accepted && result.needsRefresh) refreshExportsAfterMutation();
     })
-    .catch(() => {
-      exportUiState.actionStatus = 'idle';
-      exportUiState.error = 'Не удалось создать экспорт. Проверьте, что база данных существует и локальное приложение запущено.';
-      exportUiState.message = '';
-      announceAssertive(exportUiState.error);
-      render();
-    });
+    .catch((error: unknown) => { const result = exportLifecycle.finishMutationFailure(started, error instanceof TypeError); applyExportLifecycleState(); handleLifecycleFinish(result); render(); });
+}
+function refreshExportsAfterMutation() {
+  const started = exportLifecycle.startRead('mutation-refresh');
+  if (!started.accepted) return;
+  Promise.all([getExportStatus(), getExports()])
+    .then(([status, list]) => { const result = exportLifecycle.finishReadSuccess(started, { status, list }); applyExportLifecycleState(); handleLifecycleFinish(result); render(); })
+    .catch(() => { const result = exportLifecycle.finishReadFailure(started); applyExportLifecycleState(); handleLifecycleFinish(result); render(); });
 }
 
 function exportPage() {
@@ -1893,9 +1864,58 @@ function importApplyErrorMarkup() {
   return feedbackMessage('error', importUiState.applyError, `${issueList}<p class="next-step">Рабочие данные не были частично изменены.</p>`);
 }
 
+
+function localArtifactRouteForSection(section: NavigationSection | null): LocalArtifactRouteKey | null {
+  if (section === 'Резервные копии') return 'backups';
+  if (section === 'Экспорт') return 'exports';
+  if (section === 'Документы отчетов') return 'reportDocuments';
+  if (section === 'Отчеты') return 'reports';
+  return null;
+}
+
+function applyBackupLifecycleState() {
+  const snapshot = backupLifecycle.state.snapshot?.data;
+  backupUiState.status = backupLifecycle.state.read ? 'loading' : snapshot ? 'ready' : backupLifecycle.state.feedback.error ? 'error' : backupUiState.status;
+  backupUiState.actionStatus = backupLifecycle.state.mutation && !backupLifecycle.state.mutation.detached ? 'creating' : 'idle';
+  backupUiState.error = backupLifecycle.state.feedback.error;
+  backupUiState.message = backupLifecycle.state.feedback.success;
+  if (backupLifecycle.state.feedback.warning) backupUiState.error = backupLifecycle.state.feedback.warning;
+  if (snapshot) { backupUiState.backupStatus = snapshot.status; backupUiState.backups = snapshot.list.backups; }
+  backupUiState.lastCreatedBackup = backupLifecycle.state.lastCreated;
+}
+function applyExportLifecycleState() {
+  const snapshot = exportLifecycle.state.snapshot?.data;
+  exportUiState.status = exportLifecycle.state.read ? 'loading' : snapshot ? 'ready' : exportLifecycle.state.feedback.error ? 'error' : exportUiState.status;
+  exportUiState.actionStatus = exportLifecycle.state.mutation && !exportLifecycle.state.mutation.detached ? 'creating' : 'idle';
+  exportUiState.error = exportLifecycle.state.feedback.error || exportLifecycle.state.feedback.warning;
+  exportUiState.message = exportLifecycle.state.feedback.success;
+  if (snapshot) { exportUiState.exportStatus = snapshot.status; exportUiState.exports = snapshot.list.exports; }
+  exportUiState.lastCreatedExport = exportLifecycle.state.lastCreated;
+}
+function applyReportDocumentsLifecycleState() {
+  const snapshot = reportDocumentsLifecycle.state.snapshot?.data;
+  reportDocumentsUiState.status = reportDocumentsLifecycle.state.read ? 'loading' : snapshot ? 'ready' : reportDocumentsLifecycle.state.feedback.error ? 'error' : reportDocumentsUiState.status;
+  reportDocumentsUiState.actionStatus = reportDocumentsLifecycle.state.mutation && !reportDocumentsLifecycle.state.mutation.detached ? 'creating' : 'idle';
+  reportDocumentsUiState.error = reportDocumentsLifecycle.state.feedback.error || reportDocumentsLifecycle.state.feedback.warning;
+  reportDocumentsUiState.message = reportDocumentsLifecycle.state.feedback.success;
+  if (snapshot) { reportDocumentsUiState.documentStatus = snapshot.status; reportDocumentsUiState.documents = snapshot.list.items; }
+  reportDocumentsUiState.lastCreatedDocument = reportDocumentsLifecycle.state.lastCreated;
+}
+function applyReportsLifecycleState() {
+  const snapshot = reportsLifecycle.state.snapshot?.data;
+  reportsUiState.status = reportsLifecycle.state.read ? 'loading' : snapshot ? 'ready' : reportsLifecycle.state.feedback.error ? 'error' : reportsUiState.status;
+  reportsUiState.error = reportsLifecycle.state.feedback.error || reportsLifecycle.state.feedback.warning;
+  reportsUiState.message = reportsLifecycle.state.feedback.success;
+  if (snapshot) reportsUiState = { ...reportsUiState, ...snapshot };
+}
+function applyLocalArtifactsReportsLifecycleState() { applyBackupLifecycleState(); applyExportLifecycleState(); applyReportDocumentsLifecycleState(); applyReportsLifecycleState(); }
+function handleLifecycleFinish(result: { accepted: boolean; announcement: 'none' | 'polite' | 'assertive'; message: string }) { if (!result.accepted || !result.message) return; if (result.announcement === 'assertive') announceAssertive(result.message); else if (result.announcement === 'polite') announcePolite(result.message); }
+
 function updateRouteOwnership(previousSection: NavigationSection | null, nextSection: NavigationSection) {
   transitionAlertsRouteOwnership(alertsLifecycle, previousSection ?? 'Главная', nextSection);
   purchaseRouteCoordinator.transition(previousSection, nextSection);
+  transitionLocalArtifactRouteOwnership({ backups: backupLifecycle, exports: exportLifecycle, reportDocuments: reportDocumentsLifecycle, reports: reportsLifecycle } as any, localArtifactRouteForSection(previousSection), localArtifactRouteForSection(nextSection));
+  applyLocalArtifactsReportsLifecycleState();
 }
 
 
@@ -1905,6 +1925,11 @@ function clearRouteOwnedFeedbackOnNavigation(nextSection: NavigationSection) {
   if (nextSection !== 'Главная') {
     dashboardOnboardingLifecycle.clearDashboardTransientFeedback();
     dashboardOnboardingLifecycle.clearOnboardingTransientFeedback();
+    if (nextSection !== 'Резервные копии') backupLifecycle.clearTransientFeedback();
+    if (nextSection !== 'Экспорт') exportLifecycle.clearTransientFeedback();
+    if (nextSection !== 'Документы отчетов') reportDocumentsLifecycle.clearTransientFeedback();
+    if (nextSection !== 'Отчеты') reportsLifecycle.clearTransientFeedback();
+    applyLocalArtifactsReportsLifecycleState();
     applyDashboardLifecycleState();
     applyOnboardingLifecycleState();
   }
@@ -4335,42 +4360,48 @@ function deactivateIngredient(id: number) {
 
 
 function loadReportDocuments(force = false) {
-  if (!force && (reportDocumentsUiState.status === 'loading' || reportDocumentsUiState.status === 'ready')) return;
-  reportDocumentsUiState.status = 'loading';
-  reportDocumentsUiState.error = '';
-  if (force) reportDocumentsUiState.message = '';
-  render();
+  const started = reportDocumentsLifecycle.startRead(force || reportDocumentsLifecycle.state.snapshot ? 'refresh' : 'initial');
+  if (!started.accepted) return;
+  if (force) clearFeedbackAnnouncement();
+  applyReportDocumentsLifecycleState(); render();
   Promise.all([getReportDocumentStatus(), getReportDocuments()])
-    .then(([status, list]) => { reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.error = ''; render(); })
-    .catch(() => { reportDocumentsUiState.status = 'error'; reportDocumentsUiState.error = 'Не удалось загрузить документы отчётов. Проверьте, что приложение запущено, и попробуйте снова.'; render(); });
+    .then(([status, list]) => { const result = reportDocumentsLifecycle.finishReadSuccess(started, { status, list }); applyReportDocumentsLifecycleState(); handleLifecycleFinish(result); render(); })
+    .catch(() => { const result = reportDocumentsLifecycle.finishReadFailure(started); applyReportDocumentsLifecycleState(); handleLifecycleFinish(result); render(); });
 }
 
 function submitReportDocumentCreateForm(event: SubmitEvent) { event.preventDefault(); const submitter = event.submitter instanceof HTMLButtonElement ? event.submitter : null; createReportDocumentFromUi(submitter?.dataset.format === 'pdf' ? 'pdf' : 'markdown'); }
 function createReportDocumentFromUi(format: 'markdown' | 'pdf' = 'markdown') {
-  if (reportDocumentsUiState.actionStatus === 'creating') return;
   if (!reportDocumentsUiState.documentStatus?.can_create) { reportDocumentsUiState.error = 'Создание документа сейчас недоступно.'; reportDocumentsUiState.message = ''; render(); return; }
+  const started = reportDocumentsLifecycle.startMutation('create-report-document');
+  if (!started.accepted) return;
   const reason = reportDocumentsUiState.reason.trim();
-  reportDocumentsUiState.actionStatus = 'creating'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = ''; clearFeedbackAnnouncement(); render();
+  clearFeedbackAnnouncement(); applyReportDocumentsLifecycleState(); render();
   createOverviewReportDocument({ format, ...(reason ? { reason } : {}) })
     .then((response) => {
-      reportDocumentsUiState.lastCreatedDocument = response.document;
       reportDocumentsUiState.reason = '';
       const successMessage = `${response.message || 'Документ создан.'} Его можно открыть или скачать из списка ниже.`;
-      reportDocumentsUiState.message = successMessage;
-      announcePolite(successMessage);
-      return Promise.all([getReportDocumentStatus(), getReportDocuments()])
-        .then(([status, list]) => { reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; render(); })
-        .catch(() => { reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = `${successMessage} Не удалось обновить список документов. Нажмите «Обновить список», чтобы перечитать данные.`; render(); });
+      const result = reportDocumentsLifecycle.finishMutationSuccess(started, response.document, successMessage);
+      applyReportDocumentsLifecycleState(); handleLifecycleFinish(result); render();
+      if (result.accepted && result.needsRefresh) refreshReportDocumentsAfterMutation();
     })
-    .catch((error: unknown) => { const detail = error instanceof Error && error.message && error.message !== 'API request failed' ? ` ${error.message}` : ''; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = `Не удалось создать документ отчёта. Данные мастерской не изменялись.${detail}`; reportDocumentsUiState.message = ''; announceAssertive(reportDocumentsUiState.error); render(); });
+    .catch((error: unknown) => { const result = reportDocumentsLifecycle.finishMutationFailure(started, error instanceof TypeError); applyReportDocumentsLifecycleState(); handleLifecycleFinish(result); render(); });
+}
+function refreshReportDocumentsAfterMutation() {
+  const started = reportDocumentsLifecycle.startRead('mutation-refresh');
+  if (!started.accepted) return;
+  Promise.all([getReportDocumentStatus(), getReportDocuments()])
+    .then(([status, list]) => { const result = reportDocumentsLifecycle.finishReadSuccess(started, { status, list }); applyReportDocumentsLifecycleState(); handleLifecycleFinish(result); render(); })
+    .catch(() => { const result = reportDocumentsLifecycle.finishReadFailure(started); applyReportDocumentsLifecycleState(); handleLifecycleFinish(result); render(); });
 }
 
 function loadReports(force = false) {
-  if (!force && (reportsUiState.status === 'loading' || reportsUiState.status === 'ready')) return;
-  reportsUiState.status = 'loading'; reportsUiState.error = ''; reportsUiState.message = ''; render();
+  const started = reportsLifecycle.startRead(force || reportsLifecycle.state.snapshot ? 'refresh' : 'initial');
+  if (!started.accepted) return;
+  if (force) clearFeedbackAnnouncement();
+  applyReportsLifecycleState(); render();
   Promise.all([getReportsOverview(), getInventoryReport(), getOrdersReport(), getProductionReport(), getFinanceReport()])
-    .then(([overview, inventory, orders, production, finance]) => { reportsUiState = { ...reportsUiState, status: 'ready', error: '', message: force ? 'Отчёты обновлены. Показаны актуальные данные мастерской.' : '', overview, inventory, orders, production, finance }; render(); })
-    .catch((error: unknown) => { reportsUiState.status = 'error'; const message = error instanceof Error && error.message && error.message !== 'API request failed' ? error.message : 'Не удалось загрузить отчёты. Проверьте, что приложение запущено, и попробуйте снова.'; reportsUiState.error = message; reportsUiState.message = ''; render(); });
+    .then(([overview, inventory, orders, production, finance]) => { const result = reportsLifecycle.finishReadSuccess(started, { overview, inventory, orders, production, finance }); applyReportsLifecycleState(); handleLifecycleFinish(result); render(); })
+    .catch(() => { const result = reportsLifecycle.finishReadFailure(started); applyReportsLifecycleState(); handleLifecycleFinish(result); render(); });
 }
 
 function loadInventory(force = false) {

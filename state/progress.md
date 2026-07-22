@@ -1161,3 +1161,15 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Added Settings target navigation source-contract coverage for `[data-action="navigate-settings-target"]` through `navigateToSection`.
 - Verification completed: focused Purchases suite passed twice with 116/116 checks; related frontend suites and build passed; backend verification matched the accepted baseline with branch-only failure delta 0.
 - Browser smoke status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-22 — B3.3 local artifacts and reports feedback lifecycle implementation
+
+- PR #135 is merged at `b11160cc1a06df24fa6666969154c37389e6ab65`; B3.2a Alerts and B3.2b Purchases are complete.
+- Implemented a shared local-artifacts/reports frontend lifecycle for Backups, Exports, Report Documents, and Reports with route generation, read ownership, mutation ownership where applicable, stale callback rejection, duplicate protection, retained readable snapshots, retained last-created artifacts, refresh warnings, and result-owned announcements.
+- Route contract matrix: Backups reads status + list and creates backups with a follow-up status/list GET; Exports reads status + list and creates exports with a follow-up status/list GET; Report Documents reads status + list and creates Markdown/PDF overview documents with a follow-up status/list GET; Reports reads five report endpoints and remains read-only.
+- Focused frontend suite: run 1 collected 14 / passed 14 / failed 0 / skipped 0; run 2 collected 14 / passed 14 / failed 0 / skipped 0.
+- Frontend regressions passed: dashboard/onboarding 17, help 3, alerts 56, purchases 116, form-validation 19, targeted-validation 62, order-mutation 32, order-readiness 15; frontend build passed.
+- Backend focused artifact/report command `pytest -q app/tests/test_backups_api.py app/tests/test_exports_api.py app/tests/test_reports_api.py app/tests/test_report_documents_api.py` collected 25 / passed 23 / failed 2 (known backup/export reason sanitization baseline); `pytest -q app/tests/test_reports.py app/tests/test_report_documents.py` collected 34 / passed 34.
+- Complete backend suite collected 496 / passed 492 / failed 4 / skipped 0 with known failing node IDs only; branch-only backend failure delta: 0.
+- Publication metadata is inconclusive in this runner: no GitHub remote is configured and `gh` is unavailable, so a GitHub-assigned PR number and published head could not be verified here.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

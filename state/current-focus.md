@@ -1,40 +1,14 @@
-# Current focus
+# Current focus — B3.3 local artifacts and reports shared-feedback lifecycle
 
-## Active slice
-- Existing PR: #135 — Add Purchases shared-feedback lifecycle (B3.2b).
-- Existing published branch: `codex/add-purchases-shared-feedback-lifecycle`.
-- Reviewed starting head: `9a95b310d4e3d414052e2f565eecf1efd938f450`.
-- Base: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
-- B3.2a Alerts: merged.
-- B3.2b Purchases: active correction.
+- Active slice: B3.3 — Local artifacts and reports shared-feedback lifecycle.
+- Branch: `codex/b3.3-local-artifacts-reports-feedback`.
+- Base branch: `main`.
+- Base SHA used locally: `b11160cc1a06df24fa6666969154c37389e6ab65`.
+- GitHub PR number: not verified in this runner; publication is inconclusive because no GitHub remote or `gh` CLI is configured.
+- Current local head: see final response for the post-commit SHA; publication is inconclusive in this runner.
+- Scope: `/backups`, `/exports`, `/report-documents`, `/reports`.
+- Architecture boundaries: frontend lifecycle and presentation ownership only; no backend API, service, repository, schema, migration, report-generation, PDF-generation, backup, or export behavior changes.
+- Required focused suite: `npm --prefix frontend run test:local-artifacts-reports-feedback` twice.
+- Required regressions: dashboard/onboarding, help, alerts, purchases, form validation, targeted validation, order mutation lifecycle, order readiness presentation, and frontend build.
+- Backend verification: focused backup/export/report/report-document suites and complete `pytest -q`; branch-only failure delta must remain zero against the accepted baseline failures.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
-
-## Correction goal
-Complete the PR #135 correction for production-composed Purchases test evidence that wires manual/edit form state to runtime callbacks, verifies reference side-effect isolation against the real lifecycle/form state, covers Settings target navigation, and preserves accepted neutral-feedback behavior.
-
-## Allowed files
-- `frontend/src/main.ts`
-- `frontend/src/purchase-suggestions-feedback.ts`
-- `frontend/src/purchase-suggestions-runtime.ts`
-- `frontend/src/purchase-suggestions-route.ts`
-- `frontend/src/purchase-suggestions-reference-data.ts`
-- `frontend/src/purchase-suggestions-bindings.ts`
-- `frontend/src/purchase-suggestions-form-state.ts`
-- `frontend/src/purchase-suggestions-presentation.ts`
-- `frontend/test/purchase-suggestions-feedback.test.mjs`
-- `frontend/tsconfig.test.purchase-suggestions-feedback.json`
-- `frontend/package.json`
-- `docs/implementation-plan.md`
-- `state/current-focus.md`
-- `state/handoff.md`
-- `state/progress.md`
-
-## Non-goals
-- No backend API/service/repository changes.
-- No migrations, schemas, dependencies, lock files, supplier features, stock receipt automation, Alerts runtime changes, unrelated route changes, or per-PR browser smoke.
-
-## Required tests
-- Focused Purchases suite twice.
-- Existing Alerts, Dashboard/Onboarding, validation, Orders, Help suites.
-- Frontend build.
-- Focused backend Purchases suite and complete backend suite with branch-only failure delta 0.

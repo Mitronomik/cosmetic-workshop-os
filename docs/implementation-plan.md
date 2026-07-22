@@ -722,3 +722,14 @@ Scope for this slice is intentionally narrow:
 - Passive Help Center regression coverage for search, filter, reset, article selection, and related-section navigation.
 
 B1 fixture/backend implementation and B2 backend read-model implementation are not required based on the diagnostic audit. B2 browser presentation evidence is completed only if the B3.1 exact published-head smoke actually passes. B3.2 Alerts and Purchases remains the next route batch.
+
+## B3.3 — Local artifacts and reports shared-feedback lifecycle (ACTIVE)
+
+- B3.1 is DONE: Dashboard, Onboarding, and passive Help shared-feedback lifecycle.
+- B3.2a is DONE: Alerts shared-feedback lifecycle.
+- B3.2b is DONE: Purchases shared-feedback lifecycle.
+- PR #135 is merged at `b11160cc1a06df24fa6666969154c37389e6ab65`.
+- B3.3 is active on branch `codex/b3.3-local-artifacts-reports-feedback`; publication is inconclusive in this runner because no GitHub remote or `gh` CLI is available.
+- Scope: `/backups`, `/exports`, `/report-documents`, and `/reports` only.
+- Browser smoke policy: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next slice after B3.3: B3.4 — Recipes and Clients shared-feedback lifecycle.

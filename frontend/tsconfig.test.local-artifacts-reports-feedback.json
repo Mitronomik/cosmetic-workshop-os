@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-tests/local-artifacts-reports-feedback",
+    "rootDir": "src",
+    "noEmit": false
+  },
+  "include": [
+    "src/local-artifacts-reports-feedback.ts",
+    "src/local-artifact-presentation.ts",
+    "src/dashboard-onboarding-feedback.ts",
+    "src/alerts-feedback.ts",
+    "src/purchase-suggestions-feedback.ts",
+    "src/help-passive-regression.ts"
+  ]
+}
