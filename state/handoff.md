@@ -534,3 +534,10 @@ B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun 
 - Tests actually run: required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks are recorded in the PR evidence for this correction.
 - Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
 - Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2a identity-owned detached mutation handoff for PR #134
+- Scope: corrective update for PR #134 only; identity-bearing detached Alerts mutation ownership, stale-read isolation, lossless reconciliation, regeneration counter preservation, and double-GET prevention.
+- Implementation summary: leaving Alerts moves the exact active mutation owner into detached state; only a matching request ID, kind, and alert ID can settle it; read callbacks cannot settle mutations; reconciliation is consumed only by an accepted current-visit GET.
+- Tests actually run: focused Alerts tests include asynchronous callback-routing races with injected GET/POST counters plus the required frontend regression suites, build, backend base/head comparison, and repository hygiene checks.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.

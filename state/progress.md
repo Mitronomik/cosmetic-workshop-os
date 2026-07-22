@@ -1117,3 +1117,9 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Published history before this correction: first implementation head `931d15c573cb821459fc4ef426cca88632c23f59`, first correction head `461c0d2a3b9e736a568b482af2e61883b694f855`, and second correction head `4b94a236037c458907b20fb425fea76e94114492`.
 - Correction scope: settlement-ordered reconciliation for detached Alerts mutations, durable next-entry reconciliation for away-settled operations, and executable race-order coverage while preserving Alerts-only scope.
 - Browser smoke remains pending; B3.2b Purchases remains a separate next slice.
+
+## B3.2a identity-owned detached mutation correction for PR #134
+- PR #134 remains active on `codex/implement-alerts-feedback-lifecycle`; authoritative external current head before this correction is `871b6666dc854ccc3cfd0072dc85dc2ce8e7d589`.
+- Completed local Alerts-only correction replaces boolean detached mutation state with identity-bearing ownership, exact detached settlement checks, read/mutation completion separation, and lossless accepted-read reconciliation consumption.
+- Focused Alerts tests include asynchronous race coverage for stale reads plus detached resolve/dismiss/regeneration, regeneration route orders, duplicate callbacks, wrong identity, invalid DTOs, and preservation of detached regeneration counters.
+- Browser smoke remains pending; B3.2b Purchases remains separate and blocked until B3.2a acceptance.
