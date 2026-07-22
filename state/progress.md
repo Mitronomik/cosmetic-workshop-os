@@ -1111,3 +1111,9 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - PR #134 remains active on `codex/implement-alerts-feedback-lifecycle`; base is `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`, first implementation head was `931d15c573cb821459fc4ef426cca88632c23f59`, and first correction head was `461c0d2a3b9e736a568b482af2e61883b694f855`.
 - Correction scope: Alerts route re-entry during active operations, regeneration follow-up ownership after route loss, and disabled reset controls in empty-state rendering.
 - Browser smoke remains pending; B3.2b Purchases remains separate.
+
+## B3.2a final settlement-order correction for PR #134
+- PR #134 remains active on `codex/implement-alerts-feedback-lifecycle`; base is `70bbc783452a373afba76bcd8f6fe94c1e7ac75b`.
+- Published history before this correction: first implementation head `931d15c573cb821459fc4ef426cca88632c23f59`, first correction head `461c0d2a3b9e736a568b482af2e61883b694f855`, and second correction head `4b94a236037c458907b20fb425fea76e94114492`.
+- Correction scope: settlement-ordered reconciliation for detached Alerts mutations, durable next-entry reconciliation for away-settled operations, and executable race-order coverage while preserving Alerts-only scope.
+- Browser smoke remains pending; B3.2b Purchases remains a separate next slice.

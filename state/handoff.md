@@ -527,3 +527,10 @@ B3.1 remains ACTIVE, not DONE, and not merge-ready. Browser smoke must be rerun 
 - Tests actually run: full required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks were run locally; branch-only backend failure delta is zero.
 - Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
 - Next separate slice: B3.2b Purchases shared feedback lifecycle.
+
+## B3.2a final settlement-order correction handoff for PR #134
+- Scope: corrective update for PR #134 only; detached Alerts reads versus detached mutations, settlement-ordered re-entry reconciliation, away-settled operation reconciliation, and busy reset presentation evidence.
+- Implementation summary: re-entering Alerts during a detached mutation now waits in a neutral busy state until that mutation settles, then consumes exactly one reconciliation GET for the current visit or the next Alerts entry; detached reads remain safe for immediate fresh GETs.
+- Tests actually run: required frontend checks, frontend build, base backend suite, corrected-head backend suite, and repository hygiene checks are recorded in the PR evidence for this correction.
+- Browser smoke still pending: PENDING — EXTERNAL EXACT-PUBLISHED-HEAD BROWSER SMOKE REQUIRED.
+- Next separate slice: B3.2b Purchases shared feedback lifecycle.

@@ -9,13 +9,14 @@
 
 ## Active task
 - PR #134 is the active B3.2a Alerts shared feedback lifecycle correction PR.
-- Previous published head under review: `931d15c573cb821459fc4ef426cca88632c23f59`.
-- First correction published head: `461c0d2a3b9e736a568b482af2e61883b694f855`.
-- Current correction status: second correction in progress for leave-and-return active-operation races, regeneration follow-up ownership, and busy empty-state reset controls.
+- First implementation head: `931d15c573cb821459fc4ef426cca88632c23f59`.
+- First correction head: `461c0d2a3b9e736a568b482af2e61883b694f855`.
+- Second correction head: `4b94a236037c458907b20fb425fea76e94114492`.
+- Current correction status: settlement-ordered re-entry reconciliation is active so detached mutation reconciliation GETs occur only after the original mutation settles.
 - Browser smoke remains pending after publication; PR #134 is not merge-ready until human review and external exact-published-head browser smoke pass.
 
 ## Scope
-- Alerts-only shared feedback lifecycle for `/alerts`: route ownership, list reads, refreshes, filters, regeneration, resolve, dismiss, visible feedback, announcements, final focus recovery, invalid authoritative response recovery, all-control binding, and focused tests.
+- Alerts-only shared feedback lifecycle for `/alerts`: route ownership, list reads, refreshes, filters, regeneration, resolve, dismiss, visible feedback, announcements, final focus recovery, invalid authoritative response recovery, settlement-ordered re-entry reconciliation, all-control binding, and focused tests.
 
 ## Non-goals
 - Do not implement `/purchase-suggestions` in this slice.
