@@ -53,7 +53,7 @@ export class LocalArtifactRouteRuntime<TRead, TCreated, TPayload = void> {
     this.deps.mutate(payload).then(({ created, message, commitAccepted }) => {
       const result = this.lifecycle.finishMutationSuccess(started, created, message);
       if (!result.accepted || !this.deps.ownsRoute()) { if (result.needsRefresh && this.deps.ownsRoute()) this.queueReconciliation(); return; }
-      if (!result.reconciliationRequired) commitAccepted?.(); this.deps.applyCreated?.(created); this.deps.render(); this.complete(result);
+      if (result.knownMutationSuccess) { commitAccepted?.(); this.deps.applyCreated?.(created); } this.deps.render(); this.complete(result);
       if (result.needsRefresh && !result.reconciliationRequired) this.load('mutation-refresh');
     }).catch((error) => {
       const result = this.lifecycle.finishMutationFailure(started, this.isAmbiguous(error));

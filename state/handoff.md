@@ -659,3 +659,11 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - Focus contract: create forms for Backups, Exports, and Report Documents are focusable with `tabindex="-1"`; invalid DTO recovery focuses refresh/reconciliation controls instead of disabled create controls.
 - Focused B3.3 tests include ordering scenarios, accepted-only route side effects, restored initial/stale/absent-route and same-route transition evidence, binding selector contracts, and read-only Reports coverage.
 - GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 reconciliation retry ownership correction handoff
+
+- PR: #136; branch `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before this correction `1e8a9fa8f063346cab5cb28c24c6eacf38e526a1`.
+- Corrected invariant: `reconciliationRequired` is the safety lock for create/generate controls; automatic reconciliation GET execution is permitted only when `pendingReconciliationAfterRead` represents one unconsumed post-settlement queue.
+- Snapshot-aware ordering tests now create a readable initial snapshot before mutation, then cover provisional failure before settlement, provisional failure after settlement, authoritative failure without loop, authoritative success without extra GET, and POST count staying at one.
+- Runtime result boundary now exposes `knownMutationSuccess`; `commitAccepted` and `applyCreated` run only for validated known-success mutation results after route ownership is confirmed.
+- GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

@@ -1199,3 +1199,12 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Correction scope closes remaining B3.3 gaps for detached-mutation reconciliation ordering, failed provisional reconciliation GET queueing, focusable create targets, accepted-only Export entity counts, accepted-only Report Document reason clearing, restored stale/absent and same-route tests, and dead helper cleanup.
 - GitHub PR body is intentionally not updated by this correction; the product owner will update it manually.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 reconciliation retry ownership correction
+
+- Active PR remains #136 on `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`.
+- Published head before this correction: `1e8a9fa8f063346cab5cb28c24c6eacf38e526a1`.
+- Corrected retry ownership so `reconciliationRequired` controls the mutation lock, while automatic GET execution is allowed only by one unconsumed post-settlement queue represented by `pendingReconciliationAfterRead`.
+- Added snapshot-aware focused tests proving provisional failure before settlement does not auto-retry, detached settlement later starts exactly one authoritative GET, authoritative failure does not loop, authoritative success does not add extra GETs, and validated known success is the only path to `commitAccepted`/`applyCreated`.
+- GitHub PR body remains product-owner-owned and was not updated by this correction.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

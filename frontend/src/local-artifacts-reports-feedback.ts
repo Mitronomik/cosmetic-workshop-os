@@ -9,7 +9,7 @@ export type LocalArtifactSnapshot<TRead> = { data: TRead; loadedAtRequestId: num
 export type LocalArtifactReadOwner = { requestId: number; routeGeneration: number; kind: LocalArtifactReadKind; reconciliationEpoch: number; detachedSettledEpoch: number; detachedMutationPending: boolean };
 export type LocalArtifactMutationOwner = { requestId: number; routeGeneration: number; kind: LocalArtifactMutationKind; detached: boolean };
 export type LocalArtifactStartResult = { accepted: boolean; requestId: number; routeGeneration: number; reason: string; kind?: LocalArtifactReadKind | LocalArtifactMutationKind; reconciliationEpoch?: number; detachedSettledEpoch?: number };
-export type LocalArtifactFinishResult = { accepted: boolean; detached: boolean; announcement: AnnouncementKind; message: string; focusKey: string | null; needsRefresh: boolean; reconciliationRequired: boolean; announcementOwnerKey: string };
+export type LocalArtifactFinishResult = { accepted: boolean; detached: boolean; announcement: AnnouncementKind; message: string; focusKey: string | null; needsRefresh: boolean; reconciliationRequired: boolean; announcementOwnerKey: string; knownMutationSuccess: boolean };
 
 export type LocalArtifactFeedback = { tone: FeedbackTone; neutral: string; success: string; warning: string; error: string };
 export type LocalArtifactLifecycleState<TRead, TCreated> = {
@@ -38,9 +38,9 @@ export type LocalArtifactLifecycleOptions<TCreated> = {
 };
 
 const idleFeedback = (): LocalArtifactFeedback => ({ tone: 'none', neutral: '', success: '', warning: '', error: '' });
-const ignored = (detached = false, needsRefresh = false, reconciliationRequired = false): LocalArtifactFinishResult => ({ accepted: false, detached, announcement: 'none', message: '', focusKey: null, needsRefresh, reconciliationRequired, announcementOwnerKey: '' });
+const ignored = (detached = false, needsRefresh = false, reconciliationRequired = false): LocalArtifactFinishResult => ({ accepted: false, detached, announcement: 'none', message: '', focusKey: null, needsRefresh, reconciliationRequired, announcementOwnerKey: '', knownMutationSuccess: false });
 const ownerKey = (route: LocalArtifactRouteKey, owner: { requestId: number; routeGeneration: number; kind?: string }, phase: string) => `${route}:${owner.routeGeneration}:${owner.requestId}:${owner.kind ?? 'operation'}:${phase}`;
-const accepted = (owner: { requestId: number; routeGeneration: number; kind?: string }, route: LocalArtifactRouteKey, phase: string, message: string, announcement: AnnouncementKind, focusKey: string | null, needsRefresh = false, reconciliationRequired = false, detached = false): LocalArtifactFinishResult => ({ accepted: true, detached, announcement, message, focusKey, needsRefresh, reconciliationRequired, announcementOwnerKey: ownerKey(route, owner, phase) });
+const accepted = (owner: { requestId: number; routeGeneration: number; kind?: string }, route: LocalArtifactRouteKey, phase: string, message: string, announcement: AnnouncementKind, focusKey: string | null, needsRefresh = false, reconciliationRequired = false, detached = false, knownMutationSuccess = false): LocalArtifactFinishResult => ({ accepted: true, detached, announcement, message, focusKey, needsRefresh, reconciliationRequired, announcementOwnerKey: ownerKey(route, owner, phase), knownMutationSuccess });
 
 export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
   readonly state: LocalArtifactLifecycleState<TRead, TCreated>;
@@ -83,15 +83,16 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
     if (!this.readMatches(owner)) return ignored(false, false, this.state.reconciliationRequired);
     this.state.read = null;
     this.clearNeutral();
+    const mustStartQueuedAuthoritativeRead = owner.kind === 'reconciliation' && this.state.pendingReconciliationAfterRead && !this.state.detachedMutationPending;
     if (this.state.snapshot) {
       this.state.feedback.tone = 'warning';
       this.state.feedback.warning = owner.kind === 'mutation-refresh' ? this.options.messages.mutationRefreshWarning : this.state.reconciliationRequired ? this.options.messages.reconciliationFailed : this.options.messages.refreshError;
       this.state.feedback.error = '';
       const focusKey = this.state.reconciliationRequired ? this.options.focus?.reconciliation ?? null : owner.kind === 'mutation-refresh' ? this.options.focus?.mutationRefreshWarning ?? null : null;
-      return accepted(owner, this.options.route, 'read-failure', this.state.feedback.warning, 'polite', focusKey, this.state.reconciliationRequired, this.state.reconciliationRequired);
+      return accepted(owner, this.options.route, 'read-failure', this.state.feedback.warning, 'polite', focusKey, mustStartQueuedAuthoritativeRead, this.state.reconciliationRequired);
     }
     this.state.feedback = { ...idleFeedback(), tone: 'error', error: this.options.messages.initialError };
-    return accepted(owner, this.options.route, 'initial-error', this.state.feedback.error, 'assertive', this.options.focus?.initialError ?? null, this.state.pendingReconciliationAfterRead, this.state.reconciliationRequired);
+    return accepted(owner, this.options.route, 'initial-error', this.state.feedback.error, 'assertive', this.options.focus?.initialError ?? null, mustStartQueuedAuthoritativeRead, this.state.reconciliationRequired);
   }
 
   startMutation(kind: LocalArtifactMutationKind): LocalArtifactStartResult {
@@ -120,7 +121,7 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
     this.state.lastCreated = created;
     const success = message || this.options.messages.mutationSuccess;
     this.state.feedback.tone = 'success'; this.state.feedback.success = success; this.state.feedback.error = ''; this.state.feedback.warning = '';
-    return accepted(owner, this.options.route, 'mutation-success', success, 'polite', this.options.focus?.mutationSuccess ?? null, true, false);
+    return accepted(owner, this.options.route, 'mutation-success', success, 'polite', this.options.focus?.mutationSuccess ?? null, true, false, false, true);
   }
 
   finishMutationFailure(owner: LocalArtifactStartResult, ambiguous = false): LocalArtifactFinishResult {
