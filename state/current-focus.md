@@ -1,22 +1,21 @@
-# Current focus — PR #137 B3.4+B3.5 ownership correction
+# Current focus — PR #137 detached settlement and recipe snapshot correction
 
 - PR #136 is merged; B3.3 is complete at merge commit `e7c2d97473070f361052325fd6476208629af1cc`.
-- PR #137 remains open and under review on `codex/b3.4-b3.5-core-workspace-feedback`.
+- PR #137 remains open, non-draft, and under review on `codex/b3.4-b3.5-core-workspace-feedback`.
 - Active combined slice: B3.4+B3.5 — Formula/Client Workspace plus Inventory/Catalog Workspace.
 - Starting `main` SHA: `e7c2d97473070f361052325fd6476208629af1cc`.
-- Published PR head before this correction: `8c58e5e1466f05aa27950e2157f597e3fa4414b3`.
+- Published PR head before this correction: `b95b0b293f6f381495fa9e08d36b1ad27a214252`.
 - B3.4+B3.5 is not DONE. B3.6 remains the next slice after review and merge.
 
 ## Correction under review
 
-- Read ownership is now route-, operation-, entity-context-, generation-, and request-owned.
-- A same-operation context switch explicitly supersedes the previous owner; late obsolete completion cannot apply data, feedback, announcement, or focus, and cannot leave an active owner behind.
-- Mutation completion includes exact entity context and rejected/obsolete paths release their UI and lifecycle ownership.
-- Reconciliation is an exact structured obligation containing the originating mutation, mutation context, required authoritative read operation/context, epoch, detached-settlement state, and one-shot automatic queue state.
-- Domain adapters map every migrated mutation to an existing authoritative GET surface.
-- Formula/Client manual refresh can target an exact Recipe Version, Client Wish, Client Feedback, or ClientRecipe composition obligation.
-- StockMovement obligations remain attached to the original lot. Only validated history plus balance GETs for that lot may clear the lock; reference/list/overview/wrong-lot reads cannot.
-- StockMovement still sends exactly one POST. At most one post-settlement automatic authoritative GET is consumed; failure does not loop and manual retry remains available.
+- Both production workspace runtimes now finalize every accepted mutation request exactly once, including known success, definite failure, ambiguous failure, invalid DTO, detached completion, obsolete context, and stale ownership. Rejected mutation starts do not run a finalizer.
+- Finalization is limited to route-local busy-state/control recovery and route-loader resumption. It does not apply DTOs, clear drafts/forms, announce, move focus, clear reconciliation, or retry a write.
+- Direct RecipeTemplate, RecipeVersion, Client, Ingredient, Ingredient Lot, and Packaging mutations use the same route-local finalization primitive, so leaving and returning cannot strand saving flags.
+- ClientRecipe create, composition, archive, and restore recover after detached settlement while retaining their exact reconciliation obligation.
+- RecipeTemplate detail and its RecipeVersion list now load as one context-owned atomic snapshot. Neither half is committed until both validate for the same template; a partial failure commits neither half.
+- RecipeVersion reconciliation remains a separate exact `recipe-version-list` / `template:<id>` read and updates visible versions only when that template is still selected.
+- Structured reconciliation and original-lot StockMovement safety from the prior correction remain unchanged: exactly one POST, one post-settlement automatic GET opportunity, no automatic retry loop, and manual original-lot recovery.
 
 ## Scope boundaries
 

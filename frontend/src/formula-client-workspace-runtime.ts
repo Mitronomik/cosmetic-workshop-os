@@ -6,6 +6,15 @@ import {
 } from './formula-client-workspace-feedback.js';
 import type { WorkspaceFinishResult, WorkspaceReadKind, WorkspaceStartReason } from './core-workspace-feedback.js';
 
+export type FormulaClientMutationSettlement = (result: WorkspaceFinishResult) => void;
+
+export function requestRecipeTemplateSnapshot<TTemplate, TVersions>(
+  getTemplate: () => Promise<TTemplate>,
+  getVersions: () => Promise<TVersions>,
+): Promise<readonly [TTemplate, TVersions]> {
+  return Promise.all([getTemplate(), getVersions()]);
+}
+
 export type FormulaClientRuntimeDependencies = {
   lifecycle?: FormulaClientWorkspaceFeedbackLifecycle;
   ownsRoute: (route: FormulaClientRoute) => boolean;
@@ -76,6 +85,7 @@ export class FormulaClientWorkspaceRuntime {
     apply: (value: T) => void;
     failed?: (error: unknown, ambiguous: boolean) => void;
     rejected?: (reason: WorkspaceStartReason) => void;
+    settled?: FormulaClientMutationSettlement;
   }) {
     const started = this.lifecycle.startMutation(options.route, options.operation, options.contextKey);
     if (!started.accepted) {
@@ -83,12 +93,20 @@ export class FormulaClientWorkspaceRuntime {
       return started;
     }
     this.deps.render();
-    options.request().then((value) => {
+    let request: Promise<T>;
+    try {
+      request = options.request();
+    } catch (error) {
+      request = Promise.reject(error);
+    }
+    let settlement!: WorkspaceFinishResult;
+    void request.then((value) => {
       if (options.ownsContext && !options.ownsContext()) {
-        this.lifecycle.settleMutationObsolete(started.owner);
+        settlement = this.lifecycle.settleMutationObsolete(started.owner);
         return;
       }
       const result = this.lifecycle.finishMutationSuccess(started.owner, value, options.validate, options.successMessage);
+      settlement = result;
       if (result.knownSuccess && result.canApply && this.deps.ownsRoute(options.route)) options.apply(value);
       if (result.accepted && !result.knownSuccess && result.reconciliationRequired && this.deps.ownsRoute(options.route)) {
         options.failed?.(new Error('invalid-authoritative-mutation-response'), true);
@@ -97,18 +115,19 @@ export class FormulaClientWorkspaceRuntime {
         this.deps.render();
         this.complete(result);
       }
-    }).catch((error) => {
+    }, (error) => {
       if (options.ownsContext && !options.ownsContext()) {
-        this.lifecycle.settleMutationObsolete(started.owner);
+        settlement = this.lifecycle.settleMutationObsolete(started.owner);
         return;
       }
       const result = this.lifecycle.finishMutationFailure(started.owner, error);
+      settlement = result;
       if (result.accepted && this.deps.ownsRoute(options.route)) {
         options.failed?.(error, result.reconciliationRequired);
         this.deps.render();
         this.complete(result);
       }
-    });
+    }).finally(() => options.settled?.(settlement));
     return started;
   }
 

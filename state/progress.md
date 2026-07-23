@@ -1278,3 +1278,18 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
 - Focused backend domain verification passed 186/186. Complete backend comparison collected 496: 492 passed, the same 4 accepted failures, 0 skipped; branch-only failure delta 0.
 - Publication SHA is recorded after the correction commit and push.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — PR #137 detached settlement and recipe snapshot correction
+
+- PR #137 remains open and under review; B3.4+B3.5 is not marked DONE. Published head before this correction: `b95b0b293f6f381495fa9e08d36b1ad27a214252`.
+- Added an exactly-once mutation settlement callback to both B3.4+B3.5 production runtimes. It runs only after an accepted mutation start and covers success, definite/ambiguous failure, invalid DTO, detached completion, obsolete context, and stale ownership.
+- Route-local finalizers clear busy/saving/deactivating state and restore controls without applying DTOs, clearing drafts, announcing, focusing, clearing reconciliation, or repeating the write.
+- Direct RecipeTemplate, RecipeVersion, Client, Ingredient, Ingredient Lot, and Packaging handlers use the shared route-local finalization primitive and resume GET-only reconciliation when the user has returned to the route.
+- ClientRecipe create, composition, deactivate, and restore now recover from detached settlement without leaving the route permanently blocked.
+- RecipeTemplate opening is one context-owned atomic detail-plus-version snapshot. Partial failure commits neither half, and a late Template A snapshot cannot overwrite Template B.
+- Exact RecipeVersion reconciliation remains independent and can clear only the matching `recipe-version-list` / `template:<id>` obligation; it does not overwrite another selected template.
+- Focused production-aware coverage includes every mutation settlement path, rejected-start exclusion, direct and runtime route-return recovery, retained drafts, atomic snapshot delay/failure/context-switch cases, and the existing exact StockMovement contract.
+- Final verification before publication: Formula/Client 60/60 passed twice; Inventory/Catalog 62/62 passed twice; form validation 19/19; targeted validation 62/62; Order mutation 32/32; Order readiness 15/15; Dashboard/Onboarding 17/17; Help 3/3; Alerts 56/56; Purchases 116/116; Local Artifacts/Reports 32/32; frontend build passed.
+- Focused backend domain verification passed 186/186. Complete backend comparison collected 496: 492 passed, the same 4 accepted failures, 0 skipped; branch-only failure delta 0.
+- Publication SHA is recorded after the correction commit and push.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

@@ -10,6 +10,7 @@ import {
   isStockReconciliationForLot,
 } from '../dist-tests/inventory-catalog-workspace-feedback/inventory-catalog-workspace-feedback.js';
 import { InventoryCatalogWorkspaceRuntime } from '../dist-tests/inventory-catalog-workspace-feedback/inventory-catalog-workspace-runtime.js';
+import { finalizeWorkspaceMutationUi } from '../dist-tests/inventory-catalog-workspace-feedback/core-workspace-feedback.js';
 import { bindInventoryCatalogWorkspaceControls } from '../dist-tests/inventory-catalog-workspace-feedback/inventory-catalog-workspace-bindings.js';
 import { inventoryCatalogRouteForSection, transitionInventoryCatalogRouteOwnership } from '../dist-tests/inventory-catalog-workspace-feedback/inventory-catalog-workspace-route.js';
 import { inventoryCatalogWorkspacePresentation } from '../dist-tests/inventory-catalog-workspace-feedback/inventory-catalog-workspace-presentation.js';
@@ -170,6 +171,161 @@ test('Ingredient definite failure permits the preserved draft to remain editable
   assert.equal(h.failures[0][1], false);
   assert.equal(lifecycle.reconciliationRequired('ingredients'), false);
 });
+
+test('Inventory mutation finalizer runs exactly once for all accepted outcomes and never for rejected start', async () => {
+  const cases = [
+    { name: 'known success', resolve: entity(1), validate: isInventoryEntityDto },
+    { name: 'invalid DTO', resolve: { id: 0 }, validate: isInventoryEntityDto },
+    { name: 'definite failure', reject: { status: 422 }, validate: isInventoryEntityDto },
+    { name: 'ambiguous failure', reject: new TypeError('Failed to fetch'), validate: isInventoryEntityDto },
+    { name: 'obsolete context', resolve: entity(2), validate: isInventoryEntityDto, obsolete: true },
+    { name: 'stale ownership', resolve: entity(2), validate: isInventoryEntityDto, stale: true },
+    { name: 'detached success', resolve: entity(3), validate: isInventoryEntityDto, detached: true },
+    { name: 'detached failure', reject: new TypeError('Failed to fetch'), validate: isInventoryEntityDto, detached: true },
+  ];
+  for (const scenario of cases) {
+    const { h, lifecycle, runtime } = harness('ingredients');
+    const request = deferred();
+    let ownsContext = true;
+    const settlements = [];
+    const started = runtime.mutate({
+      route: 'ingredients',
+      operation: 'ingredient-category-create',
+      contextKey: `catalog:${scenario.name}`,
+      ownsContext: () => ownsContext,
+      request: () => request.promise,
+      validate: scenario.validate,
+      successMessage: 'saved',
+      apply() {},
+      settled: (result) => settlements.push(result),
+    });
+    if (scenario.obsolete) ownsContext = false;
+    if (scenario.stale) lifecycle.cancelMutation(started.owner);
+    if (scenario.detached) {
+      lifecycle.leave('ingredients');
+      h.route = 'packaging';
+    }
+    if ('reject' in scenario) request.reject(scenario.reject);
+    else request.resolve(scenario.resolve);
+    await flush();
+    assert.equal(settlements.length, 1, scenario.name);
+  }
+
+  const { lifecycle, runtime } = harness('ingredients');
+  const active = lifecycle.startMutation('ingredients', 'ingredient-create', 'ingredient:new');
+  let requestCount = 0;
+  let settledCount = 0;
+  const rejected = runtime.mutate({
+    route: 'ingredients',
+    operation: 'ingredient-tag-create',
+    contextKey: 'ingredients:catalog',
+    request: () => { requestCount += 1; return Promise.resolve(entity(2)); },
+    validate: isInventoryEntityDto,
+    successMessage: 'saved',
+    apply() {},
+    settled: () => { settledCount += 1; },
+  });
+  assert.equal(rejected.accepted, false);
+  assert.equal(requestCount, 0);
+  assert.equal(settledCount, 0);
+  lifecycle.cancelMutation(active.owner);
+});
+
+for (const [route, operation, contextKey] of [
+  ['ingredients', 'ingredient-category-create', 'ingredients:catalog'],
+  ['ingredients', 'ingredient-assignment', 'ingredient:4'],
+  ['packaging', 'packaging-tag-create', 'packaging:catalog'],
+  ['packaging', 'packaging-assignment', 'packaging:4'],
+]) {
+  test(`${operation} detached settlement preserves the draft and permits exact route-return reconciliation`, async () => {
+    const { h, lifecycle, runtime } = harness(route);
+    const request = deferred();
+    const state = { busy: true, draft: { name: 'Черновик', tags: [2, 4] } };
+    const before = structuredClone(state.draft);
+    runtime.mutate({
+      route,
+      operation,
+      contextKey,
+      request: () => request.promise,
+      validate: isInventoryEntityDto,
+      successMessage: 'saved',
+      apply() { assert.fail('detached result must not apply'); },
+      settled: () => { state.busy = false; },
+    });
+    lifecycle.leave(route);
+    h.route = route === 'ingredients' ? 'packaging' : 'ingredients';
+    lifecycle.enter(route);
+    h.route = route;
+    request.resolve(entity(4));
+    await flush();
+    assert.equal(state.busy, false);
+    assert.deepEqual(state.draft, before);
+    const obligation = lifecycle.reconciliationObligation(route);
+    assert.ok(obligation);
+    const reconciliationRead = runtime.read({
+      route,
+      operation: obligation.readOperation,
+      kind: 'reconciliation',
+      contextKey: obligation.readContextKey,
+      request: () => Promise.resolve({ authoritative: true }),
+      validate: (value) => value.authoritative === true,
+      apply() {},
+    });
+    assert.equal(reconciliationRead.accepted, true);
+    await flush();
+    assert.equal(lifecycle.reconciliationRequired(route), false);
+  });
+}
+
+for (const [route, operation, contextKey] of [
+  ['ingredients', 'ingredient-create', 'ingredient:new'],
+  ['ingredients', 'ingredient-update', 'ingredient:4'],
+  ['ingredientLots', 'lot-create', 'lot:new'],
+  ['ingredientLots', 'lot-update', 'lot:4'],
+  ['packaging', 'packaging-create', 'packaging:new'],
+  ['packaging', 'packaging-update', 'packaging:4'],
+]) {
+  test(`${operation} direct handler finalizer clears detached busy state and resumes the exact route loader`, async () => {
+    const { h, lifecycle, runtime } = harness(route);
+    const request = deferred();
+    const owner = lifecycle.startMutation(route, operation, contextKey);
+    assert.equal(owner.accepted, true);
+    const state = { busy: true, draft: { name: 'Несохранённый черновик', amount: '12.5' }, resumeCount: 0 };
+    const before = structuredClone(state.draft);
+    void request.promise.then((value) => {
+      lifecycle.finishMutationSuccess(owner.owner, value, isInventoryEntityDto, 'saved');
+    }).finally(() => {
+      finalizeWorkspaceMutationUi({
+        clearBusy: () => { state.busy = false; },
+        ownsRoute: () => lifecycle.ownsRoute(route),
+        resumeRoute: () => { state.resumeCount += 1; },
+      });
+    });
+    lifecycle.leave(route);
+    h.route = route === 'ingredients' ? 'packaging' : 'ingredients';
+    lifecycle.enter(route);
+    h.route = route;
+    request.resolve(entity(4));
+    await flush();
+    assert.equal(state.busy, false);
+    assert.equal(state.resumeCount, 1);
+    assert.deepEqual(state.draft, before);
+    const obligation = lifecycle.reconciliationObligation(route);
+    assert.ok(obligation);
+    const reconciliationRead = runtime.read({
+      route,
+      operation: obligation.readOperation,
+      kind: 'reconciliation',
+      contextKey: obligation.readContextKey,
+      request: () => Promise.resolve({ authoritative: true }),
+      validate: (value) => value.authoritative === true,
+      apply() {},
+    });
+    assert.equal(reconciliationRead.accepted, true);
+    await flush();
+    assert.equal(lifecycle.reconciliationRequired(route), false);
+  });
+}
 
 for (const operation of ['lot-create', 'lot-update', 'lot-deactivate']) {
   test(`${operation} is owned by the selected lot context`, () => {
@@ -507,7 +663,8 @@ test('StockMovement success plus failed refresh retains accepted success and war
 test('detached StockMovement completion is silent and POST is never repeated', async () => {
   const { h, lifecycle, runtime } = harness('stockMovements');
   const post = deferred();
-  runtime.createStockMovement({ lotId: 4, create: () => { h.postCount += 1; return post.promise; }, reconcile: () => Promise.resolve(reconciliation()), applyCreated: (value) => h.created.push(value), applyReconciliation() {} });
+  let settledCount = 0;
+  runtime.createStockMovement({ lotId: 4, create: () => { h.postCount += 1; return post.promise; }, reconcile: () => Promise.resolve(reconciliation()), applyCreated: (value) => h.created.push(value), applyReconciliation() {}, settled: () => { settledCount += 1; } });
   lifecycle.leave('stockMovements');
   h.route = 'ingredients';
   post.resolve(movement());
@@ -516,6 +673,7 @@ test('detached StockMovement completion is silent and POST is never repeated', a
   assert.deepEqual(h.created, []);
   assert.deepEqual(h.announcements, []);
   assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
+  assert.equal(settledCount, 1);
 });
 
 test('detached StockMovement waits for settlement, queues one original-lot GET, does not loop, and supports manual retry', async () => {
@@ -661,6 +819,12 @@ test('main source has GET-only lot reconciliation and no Packaging movement help
   assert.match(source, /data-reconciliation-context="\$\{obligatedLotId \? `lot:\$\{obligatedLotId\}` : ''\}"/);
   assert.match(source, /stockMovementObligationLotId\(\) \?\? stockMovementsState\.selectedLotId/);
   assert.match(source, /operation: 'stock-references',\n\s+kind: retained \? 'refresh' : 'initial'/);
+  assert.match(source, /createStockMovement\(\{[\s\S]*?settled: \(result\)/);
+  assert.match(source, /operation: 'ingredient-category-create'[\s\S]*?settled: \(result\)/);
+  assert.match(source, /operation: 'packaging-assignment'[\s\S]*?settled: \(result\)/);
+  assert.match(source, /const request = isEdit \? updateIngredient[\s\S]*?\.finally\(\(\) =>/);
+  assert.match(source, /const request = isEdit \? updateIngredientLot[\s\S]*?\.finally\(\(\) =>/);
+  assert.match(source, /const request = isEdit && submittedId \? updatePackagingItem[\s\S]*?\.finally\(\(\) =>/);
   assert.doesNotMatch(source, /createPackagingStockMovement/);
   assert.doesNotMatch(source, /updateStockMovement/);
   assert.doesNotMatch(source, /deleteStockMovement/);

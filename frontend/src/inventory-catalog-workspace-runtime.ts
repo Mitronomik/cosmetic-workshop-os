@@ -8,6 +8,8 @@ import {
 } from './inventory-catalog-workspace-feedback.js';
 import type { WorkspaceFinishResult, WorkspaceReadKind, WorkspaceStartReason } from './core-workspace-feedback.js';
 
+export type InventoryCatalogMutationSettlement = (result: WorkspaceFinishResult) => void;
+
 export type InventoryCatalogRuntimeDependencies = {
   lifecycle?: InventoryCatalogWorkspaceFeedbackLifecycle;
   ownsRoute: (route: InventoryCatalogRoute) => boolean;
@@ -72,6 +74,7 @@ export class InventoryCatalogWorkspaceRuntime {
     apply: (value: T) => void;
     failed?: (error: unknown, ambiguous: boolean) => void;
     rejected?: (reason: WorkspaceStartReason) => void;
+    settled?: InventoryCatalogMutationSettlement;
   }) {
     const started = this.lifecycle.startMutation(options.route, options.operation, options.contextKey);
     if (!started.accepted) {
@@ -79,26 +82,35 @@ export class InventoryCatalogWorkspaceRuntime {
       return started;
     }
     this.deps.render();
-    options.request().then((value) => {
+    let request: Promise<T>;
+    try {
+      request = options.request();
+    } catch (error) {
+      request = Promise.reject(error);
+    }
+    let settlement!: WorkspaceFinishResult;
+    void request.then((value) => {
       if (options.ownsContext && !options.ownsContext()) {
-        this.lifecycle.settleMutationObsolete(started.owner);
+        settlement = this.lifecycle.settleMutationObsolete(started.owner);
         return;
       }
       const result = this.lifecycle.finishMutationSuccess(started.owner, value, options.validate, options.successMessage);
+      settlement = result;
       if (result.knownSuccess && result.canApply && this.deps.ownsRoute(options.route)) options.apply(value);
       if (result.accepted && !result.knownSuccess && result.reconciliationRequired && this.deps.ownsRoute(options.route)) {
         options.failed?.(new Error('invalid-authoritative-mutation-response'), true);
       }
       this.present(options.route, result);
-    }).catch((error) => {
+    }, (error) => {
       if (options.ownsContext && !options.ownsContext()) {
-        this.lifecycle.settleMutationObsolete(started.owner);
+        settlement = this.lifecycle.settleMutationObsolete(started.owner);
         return;
       }
       const result = this.lifecycle.finishMutationFailure(started.owner, error);
+      settlement = result;
       if (result.accepted && this.deps.ownsRoute(options.route)) options.failed?.(error, result.reconciliationRequired);
       this.present(options.route, result);
-    });
+    }).finally(() => options.settled?.(settlement));
     return started;
   }
 
@@ -110,22 +122,32 @@ export class InventoryCatalogWorkspaceRuntime {
     applyReconciliation: (value: TReconciliation) => void;
     definiteFailure?: (error: unknown) => void;
     reconciliationFailed?: (retainedSnapshot: boolean) => void;
+    settled?: InventoryCatalogMutationSettlement;
   }) {
     const started = this.lifecycle.startMutation('stockMovements', 'stock-movement-create', `lot:${options.lotId}`);
     if (!started.accepted) return started;
     this.deps.render();
-    options.create().then((movement) => {
+    let request: Promise<TMovement>;
+    try {
+      request = options.create();
+    } catch (error) {
+      request = Promise.reject(error);
+    }
+    let settlement!: WorkspaceFinishResult;
+    void request.then((movement) => {
       const result = this.lifecycle.finishMutationSuccess(started.owner, movement, isStockMovementDto, 'Движение создано. Остаток пересчитан по истории движений.');
+      settlement = result;
       if (result.knownSuccess && result.canApply && this.deps.ownsRoute('stockMovements')) options.applyCreated(movement);
       this.present('stockMovements', result);
       if (result.knownSuccess) this.reconcileStockMovement(options.lotId, options.reconcile, options.applyReconciliation, false, options.reconciliationFailed);
       else this.startQueuedStockReconciliation(options.lotId, options.reconcile, options.applyReconciliation, options.reconciliationFailed);
-    }).catch((error) => {
+    }, (error) => {
       const result = this.lifecycle.finishMutationFailure(started.owner, error);
+      settlement = result;
       if (result.accepted && !result.reconciliationRequired && this.deps.ownsRoute('stockMovements')) options.definiteFailure?.(error);
       this.present('stockMovements', result);
       this.startQueuedStockReconciliation(options.lotId, options.reconcile, options.applyReconciliation, options.reconciliationFailed);
-    });
+    }).finally(() => options.settled?.(settlement));
     return started;
   }
 

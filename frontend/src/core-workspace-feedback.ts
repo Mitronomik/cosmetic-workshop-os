@@ -97,6 +97,15 @@ export type WorkspaceRouteMessages = {
   reconciliationFailed: string;
 };
 
+export function finalizeWorkspaceMutationUi(options: {
+  clearBusy: () => void;
+  ownsRoute: () => boolean;
+  resumeRoute: () => void;
+}): void {
+  options.clearBusy();
+  if (options.ownsRoute()) options.resumeRoute();
+}
+
 type RouteState<TRoute extends string, TRead extends string, TMutation extends string> = {
   generation: number;
   feedback: WorkspaceFeedback;
@@ -387,17 +396,18 @@ export class CoreWorkspaceFeedbackLifecycle<
     return this.result(owner, false, false, 'assertive', this.focus[owner.route].mutation, state.feedback.error);
   }
 
-  settleMutationObsolete(owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>): boolean {
-    if (!this.mutationMatches(owner)) return false;
+  settleMutationObsolete(owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>): WorkspaceFinishResult {
+    const state = this.state(owner.route);
+    if (!this.mutationMatches(owner)) return ignored(Boolean(state.obligation), owner.detached);
     this.mutations.delete(owner.route);
     this.ensureObligation(owner, false);
-    this.state(owner.route).mutationSettledEpoch += 1;
-    const obligation = this.state(owner.route).obligation;
+    state.mutationSettledEpoch += 1;
+    const obligation = state.obligation;
     if (obligation) {
       obligation.detachedMutationPending = false;
-      obligation.mutationSettledEpoch = this.state(owner.route).mutationSettledEpoch;
+      obligation.mutationSettledEpoch = state.mutationSettledEpoch;
     }
-    return true;
+    return ignored(true, owner.detached);
   }
 
   cancelMutation(owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>): boolean {

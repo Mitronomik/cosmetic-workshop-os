@@ -8,7 +8,8 @@ import {
   isEntityDto,
   isRecipeVersionDetailDto,
 } from '../dist-tests/formula-client-workspace-feedback/formula-client-workspace-feedback.js';
-import { FormulaClientWorkspaceRuntime } from '../dist-tests/formula-client-workspace-feedback/formula-client-workspace-runtime.js';
+import { FormulaClientWorkspaceRuntime, requestRecipeTemplateSnapshot } from '../dist-tests/formula-client-workspace-feedback/formula-client-workspace-runtime.js';
+import { finalizeWorkspaceMutationUi } from '../dist-tests/formula-client-workspace-feedback/core-workspace-feedback.js';
 import { bindFormulaClientWorkspaceControls } from '../dist-tests/formula-client-workspace-feedback/formula-client-workspace-bindings.js';
 import { formulaClientRouteForSection, transitionFormulaClientRouteOwnership } from '../dist-tests/formula-client-workspace-feedback/formula-client-workspace-route.js';
 import { formulaClientWorkspacePresentation } from '../dist-tests/formula-client-workspace-feedback/formula-client-workspace-presentation.js';
@@ -422,6 +423,265 @@ test('detached mutation completion is silent and requires reconciliation', async
   assert.equal(lifecycle.reconciliationRequired('clients'), true);
 });
 
+test('mutation finalizer runs exactly once for every accepted settlement path and never for a rejected start', async () => {
+  const cases = [
+    { name: 'known success', resolve: entity(1), validate: isEntityDto },
+    { name: 'invalid DTO', resolve: { id: 0 }, validate: isEntityDto },
+    { name: 'definite failure', reject: { status: 422 }, validate: isEntityDto },
+    { name: 'ambiguous failure', reject: new TypeError('Failed to fetch'), validate: isEntityDto },
+    { name: 'obsolete context', resolve: entity(2), validate: isEntityDto, obsolete: true },
+    { name: 'stale ownership', resolve: entity(2), validate: isEntityDto, stale: true },
+    { name: 'detached success', resolve: entity(3), validate: isEntityDto, detached: true },
+    { name: 'detached failure', reject: new TypeError('Failed to fetch'), validate: isEntityDto, detached: true },
+  ];
+  for (const scenario of cases) {
+    const { h, lifecycle, runtime } = harness('clients');
+    const request = deferred();
+    let ownsContext = true;
+    const settlements = [];
+    const started = runtime.mutate({
+      route: 'clients',
+      operation: 'client-create',
+      contextKey: `client:${scenario.name}`,
+      ownsContext: () => ownsContext,
+      request: () => request.promise,
+      validate: scenario.validate,
+      successMessage: 'saved',
+      apply() {},
+      settled: (result) => settlements.push(result),
+    });
+    if (scenario.obsolete) ownsContext = false;
+    if (scenario.stale) lifecycle.cancelMutation(started.owner);
+    if (scenario.detached) {
+      lifecycle.leave('clients');
+      h.route = 'recipes';
+    }
+    if ('reject' in scenario) request.reject(scenario.reject);
+    else request.resolve(scenario.resolve);
+    await flush();
+    assert.equal(settlements.length, 1, scenario.name);
+  }
+
+  const { lifecycle, runtime } = harness('clients');
+  const active = lifecycle.startMutation('clients', 'client-create', 'client:active');
+  let requestCount = 0;
+  let settledCount = 0;
+  const rejected = runtime.mutate({
+    route: 'clients',
+    operation: 'client-update',
+    contextKey: 'client:2',
+    request: () => { requestCount += 1; return Promise.resolve(entity(2)); },
+    validate: isEntityDto,
+    successMessage: 'saved',
+    apply() {},
+    settled: () => { settledCount += 1; },
+  });
+  assert.equal(rejected.accepted, false);
+  assert.equal(requestCount, 0);
+  assert.equal(settledCount, 0);
+  lifecycle.cancelMutation(active.owner);
+});
+
+for (const [operation, contextKey] of [
+  ['client-recipe-create', 'client:4:version:2'],
+  ['client-recipe-composition', 'client-recipe:8'],
+  ['client-recipe-deactivate', 'client-recipe:8'],
+  ['client-recipe-restore', 'client-recipe:8'],
+]) {
+  test(`${operation} detached settlement clears only busy state, preserves draft, and permits route-return reconciliation`, async () => {
+    const { h, lifecycle, runtime } = harness('clientRecipes');
+    const request = deferred();
+    const state = { busy: true, draft: { title: 'Черновик', ingredients: [{ amount: '4.5' }] } };
+    const before = structuredClone(state.draft);
+    let settledCount = 0;
+    runtime.mutate({
+      route: 'clientRecipes',
+      operation,
+      contextKey,
+      request: () => request.promise,
+      validate: isEntityDto,
+      successMessage: 'saved',
+      apply() { assert.fail('detached result must not apply'); },
+      settled: () => {
+        settledCount += 1;
+        state.busy = false;
+      },
+    });
+    lifecycle.leave('clientRecipes');
+    h.route = 'recipes';
+    lifecycle.enter('clientRecipes');
+    h.route = 'clientRecipes';
+    request.resolve(entity(8));
+    await flush();
+    assert.equal(settledCount, 1);
+    assert.equal(state.busy, false);
+    assert.deepEqual(state.draft, before);
+    const obligation = lifecycle.reconciliationObligation('clientRecipes');
+    assert.ok(obligation);
+    const reconciliation = runtime.read({
+      route: 'clientRecipes',
+      operation: obligation.readOperation,
+      kind: 'reconciliation',
+      contextKey: obligation.readContextKey,
+      request: () => Promise.resolve({ authoritative: true }),
+      validate: (value) => value.authoritative === true,
+      apply() {},
+    });
+    assert.equal(reconciliation.accepted, true);
+    await flush();
+    assert.equal(lifecycle.reconciliationRequired('clientRecipes'), false);
+  });
+}
+
+for (const [route, operation, contextKey] of [
+  ['recipes', 'recipe-template-create', 'template:new'],
+  ['recipes', 'recipe-version-create', 'template:4'],
+  ['clients', 'client-create', 'client:new'],
+  ['clients', 'client-update', 'client:4'],
+]) {
+  test(`${operation} direct handler finalizer clears detached busy state and permits exact route-return reconciliation`, async () => {
+    const { h, lifecycle, runtime } = harness(route);
+    const request = deferred();
+    const owner = lifecycle.startMutation(route, operation, contextKey);
+    assert.equal(owner.accepted, true);
+    const state = { busy: true, draft: { title: 'Черновик', note: 'сохранить' }, resumeCount: 0 };
+    const before = structuredClone(state.draft);
+    void request.promise.then((value) => {
+      lifecycle.finishMutationSuccess(owner.owner, value, isEntityDto, 'saved');
+    }).finally(() => {
+      finalizeWorkspaceMutationUi({
+        clearBusy: () => { state.busy = false; },
+        ownsRoute: () => lifecycle.ownsRoute(route),
+        resumeRoute: () => { state.resumeCount += 1; },
+      });
+    });
+    lifecycle.leave(route);
+    h.route = route === 'recipes' ? 'clients' : 'recipes';
+    lifecycle.enter(route);
+    h.route = route;
+    request.resolve(entity(4));
+    await flush();
+    assert.equal(state.busy, false);
+    assert.equal(state.resumeCount, 1);
+    assert.deepEqual(state.draft, before);
+    const obligation = lifecycle.reconciliationObligation(route);
+    assert.ok(obligation);
+    const reconciliationRead = runtime.read({
+      route,
+      operation: obligation.readOperation,
+      kind: 'reconciliation',
+      contextKey: obligation.readContextKey,
+      request: () => Promise.resolve({ authoritative: true }),
+      validate: (value) => value.authoritative === true,
+      apply() {},
+    });
+    assert.equal(reconciliationRead.accepted, true);
+    await flush();
+    assert.equal(lifecycle.reconciliationRequired(route), false);
+  });
+}
+
+test('RecipeTemplate snapshot waits for detail and versions and commits them atomically', async () => {
+  const { runtime } = harness('recipes');
+  const detail = deferred();
+  const versions = deferred();
+  const state = { selectedTemplate: entity(9), versions: [{ id: 90, recipe_template_id: 9 }] };
+  runtime.read({
+    route: 'recipes',
+    operation: 'recipe-template-detail',
+    kind: 'detail',
+    contextKey: 'template:1',
+    request: () => requestRecipeTemplateSnapshot(() => detail.promise, () => versions.promise),
+    validate: ([template, response]) => template.id === 1 && response.recipe_versions.every((item) => item.recipe_template_id === 1),
+    apply: ([template, response]) => {
+      state.selectedTemplate = template;
+      state.versions = response.recipe_versions;
+    },
+  });
+  detail.resolve(entity(1));
+  await flush();
+  assert.equal(state.selectedTemplate.id, 9);
+  assert.equal(state.versions[0].recipe_template_id, 9);
+  versions.resolve({ recipe_versions: [{ id: 10, recipe_template_id: 1 }] });
+  await flush();
+  assert.equal(state.selectedTemplate.id, 1);
+  assert.equal(state.versions[0].recipe_template_id, 1);
+});
+
+test('RecipeTemplate snapshot partial failure commits neither half', async () => {
+  const { runtime } = harness('recipes');
+  const detail = deferred();
+  const versions = deferred();
+  const state = { selectedTemplate: entity(7), versions: [{ id: 70, recipe_template_id: 7 }] };
+  runtime.read({
+    route: 'recipes',
+    operation: 'recipe-template-detail',
+    kind: 'detail',
+    contextKey: 'template:1',
+    request: () => requestRecipeTemplateSnapshot(() => detail.promise, () => versions.promise),
+    validate: () => true,
+    apply: ([template, response]) => {
+      state.selectedTemplate = template;
+      state.versions = response.recipe_versions;
+    },
+  });
+  detail.resolve(entity(1));
+  versions.reject(new Error('versions unavailable'));
+  await flush();
+  assert.equal(state.selectedTemplate.id, 7);
+  assert.equal(state.versions[0].recipe_template_id, 7);
+});
+
+test('rapid RecipeTemplate A to B switch can commit only B coherent snapshot', async () => {
+  const { runtime } = harness('recipes');
+  const aDetail = deferred();
+  const aVersions = deferred();
+  const bDetail = deferred();
+  const bVersions = deferred();
+  const applied = [];
+  const open = (id, detail, versions) => runtime.read({
+    route: 'recipes',
+    operation: 'recipe-template-detail',
+    kind: 'detail',
+    contextKey: `template:${id}`,
+    request: () => requestRecipeTemplateSnapshot(() => detail.promise, () => versions.promise),
+    validate: ([template, response]) => template.id === id && response.recipe_versions.every((item) => item.recipe_template_id === id),
+    apply: ([template, response]) => applied.push([template.id, response.recipe_versions.map((item) => item.recipe_template_id)]),
+  });
+  open(1, aDetail, aVersions);
+  open(2, bDetail, bVersions);
+  bDetail.resolve(entity(2));
+  bVersions.resolve({ recipe_versions: [{ id: 20, recipe_template_id: 2 }] });
+  await flush();
+  aDetail.resolve(entity(1));
+  aVersions.resolve({ recipe_versions: [{ id: 10, recipe_template_id: 1 }] });
+  await flush();
+  assert.deepEqual(applied, [[2, [2]]]);
+});
+
+test('RecipeVersion reconciliation clears only its exact template obligation and does not alter another visible template', async () => {
+  const { lifecycle, runtime } = harness('recipes');
+  const mutation = lifecycle.startMutation('recipes', 'recipe-version-create', 'template:1');
+  lifecycle.finishMutationFailure(mutation.owner, new TypeError('Failed to fetch'));
+  const state = { selectedTemplateId: 2, versions: [{ id: 20, recipe_template_id: 2 }] };
+  const request = deferred();
+  runtime.read({
+    route: 'recipes',
+    operation: 'recipe-version-list',
+    kind: 'reconciliation',
+    contextKey: 'template:1',
+    request: () => request.promise,
+    validate: (response) => response.recipe_versions.every((item) => item.recipe_template_id === 1),
+    apply: (response) => {
+      if (state.selectedTemplateId === 1) state.versions = response.recipe_versions;
+    },
+  });
+  request.resolve({ recipe_versions: [{ id: 10, recipe_template_id: 1 }] });
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('recipes'), false);
+  assert.deepEqual(state.versions, [{ id: 20, recipe_template_id: 2 }]);
+});
+
 test('success can retain accepted result when a follow-up refresh fails', () => {
   const lifecycle = new FormulaClientWorkspaceFeedbackLifecycle();
   lifecycle.enter('recipes');
@@ -547,4 +807,16 @@ test('main source contains supported endpoints and no unsupported mutation helpe
   assert.match(source, /function reconcileRecipeWorkspaceObligation/);
   assert.match(source, /function reconcileClientWorkspaceObligation/);
   assert.match(source, /function reconcileClientRecipeWorkspaceObligation/);
+  const openTemplate = source.slice(source.indexOf('function openRecipeTemplate'), source.indexOf('function openRecipeVersion'));
+  assert.equal((openTemplate.match(/formulaClientWorkspaceRuntime\.read\(/g) ?? []).length, 1);
+  assert.match(openTemplate, /requestRecipeTemplateSnapshot/);
+  assert.match(openTemplate, /getRecipeTemplate\(id\)/);
+  assert.match(openTemplate, /getRecipeVersions\(id\)/);
+  assert.match(openTemplate, /version\.recipe_template_id === id/);
+  assert.match(source, /operation: 'client-recipe-create'[\s\S]*?settled: \(result\)/);
+  assert.match(source, /operation: 'client-recipe-composition'[\s\S]*?settled: \(result\)/);
+  assert.match(source, /operation: 'client-recipe-deactivate'[\s\S]*?settled: \(result\)/);
+  assert.match(source, /operation: 'client-recipe-restore'[\s\S]*?settled: \(result\)/);
+  assert.match(source, /createRecipeTemplate\(payload\)[\s\S]*?\.finally\(\(\) =>/);
+  assert.match(source, /createRecipeVersion\(templateId,[\s\S]*?\.finally\(\(\) =>/);
 });

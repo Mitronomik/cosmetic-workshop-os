@@ -707,3 +707,17 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - Final pre-publication verification: Formula/Client 47/47 twice; Inventory/Catalog 51/51 twice; all required frontend regressions and build passed; focused backend domains 186/186; complete backend 496 collected, 492 passed, the same 4 accepted failures, 0 skipped, branch-only delta 0.
 - B3.4+B3.5 remains under review; B3.6 remains next.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — PR #137 detached settlement and recipe snapshot correction handoff
+
+- Continue only on PR #137 and `codex/b3.4-b3.5-core-workspace-feedback`; the published head before this correction was `b95b0b293f6f381495fa9e08d36b1ad27a214252`.
+- Both bounded production runtimes now expose an exactly-once settlement callback for every accepted mutation request. A rejected start neither issues the request nor invokes settlement.
+- Settlement only restores route-local UI availability. DTO application, form/draft reset, selection/list updates, announcements, focus, and reconciliation clearing remain owned by accepted validated lifecycle results.
+- Direct RecipeTemplate/RecipeVersion/Client and Ingredient/Ingredient Lot/Packaging handlers use the shared route-local UI finalizer so detached completion cannot strand a route-level saving flag.
+- ClientRecipe create/composition/deactivate/restore settlement can resume the existing exact GET-only reconciliation loader after route return; user drafts remain intact unless a current-context validated success explicitly owns their reset.
+- RecipeTemplate opening now requests template detail and that template's version list together and commits one coherent snapshot only after both responses validate. Partial failure preserves the prior coherent snapshot.
+- The independent RecipeVersion reconciliation path remains `recipe-version-list` with context `template:<id>` and cannot update versions for a different selected template.
+- StockMovement safety is unchanged: one POST, original-lot obligation, exact history-plus-balance GET validation, at most one post-settlement automatic attempt, no loop, and manual original-lot retry.
+- Final pre-publication verification: Formula/Client 60/60 twice; Inventory/Catalog 62/62 twice; all required frontend regressions and build passed; focused backend domains 186/186; complete backend 496 collected, 492 passed, the same 4 accepted failures, 0 skipped, branch-only delta 0.
+- B3.4+B3.5 remains under review; B3.6 remains next. Do not claim browser smoke.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

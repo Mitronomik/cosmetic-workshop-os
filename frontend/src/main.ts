@@ -19,7 +19,7 @@ import { createInitialPurchaseReferenceState, createPurchaseSuggestionsReference
 import { filterHelpArticles as filterHelpArticlesForState, helpRelatedNavigation, resetHelpFilters as resetHelpFilterState, selectHelpArticle as selectHelpArticleState } from './help-passive-regression.js';
 import { bindFormulaClientWorkspaceControls } from './formula-client-workspace-bindings.js';
 import { FormulaClientWorkspaceFeedbackLifecycle, isEntityDto, isRecipeVersionDetailDto } from './formula-client-workspace-feedback.js';
-import { FormulaClientWorkspaceRuntime } from './formula-client-workspace-runtime.js';
+import { FormulaClientWorkspaceRuntime, requestRecipeTemplateSnapshot } from './formula-client-workspace-runtime.js';
 import { formulaClientRouteForSection, transitionFormulaClientRouteOwnership } from './formula-client-workspace-route.js';
 import { formulaClientWorkspacePresentation } from './formula-client-workspace-presentation.js';
 import { bindInventoryCatalogWorkspaceControls } from './inventory-catalog-workspace-bindings.js';
@@ -27,7 +27,7 @@ import { InventoryCatalogWorkspaceFeedbackLifecycle, isInventoryEntityDto } from
 import { InventoryCatalogWorkspaceRuntime } from './inventory-catalog-workspace-runtime.js';
 import { inventoryCatalogRouteForSection, transitionInventoryCatalogRouteOwnership } from './inventory-catalog-workspace-route.js';
 import { inventoryCatalogWorkspacePresentation } from './inventory-catalog-workspace-presentation.js';
-import type { WorkspaceFinishResult } from './core-workspace-feedback.js';
+import { finalizeWorkspaceMutationUi, type WorkspaceFinishResult } from './core-workspace-feedback.js';
 import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientDeactivationMutationControls, disableClientFeedbackCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientFeedbackMutationControls, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState } from './mutation-lifecycle.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
@@ -3119,6 +3119,13 @@ function submitClientRecipeForm(event: SubmitEvent) {
       restoreClientRecipeMutationControls(document);
       render();
     },
+    settled: (result) => {
+      clientRecipeCreateSubmitting = false;
+      restoreClientRecipeMutationControls(document);
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clientRecipes')) return;
+      if (result.reconciliationRequired) loadClientRecipes(true);
+      else render();
+    },
   });
 }
 function openClientRecipe(id: number) {
@@ -3191,6 +3198,13 @@ function deactivateClientRecipe(id: number) {
       clientRecipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('clientRecipes').warning : '';
       restoreClientRecipeMutationControls(document);
     },
+    settled: (result) => {
+      if (clientRecipeArchiveRestoreSubmittingId === id) clientRecipeArchiveRestoreSubmittingId = null;
+      restoreClientRecipeMutationControls(document);
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clientRecipes')) return;
+      if (result.reconciliationRequired) loadClientRecipes(true);
+      else render();
+    },
   });
   if (!started.accepted) { clientRecipeArchiveRestoreSubmittingId = null; restoreClientRecipeMutationControls(document); }
 }
@@ -3237,6 +3251,13 @@ function restoreClientRecipe(id: number) {
       clientRecipesError = ambiguous ? '' : 'Не удалось вернуть индивидуальный рецепт из архива. Проверьте, что клиент активен, и попробуйте ещё раз.';
       clientRecipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('clientRecipes').warning : '';
       restoreClientRecipeMutationControls(document);
+    },
+    settled: (result) => {
+      if (clientRecipeArchiveRestoreSubmittingId === id) clientRecipeArchiveRestoreSubmittingId = null;
+      restoreClientRecipeMutationControls(document);
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clientRecipes')) return;
+      if (result.reconciliationRequired) loadClientRecipes(true);
+      else render();
     },
   });
   if (!started.accepted) { clientRecipeArchiveRestoreSubmittingId = null; restoreClientRecipeMutationControls(document); }
@@ -3343,6 +3364,14 @@ function submitClientRecipeCompositionEditor(event: SubmitEvent) {
       clientRecipesState.compositionEditor.isSaving = false;
       restoreClientRecipeMutationControls(document);
       render();
+    },
+    settled: (result) => {
+      clientRecipeCompositionSubmitting = false;
+      clientRecipesState.compositionEditor.isSaving = false;
+      restoreClientRecipeMutationControls(document);
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clientRecipes')) return;
+      if (result.reconciliationRequired) loadClientRecipes(true);
+      else render();
     },
   });
 }
@@ -3781,7 +3810,6 @@ function submitClientWishForm(event: SubmitEvent) {
   const isCurrentClientWishMutation = () => clientWishCreateLifecycle.isCurrent(token) && clientCardState.clientId === clientId && contextToken === clientWishContextToken;
   const submittedDraft: ClientWishFormState = { ...clientCardState.wishForm };
   const payload: ClientWishCreatePayload = { title: submittedDraft.title, description: submittedDraft.description, category: submittedDraft.category, priority: submittedDraft.priority, client_recipe_id: nullableNumber(submittedDraft.client_recipe_id) };
-  let createRejected = false;
   clientWishValidation = emptyFormValidationState();
   clientCardState.savingWish = true;
   clientCardState.wishError = '';
@@ -3816,7 +3844,6 @@ function submitClientWishForm(event: SubmitEvent) {
     if (!isCurrentClientWishMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentFormulaClientCompletion('clients', owned);
-    createRejected = true;
     clientCardState.wishForm = submittedDraft;
     if (!owned.accepted || owned.reconciliationRequired) {
       clientCardState.savingWish = false;
@@ -3833,13 +3860,14 @@ function submitClientWishForm(event: SubmitEvent) {
     applyValidationToClientWishForm(clientWishValidation);
     restoreClientWishMutationControls(document);
   }).finally(() => {
-    if (!clientWishCreateLifecycle.finish(token) || clientCardState.clientId !== clientId || contextToken !== clientWishContextToken) return;
-    if (createRejected) return;
-    if (clientCardState.savingWish) {
+    clientWishCreateLifecycle.finish(token);
+    if (clientCardState.clientId === clientId && clientCardState.savingWish) {
       clientCardState.savingWish = false;
       restoreClientWishMutationControls(document);
-      render();
     }
+    if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+    if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) reconcileClientWorkspaceObligation();
+    render();
   });
 }
 function changeClientWishStatus(wishId: number, status: ClientWishStatus) {
@@ -3877,6 +3905,11 @@ function changeClientWishStatus(wishId: number, status: ClientWishStatus) {
     if (owned.reconciliationRequired) clientCardState.wishRefreshWarning = owned.message;
     if (clientPageMutationActive()) return;
     syncClientCardDraftFormsFromDom();
+    render();
+  }).finally(() => {
+    if (clientCardState.changingWishId === wishId) clientCardState.changingWishId = null;
+    if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+    if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) reconcileClientWorkspaceObligation();
     render();
   });
 }
@@ -3916,6 +3949,11 @@ function archiveClientWishFromCard(wishId: number) {
     if (clientPageMutationActive()) return;
     syncClientCardDraftFormsFromDom();
     render();
+  }).finally(() => {
+    if (clientCardState.archivingWishId === wishId) clientCardState.archivingWishId = null;
+    if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+    if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) reconcileClientWorkspaceObligation();
+    render();
   });
 }
 function toggleClientFeedbackForm() { if (clientPageMutationActive()) return; if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; if (clientCardState.showFeedbackForm) clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; clientCardState.feedbackMessage = ''; clientCardState.feedbackRefreshWarning = ''; render(); }
@@ -3934,7 +3972,6 @@ function submitClientFeedbackForm(event: SubmitEvent) {
   const submittedDraft: ClientFeedbackFormState = { ...clientCardState.feedbackForm };
   const ratingRaw = submittedDraft.rating.trim();
   const payload: ClientFeedbackCreatePayload = { feedback_type: submittedDraft.feedback_type, sentiment: submittedDraft.sentiment, rating: ratingRaw ? Number(ratingRaw) : null, text: submittedDraft.text, follow_up_needed: submittedDraft.follow_up_needed, follow_up_note: submittedDraft.follow_up_note, occurred_at: submittedDraft.occurred_at || null, client_recipe_id: nullableNumber(submittedDraft.client_recipe_id) };
-  let createRejected = false;
   clientFeedbackValidation = emptyFormValidationState();
   clientCardState.savingFeedback = true;
   clientCardState.feedbackError = '';
@@ -3969,7 +4006,6 @@ function submitClientFeedbackForm(event: SubmitEvent) {
     if (!isCurrentClientFeedbackMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentFormulaClientCompletion('clients', owned);
-    createRejected = true;
     clientCardState.feedbackForm = submittedDraft;
     if (!owned.accepted || owned.reconciliationRequired) {
       clientCardState.savingFeedback = false;
@@ -3986,13 +4022,14 @@ function submitClientFeedbackForm(event: SubmitEvent) {
     applyValidationToClientFeedbackForm(clientFeedbackValidation);
     restoreClientFeedbackMutationControls(document);
   }).finally(() => {
-    if (!clientFeedbackCreateLifecycle.finish(token) || clientCardState.clientId !== clientId || cardContextToken !== clientCardContextToken) return;
-    if (createRejected) return;
-    if (clientCardState.savingFeedback) {
+    clientFeedbackCreateLifecycle.finish(token);
+    if (clientCardState.clientId === clientId && clientCardState.savingFeedback) {
       clientCardState.savingFeedback = false;
       restoreClientFeedbackMutationControls(document);
-      render();
     }
+    if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+    if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) reconcileClientWorkspaceObligation();
+    render();
   });
 }
 function nullableNumber(value: string) { const trimmed = value.trim(); return trimmed ? Number(trimmed) : null; }
@@ -4172,6 +4209,21 @@ function submitClientForm(event: SubmitEvent) {
       clientsStatus = 'ready';
       applyValidationToClientForm(clientValidation);
       reenableClientSubmitButtons();
+    })
+    .finally(() => {
+      finalizeWorkspaceMutationUi({
+        clearBusy: () => {
+          if (token === clientSubmitToken) {
+            clientSubmitting = false;
+            reenableClientSubmitButtons();
+          }
+        },
+        ownsRoute: () => formulaClientWorkspaceLifecycle.ownsRoute('clients'),
+        resumeRoute: () => {
+          if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) loadClients(true);
+          else render();
+        },
+      });
     });
 }
 
@@ -4234,10 +4286,14 @@ function deactivateClient(id: number) {
       clientsStatus = 'ready';
     })
     .finally(() => {
-      if (clientSubmitToken !== token || clientDeactivatingId !== archivedClientId) return;
-      clientDeactivatingId = null;
-      restoreMutationGuards(document);
-      render();
+      const busyStateIsObsolete = clientSubmitToken !== token || clientDeactivatingId !== archivedClientId;
+      if (!busyStateIsObsolete) {
+        clientDeactivatingId = null;
+        restoreMutationGuards(document);
+      }
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+      if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) loadClients(true);
+      else render();
     });
 }
 
@@ -4594,6 +4650,16 @@ function submitStockMovementForm(event: SubmitEvent) {
         : 'Движение создано, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальный остаток.';
       reenableStockMovementSubmitButtons();
     },
+    settled: (result) => {
+      if (token !== stockMovementSubmitToken) return;
+      if (result.reconciliationRequired || result.detached || !result.accepted) {
+        stockMovementSubmitting = false;
+        reenableStockMovementSubmitButtons();
+      }
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('stockMovements')) return;
+      if (result.reconciliationRequired) startQueuedStockMovementRecovery();
+      render();
+    },
   });
   if (!started.accepted) {
     stockMovementSubmitting = false;
@@ -4749,27 +4815,26 @@ function openRecipeTemplate(id: number) {
     operation: 'recipe-template-detail',
     kind: 'detail',
     contextKey: `template:${id}`,
-    request: () => getRecipeTemplate(id),
-    validate: isEntityDto,
-    apply: (template) => {
+    request: () => requestRecipeTemplateSnapshot(
+      () => getRecipeTemplate(id),
+      () => getRecipeVersions(id),
+    ),
+    validate: ([template, versions]) => (
+      isEntityDto(template)
+      && template.id === id
+      && Array.isArray(versions?.recipe_versions)
+      && versions.recipe_versions.every((version: RecipeVersion) => version.recipe_template_id === id)
+    ),
+    apply: ([template, versions]) => {
       recipesState.selectedTemplate = template;
+      recipesState.versions = versions.recipe_versions;
       recipesState.selectedVersionDetail = null;
       recipesState.versionDetailStatus = 'idle';
       recipesState.calculation = null;
       calculationStatus = 'idle';
     },
-    failed: () => { recipesError = 'Не удалось открыть рецепт. Попробуйте обновить страницу.'; },
+    failed: () => { recipesError = 'Не удалось открыть рецепт и его версии. Попробуйте обновить страницу.'; },
     rejected: () => {},
-  });
-  formulaClientWorkspaceRuntime.read({
-    route: 'recipes',
-    operation: 'recipe-version-list',
-    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('recipes', 'recipe-version-list', `template:${id}`) ? 'reconciliation' : 'detail',
-    contextKey: `template:${id}`,
-    request: () => getRecipeVersions(id),
-    validate: (versions) => Array.isArray(versions?.recipe_versions),
-    apply: (versions) => { recipesState.versions = versions.recipe_versions; },
-    failed: () => { recipesError = 'Не удалось загрузить версии рецепта. Откройте рецепт ещё раз.'; },
   });
 }
 function openRecipeVersion(id: number) {
@@ -4912,6 +4977,20 @@ function submitRecipeTemplateForm(event: SubmitEvent) {
     recipeTemplateValidation = normalizeBackendValidation(apiValidationPayload(error), recipeTemplateFieldLabels, 'Не удалось создать рецепт. Проверьте поля и попробуйте ещё раз.');
     recipesStatus = 'ready';
     applyValidationToRecipeTemplateForm(recipeTemplateValidation);
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === recipeTemplateSubmitToken) {
+          recipeTemplateSubmitting = false;
+          restoreRecipeMutationControls(document);
+        }
+      },
+      ownsRoute: () => formulaClientWorkspaceLifecycle.ownsRoute('recipes'),
+      resumeRoute: () => {
+        if (formulaClientWorkspaceLifecycle.reconciliationRequired('recipes')) loadRecipes(true);
+        else render();
+      },
+    });
   });
 }
 function submitRecipeCatalogCategoryForm(event: SubmitEvent) {
@@ -4935,6 +5014,12 @@ function submitRecipeCatalogCategoryForm(event: SubmitEvent) {
       recipesState.catalogCreating = null;
       recipesError = ambiguous ? '' : 'Не удалось создать группу рецептов. Проверьте название и попробуйте еще раз.';
       recipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    settled: (result) => {
+      recipesState.catalogCreating = null;
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('recipes')) return;
+      if (result.reconciliationRequired) loadRecipes(true);
+      else render();
     },
   });
   if (!started.accepted) { recipesState.catalogCreating = null; render(); }
@@ -4961,6 +5046,12 @@ function submitRecipeCatalogTagForm(event: SubmitEvent) {
       recipesError = ambiguous ? '' : 'Не удалось создать метку рецепта. Проверьте название и попробуйте еще раз.';
       recipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
     },
+    settled: (result) => {
+      recipesState.catalogCreating = null;
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('recipes')) return;
+      if (result.reconciliationRequired) loadRecipes(true);
+      else render();
+    },
   });
   if (!started.accepted) { recipesState.catalogCreating = null; render(); }
 }
@@ -4983,6 +5074,12 @@ function assignRecipeCategory(recipeTemplateId: number, value: string) {
       recipesState.catalogSaving = 'idle';
       recipesError = ambiguous ? '' : 'Не удалось сохранить группу рецепта. Проверьте, что группа активна, и попробуйте еще раз.';
       recipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    settled: (result) => {
+      recipesState.catalogSaving = 'idle';
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('recipes')) return;
+      if (result.reconciliationRequired) loadRecipes(true);
+      else render();
     },
   });
   if (!started.accepted) { recipesState.catalogSaving = 'idle'; render(); }
@@ -5007,6 +5104,12 @@ function assignRecipeTags(recipeTemplateId: number) {
       recipesState.catalogSaving = 'idle';
       recipesError = ambiguous ? '' : 'Не удалось сохранить метки рецепта. Проверьте, что метки активны, и попробуйте еще раз.';
       recipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    settled: (result) => {
+      recipesState.catalogSaving = 'idle';
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('recipes')) return;
+      if (result.reconciliationRequired) loadRecipes(true);
+      else render();
     },
   });
   if (!started.accepted) { recipesState.catalogSaving = 'idle'; render(); }
@@ -5082,6 +5185,20 @@ function submitRecipeVersionForm(event: SubmitEvent) {
     recipesRefreshWarning = '';
     recipeVersionValidation = normalizeBackendValidation(apiValidationPayload(error), recipeVersionFieldLabels(form), 'Не удалось сохранить версию. Проверьте строки состава и попробуйте ещё раз.');
     applyValidationToRecipeVersionForm(recipeVersionValidation);
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === recipeVersionSubmitToken) {
+          recipeVersionSubmitting = false;
+          restoreRecipeMutationControls(document);
+        }
+      },
+      ownsRoute: () => formulaClientWorkspaceLifecycle.ownsRoute('recipes'),
+      resumeRoute: () => {
+        if (formulaClientWorkspaceLifecycle.reconciliationRequired('recipes')) loadRecipes(true);
+        else render();
+      },
+    });
   });
 }
 function submitCalculationForm(event: SubmitEvent) { event.preventDefault(); const detail = recipesState.selectedVersionDetail; if (!detail) return; const data = new FormData(event.currentTarget as HTMLFormElement); const value = String(data.get('target_batch_size_value') ?? '').trim(); const unit = String(data.get('target_batch_size_unit') ?? 'g'); recipesState.calculationTargetValue = value; recipesState.calculationTargetUnit = unit; runRecipeCalculation(detail.version.id, value, unit, 'manual'); }
@@ -5221,6 +5338,20 @@ function submitPackagingItemForm(event: SubmitEvent) {
     packagingItemsStatus = 'ready';
     applyValidationToPackagingItemForm(packagingItemValidation);
     reenablePackagingItemSubmitButtons();
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === packagingItemSubmitToken) {
+          packagingItemSubmitting = false;
+          reenablePackagingItemSubmitButtons();
+        }
+      },
+      ownsRoute: () => inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging'),
+      resumeRoute: () => {
+        if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('packaging')) loadPackagingItems(true);
+        else render();
+      },
+    });
   });
 }
 function deactivatePackagingItem(id: number) {
@@ -5255,6 +5386,11 @@ function deactivatePackagingItem(id: number) {
     packagingItemsRefreshWarning = owned.reconciliationRequired ? owned.message : '';
     packagingItemsStatus = 'ready';
     render();
+  }).finally(() => {
+    if (packagingItemDeactivatingId === id) packagingItemDeactivatingId = null;
+    if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging')) return;
+    if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('packaging')) loadPackagingItems(true);
+    else render();
   });
 }
 
@@ -5281,6 +5417,12 @@ function submitPackagingCatalogCategoryForm(event: SubmitEvent) {
       packagingItemsError = ambiguous ? '' : 'Не удалось создать группу тары. Проверьте название и попробуйте еще раз.';
       packagingItemsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('packaging').warning : '';
     },
+    settled: (result) => {
+      packagingItemsState.catalogCreating = null;
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging')) return;
+      if (result.reconciliationRequired) loadPackagingItems(true);
+      else render();
+    },
   });
   if (!started.accepted) { packagingItemsState.catalogCreating = null; render(); }
 }
@@ -5306,6 +5448,12 @@ function submitPackagingCatalogTagForm(event: SubmitEvent) {
       packagingItemsState.catalogCreating = null;
       packagingItemsError = ambiguous ? '' : 'Не удалось создать метку тары. Проверьте название и попробуйте еще раз.';
       packagingItemsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('packaging').warning : '';
+    },
+    settled: (result) => {
+      packagingItemsState.catalogCreating = null;
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging')) return;
+      if (result.reconciliationRequired) loadPackagingItems(true);
+      else render();
     },
   });
   if (!started.accepted) { packagingItemsState.catalogCreating = null; render(); }
@@ -5339,6 +5487,12 @@ function applyPackagingAssignmentDraft() {
       packagingItemsState.catalogSaving = 'idle';
       packagingItemsError = ambiguous ? '' : 'Не удалось сохранить группу или метки тары. Проверьте данные и попробуйте еще раз.';
       packagingItemsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('packaging').warning : '';
+    },
+    settled: (result) => {
+      packagingItemsState.catalogSaving = 'idle';
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging')) return;
+      if (result.reconciliationRequired) loadPackagingItems(true);
+      else render();
     },
   });
   if (!started.accepted) { packagingItemsState.catalogSaving = 'idle'; render(); }
@@ -5440,6 +5594,20 @@ function submitIngredientLotForm(event: SubmitEvent) {
     ingredientLotsStatus = 'ready';
     applyValidationToIngredientLotForm(ingredientLotValidation);
     reenableIngredientLotSubmitButtons();
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === ingredientLotSubmitToken) {
+          ingredientLotSubmitting = false;
+          reenableIngredientLotSubmitButtons();
+        }
+      },
+      ownsRoute: () => inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredientLots'),
+      resumeRoute: () => {
+        if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredientLots')) loadIngredientLots(true);
+        else render();
+      },
+    });
   });
 }
 function deactivateIngredientLot(id: number) {
@@ -5464,6 +5632,10 @@ function deactivateIngredientLot(id: number) {
     ingredientLotsRefreshWarning = owned.reconciliationRequired ? owned.message : '';
     ingredientLotsStatus = 'ready';
     render();
+  }).finally(() => {
+    if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredientLots')) return;
+    if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredientLots')) loadIngredientLots(true);
+    else render();
   });
 }
 
@@ -5566,6 +5738,20 @@ function submitIngredientForm(event: SubmitEvent) {
     ingredientsStatus = 'ready';
     applyValidationToIngredientForm(ingredientValidation);
     reenableIngredientSubmitButtons();
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === ingredientSubmitToken) {
+          ingredientSubmitting = false;
+          reenableIngredientSubmitButtons();
+        }
+      },
+      ownsRoute: () => inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients'),
+      resumeRoute: () => {
+        if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredients')) loadIngredients(true);
+        else render();
+      },
+    });
   });
 }
 
@@ -5592,6 +5778,12 @@ function submitIngredientCatalogCategoryForm(event: SubmitEvent) {
       ingredientsError = ambiguous ? '' : 'Не удалось создать группу. Проверьте название и попробуйте еще раз.';
       ingredientsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('ingredients').warning : '';
     },
+    settled: (result) => {
+      ingredientsState.catalogCreating = null;
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients')) return;
+      if (result.reconciliationRequired) loadIngredients(true);
+      else render();
+    },
   });
   if (!started.accepted) { ingredientsState.catalogCreating = null; render(); }
 }
@@ -5617,6 +5809,12 @@ function submitIngredientCatalogTagForm(event: SubmitEvent) {
       ingredientsState.catalogCreating = null;
       ingredientsError = ambiguous ? '' : 'Не удалось создать метку. Проверьте название и попробуйте еще раз.';
       ingredientsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('ingredients').warning : '';
+    },
+    settled: (result) => {
+      ingredientsState.catalogCreating = null;
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients')) return;
+      if (result.reconciliationRequired) loadIngredients(true);
+      else render();
     },
   });
   if (!started.accepted) { ingredientsState.catalogCreating = null; render(); }
@@ -5650,6 +5848,12 @@ function applyIngredientAssignmentDraft() {
       ingredientsError = ambiguous ? '' : 'Не удалось сохранить группу или метки. Проверьте данные и попробуйте еще раз.';
       ingredientsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('ingredients').warning : '';
     },
+    settled: (result) => {
+      ingredientsState.catalogSaving = 'idle';
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients')) return;
+      if (result.reconciliationRequired) loadIngredients(true);
+      else render();
+    },
   });
   if (!started.accepted) { ingredientsState.catalogSaving = 'idle'; render(); }
 }
@@ -5675,6 +5879,10 @@ function deactivateIngredient(id: number) {
     ingredientsRefreshWarning = owned.reconciliationRequired ? owned.message : '';
     ingredientsStatus = 'ready';
     render();
+  }).finally(() => {
+    if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients')) return;
+    if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredients')) loadIngredients(true);
+    else render();
   });
 }
 
