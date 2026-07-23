@@ -900,7 +900,7 @@ test('stale stock post-save refresh failure does not mutate state', async () => 
   assert.equal(state.renders, 0);
 });
 
-test('source guards cover packaging adjacent actions and stock detail stale render token', () => {
+test('source guards cover packaging adjacent actions and owned stock detail context', () => {
   const disablePackaging = mainSourceFunction('disablePackagingItemSubmitControls');
   for (const action of ['filter-packaging-search', 'filter-packaging-category', 'filter-packaging-kind', 'filter-packaging-status', 'add-packaging-tag-filter', 'remove-packaging-tag-filter', 'clear-packaging-filter', 'reset-packaging-filters', 'packaging-catalog-category', 'packaging-catalog-tag', 'assign-packaging-category', 'toggle-packaging-tag', 'apply-packaging-assignment', 'reset-packaging-assignment', 'search-packaging-category', 'search-packaging-tags', 'toggle-packaging-tags', 'new-packaging-item', 'edit-packaging-item', 'deactivate-packaging-item', 'reload-packaging-items', 'hide-packaging-create-form', 'cancel-packaging-edit']) {
     assert.ok(disablePackaging.includes(action), `${action} is disabled by mutation guard`);
@@ -910,10 +910,10 @@ test('source guards cover packaging adjacent actions and stock detail stale rend
   assert.ok(lifecycleSource.includes('data-mutation-readonly'));
   assert.ok(lifecycleSource.includes('packagingPageMutationActiveState'));
   const loadDetail = mainSourceFunction('loadSelectedStockMovementLot');
-  assert.ok(loadDetail.includes('stockMovementLotDetailLifecycle.begin'));
-  assert.ok(loadDetail.includes('stockMovementSubmitting'));
-  assert.ok(mainSourceFunction('stockMovementLotDetailIsCurrent').includes('stockMovementsState.selectedLotId'));
-  assert.ok(loadDetail.includes('if (!stockMovementSubmitting) render()'));
+  assert.ok(loadDetail.includes('inventoryCatalogWorkspaceRuntime.read'));
+  assert.ok(loadDetail.includes("operation: 'stock-reconciliation'"));
+  assert.ok(loadDetail.includes('contextKey: `lot:${lotId}`'));
+  assert.ok(loadDetail.includes('stockMovementsState.selectedLotId !== lotId'));
   const stockDisable = mainSourceFunction('disableStockMovementSubmitControls');
   assert.ok(stockDisable.includes('mutationDisabled(document.querySelector<HTMLSelectElement>(\'[data-action="select-stock-lot"]\'))'));
 });
@@ -1025,7 +1025,7 @@ test('recipe source uses direct mutation guards and no render at submit start', 
   assert.ok(templatePrefix.includes('disableRecipeTemplateMutationControls(document)'));
   assert.equal(templatePrefix.includes('render()'), false);
   assert.ok(templatePrefix.includes('if (recipeVersionSubmitting) return;'));
-  assert.ok(templatePrefix.includes('recipeTemplateMutationLifecycle.begin()'));
+  assert.ok(templatePrefix.includes("formulaClientWorkspaceLifecycle.startMutation('recipes', 'recipe-template-create')"));
 
   const versionStart = source.indexOf('function submitRecipeVersionForm');
   const versionRequest = source.indexOf('createRecipeVersion(templateId', versionStart);
@@ -1033,7 +1033,7 @@ test('recipe source uses direct mutation guards and no render at submit start', 
   assert.ok(versionPrefix.includes('disableRecipeVersionMutationControls(document)'));
   assert.equal(versionPrefix.includes('render()'), false);
   assert.ok(versionPrefix.includes('if (recipeTemplateSubmitting || !recipesState.selectedTemplate) return;'));
-  assert.ok(versionPrefix.includes('recipeVersionMutationLifecycle.begin()'));
+  assert.ok(versionPrefix.includes("formulaClientWorkspaceLifecycle.startMutation('recipes', 'recipe-version-create'"));
 
   assert.ok(source.includes('restoreRecipeMutationControls(document);'));
   assert.ok(source.includes('recipesRefreshWarning = \'Рецепт создан, но список не обновился.'));
@@ -1622,10 +1622,11 @@ test('client card source guards use card-level feedback validation contracts wit
   assert.ok(pageMutation.includes('clientCardState.archivingWishId !== null'));
 
   const deactivate = mainSourceFunction('deactivateClient');
-  assert.ok(deactivate.includes('clientDeactivationLifecycle.begin()'));
+  assert.ok(deactivate.includes("formulaClientWorkspaceLifecycle.startMutation('clients', 'client-deactivate'"));
+  assert.ok(deactivate.includes('const token = ++clientSubmitToken;'));
   assert.ok(deactivate.includes('clientDeactivatingId = archivedClientId;'));
   assert.ok(deactivate.includes('disableClientDeactivationMutationControls(document, archivedClientId);'));
-  assert.ok(deactivate.includes('clientDeactivationLifecycle.finish(token)'));
+  assert.ok(deactivate.includes('clientSubmitToken !== token'));
 
   const feedbackSubmit = mainSourceFunction('submitClientFeedbackForm');
   assert.ok(feedbackSubmit.includes('clientFeedbackCreateLifecycle.begin()'));
