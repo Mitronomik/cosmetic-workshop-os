@@ -650,3 +650,12 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - The production runtime owns lifecycle construction, focus configuration, request-owned announcements, reconciliation locks, and result-owned feedback cleanup.
 - Reports remains read-only in production and in the focused harness.
 - GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 remaining reconciliation/result-boundary correction handoff
+
+- PR: #136; branch `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before this correction `aae116536c2b68dec0808ccd0cae099f325e09ae`.
+- Reconciliation invariant: a detached-mutation obligation may clear only after an accepted reconciliation GET that started after the detached mutation definitely settled. Provisional GET success before settlement keeps the lock; provisional GET failure after settlement starts exactly one queued authoritative GET; failed authoritative GET does not loop and leaves manual retry available.
+- Runtime result boundary: Export `entity_counts` and Report Document reason clearing are committed only after validated, owned, current-route mutation success. Invalid, ambiguous, stale, detached, and definite-failure completions do not apply those route-specific side effects.
+- Focus contract: create forms for Backups, Exports, and Report Documents are focusable with `tabindex="-1"`; invalid DTO recovery focuses refresh/reconciliation controls instead of disabled create controls.
+- Focused B3.3 tests include ordering scenarios, accepted-only route side effects, restored initial/stale/absent-route and same-route transition evidence, binding selector contracts, and read-only Reports coverage.
+- GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

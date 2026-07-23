@@ -6,7 +6,7 @@ export type FeedbackTone = 'none' | 'neutral' | 'success' | 'warning' | 'error';
 export type AnnouncementKind = 'none' | 'polite' | 'assertive';
 
 export type LocalArtifactSnapshot<TRead> = { data: TRead; loadedAtRequestId: number };
-export type LocalArtifactReadOwner = { requestId: number; routeGeneration: number; kind: LocalArtifactReadKind; reconciliationEpoch: number; detachedSettledEpoch: number };
+export type LocalArtifactReadOwner = { requestId: number; routeGeneration: number; kind: LocalArtifactReadKind; reconciliationEpoch: number; detachedSettledEpoch: number; detachedMutationPending: boolean };
 export type LocalArtifactMutationOwner = { requestId: number; routeGeneration: number; kind: LocalArtifactMutationKind; detached: boolean };
 export type LocalArtifactStartResult = { accepted: boolean; requestId: number; routeGeneration: number; reason: string; kind?: LocalArtifactReadKind | LocalArtifactMutationKind; reconciliationEpoch?: number; detachedSettledEpoch?: number };
 export type LocalArtifactFinishResult = { accepted: boolean; detached: boolean; announcement: AnnouncementKind; message: string; focusKey: string | null; needsRefresh: boolean; reconciliationRequired: boolean; announcementOwnerKey: string };
@@ -24,6 +24,7 @@ export type LocalArtifactLifecycleState<TRead, TCreated> = {
   reconciliationEpoch: number;
   detachedSettledEpoch: number;
   pendingReconciliationAfterRead: boolean;
+  detachedMutationPending: boolean;
 };
 export type LocalArtifactLifecycleMessages = {
   loading: string; refreshing: string; reconciling: string; initialError: string; refreshError: string; refreshSuccess: string;
@@ -45,7 +46,7 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
   readonly state: LocalArtifactLifecycleState<TRead, TCreated>;
   private nextRequestId = 0;
   constructor(private readonly options: LocalArtifactLifecycleOptions<TCreated>) {
-    this.state = { routeGeneration: 0, read: null, mutation: null, snapshot: null, lastCreated: null, feedback: idleFeedback(), reconciliationRequired: false, reconciliationReason: null, reconciliationEpoch: 0, detachedSettledEpoch: 0, pendingReconciliationAfterRead: false };
+    this.state = { routeGeneration: 0, read: null, mutation: null, snapshot: null, lastCreated: null, feedback: idleFeedback(), reconciliationRequired: false, reconciliationReason: null, reconciliationEpoch: 0, detachedSettledEpoch: 0, pendingReconciliationAfterRead: false, detachedMutationPending: false };
   }
 
   enter() { this.state.routeGeneration += 1; this.state.read = null; this.clearNeutral(); }
@@ -54,7 +55,7 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
   startRead(kind: LocalArtifactReadKind): LocalArtifactStartResult {
     if (this.state.read) return { accepted: false, requestId: this.state.read.requestId, routeGeneration: this.state.routeGeneration, reason: 'read-active', kind: this.state.read.kind };
     if (this.state.mutation && !this.state.mutation.detached) return { accepted: false, requestId: this.state.mutation.requestId, routeGeneration: this.state.routeGeneration, reason: 'mutation-active', kind: this.state.mutation.kind };
-    const owner = { requestId: ++this.nextRequestId, routeGeneration: this.state.routeGeneration, kind, reconciliationEpoch: this.state.reconciliationEpoch, detachedSettledEpoch: this.state.detachedSettledEpoch };
+    const owner = { requestId: ++this.nextRequestId, routeGeneration: this.state.routeGeneration, kind, reconciliationEpoch: this.state.reconciliationEpoch, detachedSettledEpoch: this.state.detachedSettledEpoch, detachedMutationPending: this.state.detachedMutationPending };
     this.state.read = owner;
     this.state.feedback.error = '';
     if (kind === 'initial' && !this.state.snapshot) this.state.feedback = { ...idleFeedback(), tone: 'neutral', neutral: this.options.messages.loading };
@@ -70,9 +71,10 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
     const wasRefresh = owner.kind === 'refresh';
     const wasReconciliation = owner.kind === 'reconciliation' || owner.kind === 'mutation-refresh';
     const ownerDetachedSettledEpoch = owner.detachedSettledEpoch ?? 0;
-    const canClearReconciliation = wasReconciliation && owner.reconciliationEpoch === this.state.reconciliationEpoch && (!(this.state.reconciliationReason === 'detached-mutation') || ownerDetachedSettledEpoch >= this.state.detachedSettledEpoch);
+    const ownerDetachedPending = 'detachedMutationPending' in owner ? Boolean(owner.detachedMutationPending) : false;
+    const canClearReconciliation = wasReconciliation && owner.reconciliationEpoch === this.state.reconciliationEpoch && (!(this.state.reconciliationReason === 'detached-mutation') || (!ownerDetachedPending && !this.state.detachedMutationPending && ownerDetachedSettledEpoch >= this.state.detachedSettledEpoch));
     if (canClearReconciliation) { this.state.reconciliationRequired = false; this.state.reconciliationReason = null; this.state.pendingReconciliationAfterRead = false; }
-    else if (wasReconciliation && this.state.reconciliationRequired && ownerDetachedSettledEpoch < this.state.detachedSettledEpoch) this.state.pendingReconciliationAfterRead = true;
+    else if (wasReconciliation && this.state.reconciliationRequired && !this.state.detachedMutationPending && (ownerDetachedPending || ownerDetachedSettledEpoch < this.state.detachedSettledEpoch)) this.state.pendingReconciliationAfterRead = true;
     this.state.feedback = { ...this.state.feedback, tone: wasRefresh ? 'success' : 'none', neutral: '', error: '', warning: canClearReconciliation || !this.state.reconciliationRequired ? '' : this.state.feedback.warning, success: wasRefresh ? this.options.messages.refreshSuccess : this.state.feedback.success };
     return accepted(owner, this.options.route, wasRefresh ? 'refresh-success' : 'read-success', wasRefresh ? this.options.messages.refreshSuccess : '', wasRefresh ? 'polite' : 'none', wasRefresh ? this.options.focus?.refreshSuccess ?? null : null, this.state.pendingReconciliationAfterRead, this.state.reconciliationRequired);
   }
@@ -89,7 +91,7 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
       return accepted(owner, this.options.route, 'read-failure', this.state.feedback.warning, 'polite', focusKey, this.state.reconciliationRequired, this.state.reconciliationRequired);
     }
     this.state.feedback = { ...idleFeedback(), tone: 'error', error: this.options.messages.initialError };
-    return accepted(owner, this.options.route, 'initial-error', this.state.feedback.error, 'assertive', this.options.focus?.initialError ?? null, false, this.state.reconciliationRequired);
+    return accepted(owner, this.options.route, 'initial-error', this.state.feedback.error, 'assertive', this.options.focus?.initialError ?? null, this.state.pendingReconciliationAfterRead, this.state.reconciliationRequired);
   }
 
   startMutation(kind: LocalArtifactMutationKind): LocalArtifactStartResult {
@@ -107,7 +109,7 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
     if (!this.mutationMatches(owner)) return ignored(Boolean(current?.detached), false, this.state.reconciliationRequired);
     const detached = Boolean(current?.detached);
     this.state.mutation = null;
-    if (detached) { this.state.detachedSettledEpoch += 1; this.requireReconciliation('detached-mutation'); this.state.pendingReconciliationAfterRead = Boolean(this.state.read); return ignored(true, true, true); }
+    if (detached) { this.state.detachedSettledEpoch += 1; this.state.detachedMutationPending = false; this.requireReconciliation('detached-mutation'); this.state.pendingReconciliationAfterRead = Boolean(this.state.read); return ignored(true, true, true); }
     const valid = this.options.validateCreated ? this.options.validateCreated(created) : true;
     this.clearNeutral();
     if (!valid) {
@@ -126,7 +128,7 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
     if (!this.mutationMatches(owner)) return ignored(Boolean(current?.detached), false, this.state.reconciliationRequired);
     const detached = Boolean(current?.detached);
     this.state.mutation = null;
-    if (detached) { this.state.detachedSettledEpoch += 1; this.requireReconciliation('detached-mutation'); this.state.pendingReconciliationAfterRead = Boolean(this.state.read); return ignored(true, true, true); }
+    if (detached) { this.state.detachedSettledEpoch += 1; this.state.detachedMutationPending = false; this.requireReconciliation('detached-mutation'); this.state.pendingReconciliationAfterRead = Boolean(this.state.read); return ignored(true, true, true); }
     if (ambiguous) {
       this.requireReconciliation('ambiguous-mutation');
       this.state.feedback = { ...idleFeedback(), tone: 'warning', warning: this.options.messages.mutationAmbiguous };
@@ -137,7 +139,7 @@ export class LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated = never> {
   }
 
   clearTransientFeedback() { if (this.state.reconciliationRequired && this.state.feedback.warning) this.state.feedback = { ...idleFeedback(), tone: 'warning', warning: this.state.feedback.warning }; else this.state.feedback = idleFeedback(); }
-  private requireReconciliation(reason: Exclude<ReconciliationReason, null>) { if (!this.state.reconciliationRequired || this.state.reconciliationReason !== reason) this.state.reconciliationEpoch += 1; this.state.reconciliationRequired = true; this.state.reconciliationReason = reason; }
+  private requireReconciliation(reason: Exclude<ReconciliationReason, null>) { if (!this.state.reconciliationRequired || this.state.reconciliationReason !== reason) this.state.reconciliationEpoch += 1; this.state.reconciliationRequired = true; this.state.reconciliationReason = reason; if (reason === 'detached-mutation' && this.state.mutation?.detached) this.state.detachedMutationPending = true; }
   private clearNeutral() { this.state.feedback.neutral = ''; if (this.state.feedback.tone === 'neutral') this.state.feedback.tone = 'none'; }
   private readMatches(owner: { requestId: number; routeGeneration: number }) { return Boolean(this.state.read && this.state.read.requestId === owner.requestId && this.state.read.routeGeneration === owner.routeGeneration); }
   private mutationMatches(owner: { requestId: number; routeGeneration: number }) { return Boolean(this.state.mutation && this.state.mutation.requestId === owner.requestId && this.state.mutation.routeGeneration === owner.routeGeneration); }

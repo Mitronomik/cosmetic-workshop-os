@@ -7,7 +7,7 @@ export type LocalArtifactRuntimeDeps<TRead, TCreated, TPayload> = {
   mutationKind?: LocalArtifactMutationKind;
   messages: LocalArtifactRuntimeMessages;
   read: () => Promise<TRead>;
-  mutate?: (payload: TPayload) => Promise<{ created: TCreated; message: string }>;
+  mutate?: (payload: TPayload) => Promise<{ created: TCreated; message: string; commitAccepted?: () => void }>;
   validateCreated?: (created: TCreated) => boolean;
   lifecycle?: LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated>;
   createAvailable?: () => boolean;
@@ -40,7 +40,7 @@ export class LocalArtifactRouteRuntime<TRead, TCreated, TPayload = void> {
     }).catch(() => {
       const result = this.lifecycle.finishReadFailure(started);
       if (!result.accepted || !this.deps.ownsRoute()) return;
-      this.deps.render(); this.complete(result);
+      this.deps.render(); this.complete(result); if (result.needsRefresh) this.queueReconciliation();
     });
     return started;
   }
@@ -50,10 +50,10 @@ export class LocalArtifactRouteRuntime<TRead, TCreated, TPayload = void> {
     const started = this.lifecycle.startMutation(this.deps.mutationKind);
     if (!started.accepted) return started;
     this.deps.render();
-    this.deps.mutate(payload).then(({ created, message }) => {
+    this.deps.mutate(payload).then(({ created, message, commitAccepted }) => {
       const result = this.lifecycle.finishMutationSuccess(started, created, message);
       if (!result.accepted || !this.deps.ownsRoute()) { if (result.needsRefresh && this.deps.ownsRoute()) this.queueReconciliation(); return; }
-      this.deps.applyCreated?.(created); this.deps.render(); this.complete(result);
+      if (!result.reconciliationRequired) commitAccepted?.(); this.deps.applyCreated?.(created); this.deps.render(); this.complete(result);
       if (result.needsRefresh && !result.reconciliationRequired) this.load('mutation-refresh');
     }).catch((error) => {
       const result = this.lifecycle.finishMutationFailure(started, this.isAmbiguous(error));

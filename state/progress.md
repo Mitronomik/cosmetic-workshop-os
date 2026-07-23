@@ -1190,3 +1190,12 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Focused test counts and regression/backend verification are recorded in the final correction response after execution.
 - GitHub PR body is intentionally not updated by this correction; the product owner will update it manually.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 remaining reconciliation/result-boundary correction
+
+- Active PR remains #136 — B3.3 — Local artifacts and reports shared-feedback lifecycle.
+- Branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`.
+- Published head before this correction: `aae116536c2b68dec0808ccd0cae099f325e09ae`.
+- Correction scope closes remaining B3.3 gaps for detached-mutation reconciliation ordering, failed provisional reconciliation GET queueing, focusable create targets, accepted-only Export entity counts, accepted-only Report Document reason clearing, restored stale/absent and same-route tests, and dead helper cleanup.
+- GitHub PR body is intentionally not updated by this correction; the product owner will update it manually.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
