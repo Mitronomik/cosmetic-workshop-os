@@ -1183,3 +1183,10 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Correction addresses five review gaps: irreversible detached mutation ownership, production-composed runtime tests, real production focus recovery, separate warning/error presentation, and reconciliation lock after ambiguous outcomes.
 - Focused and regression test counts are recorded in the PR body and final correction response after execution.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 DOM binding and reconciliation correction
+
+- Added a focused correction for PR #136 on `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle` to address DOM binding validity, duplicate focus attributes, detached reconciliation sequencing, request-owned announcements, focus target consistency, feedback cleanup, reconciliation-disabled controls, Dashboard navigation cleanup, and the Reports read-only test harness.
+- Focused test counts and regression/backend verification are recorded in the final correction response after execution.
+- GitHub PR body is intentionally not updated by this correction; the product owner will update it manually.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

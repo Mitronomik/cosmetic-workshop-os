@@ -21,7 +21,7 @@ export type LocalArtifactRuntimeDeps<TRead, TCreated, TPayload> = {
 
 export class LocalArtifactRouteRuntime<TRead, TCreated, TPayload = void> {
   readonly lifecycle: LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated>;
-  private lastAnnouncement = '';
+  private announcedOwners = new Set<string>();
   constructor(private readonly deps: LocalArtifactRuntimeDeps<TRead, TCreated, TPayload>) {
     this.lifecycle = deps.lifecycle ?? new LocalArtifactsReportsFeedbackLifecycle<TRead, TCreated>({ route: deps.route, messages: deps.messages, validateCreated: deps.validateCreated, focus: this.focusMap(deps.route) });
   }
@@ -36,7 +36,7 @@ export class LocalArtifactRouteRuntime<TRead, TCreated, TPayload = void> {
     this.deps.read().then((snapshot) => {
       const result = this.lifecycle.finishReadSuccess(started, snapshot);
       if (!result.accepted || !this.deps.ownsRoute()) return;
-      this.deps.applyRead(snapshot); this.deps.render(); this.complete(result);
+      this.deps.applyRead(snapshot); this.deps.render(); this.complete(result); if (result.needsRefresh) this.queueReconciliation();
     }).catch(() => {
       const result = this.lifecycle.finishReadFailure(started);
       if (!result.accepted || !this.deps.ownsRoute()) return;
@@ -52,12 +52,12 @@ export class LocalArtifactRouteRuntime<TRead, TCreated, TPayload = void> {
     this.deps.render();
     this.deps.mutate(payload).then(({ created, message }) => {
       const result = this.lifecycle.finishMutationSuccess(started, created, message);
-      if (!result.accepted || !this.deps.ownsRoute()) { if (result.needsRefresh && this.deps.ownsRoute()) this.load('reconciliation'); return; }
+      if (!result.accepted || !this.deps.ownsRoute()) { if (result.needsRefresh && this.deps.ownsRoute()) this.queueReconciliation(); return; }
       this.deps.applyCreated?.(created); this.deps.render(); this.complete(result);
-      if (result.needsRefresh) this.load('mutation-refresh');
+      if (result.needsRefresh && !result.reconciliationRequired) this.load('mutation-refresh');
     }).catch((error) => {
       const result = this.lifecycle.finishMutationFailure(started, this.isAmbiguous(error));
-      if (!result.accepted || !this.deps.ownsRoute()) { if (result.needsRefresh && this.deps.ownsRoute()) this.load('reconciliation'); return; }
+      if (!result.accepted || !this.deps.ownsRoute()) { if (result.needsRefresh && this.deps.ownsRoute()) this.queueReconciliation(); return; }
       this.deps.render(); this.complete(result);
     });
     return started;
@@ -65,10 +65,16 @@ export class LocalArtifactRouteRuntime<TRead, TCreated, TPayload = void> {
 
   reconcile() { return this.load('reconciliation'); }
 
+  private queueReconciliation() {
+    if (!this.deps.ownsRoute() || this.lifecycle.state.read) { this.lifecycle.state.pendingReconciliationAfterRead = true; return; }
+    this.lifecycle.state.pendingReconciliationAfterRead = false;
+    this.load('reconciliation');
+  }
+
   private complete(result: LocalArtifactFinishResult) {
     if (!result.accepted || !this.deps.ownsRoute()) return;
-    if (result.message && result.announcement !== 'none' && this.lastAnnouncement !== `${result.announcement}:${result.message}`) {
-      this.lastAnnouncement = `${result.announcement}:${result.message}`;
+    if (result.message && result.announcement !== 'none' && result.announcementOwnerKey && !this.announcedOwners.has(result.announcementOwnerKey)) {
+      this.announcedOwners.add(result.announcementOwnerKey);
       this.deps.announce(result.message, result.announcement);
     }
     if (result.focusKey) this.deps.focus(result.focusKey);

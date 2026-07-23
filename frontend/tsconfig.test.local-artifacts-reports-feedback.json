@@ -3,6 +3,7 @@
   "compilerOptions": { "outDir": "dist-tests/local-artifacts-reports-feedback", "rootDir": "src", "noEmit": false },
   "include": [
     "src/local-artifacts-reports-feedback.ts",
+    "src/local-artifacts-reports-bindings.ts",
     "src/local-artifacts-reports-runtime.ts",
     "src/local-artifacts-reports-route.ts",
     "src/local-artifacts-reports-presentation.ts",

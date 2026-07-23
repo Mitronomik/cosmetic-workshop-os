@@ -15,3 +15,11 @@
 - Required regressions: dashboard/onboarding, help, alerts, purchases, form validation, targeted validation, order mutation lifecycle, order readiness presentation, and frontend build.
 - Backend verification: focused backup/export/report/report-document suites and complete `pytest -q`; branch-only failure delta must remain zero against accepted baseline failures.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+
+## Current correction addendum — DOM binding and reconciliation regressions
+
+- Correction commit scope: fix B3.3 DOM binding selectors, duplicate focus-key attributes, detached reconciliation sequencing, production focus construction, reconciliation-disabled controls, request-owned announcements, result-owned feedback cleanup, Dashboard navigation cleanup, Reports read-only harness, and dead helper cleanup.
+- GitHub PR body is intentionally not updated by this correction; product owner will update it manually.
+- Required verification remains the focused B3.3 suite twice, listed frontend regressions, frontend build, focused backend artifact/report suites, complete backend suite with branch-only failure delta 0, and repository integrity checks.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

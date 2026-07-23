@@ -641,3 +641,12 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - Backend remains unchanged; known baseline failures are unchanged.
 - Next slice remains B3.4 — Recipes and Clients shared-feedback lifecycle.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 DOM binding and reconciliation correction handoff
+
+- Correction scope remains `/backups`, `/exports`, `/report-documents`, and `/reports` only.
+- B3.3 bindings are extracted to a production binding helper used by `main.ts` and focused tests; invalid compound selectors and duplicate focus-key attributes are removed from B3.3 markup.
+- Detached mutation reconciliation now distinguishes provisional reads from post-settlement authoritative reads and queues at most one post-settlement reconciliation GET when needed; POST is never retried automatically.
+- The production runtime owns lifecycle construction, focus configuration, request-owned announcements, reconciliation locks, and result-owned feedback cleanup.
+- Reports remains read-only in production and in the focused harness.
+- GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
