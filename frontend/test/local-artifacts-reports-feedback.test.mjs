@@ -1,78 +1,42 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LocalArtifactsReportsFeedbackLifecycle, bindEveryActionControl, transitionLocalArtifactRouteOwnership } from '../dist-tests/local-artifacts-reports-feedback/local-artifacts-reports-feedback.js';
+import { createLocalArtifactRouteRuntime } from '../dist-tests/local-artifacts-reports-feedback/local-artifacts-reports-runtime.js';
+import { transitionLocalArtifactsReportsRouteOwnership } from '../dist-tests/local-artifacts-reports-feedback/local-artifacts-reports-route.js';
+import { bindEveryActionControl } from '../dist-tests/local-artifacts-reports-feedback/local-artifacts-reports-feedback.js';
 import { localArtifactPresentation } from '../dist-tests/local-artifacts-reports-feedback/local-artifact-presentation.js';
 
-const messages = {
-  loading:'loading', refreshing:'refreshing', initialError:'initial error', refreshError:'refresh warning', refreshSuccess:'refresh ok', mutationBusy:'busy', mutationSuccess:'created', mutationError:'create failed', mutationAmbiguous:'ambiguous refresh first', invalidMutationResponse:'invalid created', mutationRefreshWarning:'created but refresh failed'
-};
-const mk = () => new LocalArtifactsReportsFeedbackLifecycle({ route:'backups', messages, validateCreated:(x)=>Boolean(x?.id || x?.filename) });
-const snap = (items=[]) => ({ items });
-const created = (id=1) => ({ id, filename:`file-${id}.json`, path:`/tmp/file-${id}.json` });
+const messages = { loading:'loading', refreshing:'refreshing', reconciling:'reconciling', initialError:'initial error', refreshError:'refresh warning', refreshSuccess:'refresh ok', mutationBusy:'busy', mutationSuccess:'created', mutationError:'create failed', mutationAmbiguous:'Нельзя подтвердить результат: файл мог быть создан. Обновите список перед повтором.', invalidMutationResponse:'invalid created', mutationRefreshWarning:'created but refresh failed', reconciliationFailed:'still cannot confirm' };
+function deferred(){let resolve,reject;const promise=new Promise((res,rej)=>{resolve=res;reject=rej});return {promise,resolve,reject};}
+const artifact=(id=1)=>({id,filename:`file-${id}.json`,path:`/tmp/file-${id}.json`,created_at:'2026-07-23T00:00:00Z',size_bytes:10,reason:'manual'});
+function makeRoute(route='backups'){
+  const h={active:true,renders:0,polite:[],assertive:[],focus:[],reads:[],mutations:[],applied:[],created:[],postCount:0,readCount:0};
+  const runtime=createLocalArtifactRouteRuntime({ route, mutationKind: route==='exports'?'create-export':route==='reportDocuments'?'create-report-document':'create-backup', messages, read:()=>{h.readCount++;const d=deferred();h.reads.push(d);return d.promise;}, mutate:()=>{h.postCount++;const d=deferred();h.mutations.push(d);return d.promise;}, validateCreated:(x)=>Boolean(x?.filename&&x?.path || x?.id&&x?.filename), ownsRoute:()=>h.active, applyRead:(s)=>h.applied.push(s), applyCreated:(c)=>h.created.push(c), render:()=>{if(h.active)h.renders++}, announce:(m,k)=>h[k==='assertive'?'assertive':'polite'].push(m), focus:(k)=>h.focus.push(k) });
+  return {h,runtime};
+}
+const flush=()=>new Promise(r=>setImmediate(r));
 
-test('shared ownership covers request ids, duplicate reads, loaded empty snapshots and refresh preservation',()=>{
-  const l=mk(); l.enter(); const a=l.startRead('initial'); assert.equal(a.accepted,true); assert.equal(a.requestId,1);
-  assert.equal(l.startRead('initial').accepted,false);
-  let done=l.finishReadSuccess(a,snap([])); assert.equal(done.accepted,true); assert.deepEqual(l.state.snapshot.data.items,[]); assert.equal(l.state.feedback.neutral,'');
-  const r=l.startRead('refresh'); assert.equal(r.requestId,2); done=l.finishReadFailure(r); assert.equal(done.accepted,true); assert.deepEqual(l.state.snapshot.data.items,[]); assert.equal(l.state.feedback.warning,'refresh warning');
-});
+test('production runtime: detached settles before return reconciles with GET and no POST repeat',async()=>{const {h,runtime}=makeRoute('backups');runtime.enter();runtime.create({reason:'manual'});assert.equal(h.postCount,1);runtime.leave();h.active=false;h.mutations[0].resolve({created:artifact(1),message:'created'});await flush();assert.deepEqual(h.polite,[]);assert.deepEqual(h.focus,[]);assert.equal(h.renders,1);h.active=true;runtime.enter();runtime.reconcile();assert.equal(h.readCount,1);h.reads[0].resolve({items:[artifact(1)]});await flush();assert.equal(h.postCount,1);assert.equal(runtime.lifecycle.state.reconciliationRequired,false);});
 
-test('route generations reject stale success and stale failure and cannot clear newer owner',()=>{
-  const l=mk(); l.enter(); const old=l.startRead('initial'); l.leave(); l.enter(); const newer=l.startRead('initial');
-  assert.equal(l.finishReadSuccess(old,snap([1])).accepted,false); assert.equal(l.state.read.requestId,newer.requestId);
-  assert.equal(l.finishReadFailure(old).accepted,false); assert.equal(l.state.read.requestId,newer.requestId);
-});
+test('production runtime: return before detached settlement keeps detached immutable and queues authoritative reconciliation',async()=>{const {h,runtime}=makeRoute('exports');runtime.enter();runtime.create({reason:'manual'});runtime.leave();h.active=false;h.active=true;runtime.enter();runtime.reconcile();assert.equal(h.readCount,1);h.mutations[0].resolve({created:artifact(2),message:'old success'});await flush();assert.deepEqual(h.polite,[]);assert.deepEqual(h.focus,[]);assert.equal(runtime.lifecycle.state.reconciliationRequired,true);h.reads[0].resolve({items:[artifact(2)]});await flush();assert.equal(runtime.lifecycle.state.reconciliationRequired,false);assert.equal(h.postCount,1);});
 
-test('duplicate mutations rejected, result-owned messages do not leak between operations, neutral clears',()=>{
-  const l=mk(); l.enter(); const m=l.startMutation('create-backup'); assert.equal(l.state.feedback.neutral,'busy'); assert.equal(l.startMutation('create-backup').accepted,false);
-  const done=l.finishMutationSuccess(m,created(1),'success one'); assert.equal(done.message,'success one'); assert.equal(l.state.feedback.neutral,''); assert.equal(l.state.feedback.success,'success one');
-  const m2=l.startMutation('create-backup'); const fail=l.finishMutationFailure(m2); assert.equal(fail.message,'create failed'); assert.equal(l.state.feedback.success,''); assert.equal(l.state.feedback.error,'create failed');
-});
+test('production runtime: detached failure creates no feedback but requires read reconciliation',async()=>{const {h,runtime}=makeRoute('reportDocuments');runtime.enter();runtime.create({format:'pdf'});runtime.leave();h.active=false;h.mutations[0].reject(new Error('definite'));await flush();assert.deepEqual(h.assertive,[]);assert.equal(runtime.lifecycle.state.reconciliationRequired,true);h.active=true;runtime.enter();runtime.reconcile();assert.equal(h.readCount,1);});
 
-test('mutation success plus refresh failure keeps created result and separates warning',()=>{
-  const l=mk(); l.enter(); const read=l.startRead('initial'); l.finishReadSuccess(read,snap([created(0)]));
-  const m=l.startMutation('create-backup'); const ok=l.finishMutationSuccess(m,created(2),'backup created'); assert.equal(ok.needsRefresh,true); assert.deepEqual(l.state.lastCreated,created(2));
-  const rr=l.startRead('mutation-refresh'); const warn=l.finishReadFailure(rr); assert.equal(warn.message,'created but refresh failed'); assert.equal(l.state.feedback.success,'backup created'); assert.equal(l.state.feedback.warning,'created but refresh failed'); assert.deepEqual(l.state.snapshot.data.items,[created(0)]);
-});
+for (const route of ['backups','exports','reportDocuments']) test(`ambiguous ${route} locks mutation until accepted GET reconciliation`,async()=>{const {h,runtime}=makeRoute(route);runtime.enter();runtime.create({});h.mutations[0].reject(new TypeError('Failed to fetch'));await flush();assert.equal(runtime.lifecycle.state.reconciliationRequired,true);assert.equal(runtime.presentation().canCreate,false);runtime.create({});assert.equal(h.postCount,1);runtime.reconcile();h.reads[0].reject(new Error('GET failed'));await flush();assert.equal(runtime.lifecycle.state.reconciliationRequired,true);runtime.reconcile();h.reads[1].resolve({items:[]});await flush();assert.equal(runtime.lifecycle.state.reconciliationRequired,false);runtime.create({});assert.equal(h.postCount,2);});
 
-test('detached mutation settlement renders no announcement or focus and return read does not repeat mutation',()=>{
-  const l=mk(); l.enter(); const m=l.startMutation('create-backup'); l.leave(); const done=l.finishMutationSuccess(m,created(3),'late'); assert.equal(done.accepted,false); assert.equal(done.detached,true); assert.equal(done.announcement,'none'); l.enter(); const r=l.startRead('initial'); assert.equal(r.accepted,true); assert.equal(r.kind,'initial');
-});
+test('stale GET cannot clear reconciliation lock or newer owner',async()=>{const {h,runtime}=makeRoute('backups');runtime.enter();runtime.create({});h.mutations[0].reject(new TypeError('network'));await flush();const stale=runtime.reconcile();runtime.leave();runtime.enter();h.reads[0].resolve({items:[]});await flush();assert.equal(stale.accepted,true);assert.equal(runtime.lifecycle.state.reconciliationRequired,true);});
 
-test('invalid or unrelated mutation response is rejected and asks for read reconciliation',()=>{
-  const l=mk(); l.enter(); const m=l.startMutation('create-backup'); const done=l.finishMutationSuccess(m,{},'bad'); assert.equal(done.accepted,true); assert.equal(done.needsRefresh,true); assert.equal(done.announcement,'assertive'); assert.equal(l.state.lastCreated,null); assert.equal(l.state.feedback.error,'invalid created');
-});
+for (const route of ['backups','exports','reportDocuments']) test(`success plus refresh warning on ${route} keeps success and warning presentation`,async()=>{const {h,runtime}=makeRoute(route);runtime.enter();runtime.load('initial');h.reads[0].resolve({items:[artifact(0)]});await flush();runtime.create({});h.mutations[0].resolve({created:artifact(3),message:'created ok'});await flush();assert.equal(h.postCount,1);assert.equal(h.created.length,1);assert.equal(h.polite.at(-1),'created ok');h.reads[1].reject(new Error('read fail'));await flush();const p=runtime.presentation();assert.equal(p.feedback.success,'created ok');assert.equal(p.feedback.warning,'created but refresh failed');assert.equal(p.feedback.error,'');assert.equal(h.polite.at(-1),'created but refresh failed');});
 
-test('ambiguous transport outcome is not retried automatically and points to refresh',()=>{
-  const l=mk(); l.enter(); const m=l.startMutation('create-backup'); const done=l.finishMutationFailure(m,true); assert.match(done.message,/refresh first/); assert.equal(done.needsRefresh,true); assert.equal(l.state.mutation,null);
-});
+test('definite mutation failure is error/assertive and focuses create target',async()=>{const {h,runtime}=makeRoute('backups');runtime.enter();runtime.create({});h.mutations[0].reject({status:500});await flush();const p=runtime.presentation();assert.equal(p.feedback.error,'create failed');assert.deepEqual(h.assertive,['create failed']);assert.deepEqual(h.focus,['b3-backups-create']);});
 
-test('backups lifecycle: empty, non-empty, retry, duplicate create and refresh GET-only recovery',()=>{
-  const l=mk(); l.enter(); const empty=l.startRead('initial'); l.finishReadSuccess(empty,snap([])); assert.equal(l.state.snapshot.data.items.length,0);
-  const refresh=l.startRead('refresh'); l.finishReadSuccess(refresh,snap([created(1)])); assert.equal(l.state.snapshot.data.items.length,1);
-  const m=l.startMutation('create-backup'); assert.equal(l.startMutation('create-backup').accepted,false); l.finishMutationSuccess(m,created(4),'created'); const getOnly=l.startRead('mutation-refresh'); assert.equal(getOnly.kind,'mutation-refresh');
-});
+test('initial failure focuses retry, initial success is silent, manual Reports refresh is polite and read-only',async()=>{const {h,runtime}=makeRoute('reports');runtime.enter();runtime.load('initial');h.reads[0].reject(new Error('down'));await flush();assert.deepEqual(h.assertive,['initial error']);assert.deepEqual(h.focus,['b3-reports-retry']);runtime.load('initial');h.reads[1].resolve({overview:{},inventory:{},orders:{},production:{},finance:{}});await flush();assert.equal(h.polite.length,0);runtime.load('refresh');h.reads[2].resolve({overview:{fresh:true},inventory:{},orders:{},production:{},finance:{}});await flush();assert.deepEqual(h.polite,['refresh ok']);assert.equal(h.postCount,0);assert.equal(h.readCount,3);});
 
-test('exports lifecycle preserves PR106 success plus refresh warning and open/download presentation is unaffected',()=>{
-  const l=new LocalArtifactsReportsFeedbackLifecycle({ route:'exports', messages, validateCreated:(x)=>Boolean(x?.filename&&x?.path) }); l.enter(); const r=l.startRead('initial'); l.finishReadSuccess(r,snap([created(1)])); const m=l.startMutation('create-export'); l.finishMutationSuccess(m,created(2),'export ok'); const rr=l.startRead('mutation-refresh'); l.finishReadFailure(rr); assert.equal(l.state.lastCreated.filename,'file-2.json'); const p=localArtifactPresentation({filename:'export.json',path:'/safe/export.json',folderKind:'exports'}); assert.equal(p.filename,'export.json'); assert.match(p.folderLabel,/экспорта/i);
-});
+test('stale and absent route completions do not announce/focus/render',async()=>{const {h,runtime}=makeRoute('exports');runtime.enter();runtime.load('initial');runtime.leave();h.active=false;h.reads[0].resolve({items:[artifact(1)]});await flush();assert.deepEqual(h.polite,[]);assert.deepEqual(h.focus,[]);assert.equal(h.applied.length,0);});
 
-test('report documents lifecycle covers markdown, pdf, unavailable capability and unchanged previous docs',()=>{
-  const l=new LocalArtifactsReportsFeedbackLifecycle({ route:'reportDocuments', messages, validateCreated:(x)=>Boolean(x?.id&&x?.filename&&x?.format) }); l.enter(); const previous={id:'old',filename:'old.md',format:'markdown'}; const r=l.startRead('initial'); l.finishReadSuccess(r,snap([previous])); const m=l.startMutation('create-report-document'); l.finishMutationSuccess(m,{id:'new',filename:'new.pdf',format:'pdf'},'pdf ok'); const rr=l.startRead('mutation-refresh'); l.finishReadFailure(rr); assert.deepEqual(l.state.snapshot.data.items,[previous]); assert.equal(l.state.lastCreated.format,'pdf');
-});
+test('route adapter same-route transition does not re-enter and leaving invalidates reads',()=>{const a=makeRoute('backups').runtime,b=makeRoute('exports').runtime;transitionLocalArtifactsReportsRouteOwnership({backups:a,exports:b},null,'backups');assert.equal(a.lifecycle.state.routeGeneration,1);transitionLocalArtifactsReportsRouteOwnership({backups:a,exports:b},'backups','backups');assert.equal(a.lifecycle.state.routeGeneration,1);const r=a.load('initial');transitionLocalArtifactsReportsRouteOwnership({backups:a,exports:b},'backups','exports');assert.equal(a.lifecycle.finishReadSuccess(r,{items:[]}).accepted,false);assert.equal(b.lifecycle.state.routeGeneration,1);});
 
-test('reports lifecycle is read only, supports empty/non-empty, stale callbacks and route leave invalidation',()=>{
-  const l=new LocalArtifactsReportsFeedbackLifecycle({ route:'reports', messages }); l.enter(); const r=l.startRead('initial'); l.finishReadSuccess(r,{overview:{empty:true}}); assert.equal(l.state.snapshot.data.overview.empty,true); const r2=l.startRead('refresh'); l.leave(); assert.equal(l.finishReadSuccess(r2,{overview:{empty:false}}).accepted,false); l.enter(); const r3=l.startRead('initial'); l.finishReadFailure(r3); assert.equal(l.state.feedback.warning,'refresh warning');
-});
+test('all rendered retry/reload controls bind through production helper',()=>{const calls=[];const controls=[{addEventListener:(t,cb)=>calls.push([t,cb])},{addEventListener:(t,cb)=>calls.push([t,cb])}];const count=bindEveryActionControl({querySelectorAll:(s)=>s==='[data-action="reload-backups"]'?controls:[]},'[data-action="reload-backups"]',()=>{});assert.equal(count,2);assert.equal(calls.length,2);});
 
-test('navigation integration transitions all B3.3 routes and avoids same-route duplicate enter',()=>{
-  const a=mk(), b=mk(); transitionLocalArtifactRouteOwnership({backups:a,exports:b},null,'backups'); assert.equal(a.state.routeGeneration,1); transitionLocalArtifactRouteOwnership({backups:a,exports:b},'backups','backups'); assert.equal(a.state.routeGeneration,1); transitionLocalArtifactRouteOwnership({backups:a,exports:b},'backups','exports'); assert.equal(a.state.routeGeneration,2); assert.equal(b.state.routeGeneration,1);
-});
+test('main wiring source uses production runtime factory and route adapter, not only helper lifecycle',async()=>{const fs=await import('node:fs/promises');const source=await fs.readFile(new URL('../src/main.ts', import.meta.url),'utf8');assert.match(source,/createLocalArtifactRouteRuntime<BackupReadSnapshot/);assert.match(source,/transitionLocalArtifactsReportsRouteOwnership\(\{ backups: backupRuntime/);assert.doesNotMatch(source,/mutation\.detached = false/);assert.doesNotMatch(source,/feedback\.error \|\| .*feedback\.warning/);});
 
-test('all rendered retry/reload controls are bound with querySelectorAll helper',()=>{
-  const calls=[]; const controls=[{addEventListener:(t,cb)=>calls.push([t,cb])},{addEventListener:(t,cb)=>calls.push([t,cb])}]; const root={querySelectorAll:(sel)=> sel==='[data-action="reload-backups"]'?controls:[]}; const count=bindEveryActionControl(root,'[data-action="reload-backups"]',()=>{}); assert.equal(count,2); assert.equal(calls.length,2);
-});
-
-test('regression boundaries keep alerts purchases dashboard help and import concepts external',()=>{
-  const p=localArtifactPresentation({ filename:null, path:'/tmp/report.md', folderKind:'reportDocuments' }); assert.equal(p.filename,'report.md'); assert.equal(typeof p.technicalPath,'string');
-});
+test('local artifact presentation remains unchanged for open/download metadata',()=>{const p=localArtifactPresentation({filename:null,path:'/safe/export.json',folderKind:'exports'});assert.equal(p.filename,'export.json');assert.match(p.folderLabel,/экспорта/i);});

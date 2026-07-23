@@ -1173,3 +1173,13 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Complete backend suite collected 496 / passed 492 / failed 4 / skipped 0 with known failing node IDs only; branch-only backend failure delta: 0.
 - Publication metadata is inconclusive in this runner: no GitHub remote is configured and `gh` is unavailable, so a GitHub-assigned PR number and published head could not be verified here.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 correction
+
+- Earlier local runner notes could not verify publication, but GitHub publication was subsequently verified by the product owner.
+- Authoritative PR: #136 — B3.3 — Local artifacts and reports shared-feedback lifecycle.
+- Authoritative branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`.
+- Base: `main` at `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before correction: `e0138cc9a05a7e5529bf9f0e16b2283eb080d55a`; state open; draft false.
+- Correction addresses five review gaps: irreversible detached mutation ownership, production-composed runtime tests, real production focus recovery, separate warning/error presentation, and reconciliation lock after ambiguous outcomes.
+- Focused and regression test counts are recorded in the PR body and final correction response after execution.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

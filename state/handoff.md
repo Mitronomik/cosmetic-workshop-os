@@ -631,3 +631,13 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - Local head/published head must be verified after push; this runner had no GitHub remote or `gh`.
 - Next slice: B3.4 — Recipes and Clients shared-feedback lifecycle.
 - Block B smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 correction handoff
+
+- PR #136 remains the active B3.3 pull request; no replacement PR or branch is intended.
+- Actual branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before correction `e0138cc9a05a7e5529bf9f0e16b2283eb080d55a`; state open; draft false.
+- Runtime correction: detached mutations are irreversible and require read reconciliation; ambiguous outcomes lock create/generate until authoritative GET reconciliation; success, warning, and error remain separate; production focus callbacks are invoked only for accepted current-route completions.
+- Test correction: the focused B3.3 suite now uses production runtime and route modules with deferred API dependencies, render/announcement/focus recording, and exact GET/POST call assertions.
+- Backend remains unchanged; known baseline failures are unchanged.
+- Next slice remains B3.4 — Recipes and Clients shared-feedback lifecycle.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

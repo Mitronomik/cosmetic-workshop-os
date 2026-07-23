@@ -1,12 +1,11 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "outDir": "dist-tests/local-artifacts-reports-feedback",
-    "rootDir": "src",
-    "noEmit": false
-  },
+  "compilerOptions": { "outDir": "dist-tests/local-artifacts-reports-feedback", "rootDir": "src", "noEmit": false },
   "include": [
     "src/local-artifacts-reports-feedback.ts",
+    "src/local-artifacts-reports-runtime.ts",
+    "src/local-artifacts-reports-route.ts",
+    "src/local-artifacts-reports-presentation.ts",
     "src/local-artifact-presentation.ts",
     "src/dashboard-onboarding-feedback.ts",
     "src/alerts-feedback.ts",
