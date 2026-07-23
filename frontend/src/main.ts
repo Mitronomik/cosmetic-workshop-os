@@ -3,6 +3,10 @@ import { applyValidationToClientForm, applyValidationToClientRecipeCompositionFo
 import { canOpenOrderProductionConfirmation, canStartOrderReadinessRequest, canStartOrderWriteRequest, clearOrderSourceValidation, createOrderMutationController, emptyOrderValidationProvenance, orderBoundOperationActive, orderOperationError, orderOperationErrorFor, orderPayloadFromDraft, orderPersistentWriteActive, orderPersistentWriteOwner, orderProductionIsClosed, orderReadinessAttemptMatches, orderReadinessRequestActive, orderReadinessResultIsCurrent, orderRequestOwnerMatches, ownerFromOrderRequest, extractProductionApiFailure, productionConfirmationFailurePresentation, productionFailureForOrder, productionReadinessFailureMessage, productionResponseBelongsToOrder, finishProductionOwnerState, restoreOrderOperationGenerationForOwnedNonMutatingFailure, type OrderContextSnapshot, type OrderOperationError, type OrderOperationState, type OrderRequestSnapshot, type OrderTransientRequestOwner, type OrderValidationProvenance } from './order-mutation-lifecycle.js';
 import { renderOrderLifecycleActions, renderOrderPersistentWriteNotice, renderOrderProductionGate, renderOrderReadinessPanel, renderOrderRowActions, type OrderLifecycleActionsInput, type ProductionReadinessResponse } from './order-readiness-presentation.js';
 import { artifactFolderLabel, artifactReason, artifactSize, localArtifactPresentation } from './local-artifact-presentation.js';
+import { type LocalArtifactRouteKey } from './local-artifacts-reports-feedback.js';
+import { bindLocalArtifactsReportsControls } from './local-artifacts-reports-bindings.js';
+import { createLocalArtifactRouteRuntime } from './local-artifacts-reports-runtime.js';
+import { transitionLocalArtifactsReportsRouteOwnership } from './local-artifacts-reports-route.js';
 import { bindActionControls, DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, selectOnboardingFocusTarget, type FocusCandidate, type OnboardingAction } from './dashboard-onboarding-feedback.js';
 import { ALERT_REGENERATION_REFRESH_WARNING_ANNOUNCEMENT, AlertsFeedbackLifecycle, alertsPresentation, bindAlertsActionControls, filterDisplayedAlerts, selectAlertFocusTarget, transitionAlertsRouteOwnership, type AlertFilters } from './alerts-feedback.js';
 import { PurchaseSuggestionsFeedbackLifecycle, purchaseSuggestionsPresentation, DEFAULT_PURCHASE_FILTERS, type PurchaseSuggestionFilters as LifecyclePurchaseSuggestionFilters } from './purchase-suggestions-feedback.js';
@@ -187,13 +191,13 @@ type BackupStatusResponse = { database_path: string; database_exists: boolean; d
 type BackupListResponse = { backups: BackupFileResponse[]; backup_dir: string };
 type BackupCreateRequest = { reason?: string | null };
 type BackupCreateResponse = { backup: BackupFileResponse; database_path: string; backup_dir: string; message: string };
-type BackupUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; message: string; backupStatus: BackupStatusResponse | null; backups: BackupFileResponse[]; reason: string; customReason: string; lastCreatedBackup: BackupFileResponse | null };
+type BackupUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; warning: string; message: string; backupStatus: BackupStatusResponse | null; backups: BackupFileResponse[]; reason: string; customReason: string; lastCreatedBackup: BackupFileResponse | null };
 type ExportFileResponse = { filename: string; path: string; created_at: string | null; reason: string | null; size_bytes: number };
 type ExportStatusResponse = { database_path: string; database_exists: boolean; database_size_bytes: number | null; export_dir: string; export_dir_exists: boolean; export_count: number; latest_export: ExportFileResponse | null };
 type ExportListResponse = { exports: ExportFileResponse[]; export_dir: string };
 type ExportCreateRequest = { reason?: string | null };
 type ExportCreateResponse = { export: ExportFileResponse; database_path: string; export_dir: string; entity_counts: Record<string, number>; message: string };
-type ExportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; message: string; exportStatus: ExportStatusResponse | null; exports: ExportFileResponse[]; reason: string; customReason: string; lastCreatedExport: ExportFileResponse | null; lastEntityCounts: Record<string, number> };
+type ExportUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; warning: string; message: string; exportStatus: ExportStatusResponse | null; exports: ExportFileResponse[]; reason: string; customReason: string; lastCreatedExport: ExportFileResponse | null; lastEntityCounts: Record<string, number> };
 type DemoDataInstallRequest = { confirm_install: boolean; understand_demo_data: boolean };
 type DemoDataClearRequest = { confirm_clear: boolean };
 type DemoDataStatusResponse = { is_installed: boolean; active_session_id: number | null; demo_version: string; can_install: boolean; can_clear: boolean; has_business_data: boolean; has_non_demo_business_data: boolean; created_counts: Record<string, number>; blocking_reasons: string[]; message: string };
@@ -451,13 +455,13 @@ type AlertsReportSummary = { open_alerts: number; critical_or_blocking_alerts: n
 type PurchaseReportSummary = { open_purchase_suggestions: number };
 type OverviewReportResponse = { generated_at: string; inventory_summary: InventoryReportResponse; orders_summary: OrdersReportResponse; production_summary: ProductionReportResponse; alerts_summary: AlertsReportSummary; purchase_summary: PurchaseReportSummary; finance_summary: FinanceReportResponse; warnings: ReportWarning[] };
 type ReportTab = 'overview' | 'inventory' | 'orders' | 'production' | 'finance';
-type ReportsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; selectedReport: ReportTab; error: string; message: string; overview: OverviewReportResponse | null; inventory: InventoryReportResponse | null; orders: OrdersReportResponse | null; production: ProductionReportResponse | null; finance: FinanceReportResponse | null };
+type ReportsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; selectedReport: ReportTab; error: string; warning: string; message: string; overview: OverviewReportResponse | null; inventory: InventoryReportResponse | null; orders: OrdersReportResponse | null; production: ProductionReportResponse | null; finance: FinanceReportResponse | null };
 type ReportDocumentMetadata = { id: string; document_type: string; format: string; filename: string; metadata_filename: string | null; created_at: string; source: string; source_generated_at: string | null; title: string; warnings_count: number; size_bytes: number };
 type ReportDocumentStatusResponse = { documents_dir: string; available_formats: string[]; available_document_types: string[]; can_create: boolean; documents_count: number; message: string };
 type ReportDocumentListResponse = { items: ReportDocumentMetadata[]; limit: number; offset: number; total: number };
 type ReportOverviewDocumentCreateRequest = { format?: 'markdown' | 'pdf'; reason?: string };
 type ReportDocumentCreateResponse = { document: ReportDocumentMetadata; message: string };
-type ReportDocumentsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; message: string; documentStatus: ReportDocumentStatusResponse | null; documents: ReportDocumentMetadata[]; lastCreatedDocument: ReportDocumentMetadata | null; reason: string };
+type ReportDocumentsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; warning: string; message: string; documentStatus: ReportDocumentStatusResponse | null; documents: ReportDocumentMetadata[]; lastCreatedDocument: ReportDocumentMetadata | null; reason: string };
 
 type NavigationSection = 'Главная' | 'Алерты' | 'Демо-данные' | 'Резервные копии' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Производство' | 'Экспорт' | 'Документы отчетов' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Помощь';
 type NavigationStatus = 'ready' | 'empty' | 'planned';
@@ -600,8 +604,8 @@ let productionHistoryState: ProductionHistoryState = { batches: [], selectedBatc
 let dashboardState: DashboardState = { status: 'idle', error: '', message: '', warning: '', hasLoadedSnapshot: false, orders: [], clients: [], alerts: [], purchaseSuggestions: [], productionBatches: [] };
 let routePresentationGeneration = 0;
 const dashboardOnboardingLifecycle = new DashboardOnboardingFeedbackLifecycle<DashboardData, OnboardingState>();
-let backupUiState: BackupUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', backupStatus: null, backups: [], reason: 'manual', customReason: '', lastCreatedBackup: null };
-let exportUiState: ExportUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', exportStatus: null, exports: [], reason: 'manual', customReason: '', lastCreatedExport: null, lastEntityCounts: {} };
+let backupUiState: BackupUiState = { status: 'idle', actionStatus: 'idle', error: '', warning: '', message: '', backupStatus: null, backups: [], reason: 'manual', customReason: '', lastCreatedBackup: null };
+let exportUiState: ExportUiState = { status: 'idle', actionStatus: 'idle', error: '', warning: '', message: '', exportStatus: null, exports: [], reason: 'manual', customReason: '', lastCreatedExport: null, lastEntityCounts: {} };
 let demoDataUiState: DemoDataUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', demoStatus: null, installConfirmChecked: false, understandDemoChecked: false, clearConfirmChecked: false, showInstallConfirm: false, showClearConfirm: false, lastInstallResult: null, lastClearResult: null };
 let importUiState: ImportUiState = { status: 'idle', actionStatus: 'idle', applyStatus: 'idle', error: '', message: '', applyError: '', applyErrorIssues: [], applyMessage: '', applyRefreshWarning: '', applyConfirmChecked: false, backupAcknowledged: false, allowWarnings: false, lastApplyResult: null, showApplyConfirm: false, targets: [], drafts: [], selectedDraft: null, selectedDraftStatus: 'idle', selectedDraftError: '', selectedTargetType: '', selectedFileName: '', filters: { status: '', targetType: '' } };
 let alertsState: AlertsState = { items: [], status: 'idle', actionStatus: 'idle', error: '', message: '', filters: { status: 'open', type: '', search: '' }, lastGeneration: null };
@@ -691,8 +695,26 @@ let recipesState: RecipesState = { templates: [], selectedTemplate: null, versio
 let ingredientCatalogControls: CatalogControlState = { categorySearch: '', tagSearch: '', showAllTags: false };
 let packagingCatalogControls: CatalogControlState = { categorySearch: '', tagSearch: '', showAllTags: false };
 let helpUiState: HelpUiState = { search: '', category: '', selectedArticleId: 'getting-started' };
-let reportsUiState: ReportsUiState = { status: 'idle', selectedReport: 'overview', error: '', message: '', overview: null, inventory: null, orders: null, production: null, finance: null };
-let reportDocumentsUiState: ReportDocumentsUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', documentStatus: null, documents: [], lastCreatedDocument: null, reason: '' };
+let reportsUiState: ReportsUiState = { status: 'idle', selectedReport: 'overview', error: '', warning: '', message: '', overview: null, inventory: null, orders: null, production: null, finance: null };
+let reportDocumentsUiState: ReportDocumentsUiState = { status: 'idle', actionStatus: 'idle', error: '', warning: '', message: '', documentStatus: null, documents: [], lastCreatedDocument: null, reason: '' };
+
+type BackupReadSnapshot = { status: BackupStatusResponse; list: BackupListResponse };
+type ExportReadSnapshot = { status: ExportStatusResponse; list: ExportListResponse };
+type ReportDocumentReadSnapshot = { status: ReportDocumentStatusResponse; list: ReportDocumentListResponse };
+type ReportsReadSnapshot = { overview: OverviewReportResponse; inventory: InventoryReportResponse; orders: OrdersReportResponse; production: ProductionReportResponse; finance: FinanceReportResponse };
+
+const backupMessages = { loading: 'Загружаем сведения о резервных копиях…', refreshing: 'Обновляем список резервных копий…', reconciling: 'Проверяем список резервных копий перед следующим созданием…', initialError: 'Не удалось загрузить сведения о резервных копиях. Проверьте, что локальное приложение запущено, и попробуйте снова.', refreshError: 'Не удалось обновить список резервных копий. Предыдущие сведения оставлены на экране.', refreshSuccess: 'Список резервных копий обновлён.', mutationBusy: 'Создаём резервную копию…', mutationSuccess: 'Резервная копия создана.', mutationError: 'Не удалось создать резервную копию. Проверьте, что база данных существует и локальное приложение запущено.', mutationAmbiguous: 'Не удалось получить ответ о создании резервной копии. Перед повторным созданием обновите список: файл мог быть создан локально.', invalidMutationResponse: 'Ответ о резервной копии неполный. Обновите список перед повторной попыткой.', mutationRefreshWarning: 'Резервная копия создана, но список не удалось обновить. Нажмите «Обновить», чтобы перечитать данные.', reconciliationFailed: 'Не удалось подтвердить результат. Файл мог быть создан. Обновите список перед повторным созданием.' };
+const exportMessages = { loading: 'Загружаем сведения об экспортах…', refreshing: 'Обновляем список экспортов…', reconciling: 'Проверяем список экспортов перед следующим созданием…', initialError: 'Не удалось загрузить сведения об экспортах. Проверьте, что локальное приложение запущено, и попробуйте снова.', refreshError: 'Не удалось обновить список экспортов. Предыдущие сведения оставлены на экране.', refreshSuccess: 'Список экспортов обновлён.', mutationBusy: 'Создаём экспорт…', mutationSuccess: 'Экспорт создан.', mutationError: 'Не удалось создать экспорт. Проверьте, что база данных существует и локальное приложение запущено.', mutationAmbiguous: 'Не удалось получить ответ о создании экспорта. Перед повторным созданием обновите список: файл мог быть создан локально.', invalidMutationResponse: 'Ответ об экспорте неполный. Обновите список перед повторной попыткой.', mutationRefreshWarning: 'Экспорт создан, но список не удалось обновить. Нажмите «Обновить», чтобы перечитать данные.', reconciliationFailed: 'Не удалось подтвердить результат. Файл мог быть создан. Обновите список перед повторным созданием.' };
+const reportDocumentsMessages = { loading: 'Загружаем документы отчётов…', refreshing: 'Обновляем список документов отчётов…', reconciling: 'Проверяем список документов перед следующей генерацией…', initialError: 'Не удалось загрузить документы отчётов. Проверьте, что приложение запущено, и попробуйте снова.', refreshError: 'Не удалось обновить список документов отчётов. Предыдущие сведения оставлены на экране.', refreshSuccess: 'Список документов отчётов обновлён.', mutationBusy: 'Создаём документ отчёта…', mutationSuccess: 'Документ создан. Его можно открыть или скачать из списка ниже.', mutationError: 'Не удалось создать документ отчёта. Данные мастерской не изменялись.', mutationAmbiguous: 'Не удалось получить ответ о создании документа. Перед повторной генерацией обновите список: файл мог быть создан локально.', invalidMutationResponse: 'Ответ о документе неполный. Обновите список перед повторной попыткой.', mutationRefreshWarning: 'Документ создан, но список не удалось обновить. Нажмите «Обновить список», чтобы перечитать данные.', reconciliationFailed: 'Не удалось подтвердить результат. Файл мог быть создан. Обновите список перед повторной генерацией.' };
+const reportsMessages = { loading: 'Загружаем отчёты…', refreshing: 'Обновляем отчёты…', reconciling: 'Обновляем отчёты…', initialError: 'Не удалось загрузить отчёты. Проверьте, что приложение запущено, и попробуйте снова.', refreshError: 'Не удалось обновить отчёты. Предыдущая сводка оставлена на экране.', refreshSuccess: 'Отчёты обновлены. Показаны актуальные данные мастерской.', mutationBusy: '', mutationSuccess: '', mutationError: '', mutationAmbiguous: '', invalidMutationResponse: '', mutationRefreshWarning: '', reconciliationFailed: 'Не удалось обновить отчёты. Предыдущая сводка оставлена на экране.' };
+const backupRuntime = createLocalArtifactRouteRuntime<BackupReadSnapshot, BackupFileResponse, BackupCreateRequest>({ route: 'backups', mutationKind: 'create-backup', messages: backupMessages, read: () => Promise.all([getBackupStatus(), getBackups()]).then(([status, list]) => ({ status, list })), mutate: (payload) => createBackup(payload).then((response) => ({ created: response.backup, message: `${response.message || 'Резервная копия создана.'} Файл: ${response.backup.filename}` })), validateCreated: (b) => Boolean(b && b.filename && b.path), createAvailable: () => Boolean(backupUiState.backupStatus?.database_exists), ownsRoute: () => activeSection === 'Резервные копии', applyRead: (snapshot) => { backupUiState.backupStatus = snapshot.status; backupUiState.backups = snapshot.list.backups; }, applyCreated: (backup) => { backupUiState.lastCreatedBackup = backup; }, render: () => { applyBackupLifecycleState(); if (activeSection === 'Резервные копии') render(); }, announce: (message, kind) => kind === 'assertive' ? announceAssertive(message) : announcePolite(message), focus: focusLocalArtifactTarget });
+const exportRuntime = createLocalArtifactRouteRuntime<ExportReadSnapshot, ExportFileResponse, ExportCreateRequest>({ route: 'exports', mutationKind: 'create-export', messages: exportMessages, read: () => Promise.all([getExportStatus(), getExports()]).then(([status, list]) => ({ status, list })), mutate: (payload) => createExport(payload).then((response) => ({ created: response.export, message: `${response.message || 'Экспорт создан.'} Файл: ${response.export.filename}`, commitAccepted: () => { exportUiState.lastEntityCounts = response.entity_counts || {}; } })), validateCreated: (e) => Boolean(e && e.filename && e.path), createAvailable: () => Boolean(exportUiState.exportStatus?.database_exists), ownsRoute: () => activeSection === 'Экспорт', applyRead: (snapshot) => { exportUiState.exportStatus = snapshot.status; exportUiState.exports = snapshot.list.exports; }, applyCreated: (item) => { exportUiState.lastCreatedExport = item; }, render: () => { applyExportLifecycleState(); if (activeSection === 'Экспорт') render(); }, announce: (message, kind) => kind === 'assertive' ? announceAssertive(message) : announcePolite(message), focus: focusLocalArtifactTarget });
+const reportDocumentsRuntime = createLocalArtifactRouteRuntime<ReportDocumentReadSnapshot, ReportDocumentMetadata, ReportOverviewDocumentCreateRequest>({ route: 'reportDocuments', mutationKind: 'create-report-document', messages: reportDocumentsMessages, read: () => Promise.all([getReportDocumentStatus(), getReportDocuments()]).then(([status, list]) => ({ status, list })), mutate: (payload) => createOverviewReportDocument(payload).then((response) => ({ created: response.document, message: `${response.message || 'Документ создан.'} Его можно открыть или скачать из списка ниже.`, commitAccepted: () => { reportDocumentsUiState.reason = ''; } })), validateCreated: (d) => Boolean(d && d.id && d.filename && d.format), createAvailable: () => Boolean(reportDocumentsUiState.documentStatus?.can_create), ownsRoute: () => activeSection === 'Документы отчетов', applyRead: (snapshot) => { reportDocumentsUiState.documentStatus = snapshot.status; reportDocumentsUiState.documents = snapshot.list.items; }, applyCreated: (item) => { reportDocumentsUiState.lastCreatedDocument = item; }, render: () => { applyReportDocumentsLifecycleState(); if (activeSection === 'Документы отчетов') render(); }, announce: (message, kind) => kind === 'assertive' ? announceAssertive(message) : announcePolite(message), focus: focusLocalArtifactTarget });
+const reportsRuntime = createLocalArtifactRouteRuntime<ReportsReadSnapshot, never, void>({ route: 'reports', messages: reportsMessages, read: () => Promise.all([getReportsOverview(), getInventoryReport(), getOrdersReport(), getProductionReport(), getFinanceReport()]).then(([overview, inventory, orders, production, finance]) => ({ overview, inventory, orders, production, finance })), ownsRoute: () => activeSection === 'Отчеты', applyRead: (snapshot) => { reportsUiState = { ...reportsUiState, ...snapshot }; }, render: () => { applyReportsLifecycleState(); if (activeSection === 'Отчеты') render(); }, announce: (message, kind) => kind === 'assertive' ? announceAssertive(message) : announcePolite(message), focus: focusLocalArtifactTarget });
+const backupLifecycle = backupRuntime.lifecycle;
+const exportLifecycle = exportRuntime.lifecycle;
+const reportDocumentsLifecycle = reportDocumentsRuntime.lifecycle;
+const reportsLifecycle = reportsRuntime.lifecycle;
 let settingsUiState: SettingsUiState = { status: 'idle', data: null, error: '' };
 const emptyWorkshopProfile = (): WorkshopProfile => ({ workshop_name: '', master_name: '', workshop_contact_text: '', workshop_note: '' });
 let workshopProfileUiState: WorkshopProfileUiState = { status: 'idle', actionStatus: 'idle', profile: null, draft: emptyWorkshopProfile(), error: '', message: '' };
@@ -843,15 +865,19 @@ function bindEvents(root: HTMLElement) {
     });
   });
   bindActionControls(root, '[data-action="reload-dashboard"]', () => loadDashboard(true));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-reports"]')?.addEventListener('click', () => loadReports(true));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-report-documents"]')?.addEventListener('click', () => loadReportDocuments(true));
-  root.querySelector<HTMLFormElement>('[data-form="report-document-create"]')?.addEventListener('submit', submitReportDocumentCreateForm);
-  root.querySelector<HTMLInputElement>('[data-action="report-document-reason"]')?.addEventListener('input', (event) => { reportDocumentsUiState.reason = (event.currentTarget as HTMLInputElement).value.slice(0, 80); });
-  root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-report-documents-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
-  root.querySelectorAll<HTMLButtonElement>('[data-action="select-report-tab"]').forEach((button) => button.addEventListener('click', () => { reportsUiState.selectedReport = (button.dataset.report as ReportTab | undefined) ?? 'overview'; render(); }));
-  root.querySelectorAll<HTMLButtonElement>('[data-action="navigate-report-related"]').forEach((button) => button.addEventListener('click', () => navigateToSection(button.dataset.section as NavigationSection | undefined)));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-backups"]')?.addEventListener('click', () => loadBackups(true));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-exports"]')?.addEventListener('click', () => loadExports(true));
+  bindLocalArtifactsReportsControls(root, {
+    reloadBackups: () => loadBackups(true),
+    submitBackup: (event) => { event?.preventDefault(); submitBackupCreate(); },
+    reloadExports: () => loadExports(true),
+    submitExport: (event) => { event?.preventDefault(); submitExportCreate(); },
+    reloadReportDocuments: () => loadReportDocuments(true),
+    submitReportDocument: (event) => submitReportDocumentCreateForm(event as SubmitEvent),
+    updateReportDocumentReason: (value) => { reportDocumentsUiState.reason = value; },
+    navigateReportDocumentsRelated: (section) => navigateToSection(section as NavigationSection | undefined),
+    reloadReports: () => loadReports(true),
+    selectReportTab: (tab) => { reportsUiState.selectedReport = (tab as ReportTab | undefined) ?? 'overview'; render(); },
+    navigateReportRelated: (section) => navigateToSection(section as NavigationSection | undefined),
+  });
   root.querySelector<HTMLButtonElement>('[data-action="reload-imports"]')?.addEventListener('click', () => loadImports(true));
   root.querySelector<HTMLButtonElement>('[data-action="reload-demo-data"]')?.addEventListener('click', () => loadDemoDataStatus(true));
   root.querySelector<HTMLButtonElement>('[data-action="show-demo-install-confirm"]')?.addEventListener('click', showDemoInstallConfirm);
@@ -879,12 +905,8 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLSelectElement>('[data-action="filter-import-status"]')?.addEventListener('change', (event) => { importUiState.filters.status = (event.currentTarget as HTMLSelectElement).value; loadImports(true); });
   root.querySelector<HTMLSelectElement>('[data-action="filter-import-target"]')?.addEventListener('change', (event) => { importUiState.filters.targetType = (event.currentTarget as HTMLSelectElement).value; loadImports(true); });
   root.querySelector<HTMLButtonElement>('[data-action="reset-import-filters"]')?.addEventListener('click', () => { importUiState.filters = { status: '', targetType: '' }; loadImports(true); });
-  root.querySelector<HTMLFormElement>('[data-form="export-create"]')?.addEventListener('submit', submitExportCreateForm);
-  root.querySelector<HTMLButtonElement>('[data-action="create-export"]')?.addEventListener('click', () => submitExportCreate());
   root.querySelector<HTMLSelectElement>('[data-action="select-export-reason"]')?.addEventListener('change', (event) => { exportUiState.reason = (event.currentTarget as HTMLSelectElement).value; exportUiState.message = ''; exportUiState.error = ''; render(); });
   root.querySelector<HTMLInputElement>('[data-action="custom-export-reason"]')?.addEventListener('input', (event) => { exportUiState.customReason = (event.currentTarget as HTMLInputElement).value.slice(0, 80); });
-  root.querySelector<HTMLFormElement>('[data-form="backup-create"]')?.addEventListener('submit', submitBackupCreateForm);
-  root.querySelector<HTMLButtonElement>('[data-action="create-backup"]')?.addEventListener('click', () => submitBackupCreate());
   root.querySelector<HTMLSelectElement>('[data-action="select-backup-reason"]')?.addEventListener('change', (event) => { backupUiState.reason = (event.currentTarget as HTMLSelectElement).value; backupUiState.message = ''; backupUiState.error = ''; render(); });
   root.querySelector<HTMLInputElement>('[data-action="custom-backup-reason"]')?.addEventListener('input', (event) => { backupUiState.customReason = (event.currentTarget as HTMLInputElement).value.slice(0, 80); });
   root.querySelector<HTMLInputElement>('[data-action="filter-help-search"]')?.addEventListener('input', (event) => updateHelpSearch(event.currentTarget as HTMLInputElement));
@@ -1393,29 +1415,11 @@ function productionPage() {
 function productionHistoryToolbar() { return `<section class="card filter-card"><label>Поиск по истории<input data-action="filter-production-search" value="${escapeHtml(productionHistoryState.filters.search)}" placeholder="Продукт, клиент, заметка, номер заказа или партии" /></label></section>`; }
 function filteredProductionBatches() { const q=productionHistoryState.filters.search.trim().toLowerCase(); if(!q) return productionHistoryState.batches; return productionHistoryState.batches.filter((b)=>[b.product_name,b.client_name??'',b.notes,String(b.order_id),String(b.id)].some((v)=>v.toLowerCase().includes(q))); }
 function loadBackups(force = false) {
-  if (!force && (backupUiState.status === 'loading' || backupUiState.status === 'ready')) return;
-  backupUiState.status = 'loading';
-  backupUiState.error = '';
-  if (force) backupUiState.message = '';
-  render();
-  Promise.all([getBackupStatus(), getBackups()])
-    .then(([status, list]) => {
-      backupUiState.status = 'ready';
-      backupUiState.backupStatus = status;
-      backupUiState.backups = list.backups;
-      backupUiState.error = '';
-      render();
-    })
-    .catch(() => {
-      backupUiState.status = 'error';
-      backupUiState.error = 'Не удалось загрузить сведения о резервных копиях. Проверьте, что локальное приложение запущено, и попробуйте снова.';
-      render();
-    });
+  if (force) clearFeedbackAnnouncement();
+  backupRuntime.load(backupLifecycle.state.reconciliationRequired ? 'reconciliation' : force || backupLifecycle.state.snapshot ? 'refresh' : 'initial');
 }
 
-function submitBackupCreateForm(event: SubmitEvent) { event.preventDefault(); submitBackupCreate(); }
 function submitBackupCreate() {
-  if (backupUiState.actionStatus === 'creating') return;
   const status = backupUiState.backupStatus;
   if (!status?.database_exists) {
     backupUiState.error = 'База данных пока не найдена. Сначала запустите приложение и создайте рабочие данные.';
@@ -1425,128 +1429,38 @@ function submitBackupCreate() {
   }
   const rawReason = backupUiState.reason === 'custom' ? backupUiState.customReason.trim() : backupUiState.reason;
   const reason = rawReason || 'manual';
-  backupUiState.actionStatus = 'creating';
-  backupUiState.error = '';
-  backupUiState.message = '';
   clearFeedbackAnnouncement();
-  render();
-  createBackup({ reason })
-    .then((response) => {
-      backupUiState.lastCreatedBackup = response.backup;
-      backupUiState.message = `${response.message || 'Резервная копия создана.'} Файл: ${response.backup.filename}`;
-      announcePolite(backupUiState.message);
-      return Promise.all([getBackupStatus(), getBackups()])
-        .then(([statusResponse, list]) => {
-          backupUiState.backupStatus = statusResponse;
-          backupUiState.backups = list.backups;
-          backupUiState.status = 'ready';
-          backupUiState.actionStatus = 'idle';
-          render();
-        })
-        .catch(() => {
-          backupUiState.status = 'ready';
-          backupUiState.actionStatus = 'idle';
-          backupUiState.error = '';
-          backupUiState.message = `${backupUiState.message} Не удалось обновить список резервных копий. Нажмите «Обновить», чтобы перечитать данные.`;
-          render();
-        });
-    })
-    .catch(() => {
-      backupUiState.actionStatus = 'idle';
-      backupUiState.error = 'Не удалось создать резервную копию. Проверьте, что база данных существует и локальное приложение запущено.';
-      backupUiState.message = '';
-      announceAssertive(backupUiState.error);
-      render();
-    });
+  backupRuntime.create({ reason });
 }
-
-
 function loadExports(force = false) {
-  if (!force && (exportUiState.status === 'loading' || exportUiState.status === 'ready')) return;
-  exportUiState.status = 'loading';
-  exportUiState.error = '';
-  if (force) exportUiState.message = '';
-  render();
-  Promise.all([getExportStatus(), getExports()])
-    .then(([status, list]) => {
-      exportUiState.status = 'ready';
-      exportUiState.exportStatus = status;
-      exportUiState.exports = list.exports;
-      exportUiState.error = '';
-      render();
-    })
-    .catch(() => {
-      exportUiState.status = 'error';
-      exportUiState.error = 'Не удалось загрузить сведения об экспортах. Проверьте, что локальное приложение запущено, и попробуйте снова.';
-      render();
-    });
+  if (force) clearFeedbackAnnouncement();
+  exportRuntime.load(exportLifecycle.state.reconciliationRequired ? 'reconciliation' : force || exportLifecycle.state.snapshot ? 'refresh' : 'initial');
 }
-
-function submitExportCreateForm(event: SubmitEvent) { event.preventDefault(); submitExportCreate(); }
 function submitExportCreate() {
-  if (exportUiState.actionStatus === 'creating') return;
   const status = exportUiState.exportStatus;
-  if (!status?.database_exists) {
-    exportUiState.error = 'База данных пока не найдена. Сначала запустите приложение и создайте рабочие данные.';
-    exportUiState.message = '';
-    render();
-    return;
-  }
+  if (!status?.database_exists) { exportUiState.error = 'База данных пока не найдена. Сначала запустите приложение и создайте рабочие данные.'; exportUiState.message = ''; render(); return; }
   const rawReason = exportUiState.reason === 'custom' ? exportUiState.customReason.trim() : exportUiState.reason;
   const reason = rawReason || 'manual';
-  exportUiState.actionStatus = 'creating';
-  exportUiState.error = '';
-  exportUiState.message = '';
   clearFeedbackAnnouncement();
-  render();
-  createExport({ reason })
-    .then((response) => {
-      exportUiState.lastCreatedExport = response.export;
-      exportUiState.lastEntityCounts = response.entity_counts || {};
-      const successMessage = `${response.message || 'Экспорт создан.'} Файл: ${response.export.filename}`;
-      exportUiState.message = successMessage;
-      announcePolite(successMessage);
-      return Promise.all([getExportStatus(), getExports()])
-        .then(([statusResponse, list]) => {
-          exportUiState.exportStatus = statusResponse;
-          exportUiState.exports = list.exports;
-          exportUiState.status = 'ready';
-          exportUiState.actionStatus = 'idle';
-          render();
-        })
-        .catch(() => {
-          exportUiState.status = 'ready';
-          exportUiState.actionStatus = 'idle';
-          exportUiState.error = '';
-          exportUiState.message = `${successMessage} Не удалось обновить список экспортов. Нажмите «Обновить», чтобы перечитать данные.`;
-          render();
-        });
-    })
-    .catch(() => {
-      exportUiState.actionStatus = 'idle';
-      exportUiState.error = 'Не удалось создать экспорт. Проверьте, что база данных существует и локальное приложение запущено.';
-      exportUiState.message = '';
-      announceAssertive(exportUiState.error);
-      render();
-    });
+  exportRuntime.create({ reason });
 }
-
 function exportPage() {
   const isLoading = exportUiState.status === 'loading';
   const status = exportUiState.exportStatus;
-  const createDisabled = exportUiState.actionStatus === 'creating' || isLoading || !status?.database_exists;
-  return `<div class="page-grid backup-page">
+  const createDisabled = exportUiState.actionStatus === 'creating' || isLoading || exportLifecycle.state.reconciliationRequired || !status?.database_exists;
+  return `<div class="page-grid backup-page" tabindex="-1" data-focus-key="b3-exports-content">
     <section class="card data-card dashboard-hero">
       <div><p class="card-kicker">Копия данных для проверки и переноса</p><h2>Экспорт данных</h2><p>Экспорт создаёт отдельный локальный файл с копией основных данных мастерской. Файл сохраняется в формате JSON и не изменяет рабочие записи.</p><p class="next-step">Файл сохраняется локально на этом MacBook в папке экспортов. Загрузить его обратно через этот экран нельзя.</p></div>
-      <div class="actions"><button class="secondary-action" type="button" data-action="reload-exports" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button><button class="primary-action" type="button" data-action="create-export" ${createDisabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div>
+      <div class="actions"><button class="secondary-action" type="button" data-action="reload-exports" data-focus-key="b3-exports-refresh" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button><button class="primary-action" type="button" data-action="create-export" ${createDisabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div>
     </section>
     ${exportUiState.error ? feedbackMessage('error', exportUiState.error) : ''}
     ${exportUiState.message ? feedbackMessage('success', exportUiState.message) : ''}
+    ${exportUiState.warning ? feedbackMessage('warning', exportUiState.warning, '<p class="next-step"><button class="secondary-action compact" type="button" data-action="reload-exports" data-focus-key="b3-exports-refresh">Обновить список</button></p>') : ''}
     ${exportUiState.status === 'error' && !status ? exportLoadErrorCard() : `${exportStatusCards()}${exportCreateCard()}${exportEntityCountsCard()}${exportHistoryCard()}${exportNonGoalsCard()}`}
   </div>`;
 }
 
-function exportLoadErrorCard() { return `<section class="card error-card"><h2>Сведения недоступны</h2><p>Не удалось загрузить сведения об экспортах.</p><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-exports">Обновить</button></div></section>`; }
+function exportLoadErrorCard() { return `<section class="card error-card"><h2>Сведения недоступны</h2><p>Не удалось загрузить сведения об экспортах.</p><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-exports" data-focus-key="b3-exports-retry">Обновить</button></div></section>`; }
 function exportStatusCards() {
   const status = exportUiState.exportStatus;
   if (exportUiState.status === 'loading' && !status) return '<section class="card"><p>Загружаем сведения о базе и экспортах…</p></section>';
@@ -1563,10 +1477,10 @@ function exportStatusCards() {
 }
 function exportCreateCard() {
   const status = exportUiState.exportStatus;
-  const disabled = exportUiState.actionStatus === 'creating' || exportUiState.status === 'loading' || !status?.database_exists;
-  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать экспорт</h2><p>Экспорт включает основные данные: рецепты, клиентов, заказы, склад, производство, алерты и закупки. Этот файл можно использовать для проверки или переноса данных, но загрузить его обратно через этот экран нельзя.</p>${!status?.database_exists ? feedbackMessage('error', 'Сначала запустите приложение и создайте рабочую базу данных.') : ''}<form class="form-grid" data-form="export-create" aria-busy="${exportUiState.actionStatus === 'creating' ? 'true' : 'false'}"><label>Причина<select name="reason" data-action="select-export-reason"><option value="manual" ${exportUiState.reason === 'manual' ? 'selected' : ''}>Обычный экспорт</option><option value="before_import" ${exportUiState.reason === 'before_import' ? 'selected' : ''}>Перед импортом</option><option value="before_update" ${exportUiState.reason === 'before_update' ? 'selected' : ''}>Перед обновлением приложения</option><option value="before_large_edit" ${exportUiState.reason === 'before_large_edit' ? 'selected' : ''}>Перед крупными изменениями</option><option value="support_snapshot" ${exportUiState.reason === 'support_snapshot' ? 'selected' : ''}>Для поддержки</option><option value="custom" ${exportUiState.reason === 'custom' ? 'selected' : ''}>Своя причина</option></select></label>${exportUiState.reason === 'custom' ? `<label>Своя причина<input name="customReason" maxlength="80" value="${escapeHtml(exportUiState.customReason)}" data-action="custom-export-reason" placeholder="Например: перед обращением в поддержку" /></label>` : ''}<div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div></form>${exportUiState.lastCreatedExport ? lastCreatedExportSummary(exportUiState.lastCreatedExport) : '<p class="next-step">Создание экспорта не запускается автоматически и не меняет рабочие данные.</p>'}</section>`;
+  const disabled = exportUiState.actionStatus === 'creating' || exportUiState.status === 'loading' || exportLifecycle.state.reconciliationRequired || !status?.database_exists;
+  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать экспорт</h2><p>Экспорт включает основные данные: рецепты, клиентов, заказы, склад, производство, алерты и закупки. Этот файл можно использовать для проверки или переноса данных, но загрузить его обратно через этот экран нельзя.</p>${!status?.database_exists ? feedbackMessage('error', 'Сначала запустите приложение и создайте рабочую базу данных.') : ''}<form class="form-grid" data-form="export-create" data-focus-key="b3-exports-create" tabindex="-1" aria-busy="${exportUiState.actionStatus === 'creating' ? 'true' : 'false'}"><label>Причина<select name="reason" data-action="select-export-reason"><option value="manual" ${exportUiState.reason === 'manual' ? 'selected' : ''}>Обычный экспорт</option><option value="before_import" ${exportUiState.reason === 'before_import' ? 'selected' : ''}>Перед импортом</option><option value="before_update" ${exportUiState.reason === 'before_update' ? 'selected' : ''}>Перед обновлением приложения</option><option value="before_large_edit" ${exportUiState.reason === 'before_large_edit' ? 'selected' : ''}>Перед крупными изменениями</option><option value="support_snapshot" ${exportUiState.reason === 'support_snapshot' ? 'selected' : ''}>Для поддержки</option><option value="custom" ${exportUiState.reason === 'custom' ? 'selected' : ''}>Своя причина</option></select></label>${exportUiState.reason === 'custom' ? `<label>Своя причина<input name="customReason" maxlength="80" value="${escapeHtml(exportUiState.customReason)}" data-action="custom-export-reason" placeholder="Например: перед обращением в поддержку" /></label>` : ''}<div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${exportUiState.actionStatus === 'creating' ? 'Создаём экспорт…' : 'Создать экспорт'}</button></div></form>${exportUiState.lastCreatedExport ? lastCreatedExportSummary(exportUiState.lastCreatedExport) : '<p class="next-step">Создание экспорта не запускается автоматически и не меняет рабочие данные.</p>'}</section>`;
 }
-function lastCreatedExportSummary(item: ExportFileResponse) { const p = localArtifactPresentation({ filename: item.filename, path: item.path, createdAt: item.created_at, reason: exportReasonLabelRaw(item.reason), sizeBytes: item.size_bytes, folderKind: 'exports' }); return `<div class="local-artifact-created-summary"><p class="next-step">Последний созданный файл экспорта: <strong>${escapeHtml(p.filename)}</strong></p><dl class="metadata-list local-artifact-summary"><div><dt>Тип файла</dt><dd>Экспорт данных</dd></div><div><dt>Создан</dt><dd>${escapeHtml(p.createdAtLabel)}</dd></div><div><dt>Размер</dt><dd>${escapeHtml(p.sizeLabel)}</dd></div><div><dt>Хранение</dt><dd>${escapeHtml(p.localStatusLabel)}</dd></div><div><dt>Где искать</dt><dd>${escapeHtml(p.folderLabel)}</dd></div></dl></div>`; }
+function lastCreatedExportSummary(item: ExportFileResponse) { const p = localArtifactPresentation({ filename: item.filename, path: item.path, createdAt: item.created_at, reason: exportReasonLabelRaw(item.reason), sizeBytes: item.size_bytes, folderKind: 'exports' }); return `<div class="local-artifact-created-summary" tabindex="-1" data-focus-key="b3-exports-last-created"><p class="next-step">Последний созданный файл экспорта: <strong>${escapeHtml(p.filename)}</strong></p><dl class="metadata-list local-artifact-summary"><div><dt>Тип файла</dt><dd>Экспорт данных</dd></div><div><dt>Создан</dt><dd>${escapeHtml(p.createdAtLabel)}</dd></div><div><dt>Размер</dt><dd>${escapeHtml(p.sizeLabel)}</dd></div><div><dt>Хранение</dt><dd>${escapeHtml(p.localStatusLabel)}</dd></div><div><dt>Где искать</dt><dd>${escapeHtml(p.folderLabel)}</dd></div></dl></div>`; }
 function exportEntityCountsCard() {
   const entries = Object.entries(exportUiState.lastEntityCounts || {});
   if (!entries.length) return '';
@@ -1893,9 +1807,61 @@ function importApplyErrorMarkup() {
   return feedbackMessage('error', importUiState.applyError, `${issueList}<p class="next-step">Рабочие данные не были частично изменены.</p>`);
 }
 
+
+function localArtifactRouteForSection(section: NavigationSection | null): LocalArtifactRouteKey | null {
+  if (section === 'Резервные копии') return 'backups';
+  if (section === 'Экспорт') return 'exports';
+  if (section === 'Документы отчетов') return 'reportDocuments';
+  if (section === 'Отчеты') return 'reports';
+  return null;
+}
+
+function applyBackupLifecycleState() {
+  const snapshot = backupLifecycle.state.snapshot?.data;
+  backupUiState.status = backupLifecycle.state.read ? 'loading' : snapshot ? 'ready' : backupLifecycle.state.feedback.error ? 'error' : backupUiState.status;
+  backupUiState.actionStatus = backupLifecycle.state.mutation && !backupLifecycle.state.mutation.detached ? 'creating' : 'idle';
+  backupUiState.error = backupLifecycle.state.feedback.error;
+  backupUiState.warning = backupLifecycle.state.feedback.warning;
+  backupUiState.message = backupLifecycle.state.feedback.success;
+  if (snapshot) { backupUiState.backupStatus = snapshot.status; backupUiState.backups = snapshot.list.backups; }
+  backupUiState.lastCreatedBackup = backupLifecycle.state.lastCreated;
+}
+function applyExportLifecycleState() {
+  const snapshot = exportLifecycle.state.snapshot?.data;
+  exportUiState.status = exportLifecycle.state.read ? 'loading' : snapshot ? 'ready' : exportLifecycle.state.feedback.error ? 'error' : exportUiState.status;
+  exportUiState.actionStatus = exportLifecycle.state.mutation && !exportLifecycle.state.mutation.detached ? 'creating' : 'idle';
+  exportUiState.error = exportLifecycle.state.feedback.error;
+  exportUiState.warning = exportLifecycle.state.feedback.warning;
+  exportUiState.message = exportLifecycle.state.feedback.success;
+  if (snapshot) { exportUiState.exportStatus = snapshot.status; exportUiState.exports = snapshot.list.exports; }
+  exportUiState.lastCreatedExport = exportLifecycle.state.lastCreated;
+}
+function applyReportDocumentsLifecycleState() {
+  const snapshot = reportDocumentsLifecycle.state.snapshot?.data;
+  reportDocumentsUiState.status = reportDocumentsLifecycle.state.read ? 'loading' : snapshot ? 'ready' : reportDocumentsLifecycle.state.feedback.error ? 'error' : reportDocumentsUiState.status;
+  reportDocumentsUiState.actionStatus = reportDocumentsLifecycle.state.mutation && !reportDocumentsLifecycle.state.mutation.detached ? 'creating' : 'idle';
+  reportDocumentsUiState.error = reportDocumentsLifecycle.state.feedback.error;
+  reportDocumentsUiState.warning = reportDocumentsLifecycle.state.feedback.warning;
+  reportDocumentsUiState.message = reportDocumentsLifecycle.state.feedback.success;
+  if (snapshot) { reportDocumentsUiState.documentStatus = snapshot.status; reportDocumentsUiState.documents = snapshot.list.items; }
+  reportDocumentsUiState.lastCreatedDocument = reportDocumentsLifecycle.state.lastCreated;
+}
+function applyReportsLifecycleState() {
+  const snapshot = reportsLifecycle.state.snapshot?.data;
+  reportsUiState.status = reportsLifecycle.state.read ? 'loading' : snapshot ? 'ready' : reportsLifecycle.state.feedback.error ? 'error' : reportsUiState.status;
+  reportsUiState.error = reportsLifecycle.state.feedback.error;
+  reportsUiState.warning = reportsLifecycle.state.feedback.warning;
+  reportsUiState.message = reportsLifecycle.state.feedback.success;
+  if (snapshot) reportsUiState = { ...reportsUiState, ...snapshot };
+}
+function applyLocalArtifactsReportsLifecycleState() { applyBackupLifecycleState(); applyExportLifecycleState(); applyReportDocumentsLifecycleState(); applyReportsLifecycleState(); }
+function focusLocalArtifactTarget(key: string | null) { if (!key) return; document.querySelector<HTMLElement>(`[data-focus-key="${key}"]`)?.focus(); }
+
 function updateRouteOwnership(previousSection: NavigationSection | null, nextSection: NavigationSection) {
   transitionAlertsRouteOwnership(alertsLifecycle, previousSection ?? 'Главная', nextSection);
   purchaseRouteCoordinator.transition(previousSection, nextSection);
+  transitionLocalArtifactsReportsRouteOwnership({ backups: backupRuntime, exports: exportRuntime, reportDocuments: reportDocumentsRuntime, reports: reportsRuntime } as any, localArtifactRouteForSection(previousSection), localArtifactRouteForSection(nextSection));
+  applyLocalArtifactsReportsLifecycleState();
 }
 
 
@@ -1905,9 +1871,14 @@ function clearRouteOwnedFeedbackOnNavigation(nextSection: NavigationSection) {
   if (nextSection !== 'Главная') {
     dashboardOnboardingLifecycle.clearDashboardTransientFeedback();
     dashboardOnboardingLifecycle.clearOnboardingTransientFeedback();
-    applyDashboardLifecycleState();
-    applyOnboardingLifecycleState();
   }
+  if (nextSection !== 'Резервные копии') backupLifecycle.clearTransientFeedback();
+  if (nextSection !== 'Экспорт') exportLifecycle.clearTransientFeedback();
+  if (nextSection !== 'Документы отчетов') reportDocumentsLifecycle.clearTransientFeedback();
+  if (nextSection !== 'Отчеты') reportsLifecycle.clearTransientFeedback();
+  applyLocalArtifactsReportsLifecycleState();
+  applyDashboardLifecycleState();
+  applyOnboardingLifecycleState();
 }
 
 function navigateToSection(section: NavigationSection | undefined) { if (!section) return; const previousSection = activeSection; const nextSection = section; activeSection = nextSection; updateRouteOwnership(previousSection, nextSection); clearRouteOwnedFeedbackOnNavigation(nextSection); window.history.pushState({}, '', pathForSection(nextSection)); loadSectionData(nextSection); render(); }
@@ -2024,19 +1995,20 @@ function formatImportCellValue(value: unknown): string { if (value == null || va
 function backupPage() {
   const isLoading = backupUiState.status === 'loading';
   const status = backupUiState.backupStatus;
-  const createDisabled = backupUiState.actionStatus === 'creating' || isLoading || !status?.database_exists;
-  return `<div class="page-grid backup-page">
+  const createDisabled = backupUiState.actionStatus === 'creating' || isLoading || backupLifecycle.state.reconciliationRequired || !status?.database_exists;
+  return `<div class="page-grid backup-page" tabindex="-1" data-focus-key="b3-backups-content">
     <section class="card data-card dashboard-hero">
       <div><p class="card-kicker">Локальная защита данных</p><h2>Резервные копии</h2><p>Резервная копия сохраняет текущее состояние данных мастерской в отдельном локальном файле.</p><p class="next-step">Создание копии не изменяет рецепты, клиентов, заказы, склад или производство. На этом экране можно создавать и просматривать резервные копии. Восстановление данных здесь не выполняется.</p></div>
-      <div class="actions"><button class="secondary-action" type="button" data-action="reload-backups" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button><button class="primary-action" type="button" data-action="create-backup" ${createDisabled ? 'disabled' : ''}>${backupUiState.actionStatus === 'creating' ? 'Создаём копию…' : 'Создать резервную копию'}</button></div>
+      <div class="actions"><button class="secondary-action" type="button" data-action="reload-backups" data-focus-key="b3-backups-refresh" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить'}</button><button class="primary-action" type="button" data-action="create-backup" ${createDisabled ? 'disabled' : ''}>${backupUiState.actionStatus === 'creating' ? 'Создаём копию…' : 'Создать резервную копию'}</button></div>
     </section>
-    ${backupUiState.error ? `<p class="page-message error-message">${escapeHtml(backupUiState.error)}</p>` : ''}
-    ${backupUiState.message ? `<p class="page-message">${escapeHtml(backupUiState.message)}</p>` : ''}
+    ${backupUiState.error ? feedbackMessage('error', backupUiState.error) : ''}
+    ${backupUiState.message ? feedbackMessage('success', backupUiState.message) : ''}
+    ${backupUiState.warning ? feedbackMessage('warning', backupUiState.warning, '<p class="next-step"><button class="secondary-action compact" type="button" data-action="reload-backups" data-focus-key="b3-backups-refresh">Обновить список</button></p>') : ''}
     ${backupUiState.status === 'error' && !status ? backupLoadErrorCard() : `${backupStatusCards()}${backupCreateCard()}${backupHistoryCard()}${backupNonGoalsCard()}`}
   </div>`;
 }
 
-function backupLoadErrorCard() { return `<section class="card error-card"><h2>Сведения недоступны</h2><p>Не удалось загрузить сведения о резервных копиях.</p><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-backups">Обновить</button></div></section>`; }
+function backupLoadErrorCard() { return `<section class="card error-card"><h2>Сведения недоступны</h2><p>Не удалось загрузить сведения о резервных копиях.</p><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-backups" data-focus-key="b3-backups-retry">Обновить</button></div></section>`; }
 function backupStatusCards() {
   const status = backupUiState.backupStatus;
   if (backupUiState.status === 'loading' && !status) return '<section class="card"><p>Загружаем сведения о базе и резервных копиях…</p></section>';
@@ -2053,10 +2025,10 @@ function backupStatusCards() {
 }
 function backupCreateCard() {
   const status = backupUiState.backupStatus;
-  const disabled = backupUiState.actionStatus === 'creating' || backupUiState.status === 'loading' || !status?.database_exists;
-  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать резервную копию</h2><p>Нажмите кнопку перед большим импортом, обновлением приложения или существенными изменениями рабочих данных. Приложение сохранит отдельный локальный файл резервной копии.</p>${!status?.database_exists ? '<p class="page-message error-message">Сначала запустите приложение и создайте рабочую базу данных.</p>' : ''}<form class="form-grid" data-form="backup-create" aria-busy="${backupUiState.actionStatus === 'creating' ? 'true' : 'false'}"><label>Причина<select name="reason" data-action="select-backup-reason"><option value="manual" ${backupUiState.reason === 'manual' ? 'selected' : ''}>Обычная резервная копия</option><option value="before_import" ${backupUiState.reason === 'before_import' ? 'selected' : ''}>Перед импортом</option><option value="before_update" ${backupUiState.reason === 'before_update' ? 'selected' : ''}>Перед обновлением приложения</option><option value="before_large_edit" ${backupUiState.reason === 'before_large_edit' ? 'selected' : ''}>Перед крупными изменениями</option><option value="custom" ${backupUiState.reason === 'custom' ? 'selected' : ''}>Своя причина</option></select></label>${backupUiState.reason === 'custom' ? `<label>Своя причина<input name="customReason" maxlength="80" value="${escapeHtml(backupUiState.customReason)}" data-action="custom-backup-reason" placeholder="Например: перед правкой рецептов" /></label>` : ''}<div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${backupUiState.actionStatus === 'creating' ? 'Создаём копию…' : 'Создать резервную копию'}</button></div></form>${backupUiState.lastCreatedBackup ? lastCreatedBackupSummary(backupUiState.lastCreatedBackup) : '<p class="next-step">Создание копии не запускается автоматически и не меняет рабочие данные.</p>'}</section>`;
+  const disabled = backupUiState.actionStatus === 'creating' || backupUiState.status === 'loading' || backupLifecycle.state.reconciliationRequired || !status?.database_exists;
+  return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать резервную копию</h2><p>Нажмите кнопку перед большим импортом, обновлением приложения или существенными изменениями рабочих данных. Приложение сохранит отдельный локальный файл резервной копии.</p>${!status?.database_exists ? '<p class="page-message error-message">Сначала запустите приложение и создайте рабочую базу данных.</p>' : ''}<form class="form-grid" data-form="backup-create" data-focus-key="b3-backups-create" tabindex="-1" aria-busy="${backupUiState.actionStatus === 'creating' ? 'true' : 'false'}"><label>Причина<select name="reason" data-action="select-backup-reason"><option value="manual" ${backupUiState.reason === 'manual' ? 'selected' : ''}>Обычная резервная копия</option><option value="before_import" ${backupUiState.reason === 'before_import' ? 'selected' : ''}>Перед импортом</option><option value="before_update" ${backupUiState.reason === 'before_update' ? 'selected' : ''}>Перед обновлением приложения</option><option value="before_large_edit" ${backupUiState.reason === 'before_large_edit' ? 'selected' : ''}>Перед крупными изменениями</option><option value="custom" ${backupUiState.reason === 'custom' ? 'selected' : ''}>Своя причина</option></select></label>${backupUiState.reason === 'custom' ? `<label>Своя причина<input name="customReason" maxlength="80" value="${escapeHtml(backupUiState.customReason)}" data-action="custom-backup-reason" placeholder="Например: перед правкой рецептов" /></label>` : ''}<div class="actions"><button class="primary-action" type="submit" ${disabled ? 'disabled' : ''}>${backupUiState.actionStatus === 'creating' ? 'Создаём копию…' : 'Создать резервную копию'}</button></div></form>${backupUiState.lastCreatedBackup ? lastCreatedBackupSummary(backupUiState.lastCreatedBackup) : '<p class="next-step">Создание копии не запускается автоматически и не меняет рабочие данные.</p>'}</section>`;
 }
-function lastCreatedBackupSummary(backup: BackupFileResponse) { const p = localArtifactPresentation({ filename: backup.filename, path: backup.path, createdAt: backup.created_at, reason: backupReasonLabelRaw(backup.reason), sizeBytes: backup.size_bytes, folderKind: 'backups' }); return `<div class="local-artifact-created-summary"><p class="next-step">Последний созданный файл: <strong>${escapeHtml(p.filename)}</strong></p><dl class="metadata-list local-artifact-summary"><div><dt>Тип файла</dt><dd>Резервная копия</dd></div><div><dt>Создана</dt><dd>${escapeHtml(p.createdAtLabel)}</dd></div><div><dt>Размер</dt><dd>${escapeHtml(p.sizeLabel)}</dd></div><div><dt>Хранение</dt><dd>${escapeHtml(p.localStatusLabel)}</dd></div><div><dt>Где искать</dt><dd>${escapeHtml(p.folderLabel)}</dd></div></dl></div>`; }
+function lastCreatedBackupSummary(backup: BackupFileResponse) { const p = localArtifactPresentation({ filename: backup.filename, path: backup.path, createdAt: backup.created_at, reason: backupReasonLabelRaw(backup.reason), sizeBytes: backup.size_bytes, folderKind: 'backups' }); return `<div class="local-artifact-created-summary" tabindex="-1" data-focus-key="b3-backups-last-created"><p class="next-step">Последний созданный файл: <strong>${escapeHtml(p.filename)}</strong></p><dl class="metadata-list local-artifact-summary"><div><dt>Тип файла</dt><dd>Резервная копия</dd></div><div><dt>Создана</dt><dd>${escapeHtml(p.createdAtLabel)}</dd></div><div><dt>Размер</dt><dd>${escapeHtml(p.sizeLabel)}</dd></div><div><dt>Хранение</dt><dd>${escapeHtml(p.localStatusLabel)}</dd></div><div><dt>Где искать</dt><dd>${escapeHtml(p.folderLabel)}</dd></div></dl></div>`; }
 function backupHistoryCard() {
   if (!backupUiState.backups.length) return `<section class="card empty-card"><h2>История резервных копий</h2><p>Резервных копий пока нет.</p><p>Создайте первую копию перед импортом или крупными изменениями.</p></section>`;
   return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Локальные файлы</p><h2>История резервных копий</h2></div><span class="pill info">${backupUiState.backups.length}</span></div><div class="backup-list">${backupUiState.backups.map(backupHistoryItem).join('')}</div></section>`;
@@ -2644,12 +2616,12 @@ function stepHint(step: string) { return onboardingStepUi[step]?.hint ?? 'Шаг
 
 function reportDocumentsPage() {
   const isLoading = reportDocumentsUiState.status === 'loading';
-  return `<div class="page-grid backup-page report-documents-page"><section class="card data-card dashboard-hero"><div><p class="card-kicker">Документы отчётов</p><h2>Документы отчётов</h2><p>Отчёты показывают текущую сводку на экране. Здесь можно создать отдельный файл с этой сводкой для хранения, печати или отправки.</p><p class="next-step">Документ создаётся только после явного нажатия. Он основан на текущих данных отчётов и не меняет рецепты, клиентов, заказы, склад или производство.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить список'}</button></div></section>${reportDocumentsUiState.error ? feedbackMessage('error', reportDocumentsUiState.error) : ''}${reportDocumentsUiState.message ? feedbackMessage('success', reportDocumentsUiState.message) : ''}${reportDocumentsUiState.status === 'error' && !reportDocumentsUiState.documentStatus ? reportDocumentsLoadErrorCard() : `${reportDocumentsStatusCard()}${reportDocumentsCreateCard()}${reportDocumentsLastCreatedCard()}${reportDocumentsListCard()}${reportDocumentsBoundariesCard()}`}</div>`;
+  return `<div class="page-grid backup-page report-documents-page" tabindex="-1" data-focus-key="b3-report-documents-content"><section class="card data-card dashboard-hero"><div><p class="card-kicker">Документы отчётов</p><h2>Документы отчётов</h2><p>Отчёты показывают текущую сводку на экране. Здесь можно создать отдельный файл с этой сводкой для хранения, печати или отправки.</p><p class="next-step">Документ создаётся только после явного нажатия. Он основан на текущих данных отчётов и не меняет рецепты, клиентов, заказы, склад или производство.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents" data-focus-key="b3-report-documents-refresh" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Обновляем…' : 'Обновить список'}</button></div></section>${reportDocumentsUiState.error ? feedbackMessage('error', reportDocumentsUiState.error) : ''}${reportDocumentsUiState.message ? feedbackMessage('success', reportDocumentsUiState.message) : ''}${reportDocumentsUiState.warning ? feedbackMessage('warning', reportDocumentsUiState.warning, '<p class="next-step"><button class="secondary-action compact" type="button" data-action="reload-report-documents" data-focus-key="b3-report-documents-refresh">Обновить список</button></p>') : ''}${reportDocumentsUiState.status === 'error' && !reportDocumentsUiState.documentStatus ? reportDocumentsLoadErrorCard() : `${reportDocumentsStatusCard()}${reportDocumentsCreateCard()}${reportDocumentsLastCreatedCard()}${reportDocumentsListCard()}${reportDocumentsBoundariesCard()}`}</div>`;
 }
-function reportDocumentsLoadErrorCard() { return `<section class="card error-card"><h2>Документы недоступны</h2><p>Не удалось загрузить документы отчётов. Проверьте, что приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents">Повторить</button></div></section>`; }
+function reportDocumentsLoadErrorCard() { return `<section class="card error-card"><h2>Документы недоступны</h2><p>Не удалось загрузить документы отчётов. Проверьте, что приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-report-documents" data-focus-key="b3-report-documents-retry">Повторить</button></div></section>`; }
 function reportDocumentsStatusCard() { const s = reportDocumentsUiState.documentStatus; if (reportDocumentsUiState.status === 'loading' && !s) return '<section class="card"><p>Загружаем сведения о документах отчётов…</p></section>'; if (!s) return ''; return `<section class="overview-grid"><div class="metric-card"><span>Доступные форматы</span><strong>${escapeHtml(s.available_formats.map(reportDocumentFormatLabel).join(', ') || 'Нет')}</strong></div><div class="metric-card"><span>Тип документа</span><strong>${s.available_document_types.includes('workshop_overview') ? 'Сводка мастерской' : escapeHtml(s.available_document_types.join(', ') || 'Нет')}</strong></div><div class="metric-card"><span>Создано документов</span><strong>${s.documents_count}</strong></div><div class="metric-card"><span>Можно создать</span><strong>${s.can_create ? 'Да' : 'Нет'}</strong></div><div class="metric-card wide"><span>${escapeHtml(artifactFolderLabel('reportDocuments'))}</span><strong>${escapeHtml(s.message || 'Документы сохраняются локально.')}</strong><details class="technical-details"><summary>Технический путь к папке</summary><code class="path-text">${escapeHtml(s.documents_dir)}</code></details></div></section>`; }
-function reportDocumentsCreateCard() { const disabled = reportDocumentsUiState.actionStatus === 'creating' || reportDocumentsUiState.status === 'loading' || !reportDocumentsUiState.documentStatus?.can_create; const formats = reportDocumentsUiState.documentStatus?.available_formats ?? ['markdown']; const canPdf = formats.includes('pdf'); const pdfUnavailable = !canPdf ? '<p class="next-step">PDF сейчас недоступен на этом устройстве. Можно создать Markdown-документ.</p>' : ''; return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать сводку мастерской</h2><p>Файл будет создан из текущей сводки мастерской: склад, заказы, производство, алерты, закупки и базовые финансы.</p>${feedbackMessage('neutral', 'Markdown — текстовый документ, который удобно открыть и отредактировать. PDF — готовый документ для просмотра, печати или отправки.')}<form class="form-grid" data-form="report-document-create" aria-busy="${reportDocumentsUiState.actionStatus === 'creating' ? 'true' : 'false'}"><label>Причина / заметка<input name="reason" maxlength="80" value="${escapeHtml(reportDocumentsUiState.reason)}" data-action="report-document-reason" placeholder="Например: еженедельная проверка" /></label><div class="actions"><button class="secondary-action" type="submit" data-format="markdown" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаём…' : 'Создать Markdown'}</button>${canPdf ? `<button class="primary-action" type="submit" data-format="pdf" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаём…' : 'Создать PDF'}</button>` : ''}</div></form>${pdfUnavailable}<p class="next-step">Документ создаётся только после явного нажатия. Создание документа не изменяет данные мастерской.</p></section>`; }
-function reportDocumentsLastCreatedCard() { const d = reportDocumentsUiState.lastCreatedDocument; if (!d) return ''; const p = localArtifactPresentation({ filename: d.filename, createdAt: d.created_at, sizeBytes: d.size_bytes, folderKind: 'reportDocuments' }); return `<section class="card data-card"><p class="card-kicker">Последний результат</p><h2>Документ создан</h2><dl class="metadata-list local-artifact-summary"><div><dt>Файл</dt><dd>${escapeHtml(p.filename)}</dd></div><div><dt>Тип документа</dt><dd>${escapeHtml(reportDocumentTypeLabel(d.document_type))}</dd></div><div><dt>Создан</dt><dd>${escapeHtml(p.createdAtLabel)}</dd></div><div><dt>Размер</dt><dd>${escapeHtml(p.sizeLabel)}</dd></div><div><dt>Хранение</dt><dd>${escapeHtml(p.localStatusLabel)}</dd></div><div><dt>Где искать</dt><dd>${escapeHtml(p.folderLabel)}</dd></div></dl><p class="next-step">Документ создан. Его можно открыть или скачать из списка ниже.</p></section>`; }
+function reportDocumentsCreateCard() { const disabled = reportDocumentsUiState.actionStatus === 'creating' || reportDocumentsUiState.status === 'loading' || reportDocumentsLifecycle.state.reconciliationRequired || !reportDocumentsUiState.documentStatus?.can_create; const formats = reportDocumentsUiState.documentStatus?.available_formats ?? ['markdown']; const canPdf = formats.includes('pdf'); const pdfUnavailable = !canPdf ? '<p class="next-step">PDF сейчас недоступен на этом устройстве. Можно создать Markdown-документ.</p>' : ''; return `<section class="card data-card"><p class="card-kicker">Явное действие</p><h2>Создать сводку мастерской</h2><p>Файл будет создан из текущей сводки мастерской: склад, заказы, производство, алерты, закупки и базовые финансы.</p>${feedbackMessage('neutral', 'Markdown — текстовый документ, который удобно открыть и отредактировать. PDF — готовый документ для просмотра, печати или отправки.')}<form class="form-grid" data-form="report-document-create" data-focus-key="b3-report-documents-create" tabindex="-1" aria-busy="${reportDocumentsUiState.actionStatus === 'creating' ? 'true' : 'false'}"><label>Причина / заметка<input name="reason" maxlength="80" value="${escapeHtml(reportDocumentsUiState.reason)}" data-action="report-document-reason" placeholder="Например: еженедельная проверка" /></label><div class="actions"><button class="secondary-action" type="submit" data-format="markdown" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаём…' : 'Создать Markdown'}</button>${canPdf ? `<button class="primary-action" type="submit" data-format="pdf" ${disabled ? 'disabled' : ''}>${reportDocumentsUiState.actionStatus === 'creating' ? 'Создаём…' : 'Создать PDF'}</button>` : ''}</div></form>${pdfUnavailable}<p class="next-step">Документ создаётся только после явного нажатия. Создание документа не изменяет данные мастерской.</p></section>`; }
+function reportDocumentsLastCreatedCard() { const d = reportDocumentsUiState.lastCreatedDocument; if (!d) return ''; const p = localArtifactPresentation({ filename: d.filename, createdAt: d.created_at, sizeBytes: d.size_bytes, folderKind: 'reportDocuments' }); return `<section class="card data-card" tabindex="-1" data-focus-key="b3-report-documents-last-created"><p class="card-kicker">Последний результат</p><h2>Документ создан</h2><dl class="metadata-list local-artifact-summary"><div><dt>Файл</dt><dd>${escapeHtml(p.filename)}</dd></div><div><dt>Тип документа</dt><dd>${escapeHtml(reportDocumentTypeLabel(d.document_type))}</dd></div><div><dt>Создан</dt><dd>${escapeHtml(p.createdAtLabel)}</dd></div><div><dt>Размер</dt><dd>${escapeHtml(p.sizeLabel)}</dd></div><div><dt>Хранение</dt><dd>${escapeHtml(p.localStatusLabel)}</dd></div><div><dt>Где искать</dt><dd>${escapeHtml(p.folderLabel)}</dd></div></dl><p class="next-step">Документ создан. Его можно открыть или скачать из списка ниже.</p></section>`; }
 function reportDocumentsListCard() { const docs = reportDocumentsUiState.documents; if (!docs.length) return `<section class="card empty-card"><h2>Созданные документы</h2><p>Документы отчётов пока не создавались. Создайте Markdown или PDF-файл со сводкой мастерской.</p><p>Создайте сводку вручную, когда нужен файл для просмотра или передачи.</p><div class="actions"><button class="secondary-action" type="button" data-action="navigate-report-documents-related" data-section="Отчеты">Открыть отчёты</button></div></section>`; return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Локальные файлы</p><h2>Созданные документы</h2></div><span class="pill info">${docs.length}</span></div><div class="backup-list">${docs.map(reportDocumentItem).join('')}</div><p class="next-step">Файлы можно открыть или скачать с помощью кнопок в списке. Имена файлов не меняются.</p><div class="actions"><button class="secondary-action" type="button" data-action="navigate-report-documents-related" data-section="Отчеты">Открыть отчёты</button></div></section>`; }
 function reportDocumentItem(d: ReportDocumentMetadata) { const p = localArtifactPresentation({ filename: d.filename, createdAt: d.created_at, sizeBytes: d.size_bytes, folderKind: 'reportDocuments' }); return `<article class="recipe-line backup-item local-artifact-card"><div class="section-heading"><div><p class="card-kicker">${escapeHtml(reportDocumentTypeLabel(d.document_type))}</p><h3>${escapeHtml(d.title || 'Сводка мастерской')}</h3><p><span class="pill info">${escapeHtml(p.localStatusLabel)}</span> <span class="pill muted">${escapeHtml(p.folderLabel)}</span></p></div><small>${escapeHtml(p.createdAtLabel)}</small></div><dl class="metadata-list local-artifact-summary"><div><dt>Файл</dt><dd>${escapeHtml(p.filename)}</dd></div><div><dt>Тип документа</dt><dd>${escapeHtml(reportDocumentTypeLabel(d.document_type))}</dd></div><div><dt>Формат</dt><dd>${reportDocumentFormatLabel(d.format)}</dd></div><div><dt>Создан</dt><dd>${escapeHtml(p.createdAtLabel)}</dd></div><div><dt>Размер</dt><dd>${escapeHtml(p.sizeLabel)}</dd></div><div><dt>Предупреждений</dt><dd>${d.warnings_count}</dd></div><div><dt>Хранение</dt><dd>${escapeHtml(p.localStatusLabel)}</dd></div><div><dt>Где искать</dt><dd>${escapeHtml(p.folderLabel)}</dd></div><div><dt>Основан на сводке</dt><dd>${escapeHtml(d.source)}${d.source_generated_at ? ` · ${formatDateTime(d.source_generated_at)}` : ''}</dd></div></dl>${reportDocumentsUiState.documentStatus?.documents_dir ? `<details class="technical-details"><summary>Технические сведения</summary><p><strong>Папка документов отчётов:</strong><br><code class="path-text">${escapeHtml(reportDocumentsUiState.documentStatus.documents_dir)}</code></p></details>` : ''}${reportDocumentActions(d)}</article>`; }
 function reportDocumentActions(d: ReportDocumentMetadata) { const attachmentUrl = reportDocumentDownloadUrl(d.id, 'attachment'); if (d.format === 'pdf') return `<div class="actions document-actions"><a class="secondary-action compact" href="${reportDocumentDownloadUrl(d.id, 'inline')}" target="_blank" rel="noopener noreferrer">Открыть PDF</a><a class="primary-action compact" href="${attachmentUrl}">Скачать PDF</a></div>`; if (d.format === 'markdown') return `<div class="actions document-actions"><a class="secondary-action compact" href="${attachmentUrl}">Скачать Markdown</a></div>`; return ''; }
@@ -2661,10 +2633,10 @@ function reportDocumentsBoundariesCard() { return `<section class="card data-car
 function reportsPage() {
   const generatedAt = reportsUiState.overview?.generated_at ?? reportsUiState.inventory?.generated_at ?? reportsUiState.orders?.generated_at ?? reportsUiState.production?.generated_at ?? reportsUiState.finance?.generated_at ?? null;
   const body = reportsUiState.status === 'loading' && !reportsUiState.overview ? reportsLoadingCard() : reportsUiState.status === 'error' && !reportsUiState.overview ? reportsErrorCard() : reportsContent();
-  return `<div class="reports-layout"><section class="card data-card reports-hero"><div class="section-heading"><div><p class="card-kicker">Отчёты</p><h2>Отчёты</h2><p>Здесь собраны сводные показатели мастерской по складу, заказам, производству и финансам.</p><p class="next-step">Просмотр и обновление отчётов не изменяют рабочие данные.</p><div class="actions"><button class="secondary-action compact" type="button" data-action="navigate-report-related" data-section="Документы отчетов">Открыть документы отчётов</button></div>${generatedAt ? `<p class="muted-text">Сформировано: ${formatDateTime(generatedAt)}</p>` : ''}</div><button class="primary-action" type="button" data-action="reload-reports" ${reportsUiState.status === 'loading' ? 'disabled' : ''}>Обновить отчёты</button></div></section>${reportsUiState.error && reportsUiState.overview ? `<p class="page-message error-message">${escapeHtml(reportsUiState.error)}</p>` : ''}${reportsUiState.message ? `<p class="page-message">${escapeHtml(reportsUiState.message)}</p>` : ''}${body}</div>`;
+  return `<div class="reports-layout" tabindex="-1" data-focus-key="b3-reports-content"><section class="card data-card reports-hero"><div class="section-heading"><div><p class="card-kicker">Отчёты</p><h2>Отчёты</h2><p>Здесь собраны сводные показатели мастерской по складу, заказам, производству и финансам.</p><p class="next-step">Просмотр и обновление отчётов не изменяют рабочие данные.</p><div class="actions"><button class="secondary-action compact" type="button" data-action="navigate-report-related" data-section="Документы отчетов">Открыть документы отчётов</button></div>${generatedAt ? `<p class="muted-text">Сформировано: ${formatDateTime(generatedAt)}</p>` : ''}</div><button class="primary-action" type="button" data-action="reload-reports" data-focus-key="b3-reports-refresh" ${reportsUiState.status === 'loading' ? 'disabled' : ''}>Обновить отчёты</button></div></section>${reportsUiState.error && reportsUiState.overview ? feedbackMessage('error', reportsUiState.error) : ''}${reportsUiState.warning && reportsUiState.overview ? feedbackMessage('warning', reportsUiState.warning) : ''}${reportsUiState.message ? feedbackMessage('success', reportsUiState.message) : ''}${body}</div>`;
 }
 function reportsLoadingCard() { return `<section class="card"><p class="card-kicker">Отчёты</p><h2>Загружаем сводку мастерской…</h2><p>Показываем текущие показатели без изменения рабочих данных.</p></section>`; }
-function reportsErrorCard() { return `<section class="card error-card"><p class="card-kicker">Отчёты</p><h2>Не удалось загрузить отчёты</h2><p>${escapeHtml(reportsUiState.error || 'Не удалось загрузить отчёты. Проверьте, что приложение запущено, и попробуйте снова.')}</p><button class="primary-action" type="button" data-action="reload-reports">Повторить</button></section>`; }
+function reportsErrorCard() { return `<section class="card error-card"><p class="card-kicker">Отчёты</p><h2>Не удалось загрузить отчёты</h2><p>${escapeHtml(reportsUiState.error || 'Не удалось загрузить отчёты. Проверьте, что приложение запущено, и попробуйте снова.')}</p><button class="primary-action" type="button" data-action="reload-reports" data-focus-key="b3-reports-retry">Повторить</button></section>`; }
 function reportsContent() { return `${reportTabs()}${reportEmptyState()}${selectedReportMarkup()}`; }
 function reportTabs() { const tabs: Array<[ReportTab,string]> = [['overview','Обзор'],['inventory','Склад'],['orders','Заказы'],['production','Производство'],['finance','Финансы']]; return `<section class="card filter-card"><div class="segmented-control">${tabs.map(([key,label])=>`<button class="secondary-action compact ${reportsUiState.selectedReport===key?'active':''}" type="button" data-action="select-report-tab" data-report="${key}">${label}</button>`).join('')}</div></section>`; }
 function reportEmptyState() { const o = reportsUiState.overview; if (!o) return ''; const hasData = o.inventory_summary.total_active_ingredients + o.orders_summary.total_orders + o.production_summary.total_production_batches + o.alerts_summary.open_alerts + o.purchase_summary.open_purchase_suggestions > 0; if (hasData) return ''; return `<section class="card empty-card"><h2>Данных пока мало</h2><p>Данных пока мало. Добавьте компоненты, рецепты, клиентов и заказы или включите демо-данные, чтобы увидеть пример отчётов.</p><div class="actions"><button class="secondary-action compact" type="button" data-action="navigate-report-related" data-section="Демо-данные">Открыть демо-данные</button><button class="secondary-action compact" type="button" data-action="navigate-report-related" data-section="Компоненты">Открыть компоненты</button><button class="secondary-action compact" type="button" data-action="navigate-report-related" data-section="Заказы">Открыть заказы</button></div></section>`; }
@@ -4335,42 +4307,20 @@ function deactivateIngredient(id: number) {
 
 
 function loadReportDocuments(force = false) {
-  if (!force && (reportDocumentsUiState.status === 'loading' || reportDocumentsUiState.status === 'ready')) return;
-  reportDocumentsUiState.status = 'loading';
-  reportDocumentsUiState.error = '';
-  if (force) reportDocumentsUiState.message = '';
-  render();
-  Promise.all([getReportDocumentStatus(), getReportDocuments()])
-    .then(([status, list]) => { reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.error = ''; render(); })
-    .catch(() => { reportDocumentsUiState.status = 'error'; reportDocumentsUiState.error = 'Не удалось загрузить документы отчётов. Проверьте, что приложение запущено, и попробуйте снова.'; render(); });
+  if (force) clearFeedbackAnnouncement();
+  reportDocumentsRuntime.load(reportDocumentsLifecycle.state.reconciliationRequired ? 'reconciliation' : force || reportDocumentsLifecycle.state.snapshot ? 'refresh' : 'initial');
 }
 
 function submitReportDocumentCreateForm(event: SubmitEvent) { event.preventDefault(); const submitter = event.submitter instanceof HTMLButtonElement ? event.submitter : null; createReportDocumentFromUi(submitter?.dataset.format === 'pdf' ? 'pdf' : 'markdown'); }
 function createReportDocumentFromUi(format: 'markdown' | 'pdf' = 'markdown') {
-  if (reportDocumentsUiState.actionStatus === 'creating') return;
   if (!reportDocumentsUiState.documentStatus?.can_create) { reportDocumentsUiState.error = 'Создание документа сейчас недоступно.'; reportDocumentsUiState.message = ''; render(); return; }
   const reason = reportDocumentsUiState.reason.trim();
-  reportDocumentsUiState.actionStatus = 'creating'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = ''; clearFeedbackAnnouncement(); render();
-  createOverviewReportDocument({ format, ...(reason ? { reason } : {}) })
-    .then((response) => {
-      reportDocumentsUiState.lastCreatedDocument = response.document;
-      reportDocumentsUiState.reason = '';
-      const successMessage = `${response.message || 'Документ создан.'} Его можно открыть или скачать из списка ниже.`;
-      reportDocumentsUiState.message = successMessage;
-      announcePolite(successMessage);
-      return Promise.all([getReportDocumentStatus(), getReportDocuments()])
-        .then(([status, list]) => { reportDocumentsUiState.documentStatus = status; reportDocumentsUiState.documents = list.items; reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; render(); })
-        .catch(() => { reportDocumentsUiState.status = 'ready'; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = ''; reportDocumentsUiState.message = `${successMessage} Не удалось обновить список документов. Нажмите «Обновить список», чтобы перечитать данные.`; render(); });
-    })
-    .catch((error: unknown) => { const detail = error instanceof Error && error.message && error.message !== 'API request failed' ? ` ${error.message}` : ''; reportDocumentsUiState.actionStatus = 'idle'; reportDocumentsUiState.error = `Не удалось создать документ отчёта. Данные мастерской не изменялись.${detail}`; reportDocumentsUiState.message = ''; announceAssertive(reportDocumentsUiState.error); render(); });
+  clearFeedbackAnnouncement();
+  reportDocumentsRuntime.create({ format, ...(reason ? { reason } : {}) });
 }
-
 function loadReports(force = false) {
-  if (!force && (reportsUiState.status === 'loading' || reportsUiState.status === 'ready')) return;
-  reportsUiState.status = 'loading'; reportsUiState.error = ''; reportsUiState.message = ''; render();
-  Promise.all([getReportsOverview(), getInventoryReport(), getOrdersReport(), getProductionReport(), getFinanceReport()])
-    .then(([overview, inventory, orders, production, finance]) => { reportsUiState = { ...reportsUiState, status: 'ready', error: '', message: force ? 'Отчёты обновлены. Показаны актуальные данные мастерской.' : '', overview, inventory, orders, production, finance }; render(); })
-    .catch((error: unknown) => { reportsUiState.status = 'error'; const message = error instanceof Error && error.message && error.message !== 'API request failed' ? error.message : 'Не удалось загрузить отчёты. Проверьте, что приложение запущено, и попробуйте снова.'; reportsUiState.error = message; reportsUiState.message = ''; render(); });
+  if (force) clearFeedbackAnnouncement();
+  reportsRuntime.load(force || reportsLifecycle.state.snapshot ? 'refresh' : 'initial');
 }
 
 function loadInventory(force = false) {

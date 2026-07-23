@@ -605,3 +605,65 @@ The reviewed published head `9a95b310d4e3d414052e2f565eecf1efd938f450` still had
 Manual and edit failure, invalid DTO, stale newer-draft, detached settlement, and valid success tests now assert the connected production form state that the runtime callbacks can actually mutate. Reference side-effect tests now assert the real lifecycle snapshot, applied filters, local search, mutation owner, reconciliation obligation, and manual draft while ingredient/packaging requests fail or settle. Settings target navigation now has source-contract coverage through `navigateToSection`.
 
 Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-22 — B3.3 handoff: local artifacts and reports shared-feedback lifecycle
+
+### Route contract matrix
+
+| Route | Initial reads | Refresh reads | Mutations | Follow-up reads | Retained result behavior |
+|---|---|---|---|---|---|
+| Backups | `GET /api/backups/status` + `GET /api/backups` | same GET pair | `POST /api/backups` | same GET pair after accepted create | previous list/status remain on refresh failure; returned backup remains as last-created |
+| Exports | `GET /api/exports/status` + `GET /api/exports` | same GET pair | `POST /api/exports` | same GET pair after accepted create | previous list/status remain on refresh failure; returned export remains as last-created |
+| Report Documents | `GET /api/report-documents/status` + `GET /api/report-documents` | same GET pair | `POST /api/report-documents/reports/overview` for Markdown/PDF | same GET pair after accepted generation | previous documents/status remain on refresh failure; returned document remains as last-created |
+| Reports | five read-only report GETs: overview, inventory, orders, production, finance | same five GETs | none | none | previous report snapshot remains on refresh failure |
+
+### Implemented ownership model
+
+- `frontend/src/local-artifacts-reports-feedback.ts` owns shared request IDs, route generations, read owners, mutation owners, detached settlement safety, loaded snapshots, retained last-created artifacts, refresh warnings, and result-owned completion messages.
+- `frontend/src/main.ts` wires Backups, Exports, Report Documents, and Reports into the shared route-ownership transition used by app navigation, `popstate`, startup/direct route, Help/settings/onboarding related navigation, sidebar, and `data-nav-section` actions.
+- Successful mutation followed by failed refresh remains success plus warning; recovery refresh uses GET only and does not repeat POST/generation.
+- Detached mutation settlement does not render, announce, or move focus for an absent route.
+- Reports remains read-only; route entry and refresh do not regenerate alerts, purchases, documents, backups, or exports.
+
+### Verification notes
+
+- Known backend baseline failures remain: `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`, `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`, `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`, `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`.
+- Local head/published head must be verified after push; this runner had no GitHub remote or `gh`.
+- Next slice: B3.4 — Recipes and Clients shared-feedback lifecycle.
+- Block B smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 correction handoff
+
+- PR #136 remains the active B3.3 pull request; no replacement PR or branch is intended.
+- Actual branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before correction `e0138cc9a05a7e5529bf9f0e16b2283eb080d55a`; state open; draft false.
+- Runtime correction: detached mutations are irreversible and require read reconciliation; ambiguous outcomes lock create/generate until authoritative GET reconciliation; success, warning, and error remain separate; production focus callbacks are invoked only for accepted current-route completions.
+- Test correction: the focused B3.3 suite now uses production runtime and route modules with deferred API dependencies, render/announcement/focus recording, and exact GET/POST call assertions.
+- Backend remains unchanged; known baseline failures are unchanged.
+- Next slice remains B3.4 — Recipes and Clients shared-feedback lifecycle.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 DOM binding and reconciliation correction handoff
+
+- Correction scope remains `/backups`, `/exports`, `/report-documents`, and `/reports` only.
+- B3.3 bindings are extracted to a production binding helper used by `main.ts` and focused tests; invalid compound selectors and duplicate focus-key attributes are removed from B3.3 markup.
+- Detached mutation reconciliation now distinguishes provisional reads from post-settlement authoritative reads and queues at most one post-settlement reconciliation GET when needed; POST is never retried automatically.
+- The production runtime owns lifecycle construction, focus configuration, request-owned announcements, reconciliation locks, and result-owned feedback cleanup.
+- Reports remains read-only in production and in the focused harness.
+- GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 remaining reconciliation/result-boundary correction handoff
+
+- PR: #136; branch `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before this correction `aae116536c2b68dec0808ccd0cae099f325e09ae`.
+- Reconciliation invariant: a detached-mutation obligation may clear only after an accepted reconciliation GET that started after the detached mutation definitely settled. Provisional GET success before settlement keeps the lock; provisional GET failure after settlement starts exactly one queued authoritative GET; failed authoritative GET does not loop and leaves manual retry available.
+- Runtime result boundary: Export `entity_counts` and Report Document reason clearing are committed only after validated, owned, current-route mutation success. Invalid, ambiguous, stale, detached, and definite-failure completions do not apply those route-specific side effects.
+- Focus contract: create forms for Backups, Exports, and Report Documents are focusable with `tabindex="-1"`; invalid DTO recovery focuses refresh/reconciliation controls instead of disabled create controls.
+- Focused B3.3 tests include ordering scenarios, accepted-only route side effects, restored initial/stale/absent-route and same-route transition evidence, binding selector contracts, and read-only Reports coverage.
+- GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.3 PR #136 reconciliation retry ownership correction handoff
+
+- PR: #136; branch `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before this correction `1e8a9fa8f063346cab5cb28c24c6eacf38e526a1`.
+- Corrected invariant: `reconciliationRequired` is the safety lock for create/generate controls; automatic reconciliation GET execution is permitted only when `pendingReconciliationAfterRead` represents one unconsumed post-settlement queue.
+- Snapshot-aware ordering tests now create a readable initial snapshot before mutation, then cover provisional failure before settlement, provisional failure after settlement, authoritative failure without loop, authoritative success without extra GET, and POST count staying at one.
+- Runtime result boundary now exposes `knownMutationSuccess`; `commitAccepted` and `applyCreated` run only for validated known-success mutation results after route ownership is confirmed.
+- GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

@@ -722,3 +722,24 @@ Scope for this slice is intentionally narrow:
 - Passive Help Center regression coverage for search, filter, reset, article selection, and related-section navigation.
 
 B1 fixture/backend implementation and B2 backend read-model implementation are not required based on the diagnostic audit. B2 browser presentation evidence is completed only if the B3.1 exact published-head smoke actually passes. B3.2 Alerts and Purchases remains the next route batch.
+
+## B3.3 — Local artifacts and reports shared-feedback lifecycle (ACTIVE)
+
+- B3.1 is DONE: Dashboard, Onboarding, and passive Help shared-feedback lifecycle.
+- B3.2a is DONE: Alerts shared-feedback lifecycle.
+- B3.2b is DONE: Purchases shared-feedback lifecycle.
+- PR #135 is merged at `b11160cc1a06df24fa6666969154c37389e6ab65`.
+- B3.3 is active on branch `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; PR #136 is published and open on the verified GitHub branch.
+- Scope: `/backups`, `/exports`, `/report-documents`, and `/reports` only.
+- Browser smoke policy: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next slice after B3.3: B3.4 — Recipes and Clients shared-feedback lifecycle.
+
+## B3.3 correction metadata — PR #136
+
+- PR: #136 — B3.3 — Local artifacts and reports shared-feedback lifecycle.
+- Actual branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`.
+- Base: `main` at `b11160cc1a06df24fa6666969154c37389e6ab65`.
+- Published head before correction: `e0138cc9a05a7e5529bf9f0e16b2283eb080d55a`.
+- State: open; draft: false.
+- This correction keeps the B3.3 route scope and fixes detached ownership, production-composed evidence, focus recovery, warning/error separation, and reconciliation lock semantics.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
