@@ -15,6 +15,29 @@ export type WorkspaceFeedback = {
   error: string;
 };
 
+export type WorkspaceReconciliationSpec<TRead extends string> = {
+  readOperation: TRead;
+  readContextKey: string;
+};
+
+export type WorkspaceReconciliationObligation<
+  TRoute extends string,
+  TRead extends string,
+  TMutation extends string,
+> = {
+  route: TRoute;
+  mutationOperation: TMutation;
+  mutationContextKey: string;
+  mutationRequestId: number;
+  readOperation: TRead;
+  readContextKey: string;
+  epoch: number;
+  mutationSettledEpoch: number;
+  detachedMutationPending: boolean;
+  queuedAutomatic: boolean;
+  automaticAttemptConsumed: boolean;
+};
+
 export type WorkspaceReadOwner<TRoute extends string, TRead extends string> = {
   requestId: number;
   route: TRoute;
@@ -27,18 +50,26 @@ export type WorkspaceReadOwner<TRoute extends string, TRead extends string> = {
   detachedMutationPending: boolean;
 };
 
-export type WorkspaceMutationOwner<TRoute extends string, TMutation extends string> = {
+export type WorkspaceMutationOwner<TRoute extends string, TRead extends string, TMutation extends string> = {
   requestId: number;
   route: TRoute;
   operation: TMutation;
   contextKey: string;
   routeGeneration: number;
   detached: boolean;
+  reconciliation: WorkspaceReconciliationSpec<TRead>;
 };
+
+export type WorkspaceStartReason =
+  | 'duplicate-read'
+  | 'read-active'
+  | 'mutation-active'
+  | 'reconciliation-required'
+  | 'inactive-route';
 
 export type WorkspaceStartResult<TOwner> =
   | { accepted: true; owner: TOwner }
-  | { accepted: false; reason: 'duplicate-read' | 'read-active' | 'mutation-active' | 'reconciliation-required' | 'inactive-route' };
+  | { accepted: false; reason: WorkspaceStartReason };
 
 export type WorkspaceFinishResult = {
   accepted: boolean;
@@ -66,16 +97,20 @@ export type WorkspaceRouteMessages = {
   reconciliationFailed: string;
 };
 
-type RouteState = {
+type RouteState<TRoute extends string, TRead extends string, TMutation extends string> = {
   generation: number;
   feedback: WorkspaceFeedback;
   hasSnapshot: boolean;
-  reconciliationRequired: boolean;
   reconciliationEpoch: number;
   mutationSettledEpoch: number;
-  detachedMutationPending: boolean;
-  queuedReconciliation: boolean;
+  obligation: WorkspaceReconciliationObligation<TRoute, TRead, TMutation> | null;
 };
+
+type ReconciliationResolver<TRoute extends string, TRead extends string, TMutation extends string> = (
+  route: TRoute,
+  mutation: TMutation,
+  mutationContextKey: string,
+) => WorkspaceReconciliationSpec<TRead>;
 
 const emptyFeedback = (): WorkspaceFeedback => ({ neutral: '', success: '', warning: '', error: '' });
 const ignored = (reconciliationRequired = false, detached = false): WorkspaceFinishResult => ({
@@ -92,8 +127,11 @@ const ignored = (reconciliationRequired = false, detached = false): WorkspaceFin
 });
 
 /**
- * Small ownership primitive shared only by the two B3.4+B3.5 domain adapters.
- * Route data and domain mutations remain in their existing bounded runtimes.
+ * Ownership primitive shared only by the two B3.4+B3.5 domain adapters.
+ *
+ * Read policy: the same route + operation + context is a duplicate, while a
+ * different context explicitly supersedes the older owner for that operation.
+ * Reconciliation endpoint knowledge remains in the domain resolver.
  */
 export class CoreWorkspaceFeedbackLifecycle<
   TRoute extends string,
@@ -102,14 +140,15 @@ export class CoreWorkspaceFeedbackLifecycle<
 > {
   private requestId = 0;
   private activeRoute: TRoute | null = null;
-  private readonly routeStates = new Map<TRoute, RouteState>();
+  private readonly routeStates = new Map<TRoute, RouteState<TRoute, TRead, TMutation>>();
   private readonly reads = new Map<string, WorkspaceReadOwner<TRoute, TRead>>();
-  private readonly mutations = new Map<TRoute, WorkspaceMutationOwner<TRoute, TMutation>>();
+  private readonly mutations = new Map<TRoute, WorkspaceMutationOwner<TRoute, TRead, TMutation>>();
   private readonly announcedOwners = new Set<string>();
 
   constructor(
     private readonly messages: Record<TRoute, WorkspaceRouteMessages>,
     private readonly focus: Record<TRoute, { retry: string; refresh: string; mutation: string; success: string }>,
+    private readonly reconciliationFor: ReconciliationResolver<TRoute, TRead, TMutation>,
   ) {}
 
   enter(route: TRoute): void {
@@ -127,9 +166,7 @@ export class CoreWorkspaceFeedbackLifecycle<
     const mutation = this.mutations.get(route);
     if (mutation) {
       mutation.detached = true;
-      state.reconciliationRequired = true;
-      state.reconciliationEpoch += 1;
-      state.detachedMutationPending = true;
+      this.ensureObligation(mutation, true);
     }
     state.feedback.neutral = '';
   }
@@ -153,11 +190,26 @@ export class CoreWorkspaceFeedbackLifecycle<
   }
 
   reconciliationRequired(route: TRoute): boolean {
-    return this.state(route).reconciliationRequired;
+    return this.state(route).obligation !== null;
+  }
+
+  reconciliationObligation(route: TRoute): Readonly<WorkspaceReconciliationObligation<TRoute, TRead, TMutation>> | null {
+    const obligation = this.state(route).obligation;
+    return obligation ? { ...obligation } : null;
+  }
+
+  isRequiredReconciliation(route: TRoute, operation: TRead, contextKey: string): boolean {
+    const obligation = this.state(route).obligation;
+    return Boolean(
+      obligation
+      && obligation.readOperation === operation
+      && obligation.readContextKey === contextKey,
+    );
   }
 
   mutationActive(route: TRoute): boolean {
-    return Boolean(this.mutations.get(route) && !this.mutations.get(route)?.detached);
+    const mutation = this.mutations.get(route);
+    return Boolean(mutation && !mutation.detached);
   }
 
   startRead(
@@ -167,10 +219,17 @@ export class CoreWorkspaceFeedbackLifecycle<
     contextKey = '',
   ): WorkspaceStartResult<WorkspaceReadOwner<TRoute, TRead>> {
     if (!this.ownsRoute(route)) return { accepted: false, reason: 'inactive-route' };
-    const key = this.readKey(route, operation);
-    if (this.reads.has(key)) return { accepted: false, reason: 'duplicate-read' };
-    if (this.mutationActive(route) && kind !== 'mutation-refresh') return { accepted: false, reason: 'mutation-active' };
+    const operationOwners = [...this.reads.entries()].filter(([, owner]) => owner.route === route && owner.operation === operation);
+    if (operationOwners.some(([, owner]) => owner.contextKey === contextKey)) {
+      return { accepted: false, reason: 'duplicate-read' };
+    }
+    if (this.mutationActive(route) && kind !== 'mutation-refresh') {
+      return { accepted: false, reason: 'mutation-active' };
+    }
+    // A different entity context is an explicit supersession boundary.
+    for (const [key] of operationOwners) this.reads.delete(key);
     const state = this.state(route);
+    const obligation = state.obligation;
     const owner: WorkspaceReadOwner<TRoute, TRead> = {
       requestId: ++this.requestId,
       route,
@@ -178,12 +237,12 @@ export class CoreWorkspaceFeedbackLifecycle<
       kind,
       contextKey,
       routeGeneration: state.generation,
-      reconciliationEpoch: state.reconciliationEpoch,
+      reconciliationEpoch: obligation?.epoch ?? 0,
       mutationSettledEpoch: state.mutationSettledEpoch,
-      detachedMutationPending: state.detachedMutationPending,
+      detachedMutationPending: obligation?.detachedMutationPending ?? false,
     };
-    this.reads.set(key, owner);
-    state.feedback.error = '';
+    this.reads.set(this.readKey(route, operation, contextKey), owner);
+    if (!obligation || this.readMatchesObligation(owner, obligation)) state.feedback.error = '';
     if (kind === 'initial' && !state.hasSnapshot) state.feedback = { ...emptyFeedback(), neutral: this.messages[route].loading };
     else if (kind === 'refresh') state.feedback = { ...emptyFeedback(), neutral: this.messages[route].refreshing };
     return { accepted: true, owner };
@@ -195,25 +254,27 @@ export class CoreWorkspaceFeedbackLifecycle<
     validate: (value: T) => boolean = () => true,
   ): WorkspaceFinishResult {
     const state = this.state(owner.route);
-    if (!this.readMatches(owner)) return ignored(state.reconciliationRequired);
-    this.reads.delete(this.readKey(owner.route, owner.operation));
-    if (!this.ownerOwnsPresentation(owner)) return ignored(state.reconciliationRequired);
+    if (!this.readMatches(owner)) return ignored(Boolean(state.obligation));
+    this.reads.delete(this.readKey(owner.route, owner.operation, owner.contextKey));
+    if (!this.ownerOwnsPresentation(owner)) return ignored(Boolean(state.obligation));
+    const obligation = state.obligation;
+    const matchesObligation = Boolean(obligation && this.readMatchesObligation(owner, obligation));
     if (!validate(value)) {
-      state.feedback = { ...emptyFeedback(), error: this.messages[owner.route].invalidResponse };
-      return this.result(owner, false, false, 'assertive', this.focus[owner.route].retry, state.feedback.error);
+      state.feedback.neutral = '';
+      state.feedback.error = this.messages[owner.route].invalidResponse;
+      if (matchesObligation) state.feedback.warning = this.messages[owner.route].reconciliationFailed;
+      return this.result(owner, false, false, 'assertive', matchesObligation ? this.focus[owner.route].refresh : this.focus[owner.route].retry, state.feedback.error);
     }
     state.hasSnapshot = true;
-    const reconciliation = owner.kind === 'reconciliation';
-    const canClear = reconciliation
-      && owner.reconciliationEpoch === state.reconciliationEpoch
-      && !state.detachedMutationPending
-      && owner.mutationSettledEpoch >= state.mutationSettledEpoch;
+    const canClear = owner.kind === 'reconciliation'
+      && obligation !== null
+      && matchesObligation
+      && owner.reconciliationEpoch === obligation.epoch
+      && !obligation.detachedMutationPending
+      && owner.mutationSettledEpoch >= obligation.mutationSettledEpoch;
     if (canClear) {
-      state.reconciliationRequired = false;
-      state.queuedReconciliation = false;
+      state.obligation = null;
       state.feedback.warning = '';
-    } else if (reconciliation && state.reconciliationRequired && !state.detachedMutationPending) {
-      state.queuedReconciliation = true;
     }
     const manualRefresh = owner.kind === 'refresh';
     state.feedback.neutral = '';
@@ -226,34 +287,32 @@ export class CoreWorkspaceFeedbackLifecycle<
       manualRefresh ? 'polite' : 'none',
       manualRefresh ? this.focus[owner.route].refresh : null,
       manualRefresh ? state.feedback.success : '',
-      state.queuedReconciliation,
+      Boolean(state.obligation),
     );
   }
 
   finishReadFailure(owner: WorkspaceReadOwner<TRoute, TRead>): WorkspaceFinishResult {
     const state = this.state(owner.route);
-    if (!this.readMatches(owner)) return ignored(state.reconciliationRequired);
-    this.reads.delete(this.readKey(owner.route, owner.operation));
-    if (!this.ownerOwnsPresentation(owner)) return ignored(state.reconciliationRequired);
-    const queued = owner.kind === 'reconciliation'
-      && state.queuedReconciliation
-      && !state.detachedMutationPending;
+    if (!this.readMatches(owner)) return ignored(Boolean(state.obligation));
+    this.reads.delete(this.readKey(owner.route, owner.operation, owner.contextKey));
+    if (!this.ownerOwnsPresentation(owner)) return ignored(Boolean(state.obligation));
+    const matchesObligation = Boolean(state.obligation && this.readMatchesObligation(owner, state.obligation));
     state.feedback.neutral = '';
     if (state.hasSnapshot || owner.kind === 'mutation-refresh' || Boolean(state.feedback.success)) {
       state.feedback.error = '';
-      state.feedback.warning = state.reconciliationRequired
+      state.feedback.warning = matchesObligation
         ? this.messages[owner.route].reconciliationFailed
         : this.messages[owner.route].refreshError;
-      return this.result(owner, false, false, 'polite', state.reconciliationRequired ? this.focus[owner.route].refresh : null, state.feedback.warning, queued);
+      return this.result(owner, false, false, 'polite', matchesObligation ? this.focus[owner.route].refresh : null, state.feedback.warning, matchesObligation);
     }
-    state.feedback.warning = '';
+    state.feedback.warning = matchesObligation ? this.messages[owner.route].reconciliationFailed : '';
     state.feedback.error = this.messages[owner.route].initialError;
-    return this.result(owner, false, false, 'assertive', this.focus[owner.route].retry, state.feedback.error, queued);
+    return this.result(owner, false, false, 'assertive', matchesObligation ? this.focus[owner.route].refresh : this.focus[owner.route].retry, state.feedback.error, matchesObligation);
   }
 
   discardRead(owner: WorkspaceReadOwner<TRoute, TRead>): boolean {
     if (!this.readMatches(owner)) return false;
-    this.reads.delete(this.readKey(owner.route, owner.operation));
+    this.reads.delete(this.readKey(owner.route, owner.operation, owner.contextKey));
     if (![...this.reads.values()].some((read) => read.route === owner.route)) this.state(owner.route).feedback.neutral = '';
     return true;
   }
@@ -262,19 +321,20 @@ export class CoreWorkspaceFeedbackLifecycle<
     route: TRoute,
     operation: TMutation,
     contextKey = '',
-  ): WorkspaceStartResult<WorkspaceMutationOwner<TRoute, TMutation>> {
+  ): WorkspaceStartResult<WorkspaceMutationOwner<TRoute, TRead, TMutation>> {
     if (!this.ownsRoute(route)) return { accepted: false, reason: 'inactive-route' };
     const state = this.state(route);
-    if (state.reconciliationRequired) return { accepted: false, reason: 'reconciliation-required' };
+    if (state.obligation) return { accepted: false, reason: 'reconciliation-required' };
     if (this.mutations.has(route)) return { accepted: false, reason: 'mutation-active' };
     if ([...this.reads.values()].some((owner) => owner.route === route)) return { accepted: false, reason: 'read-active' };
-    const owner: WorkspaceMutationOwner<TRoute, TMutation> = {
+    const owner: WorkspaceMutationOwner<TRoute, TRead, TMutation> = {
       requestId: ++this.requestId,
       route,
       operation,
       contextKey,
       routeGeneration: state.generation,
       detached: false,
+      reconciliation: this.reconciliationFor(route, operation, contextKey),
     };
     this.mutations.set(route, owner);
     state.feedback = { ...emptyFeedback(), neutral: this.messages[route].mutationBusy };
@@ -282,27 +342,22 @@ export class CoreWorkspaceFeedbackLifecycle<
   }
 
   finishMutationSuccess<T>(
-    owner: WorkspaceMutationOwner<TRoute, TMutation>,
+    owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>,
     value: T,
     validate: (value: T) => boolean,
     successMessage: string,
   ): WorkspaceFinishResult {
     const state = this.state(owner.route);
     const current = this.mutations.get(owner.route);
-    if (!this.mutationMatches(owner)) return ignored(state.reconciliationRequired, Boolean(current?.detached));
+    if (!this.mutationMatches(owner)) return ignored(Boolean(state.obligation), Boolean(current?.detached));
     this.mutations.delete(owner.route);
     if (current?.detached || !this.ownerOwnsPresentation(owner)) {
-      state.detachedMutationPending = false;
-      state.mutationSettledEpoch += 1;
-      state.reconciliationRequired = true;
-      state.queuedReconciliation = true;
+      this.settleDetachedMutation(owner);
       return ignored(true, true);
     }
     state.feedback.neutral = '';
     if (!validate(value)) {
-      state.reconciliationRequired = true;
-      state.reconciliationEpoch += 1;
-      state.queuedReconciliation = true;
+      this.ensureObligation(owner, false);
       state.feedback = { ...emptyFeedback(), error: this.messages[owner.route].invalidResponse };
       return this.result(owner, false, false, 'assertive', this.focus[owner.route].refresh, state.feedback.error, true);
     }
@@ -311,25 +366,20 @@ export class CoreWorkspaceFeedbackLifecycle<
   }
 
   finishMutationFailure(
-    owner: WorkspaceMutationOwner<TRoute, TMutation>,
+    owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>,
     error: unknown,
   ): WorkspaceFinishResult {
     const state = this.state(owner.route);
     const current = this.mutations.get(owner.route);
-    if (!this.mutationMatches(owner)) return ignored(state.reconciliationRequired, Boolean(current?.detached));
+    if (!this.mutationMatches(owner)) return ignored(Boolean(state.obligation), Boolean(current?.detached));
     this.mutations.delete(owner.route);
     if (current?.detached || !this.ownerOwnsPresentation(owner)) {
-      state.detachedMutationPending = false;
-      state.mutationSettledEpoch += 1;
-      state.reconciliationRequired = true;
-      state.queuedReconciliation = true;
+      this.settleDetachedMutation(owner);
       return ignored(true, true);
     }
     state.feedback.neutral = '';
     if (isAmbiguousTransportError(error)) {
-      state.reconciliationRequired = true;
-      state.reconciliationEpoch += 1;
-      state.queuedReconciliation = true;
+      this.ensureObligation(owner, false);
       state.feedback = { ...emptyFeedback(), warning: this.messages[owner.route].mutationAmbiguous };
       return this.result(owner, false, false, 'assertive', this.focus[owner.route].refresh, state.feedback.warning, true);
     }
@@ -337,16 +387,37 @@ export class CoreWorkspaceFeedbackLifecycle<
     return this.result(owner, false, false, 'assertive', this.focus[owner.route].mutation, state.feedback.error);
   }
 
-  consumeQueuedReconciliation(route: TRoute): boolean {
-    const state = this.state(route);
-    if (!state.queuedReconciliation || state.detachedMutationPending) return false;
-    state.queuedReconciliation = false;
+  settleMutationObsolete(owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>): boolean {
+    if (!this.mutationMatches(owner)) return false;
+    this.mutations.delete(owner.route);
+    this.ensureObligation(owner, false);
+    this.state(owner.route).mutationSettledEpoch += 1;
+    const obligation = this.state(owner.route).obligation;
+    if (obligation) {
+      obligation.detachedMutationPending = false;
+      obligation.mutationSettledEpoch = this.state(owner.route).mutationSettledEpoch;
+    }
     return true;
+  }
+
+  cancelMutation(owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>): boolean {
+    if (!this.mutationMatches(owner)) return false;
+    this.mutations.delete(owner.route);
+    this.state(owner.route).feedback.neutral = '';
+    return true;
+  }
+
+  consumeQueuedReconciliation(route: TRoute): Readonly<WorkspaceReconciliationObligation<TRoute, TRead, TMutation>> | null {
+    const obligation = this.state(route).obligation;
+    if (!obligation || obligation.detachedMutationPending || !obligation.queuedAutomatic || obligation.automaticAttemptConsumed) return null;
+    obligation.queuedAutomatic = false;
+    obligation.automaticAttemptConsumed = true;
+    return { ...obligation };
   }
 
   clearTransientFeedback(route: TRoute): void {
     const state = this.state(route);
-    state.feedback = state.reconciliationRequired && state.feedback.warning
+    state.feedback = state.obligation && state.feedback.warning
       ? { ...emptyFeedback(), warning: state.feedback.warning }
       : emptyFeedback();
   }
@@ -358,36 +429,89 @@ export class CoreWorkspaceFeedbackLifecycle<
     return true;
   }
 
-  private state(route: TRoute): RouteState {
+  private state(route: TRoute): RouteState<TRoute, TRead, TMutation> {
     let state = this.routeStates.get(route);
     if (!state) {
       state = {
         generation: 0,
         feedback: emptyFeedback(),
         hasSnapshot: false,
-        reconciliationRequired: false,
         reconciliationEpoch: 0,
         mutationSettledEpoch: 0,
-        detachedMutationPending: false,
-        queuedReconciliation: false,
+        obligation: null,
       };
       this.routeStates.set(route, state);
     }
     return state;
   }
 
-  private readKey(route: TRoute, operation: TRead): string {
-    return `${route}:${operation}`;
+  private ensureObligation(owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>, detachedMutationPending: boolean): void {
+    const state = this.state(owner.route);
+    const existing = state.obligation;
+    if (existing?.mutationRequestId === owner.requestId) {
+      existing.detachedMutationPending = existing.detachedMutationPending || detachedMutationPending;
+      return;
+    }
+    state.reconciliationEpoch += 1;
+    state.obligation = {
+      route: owner.route,
+      mutationOperation: owner.operation,
+      mutationContextKey: owner.contextKey,
+      mutationRequestId: owner.requestId,
+      readOperation: owner.reconciliation.readOperation,
+      readContextKey: owner.reconciliation.readContextKey,
+      epoch: state.reconciliationEpoch,
+      mutationSettledEpoch: state.mutationSettledEpoch,
+      detachedMutationPending,
+      queuedAutomatic: true,
+      automaticAttemptConsumed: false,
+    };
+  }
+
+  private settleDetachedMutation(owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>): void {
+    const state = this.state(owner.route);
+    this.ensureObligation(owner, true);
+    state.mutationSettledEpoch += 1;
+    const obligation = state.obligation;
+    if (!obligation) return;
+    obligation.detachedMutationPending = false;
+    obligation.mutationSettledEpoch = state.mutationSettledEpoch;
+    if (!obligation.automaticAttemptConsumed) obligation.queuedAutomatic = true;
+  }
+
+  private readKey(route: TRoute, operation: TRead, contextKey: string): string {
+    return `${route}:${operation}:${contextKey}`;
   }
 
   private readMatches(owner: WorkspaceReadOwner<TRoute, TRead>): boolean {
-    const current = this.reads.get(this.readKey(owner.route, owner.operation));
-    return Boolean(current && current.requestId === owner.requestId && current.routeGeneration === owner.routeGeneration);
+    const current = this.reads.get(this.readKey(owner.route, owner.operation, owner.contextKey));
+    return Boolean(
+      current
+      && current.requestId === owner.requestId
+      && current.routeGeneration === owner.routeGeneration
+      && current.operation === owner.operation
+      && current.contextKey === owner.contextKey,
+    );
   }
 
-  private mutationMatches(owner: WorkspaceMutationOwner<TRoute, TMutation>): boolean {
+  private mutationMatches(owner: WorkspaceMutationOwner<TRoute, TRead, TMutation>): boolean {
     const current = this.mutations.get(owner.route);
-    return Boolean(current && current.requestId === owner.requestId && current.routeGeneration === owner.routeGeneration);
+    return Boolean(
+      current
+      && current.requestId === owner.requestId
+      && current.routeGeneration === owner.routeGeneration
+      && current.operation === owner.operation
+      && current.contextKey === owner.contextKey,
+    );
+  }
+
+  private readMatchesObligation(
+    owner: WorkspaceReadOwner<TRoute, TRead>,
+    obligation: WorkspaceReconciliationObligation<TRoute, TRead, TMutation>,
+  ): boolean {
+    return owner.route === obligation.route
+      && owner.operation === obligation.readOperation
+      && owner.contextKey === obligation.readContextKey;
   }
 
   private ownerOwnsPresentation(owner: { route: TRoute; routeGeneration: number }): boolean {
@@ -395,7 +519,7 @@ export class CoreWorkspaceFeedbackLifecycle<
   }
 
   private result(
-    owner: { route: TRoute; operation: string; requestId: number; routeGeneration: number },
+    owner: { route: TRoute; operation: string; requestId: number; routeGeneration: number; contextKey: string },
     canApply: boolean,
     knownSuccess: boolean,
     announcement: WorkspaceFinishResult['announcement'],
@@ -409,9 +533,9 @@ export class CoreWorkspaceFeedbackLifecycle<
       detached: false,
       knownSuccess,
       needsRefresh,
-      reconciliationRequired: this.state(owner.route).reconciliationRequired,
+      reconciliationRequired: this.reconciliationRequired(owner.route),
       announcement,
-      announcementOwnerKey: `${owner.route}:${owner.routeGeneration}:${owner.requestId}:${owner.operation}`,
+      announcementOwnerKey: `${owner.route}:${owner.routeGeneration}:${owner.requestId}:${owner.operation}:${owner.contextKey}`,
       focusKey,
       message,
     };

@@ -1,4 +1,8 @@
-import { CoreWorkspaceFeedbackLifecycle, type WorkspaceRouteMessages } from './core-workspace-feedback.js';
+import {
+  CoreWorkspaceFeedbackLifecycle,
+  type WorkspaceReconciliationSpec,
+  type WorkspaceRouteMessages,
+} from './core-workspace-feedback.js';
 
 export type InventoryCatalogRoute = 'inventory' | 'ingredients' | 'ingredientLots' | 'stockMovements' | 'packaging';
 export type InventoryCatalogRead =
@@ -8,6 +12,7 @@ export type InventoryCatalogRead =
   | 'lot-list'
   | 'lot-references'
   | 'stock-references'
+  | 'stock-lot-detail'
   | 'stock-movements'
   | 'stock-balance'
   | 'stock-reconciliation'
@@ -44,6 +49,26 @@ const messages = (subject: string): WorkspaceRouteMessages => ({
   reconciliationFailed: 'Не удалось подтвердить результат. Обновите данные вручную перед повторной операцией.',
 });
 
+export function inventoryCatalogReconciliationFor(
+  route: InventoryCatalogRoute,
+  mutation: InventoryCatalogMutation,
+  mutationContextKey: string,
+): WorkspaceReconciliationSpec<InventoryCatalogRead> {
+  if (route === 'ingredients') {
+    return { readOperation: 'ingredient-list', readContextKey: 'ingredients:list' };
+  }
+  if (route === 'ingredientLots') {
+    return { readOperation: 'lot-list', readContextKey: 'lots:list' };
+  }
+  if (route === 'packaging') {
+    return { readOperation: 'packaging-list', readContextKey: 'packaging:list' };
+  }
+  if (route === 'stockMovements' && mutation === 'stock-movement-create') {
+    return { readOperation: 'stock-reconciliation', readContextKey: mutationContextKey };
+  }
+  return { readOperation: 'inventory-overview', readContextKey: 'inventory:overview' };
+}
+
 export class InventoryCatalogWorkspaceFeedbackLifecycle extends CoreWorkspaceFeedbackLifecycle<
   InventoryCatalogRoute,
   InventoryCatalogRead,
@@ -68,6 +93,7 @@ export class InventoryCatalogWorkspaceFeedbackLifecycle extends CoreWorkspaceFee
         stockMovements: { retry: 'core-stock-retry', refresh: 'core-stock-reconcile', mutation: 'core-stock-form', success: 'core-stock-content' },
         packaging: { retry: 'core-packaging-retry', refresh: 'core-packaging-refresh', mutation: 'core-packaging-form', success: 'core-packaging-content' },
       },
+      inventoryCatalogReconciliationFor,
     );
   }
 }
@@ -100,4 +126,14 @@ export function isStockReconciliationDto(value: unknown): boolean {
   const result = value as { movements?: unknown; balance?: unknown };
   return Array.isArray(result.movements)
     && Boolean(result.balance && typeof result.balance === 'object' && 'ingredient_lot_id' in result.balance);
+}
+
+export function isStockReconciliationForLot(value: unknown, lotId: number): boolean {
+  if (!isStockReconciliationDto(value)) return false;
+  const result = value as {
+    movements: Array<{ ingredient_lot_id?: unknown }>;
+    balance: { ingredient_lot_id?: unknown };
+  };
+  return Number(result.balance.ingredient_lot_id) === lotId
+    && result.movements.every((movement) => Number(movement.ingredient_lot_id) === lotId);
 }

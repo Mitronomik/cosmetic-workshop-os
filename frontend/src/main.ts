@@ -2622,10 +2622,15 @@ function ingredientLotList() {
 function stockMovementsPage() {
   const lifecycleFeedback = inventoryCatalogWorkspacePresentation(inventoryCatalogWorkspaceLifecycle, 'stockMovements').feedback;
   const reconciliationRequired = inventoryCatalogWorkspaceLifecycle.reconciliationRequired('stockMovements');
+  const obligatedLotId = inventoryCatalogWorkspaceRuntime.stockMovementObligationLotId();
+  const obligatedLot = obligatedLotId ? stockMovementsState.lots.find((lot) => lot.id === obligatedLotId) ?? null : null;
+  const obligationCopy = obligatedLot
+    ? ` Проверка относится к партии «${escapeHtml(stockLotLabel(obligatedLot))}».`
+    : '';
   if (stockMovementsStatus === 'idle' || stockMovementsStatus === 'loading') return `<section class="card"><p class="card-kicker">Движения сырья</p><h2>Загружаем движения…</h2><p>Загружаем партии компонентов и историю движений.</p></section>`;
   if (stockMovementsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Движения сырья</p><h2>Не удалось загрузить движения сырья</h2><p>${stockMovementsError || 'Не удалось получить данные о движениях склада.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-stock-movements">Повторить загрузку</button></section>`;
   if (stockMovementsState.lots.length === 0) return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>История движений компонентов</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements" ${stockMovementSubmitting ? 'disabled' : ''}>Обновить</button></section><section class="card empty-card"><h2>Пока нет партий для движений</h2><p>Сначала создайте компонент и партию. После этого можно будет добавить приход или списание.</p><p class="next-step">Текущий остаток нельзя ввести вручную: он появится после первого движения сырья.</p></section></div>`;
-  return `<div class="catalog-layout" tabindex="-1" data-focus-key="core-stock-content"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>Движения сырья</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-stock-movements" ${stockMovementSubmitting ? 'disabled' : ''}>Обновить</button>${reconciliationRequired ? '<button class="primary-action" type="button" data-action="reconcile-stock-movement" data-focus-key="core-stock-reconcile">Проверить результат</button>' : ''}</div></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsRefreshWarning || lifecycleFeedback.warning ? `<p class="page-message warning-message">${stockMovementsRefreshWarning || lifecycleFeedback.warning}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
+  return `<div class="catalog-layout" tabindex="-1" data-focus-key="core-stock-content"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>Движения сырья</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-stock-movements" ${stockMovementSubmitting ? 'disabled' : ''}>Обновить</button>${reconciliationRequired ? `<button class="primary-action" type="button" data-action="reconcile-stock-movement" data-reconciliation-context="${obligatedLotId ? `lot:${obligatedLotId}` : ''}" data-focus-key="core-stock-reconcile">Проверить результат</button>` : ''}</div></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsRefreshWarning || lifecycleFeedback.warning ? `<p class="page-message warning-message">${stockMovementsRefreshWarning || lifecycleFeedback.warning}${obligationCopy}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
 }
 
 function stockLotSelector() {
@@ -2948,8 +2953,35 @@ function clientRecipeIngredientName(id: number) { return recipesState.ingredient
 function clientRecipePayloadFromForm(form: HTMLFormElement): ClientRecipePayload { const data = new FormData(form); const batch = String(data.get('target_batch_size_value') ?? '').trim(); return { client_id: Number(data.get('client_id')), source_recipe_version_id: Number(data.get('source_recipe_version_id')), title: String(data.get('title') ?? '').trim(), target_batch_size_value: batch || null, target_batch_size_unit: batch ? String(data.get('target_batch_size_unit') ?? 'g') : null, personalization_notes: String(data.get('personalization_notes') ?? '').trim(), allergy_notes: String(data.get('allergy_notes') ?? '').trim(), preference_notes: String(data.get('preference_notes') ?? '').trim(), contraindication_notes: String(data.get('contraindication_notes') ?? '').trim(), notes: String(data.get('notes') ?? '').trim() }; }
 function saveClientRecipeFormFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="client-recipe"]'); if (!form) return; const data = new FormData(form); clientRecipesState.form = { client_id: String(data.get('client_id') ?? ''), recipe_template_id: String(data.get('recipe_template_id') ?? ''), source_recipe_version_id: String(data.get('source_recipe_version_id') ?? ''), title: String(data.get('title') ?? '').trim(), target_batch_size_value: String(data.get('target_batch_size_value') ?? '').trim(), target_batch_size_unit: String(data.get('target_batch_size_unit') ?? 'g'), personalization_notes: String(data.get('personalization_notes') ?? '').trim(), allergy_notes: String(data.get('allergy_notes') ?? '').trim(), preference_notes: String(data.get('preference_notes') ?? '').trim(), contraindication_notes: String(data.get('contraindication_notes') ?? '').trim(), notes: String(data.get('notes') ?? '').trim() }; }
 function humanClientRecipeError(error: unknown) { const message = error instanceof Error ? error.message : ''; if (message.includes('Source recipe version has no ingredient lines')) return 'Не удалось создать индивидуальный рецепт: выбранная версия рецепта пустая. Добавьте состав в версии рецепта.'; if (message.includes('Client is inactive')) return 'Не удалось создать индивидуальный рецепт: выбранный клиент находится в архиве. Выберите активного клиента.'; if (message.includes('Ingredient is inactive')) return 'Не удалось создать индивидуальный рецепт: в версии рецепта есть архивный компонент. Проверьте состав версии.'; if (message.includes('Client was not found')) return 'Не удалось создать индивидуальный рецепт: выбранный клиент не найден. Обновите список клиентов.'; if (message.includes('Source recipe version was not found')) return 'Не удалось создать индивидуальный рецепт: выбранная версия рецепта не найдена. Обновите рецепты.'; return 'Не удалось создать индивидуальный рецепт. Проверьте клиента, версию рецепта и обязательные поля.'; }
+function reconcileClientRecipeWorkspaceObligation() {
+  const obligation = formulaClientWorkspaceLifecycle.reconciliationObligation('clientRecipes');
+  if (!obligation || obligation.readOperation !== 'client-recipe-detail') return false;
+  const match = obligation.readContextKey.match(/^client-recipe:(\d+)$/);
+  if (!match) return false;
+  const recipeId = Number(match[1]);
+  const started = formulaClientWorkspaceRuntime.read({
+    route: 'clientRecipes',
+    operation: 'client-recipe-detail',
+    kind: 'reconciliation',
+    contextKey: obligation.readContextKey,
+    request: () => getClientRecipe(recipeId),
+    validate: (detail) => Boolean(detail && isEntityDto(detail.client_recipe) && Array.isArray(detail.ingredients)),
+    apply: (detail) => {
+      if (clientRecipesState.selectedDetail?.client_recipe.id === recipeId) {
+        clientRecipesState.selectedDetail = detail;
+        clientRecipesState.detailStatus = 'ready';
+      }
+      clientRecipesRefreshWarning = '';
+    },
+    failed: () => {
+      clientRecipesRefreshWarning = 'Не удалось проверить сохранённый состав исходного индивидуального рецепта. Нажмите «Обновить» ещё раз.';
+    },
+  });
+  return started.accepted;
+}
 function loadClientRecipes(force = false) {
   if (clientRecipePageMutationActive()) return;
+  if (force) reconcileClientRecipeWorkspaceObligation();
   if (!force && (clientRecipesStatus === 'loading' || clientRecipesStatus === 'ready')) return;
   const retained = clientRecipesStatus === 'ready';
   if (!retained) clientRecipesStatus = 'loading';
@@ -2958,7 +2990,8 @@ function loadClientRecipes(force = false) {
   formulaClientWorkspaceRuntime.read({
     route: 'clientRecipes',
     operation: 'client-recipe-list',
-    kind: formulaClientWorkspaceLifecycle.reconciliationRequired('clientRecipes') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('clientRecipes', 'client-recipe-list', 'client-recipes:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'client-recipes:list',
     request: () => Promise.all([getClientRecipes(clientRecipesState.includeInactive), getClients(true), getRecipeTemplates(), getIngredients()]),
     validate: ([recipes, clients, templates, ingredients]) => Array.isArray(recipes?.client_recipes) && Array.isArray(clients?.clients) && Array.isArray(templates?.recipe_templates) && Array.isArray(ingredients?.ingredients),
     apply: ([recipes, clients, templates, ingredients]) => {
@@ -2972,6 +3005,9 @@ function loadClientRecipes(force = false) {
       clientRecipesStatus = hasSnapshot ? 'ready' : 'error';
       clientRecipesError = hasSnapshot ? '' : 'Не получилось получить индивидуальные рецепты, клиентов или базовые рецепты из локального приложения.';
       clientRecipesRefreshWarning = hasSnapshot ? formulaClientWorkspaceLifecycle.feedback('clientRecipes').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') clientRecipesStatus = retained ? 'ready' : 'idle';
     },
   });
 }
@@ -3009,6 +3045,11 @@ function selectClientRecipeTemplate(value: string) {
       clientRecipesState.versionsStatus = 'error';
       clientRecipesError = 'Не удалось загрузить сохранённые версии состава. Черновик сохранён; выберите базовый рецепт ещё раз.';
     },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read' && clientRecipesState.form.recipe_template_id === String(templateId)) {
+        clientRecipesState.versionsStatus = 'idle';
+      }
+    },
   });
 }
 function submitClientRecipeForm(event: SubmitEvent) {
@@ -3031,7 +3072,8 @@ function submitClientRecipeForm(event: SubmitEvent) {
   formulaClientWorkspaceRuntime.mutate({
     route: 'clientRecipes',
     operation: 'client-recipe-create',
-    contextKey: `version:${payload.source_recipe_version_id}`,
+    contextKey: `client:${payload.client_id}:version:${payload.source_recipe_version_id}`,
+    ownsContext: () => clientRecipeCreateSubmitting,
     request: () => createClientRecipe(payload),
     validate: (detail) => Boolean(detail && isEntityDto(detail.client_recipe) && Array.isArray(detail.ingredients)),
     successMessage: 'Индивидуальный рецепт создан.',
@@ -3052,6 +3094,7 @@ function submitClientRecipeForm(event: SubmitEvent) {
         route: 'clientRecipes',
         operation: 'client-recipe-list',
         kind: 'mutation-refresh',
+        contextKey: 'client-recipes:list',
         request: () => getClientRecipes(clientRecipesState.includeInactive),
         validate: (response) => Array.isArray(response?.client_recipes),
         apply: (response) => { clientRecipesState.items = response.client_recipes; clientRecipesStatus = 'ready'; },
@@ -3071,6 +3114,11 @@ function submitClientRecipeForm(event: SubmitEvent) {
       clientRecipesStatus = 'ready';
       applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation);
     },
+    rejected: () => {
+      clientRecipeCreateSubmitting = false;
+      restoreClientRecipeMutationControls(document);
+      render();
+    },
   });
 }
 function openClientRecipe(id: number) {
@@ -3089,7 +3137,7 @@ function openClientRecipe(id: number) {
   formulaClientWorkspaceRuntime.read({
     route: 'clientRecipes',
     operation: 'client-recipe-detail',
-    kind: 'detail',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('clientRecipes', 'client-recipe-detail', `client-recipe:${id}`) ? 'reconciliation' : 'detail',
     contextKey: `client-recipe:${id}`,
     request: () => getClientRecipe(id),
     validate: (detail) => Boolean(detail && isEntityDto(detail.client_recipe) && Array.isArray(detail.ingredients)),
@@ -3100,6 +3148,9 @@ function openClientRecipe(id: number) {
     failed: () => {
       clientRecipesState.detailStatus = 'error';
       clientRecipesError = 'Не удалось открыть индивидуальный рецепт. Обновите список и попробуйте еще раз.';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') clientRecipesState.detailStatus = 'idle';
     },
   });
 }
@@ -3126,6 +3177,7 @@ function deactivateClientRecipe(id: number) {
         route: 'clientRecipes',
         operation: 'client-recipe-list',
         kind: 'mutation-refresh',
+        contextKey: 'client-recipes:list',
         request: () => getClientRecipes(clientRecipesState.includeInactive),
         validate: (response) => Array.isArray(response?.client_recipes),
         apply: (response) => { clientRecipesState.items = response.client_recipes; clientRecipesStatus = 'ready'; },
@@ -3258,6 +3310,7 @@ function submitClientRecipeCompositionEditor(event: SubmitEvent) {
     route: 'clientRecipes',
     operation: 'client-recipe-composition',
     contextKey: `client-recipe:${contextId}`,
+    ownsContext: () => clientRecipeCompositionSubmitting && clientRecipesState.selectedDetail?.client_recipe.id === contextId,
     request: () => updateClientRecipeIngredients(contextId, payload),
     validate: (updated) => Boolean(updated && updated.client_recipe?.id === contextId && Array.isArray(updated.ingredients)),
     successMessage: 'Состав индивидуального рецепта сохранён. Базовый рецепт не изменён.',
@@ -3284,6 +3337,12 @@ function submitClientRecipeCompositionEditor(event: SubmitEvent) {
       }
       clientRecipeCompositionValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCompositionFieldLabels(clientRecipesState.compositionEditor.draft), 'Не удалось сохранить состав индивидуального рецепта. Проверьте строки и попробуйте ещё раз.');
       applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation);
+    },
+    rejected: () => {
+      clientRecipeCompositionSubmitting = false;
+      clientRecipesState.compositionEditor.isSaving = false;
+      restoreClientRecipeMutationControls(document);
+      render();
     },
   });
 }
@@ -3592,7 +3651,7 @@ function loadClientCardData(clientId: number) {
   const isCurrentClientCardRecipes = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
   const canRenderRecipesResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
   getClientRecipes(true).then((response) => {
-    if (!isCurrentClientCardRecipes()) return;
+    if (!isCurrentClientCardRecipes()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishReadSuccess(workspaceOwner.owner, response, (value) => Array.isArray(value?.client_recipes));
     presentFormulaClientCompletion('clients', owned);
     if (!owned.canApply) return;
@@ -3602,7 +3661,7 @@ function loadClientCardData(clientId: number) {
     syncClientCardDraftFormsFromDom();
     render();
   }).catch(() => {
-    if (!isCurrentClientCardRecipes()) return;
+    if (!isCurrentClientCardRecipes()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishReadFailure(workspaceOwner.owner);
     presentFormulaClientCompletion('clients', owned);
     if (!owned.accepted) return;
@@ -3617,7 +3676,13 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
   if (!clientId) return Promise.resolve();
   if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();
   const includeArchived = clientCardState.includeArchivedWishes;
-  const workspaceOwner = formulaClientWorkspaceLifecycle.startRead('clients', 'client-wishes', 'related', `client:${clientId}:archived:${includeArchived}`);
+  const wishContextKey = `client:${clientId}:archived:${includeArchived}`;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startRead(
+    'clients',
+    'client-wishes',
+    formulaClientWorkspaceLifecycle.isRequiredReconciliation('clients', 'client-wishes', wishContextKey) ? 'reconciliation' : 'related',
+    wishContextKey,
+  );
   if (!workspaceOwner.accepted) return Promise.resolve();
   const cardContextToken = clientCardContextToken;
   const targetedValidationToken = clientCardTargetedValidationToken;
@@ -3626,7 +3691,7 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
   const canRenderWishesResponse = () => isCurrentWishesRequest() && clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
   if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (canRenderWishesResponse()) render(); }
   return fetchClientWishes(clientId, includeArchived).then((wishes) => {
-    if (!isCurrentWishesRequest()) return;
+    if (!isCurrentWishesRequest()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishReadSuccess(workspaceOwner.owner, wishes, Array.isArray);
     presentFormulaClientCompletion('clients', owned);
     if (!owned.canApply) return;
@@ -3636,7 +3701,7 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
     syncClientCardDraftFormsFromDom();
     render();
   }).catch((error) => {
-    if (!isCurrentWishesRequest()) return;
+    if (!isCurrentWishesRequest()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishReadFailure(workspaceOwner.owner);
     presentFormulaClientCompletion('clients', owned);
     if (!owned.accepted) return;
@@ -3663,7 +3728,13 @@ function refreshClientFeedback(renderLoading = true, rejectOnError = false, show
   const clientId = clientCardState.clientId;
   if (!clientId) return Promise.resolve();
   const cardContextToken = clientCardContextToken;
-  const workspaceOwner = formulaClientWorkspaceLifecycle.startRead('clients', 'client-feedback', 'related', `client:${clientId}`);
+  const feedbackContextKey = `client:${clientId}`;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startRead(
+    'clients',
+    'client-feedback',
+    formulaClientWorkspaceLifecycle.isRequiredReconciliation('clients', 'client-feedback', feedbackContextKey) ? 'reconciliation' : 'related',
+    feedbackContextKey,
+  );
   if (!workspaceOwner.accepted) return Promise.resolve();
   const targetedValidationToken = clientCardTargetedValidationToken;
   const requestGeneration = clientFeedbackListRequestLifecycle.begin();
@@ -3672,7 +3743,7 @@ function refreshClientFeedback(renderLoading = true, rejectOnError = false, show
   if (!clientCardFormDomLocked()) syncClientCardDraftFormsFromDom();
   if (renderLoading) { clientCardState.feedbackStatus = 'loading'; if (canRenderFeedbackResponse()) render(); }
   return fetchClientFeedback(clientId).then((feedback) => {
-    if (!isCurrentClientCardFeedback()) return;
+    if (!isCurrentClientCardFeedback()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishReadSuccess(workspaceOwner.owner, feedback, Array.isArray);
     presentFormulaClientCompletion('clients', owned);
     if (!owned.canApply) return;
@@ -3682,7 +3753,7 @@ function refreshClientFeedback(renderLoading = true, rejectOnError = false, show
     syncClientCardDraftFormsFromDom();
     render();
   }).catch((error) => {
-    if (!isCurrentClientCardFeedback()) return;
+    if (!isCurrentClientCardFeedback()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishReadFailure(workspaceOwner.owner);
     presentFormulaClientCompletion('clients', owned);
     if (!owned.accepted) return;
@@ -3701,11 +3772,11 @@ function submitClientWishForm(event: SubmitEvent) {
   event.preventDefault();
   const clientId = clientCardState.clientId;
   if (!clientId || clientPageMutationActive()) return;
-  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-create', `client:${clientId}`);
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-create', `client:${clientId}:archived:${clientCardState.includeArchivedWishes}`);
   if (!workspaceOwner.accepted) return;
   syncClientCardDraftFormsFromDom();
   const token = clientWishCreateLifecycle.begin();
-  if (token === null) return;
+  if (token === null) { formulaClientWorkspaceLifecycle.cancelMutation(workspaceOwner.owner); return; }
   const contextToken = clientWishContextToken;
   const isCurrentClientWishMutation = () => clientWishCreateLifecycle.isCurrent(token) && clientCardState.clientId === clientId && contextToken === clientWishContextToken;
   const submittedDraft: ClientWishFormState = { ...clientCardState.wishForm };
@@ -3720,7 +3791,7 @@ function submitClientWishForm(event: SubmitEvent) {
   disableClientWishCreateMutationControls(document);
   clearFeedbackAnnouncement();
   createClientWish(clientId, payload).then((created) => {
-    if (!isCurrentClientWishMutation()) return;
+    if (!isCurrentClientWishMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, created, isEntityDto, 'Пожелание клиента сохранено.');
     presentFormulaClientCompletion('clients', owned);
     if (!owned.knownSuccess || !owned.canApply) return;
@@ -3742,7 +3813,7 @@ function submitClientWishForm(event: SubmitEvent) {
       render();
     });
   }).catch((error) => {
-    if (!isCurrentClientWishMutation()) return;
+    if (!isCurrentClientWishMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentFormulaClientCompletion('clients', owned);
     createRejected = true;
@@ -3773,21 +3844,32 @@ function submitClientWishForm(event: SubmitEvent) {
 }
 function changeClientWishStatus(wishId: number, status: ClientWishStatus) {
   if (clientPageMutationActive() || !['open','planned','resolved'].includes(status)) return;
-  const owner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-status', `wish:${wishId}`);
+  const clientId = clientCardState.clientId;
+  if (!clientId) return;
+  const owner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-status', `client:${clientId}:archived:${clientCardState.includeArchivedWishes}:wish:${wishId}`);
   if (!owner.accepted) return;
+  const cardContextToken = clientCardContextToken;
+  const isCurrentWishStatus = () => clientCardState.clientId === clientId && clientCardContextToken === cardContextToken && clientCardState.changingWishId === wishId;
   clientWishListRequestLifecycle.invalidate();
   syncClientCardDraftFormsFromDom();
   clientCardState.changingWishId = wishId;
   clientCardState.wishError = '';
   render();
   updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then((updated) => {
+    if (!isCurrentWishStatus()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(owner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(owner.owner, updated, isEntityDto, 'Статус пожелания изменён.');
     presentFormulaClientCompletion('clients', owned);
-    if (!owned.knownSuccess || !owned.canApply) return;
+    if (!owned.knownSuccess || !owned.canApply) {
+      clientCardState.changingWishId = null;
+      clientCardState.wishRefreshWarning = owned.message;
+      render();
+      return;
+    }
     clientCardState.changingWishId = null;
     if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom();
     return refreshClientWishes(!clientPageMutationActive());
   }).catch((error) => {
+    if (!isCurrentWishStatus()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(owner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(owner.owner, error);
     presentFormulaClientCompletion('clients', owned);
     clientCardState.changingWishId = null;
@@ -3800,21 +3882,32 @@ function changeClientWishStatus(wishId: number, status: ClientWishStatus) {
 }
 function archiveClientWishFromCard(wishId: number) {
   if (clientPageMutationActive() || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return;
-  const owner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-archive', `wish:${wishId}`);
+  const clientId = clientCardState.clientId;
+  if (!clientId) return;
+  const owner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-archive', `client:${clientId}:archived:${clientCardState.includeArchivedWishes}:wish:${wishId}`);
   if (!owner.accepted) return;
+  const cardContextToken = clientCardContextToken;
+  const isCurrentWishArchive = () => clientCardState.clientId === clientId && clientCardContextToken === cardContextToken && clientCardState.archivingWishId === wishId;
   clientWishListRequestLifecycle.invalidate();
   syncClientCardDraftFormsFromDom();
   clientCardState.archivingWishId = wishId;
   clientCardState.wishError = '';
   render();
   archiveClientWish(wishId).then((archived) => {
+    if (!isCurrentWishArchive()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(owner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(owner.owner, archived, isEntityDto, 'Пожелание архивировано.');
     presentFormulaClientCompletion('clients', owned);
-    if (!owned.knownSuccess || !owned.canApply) return;
+    if (!owned.knownSuccess || !owned.canApply) {
+      clientCardState.archivingWishId = null;
+      clientCardState.wishRefreshWarning = owned.message;
+      render();
+      return;
+    }
     clientCardState.archivingWishId = null;
     if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom();
     return refreshClientWishes(!clientPageMutationActive());
   }).catch((error) => {
+    if (!isCurrentWishArchive()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(owner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(owner.owner, error);
     presentFormulaClientCompletion('clients', owned);
     clientCardState.archivingWishId = null;
@@ -3835,7 +3928,7 @@ function submitClientFeedbackForm(event: SubmitEvent) {
   if (!workspaceOwner.accepted) return;
   syncClientCardDraftFormsFromDom();
   const token = clientFeedbackCreateLifecycle.begin();
-  if (token === null) return;
+  if (token === null) { formulaClientWorkspaceLifecycle.cancelMutation(workspaceOwner.owner); return; }
   const cardContextToken = clientCardContextToken;
   const isCurrentClientFeedbackMutation = () => clientFeedbackCreateLifecycle.isCurrent(token) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
   const submittedDraft: ClientFeedbackFormState = { ...clientCardState.feedbackForm };
@@ -3850,7 +3943,7 @@ function submitClientFeedbackForm(event: SubmitEvent) {
   applyValidationToClientFeedbackForm(clientFeedbackValidation);
   disableClientFeedbackCreateMutationControls(document);
   createClientFeedback(clientId, payload).then((created) => {
-    if (!isCurrentClientFeedbackMutation()) return;
+    if (!isCurrentClientFeedbackMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, created, isEntityDto, 'Отзыв клиента сохранён.');
     presentFormulaClientCompletion('clients', owned);
     if (!owned.knownSuccess || !owned.canApply) return;
@@ -3873,7 +3966,7 @@ function submitClientFeedbackForm(event: SubmitEvent) {
       render();
     });
   }).catch((error) => {
-    if (!isCurrentClientFeedbackMutation()) return;
+    if (!isCurrentClientFeedbackMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentFormulaClientCompletion('clients', owned);
     createRejected = true;
@@ -3921,6 +4014,7 @@ function closeClientEdit() { if (clientPageMutationActive()) return; clientSubmi
 function focusClientName() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="client-full-name"]')?.focus()); }
 
 function loadClients(force = false) {
+  if (force) reconcileClientWorkspaceObligation();
   if (clientPageMutationActive()) return;
   if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return;
   const retained = clientsStatus === 'ready';
@@ -3930,7 +4024,8 @@ function loadClients(force = false) {
   formulaClientWorkspaceRuntime.read({
     route: 'clients',
     operation: 'client-list',
-    kind: formulaClientWorkspaceLifecycle.reconciliationRequired('clients') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('clients', 'client-list', 'clients:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'clients:list',
     request: () => getClients(clientsState.includeInactive),
     validate: (response) => Array.isArray(response?.clients),
     apply: (response) => {
@@ -3942,7 +4037,69 @@ function loadClients(force = false) {
       clientsError = hasSnapshot ? '' : 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.';
       clientsRefreshWarning = hasSnapshot ? formulaClientWorkspaceLifecycle.feedback('clients').warning : '';
     },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') clientsStatus = retained ? 'ready' : 'idle';
+    },
   });
+}
+
+function reconcileClientWorkspaceObligation() {
+  const obligation = formulaClientWorkspaceLifecycle.reconciliationObligation('clients');
+  if (!obligation) return false;
+  if (obligation.readOperation === 'client-wishes') {
+    const match = obligation.readContextKey.match(/^client:(\d+):archived:(true|false)$/);
+    if (!match) return false;
+    const clientId = Number(match[1]);
+    const includeArchived = match[2] === 'true';
+    const started = formulaClientWorkspaceRuntime.read({
+      route: 'clients',
+      operation: 'client-wishes',
+      kind: 'reconciliation',
+      contextKey: obligation.readContextKey,
+      request: () => fetchClientWishes(clientId, includeArchived),
+      validate: Array.isArray,
+      apply: (wishes) => {
+        if (clientCardState.clientId === clientId && clientCardState.includeArchivedWishes === includeArchived) {
+          clientCardState.wishes = wishes;
+          clientCardState.wishesStatus = 'ready';
+          clientCardState.wishRefreshWarning = '';
+        }
+      },
+      failed: () => {
+        if (clientCardState.clientId === clientId) {
+          clientCardState.wishRefreshWarning = 'Не удалось проверить пожелания исходного клиента. Нажмите «Обновить» ещё раз.';
+        }
+      },
+    });
+    return started.accepted;
+  }
+  if (obligation.readOperation === 'client-feedback') {
+    const match = obligation.readContextKey.match(/^client:(\d+)$/);
+    if (!match) return false;
+    const clientId = Number(match[1]);
+    const started = formulaClientWorkspaceRuntime.read({
+      route: 'clients',
+      operation: 'client-feedback',
+      kind: 'reconciliation',
+      contextKey: obligation.readContextKey,
+      request: () => fetchClientFeedback(clientId),
+      validate: Array.isArray,
+      apply: (feedback) => {
+        if (clientCardState.clientId === clientId) {
+          clientCardState.feedback = feedback;
+          clientCardState.feedbackStatus = 'ready';
+          clientCardState.feedbackRefreshWarning = '';
+        }
+      },
+      failed: () => {
+        if (clientCardState.clientId === clientId) {
+          clientCardState.feedbackRefreshWarning = 'Не удалось проверить отзывы исходного клиента. Нажмите «Обновить» ещё раз.';
+        }
+      },
+    });
+    return started.accepted;
+  }
+  return false;
 }
 function startEditClient(id: number) { if (clientPageMutationActive()) return; clientSubmitToken += 1; const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); loadClientCardData(id); render(); focusClientName(); }
 function submitClientForm(event: SubmitEvent) {
@@ -3966,7 +4123,7 @@ function submitClientForm(event: SubmitEvent) {
   const request = isEdit ? updateClient(submittedFormId!, payload) : createClient(payload);
   request
     .then((client) => {
-      if (token !== clientSubmitToken) return;
+      if (token !== clientSubmitToken) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
       const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, client, isEntityDto, isEdit ? 'Карточка клиента обновлена.' : 'Клиент создан.');
       presentFormulaClientCompletion('clients', owned);
       if (!owned.knownSuccess || !owned.canApply) {
@@ -3989,6 +4146,7 @@ function submitClientForm(event: SubmitEvent) {
         route: 'clients',
         operation: 'client-list',
         kind: 'mutation-refresh',
+        contextKey: 'clients:list',
         request: () => getClients(clientsState.includeInactive),
         validate: (response) => Array.isArray(response?.clients),
         apply: (response) => { if (token === clientSubmitToken) clientsState.items = response.clients; clientsStatus = 'ready'; },
@@ -3996,7 +4154,7 @@ function submitClientForm(event: SubmitEvent) {
       });
     })
     .catch((error) => {
-      if (token !== clientSubmitToken) return;
+      if (token !== clientSubmitToken) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
       const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
       presentFormulaClientCompletion('clients', owned);
       if (isEdit) syncClientCardDraftFormsFromDom();
@@ -4033,7 +4191,7 @@ function deactivateClient(id: number) {
   const isCurrentClientDeactivation = () => clientSubmitToken === token && clientDeactivatingId === archivedClientId;
   deactivateClientRequest(archivedClientId)
     .then((archivedClient) => {
-      if (!isCurrentClientDeactivation()) return;
+      if (!isCurrentClientDeactivation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
       const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, archivedClient, isEntityDto, 'Клиент архивирован.');
       presentFormulaClientCompletion('clients', owned);
       if (!owned.knownSuccess || !owned.canApply) return;
@@ -4052,7 +4210,7 @@ function deactivateClient(id: number) {
         route: 'clients',
         operation: 'client-list',
         kind: 'mutation-refresh',
-        contextKey: `archived:${archivedClientId}`,
+        contextKey: 'clients:list',
         request: () => getClients(clientsState.includeInactive),
         validate: (response) => Array.isArray(response?.clients),
         apply: (response) => {
@@ -4067,7 +4225,7 @@ function deactivateClient(id: number) {
         },
       });
     }, (error) => {
-      if (!isCurrentClientDeactivation()) return;
+      if (!isCurrentClientDeactivation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
       const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
       presentFormulaClientCompletion('clients', owned);
       clientsMessage = '';
@@ -4319,7 +4477,8 @@ function loadStockMovements(force = false) {
   inventoryCatalogWorkspaceRuntime.read({
     route: 'stockMovements',
     operation: 'stock-references',
-    kind: inventoryCatalogWorkspaceLifecycle.reconciliationRequired('stockMovements') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    kind: retained ? 'refresh' : 'initial',
+    contextKey: 'stock:references',
     request: () => Promise.all([getIngredientLots(), getIngredients()]),
     validate: ([lots, ingredients]) => Array.isArray(lots?.lots) && Array.isArray(ingredients?.ingredients),
     apply: ([lots, ingredients]) => {
@@ -4327,12 +4486,16 @@ function loadStockMovements(force = false) {
       stockMovementsState.ingredients = ingredients.ingredients;
       stockMovementsStatus = 'ready';
       if (!stockMovementsState.selectedLotId && stockMovementsState.lots.length > 0) stockMovementsState.selectedLotId = stockMovementsState.lots[0].id;
-      if (stockMovementsState.selectedLotId) loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
+      const recoveryStarted = startQueuedStockMovementRecovery();
+      if (!recoveryStarted && stockMovementsState.selectedLotId) loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
     },
     failed: (hasSnapshot) => {
       stockMovementsStatus = hasSnapshot ? 'ready' : 'error';
       stockMovementsError = hasSnapshot ? '' : 'Не удалось получить данные о движениях склада.';
       stockMovementsRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('stockMovements').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') stockMovementsStatus = retained ? 'ready' : 'idle';
     },
   });
 }
@@ -4347,8 +4510,8 @@ function loadSelectedStockMovementLot(lotId: number) {
   }
   inventoryCatalogWorkspaceRuntime.read({
     route: 'stockMovements',
-    operation: 'stock-reconciliation',
-    kind: inventoryCatalogWorkspaceLifecycle.reconciliationRequired('stockMovements') ? 'reconciliation' : 'detail',
+    operation: 'stock-lot-detail',
+    kind: 'detail',
     contextKey: `lot:${lotId}`,
     request: () => fetchStockMovementLotDetail(lotId),
     validate: (detail) => Boolean(detail && detail.balance?.ingredient_lot_id === lotId && Array.isArray(detail.movements)),
@@ -4363,6 +4526,11 @@ function loadSelectedStockMovementLot(lotId: number) {
       stockMovementsState.detailStatus = retained ? 'ready' : 'error';
       stockMovementsError = retained ? '' : 'Не удалось загрузить остаток или историю выбранной партии.';
       stockMovementsRefreshWarning = retained ? inventoryCatalogWorkspaceLifecycle.feedback('stockMovements').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read' && stockMovementsState.selectedLotId === lotId) {
+        stockMovementsState.detailStatus = retained ? 'ready' : 'idle';
+      }
     },
   });
 }
@@ -4385,14 +4553,16 @@ function submitStockMovementForm(event: SubmitEvent) {
   applyValidationToStockMovementForm(stockMovementValidation);
   disableStockMovementSubmitControls();
   const applyReconciliation = (detail: { balance: IngredientLotBalanceResponse; movements: StockMovement[] }) => {
-    if (token !== stockMovementSubmitToken || stockMovementsState.selectedLotId !== payload.ingredient_lot_id) return;
-    stockMovementsState.balance = detail.balance;
-    stockMovementsState.movements = detail.movements;
-    stockMovementsState.detailStatus = 'ready';
+    if (token !== stockMovementSubmitToken) return;
+    if (stockMovementsState.selectedLotId === payload.ingredient_lot_id) {
+      stockMovementsState.balance = detail.balance;
+      stockMovementsState.movements = detail.movements;
+      stockMovementsState.detailStatus = 'ready';
+    }
     stockMovementSubmitting = false;
     reenableStockMovementSubmitButtons();
   };
-  inventoryCatalogWorkspaceRuntime.createStockMovement({
+  const started = inventoryCatalogWorkspaceRuntime.createStockMovement({
     lotId: payload.ingredient_lot_id,
     create: () => createStockMovement(payload),
     reconcile: () => fetchStockMovementLotDetail(payload.ingredient_lot_id),
@@ -4425,10 +4595,15 @@ function submitStockMovementForm(event: SubmitEvent) {
       reenableStockMovementSubmitButtons();
     },
   });
+  if (!started.accepted) {
+    stockMovementSubmitting = false;
+    reenableStockMovementSubmitButtons();
+    render();
+  }
 }
 
 function reconcileSelectedStockMovement() {
-  const lotId = stockMovementsState.selectedLotId;
+  const lotId = inventoryCatalogWorkspaceRuntime.stockMovementObligationLotId() ?? stockMovementsState.selectedLotId;
   if (!lotId || stockMovementSubmitting) return;
   stockMovementsError = '';
   stockMovementsRefreshWarning = '';
@@ -4436,17 +4611,50 @@ function reconcileSelectedStockMovement() {
     lotId,
     () => fetchStockMovementLotDetail(lotId),
     (detail) => {
-      if (stockMovementsState.selectedLotId !== lotId) return;
-      stockMovementsState.balance = detail.balance;
-      stockMovementsState.movements = detail.movements;
-      stockMovementsState.detailStatus = 'ready';
-      stockMovementsMessage = 'История и остаток партии обновлены. Можно продолжить работу.';
+      if (stockMovementsState.selectedLotId === lotId) {
+        stockMovementsState.balance = detail.balance;
+        stockMovementsState.movements = detail.movements;
+        stockMovementsState.detailStatus = 'ready';
+      }
+      stockMovementsMessage = stockMovementsState.selectedLotId === lotId
+        ? 'История и остаток партии обновлены. Можно продолжить работу.'
+        : 'Результат предыдущего движения проверен по исходной партии. Выбранная сейчас партия не изменялась.';
     },
     true,
     () => {
       stockMovementsRefreshWarning = 'Не удалось проверить историю и остаток партии. Повторите проверку вручную.';
     },
   );
+}
+
+function startQueuedStockMovementRecovery() {
+  const lotId = inventoryCatalogWorkspaceRuntime.stockMovementObligationLotId();
+  if (!lotId) return false;
+  const started = inventoryCatalogWorkspaceRuntime.startQueuedStockReconciliation(
+    lotId,
+    () => fetchStockMovementLotDetail(lotId),
+    (detail) => {
+      stockMovementSubmitting = false;
+      if (stockMovementsState.selectedLotId === lotId) {
+        stockMovementsState.balance = detail.balance;
+        stockMovementsState.movements = detail.movements;
+        stockMovementsState.detailStatus = 'ready';
+      } else if (stockMovementsState.selectedLotId) {
+        loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
+      }
+      stockMovementsMessage = 'Результат предыдущего движения проверен по исходной партии.';
+      reenableStockMovementSubmitButtons();
+    },
+    () => {
+      stockMovementSubmitting = false;
+      stockMovementsRefreshWarning = 'Не удалось проверить историю и остаток исходной партии. Нажмите «Проверить результат», чтобы повторить проверку вручную.';
+      reenableStockMovementSubmitButtons();
+      if (stockMovementsState.selectedLotId && stockMovementsState.selectedLotId !== lotId) {
+        loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
+      }
+    },
+  );
+  return Boolean(started?.accepted);
 }
 
 function setRecipeIngredientOptions(ingredients: Ingredient[]) { recipesState.ingredients = ingredients.filter((i)=>i.is_active); }
@@ -4456,6 +4664,7 @@ function refreshRecipeIngredientOptions(showMessage = false) {
     route: 'recipes',
     operation: 'recipe-references',
     kind: showMessage ? 'refresh' : 'reference',
+    contextKey: 'recipes:ingredients',
     request: getIngredients,
     validate: (ingredients) => Array.isArray(ingredients?.ingredients),
     apply: (ingredients) => {
@@ -4469,7 +4678,31 @@ function refreshRecipeIngredientOptions(showMessage = false) {
     },
   });
 }
+function reconcileRecipeWorkspaceObligation() {
+  const obligation = formulaClientWorkspaceLifecycle.reconciliationObligation('recipes');
+  if (!obligation || obligation.readOperation !== 'recipe-version-list') return false;
+  const match = obligation.readContextKey.match(/^template:(\d+)$/);
+  if (!match) return false;
+  const templateId = Number(match[1]);
+  const started = formulaClientWorkspaceRuntime.read({
+    route: 'recipes',
+    operation: 'recipe-version-list',
+    kind: 'reconciliation',
+    contextKey: obligation.readContextKey,
+    request: () => getRecipeVersions(templateId),
+    validate: (versions) => Array.isArray(versions?.recipe_versions),
+    apply: (versions) => {
+      if (recipesState.selectedTemplate?.id === templateId) recipesState.versions = versions.recipe_versions;
+      recipesRefreshWarning = '';
+    },
+    failed: () => {
+      recipesRefreshWarning = 'Не удалось проверить список версий исходного рецепта. Нажмите «Обновить» ещё раз.';
+    },
+  });
+  return started.accepted;
+}
 function loadRecipes(force = false) {
+  if (force) reconcileRecipeWorkspaceObligation();
   if (!force && recipesStatus === 'loading') return;
   if (!force && recipesStatus === 'ready') { refreshRecipeIngredientOptions(); return; }
   saveVersionFormFromDom();
@@ -4480,7 +4713,8 @@ function loadRecipes(force = false) {
   formulaClientWorkspaceRuntime.read({
     route: 'recipes',
     operation: 'recipe-list',
-    kind: formulaClientWorkspaceLifecycle.reconciliationRequired('recipes') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('recipes', 'recipe-list', 'recipes:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'recipes:list',
     request: () => Promise.all([getRecipeTemplates(), getIngredients(), getRecipeCatalogCategories(), getRecipeCatalogTags()]),
     validate: ([templates, ingredients, categories, tags]) => Array.isArray(templates?.recipe_templates) && Array.isArray(ingredients?.ingredients) && Array.isArray(categories?.categories) && Array.isArray(tags?.tags),
     apply: ([templates, ingredients, categories, tags]) => {
@@ -4494,6 +4728,9 @@ function loadRecipes(force = false) {
       recipesStatus = hasSnapshot ? 'ready' : 'error';
       recipesError = hasSnapshot ? '' : 'Не получилось загрузить рецепты. Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.';
       recipesRefreshWarning = hasSnapshot ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') recipesStatus = retained ? 'ready' : 'idle';
     },
   });
 }
@@ -4512,17 +4749,27 @@ function openRecipeTemplate(id: number) {
     operation: 'recipe-template-detail',
     kind: 'detail',
     contextKey: `template:${id}`,
-    request: () => Promise.all([getRecipeTemplate(id), getRecipeVersions(id)]),
-    validate: ([template, versions]) => isEntityDto(template) && Array.isArray(versions?.recipe_versions),
-    apply: ([template, versions]) => {
+    request: () => getRecipeTemplate(id),
+    validate: isEntityDto,
+    apply: (template) => {
       recipesState.selectedTemplate = template;
-      recipesState.versions = versions.recipe_versions;
       recipesState.selectedVersionDetail = null;
       recipesState.versionDetailStatus = 'idle';
       recipesState.calculation = null;
       calculationStatus = 'idle';
     },
     failed: () => { recipesError = 'Не удалось открыть рецепт. Попробуйте обновить страницу.'; },
+    rejected: () => {},
+  });
+  formulaClientWorkspaceRuntime.read({
+    route: 'recipes',
+    operation: 'recipe-version-list',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('recipes', 'recipe-version-list', `template:${id}`) ? 'reconciliation' : 'detail',
+    contextKey: `template:${id}`,
+    request: () => getRecipeVersions(id),
+    validate: (versions) => Array.isArray(versions?.recipe_versions),
+    apply: (versions) => { recipesState.versions = versions.recipe_versions; },
+    failed: () => { recipesError = 'Не удалось загрузить версии рецепта. Откройте рецепт ещё раз.'; },
   });
 }
 function openRecipeVersion(id: number) {
@@ -4553,6 +4800,12 @@ function openRecipeVersion(id: number) {
       calculationStatus = 'idle';
       recipesError = 'Не удалось загрузить версию рецепта.';
     },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') {
+        recipesState.versionDetailStatus = 'idle';
+        calculationStatus = 'idle';
+      }
+    },
   });
 }
 
@@ -4563,7 +4816,7 @@ function runRecipeCalculation(versionId: number, value: string, unit: string, ki
     route: 'recipes',
     operation: 'recipe-calculation',
     kind: 'calculation',
-    contextKey: `version:${versionId}:${value}:${unit}:${kind}`,
+    contextKey: `version:${versionId}:value:${value}:unit:${unit}`,
     request: () => getRecipeCalculation(versionId, value, unit),
     validate: (result) => Boolean(result && typeof result === 'object' && 'recipe_version_id' in result),
     apply: (result) => {
@@ -4578,12 +4831,15 @@ function runRecipeCalculation(versionId: number, value: string, unit: string, ki
         ? 'Не удалось выполнить расчет. Проверьте размер партии и попробуйте еще раз.'
         : 'Не удалось выполнить расчет. Состав версии открыт, попробуйте пересчитать позже.';
     },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read' && recipesState.selectedVersionDetail?.version.id === versionId) calculationStatus = 'idle';
+    },
   });
 }
 function submitRecipeTemplateForm(event: SubmitEvent) {
   event.preventDefault();
   if (recipeVersionSubmitting) return;
-  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('recipes', 'recipe-template-create');
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('recipes', 'recipe-template-create', 'template:new');
   if (!workspaceOwner.accepted) return;
   const payload = recipeTemplatePayloadFromForm(event.currentTarget as HTMLFormElement);
   recipesState.templateForm = payload;
@@ -4596,7 +4852,7 @@ function submitRecipeTemplateForm(event: SubmitEvent) {
   applyValidationToRecipeTemplateForm(recipeTemplateValidation);
   disableRecipeTemplateMutationControls(document);
   createRecipeTemplate(payload).then((template)=>{
-    if (token !== recipeTemplateSubmitToken) return;
+    if (token !== recipeTemplateSubmitToken) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, template, isEntityDto, 'Рецепт создан.');
     presentFormulaClientCompletion('recipes', owned);
     if (!owned.knownSuccess || !owned.canApply) {
@@ -4640,7 +4896,7 @@ function submitRecipeTemplateForm(event: SubmitEvent) {
       },
     });
   }).catch((error)=>{
-    if (token !== recipeTemplateSubmitToken) return;
+    if (token !== recipeTemplateSubmitToken) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentFormulaClientCompletion('recipes', owned);
     recipeTemplateSubmitting = false;
@@ -4666,6 +4922,7 @@ function submitRecipeCatalogCategoryForm(event: SubmitEvent) {
   const started = formulaClientWorkspaceRuntime.mutate({
     route: 'recipes',
     operation: 'recipe-category-create',
+    contextKey: 'recipes:catalog',
     request: () => createRecipeCatalogCategory(name),
     validate: isEntityDto,
     successMessage: 'Группа рецептов создана.',
@@ -4690,6 +4947,7 @@ function submitRecipeCatalogTagForm(event: SubmitEvent) {
   const started = formulaClientWorkspaceRuntime.mutate({
     route: 'recipes',
     operation: 'recipe-tag-create',
+    contextKey: 'recipes:catalog',
     request: () => createRecipeCatalogTag(name),
     validate: isEntityDto,
     successMessage: 'Метка рецепта создана.',
@@ -4771,7 +5029,7 @@ function submitRecipeVersionForm(event: SubmitEvent) {
   applyValidationToRecipeVersionForm(recipeVersionValidation);
   disableRecipeVersionMutationControls(document);
   createRecipeVersion(templateId, recipeVersionPayload(form)).then((detail)=>{
-    if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) return;
+    if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, detail, isRecipeVersionDetailDto, 'Новая версия рецепта сохранена.');
     presentFormulaClientCompletion('recipes', owned);
     if (!owned.knownSuccess || !owned.canApply) {
@@ -4792,7 +5050,7 @@ function submitRecipeVersionForm(event: SubmitEvent) {
       route: 'recipes',
       operation: 'recipe-version-list',
       kind: 'mutation-refresh',
-      contextKey: `created:${detail.version.id}`,
+      contextKey: `template:${templateId}`,
       request: () => Promise.all([getRecipeVersions(templateId), getRecipeVersionDetail(detail.version.id)]),
       validate: ([versions, opened]) => Array.isArray(versions?.recipe_versions) && isRecipeVersionDetailDto(opened),
       apply: ([versions, opened]) => {
@@ -4809,7 +5067,7 @@ function submitRecipeVersionForm(event: SubmitEvent) {
       },
     });
   }).catch((error)=>{
-    if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) return;
+    if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentFormulaClientCompletion('recipes', owned);
     recipeVersionSubmitting = false;
@@ -4838,7 +5096,8 @@ function loadPackagingItems(force = false) {
   inventoryCatalogWorkspaceRuntime.read({
     route: 'packaging',
     operation: 'packaging-list',
-    kind: inventoryCatalogWorkspaceLifecycle.reconciliationRequired('packaging') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    kind: inventoryCatalogWorkspaceLifecycle.isRequiredReconciliation('packaging', 'packaging-list', 'packaging:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'packaging:list',
     request: () => Promise.all([getPackagingItems(), getPackagingCatalogCategories(), getPackagingCatalogTags()]),
     validate: ([items, categories, tags]) => Array.isArray(items?.packaging_items) && Array.isArray(categories?.categories) && Array.isArray(tags?.tags),
     apply: ([items, categories, tags]) => {
@@ -4851,6 +5110,9 @@ function loadPackagingItems(force = false) {
       packagingItemsStatus = hasSnapshot ? 'ready' : 'error';
       packagingItemsError = hasSnapshot ? '' : 'Не получилось загрузить справочник тары.';
       packagingItemsRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('packaging').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') packagingItemsStatus = retained ? 'ready' : 'idle';
     },
   });
 }
@@ -4915,7 +5177,7 @@ function submitPackagingItemForm(event: SubmitEvent) {
   disablePackagingItemSubmitControls();
   const request = isEdit && submittedId ? updatePackagingItem(submittedId, payload) : createPackagingItem(payload);
   request.then((saved) => {
-    if (token !== packagingItemSubmitToken) return;
+    if (token !== packagingItemSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, saved, isInventoryEntityDto, isEdit ? 'Тара сохранена.' : 'Тара создана.');
     presentInventoryCatalogCompletion('packaging', owned);
     if (!owned.knownSuccess || !owned.canApply) {
@@ -4935,13 +5197,14 @@ function submitPackagingItemForm(event: SubmitEvent) {
       route: 'packaging',
       operation: 'packaging-list',
       kind: 'mutation-refresh',
+      contextKey: 'packaging:list',
       request: getPackagingItems,
       validate: (response) => Array.isArray(response?.packaging_items),
       apply: (response) => { if (token === packagingItemSubmitToken) packagingItemsState.items = response.packaging_items; packagingItemsStatus = 'ready'; },
       failed: () => { packagingItemsStatus = 'ready'; packagingItemsRefreshWarning = 'Тара сохранена, но список не обновился. Нажмите «Обновить список», чтобы увидеть актуальные данные.'; },
     });
   }).catch((error) => {
-    if (token !== packagingItemSubmitToken) return;
+    if (token !== packagingItemSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentInventoryCatalogCompletion('packaging', owned);
     packagingItemSubmitting = false;
@@ -4972,7 +5235,12 @@ function deactivatePackagingItem(id: number) {
   deactivatePackagingItemRequest(id).then((saved) => {
     const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(owner.owner, saved, isInventoryEntityDto, 'Тара деактивирована.');
     presentInventoryCatalogCompletion('packaging', owned);
-    if (!owned.knownSuccess || !owned.canApply) return;
+    if (!owned.knownSuccess || !owned.canApply) {
+      packagingItemDeactivatingId = null;
+      packagingItemsRefreshWarning = owned.message;
+      render();
+      return;
+    }
     packagingItemsState.items = packagingItemsState.items.map((packagingItem) => packagingItem.id === id ? saved : packagingItem);
     packagingItemsMessage = 'Тара деактивирована. История и остатки склада не изменялись.';
     packagingItemsError = '';
@@ -4999,6 +5267,7 @@ function submitPackagingCatalogCategoryForm(event: SubmitEvent) {
   const started = inventoryCatalogWorkspaceRuntime.mutate({
     route: 'packaging',
     operation: 'packaging-category-create',
+    contextKey: 'packaging:catalog',
     request: () => createPackagingCatalogCategory(name),
     validate: isInventoryEntityDto,
     successMessage: 'Группа тары создана.',
@@ -5024,6 +5293,7 @@ function submitPackagingCatalogTagForm(event: SubmitEvent) {
   const started = inventoryCatalogWorkspaceRuntime.mutate({
     route: 'packaging',
     operation: 'packaging-tag-create',
+    contextKey: 'packaging:catalog',
     request: () => createPackagingCatalogTag(name),
     validate: isInventoryEntityDto,
     successMessage: 'Метка тары создана.',
@@ -5083,7 +5353,8 @@ function loadIngredientLots(force = false) {
   inventoryCatalogWorkspaceRuntime.read({
     route: 'ingredientLots',
     operation: 'lot-list',
-    kind: inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredientLots') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    kind: inventoryCatalogWorkspaceLifecycle.isRequiredReconciliation('ingredientLots', 'lot-list', 'lots:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'lots:list',
     request: () => Promise.all([getIngredientLots(), getIngredients()]),
     validate: ([lots, ingredients]) => Array.isArray(lots?.lots) && Array.isArray(ingredients?.ingredients),
     apply: ([lots, ingredients]) => {
@@ -5095,6 +5366,9 @@ function loadIngredientLots(force = false) {
       ingredientLotsStatus = hasSnapshot ? 'ready' : 'error';
       ingredientLotsError = hasSnapshot ? '' : 'Не удалось получить данные о партиях.';
       ingredientLotsRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('ingredientLots').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') ingredientLotsStatus = retained ? 'ready' : 'idle';
     },
   });
 }
@@ -5120,7 +5394,7 @@ function submitIngredientLotForm(event: SubmitEvent) {
   disableIngredientLotFormButtons();
   const request = isEdit ? updateIngredientLot(submittedFormId!, payload) : createIngredientLot(payload);
   request.then((saved) => {
-    if (token !== ingredientLotSubmitToken) return;
+    if (token !== ingredientLotSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, saved, isInventoryEntityDto, isEdit ? 'Партия сохранена.' : 'Партия создана.');
     presentInventoryCatalogCompletion('ingredientLots', owned);
     if (!owned.knownSuccess || !owned.canApply) {
@@ -5142,13 +5416,14 @@ function submitIngredientLotForm(event: SubmitEvent) {
       route: 'ingredientLots',
       operation: 'lot-list',
       kind: 'mutation-refresh',
+      contextKey: 'lots:list',
       request: getIngredientLots,
       validate: (response) => Array.isArray(response?.lots),
       apply: (response) => { if (token === ingredientLotSubmitToken) ingredientLotsState.lots = response.lots; ingredientLotsStatus = 'ready'; },
       failed: () => { ingredientLotsStatus = 'ready'; ingredientLotsRefreshWarning = 'Партия сохранена, но список не обновился. Нажмите «Обновить», чтобы получить актуальные данные.'; },
     });
   }).catch((error) => {
-    if (token !== ingredientLotSubmitToken) return;
+    if (token !== ingredientLotSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentInventoryCatalogCompletion('ingredientLots', owned);
     ingredientLotSubmitting = false;
@@ -5201,7 +5476,8 @@ function loadIngredients(force = false) {
   inventoryCatalogWorkspaceRuntime.read({
     route: 'ingredients',
     operation: 'ingredient-list',
-    kind: inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredients') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    kind: inventoryCatalogWorkspaceLifecycle.isRequiredReconciliation('ingredients', 'ingredient-list', 'ingredients:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'ingredients:list',
     request: () => Promise.all([getIngredients(), getIngredientCatalogCategories(), getIngredientCatalogTags()]),
     validate: ([items, categories, tags]) => Array.isArray(items?.ingredients) && Array.isArray(categories?.categories) && Array.isArray(tags?.tags),
     apply: ([items, categories, tags]) => {
@@ -5214,6 +5490,9 @@ function loadIngredients(force = false) {
       ingredientsStatus = hasSnapshot ? 'ready' : 'error';
       ingredientsError = hasSnapshot ? '' : 'Не получилось загрузить справочник компонентов или каталог групп и меток.';
       ingredientsRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('ingredients').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') ingredientsStatus = retained ? 'ready' : 'idle';
     },
   });
 }
@@ -5236,7 +5515,7 @@ function submitIngredientForm(event: SubmitEvent) {
   disableIngredientFormButtons();
   const request = isEdit ? updateIngredient(submittedFormId!, payload) : createIngredient(payload);
   request.then((saved) => {
-    if (token !== ingredientSubmitToken) return;
+    if (token !== ingredientSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, saved, isInventoryEntityDto, isEdit ? 'Компонент сохранён.' : 'Компонент создан.');
     presentInventoryCatalogCompletion('ingredients', owned);
     if (!owned.knownSuccess || !owned.canApply) {
@@ -5259,6 +5538,7 @@ function submitIngredientForm(event: SubmitEvent) {
       route: 'ingredients',
       operation: 'ingredient-list',
       kind: 'mutation-refresh',
+      contextKey: 'ingredients:list',
       request: getIngredients,
       validate: (response) => Array.isArray(response?.ingredients),
       apply: (response) => {
@@ -5269,7 +5549,7 @@ function submitIngredientForm(event: SubmitEvent) {
       failed: () => { ingredientsStatus = 'ready'; ingredientsRefreshWarning = 'Компонент сохранён, но список не обновился. Нажмите «Обновить список», чтобы получить актуальные данные.'; },
     });
   }).catch((error) => {
-    if (token !== ingredientSubmitToken) return;
+    if (token !== ingredientSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
     const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
     presentInventoryCatalogCompletion('ingredients', owned);
     ingredientSubmitting = false;
@@ -5298,6 +5578,7 @@ function submitIngredientCatalogCategoryForm(event: SubmitEvent) {
   const started = inventoryCatalogWorkspaceRuntime.mutate({
     route: 'ingredients',
     operation: 'ingredient-category-create',
+    contextKey: 'ingredients:catalog',
     request: () => createIngredientCatalogCategory(name),
     validate: isInventoryEntityDto,
     successMessage: 'Группа создана и доступна для компонентов.',
@@ -5323,6 +5604,7 @@ function submitIngredientCatalogTagForm(event: SubmitEvent) {
   const started = inventoryCatalogWorkspaceRuntime.mutate({
     route: 'ingredients',
     operation: 'ingredient-tag-create',
+    contextKey: 'ingredients:catalog',
     request: () => createIngredientCatalogTag(name),
     validate: isInventoryEntityDto,
     successMessage: 'Метка создана и доступна для компонентов.',
@@ -5423,7 +5705,8 @@ function loadInventory(force = false) {
   inventoryCatalogWorkspaceRuntime.read({
     route: 'inventory',
     operation: 'inventory-overview',
-    kind: inventoryCatalogWorkspaceLifecycle.reconciliationRequired('inventory') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    kind: retained ? 'refresh' : 'initial',
+    contextKey: 'inventory:overview',
     request: () => Promise.all([getInventoryOverview(), getIngredientLotBalances(), getPackagingBalances()]),
     validate: ([overview, lots, packaging]) => Boolean(overview) && Array.isArray(lots?.ingredient_lot_balances) && Array.isArray(packaging?.packaging_balances),
     apply: ([overview, lots, packaging]) => {
@@ -5434,6 +5717,9 @@ function loadInventory(force = false) {
       inventoryStatus = hasSnapshot ? 'ready' : 'error';
       inventoryError = hasSnapshot ? '' : 'Не получилось загрузить складскую сводку.';
       inventoryRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('inventory').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') inventoryStatus = retained ? 'ready' : 'idle';
     },
   });
 }

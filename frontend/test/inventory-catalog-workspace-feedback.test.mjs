@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import {
   INVENTORY_CATALOG_UNSUPPORTED_OPERATIONS,
   InventoryCatalogWorkspaceFeedbackLifecycle,
+  inventoryCatalogReconciliationFor,
   isInventoryEntityDto,
   isStockMovementDto,
   isStockReconciliationDto,
+  isStockReconciliationForLot,
 } from '../dist-tests/inventory-catalog-workspace-feedback/inventory-catalog-workspace-feedback.js';
 import { InventoryCatalogWorkspaceRuntime } from '../dist-tests/inventory-catalog-workspace-feedback/inventory-catalog-workspace-runtime.js';
 import { bindInventoryCatalogWorkspaceControls } from '../dist-tests/inventory-catalog-workspace-feedback/inventory-catalog-workspace-bindings.js';
@@ -199,6 +201,84 @@ test('stale lot movement and balance reads cannot update another selected lot', 
   assert.equal(lifecycle.finishReadSuccess(balance.owner, { ingredient_lot_id: 1 }).canApply, false);
 });
 
+for (const scenario of [
+  ['ingredientLots', 'lot-references', 'lot'],
+  ['stockMovements', 'stock-lot-detail', 'lot'],
+  ['ingredients', 'ingredient-references', 'ingredient'],
+  ['packaging', 'packaging-references', 'packaging'],
+]) {
+  const [route, operation, prefix] = scenario;
+  test(`${operation} supersedes Context A with Context B and releases stale ownership`, async () => {
+    const { h, lifecycle, runtime } = harness(route);
+    const a = deferred();
+    const b = deferred();
+    const applied = [];
+    runtime.read({
+      route,
+      operation,
+      kind: 'detail',
+      contextKey: `${prefix}:1`,
+      request: () => a.promise,
+      apply: (value) => applied.push(value.context),
+    });
+    const second = runtime.read({
+      route,
+      operation,
+      kind: 'detail',
+      contextKey: `${prefix}:2`,
+      request: () => b.promise,
+      apply: (value) => applied.push(value.context),
+    });
+    assert.equal(second.accepted, true);
+    a.resolve({ context: 'A' });
+    await flush();
+    assert.deepEqual(applied, []);
+    assert.deepEqual(h.announcements, []);
+    assert.deepEqual(h.focus, []);
+    b.resolve({ context: 'B' });
+    await flush();
+    assert.deepEqual(applied, ['B']);
+    const laterA = lifecycle.startRead(route, operation, 'detail', `${prefix}:1`);
+    assert.equal(laterA.accepted, true);
+  });
+}
+
+test('non-stock Inventory reconciliation ignores unrelated and wrong-context reads', () => {
+  const lifecycle = new InventoryCatalogWorkspaceFeedbackLifecycle();
+  lifecycle.enter('ingredients');
+  const mutation = lifecycle.startMutation('ingredients', 'ingredient-update', 'ingredient:4');
+  lifecycle.finishMutationFailure(mutation.owner, new TypeError('network'));
+  const obligation = lifecycle.reconciliationObligation('ingredients');
+  assert.deepEqual(
+    { operation: obligation.readOperation, context: obligation.readContextKey },
+    { operation: 'ingredient-list', context: 'ingredients:list' },
+  );
+  const unrelated = lifecycle.startRead('ingredients', 'ingredient-references', 'reconciliation', 'ingredients:list');
+  lifecycle.finishReadSuccess(unrelated.owner, { ingredients: [] }, () => true);
+  assert.equal(lifecycle.reconciliationRequired('ingredients'), true);
+  const wrong = lifecycle.startRead('ingredients', 'ingredient-list', 'reconciliation', 'ingredient:4');
+  lifecycle.finishReadSuccess(wrong.owner, { ingredients: [] }, (value) => Array.isArray(value.ingredients));
+  assert.equal(lifecycle.reconciliationRequired('ingredients'), true);
+  const exact = lifecycle.startRead('ingredients', 'ingredient-list', 'reconciliation', 'ingredients:list');
+  lifecycle.finishReadSuccess(exact.owner, { ingredients: [] }, (value) => Array.isArray(value.ingredients));
+  assert.equal(lifecycle.reconciliationRequired('ingredients'), false);
+});
+
+test('domain reconciliation map covers every migrated Inventory/Catalog mutation', () => {
+  const cases = [
+    ...['ingredient-create', 'ingredient-update', 'ingredient-deactivate', 'ingredient-category-create', 'ingredient-tag-create', 'ingredient-assignment']
+      .map((mutation) => ['ingredients', mutation, 'ingredient:4', 'ingredient-list', 'ingredients:list']),
+    ...['lot-create', 'lot-update', 'lot-deactivate']
+      .map((mutation) => ['ingredientLots', mutation, 'lot:4', 'lot-list', 'lots:list']),
+    ...['packaging-create', 'packaging-update', 'packaging-deactivate', 'packaging-category-create', 'packaging-tag-create', 'packaging-assignment']
+      .map((mutation) => ['packaging', mutation, 'packaging:4', 'packaging-list', 'packaging:list']),
+    ['stockMovements', 'stock-movement-create', 'lot:4', 'stock-reconciliation', 'lot:4'],
+  ];
+  for (const [route, mutation, context, readOperation, readContextKey] of cases) {
+    assert.deepEqual(inventoryCatalogReconciliationFor(route, mutation, context), { readOperation, readContextKey });
+  }
+});
+
 for (const operation of ['packaging-create', 'packaging-update', 'packaging-deactivate', 'packaging-category-create', 'packaging-tag-create', 'packaging-assignment']) {
   test(`${operation} has explicit item/catalog ownership`, () => {
     const lifecycle = new InventoryCatalogWorkspaceFeedbackLifecycle();
@@ -225,6 +305,8 @@ test('StockMovement DTO validation rejects incomplete results', () => {
   assert.equal(isStockMovementDto({ id: 1, ingredient_lot_id: 4 }), false);
   assert.equal(isStockReconciliationDto(reconciliation()), true);
   assert.equal(isStockReconciliationDto({ movements: [], balance: null }), false);
+  assert.equal(isStockReconciliationForLot(reconciliation(4), 4), true);
+  assert.equal(isStockReconciliationForLot(reconciliation(5), 4), false);
 });
 
 test('StockMovement creation issues exactly one POST and applies validated DTO', async () => {
@@ -268,6 +350,78 @@ test('ambiguous StockMovement result locks repeat and reconciles with GET only',
   assert.equal(runtime.createStockMovement(options).reason, 'reconciliation-required');
   assert.equal(h.postCount, 1);
   get.resolve(reconciliation());
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), false);
+});
+
+test('StockMovement obligation ignores references, lot list and wrong-lot reconciliation', async () => {
+  const { h, lifecycle, runtime } = harness('stockMovements');
+  const post = deferred();
+  const automatic = deferred();
+  const options = {
+    lotId: 4,
+    create: () => { h.postCount += 1; return post.promise; },
+    reconcile: () => { h.getCount += 1; return automatic.promise; },
+    applyCreated() {},
+    applyReconciliation: (value) => h.applied.push(value),
+  };
+  runtime.createStockMovement(options);
+  post.reject(new TypeError('Failed to fetch'));
+  await flush();
+  assert.equal(h.postCount, 1);
+  assert.equal(runtime.stockMovementObligationLotId(), 4);
+
+  const references = lifecycle.startRead('stockMovements', 'stock-references', 'reference', 'stock:references');
+  lifecycle.finishReadSuccess(references.owner, { lots: [], ingredients: [] }, () => true);
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
+
+  const lots = lifecycle.startRead('stockMovements', 'stock-lot-detail', 'detail', 'lots:list');
+  lifecycle.finishReadSuccess(lots.owner, { lots: [] }, () => true);
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
+
+  const wrongLot = deferred();
+  runtime.read({
+    route: 'stockMovements',
+    operation: 'stock-lot-detail',
+    kind: 'detail',
+    contextKey: 'lot:5',
+    request: () => { h.getCount += 1; return wrongLot.promise; },
+    validate: (value) => isStockReconciliationForLot(value, 5),
+    apply: (value) => h.applied.push(value),
+  });
+  wrongLot.resolve(reconciliation(5));
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
+
+  automatic.resolve(reconciliation(4));
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), false);
+  assert.equal(h.postCount, 1);
+  assert.equal(h.getCount, 2);
+});
+
+test('invalid original-lot history or balance cannot clear the StockMovement obligation', async () => {
+  const { lifecycle, runtime } = harness('stockMovements');
+  const post = deferred();
+  const automatic = deferred();
+  runtime.createStockMovement({
+    lotId: 4,
+    create: () => post.promise,
+    reconcile: () => automatic.promise,
+    applyCreated() {},
+    applyReconciliation() {},
+  });
+  post.reject(new TypeError('network'));
+  await flush();
+  automatic.resolve({
+    movements: [movement(1, 5)],
+    balance: { ingredient_lot_id: 4, remaining_quantity: '10.0000', unit: 'g' },
+  });
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
+  const manual = deferred();
+  runtime.reconcileStockMovement(4, () => manual.promise, () => {});
+  manual.resolve(reconciliation(4));
   await flush();
   assert.equal(lifecycle.reconciliationRequired('stockMovements'), false);
 });
@@ -364,6 +518,94 @@ test('detached StockMovement completion is silent and POST is never repeated', a
   assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
 });
 
+test('detached StockMovement waits for settlement, queues one original-lot GET, does not loop, and supports manual retry', async () => {
+  const { h, lifecycle, runtime } = harness('stockMovements');
+  const post = deferred();
+  const automatic = deferred();
+  const applied = [];
+  runtime.createStockMovement({
+    lotId: 4,
+    create: () => { h.postCount += 1; return post.promise; },
+    reconcile: () => { h.getCount += 1; return automatic.promise; },
+    applyCreated: (value) => h.created.push(value),
+    applyReconciliation: (value) => applied.push(value),
+  });
+  lifecycle.leave('stockMovements');
+  h.route = 'ingredients';
+  lifecycle.enter('ingredients');
+  lifecycle.leave('ingredients');
+  h.route = 'stockMovements';
+  lifecycle.enter('stockMovements');
+
+  const references = deferred();
+  runtime.read({
+    route: 'stockMovements',
+    operation: 'stock-references',
+    kind: 'reference',
+    contextKey: 'stock:references',
+    request: () => references.promise,
+    apply() {},
+  });
+  references.resolve({ lots: [], ingredients: [] });
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
+  assert.equal(h.getCount, 0);
+  assert.equal(runtime.startQueuedStockReconciliation(4, () => { h.getCount += 1; return automatic.promise; }, (value) => applied.push(value)), null);
+
+  post.reject(new TypeError('detached network result'));
+  await flush();
+  assert.equal(h.getCount, 1);
+  assert.equal(runtime.startQueuedStockReconciliation(4, () => { h.getCount += 1; return Promise.resolve(reconciliation(4)); }, () => {}), null);
+  automatic.reject(new Error('GET down'));
+  await flush();
+  await flush();
+  assert.equal(h.getCount, 1);
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
+
+  const manual = deferred();
+  runtime.reconcileStockMovement(4, () => { h.getCount += 1; return manual.promise; }, (value) => applied.push(value));
+  manual.resolve(reconciliation(4));
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), false);
+  assert.equal(h.postCount, 1);
+  assert.equal(h.getCount, 2);
+});
+
+test('Lot B selection cannot clear Lot A obligation and recovery targets Lot A', async () => {
+  const { h, lifecycle, runtime } = harness('stockMovements');
+  const post = deferred();
+  const automatic = deferred();
+  const options = {
+    lotId: 4,
+    create: () => { h.postCount += 1; return post.promise; },
+    reconcile: () => { h.getCount += 1; return automatic.promise; },
+    applyCreated() {},
+    applyReconciliation() {},
+  };
+  runtime.createStockMovement(options);
+  post.reject(new TypeError('network'));
+  await flush();
+  const lotB = deferred();
+  runtime.read({
+    route: 'stockMovements',
+    operation: 'stock-lot-detail',
+    kind: 'detail',
+    contextKey: 'lot:5',
+    request: () => { h.getCount += 1; return lotB.promise; },
+    validate: (value) => isStockReconciliationForLot(value, 5),
+    apply() {},
+  });
+  lotB.resolve(reconciliation(5));
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), true);
+  assert.equal(runtime.stockMovementObligationLotId(), 4);
+  assert.equal(runtime.createStockMovement({ ...options, lotId: 5 }).reason, 'reconciliation-required');
+  automatic.resolve(reconciliation(4));
+  await flush();
+  assert.equal(lifecycle.reconciliationRequired('stockMovements'), false);
+  assert.equal(h.postCount, 1);
+});
+
 test('unsupported inventory mutations remain explicitly closed', () => {
   assert.ok(INVENTORY_CATALOG_UNSUPPORTED_OPERATIONS.includes('stock-movement-update'));
   assert.ok(INVENTORY_CATALOG_UNSUPPORTED_OPERATIONS.includes('stock-movement-delete'));
@@ -416,6 +658,9 @@ test('main source has GET-only lot reconciliation and no Packaging movement help
   const source = await fs.readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
   assert.match(source, /getStockMovementsByLot/);
   assert.match(source, /getIngredientLotBalance/);
+  assert.match(source, /data-reconciliation-context="\$\{obligatedLotId \? `lot:\$\{obligatedLotId\}` : ''\}"/);
+  assert.match(source, /stockMovementObligationLotId\(\) \?\? stockMovementsState\.selectedLotId/);
+  assert.match(source, /operation: 'stock-references',\n\s+kind: retained \? 'refresh' : 'initial'/);
   assert.doesNotMatch(source, /createPackagingStockMovement/);
   assert.doesNotMatch(source, /updateStockMovement/);
   assert.doesNotMatch(source, /deleteStockMovement/);

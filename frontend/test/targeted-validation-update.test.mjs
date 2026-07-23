@@ -911,7 +911,8 @@ test('source guards cover packaging adjacent actions and owned stock detail cont
   assert.ok(lifecycleSource.includes('packagingPageMutationActiveState'));
   const loadDetail = mainSourceFunction('loadSelectedStockMovementLot');
   assert.ok(loadDetail.includes('inventoryCatalogWorkspaceRuntime.read'));
-  assert.ok(loadDetail.includes("operation: 'stock-reconciliation'"));
+  assert.ok(loadDetail.includes("operation: 'stock-lot-detail'"));
+  assert.equal(loadDetail.includes("kind: 'reconciliation'"), false);
   assert.ok(loadDetail.includes('contextKey: `lot:${lotId}`'));
   assert.ok(loadDetail.includes('stockMovementsState.selectedLotId !== lotId'));
   const stockDisable = mainSourceFunction('disableStockMovementSubmitControls');
@@ -1025,7 +1026,7 @@ test('recipe source uses direct mutation guards and no render at submit start', 
   assert.ok(templatePrefix.includes('disableRecipeTemplateMutationControls(document)'));
   assert.equal(templatePrefix.includes('render()'), false);
   assert.ok(templatePrefix.includes('if (recipeVersionSubmitting) return;'));
-  assert.ok(templatePrefix.includes("formulaClientWorkspaceLifecycle.startMutation('recipes', 'recipe-template-create')"));
+  assert.ok(templatePrefix.includes("formulaClientWorkspaceLifecycle.startMutation('recipes', 'recipe-template-create', 'template:new')"));
 
   const versionStart = source.indexOf('function submitRecipeVersionForm');
   const versionRequest = source.indexOf('createRecipeVersion(templateId', versionStart);

@@ -4,6 +4,7 @@ import {
   FORMULA_CLIENT_UNSUPPORTED_OPERATIONS,
   FormulaClientWorkspaceFeedbackLifecycle,
   containsSensitiveClientText,
+  formulaClientReconciliationFor,
   isEntityDto,
   isRecipeVersionDetailDto,
 } from '../dist-tests/formula-client-workspace-feedback/formula-client-workspace-feedback.js';
@@ -210,13 +211,202 @@ test('definite failure calls failure handling without reconciliation lock', asyn
 test('ambiguous mutation locks repetition until authoritative GET succeeds', () => {
   const lifecycle = new FormulaClientWorkspaceFeedbackLifecycle();
   lifecycle.enter('clients');
-  const mutation = lifecycle.startMutation('clients', 'client-create');
+  const mutation = lifecycle.startMutation('clients', 'client-create', 'client:new');
   lifecycle.finishMutationFailure(mutation.owner, new TypeError('Failed to fetch'));
   assert.equal(lifecycle.reconciliationRequired('clients'), true);
   assert.equal(lifecycle.startMutation('clients', 'client-create').reason, 'reconciliation-required');
-  const reconcile = lifecycle.startRead('clients', 'client-list', 'reconciliation');
+  const reconcile = lifecycle.startRead('clients', 'client-list', 'reconciliation', 'clients:list');
   assert.equal(lifecycle.finishReadSuccess(reconcile.owner, { clients: [] }).canApply, true);
   assert.equal(lifecycle.reconciliationRequired('clients'), false);
+});
+
+for (const scenario of [
+  ['recipes', 'recipe-template-detail', 'template'],
+  ['recipes', 'recipe-version-detail', 'version'],
+  ['recipes', 'recipe-calculation', 'version'],
+  ['clientRecipes', 'client-recipe-detail', 'client-recipe'],
+  ['clients', 'client-related', 'client'],
+  ['clients', 'client-wishes', 'client'],
+  ['clients', 'client-feedback', 'client'],
+]) {
+  const [route, operation, contextPrefix] = scenario;
+  test(`${operation} supersedes Context A with Context B and discards A's late completion`, async () => {
+    const { h, lifecycle, runtime } = harness(route);
+    const a = deferred();
+    const b = deferred();
+    const applied = [];
+    const first = runtime.read({
+      route,
+      operation,
+      kind: operation === 'recipe-calculation' ? 'calculation' : 'detail',
+      contextKey: `${contextPrefix}:1`,
+      request: () => a.promise,
+      apply: (value) => applied.push(value.context),
+    });
+    const second = runtime.read({
+      route,
+      operation,
+      kind: operation === 'recipe-calculation' ? 'calculation' : 'detail',
+      contextKey: `${contextPrefix}:2`,
+      request: () => b.promise,
+      apply: (value) => applied.push(value.context),
+    });
+    assert.equal(first.accepted, true);
+    assert.equal(second.accepted, true);
+    a.resolve({ context: 'A' });
+    await flush();
+    assert.deepEqual(applied, []);
+    assert.deepEqual(h.announcements, []);
+    assert.deepEqual(h.focus, []);
+    b.resolve({ context: 'B' });
+    await flush();
+    assert.deepEqual(applied, ['B']);
+    const again = lifecycle.startRead(route, operation, 'detail', `${contextPrefix}:1`);
+    assert.equal(again.accepted, true);
+    lifecycle.discardRead(again.owner);
+  });
+}
+
+test('same operation and exact context is rejected while active, but distinct contexts do not collide', () => {
+  const lifecycle = new FormulaClientWorkspaceFeedbackLifecycle();
+  lifecycle.enter('clients');
+  const a = lifecycle.startRead('clients', 'client-wishes', 'related', 'client:1:archived:false');
+  assert.equal(a.accepted, true);
+  assert.deepEqual(
+    lifecycle.startRead('clients', 'client-wishes', 'refresh', 'client:1:archived:false'),
+    { accepted: false, reason: 'duplicate-read' },
+  );
+  const b = lifecycle.startRead('clients', 'client-wishes', 'related', 'client:2:archived:false');
+  assert.equal(b.accepted, true);
+  assert.equal(lifecycle.finishReadSuccess(a.owner, { wishes: ['A'] }).canApply, false);
+  assert.equal(lifecycle.finishReadSuccess(b.owner, { wishes: ['B'] }).canApply, true);
+});
+
+test('obsolete Wishes owner is settled so Client B and a later Client A request are accepted', async () => {
+  const { lifecycle, runtime } = harness('clients');
+  const a = deferred();
+  const b = deferred();
+  const applied = [];
+  runtime.read({
+    route: 'clients',
+    operation: 'client-wishes',
+    kind: 'related',
+    contextKey: 'client:1:archived:false',
+    request: () => a.promise,
+    apply: (value) => applied.push(value.client),
+  });
+  runtime.read({
+    route: 'clients',
+    operation: 'client-wishes',
+    kind: 'related',
+    contextKey: 'client:2:archived:false',
+    request: () => b.promise,
+    apply: (value) => applied.push(value.client),
+  });
+  a.reject(new Error('obsolete A'));
+  b.resolve({ client: 'B' });
+  await flush();
+  assert.deepEqual(applied, ['B']);
+  const laterA = lifecycle.startRead('clients', 'client-wishes', 'related', 'client:1:archived:false');
+  assert.equal(laterA.accepted, true);
+});
+
+test('rejected production runtime read invokes unwind callback and cannot leave loading stuck', () => {
+  const { runtime } = harness('recipes');
+  const pending = deferred();
+  let status = 'loading';
+  let requestCount = 0;
+  runtime.read({
+    route: 'recipes',
+    operation: 'recipe-version-detail',
+    kind: 'detail',
+    contextKey: 'version:5',
+    request: () => { requestCount += 1; return pending.promise; },
+    apply() {},
+  });
+  const duplicate = runtime.read({
+    route: 'recipes',
+    operation: 'recipe-version-detail',
+    kind: 'detail',
+    contextKey: 'version:5',
+    request: () => { requestCount += 1; return Promise.resolve({}); },
+    apply() {},
+    rejected: () => { status = 'ready'; },
+  });
+  assert.equal(duplicate.accepted, false);
+  assert.equal(status, 'ready');
+  assert.equal(requestCount, 1);
+});
+
+test('non-stock reconciliation requires the mapped operation, exact context, valid DTO and manual retry', () => {
+  const lifecycle = new FormulaClientWorkspaceFeedbackLifecycle();
+  lifecycle.enter('clients');
+  const snapshot = lifecycle.startRead('clients', 'client-list', 'initial', 'clients:list');
+  lifecycle.finishReadSuccess(snapshot.owner, { clients: [entity(7)] }, (value) => Array.isArray(value.clients));
+  const mutation = lifecycle.startMutation('clients', 'client-update', 'client:7');
+  lifecycle.finishMutationFailure(mutation.owner, new TypeError('network'));
+  const obligation = lifecycle.reconciliationObligation('clients');
+  assert.deepEqual(
+    { operation: obligation.readOperation, context: obligation.readContextKey, mutation: obligation.mutationOperation },
+    { operation: 'client-list', context: 'clients:list', mutation: 'client-update' },
+  );
+
+  const unrelated = lifecycle.startRead('clients', 'client-feedback', 'reconciliation', 'client:7');
+  lifecycle.finishReadSuccess(unrelated.owner, { feedback: [] }, () => true);
+  assert.equal(lifecycle.reconciliationRequired('clients'), true);
+
+  const wrongContext = lifecycle.startRead('clients', 'client-list', 'reconciliation', 'client:7');
+  lifecycle.finishReadSuccess(wrongContext.owner, { clients: [] }, (value) => Array.isArray(value.clients));
+  assert.equal(lifecycle.reconciliationRequired('clients'), true);
+
+  const invalid = lifecycle.startRead('clients', 'client-list', 'reconciliation', 'clients:list');
+  lifecycle.finishReadSuccess(invalid.owner, { clients: 'invalid' }, (value) => Array.isArray(value.clients));
+  assert.equal(lifecycle.reconciliationRequired('clients'), true);
+  assert.equal(lifecycle.hasSnapshot('clients'), true);
+
+  const failed = lifecycle.startRead('clients', 'client-list', 'reconciliation', 'clients:list');
+  lifecycle.finishReadFailure(failed.owner);
+  assert.equal(lifecycle.reconciliationRequired('clients'), true);
+  assert.equal(lifecycle.hasSnapshot('clients'), true);
+
+  const manual = lifecycle.startRead('clients', 'client-list', 'reconciliation', 'clients:list');
+  lifecycle.finishReadSuccess(manual.owner, { clients: [entity(7)] }, (value) => Array.isArray(value.clients));
+  assert.equal(lifecycle.reconciliationRequired('clients'), false);
+});
+
+test('mutation completion identity includes entity context', () => {
+  const lifecycle = new FormulaClientWorkspaceFeedbackLifecycle();
+  lifecycle.enter('clients');
+  const mutation = lifecycle.startMutation('clients', 'client-update', 'client:7');
+  const wrongContextOwner = { ...mutation.owner, contextKey: 'client:8' };
+  assert.equal(lifecycle.finishMutationSuccess(wrongContextOwner, entity(8), isEntityDto, 'saved').accepted, false);
+  assert.equal(lifecycle.mutationActive('clients'), true);
+  assert.equal(lifecycle.finishMutationSuccess(mutation.owner, entity(7), isEntityDto, 'saved').knownSuccess, true);
+});
+
+test('domain reconciliation map covers every migrated Formula/Client mutation', () => {
+  const cases = [
+    ['recipes', 'recipe-template-create', 'template:new', 'recipe-list', 'recipes:list'],
+    ['recipes', 'recipe-version-create', 'template:4', 'recipe-version-list', 'template:4'],
+    ['recipes', 'recipe-category-create', 'recipes:catalog', 'recipe-list', 'recipes:list'],
+    ['recipes', 'recipe-tag-create', 'recipes:catalog', 'recipe-list', 'recipes:list'],
+    ['recipes', 'recipe-category-assign', 'template:4', 'recipe-list', 'recipes:list'],
+    ['recipes', 'recipe-tags-assign', 'template:4', 'recipe-list', 'recipes:list'],
+    ['clients', 'client-create', 'client:new', 'client-list', 'clients:list'],
+    ['clients', 'client-update', 'client:4', 'client-list', 'clients:list'],
+    ['clients', 'client-deactivate', 'client:4', 'client-list', 'clients:list'],
+    ['clients', 'wish-create', 'client:4:archived:false', 'client-wishes', 'client:4:archived:false'],
+    ['clients', 'wish-status', 'client:4:archived:false:wish:2', 'client-wishes', 'client:4:archived:false'],
+    ['clients', 'wish-archive', 'client:4:archived:true:wish:2', 'client-wishes', 'client:4:archived:true'],
+    ['clients', 'feedback-create', 'client:4', 'client-feedback', 'client:4'],
+    ['clientRecipes', 'client-recipe-create', 'client:4:version:2', 'client-recipe-list', 'client-recipes:list'],
+    ['clientRecipes', 'client-recipe-composition', 'client-recipe:8', 'client-recipe-detail', 'client-recipe:8'],
+    ['clientRecipes', 'client-recipe-deactivate', 'client-recipe:8', 'client-recipe-list', 'client-recipes:list'],
+    ['clientRecipes', 'client-recipe-restore', 'client-recipe:8', 'client-recipe-list', 'client-recipes:list'],
+  ];
+  for (const [route, mutation, context, readOperation, readContextKey] of cases) {
+    assert.deepEqual(formulaClientReconciliationFor(route, mutation, context), { readOperation, readContextKey });
+  }
 });
 
 test('detached mutation completion is silent and requires reconciliation', async () => {
@@ -354,4 +544,7 @@ test('main source contains supported endpoints and no unsupported mutation helpe
   assert.match(source, /\/api\/client-wishes\/\$\{wishId\}\/status/);
   assert.doesNotMatch(source, /function updateClientFeedback/);
   assert.doesNotMatch(source, /function calculateClientRecipe/);
+  assert.match(source, /function reconcileRecipeWorkspaceObligation/);
+  assert.match(source, /function reconcileClientWorkspaceObligation/);
+  assert.match(source, /function reconcileClientRecipeWorkspaceObligation/);
 });

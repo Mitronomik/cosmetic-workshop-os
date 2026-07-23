@@ -1,12 +1,12 @@
 import {
   InventoryCatalogWorkspaceFeedbackLifecycle,
+  isStockReconciliationForLot,
   isStockMovementDto,
-  isStockReconciliationDto,
   type InventoryCatalogMutation,
   type InventoryCatalogRead,
   type InventoryCatalogRoute,
 } from './inventory-catalog-workspace-feedback.js';
-import type { WorkspaceFinishResult, WorkspaceReadKind } from './core-workspace-feedback.js';
+import type { WorkspaceFinishResult, WorkspaceReadKind, WorkspaceStartReason } from './core-workspace-feedback.js';
 
 export type InventoryCatalogRuntimeDependencies = {
   lifecycle?: InventoryCatalogWorkspaceFeedbackLifecycle;
@@ -33,9 +33,13 @@ export class InventoryCatalogWorkspaceRuntime {
     validate?: (value: T) => boolean;
     apply: (value: T) => void;
     failed?: (retainedSnapshot: boolean) => void;
+    rejected?: (reason: WorkspaceStartReason) => void;
   }) {
     const started = this.lifecycle.startRead(options.route, options.operation, options.kind, options.contextKey);
-    if (!started.accepted) return started;
+    if (!started.accepted) {
+      options.rejected?.(started.reason);
+      return started;
+    }
     this.deps.render();
     options.request().then((value) => {
       if (options.ownsContext && !options.ownsContext()) {
@@ -61,20 +65,36 @@ export class InventoryCatalogWorkspaceRuntime {
     route: InventoryCatalogRoute;
     operation: InventoryCatalogMutation;
     contextKey?: string;
+    ownsContext?: () => boolean;
     request: () => Promise<T>;
     validate: (value: T) => boolean;
     successMessage: string;
     apply: (value: T) => void;
     failed?: (error: unknown, ambiguous: boolean) => void;
+    rejected?: (reason: WorkspaceStartReason) => void;
   }) {
     const started = this.lifecycle.startMutation(options.route, options.operation, options.contextKey);
-    if (!started.accepted) return started;
+    if (!started.accepted) {
+      options.rejected?.(started.reason);
+      return started;
+    }
     this.deps.render();
     options.request().then((value) => {
+      if (options.ownsContext && !options.ownsContext()) {
+        this.lifecycle.settleMutationObsolete(started.owner);
+        return;
+      }
       const result = this.lifecycle.finishMutationSuccess(started.owner, value, options.validate, options.successMessage);
       if (result.knownSuccess && result.canApply && this.deps.ownsRoute(options.route)) options.apply(value);
+      if (result.accepted && !result.knownSuccess && result.reconciliationRequired && this.deps.ownsRoute(options.route)) {
+        options.failed?.(new Error('invalid-authoritative-mutation-response'), true);
+      }
       this.present(options.route, result);
     }).catch((error) => {
+      if (options.ownsContext && !options.ownsContext()) {
+        this.lifecycle.settleMutationObsolete(started.owner);
+        return;
+      }
       const result = this.lifecycle.finishMutationFailure(started.owner, error);
       if (result.accepted && this.deps.ownsRoute(options.route)) options.failed?.(error, result.reconciliationRequired);
       this.present(options.route, result);
@@ -116,23 +136,36 @@ export class InventoryCatalogWorkspaceRuntime {
     manual = true,
     failed?: (retainedSnapshot: boolean) => void,
   ) {
-    const kind = this.lifecycle.reconciliationRequired('stockMovements') ? 'reconciliation' : 'mutation-refresh';
+    const contextKey = `lot:${lotId}`;
+    const kind = this.lifecycle.isRequiredReconciliation('stockMovements', 'stock-reconciliation', contextKey)
+      ? 'reconciliation'
+      : manual ? 'detail' : 'mutation-refresh';
     return this.read({
       route: 'stockMovements',
       operation: 'stock-reconciliation',
       kind,
-      contextKey: `lot:${lotId}:${manual ? 'manual' : 'automatic'}`,
+      contextKey,
       request,
-      validate: isStockReconciliationDto,
+      validate: (value) => isStockReconciliationForLot(value, lotId),
       apply,
       failed,
     });
   }
 
-  startQueuedStockReconciliation<T>(lotId: number, request: () => Promise<T>, apply: (value: T) => void, failed?: (retainedSnapshot: boolean) => void): void {
-    if (!this.deps.ownsRoute('stockMovements')) return;
-    if (!this.lifecycle.consumeQueuedReconciliation('stockMovements')) return;
-    this.reconcileStockMovement(lotId, request, apply, false, failed);
+  stockMovementObligationLotId(): number | null {
+    const obligation = this.lifecycle.reconciliationObligation('stockMovements');
+    if (!obligation || obligation.mutationOperation !== 'stock-movement-create') return null;
+    const match = obligation.readContextKey.match(/^lot:(\d+)$/);
+    return match ? Number(match[1]) : null;
+  }
+
+  startQueuedStockReconciliation<T>(lotId: number, request: () => Promise<T>, apply: (value: T) => void, failed?: (retainedSnapshot: boolean) => void) {
+    if (!this.deps.ownsRoute('stockMovements')) return null;
+    const obligation = this.lifecycle.reconciliationObligation('stockMovements');
+    if (!obligation || obligation.readOperation !== 'stock-reconciliation' || obligation.readContextKey !== `lot:${lotId}`) return null;
+    const consumed = this.lifecycle.consumeQueuedReconciliation('stockMovements');
+    if (!consumed || consumed.readContextKey !== `lot:${lotId}`) return null;
+    return this.reconcileStockMovement(lotId, request, apply, false, failed);
   }
 
   private present(route: InventoryCatalogRoute, result: WorkspaceFinishResult): void {

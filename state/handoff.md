@@ -692,3 +692,18 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - Complete backend comparison: 496 collected, 492 passed, 4 accepted baseline failures, 0 skipped; branch-only failure delta 0.
 - No browser smoke was run or claimed. Status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 - Next slice remains B3.6 — Order-to-production shared-feedback lifecycle.
+
+## 2026-07-23 — PR #137 ownership correction handoff
+
+- PR #137 remains open, non-draft, and under review on `codex/b3.4-b3.5-core-workspace-feedback`; do not create a replacement PR or branch.
+- Published head before this correction: `8c58e5e1466f05aa27950e2157f597e3fa4414b3`.
+- The correction closes the reviewed same-route context defect by making reads and mutations entity-context-owned in addition to route, operation, generation, and request identity.
+- The selected policy is explicit supersession: a read for Context B removes the prior same-operation Context A owner, while a duplicate for the exact same context remains rejected.
+- Production runtime callbacks discard obsolete read owners or settle obsolete mutation owners before returning, so a later request for the same operation/context is accepted.
+- Reconciliation is a structured domain-mapped obligation. Only the required validated operation and exact context at the obligation epoch, after mutation settlement, can clear it.
+- StockMovement create remains exactly one POST. Its obligation records `stock-movement-create`, `lot:<originalLotId>`, and `stock-reconciliation` for the same lot. Only the composed history and balance GET result for that original lot can unlock creation.
+- Route re-entry and general StockMovement references do not unlock detached work. One authoritative original-lot GET may run after settlement; failure does not loop, and the recovery control continues to target the original obligated lot.
+- No backend production, schema, migration, dependency, lockfile, Orders, Production, unsupported mutation, or smoke-infrastructure change belongs to this correction.
+- Final pre-publication verification: Formula/Client 47/47 twice; Inventory/Catalog 51/51 twice; all required frontend regressions and build passed; focused backend domains 186/186; complete backend 496 collected, 492 passed, the same 4 accepted failures, 0 skipped, branch-only delta 0.
+- B3.4+B3.5 remains under review; B3.6 remains next.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

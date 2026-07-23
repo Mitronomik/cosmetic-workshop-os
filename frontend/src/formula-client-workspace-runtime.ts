@@ -4,7 +4,7 @@ import {
   type FormulaClientRead,
   type FormulaClientRoute,
 } from './formula-client-workspace-feedback.js';
-import type { WorkspaceFinishResult, WorkspaceReadKind } from './core-workspace-feedback.js';
+import type { WorkspaceFinishResult, WorkspaceReadKind, WorkspaceStartReason } from './core-workspace-feedback.js';
 
 export type FormulaClientRuntimeDependencies = {
   lifecycle?: FormulaClientWorkspaceFeedbackLifecycle;
@@ -31,9 +31,13 @@ export class FormulaClientWorkspaceRuntime {
     validate?: (value: T) => boolean;
     apply: (value: T) => void;
     failed?: (retainedSnapshot: boolean) => void;
+    rejected?: (reason: WorkspaceStartReason) => void;
   }) {
     const started = this.lifecycle.startRead(options.route, options.operation, options.kind, options.contextKey);
-    if (!started.accepted) return started;
+    if (!started.accepted) {
+      options.rejected?.(started.reason);
+      return started;
+    }
     this.deps.render();
     options.request().then((value) => {
       if (options.ownsContext && !options.ownsContext()) {
@@ -65,23 +69,39 @@ export class FormulaClientWorkspaceRuntime {
     route: FormulaClientRoute;
     operation: FormulaClientMutation;
     contextKey?: string;
+    ownsContext?: () => boolean;
     request: () => Promise<T>;
     validate: (value: T) => boolean;
     successMessage: string;
     apply: (value: T) => void;
     failed?: (error: unknown, ambiguous: boolean) => void;
+    rejected?: (reason: WorkspaceStartReason) => void;
   }) {
     const started = this.lifecycle.startMutation(options.route, options.operation, options.contextKey);
-    if (!started.accepted) return started;
+    if (!started.accepted) {
+      options.rejected?.(started.reason);
+      return started;
+    }
     this.deps.render();
     options.request().then((value) => {
+      if (options.ownsContext && !options.ownsContext()) {
+        this.lifecycle.settleMutationObsolete(started.owner);
+        return;
+      }
       const result = this.lifecycle.finishMutationSuccess(started.owner, value, options.validate, options.successMessage);
       if (result.knownSuccess && result.canApply && this.deps.ownsRoute(options.route)) options.apply(value);
+      if (result.accepted && !result.knownSuccess && result.reconciliationRequired && this.deps.ownsRoute(options.route)) {
+        options.failed?.(new Error('invalid-authoritative-mutation-response'), true);
+      }
       if (result.accepted && this.deps.ownsRoute(options.route)) {
         this.deps.render();
         this.complete(result);
       }
     }).catch((error) => {
+      if (options.ownsContext && !options.ownsContext()) {
+        this.lifecycle.settleMutationObsolete(started.owner);
+        return;
+      }
       const result = this.lifecycle.finishMutationFailure(started.owner, error);
       if (result.accepted && this.deps.ownsRoute(options.route)) {
         options.failed?.(error, result.reconciliationRequired);

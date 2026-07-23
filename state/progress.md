@@ -1264,3 +1264,17 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
 - Complete backend suite matched the accepted baseline exactly: 496 collected, 492 passed, 4 failed, 0 skipped. The four failing node IDs are the accepted backup reason, export reason, import issue-count, and purchase manual-smoke baseline failures; branch-only failure delta is 0.
 - Browser smoke was not run or claimed: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 - Publication and exact final-head evidence are recorded after commits, push, and PR creation.
+
+## 2026-07-23 — PR #137 context and reconciliation ownership correction
+
+- PR #137 remains open and under review; B3.4+B3.5 is not marked DONE.
+- Corrected same-route entity ownership so read identity includes route, operation, context key, route generation, and request identity. A different context explicitly supersedes the previous same-operation owner; obsolete callbacks settle without presentation effects or owner leaks.
+- Corrected mutation ownership so exact entity context participates in completion matching and rejected/obsolete callbacks cannot reset or apply a different context.
+- Replaced route-level boolean-only reconciliation with a structured, epoch-owned obligation mapped by the Formula/Client and Inventory/Catalog domain adapters.
+- Exact authoritative operation and context are now required to clear a lock; unrelated, wrong-context, invalid, stale, detached, and provisional reads preserve it.
+- StockMovement reconciliation is attached to the original lot and requires validated movement-history plus lot-balance GETs for that lot. Reference loading, lot lists, overview reads, and another lot cannot clear it.
+- StockMovement remains one POST per user action. The post-settlement automatic GET queue is consumed at most once, failure does not loop, and manual original-lot retry remains available.
+- Final correction verification before publication: Formula/Client 47/47 twice; Inventory/Catalog 51/51 twice; form validation 19/19; targeted validation 62/62; Order mutation 32/32; Order readiness 15/15; Dashboard/Onboarding 17/17; Help 3/3; Alerts 56/56; Purchases 116/116; Local Artifacts/Reports 32/32; frontend build passed.
+- Focused backend domain verification passed 186/186. Complete backend comparison collected 496: 492 passed, the same 4 accepted failures, 0 skipped; branch-only failure delta 0.
+- Publication SHA is recorded after the correction commit and push.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

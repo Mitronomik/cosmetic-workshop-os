@@ -1,4 +1,8 @@
-import { CoreWorkspaceFeedbackLifecycle, type WorkspaceRouteMessages } from './core-workspace-feedback.js';
+import {
+  CoreWorkspaceFeedbackLifecycle,
+  type WorkspaceReconciliationSpec,
+  type WorkspaceRouteMessages,
+} from './core-workspace-feedback.js';
 
 export type FormulaClientRoute = 'recipes' | 'clients' | 'clientRecipes';
 export type FormulaClientRead =
@@ -47,6 +51,40 @@ const messages = (subject: string): WorkspaceRouteMessages => ({
   reconciliationFailed: 'Не удалось подтвердить результат. Обновите данные вручную перед повторным сохранением.',
 });
 
+function clientContext(contextKey: string): string {
+  return contextKey.match(/^client:\d+/)?.[0] ?? contextKey;
+}
+
+function clientWishContext(contextKey: string): string {
+  return contextKey.match(/^client:\d+:archived:(?:true|false)/)?.[0] ?? clientContext(contextKey);
+}
+
+export function formulaClientReconciliationFor(
+  route: FormulaClientRoute,
+  mutation: FormulaClientMutation,
+  mutationContextKey: string,
+): WorkspaceReconciliationSpec<FormulaClientRead> {
+  if (route === 'recipes') {
+    if (mutation === 'recipe-version-create') {
+      return { readOperation: 'recipe-version-list', readContextKey: mutationContextKey };
+    }
+    return { readOperation: 'recipe-list', readContextKey: 'recipes:list' };
+  }
+  if (route === 'clients') {
+    if (mutation === 'wish-create' || mutation === 'wish-status' || mutation === 'wish-archive') {
+      return { readOperation: 'client-wishes', readContextKey: clientWishContext(mutationContextKey) };
+    }
+    if (mutation === 'feedback-create') {
+      return { readOperation: 'client-feedback', readContextKey: clientContext(mutationContextKey) };
+    }
+    return { readOperation: 'client-list', readContextKey: 'clients:list' };
+  }
+  if (mutation === 'client-recipe-composition') {
+    return { readOperation: 'client-recipe-detail', readContextKey: mutationContextKey };
+  }
+  return { readOperation: 'client-recipe-list', readContextKey: 'client-recipes:list' };
+}
+
 export class FormulaClientWorkspaceFeedbackLifecycle extends CoreWorkspaceFeedbackLifecycle<
   FormulaClientRoute,
   FormulaClientRead,
@@ -64,6 +102,7 @@ export class FormulaClientWorkspaceFeedbackLifecycle extends CoreWorkspaceFeedba
         clients: { retry: 'core-clients-retry', refresh: 'core-clients-refresh', mutation: 'core-clients-form', success: 'core-clients-content' },
         clientRecipes: { retry: 'core-client-recipes-retry', refresh: 'core-client-recipes-refresh', mutation: 'core-client-recipes-form', success: 'core-client-recipes-content' },
       },
+      formulaClientReconciliationFor,
     );
   }
 }
