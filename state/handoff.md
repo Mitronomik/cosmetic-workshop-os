@@ -629,18 +629,32 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 
 - Known backend baseline failures remain: `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`, `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`, `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`, `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`.
 - Local head/published head must be verified after push; this runner had no GitHub remote or `gh`.
-- Next slice: B3.4 — Recipes and Clients shared-feedback lifecycle.
+- Historical next-slice note superseded by the combined B3.4+B3.5 slice recorded below.
 - Block B smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
 ## 2026-07-23 — B3.3 PR #136 correction handoff
 
-- PR #136 remains the active B3.3 pull request; no replacement PR or branch is intended.
-- Actual branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before correction `e0138cc9a05a7e5529bf9f0e16b2283eb080d55a`; state open; draft false.
+- PR #136 is merged; B3.3 is complete at merge commit `e7c2d97473070f361052325fd6476208629af1cc`.
+- Historical correction branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; its earlier base was `b11160cc1a06df24fa6666969154c37389e6ab65`.
 - Runtime correction: detached mutations are irreversible and require read reconciliation; ambiguous outcomes lock create/generate until authoritative GET reconciliation; success, warning, and error remain separate; production focus callbacks are invoked only for accepted current-route completions.
 - Test correction: the focused B3.3 suite now uses production runtime and route modules with deferred API dependencies, render/announcement/focus recording, and exact GET/POST call assertions.
 - Backend remains unchanged; known baseline failures are unchanged.
-- Next slice remains B3.4 — Recipes and Clients shared-feedback lifecycle.
+- Historical next-slice note superseded by the combined B3.4+B3.5 slice recorded below.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.4+B3.5 implementation handoff
+
+- PR #136 is merged and B3.3 is complete at merge commit `e7c2d97473070f361052325fd6476208629af1cc`.
+- The active branch is `codex/b3.4-b3.5-core-workspace-feedback`, based on the same verified `main` SHA.
+- Formula/Client coverage includes Recipe Template list/detail/create, rendered recipe category/tag operations, immutable Recipe Version list/detail/create with complete composition, backend calculation GET, Client list/related/create/update/deactivate, ClientRecipe list/detail/create/composition/deactivate/restore, Wish list/create/status/archive, and Feedback list/create.
+- Inventory/Catalog coverage includes composed read-only Inventory overview/balances, Ingredient list/create/update/deactivate/category/tag operations, Ingredient Lot list/references/create/update/deactivate, selected-lot StockMovement history/balance plus append-only create, and Packaging list/create/update/deactivate/category/tag operations.
+- The two bounded production lifecycle families own route generations, request identity, stale/detached rejection, snapshots, DTO boundaries, reconciliation locks, one-shot GET queues, announcements, focus, binding, and presentation.
+- StockMovement creation performs exactly one POST. Ambiguous or invalid results lock repetition; reconciliation uses authoritative movement/balance GETs only, never loops, and remains manually repeatable.
+- Accepted mutation success is not downgraded when its follow-up GET fails; definite failures preserve drafts; obsolete same-route reference requests are discarded silently.
+- Unsupported paths remain absent: RecipeTemplate update, in-place RecipeVersion editing, persisted RecipeIngredient CRUD, ClientRecipe calculation, Feedback update, Packaging StockMovement, Orders, Production, backend expansion, and migrations.
+- External smoke-authoring contract not stored in the repository; not required for this smoke-deferred runtime slice.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next slice: B3.6 — Order-to-production shared-feedback lifecycle.
 
 ## 2026-07-23 — B3.3 PR #136 DOM binding and reconciliation correction handoff
 
@@ -667,3 +681,14 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - Snapshot-aware ordering tests now create a readable initial snapshot before mutation, then cover provisional failure before settlement, provisional failure after settlement, authoritative failure without loop, authoritative success without extra GET, and POST count staying at one.
 - Runtime result boundary now exposes `knownMutationSuccess`; `commitAccepted` and `applyCreated` run only for validated known-success mutation results after route ownership is confirmed.
 - GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.4+B3.5 verification handoff
+
+- Formula/Client focused tests: 34/34 passed twice.
+- Inventory/Catalog focused tests: 41/41 passed twice.
+- Frontend regressions: 19 form-validation, 62 targeted-validation, 32 order-mutation, 15 order-readiness, 17 Dashboard/Onboarding, 3 Help, 56 Alerts, 116 Purchases, and 32 Local Artifacts/Reports checks passed.
+- Frontend build passed.
+- Focused backend Formula/Client/Inventory/Catalog suites: 190 passed.
+- Complete backend comparison: 496 collected, 492 passed, 4 accepted baseline failures, 0 skipped; branch-only failure delta 0.
+- No browser smoke was run or claimed. Status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next slice remains B3.6 — Order-to-production shared-feedback lifecycle.
