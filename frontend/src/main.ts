@@ -1,6 +1,6 @@
 import { clearFieldValidation, clearIndexedCollectionValidation, emptyFormValidationState, normalizeBackendValidation, type FormValidationState } from './form-validation.js';
 import { applyValidationToClientForm, applyValidationToClientRecipeCompositionForm, applyValidationToClientRecipeCreateForm, applyValidationToClientFeedbackForm, applyValidationToClientWishForm, applyValidationToOrderForm, applyValidationToIngredientForm, applyValidationToIngredientLotForm, applyValidationToPackagingItemForm, applyValidationToRecipeTemplateForm, applyValidationToRecipeVersionForm, applyValidationToStockMovementForm } from './targeted-validation-update.js';
-import { canOpenOrderProductionConfirmation, canStartOrderReadinessRequest, canStartOrderWriteRequest, clearOrderSourceValidation, createOrderMutationController, emptyOrderValidationProvenance, orderBoundOperationActive, orderOperationError, orderOperationErrorFor, orderPayloadFromDraft, orderPersistentWriteActive, orderPersistentWriteOwner, orderProductionIsClosed, orderReadinessAttemptMatches, orderReadinessRequestActive, orderReadinessResultIsCurrent, orderRequestOwnerMatches, ownerFromOrderRequest, extractProductionApiFailure, productionConfirmationFailurePresentation, productionFailureForOrder, productionReadinessFailureMessage, productionResponseBelongsToOrder, finishProductionOwnerState, restoreOrderOperationGenerationForOwnedNonMutatingFailure, type OrderContextSnapshot, type OrderOperationError, type OrderOperationState, type OrderRequestSnapshot, type OrderTransientRequestOwner, type OrderValidationProvenance } from './order-mutation-lifecycle.js';
+import { canOpenOrderProductionConfirmation, canStartOrderReadinessRequest, canStartOrderWriteRequest, clearOrderSourceValidation, createOrderMutationController, emptyOrderValidationProvenance, orderBoundOperationActive, orderDtoIsValid, orderOperationError, orderOperationErrorFor, orderPayloadFromDraft, orderPersistentWriteActive, orderPersistentWriteOwner, orderProductionIsClosed, orderReadinessAttemptMatches, orderReadinessRequestActive, orderReadinessResultIsCurrent, orderReferenceDataIsValid, orderRequestOwnerMatches, ordersDtoIsValid, ownerFromOrderRequest, extractProductionApiFailure, productionBatchDtoIsValid, productionConfirmationFailurePresentation, productionFailureForOrder, productionReadinessDtoIsValid, productionReadinessFailureMessage, productionReconciliationIsCoherent, productionResponseBelongsToOrder, finishProductionOwnerState, restoreOrderOperationGenerationForOwnedNonMutatingFailure, type OrderContextSnapshot, type OrderOperationError, type OrderOperationState, type OrderRequestSnapshot, type OrderTransientRequestOwner, type OrderValidationProvenance } from './order-mutation-lifecycle.js';
 import { renderOrderLifecycleActions, renderOrderPersistentWriteNotice, renderOrderProductionGate, renderOrderReadinessPanel, renderOrderRowActions, type OrderLifecycleActionsInput, type ProductionReadinessResponse } from './order-readiness-presentation.js';
 import { artifactFolderLabel, artifactReason, artifactSize, localArtifactPresentation } from './local-artifact-presentation.js';
 import { type LocalArtifactRouteKey } from './local-artifacts-reports-feedback.js';
@@ -630,7 +630,7 @@ const purchaseRouteCoordinator = createPurchaseSuggestionsNavigationCoordinator(
 let orderValidation: FormValidationState = emptyFormValidationState();
 let orderRefreshWarning = '';
 let orderValidationProvenance: OrderValidationProvenance = emptyOrderValidationProvenance();
-const orderMutationController = createOrderMutationController();
+const orderMutationController = createOrderMutationController({ routeActive: false });
 function bumpOrderContext() { return orderMutationController.bumpContext(); }
 function currentOrderContext(): OrderContextSnapshot { return orderMutationController.snapshot({ formMode: ordersState.formMode, editedOrderId: ordersState.form.id, selectedOrderId: ordersState.selectedOrder?.id ?? null, showForm: ordersState.showForm }); }
 function orderReadCanRenderCaptured(snapshot: OrderContextSnapshot) { return orderMutationController.canRenderContext(snapshot, currentOrderContext()); }
@@ -1939,6 +1939,12 @@ function updateRouteOwnership(previousSection: NavigationSection | null, nextSec
   transitionLocalArtifactsReportsRouteOwnership({ backups: backupRuntime, exports: exportRuntime, reportDocuments: reportDocumentsRuntime, reports: reportsRuntime } as any, localArtifactRouteForSection(previousSection), localArtifactRouteForSection(nextSection));
   transitionFormulaClientRouteOwnership(formulaClientWorkspaceLifecycle, previousSection, nextSection);
   transitionInventoryCatalogRouteOwnership(inventoryCatalogWorkspaceLifecycle, previousSection, nextSection);
+  if (previousSection === 'Заказы' && nextSection !== 'Заказы') detachOrderRouteState();
+  orderMutationController.transitionRoute(previousSection === 'Заказы', nextSection === 'Заказы');
+  if (nextSection === 'Заказы') {
+    invalidateOrderReadinessAfterRouteEntry();
+    queueAutomaticProductionReconciliation();
+  }
   applyLocalArtifactsReportsLifecycleState();
 }
 
@@ -1958,6 +1964,7 @@ function clearRouteOwnedFeedbackOnNavigation(nextSection: NavigationSection) {
   for (const route of ['recipes', 'clients', 'clientRecipes'] as const) if (route !== formulaRoute) formulaClientWorkspaceLifecycle.clearTransientFeedback(route);
   const inventoryRoute = inventoryCatalogRouteForSection(nextSection);
   for (const route of ['inventory', 'ingredients', 'ingredientLots', 'stockMovements', 'packaging'] as const) if (route !== inventoryRoute) inventoryCatalogWorkspaceLifecycle.clearTransientFeedback(route);
+  if (nextSection !== 'Заказы') orderMutationController.clearTransientFeedback();
   applyLocalArtifactsReportsLifecycleState();
   applyDashboardLifecycleState();
   applyOnboardingLifecycleState();
@@ -2128,7 +2135,7 @@ function productionIngredientsTable(rows: ProductionBatchIngredientResponse[]) {
 function productionPackagingTable(rows: ProductionBatchPackagingResponse[]) { return `<div class="readiness-block"><h3>Списанная тара</h3>${rows.length ? `<div class="table-wrap"><table class="compact-catalog-table"><thead><tr><th>Тара</th><th>Количество</th><th>Ед.</th><th>Цена за ед.</th><th>Стоимость</th></tr></thead><tbody>${rows.map((r)=>`<tr><td><strong>${escapeHtml(r.packaging_name_snapshot)}</strong></td><td>${formatDecimalForDisplay(r.quantity)}</td><td>${unitLabel(r.unit)}</td><td>${moneyOrMissing(r.unit_cost_snapshot)}</td><td>${moneyOrMissing(r.total_cost_snapshot)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty-hint">Списания тары в снимке не найдены.</p>'}</div>`; }
 function loadProductionHistory(force=false) { if(!force && (productionHistoryState.status==='loading'||productionHistoryState.status==='ready')) return; productionHistoryState.status='loading'; productionHistoryState.error=''; render(); getProductionBatches().then((response)=>{ productionHistoryState.batches=response.production_batches; productionHistoryState.status='ready'; productionHistoryState.error=''; render(); }).catch(()=>{ productionHistoryState.status='error'; productionHistoryState.error='Не удалось загрузить историю производства. Проверьте, что локальное приложение запущено.'; render(); }); }
 function openProductionBatch(id:number) { productionHistoryState.detailStatus='loading'; productionHistoryState.detailError=''; render(); getProductionBatch(id).then((batch)=>{ productionHistoryState.selectedBatch=batch; productionHistoryState.detailStatus='ready'; render(); }).catch(()=>{ productionHistoryState.detailStatus='error'; productionHistoryState.detailError='Не удалось открыть производственную партию. Обновите историю производства и попробуйте ещё раз.'; render(); }); }
-function openProductionBatchByOrder(id:number) { if (orderFormMutationActive()) return; const snapshot=orderMutationController.beginRequest('productionHistory', currentOrderContext(), { requestedOrderId: id }); ordersState.productionHistoryRequestOwner=ownerFromOrderRequest(snapshot, id, 'productionHistory'); ordersState.productionLoadingOrderId=id; delete ordersState.productionFailureByOrderId[id]; render(); getProductionBatchByOrder(id).then((batch)=>{ if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id || !productionHistoryOwnerMatches(snapshot, id)) return; ordersState.productionByOrderId[id]=batch; ordersState.productionLoadingOrderId=null; ordersState.productionHistoryRequestOwner=null; productionHistoryState.selectedBatch=batch; productionHistoryState.detailStatus='ready'; productionHistoryState.detailError=''; activeSection='Производство'; window.history.pushState({}, '', pathForSection(activeSection)); loadProductionHistory(true); render(); }).catch((e)=>{ if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id || !productionHistoryOwnerMatches(snapshot, id)) return; ordersState.productionLoadingOrderId=null; ordersState.productionHistoryRequestOwner=null; const status=typeof e==='object' && e && 'status' in e ? Number((e as {status?: number}).status) : 0; ordersState.productionFailureByOrderId[id]=status===404 ? 'Для этого заказа производственная партия пока не найдена.' : 'Не удалось открыть производственную партию. Обновите историю производства и попробуйте ещё раз.'; render(); }); }
+function openProductionBatchByOrder(id:number) { if (orderFormMutationActive()) return; const snapshot=orderMutationController.beginRequest('productionHistory', currentOrderContext(), { requestedOrderId: id }); ordersState.productionHistoryRequestOwner=ownerFromOrderRequest(snapshot, id, 'productionHistory'); ordersState.productionLoadingOrderId=id; delete ordersState.productionFailureByOrderId[id]; render(); const finalize=()=>{ if(!orderMutationController.settleRequest(snapshot).accepted)return; if(productionHistoryOwnerMatches(snapshot,id)){ ordersState.productionLoadingOrderId=null; ordersState.productionHistoryRequestOwner=null; } }; getProductionBatchByOrder(id).then((batch)=>{ if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id || !productionHistoryOwnerMatches(snapshot, id)) return; if(!productionBatchDtoIsValid(batch,id)) throw new Error('invalid-production-history-response'); finalize(); ordersState.productionByOrderId[id]=batch; productionHistoryState.selectedBatch=batch; productionHistoryState.detailStatus='ready'; productionHistoryState.detailError=''; const previousSection=activeSection; activeSection='Производство'; updateRouteOwnership(previousSection,activeSection); clearRouteOwnedFeedbackOnNavigation(activeSection); window.history.pushState({}, '', pathForSection(activeSection)); loadProductionHistory(true); render(); }).catch((e)=>{ if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id || !productionHistoryOwnerMatches(snapshot, id)) return; finalize(); const status=typeof e==='object' && e && 'status' in e ? Number((e as {status?: number}).status) : 0; ordersState.productionFailureByOrderId[id]=status===404 ? 'Для этого заказа производственная партия пока не найдена.' : 'Не удалось открыть производственную партию. Обновите историю производства и попробуйте ещё раз.'; render(); }).finally(finalize); }
 
 
 const orderFieldLabels: Record<string, string> = {
@@ -2187,12 +2194,17 @@ function restoreOrderMutationControls() {
 
 function emptyOrderForm(): OrderFormState { return { id: null, client_id: '', source_type: 'recipe_version', recipe_version_id: '', client_recipe_id: '', product_name: '', target_batch_size_value: '', target_batch_size_unit: 'g', packaging_item_id: '', packaging_quantity: '', sale_price: '', ordered_at: '', planned_production_at: '', notes: '' }; }
 function ordersPage() {
-  if (ordersStatus === 'idle' || ordersStatus === 'loading') return `<section class="card"><p class="card-kicker">Заказы</p><h2>Загружаем заказы…</h2><p>Получаем рабочий список заказов, клиентов, рецептов и тары из локального приложения.</p></section>`;
-  if (ordersStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Заказы</p><h2>Не удалось загрузить заказы</h2><p>${ordersError || 'Локальное приложение временно недоступно.'}</p><p class="next-step">Проверьте, что локальное приложение запущено, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-orders">Повторить загрузку</button></section>`;
+  const feedback = orderMutationController.feedback();
+  if ((ordersStatus === 'idle' || ordersStatus === 'loading') && !ordersState.items.length) return `<section class="card"><p class="card-kicker">Заказы</p><h2>Загружаем заказы…</h2><p>Получаем рабочий список заказов, клиентов, рецептов и тары из локального приложения.</p></section>`;
+  if (ordersStatus === 'error' && !ordersState.items.length) return `<section class="card error-card"><p class="card-kicker">Заказы</p><h2>Не удалось загрузить заказы</h2><p>${escapeHtml(feedback.error || ordersError || 'Локальное приложение временно недоступно.')}</p><p class="next-step">Проверьте, что локальное приложение запущено, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-orders" data-order-focus="list-recovery">Повторить загрузку</button></section>`;
   const items = filteredOrders();
   const workspace = ordersState.showForm ? orderFormPanel() : ordersState.selectedOrder ? orderDetailPanel(ordersState.selectedOrder) : '';
   const persistentWriteNotice = renderOrderPersistentWriteNotice(orderPersistentWriteBusy(), false);
-  return `<div class="recipes-layout"><section class="card recipes-intro"><div><p class="card-kicker">Заказы</p><h2>Заказы клиентов</h2><p>Здесь можно создать заказ на основе сохранённой версии рецепта или индивидуальной формулы клиента.</p><p class="next-step">В этом разделе можно проверить готовность и явно подтвердить изготовление. Списание склада выполняется только локальным приложением после подтверждения.</p></div><div class="actions"><button class="primary-action" type="button" data-action="open-order-create" ${orderReadinessBusy()?'disabled':''}>Создать заказ</button><button class="secondary-action" type="button" data-action="reload-orders" ${orderReadinessBusy()?'disabled':''}>Обновить</button></div></section>${persistentWriteNotice}${ordersMessage ? `<p class="page-message">${ordersMessage}</p>` : ''}${orderRefreshWarning ? `<p class="page-message warning-message">${escapeHtml(orderRefreshWarning)}</p>` : ''}${ordersError ? `<p class="page-message error-message">${ordersError}</p>` : ''}${orderFilterToolbar(items.length)}${workspace}${orderList(items)}</div>`;
+  const selectedId=ordersState.selectedOrder?.id;
+  const contextualWarning=selectedId ? (ordersState.productionRefreshWarningByOrderId[selectedId] || ordersState.productionFailureByOrderId[selectedId] || '') : '';
+  const visibleFeedbackWarning=contextualWarning && feedback.warning.includes(contextualWarning) ? '' : feedback.warning;
+  const visibleFeedbackError=contextualWarning && feedback.error.includes(contextualWarning) ? '' : feedback.error;
+  return `<div class="recipes-layout"><section class="card recipes-intro"><div><p class="card-kicker">Заказы</p><h2>Заказы клиентов</h2><p>Здесь можно создать заказ на основе сохранённой версии рецепта или индивидуальной формулы клиента.</p><p class="next-step">В этом разделе можно проверить готовность и явно подтвердить изготовление. Списание склада выполняется только локальным приложением после подтверждения.</p></div><div class="actions"><button class="primary-action" type="button" data-action="open-order-create" ${orderReadinessBusy()?'disabled':''}>Создать заказ</button><button class="secondary-action" type="button" data-action="reload-orders" data-order-focus="list-refresh" ${orderReadinessBusy()?'disabled':''}>${ordersStatus === 'loading' ? 'Обновляем…' : 'Обновить'}</button></div></section>${persistentWriteNotice}${feedback.neutral ? `<p class="page-message" aria-busy="true">${escapeHtml(feedback.neutral)}</p>` : ''}${feedback.success || ordersMessage ? `<p class="page-message">${escapeHtml(feedback.success || ordersMessage)}</p>` : ''}${visibleFeedbackWarning || orderRefreshWarning ? `<p class="page-message warning-message">${escapeHtml(visibleFeedbackWarning || orderRefreshWarning)}</p>` : ''}${visibleFeedbackError || ordersError ? `<p class="page-message error-message">${escapeHtml(visibleFeedbackError || ordersError)}</p>` : ''}${orderFilterToolbar(items.length)}${workspace}${orderList(items)}</div>`;
 }
 function orderFilterToolbar(resultCount: number) { const f=ordersState.filters; return `<section class="card data-card catalog-browser"><p class="card-kicker">Рабочий список</p><h2>Найти заказ</h2><div class="catalog-toolbar"><label class="full-span">Поиск<input type="search" data-action="filter-orders-search" value="${escapeHtml(f.search)}" placeholder="Продукт, клиент, рецепт, тара или заметки" /></label><label>Статус<select data-action="filter-orders-status"><option value="active" ${f.status==='active'?'selected':''}>Активные</option><option value="cancelled" ${f.status==='cancelled'?'selected':''}>Отменённые</option><option value="archived" ${f.status==='archived'?'selected':''}>Архив</option><option value="all" ${f.status==='all'?'selected':''}>Все</option></select></label></div><div class="catalog-summary"><span>Показаны заказы: ${resultCount} из ${ordersState.items.length}</span><button class="secondary-action compact" type="button" data-action="reset-order-filters">Сбросить фильтры</button></div></section>`; }
 function orderList(items: Order[]) { if (ordersState.items.length===0) return `<section class="card empty-card"><h2>Заказов пока нет</h2><p>Заказов пока нет. Создайте первый заказ на основе рецепта или индивидуальной формулы клиента.</p><button class="primary-action" type="button" data-action="open-order-create">Создать заказ</button></section>`; if (items.length===0) return `<section class="card empty-card"><h2>Заказы не найдены</h2><p>Измените поиск или статус, чтобы снова увидеть рабочий список.</p><button class="secondary-action" type="button" data-action="reset-order-filters">Сбросить фильтры</button></section>`; return `<section class="card data-card"><p class="card-kicker">Список</p><h2>Рабочие заказы</h2><div class="table-wrap"><table class="compact-catalog-table"><thead><tr><th>Продукт</th><th>Клиент</th><th>Основа</th><th>Партия</th><th>Тара</th><th>Статус</th><th>Дата/цена</th><th>Действия</th></tr></thead><tbody>${items.map((o)=>`<tr class="${ordersState.selectedOrder?.id===o.id?'catalog-row-selected':''} ${!o.is_active||o.status==='archived'?'archived-row':''}"><td><strong>${escapeHtml(o.product_name)}</strong><small>${escapeHtml(o.notes || 'Без заметок')}</small></td><td>${escapeHtml(orderClientName(o.client_id))}</td><td>${orderSourceLabel(o)}</td><td>${quantityLabel(o.target_batch_size_value, o.target_batch_size_unit)}</td><td>${orderPackagingLabel(o)}</td><td><span class="pill ${orderStatusPill(o)}">${orderStatusLabel(o.status)}</span></td><td>${o.planned_production_at ? `План: ${formatDate(o.planned_production_at)}` : 'План не указан'}<small>${o.sale_price ? `Цена: ${escapeHtml(o.sale_price)} ₽` : 'Цена не указана'}</small></td><td>${orderRowActions(o)}</td></tr>`).join('')}</tbody></table></div><p class="next-step">Изготовление запускается только из карточки заказа после проверки готовности и отдельного подтверждения.</p></section>`; }
@@ -2211,7 +2223,7 @@ function orderOperationGeneration(orderId: number) { return ordersState.orderOpe
 function markOrderOperationStarted(orderId: number) { ordersState.orderOperationGenerationByOrderId[orderId]=orderOperationGeneration(orderId)+1; return ordersState.orderOperationGenerationByOrderId[orderId]; }
 function restoreOrderOperationGenerationForProductionAttempt(orderId: number, previousGeneration: number, attemptedGeneration: number, shouldRestore: boolean) { ordersState.orderOperationGenerationByOrderId[orderId]=restoreOrderOperationGenerationForOwnedNonMutatingFailure(orderOperationGeneration(orderId), attemptedGeneration, previousGeneration, shouldRestore); }
 function currentOrderReadiness(o: Order) { const readiness=ordersState.readinessByOrderId[o.id]; return orderReadinessResultIsCurrent(o, readiness, ordersState.readinessAttemptGenerationByOrderId[o.id], ordersState.readinessResultGenerationByOrderId[o.id], ordersState.readinessAttemptOrderUpdatedAtByOrderId[o.id], ordersState.readinessAttemptOperationGenerationByOrderId[o.id], orderOperationGeneration(o.id)) ? readiness : null; }
-function orderLifecyclePresentation(o: Order): OrderLifecycleActionsInput { const owner=activeOrderPersistentWriteOwner(); return { orderId:o.id, isActive:o.is_active, status:o.status, sameOrderOperationActive:orderAnyOperationBusy(o.id), persistentOwner:owner ? { kind:owner.kind, orderId:owner.orderId } : null }; }
+function orderLifecyclePresentation(o: Order): OrderLifecycleActionsInput { const owner=activeOrderPersistentWriteOwner(); return { orderId:o.id, isActive:o.is_active, status:o.status, sameOrderOperationActive:orderAnyOperationBusy(o.id)||orderMutationController.productionReconciliationRequired(o.id), persistentOwner:owner ? { kind:owner.kind, orderId:owner.orderId } : null }; }
 function orderLifecycleButtons(o: Order) { return renderOrderLifecycleActions(orderLifecyclePresentation(o)); }
 function orderRowActions(o: Order) { return renderOrderRowActions(orderLifecyclePresentation(o)); }
 function orderFieldMarkup(field: keyof OrderFormState | 'recipe_source', inner: string, fullSpan = false, help = '') {
@@ -2232,13 +2244,14 @@ function orderDetailPanel(o: Order) {
   const readinessBusy = orderReadinessBusy(o.id);
   const writeBusy = orderWriteOperationBusy(o.id);
   const reconciliationBusy = ordersState.productionReconciliationLoadingOrderId === o.id;
-  const operationBusy = readinessBusy || writeBusy || reconciliationBusy;
+  const unresolvedProduction = orderMutationController.productionReconciliationRequired(o.id);
+  const operationBusy = readinessBusy || writeBusy || reconciliationBusy || unresolvedProduction;
   const persistentOwner = activeOrderPersistentWriteOwner();
   const persistentWriteNotice = renderOrderPersistentWriteNotice(Boolean(persistentOwner), persistentOwner?.orderId === o.id);
   const readinessAction = closed
     ? '<p class="next-step">Закрытые, выданные или уже изготовленные заказы нельзя проверять к производству.</p>'
     : `<button class="primary-action" type="button" data-action="check-order-readiness" data-id="${o.id}" ${operationBusy ? `disabled${readinessBusy || reconciliationBusy ? ' aria-busy="true"' : ''}` : ''}>${readinessBusy ? 'Проверяем…' : reconciliationBusy ? 'Проверяем результат…' : writeBusy ? 'Операция выполняется…' : 'Проверить изготовление'}</button>`;
-  return `<section class="card data-card"><div class="section-heading"><div><p class="card-kicker">Карточка заказа</p><h2>${escapeHtml(o.product_name)}</h2></div><button class="secondary-action" type="button" data-action="close-order-detail">Закрыть карточку</button></div><p><strong>Клиент:</strong> ${escapeHtml(orderClientName(o.client_id))}</p><p><strong>Основа:</strong> ${orderSourceLabel(o)}</p><p><strong>Партия:</strong> ${quantityLabel(o.target_batch_size_value, o.target_batch_size_unit)}</p><p><strong>Тара:</strong> ${orderPackagingLabel(o)}</p><p><strong>Статус:</strong> ${orderStatusLabel(o.status)}</p><p><strong>Дата заказа:</strong> ${o.ordered_at?formatDate(o.ordered_at):'Не указана'} · <strong>План производства:</strong> ${o.planned_production_at?formatDate(o.planned_production_at):'Не указан'}</p><p><strong>Цена:</strong> ${o.sale_price?`${escapeHtml(o.sale_price)} ₽`:'Не указана'}</p><p><strong>Заметки:</strong><br>${escapeHtml(o.notes || 'Нет заметок')}</p>${o.status==='cancelled'?'<p class="next-step">Отменённый заказ нельзя редактировать.</p>':(!o.is_active||o.status==='archived')?'<p class="next-step">Архивный заказ нельзя редактировать.</p>':reconciliationBusy?'<p class="next-step">Проверяем результат изготовления… Дождитесь завершения проверки перед изменением заказа или новой проверкой готовности.</p>':readinessBusy?'<p class="next-step">Дождитесь завершения проверки перед изменением, отменой или архивированием этого заказа.</p>':persistentWriteNotice || '<p class="next-step">Можно изменить только безопасные поля заказа. Производственные статусы здесь не меняются.</p>'}<div class="actions">${(o.status==='cancelled'||!o.is_active||o.status==='archived')?'':`<button class="secondary-action" type="button" data-action="edit-order" data-id="${o.id}" ${operationBusy?'disabled':''}>Изменить заказ</button>`}${readinessAction}${orderLifecycleButtons(o)}</div></section>${orderReadinessPanel(o)}${orderProductionPanel(o)}`;
+  return `<section class="card data-card" data-order-detail-focus-anchor="true" tabindex="-1"><div class="section-heading"><div><p class="card-kicker">Карточка заказа</p><h2>${escapeHtml(o.product_name)}</h2></div><button class="secondary-action" type="button" data-action="close-order-detail">Закрыть карточку</button></div><p><strong>Клиент:</strong> ${escapeHtml(orderClientName(o.client_id))}</p><p><strong>Основа:</strong> ${orderSourceLabel(o)}</p><p><strong>Партия:</strong> ${quantityLabel(o.target_batch_size_value, o.target_batch_size_unit)}</p><p><strong>Тара:</strong> ${orderPackagingLabel(o)}</p><p><strong>Статус:</strong> ${orderStatusLabel(o.status)}</p><p><strong>Дата заказа:</strong> ${o.ordered_at?formatDate(o.ordered_at):'Не указана'} · <strong>План производства:</strong> ${o.planned_production_at?formatDate(o.planned_production_at):'Не указан'}</p><p><strong>Цена:</strong> ${o.sale_price?`${escapeHtml(o.sale_price)} ₽`:'Не указана'}</p><p><strong>Заметки:</strong><br>${escapeHtml(o.notes || 'Нет заметок')}</p>${o.status==='cancelled'?'<p class="next-step">Отменённый заказ нельзя редактировать.</p>':(!o.is_active||o.status==='archived')?'<p class="next-step">Архивный заказ нельзя редактировать.</p>':unresolvedProduction?'<p class="next-step">Сначала проверьте результат предыдущего изготовления. Изменение, отмена и новая проверка готовности пока недоступны.</p>':reconciliationBusy?'<p class="next-step">Проверяем результат изготовления… Дождитесь завершения проверки перед изменением заказа или новой проверкой готовности.</p>':readinessBusy?'<p class="next-step">Дождитесь завершения проверки перед изменением, отменой или архивированием этого заказа.</p>':persistentWriteNotice || '<p class="next-step">Можно изменить только безопасные поля заказа. Производственные статусы здесь не меняются.</p>'}<div class="actions">${(o.status==='cancelled'||!o.is_active||o.status==='archived')?'':`<button class="secondary-action" type="button" data-action="edit-order" data-id="${o.id}" ${operationBusy?'disabled':''}>Изменить заказ</button>`}${readinessAction}${orderLifecycleButtons(o)}</div></section>${orderReadinessPanel(o)}${orderProductionPanel(o)}`;
 }
 function orderReadinessPanel(o: Order) {
   const result = ordersState.readinessByOrderId[o.id];
@@ -2247,7 +2260,8 @@ function orderReadinessPanel(o: Order) {
   return renderOrderReadinessPanel({ orderId:o.id, closed:orderProductionClosed(o), busy:orderReadinessBusy(o.id), error:readinessError, result, current:Boolean(current) }, { escapeHtml, formatDate, formatDateTime, quantityLabel, missingQuantityLabel, moneyOrMissing });
 }
 function orderReadinessFocusOwned(id: number) { const active=document.activeElement as HTMLElement|null; return active?.matches(`[data-order-readiness-focus-anchor][data-id="${id}"]`) ?? false; }
-function restoreOrderReadinessFocus(id: number, preserve: boolean) { if (!preserve) return; document.querySelector<HTMLElement>(`[data-order-readiness-focus-anchor][data-id="${id}"]`)?.focus({ preventScroll:true }); }
+function runOrderOwnedFocus(target:string, effect:()=>void, deferred=false){ const ticket=orderMutationController.beginFocus(currentOrderContext(),target); if(!ticket)return; const apply=()=>{ if(orderMutationController.canApplyFocus(ticket,currentOrderContext())) effect(); }; if(deferred) requestAnimationFrame(apply); else apply(); }
+function restoreOrderReadinessFocus(id: number, preserve: boolean) { if (!preserve) return; runOrderOwnedFocus(`readiness:${id}`,()=>document.querySelector<HTMLElement>(`[data-order-readiness-focus-anchor][data-id="${id}"]`)?.focus({ preventScroll:true })); }
 
 function orderProductionPanel(o: Order) {
   const batch = ordersState.productionByOrderId[o.id];
@@ -2259,7 +2273,8 @@ function orderProductionPanel(o: Order) {
   const confirming = ordersState.productionConfirmingOrderId === o.id || productionPending;
   const loading = ordersState.productionLoadingOrderId === o.id;
   const persistentWriteActive = orderPersistentWriteBusy();
-  return renderOrderProductionGate({ orderId:o.id, readiness, hasCachedReadiness:Boolean(ordersState.readinessByOrderId[o.id]), confirming, loading, blockedByOperation:orderReadinessBusy(o.id), persistentWriteActive, notes, error:productionFailureForOrder(ordersState.productionFailureByOrderId,o.id), reconciliationLoading: ordersState.productionReconciliationLoadingOrderId === o.id, recoveryAction: ordersState.productionRecoveryByOrderId[o.id] || '', uncertain: Boolean(ordersState.productionUncertainByOrderId[o.id]) }, escapeHtml);
+  const reconciliationRequired=orderMutationController.productionReconciliationRequired(o.id);
+  return renderOrderProductionGate({ orderId:o.id, readiness, hasCachedReadiness:Boolean(ordersState.readinessByOrderId[o.id]), confirming, loading, blockedByOperation:orderReadinessBusy(o.id), persistentWriteActive, notes, error:productionFailureForOrder(ordersState.productionFailureByOrderId,o.id) || (reconciliationRequired ? 'Исход предыдущего изготовления нужно подтвердить по точному заказу и его производственной партии.' : ''), reconciliationLoading: ordersState.productionReconciliationLoadingOrderId === o.id, recoveryAction: ordersState.productionRecoveryByOrderId[o.id] || (reconciliationRequired ? 'Повторное изготовление, отмена и архивирование заблокированы до безопасной проверки результата.' : ''), uncertain: Boolean(ordersState.productionUncertainByOrderId[o.id]) || reconciliationRequired }, escapeHtml);
 }
 function productionSuccessPanel(batch: ProductionBatchDetailResponse) { const refreshWarning = ordersState.productionRefreshWarningByOrderId[batch.order_id] || ''; return `<section class="card data-card readiness-result" data-order-production-focus-anchor="success" tabindex="-1"><div class="section-heading"><div><p class="card-kicker">Изготовление</p><h2>Заказ изготовлен</h2></div><span class="pill success">Партия №${batch.id}</span></div><div class="readiness-grid"><div><strong>Дата изготовления</strong><p>${formatDateTime(batch.produced_at)}</p></div><div><strong>Размер партии</strong><p>${quantityLabel(batch.final_batch_value, batch.final_batch_unit)}</p></div><div><strong>Итоговая себестоимость</strong><p>${moneyOrMissing(batch.total_cost)}</p></div><div><strong>Компоненты</strong><p>${moneyOrMissing(batch.component_cost)}</p></div><div><strong>Тара</strong><p>${moneyOrMissing(batch.packaging_cost)}</p></div><div><strong>Налог</strong><p>${moneyOrMissing(batch.tax)}</p></div><div><strong>Маржа</strong><p>${moneyOrMissing(batch.margin)}</p></div><div><strong>Списания компонентов</strong><p>${batch.ingredients.length}</p></div><div><strong>Списания тары</strong><p>${batch.packaging.length}</p></div></div>${batch.notes ? `<p><strong>Заметка:</strong><br>${escapeHtml(batch.notes)}</p>` : ''}${refreshWarning ? `<p class="page-message warning-message">${escapeHtml(refreshWarning)}</p>` : ''}<p class="next-step">Списание уже выполнено через складские движения. Исторические данные партии сохранены. Если списки не обновились, безопасно обновите заказ; повторять изготовление не нужно.</p></section>`; }
 function orderProductionClosed(o: Order) { return orderProductionIsClosed(o); }
@@ -2281,13 +2296,36 @@ function saveOrderFormDraftFromDom() { const form = document.querySelector<HTMLF
 function orderPayloadFromForm(form: HTMLFormElement): OrderPayload { const data=new FormData(form); const sourceType=String(data.get('source_type')) as OrderSourceType; return orderPayloadFromDraft({ client_id: String(data.get('client_id') || ''), source_type: sourceType, recipe_version_id: String(data.get('recipe_version_id') || ''), client_recipe_id: String(data.get('client_recipe_id') || ''), product_name: String(data.get('product_name') || ''), target_batch_size_value: normalizeDecimalInput(String(data.get('target_batch_size_value') || '')), target_batch_size_unit: String(data.get('target_batch_size_unit') || 'g'), packaging_item_id: String(data.get('packaging_item_id') || ''), packaging_quantity: normalizeDecimalInput(String(data.get('packaging_quantity') || '')), sale_price: normalizeDecimalInput(String(data.get('sale_price') || '')), ordered_at: String(data.get('ordered_at') || ''), planned_production_at: String(data.get('planned_production_at') || ''), notes: String(data.get('notes') || '') }); }
 function formFromOrder(o: Order): OrderFormState { return { id:o.id, client_id:String(o.client_id), source_type:o.client_recipe_id?'client_recipe':'recipe_version', recipe_version_id:o.recipe_version_id?String(o.recipe_version_id):'', client_recipe_id:o.client_recipe_id?String(o.client_recipe_id):'', product_name:o.product_name, target_batch_size_value:o.target_batch_size_value, target_batch_size_unit:o.target_batch_size_unit, packaging_item_id:o.packaging_item_id?String(o.packaging_item_id):'', packaging_quantity:o.packaging_quantity ?? '', sale_price:o.sale_price ?? '', ordered_at:o.ordered_at ?? '', planned_production_at:o.planned_production_at ?? '', notes:o.notes }; }
 type OrderReferenceData = { clients: Client[]; templates: RecipeTemplate[]; versions: RecipeVersion[]; clientRecipes: ClientRecipe[]; packagingItems: PackagingItem[] };
-function fetchOrderReferenceData(): Promise<OrderReferenceData> { return Promise.all([getClients(true), getRecipeTemplates(), getClientRecipes(true), getPackagingItems()]).then(async ([clients, templates, clientRecipes, packaging])=>{ const versionLists=await Promise.all(templates.recipe_templates.map(t=>getRecipeVersions(t.id).catch(()=>({recipe_versions:[]})))); return { clients: clients.clients, templates: templates.recipe_templates, versions: versionLists.flatMap(v=>v.recipe_versions), clientRecipes: clientRecipes.client_recipes, packagingItems: packaging.packaging_items }; }); }
+function fetchOrderReferenceData(): Promise<OrderReferenceData> { return Promise.all([getClients(true), getRecipeTemplates(), getClientRecipes(true), getPackagingItems()]).then(async ([clients, templates, clientRecipes, packaging])=>{ const versionLists=await Promise.all(templates.recipe_templates.map(t=>getRecipeVersions(t.id))); return { clients: clients.clients, templates: templates.recipe_templates, versions: versionLists.flatMap(v=>v.recipe_versions), clientRecipes: clientRecipes.client_recipes, packagingItems: packaging.packaging_items }; }); }
 function applyOrderReferenceData(data: OrderReferenceData){ ordersState.clients=data.clients; ordersState.templates=data.templates; ordersState.versions=data.versions; ordersState.clientRecipes=data.clientRecipes; ordersState.packagingItems=data.packagingItems; }
 function orderRenderSafeAfterRead(snapshot: OrderContextSnapshot) { return !orderFormMutationActive() && orderReadCanRenderCaptured(snapshot); }
 function orderRequestCanApply(snapshot: OrderRequestSnapshot) { return !orderFormMutationActive() && orderMutationController.canApplyRequest(snapshot, currentOrderContext()); }
 function finalizeIgnoredListLoading(snapshot: OrderRequestSnapshot) { if (ordersStatus === 'loading' && orderMutationController.isCurrentRequest(snapshot)) ordersStatus = 'ready'; }
-function resetInvalidatedOrderOperationState(){ orderMutationController.invalidateRequest('readiness'); orderMutationController.invalidateRequest('production'); orderMutationController.invalidateRequest('productionHistory'); orderMutationController.invalidateRequest('productionReconciliation'); ordersState.readinessRequestOwner=null; ordersState.productionHistoryRequestOwner=null; ordersState.productionReconciliationRequestOwner=null; ordersState.readinessLoadingOrderId=null; ordersState.productionReconciliationLoadingOrderId=null; if (!ordersState.productionRequestOwner) { ordersState.productionLoadingOrderId=null; ordersState.productionConfirmingOrderId=null; } ordersState.readinessError=''; ordersState.readinessErrorInfo=null; }
-function advanceOrderWorkspaceContext(){ bumpOrderContext(); resetInvalidatedOrderOperationState(); }
+function invalidateOrderReadinessAfterRouteEntry() {
+  for (const orderId of Object.keys(ordersState.readinessByOrderId).map(Number)) markOrderOperationStarted(orderId);
+  ordersState.productionConfirmingOrderId = null;
+}
+function detachOrderRouteState() {
+  if (ordersStatus === 'loading') ordersStatus = ordersState.items.length ? 'ready' : 'idle';
+  ordersState.referenceLoading = false;
+  ordersState.readinessRequestOwner = null;
+  ordersState.readinessLoadingOrderId = null;
+  ordersState.productionHistoryRequestOwner = null;
+  ordersState.productionReconciliationRequestOwner = null;
+  ordersState.productionReconciliationLoadingOrderId = null;
+  ordersState.productionConfirmingOrderId = null;
+}
+function queueAutomaticProductionReconciliation() {
+  const obligation = orderMutationController.consumeAutomaticProductionReconciliation();
+  if (!obligation) return;
+  window.setTimeout(() => {
+    if (activeSection === 'Заказы' && orderMutationController.productionReconciliationRequired(obligation.orderId)) {
+      reconcileProductionOutcome(obligation.orderId, true);
+    }
+  }, 0);
+}
+function resetInvalidatedOrderOperationState(){ orderMutationController.invalidateRequest('readiness'); orderMutationController.invalidateRequest('productionHistory'); orderMutationController.invalidateRequest('productionReconciliation'); ordersState.readinessRequestOwner=null; ordersState.productionHistoryRequestOwner=null; ordersState.productionReconciliationRequestOwner=null; ordersState.readinessLoadingOrderId=null; ordersState.productionReconciliationLoadingOrderId=null; if (!ordersState.productionRequestOwner) { ordersState.productionLoadingOrderId=null; ordersState.productionConfirmingOrderId=null; } ordersState.readinessError=''; ordersState.readinessErrorInfo=null; }
+function advanceOrderWorkspaceContext(clearFeedback=true){ bumpOrderContext(); resetInvalidatedOrderOperationState(); if(clearFeedback) orderMutationController.clearTransientFeedback(); }
 function readinessOwnerMatches(snapshot: OrderRequestSnapshot, id: number){ return orderRequestOwnerMatches(ordersState.readinessRequestOwner, snapshot, id, 'readiness'); }
 function productionOwnerMatches(snapshot: OrderRequestSnapshot, id: number){ return orderRequestOwnerMatches(ordersState.productionRequestOwner, snapshot, id, 'production'); }
 function productionHistoryOwnerMatches(snapshot: OrderRequestSnapshot, id: number){ return orderRequestOwnerMatches(ordersState.productionHistoryRequestOwner, snapshot, id, 'productionHistory'); }
@@ -2296,80 +2334,390 @@ function orderLifecycleOwnerMatches(snapshot: OrderRequestSnapshot, id: number, 
 function finishProductionOwner(snapshot: OrderRequestSnapshot, id: number){ const next=finishProductionOwnerState(ordersState.productionRequestOwner, ordersState.productionLoadingOrderId, snapshot, id); if(!next.finished) return false; ordersState.productionRequestOwner=next.owner; ordersState.productionLoadingOrderId=next.loadingOrderId; return true; }
 function finishProductionReconciliationOwner(snapshot: OrderRequestSnapshot, id: number){ if(!productionReconciliationOwnerMatches(snapshot,id)) return false; ordersState.productionReconciliationRequestOwner=null; ordersState.productionReconciliationLoadingOrderId=null; return true; }
 function finishOrderLifecycleOwner(snapshot: OrderRequestSnapshot, id: number, kind: 'cancel'|'archive'){ if(!orderLifecycleOwnerMatches(snapshot,id,kind)) return false; ordersState.orderLifecycleRequestOwner=null; ordersState.orderLifecycleLoadingOrderId=null; return true; }
-function loadOrders(force=false){ if (orderFormMutationActive() || orderReadinessBusy()) return; if(!force && ordersStatus==='loading') return; if(!force && ordersStatus==='ready') return; const snapshot=orderMutationController.beginRequest('list', currentOrderContext()); ordersStatus='loading'; ordersError=''; render(); Promise.all([getOrders(true), fetchOrderReferenceData()]).then(([orders, refs])=>{ if (!orderRequestCanApply(snapshot)) { finalizeIgnoredListLoading(snapshot); return; } ordersState.items=orders.orders; applyOrderReferenceData(refs); ordersStatus='ready'; ordersError=''; orderRefreshWarning=''; render(); }).catch(()=>{ if (!orderRequestCanApply(snapshot)) { finalizeIgnoredListLoading(snapshot); return; } ordersStatus='error'; ordersError='Не удалось загрузить заказы. Проверьте локальное приложение и попробуйте ещё раз.'; render(); }); }
-function focusOrderFormClient(){ document.querySelector<HTMLElement>('[data-form="order"] [name="client_id"]')?.focus(); }
-function beginOrderReferenceLoad(focusAfterLoad=true){ const snapshot=orderMutationController.beginRequest('reference', currentOrderContext(), { requestedOrderId: ordersState.form.id }); ordersState.referenceLoading=true; ordersState.referenceError=''; render(); fetchOrderReferenceData().then((refs)=>{ if (!orderRequestCanApply(snapshot)) return; applyOrderReferenceData(refs); ordersState.referenceLoading=false; ordersState.referenceError=''; ordersStatus='ready'; render(); if (focusAfterLoad) focusOrderFormClient(); }).catch(()=>{ if (!orderRequestCanApply(snapshot)) return; ordersState.referenceLoading=false; ordersState.referenceError='Не удалось загрузить клиентов и рецепты для заказа. Проверьте локальное приложение и попробуйте ещё раз.'; render(); }); }
+function loadOrders(force=false){
+  if (orderFormMutationActive() || orderReadinessBusy()) return;
+  if(!force && ordersStatus==='loading') return;
+  if(!force && ordersStatus==='ready') return;
+  const retained = ordersStatus === 'ready' && orderReferenceDataIsValid(ordersState);
+  const snapshot=orderMutationController.beginRequest('list', currentOrderContext());
+  ordersStatus='loading'; ordersError='';
+  orderMutationController.setNeutralFeedback(retained ? 'Обновляем заказы. Предыдущий список остаётся доступен…' : 'Загружаем заказы…');
+  render();
+  Promise.all([getOrders(true), fetchOrderReferenceData()]).then(([orders, refs])=>{
+    if (!orderRequestCanApply(snapshot)) return;
+    if (!ordersDtoIsValid(orders) || !orderReferenceDataIsValid(refs)) throw new Error('invalid-order-list-response');
+    ordersState.items=orders.orders; applyOrderReferenceData(refs); ordersStatus='ready'; ordersError=''; orderRefreshWarning='';
+    if (force) {
+      orderMutationController.setSuccessFeedback('Список заказов обновлён.');
+      if (orderMutationController.shouldAnnounce(snapshot, 'polite')) announcePolite('Список заказов обновлён.');
+    } else orderMutationController.clearTransientFeedback();
+    render();
+  }).catch(()=>{
+    if (!orderRequestCanApply(snapshot)) return;
+    if (retained) {
+      ordersStatus='ready';
+      orderRefreshWarning='Не удалось обновить заказы. Предыдущий список оставлен на экране.';
+      orderMutationController.setWarningFeedback(orderRefreshWarning);
+    } else {
+      ordersStatus='error';
+      ordersError='Не удалось загрузить заказы. Проверьте локальное приложение и попробуйте ещё раз.';
+      orderMutationController.setErrorFeedback(ordersError);
+    }
+    if (force && retained && orderMutationController.shouldAnnounce(snapshot, 'polite')) announcePolite(orderRefreshWarning);
+    if (force && !retained && orderMutationController.shouldAnnounce(snapshot, 'assertive')) announceAssertive(ordersError);
+    render();
+  }).finally(()=>{ orderMutationController.settleRequest(snapshot); finalizeIgnoredListLoading(snapshot); });
+}
+function focusOrderFormClient(){ runOrderOwnedFocus('order-form-client',()=>document.querySelector<HTMLElement>('[data-form="order"] [name="client_id"]')?.focus()); }
+function beginOrderReferenceLoad(focusAfterLoad=true){ const snapshot=orderMutationController.beginRequest('reference', currentOrderContext(), { requestedOrderId: ordersState.form.id }); ordersState.referenceLoading=true; ordersState.referenceError=''; render(); fetchOrderReferenceData().then((refs)=>{ if (!orderRequestCanApply(snapshot)) return; if (!orderReferenceDataIsValid(refs)) throw new Error('invalid-order-reference-response'); applyOrderReferenceData(refs); ordersState.referenceLoading=false; ordersState.referenceError=''; ordersStatus='ready'; render(); if (focusAfterLoad) focusOrderFormClient(); }).catch(()=>{ if (!orderRequestCanApply(snapshot)) return; ordersState.referenceLoading=false; ordersState.referenceError='Не удалось загрузить все списки для заказа. Предыдущие согласованные списки сохранены; повторите загрузку.'; render(); }).finally(()=>{ orderMutationController.settleRequest(snapshot); }); }
 function reloadOrderReferencesForForm(){ if (orderFormMutationActive()) return; if (ordersState.referenceLoading) return; beginOrderReferenceLoad(true); }
 function openOrderCreate(){ if (orderFormMutationActive() || orderReadinessBusy()) return; if (ordersState.referenceLoading && ordersState.showForm && ordersState.formMode==='create') return; advanceOrderWorkspaceContext(); orderValidation = emptyFormValidationState(); orderValidationProvenance = emptyOrderValidationProvenance(); orderRefreshWarning = ''; ordersState.formMode='create'; ordersState.form=emptyOrderForm(); ordersState.showForm=true; ordersState.selectedOrder=null; ordersMessage=''; ordersError=''; ordersState.referenceLoading=true; ordersState.referenceError=''; beginOrderReferenceLoad(true); }
-function openOrder(id:number){ if (orderFormMutationActive()) return; advanceOrderWorkspaceContext(); const fallback=ordersState.items.find(i=>i.id===id) ?? null; ordersState.selectedOrder=fallback; ordersState.showForm=false; ordersMessage=''; ordersError=''; const snapshot=orderMutationController.beginRequest('detail', currentOrderContext(), { requestedOrderId: id }); render(); getOrder(id).then((order)=>{ if (!orderRequestCanApply(snapshot) || snapshot.requestedOrderId !== id) return; ordersState.selectedOrder=order; render(); }).catch(()=>{ if (!orderRequestCanApply(snapshot)) return; ordersError='Не удалось открыть карточку заказа. Попробуйте обновить список.'; render(); }); }
-function checkOrderReadiness(id:number,preserveKeyboardFocus=false){ const order=ordersState.selectedOrder?.id===id ? ordersState.selectedOrder : ordersState.items.find(i=>i.id===id) ?? null; const conflicting=[{owner:ordersState.productionRequestOwner,loadingOrderId:ordersState.productionLoadingOrderId},{owner:ordersState.orderLifecycleRequestOwner,loadingOrderId:ordersState.orderLifecycleLoadingOrderId},{owner:ordersState.productionReconciliationRequestOwner,loadingOrderId:ordersState.productionReconciliationLoadingOrderId}]; if(!canStartOrderReadinessRequest(orderFormMutationActive(), order, ordersState.readinessRequestOwner, ordersState.readinessLoadingOrderId, id, conflicting)) return; const preserveFocus=preserveKeyboardFocus||orderReadinessFocusOwned(id); const snapshot=orderMutationController.beginRequest('readiness', currentOrderContext(), { requestedOrderId: id }); ordersState.readinessAttemptGenerationByOrderId[id]=snapshot.generation; ordersState.readinessAttemptOrderUpdatedAtByOrderId[id]=order.updated_at; ordersState.readinessAttemptOperationGenerationByOrderId[id]=orderOperationGeneration(id); ordersState.readinessRequestOwner=ownerFromOrderRequest(snapshot, id, 'readiness'); ordersState.readinessLoadingOrderId=id; ordersState.readinessError=''; ordersState.readinessErrorInfo=null; ordersState.productionConfirmingOrderId=null; announcePolite('Проверяем готовность заказа к изготовлению.'); render(); restoreOrderReadinessFocus(id,preserveFocus); checkOrderProductionReadiness(id).then((result)=>{ if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id || !readinessOwnerMatches(snapshot, id)) return; const keepFocus=orderReadinessFocusOwned(id); ordersState.readinessLoadingOrderId=null; ordersState.readinessRequestOwner=null; if(result.order_id!==id){ ordersState.readinessError='Локальное приложение вернуло результат для другого заказа. Данные не применены; повторите проверку.'; ordersState.readinessErrorInfo=orderOperationError(id,ordersState.readinessError); announceAssertive(ordersState.readinessError); render(); restoreOrderReadinessFocus(id,keepFocus); return; } const currentOrder=ordersState.selectedOrder; if(!orderReadinessAttemptMatches(currentOrder,id,ordersState.readinessAttemptOrderUpdatedAtByOrderId[id],ordersState.readinessAttemptOperationGenerationByOrderId[id],orderOperationGeneration(id))){ announceAssertive('Заказ изменился во время проверки. Повторите проверку готовности.'); render(); restoreOrderReadinessFocus(id,keepFocus); return; } ordersState.readinessByOrderId[id]=result; ordersState.readinessResultGenerationByOrderId[id]=snapshot.generation; ordersState.readinessError=''; ordersState.readinessErrorInfo=null; announcePolite(result.can_produce?'Проверка завершена. Заказ готов к изготовлению.':'Проверка завершена. Есть замечания, которые нужно просмотреть.'); render(); restoreOrderReadinessFocus(id,keepFocus); }).catch((e)=>{ if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id || !readinessOwnerMatches(snapshot, id)) return; const keepFocus=orderReadinessFocusOwned(id); ordersState.readinessLoadingOrderId=null; ordersState.readinessRequestOwner=null; const status=typeof e==='object'&&e&&'status' in e?Number((e as {status?:number}).status):undefined; const message=e instanceof Error?e.message:''; ordersState.readinessError=productionReadinessFailureMessage({status,message,networkFailure:e instanceof TypeError}); ordersState.readinessErrorInfo=orderOperationError(id, ordersState.readinessError); announceAssertive(ordersState.readinessError); render(); restoreOrderReadinessFocus(id,keepFocus); }); }
-function openProductionConfirmation(id:number){ const order=ordersState.selectedOrder?.id===id ? ordersState.selectedOrder : ordersState.items.find(i=>i.id===id) ?? null; const readiness=order ? currentOrderReadiness(order) : null; if(!canOpenOrderProductionConfirmation(orderFormMutationActive()||orderAnyOperationBusy(id)||orderPersistentWriteBusy(), order, readiness)) return; ordersState.productionConfirmingOrderId=id; delete ordersState.productionFailureByOrderId[id]; delete ordersState.productionRecoveryByOrderId[id]; if(!(id in ordersState.productionNotesByOrderId)) ordersState.productionNotesByOrderId[id]=''; render(); focusOrderProduction('confirmation'); }
+function openOrder(id:number){ if (orderFormMutationActive()) return; advanceOrderWorkspaceContext(); const fallback=ordersState.items.find(i=>i.id===id) ?? null; ordersState.selectedOrder=fallback; ordersState.showForm=false; ordersMessage=''; ordersError=''; const snapshot=orderMutationController.beginRequest('detail', currentOrderContext(), { requestedOrderId: id }); render(); getOrder(id).then((order)=>{ if (!orderRequestCanApply(snapshot) || snapshot.requestedOrderId !== id) return; if (!orderDtoIsValid(order,id)) throw new Error('invalid-order-detail-response'); ordersState.selectedOrder=order; render(); }).catch(()=>{ if (!orderRequestCanApply(snapshot)) return; const message='Не удалось обновить карточку заказа. Предыдущие сведения оставлены на экране; обновите список и попробуйте снова.'; if (fallback) orderMutationController.setWarningFeedback(message); else { ordersError=message; orderMutationController.setErrorFeedback(message); } render(); }).finally(()=>{ orderMutationController.settleRequest(snapshot); }); }
+function checkOrderReadiness(id:number,preserveKeyboardFocus=false){
+  const order=ordersState.selectedOrder?.id===id ? ordersState.selectedOrder : ordersState.items.find(i=>i.id===id) ?? null;
+  const conflicting=[{owner:ordersState.productionRequestOwner,loadingOrderId:ordersState.productionLoadingOrderId},{owner:ordersState.orderLifecycleRequestOwner,loadingOrderId:ordersState.orderLifecycleLoadingOrderId},{owner:ordersState.productionReconciliationRequestOwner,loadingOrderId:ordersState.productionReconciliationLoadingOrderId}];
+  if(orderMutationController.productionReconciliationRequired(id)) {
+    const message='Сначала проверьте результат предыдущего изготовления. Новая проверка готовности пока недоступна.';
+    orderMutationController.setWarningFeedback(message); render(); return;
+  }
+  if(!canStartOrderReadinessRequest(orderFormMutationActive(), order, ordersState.readinessRequestOwner, ordersState.readinessLoadingOrderId, id, conflicting)) return;
+  const preserveFocus=preserveKeyboardFocus||orderReadinessFocusOwned(id);
+  const snapshot=orderMutationController.beginRequest('readiness', currentOrderContext(), { requestedOrderId: id });
+  ordersState.readinessAttemptGenerationByOrderId[id]=snapshot.generation;
+  ordersState.readinessAttemptOrderUpdatedAtByOrderId[id]=order.updated_at;
+  ordersState.readinessAttemptOperationGenerationByOrderId[id]=orderOperationGeneration(id);
+  ordersState.readinessRequestOwner=ownerFromOrderRequest(snapshot, id, 'readiness');
+  ordersState.readinessLoadingOrderId=id;
+  ordersState.readinessError=''; ordersState.readinessErrorInfo=null; ordersState.productionConfirmingOrderId=null;
+  orderMutationController.setNeutralFeedback('Проверяем готовность заказа к изготовлению…');
+  render(); restoreOrderReadinessFocus(id,preserveFocus);
+  const finalize=()=>{
+    if(!orderMutationController.settleRequest(snapshot).accepted) return;
+    if(readinessOwnerMatches(snapshot,id)){
+      ordersState.readinessLoadingOrderId=null;
+      ordersState.readinessRequestOwner=null;
+    }
+  };
+  checkOrderProductionReadiness(id).then((result)=>{
+    if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id || !readinessOwnerMatches(snapshot, id)) return;
+    const keepFocus=orderReadinessFocusOwned(id);
+    if(!productionReadinessDtoIsValid(result,id)){
+      throw Object.assign(new Error('invalid-readiness-response'),{untrustedResponse:true});
+    }
+    if(!orderReadinessAttemptMatches(ordersState.selectedOrder,id,ordersState.readinessAttemptOrderUpdatedAtByOrderId[id],ordersState.readinessAttemptOperationGenerationByOrderId[id],orderOperationGeneration(id))){
+      finalize();
+      const message='Заказ изменился во время проверки. Предыдущий результат оставлен только для справки; повторите проверку готовности.';
+      orderMutationController.setWarningFeedback(message);
+      if(orderMutationController.shouldAnnounce(snapshot,'assertive')) announceAssertive(message);
+      render(); restoreOrderReadinessFocus(id,keepFocus); return;
+    }
+    finalize();
+    ordersState.readinessByOrderId[id]=result;
+    ordersState.readinessResultGenerationByOrderId[id]=snapshot.generation;
+    ordersState.readinessError=''; ordersState.readinessErrorInfo=null;
+    orderMutationController.clearTransientFeedback();
+    const message=result.status==='blocked'
+      ? 'Проверка завершена. Есть препятствия, которые нужно устранить.'
+      : result.status==='warning'
+        ? 'Проверка завершена. Изготовление возможно, но сначала прочитайте предупреждения.'
+        : 'Проверка завершена. Заказ готов к изготовлению.';
+    if(orderMutationController.shouldAnnounce(snapshot,'polite')) announcePolite(message);
+    render(); restoreOrderReadinessFocus(id,keepFocus);
+  }).catch((e)=>{
+    if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id || !readinessOwnerMatches(snapshot, id)) return;
+    const keepFocus=orderReadinessFocusOwned(id);
+    finalize();
+    const status=typeof e==='object'&&e&&'status' in e?Number((e as {status?:number}).status):undefined;
+    const message=e instanceof Error?e.message:'';
+    ordersState.readinessError=Boolean((e as {untrustedResponse?:boolean})?.untrustedResponse)
+      ? 'Локальное приложение вернуло неполный результат проверки. Данные не применены; повторите проверку.'
+      : productionReadinessFailureMessage({status,message,networkFailure:e instanceof TypeError});
+    ordersState.readinessErrorInfo=orderOperationError(id, ordersState.readinessError);
+    orderMutationController.setErrorFeedback(ordersState.readinessError);
+    if(orderMutationController.shouldAnnounce(snapshot,'assertive')) announceAssertive(ordersState.readinessError);
+    render(); restoreOrderReadinessFocus(id,keepFocus);
+  }).finally(finalize);
+}
+function openProductionConfirmation(id:number){ const order=ordersState.selectedOrder?.id===id ? ordersState.selectedOrder : ordersState.items.find(i=>i.id===id) ?? null; const readiness=order ? currentOrderReadiness(order) : null; if(orderMutationController.productionReconciliationRequired(id)||!canOpenOrderProductionConfirmation(orderFormMutationActive()||orderAnyOperationBusy(id)||orderPersistentWriteBusy(), order, readiness)) return; ordersState.productionConfirmingOrderId=id; delete ordersState.productionFailureByOrderId[id]; delete ordersState.productionRecoveryByOrderId[id]; if(!(id in ordersState.productionNotesByOrderId)) ordersState.productionNotesByOrderId[id]=''; render(); focusOrderProduction('confirmation'); }
 function cancelProductionConfirmation(id:number){ if (orderFormMutationActive() || orderAnyOperationBusy(id)) return; ordersState.productionConfirmingOrderId=null; delete ordersState.productionFailureByOrderId[id]; delete ordersState.productionRecoveryByOrderId[id]; render(); }
 function confirmProduction(id:number){
   const order=ordersState.selectedOrder?.id===id ? ordersState.selectedOrder : ordersState.items.find(i=>i.id===id) ?? null;
   const readiness=order ? currentOrderReadiness(order) : null;
-  if(ordersState.productionUncertainByOrderId[id]) { ordersState.productionFailureByOrderId[id]='Перед повторной попыткой обновите заказ и историю производства: исход прошлого запроса неизвестен.'; render(); return; }
+  if(orderMutationController.productionReconciliationRequired(id) || ordersState.productionUncertainByOrderId[id]) { ordersState.productionFailureByOrderId[id]='Перед повторной попыткой проверьте точный заказ и его производственную партию: исход прошлого запроса неизвестен.'; render(); return; }
   if(!canOpenOrderProductionConfirmation(orderFormMutationActive()||orderAnyOperationBusy(id)||orderPersistentWriteBusy(), order, readiness) || !canStartOrderWriteRequest(orderFormMutationActive(),order,id,orderOperationStates())) return;
   const previousOperationGeneration=orderOperationGeneration(id);
   const attemptedOperationGeneration=markOrderOperationStarted(id);
   const snapshot=orderMutationController.beginRequest('production', currentOrderContext(), { requestedOrderId: id });
   ordersState.productionRequestOwner=ownerFromOrderRequest(snapshot, id, 'production');
   ordersState.productionLoadingOrderId=id;
-   delete ordersState.productionFailureByOrderId[id]; delete ordersState.productionRefreshWarningByOrderId[id]; delete ordersState.productionRecoveryByOrderId[id];
-  announcePolite('Начинаем изготовление заказа.');
+  delete ordersState.productionFailureByOrderId[id]; delete ordersState.productionRefreshWarningByOrderId[id]; delete ordersState.productionRecoveryByOrderId[id];
+  orderMutationController.setNeutralFeedback('Подтверждаем изготовление заказа…');
   render();
+  const finalize=()=>{
+    if(!orderMutationController.settleRequest(snapshot).accepted) return;
+    finishProductionOwner(snapshot,id);
+  };
   produceOrder(id, ordersState.productionNotesByOrderId[id]).then((batch)=>{
-    if (!productionOwnerMatches(snapshot,id)) return undefined;
-    if (!productionResponseBelongsToOrder(batch, id)) { throw Object.assign(new Error('Локальное приложение вернуло результат для другого заказа. Изготовление нужно проверить обновлением заказа.'), { status: 500 }); }
-    ordersState.productionByOrderId[id]=batch; delete ordersState.readinessByOrderId[id]; delete ordersState.productionUncertainByOrderId[id]; delete ordersState.productionRecoveryByOrderId[id]; delete ordersState.productionFailureByOrderId[id]; ordersState.productionNotesByOrderId[id]=''; if (ordersState.productionConfirmingOrderId===id) ordersState.productionConfirmingOrderId=null;
-    const showSuccess=ordersState.selectedOrder?.id===id && orderRequestCanApply(snapshot);
-    if(showSuccess) announcePolite('Изготовление подтверждено. Производственная партия создана.');
-    if (!showSuccess) { finishProductionOwner(snapshot,id); render(); return undefined; }
-    return Promise.all([getOrders(true), getOrder(id)]).then((result)=>({ result, batch }));
-  }).then((payload)=>{
-    if (!payload || !productionOwnerMatches(snapshot,id)) return;
-    if (!orderRequestCanApply(snapshot) || ordersState.selectedOrder?.id !== id) { finishProductionOwner(snapshot,id); render(); return; }
-    const [orders, updated]=payload.result; ordersState.items=orders.orders; ordersState.selectedOrder=updated; finishProductionOwner(snapshot,id); render(); focusOrderProduction('success');
+    if (!productionOwnerMatches(snapshot,id)) return;
+    if (!productionBatchDtoIsValid(batch,id)) {
+      throw Object.assign(new Error('invalid-production-response'), { untrustedResponse:true });
+    }
+    const canPresent=orderRequestCanApply(snapshot)&&ordersState.selectedOrder?.id===id;
+    finalize();
+    if(!canPresent){
+      orderMutationController.requireProductionReconciliation(snapshot,id);
+      queueAutomaticProductionReconciliation();
+      return;
+    }
+    ordersState.productionByOrderId[id]=batch;
+    delete ordersState.readinessByOrderId[id]; delete ordersState.productionUncertainByOrderId[id];
+    delete ordersState.productionRecoveryByOrderId[id]; delete ordersState.productionFailureByOrderId[id];
+    ordersState.productionNotesByOrderId[id]='';
+    if (ordersState.productionConfirmingOrderId===id) ordersState.productionConfirmingOrderId=null;
+    orderMutationController.setSuccessFeedback('Изготовление подтверждено. Производственная партия создана.');
+    if(orderMutationController.shouldAnnounce(snapshot,'polite')) announcePolite('Изготовление подтверждено. Производственная партия создана.');
+    render(); focusOrderProduction('success');
+    const refresh=orderMutationController.beginRequest('productionReconciliation',currentOrderContext(),{requestedOrderId:id});
+    Promise.all([getOrder(id),getProductionBatchByOrder(id)]).then(([updated,confirmedBatch])=>{
+      if(!orderMutationController.canApplyRequest(refresh,currentOrderContext())||ordersState.selectedOrder?.id!==id) return;
+      if(!productionReconciliationIsCoherent(updated,confirmedBatch,id)) throw new Error('invalid-production-refresh');
+      ordersState.selectedOrder=updated;
+      ordersState.items=[updated,...ordersState.items.filter((item)=>item.id!==id)];
+      ordersState.productionByOrderId[id]=confirmedBatch;
+      render();
+    }).catch(()=>{
+      if(!orderMutationController.canApplyRequest(refresh,currentOrderContext())||ordersState.selectedOrder?.id!==id) return;
+      ordersState.productionRefreshWarningByOrderId[id]='Изготовление выполнено, но точные сведения заказа и партии не удалось перечитать. Повторять изготовление не нужно.';
+      orderMutationController.setWarningFeedback(ordersState.productionRefreshWarningByOrderId[id],true);
+      if(orderMutationController.shouldAnnounce(refresh,'polite')) announcePolite(ordersState.productionRefreshWarningByOrderId[id]);
+      render();
+    }).finally(()=>{orderMutationController.settleRequest(refresh);});
   }).catch((e)=>{
     if(!productionOwnerMatches(snapshot,id)) return;
-    const showError=orderRequestCanApply(snapshot)&&ordersState.selectedOrder?.id===id;
-    const alreadySucceeded=Boolean(ordersState.productionByOrderId[id]);
-    finishProductionOwner(snapshot,id);
-    if(alreadySucceeded){ if(showError){ ordersState.productionRefreshWarningByOrderId[id]='Изготовление выполнено, но текущие списки не удалось обновить. Обновите заказ безопасно; повторять изготовление не нужно.'; if(ordersState.productionConfirmingOrderId===id) ordersState.productionConfirmingOrderId=null; announceAssertive(ordersState.productionRefreshWarningByOrderId[id]); focusOrderProduction('success'); } }
-    else { const presentation=productionConfirmationFailurePresentation(extractProductionApiFailure(e)); restoreOrderOperationGenerationForProductionAttempt(id, previousOperationGeneration, attemptedOperationGeneration, !presentation.invalidateReadiness && !presentation.requireRefreshBeforeRetry); if(presentation.invalidateReadiness) delete ordersState.readinessByOrderId[id]; if(presentation.closeConfirmation && ordersState.productionConfirmingOrderId===id) ordersState.productionConfirmingOrderId=null; if(presentation.requireRefreshBeforeRetry) ordersState.productionUncertainByOrderId[id]=true; ordersState.productionFailureByOrderId[id]=presentation.message; ordersState.productionRecoveryByOrderId[id]=presentation.nextAction; if(showError){ announceAssertive(ordersState.productionFailureByOrderId[id]); setTimeout(()=>focusOrderProduction('failure'),0); } }
-    render();
-  });
+    const canPresent=orderRequestCanApply(snapshot)&&ordersState.selectedOrder?.id===id;
+    const untrusted=Boolean((e as {untrustedResponse?:boolean})?.untrustedResponse);
+    const presentation=productionConfirmationFailurePresentation(extractProductionApiFailure(e));
+    const uncertain=untrusted||presentation.kind==='network_uncertain'||presentation.kind==='unexpected';
+    finalize();
+    if(uncertain){
+      orderMutationController.requireProductionReconciliation(snapshot,id);
+      if(canPresent){
+        delete ordersState.readinessByOrderId[id];
+        if(ordersState.productionConfirmingOrderId===id) ordersState.productionConfirmingOrderId=null;
+        ordersState.productionUncertainByOrderId[id]=true;
+        ordersState.productionFailureByOrderId[id]=untrusted
+          ? 'Ответ об изготовлении оказался неполным. Исход изготовления нужно проверить по точному заказу и его партии.'
+          : presentation.message;
+        ordersState.productionRecoveryByOrderId[id]='Проверьте точный заказ и производственную партию. Повторное изготовление до проверки заблокировано.';
+        orderMutationController.setWarningFeedback(ordersState.productionFailureByOrderId[id]);
+        if(orderMutationController.shouldAnnounce(snapshot,'assertive')) announceAssertive(ordersState.productionFailureByOrderId[id]);
+        render(); focusOrderProduction('failure');
+      }
+      queueAutomaticProductionReconciliation();
+      return;
+    }
+    if(!canPresent) return;
+    restoreOrderOperationGenerationForProductionAttempt(id, previousOperationGeneration, attemptedOperationGeneration, !presentation.invalidateReadiness);
+    if(presentation.invalidateReadiness) delete ordersState.readinessByOrderId[id];
+    if(presentation.closeConfirmation && ordersState.productionConfirmingOrderId===id) ordersState.productionConfirmingOrderId=null;
+    ordersState.productionFailureByOrderId[id]=presentation.message;
+    ordersState.productionRecoveryByOrderId[id]=presentation.nextAction;
+    orderMutationController.setErrorFeedback(presentation.message);
+    if(orderMutationController.shouldAnnounce(snapshot,'assertive')) announceAssertive(presentation.message);
+    render(); focusOrderProduction('failure');
+  }).finally(finalize);
 }
 function apiErrorCode(e: unknown): string { const payload = typeof e === 'object' && e && 'payload' in e ? (e as {payload?: unknown}).payload : null; const detail = payload && typeof payload === 'object' && 'detail' in payload ? (payload as {detail?: unknown}).detail : null; return detail && typeof detail === 'object' && 'code' in detail ? String((detail as {code?: unknown}).code ?? '') : ''; }
-function focusOrderProduction(anchor:'confirmation'|'failure'|'success'){ requestAnimationFrame(()=>{ const el=document.querySelector<HTMLElement>(`[data-order-production-focus-anchor="${anchor}"]`); if(el) el.focus(); }); }
-function reconcileProductionOutcome(id:number){
+function focusOrderProduction(anchor:'confirmation'|'failure'|'success'){ runOrderOwnedFocus(`production:${anchor}`,()=>document.querySelector<HTMLElement>(`[data-order-production-focus-anchor="${anchor}"]`)?.focus(),true); }
+function focusOrderDetail(){ runOrderOwnedFocus('order-detail',()=>document.querySelector<HTMLElement>('[data-order-detail-focus-anchor="true"]')?.focus(),true); }
+function focusOrderValidation(){ runOrderOwnedFocus('order-validation',()=>document.querySelector<HTMLElement>('[data-form="order"] [aria-invalid="true"]')?.focus(),true); }
+function reconcileProductionOutcome(id:number,automatic=false){
+  if(!orderMutationController.canStartProductionReconciliation(id)) return;
   if(orderFormMutationActive() || orderPersistentWriteBusy() || orderBoundOperationActive(orderOperationStates(), id)) return;
   const snapshot=orderMutationController.beginRequest('productionReconciliation', currentOrderContext(), { requestedOrderId:id });
   ordersState.productionReconciliationRequestOwner=ownerFromOrderRequest(snapshot,id,'productionReconciliation');
   ordersState.productionReconciliationLoadingOrderId=id;
   ordersState.productionRecoveryByOrderId[id]='Проверяем заказ и производственную партию по локальным данным…';
-  render(); focusOrderProduction('failure');
-  Promise.allSettled([getOrder(id), getProductionBatchByOrder(id)]).then(([orderResult,batchResult])=>{
-    if(!productionReconciliationOwnerMatches(snapshot,id) || !orderMutationController.isCurrentRequest(snapshot)) return;
-    const order=orderResult.status==='fulfilled'?orderResult.value:null;
-    const batch=batchResult.status==='fulfilled'?batchResult.value:null;
+  orderMutationController.setNeutralFeedback('Проверяем результат изготовления…');
+  render(); if(!automatic&&ordersState.selectedOrder?.id===id) focusOrderProduction('failure');
+  const finalize=()=>{
+    if(!orderMutationController.settleRequest(snapshot).accepted) return;
     finishProductionReconciliationOwner(snapshot,id);
-    if(batch && productionResponseBelongsToOrder(batch,id)){
-      ordersState.productionByOrderId[id]=batch; delete ordersState.readinessByOrderId[id]; delete ordersState.productionUncertainByOrderId[id]; delete ordersState.productionRecoveryByOrderId[id]; delete ordersState.productionFailureByOrderId[id]; if(ordersState.productionConfirmingOrderId===id) ordersState.productionConfirmingOrderId=null; if(order && ordersState.selectedOrder?.id===id) ordersState.selectedOrder=order; render(); if(ordersState.selectedOrder?.id===id) focusOrderProduction('success'); return;
-    }
-    const batchMissing=batchResult.status==='rejected' && typeof batchResult.reason==='object' && batchResult.reason && 'status' in batchResult.reason && Number((batchResult.reason as {status?:number}).status)===404;
-    if(order && batchMissing && order.status!=='produced' && order.is_active && !orderProductionClosed(order)){
-      delete ordersState.productionUncertainByOrderId[id]; delete ordersState.readinessByOrderId[id]; if(ordersState.selectedOrder?.id===id) ordersState.productionConfirmingOrderId=null; ordersState.productionFailureByOrderId[id]='Изготовление не найдено по актуальным данным. Запустите проверку готовности заново перед новой попыткой.'; ordersState.productionRecoveryByOrderId[id]='Нажмите «Проверить изготовление», чтобы получить новый текущий результат готовности.'; if(ordersState.selectedOrder?.id===id) ordersState.selectedOrder=order; render(); if(ordersState.selectedOrder?.id===id) focusOrderProduction('failure'); return;
-    }
-    ordersState.productionUncertainByOrderId[id]=true; ordersState.productionFailureByOrderId[id]='Исход изготовления всё ещё не подтверждён. Повторите безопасную проверку результата.'; ordersState.productionRecoveryByOrderId[id]='Проверка должна получить и заказ, и производственную партию. До этого повторное изготовление заблокировано.'; render(); if(ordersState.selectedOrder?.id===id) focusOrderProduction('failure');
-  }).catch(()=>{
+  };
+  Promise.all([getOrder(id), getProductionBatchByOrder(id)]).then(([order,batch])=>{
     if(!productionReconciliationOwnerMatches(snapshot,id) || !orderMutationController.isCurrentRequest(snapshot)) return;
-    finishProductionReconciliationOwner(snapshot,id); ordersState.productionUncertainByOrderId[id]=true; ordersState.productionFailureByOrderId[id]='Исход изготовления всё ещё не подтверждён. Повторите безопасную проверку результата.'; ordersState.productionRecoveryByOrderId[id]='Проверка должна получить и заказ, и производственную партию. До этого повторное изготовление заблокировано.'; render(); if(ordersState.selectedOrder?.id===id) focusOrderProduction('failure');
-  });
+    const confirmed=orderMutationController.completeProductionReconciliation(snapshot,order,batch);
+    if(!confirmed) throw Object.assign(new Error('incoherent-production-reconciliation'),{reconciliationIncomplete:true});
+    finalize();
+    ordersState.productionByOrderId[id]=batch;
+    delete ordersState.readinessByOrderId[id]; delete ordersState.productionUncertainByOrderId[id];
+    delete ordersState.productionRecoveryByOrderId[id]; delete ordersState.productionFailureByOrderId[id];
+    if(ordersState.productionConfirmingOrderId===id) ordersState.productionConfirmingOrderId=null;
+    ordersState.items=[order,...ordersState.items.filter((item)=>item.id!==id)];
+    if(ordersState.selectedOrder?.id===id){
+      ordersState.selectedOrder=order;
+      orderMutationController.setSuccessFeedback('Изготовление подтверждено по заказу и производственной партии.');
+      if(!automatic&&orderMutationController.shouldAnnounce(snapshot,'polite')) announcePolite('Изготовление подтверждено по заказу и производственной партии.');
+      render(); focusOrderProduction('success');
+    } else render();
+  }).catch(()=>{
+    if(!productionReconciliationOwnerMatches(snapshot,id)) return;
+    finalize();
+    ordersState.productionUncertainByOrderId[id]=true;
+    ordersState.productionFailureByOrderId[id]='Исход изготовления всё ещё не подтверждён.';
+    ordersState.productionRecoveryByOrderId[id]='Нужны одновременно точный заказ в состоянии «Изготовлен» и принадлежащая ему производственная партия. До этого повторное изготовление заблокировано.';
+    if(ordersState.selectedOrder?.id===id){
+      orderMutationController.setWarningFeedback(`${ordersState.productionFailureByOrderId[id]} ${ordersState.productionRecoveryByOrderId[id]}`);
+      if(!automatic&&orderMutationController.shouldAnnounce(snapshot,'assertive')) announceAssertive(ordersState.productionFailureByOrderId[id]);
+      render(); if(!automatic) focusOrderProduction('failure');
+    }
+  }).finally(finalize);
 }
 function editOrder(id:number){ if (orderFormMutationActive() || orderAnyOperationBusy(id)) return; const o=ordersState.items.find(i=>i.id===id); if(!o) return; if (ordersState.referenceLoading && ordersState.showForm && ordersState.formMode==='edit' && ordersState.form.id===id) return; advanceOrderWorkspaceContext(); orderValidation = emptyFormValidationState(); orderValidationProvenance = emptyOrderValidationProvenance(); orderRefreshWarning = ''; ordersState.selectedOrder=o; ordersState.formMode='edit'; ordersState.form=formFromOrder(o); ordersState.showForm=true; ordersMessage=''; ordersError=''; ordersState.referenceLoading=true; ordersState.referenceError=''; beginOrderReferenceLoad(true); }
-function submitOrderForm(event: SubmitEvent){ event.preventDefault(); if(orderReadinessBusy()) return; const form=event.currentTarget as HTMLFormElement; const payload=orderPayloadFromForm(form); saveOrderFormDraftFromDom(); const mode=ordersState.formMode; const editedId=ordersState.form.id; if(editedId&&orderAnyOperationBusy(editedId)) return; const sourceType=ordersState.form.source_type; const submitContext=currentOrderContext(); const submit=orderMutationController.beginSubmit(submitContext); if (!submit) return; if(mode==='edit'&&editedId) markOrderOperationStarted(editedId); orderValidation=emptyFormValidationState(); orderValidationProvenance=emptyOrderValidationProvenance(); orderRefreshWarning=''; ordersError=''; applyValidationToOrderForm(orderValidation); disableOrderMutationControls(); const request=mode==='edit' && editedId ? updateOrder(editedId, payload) : createOrder(payload); request.then((saved)=>{ if (!orderMutationController.canApplySubmit(submit, currentOrderContext())) return Promise.reject({ stale:true }); orderValidation=emptyFormValidationState(); orderValidationProvenance=emptyOrderValidationProvenance(); ordersMessage=mode==='edit'?'Заказ сохранён.':'Заказ создан.'; ordersError=''; ordersState.items = [saved, ...ordersState.items.filter((item)=>item.id!==saved.id)]; ordersState.selectedOrder=saved; ordersState.showForm=false; orderMutationController.finishSubmit(submit); advanceOrderWorkspaceContext(); restoreOrderMutationControls(); render(); const refreshContext=currentOrderContext(); const refresh=orderMutationController.beginRequest('postSaveRefresh', refreshContext, { savedOrderId: saved.id }); return getOrders(true).then((response)=>{ if (!orderMutationController.canApplyPostSaveRefresh(refresh, currentOrderContext())) return; ordersState.items=response.orders; orderRefreshWarning=''; render(); }).catch(()=>{ if (!orderMutationController.canApplyPostSaveRefresh(refresh, currentOrderContext())) return; orderRefreshWarning='Заказ сохранён, но список не удалось обновить автоматически.'; render(); }); }).catch((e)=>{ if ((e as {stale?: boolean})?.stale || !orderMutationController.canApplySubmit(submit, currentOrderContext())) return; orderMutationController.finishSubmit(submit); ordersMessage=''; orderRefreshWarning=''; ordersState.formMode=mode; ordersState.form.id=editedId; ordersState.showForm=true; ordersError=''; const normalized=normalizeOrderValidation(apiValidationPayload(e), sourceType); orderValidation=normalized.validation; orderValidationProvenance=normalized.provenance; orderMutationController.markTargetedValidationApplied(); applyValidationToOrderForm(orderValidation); restoreOrderMutationControls(); announceAssertive('Проверьте заказ. Ошибки показаны рядом с полями.'); }); }
-function runOrderLifecycle(id:number,kind:'cancel'|'archive'){ const order=ordersState.selectedOrder?.id===id?ordersState.selectedOrder:ordersState.items.find(i=>i.id===id)??null; if(!canStartOrderWriteRequest(orderFormMutationActive(),order,id,orderOperationStates())) return; const confirmed=kind==='cancel'?window.confirm('Отменить заказ? Заказ останется в истории, склад и производство не будут затронуты.'):window.confirm('Архивировать заказ? Заказ не будет удалён и останется в истории.'); if(!confirmed) return; markOrderOperationStarted(id); const snapshot=orderMutationController.beginRequest(kind,currentOrderContext(),{requestedOrderId:id}); ordersState.orderLifecycleRequestOwner=ownerFromOrderRequest(snapshot,id,kind); ordersState.orderLifecycleLoadingOrderId=id; ordersError=''; render(); const request=kind==='cancel'?cancelOrderRequest(id):archiveOrderRequest(id); request.then((saved)=>{ if(!orderLifecycleOwnerMatches(snapshot,id,kind)) return; if(!orderRequestCanApply(snapshot)||ordersState.selectedOrder?.id!==id){ finishOrderLifecycleOwner(snapshot,id,kind); render(); return; } ordersMessage=kind==='cancel'?'Заказ отменён.':'Заказ архивирован.'; ordersError=''; ordersState.selectedOrder=saved; return getOrders(true); }).then((response)=>{ if(!response||!orderLifecycleOwnerMatches(snapshot,id,kind)) return; if(orderRequestCanApply(snapshot)&&ordersState.selectedOrder?.id===id) ordersState.items=response.orders; finishOrderLifecycleOwner(snapshot,id,kind); render(); }).catch((e)=>{ if(!orderLifecycleOwnerMatches(snapshot,id,kind)) return; const showError=orderRequestCanApply(snapshot)&&ordersState.selectedOrder?.id===id; finishOrderLifecycleOwner(snapshot,id,kind); if(showError) ordersError=humanOrderError(e); render(); }); }
+function submitOrderForm(event: SubmitEvent){
+  event.preventDefault();
+  if(orderReadinessBusy()) return;
+  const form=event.currentTarget as HTMLFormElement;
+  const payload=orderPayloadFromForm(form);
+  saveOrderFormDraftFromDom();
+  const mode=ordersState.formMode;
+  const editedId=ordersState.form.id;
+  if(editedId&&orderAnyOperationBusy(editedId)) return;
+  const sourceType=ordersState.form.source_type;
+  const submit=orderMutationController.beginSubmit(currentOrderContext());
+  if (!submit) return;
+  const finalize=()=>{
+    if(!orderMutationController.finishSubmit(submit)) return;
+    if(orderMutationController.ownsRoute()) restoreOrderMutationControls();
+  };
+  if(mode==='edit'&&editedId) markOrderOperationStarted(editedId);
+  orderValidation=emptyFormValidationState(); orderValidationProvenance=emptyOrderValidationProvenance();
+  orderRefreshWarning=''; ordersError=''; ordersMessage='';
+  orderMutationController.setNeutralFeedback(mode==='edit'?'Сохраняем заказ…':'Создаём заказ…');
+  applyValidationToOrderForm(orderValidation); disableOrderMutationControls();
+  const request=mode==='edit' && editedId ? updateOrder(editedId, payload) : createOrder(payload);
+  request.then((saved)=>{
+    if (!orderMutationController.canApplySubmit(submit, currentOrderContext())) { finalize(); return; }
+    if (!orderDtoIsValid(saved, mode==='edit' ? editedId ?? undefined : undefined)) {
+      throw Object.assign(new Error('invalid-order-mutation-response'), { untrustedResponse:true });
+    }
+    finalize();
+    orderValidation=emptyFormValidationState(); orderValidationProvenance=emptyOrderValidationProvenance();
+    ordersMessage=mode==='edit'?'Заказ сохранён.':'Заказ создан.';
+    orderMutationController.setSuccessFeedback(ordersMessage);
+    ordersState.items = [saved, ...ordersState.items.filter((item)=>item.id!==saved.id)];
+    ordersState.selectedOrder=saved; ordersState.showForm=false;
+    if (mode === 'edit') delete ordersState.readinessByOrderId[saved.id];
+    advanceOrderWorkspaceContext(false);
+    if (orderMutationController.shouldAnnounce(submit, 'polite')) announcePolite(ordersMessage);
+    render(); focusOrderDetail();
+    const refresh=orderMutationController.beginRequest('postSaveRefresh', currentOrderContext(), { savedOrderId: saved.id });
+    getOrders(true).then((response)=>{
+      if (!orderMutationController.canApplyPostSaveRefresh(refresh, currentOrderContext())) return;
+      if (!ordersDtoIsValid(response)) throw new Error('invalid-order-refresh-response');
+      ordersState.items=response.orders; orderRefreshWarning=''; render();
+    }).catch(()=>{
+      if (!orderMutationController.canApplyPostSaveRefresh(refresh, currentOrderContext())) return;
+      orderRefreshWarning='Заказ сохранён, но список не удалось обновить автоматически. Сохранённая карточка остаётся актуальной.';
+      orderMutationController.setWarningFeedback(orderRefreshWarning, true);
+      if (orderMutationController.shouldAnnounce(refresh, 'polite')) announcePolite(orderRefreshWarning);
+      render();
+    }).finally(()=>{ orderMutationController.settleRequest(refresh); });
+  }).catch((e)=>{
+    const canPresent=orderMutationController.canApplySubmit(submit, currentOrderContext());
+    finalize();
+    if (!canPresent) return;
+    ordersMessage=''; orderRefreshWarning='';
+    ordersState.formMode=mode; ordersState.form.id=editedId; ordersState.showForm=true;
+    const ambiguous=e instanceof TypeError || Boolean((e as {untrustedResponse?:boolean})?.untrustedResponse);
+    if (ambiguous) {
+      ordersError='';
+      const message=mode==='create'
+        ? 'Не удалось подтвердить результат создания заказа. Черновик сохранён. Не отправляйте его повторно, пока не проверите список заказов.'
+        : 'Не удалось подтвердить результат сохранения заказа. Черновик сохранён. Обновите карточку перед повторной отправкой.';
+      orderRefreshWarning=message;
+      orderMutationController.setWarningFeedback(message);
+      if (orderMutationController.shouldAnnounce(submit, 'assertive')) announceAssertive(message);
+      render();
+      return;
+    }
+    ordersError='';
+    const normalized=normalizeOrderValidation(apiValidationPayload(e), sourceType);
+    orderValidation=normalized.validation; orderValidationProvenance=normalized.provenance;
+    orderMutationController.markTargetedValidationApplied();
+    applyValidationToOrderForm(orderValidation);
+    orderMutationController.setErrorFeedback('Проверьте заказ. Ошибки показаны рядом с полями.');
+    if (orderMutationController.shouldAnnounce(submit, 'assertive')) announceAssertive('Проверьте заказ. Ошибки показаны рядом с полями.');
+    render(); focusOrderValidation();
+  }).finally(finalize);
+}
+function runOrderLifecycle(id:number,kind:'cancel'|'archive'){
+  const order=ordersState.selectedOrder?.id===id?ordersState.selectedOrder:ordersState.items.find(i=>i.id===id)??null;
+  if(!canStartOrderWriteRequest(orderFormMutationActive(),order,id,orderOperationStates())) return;
+  if (orderMutationController.productionReconciliationRequired(id)) {
+    const message='Сначала подтвердите результат изготовления этого заказа. Отмена и архивирование пока недоступны.';
+    orderMutationController.setWarningFeedback(message); render(); return;
+  }
+  const confirmed=kind==='cancel'
+    ? window.confirm('Отменить заказ? Заказ останется в истории, склад и производство не будут затронуты.')
+    : window.confirm('Архивировать заказ? Заказ не будет удалён и останется в истории.');
+  if(!confirmed) return;
+  markOrderOperationStarted(id);
+  const snapshot=orderMutationController.beginRequest(kind,currentOrderContext(),{requestedOrderId:id});
+  ordersState.orderLifecycleRequestOwner=ownerFromOrderRequest(snapshot,id,kind);
+  ordersState.orderLifecycleLoadingOrderId=id;
+  ordersError=''; ordersMessage='';
+  orderMutationController.setNeutralFeedback(kind==='cancel'?'Отменяем заказ…':'Архивируем заказ…');
+  render();
+  const finalize=()=>{
+    if(!orderMutationController.settleRequest(snapshot).accepted) return;
+    finishOrderLifecycleOwner(snapshot,id,kind);
+  };
+  const request=kind==='cancel'?cancelOrderRequest(id):archiveOrderRequest(id);
+  request.then((saved)=>{
+    if(!orderLifecycleOwnerMatches(snapshot,id,kind)) return;
+    const canPresent=orderRequestCanApply(snapshot)&&ordersState.selectedOrder?.id===id;
+    if(!orderDtoIsValid(saved,id)) throw Object.assign(new Error('invalid-order-lifecycle-response'),{untrustedResponse:true});
+    finalize();
+    if(!canPresent) return;
+    ordersMessage=kind==='cancel'?'Заказ отменён.':'Заказ архивирован.';
+    ordersError=''; orderRefreshWarning='';
+    ordersState.selectedOrder=saved;
+    ordersState.items=[saved,...ordersState.items.filter((item)=>item.id!==id)];
+    delete ordersState.readinessByOrderId[id];
+    orderMutationController.setSuccessFeedback(ordersMessage);
+    if(orderMutationController.shouldAnnounce(snapshot,'polite')) announcePolite(ordersMessage);
+    render(); focusOrderDetail();
+    const refresh=orderMutationController.beginRequest('postSaveRefresh',currentOrderContext(),{savedOrderId:id,requestedOrderId:id});
+    getOrders(true).then((response)=>{
+      if(!orderMutationController.canApplyPostSaveRefresh(refresh,currentOrderContext())) return;
+      if(!ordersDtoIsValid(response)) throw new Error('invalid-order-lifecycle-refresh');
+      ordersState.items=response.orders; render();
+    }).catch(()=>{
+      if(!orderMutationController.canApplyPostSaveRefresh(refresh,currentOrderContext())) return;
+      orderRefreshWarning=`${ordersMessage} Но список не удалось обновить автоматически. Карточка сохранена, повторять действие не нужно.`;
+      orderMutationController.setWarningFeedback(orderRefreshWarning,true);
+      if(orderMutationController.shouldAnnounce(refresh,'polite')) announcePolite(orderRefreshWarning);
+      render();
+    }).finally(()=>{orderMutationController.settleRequest(refresh);});
+  }).catch((e)=>{
+    if(!orderLifecycleOwnerMatches(snapshot,id,kind)) return;
+    const canPresent=orderRequestCanApply(snapshot)&&ordersState.selectedOrder?.id===id;
+    finalize();
+    if(!canPresent) return;
+    ordersMessage='';
+    if(e instanceof TypeError || Boolean((e as {untrustedResponse?:boolean})?.untrustedResponse)){
+      orderRefreshWarning='Не удалось подтвердить результат действия. Обновите точную карточку заказа перед повторной попыткой.';
+      orderMutationController.setWarningFeedback(orderRefreshWarning);
+      if(orderMutationController.shouldAnnounce(snapshot,'assertive')) announceAssertive(orderRefreshWarning);
+    }else{
+      ordersError=humanOrderError(e);
+      orderMutationController.setErrorFeedback(ordersError);
+      if(orderMutationController.shouldAnnounce(snapshot,'assertive')) announceAssertive(ordersError);
+    }
+    render();
+  }).finally(finalize);
+}
 function cancelOrder(id:number){ runOrderLifecycle(id,'cancel'); }
 function archiveOrder(id:number){ runOrderLifecycle(id,'archive'); }
 function humanProductionError(e: unknown) { return productionConfirmationFailurePresentation(extractProductionApiFailure(e)).message; }

@@ -1293,3 +1293,17 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
 - Focused backend domain verification passed 186/186. Complete backend comparison collected 496: 492 passed, the same 4 accepted failures, 0 skipped; branch-only failure delta 0.
 - Publication SHA is recorded after the correction commit and push.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-24 — B3.6 Order-to-production shared-feedback lifecycle
+
+- B3.4+B3.5 is DONE: PR #137 merged at `10e985229e8020fcf98c67427cde889b5cd934f8`. B3.6 started from that exact `main` SHA on `codex/b3.6-order-production-feedback`.
+- Extended the existing `OrderMutationController` with `/orders` route ownership, exact request settlement, one-result feedback channels, request-owned announcements, full Order/readiness/ProductionBatch DTO boundaries, and a structured exact original-Order production reconciliation obligation.
+- Order list, reference and detail reads now reject stale/wrong-context responses, retain readable data on refresh failure, and apply the multi-source reference snapshot atomically.
+- Create/update, cancel/archive, readiness and production use exact owners and exactly-once local finalizers. Drafts survive deterministic or ambiguous failures; known mutation success remains success when a later GET fails.
+- Production sends one POST per accepted confirmation and never retries it automatically. Network-uncertain or invalid outcomes block unsafe actions; at most one automatic exact reconciliation attempt is consumed, failures do not loop, and manual recovery remains available.
+- Only `GET /api/orders/{original_id}` plus `GET /api/production-batches/by-order/{original_id}`, both fully validated and coherent, can clear production uncertainty. Lists, partial reads, wrong Order, wrong batch, stale or detached reads cannot unlock it.
+- Focused frontend: Order production feedback 19/19 twice; Order mutation lifecycle 32/32 twice; readiness presentation 15/15 twice.
+- Frontend regressions: form validation 19/19; targeted validation 62/62; Dashboard/Onboarding 17/17; Help 3/3; Alerts 56/56; Purchases 116/116; Local Artifacts/Reports 32/32; Formula/Client 60/60; Inventory/Catalog 62/62; core wrapper 122/122; production build passed.
+- Backend: focused Orders/Production/Stock suites 95/95. Complete suite collected 496, passed 492, failed the same 4 accepted baseline tests, skipped 0; branch-only backend failure delta 0.
+- No backend production, migration, dependency, lockfile, database, smoke runner, screenshot, or browser artifact belongs to this slice.
+- Smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

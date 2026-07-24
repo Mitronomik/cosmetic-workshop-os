@@ -5,6 +5,7 @@ export type OrderSourceType = 'recipe_version' | 'client_recipe';
 export type OrderContextSnapshot = {
   contextToken: number;
   targetedValidationToken: number;
+  routeGeneration: number;
   formMode: OrderFormMode;
   editedOrderId: number | null;
   selectedOrderId: number | null;
@@ -17,10 +18,42 @@ export type OrderRequestSnapshot = OrderContextSnapshot & {
   kind: OrderRequestKind;
   generation: number;
   submitToken: number;
+  reconciliationEpoch?: number;
   savedOrderId?: number | null;
   requestedOrderId?: number | null;
 };
 export type OrderSubmitSnapshot = OrderContextSnapshot & { submitToken: number };
+
+export type OrderSharedFeedback = {
+  neutral: string;
+  success: string;
+  warning: string;
+  error: string;
+};
+
+export type OrderRequestSettlement = {
+  accepted: boolean;
+  canPresent: boolean;
+  detached: boolean;
+};
+
+export type OrderFocusTicket = {
+  routeGeneration: number;
+  contextToken: number;
+  targetedValidationToken: number;
+  focusToken: number;
+  target: string;
+};
+
+export type OrderProductionReconciliationObligation = {
+  operation: 'production';
+  orderId: number;
+  productionGeneration: number;
+  routeGeneration: number;
+  epoch: number;
+  detachedSettlement: boolean;
+  automaticAttemptConsumed: boolean;
+};
 
 export type OrderTransientRequestOwner = {
   kind: 'readiness' | 'production' | 'productionHistory' | 'productionReconciliation' | 'cancel' | 'archive';
@@ -72,6 +105,14 @@ export class OrderMutationController {
   private targetedValidationToken = 0;
   private submitToken = 0;
   private submitting = false;
+  private routeGeneration = 0;
+  private routeActive: boolean;
+  private reconciliationEpoch = 0;
+  private focusToken = 0;
+  private productionReconciliation: OrderProductionReconciliationObligation | null = null;
+  private feedbackState: OrderSharedFeedback = { neutral: '', success: '', warning: '', error: '' };
+  private readonly settledRequests = new Set<string>();
+  private readonly announcedResults = new Set<string>();
   private generations: Record<OrderRequestKind, number> = {
     list: 0,
     postSaveRefresh: 0,
@@ -85,10 +126,15 @@ export class OrderMutationController {
     archive: 0,
   };
 
+  constructor(initialRouteActive = true) {
+    this.routeActive = initialRouteActive;
+  }
+
   snapshot(workspace: OrderWorkspaceState): OrderContextSnapshot {
     return {
       contextToken: this.contextToken,
       targetedValidationToken: this.targetedValidationToken,
+      routeGeneration: this.routeGeneration,
       formMode: workspace.formMode,
       editedOrderId: workspace.editedOrderId,
       selectedOrderId: workspace.selectedOrderId,
@@ -98,13 +144,97 @@ export class OrderMutationController {
 
   getContextToken(): number { return this.contextToken; }
   getTargetedValidationToken(): number { return this.targetedValidationToken; }
+  getRouteGeneration(): number { return this.routeGeneration; }
   isSubmitting(): boolean { return this.submitting; }
+  ownsRoute(): boolean { return this.routeActive; }
+
+  enterRoute(): void {
+    this.routeGeneration += 1;
+    this.routeActive = true;
+    this.feedbackState.neutral = '';
+  }
+
+  leaveRoute(): void {
+    this.routeGeneration += 1;
+    this.routeActive = false;
+    this.feedbackState.neutral = '';
+    for (const kind of ['list', 'postSaveRefresh', 'reference', 'detail', 'readiness', 'productionHistory', 'productionReconciliation'] as const) {
+      this.invalidateRequest(kind);
+    }
+  }
+
+  transitionRoute(wasOrders: boolean, isOrders: boolean): void {
+    if (wasOrders === isOrders) return;
+    if (wasOrders) this.leaveRoute();
+    if (isOrders) this.enterRoute();
+  }
+
+  feedback(): Readonly<OrderSharedFeedback> {
+    return this.feedbackState;
+  }
+
+  setNeutralFeedback(message: string): void {
+    this.feedbackState = { neutral: message, success: '', warning: '', error: '' };
+  }
+
+  setSuccessFeedback(message: string): void {
+    this.feedbackState = { neutral: '', success: message, warning: '', error: '' };
+  }
+
+  setWarningFeedback(message: string, preserveSuccess = false): void {
+    this.feedbackState = {
+      neutral: '',
+      success: preserveSuccess ? this.feedbackState.success : '',
+      warning: message,
+      error: '',
+    };
+  }
+
+  setErrorFeedback(message: string): void {
+    this.feedbackState = { neutral: '', success: '', warning: '', error: message };
+  }
+
+  clearTransientFeedback(): void {
+    this.feedbackState = { neutral: '', success: '', warning: '', error: '' };
+  }
+
+  shouldAnnounce(
+    snapshot: OrderRequestSnapshot | OrderSubmitSnapshot,
+    channel: 'polite' | 'assertive',
+  ): boolean {
+    if (!this.routeActive || snapshot.routeGeneration !== this.routeGeneration) return false;
+    const key = 'kind' in snapshot
+      ? `${snapshot.kind}:${snapshot.generation}:${channel}`
+      : `submit:${snapshot.submitToken}:${channel}`;
+    if (this.announcedResults.has(key)) return false;
+    this.announcedResults.add(key);
+    return true;
+  }
+
+  beginFocus(context: OrderContextSnapshot, target: string): OrderFocusTicket | null {
+    if (!this.routeActive || context.routeGeneration !== this.routeGeneration) return null;
+    this.focusToken += 1;
+    return {
+      routeGeneration: context.routeGeneration,
+      contextToken: context.contextToken,
+      targetedValidationToken: context.targetedValidationToken,
+      focusToken: this.focusToken,
+      target,
+    };
+  }
+
+  canApplyFocus(ticket: OrderFocusTicket, current: OrderContextSnapshot): boolean {
+    return this.routeActive
+      && ticket.routeGeneration === this.routeGeneration
+      && ticket.contextToken === current.contextToken
+      && ticket.targetedValidationToken === current.targetedValidationToken
+      && ticket.focusToken === this.focusToken;
+  }
 
   bumpContext(): number {
     this.contextToken += 1;
     this.invalidateRequest('detail');
     this.invalidateRequest('readiness');
-    this.invalidateRequest('production');
     this.invalidateRequest('productionHistory');
     this.invalidateRequest('productionReconciliation');
     return this.contextToken;
@@ -119,25 +249,35 @@ export class OrderMutationController {
   }
 
   beginSubmit(context: OrderContextSnapshot): OrderSubmitSnapshot | null {
-    if (this.submitting) return null;
+    if (!this.routeActive || context.routeGeneration !== this.routeGeneration || this.submitting) return null;
     this.submitting = true;
     this.submitToken += 1;
     return { ...context, submitToken: this.submitToken };
   }
 
   finishSubmit(snapshot: OrderSubmitSnapshot): boolean {
-    if (snapshot.submitToken !== this.submitToken) return false;
+    if (snapshot.submitToken !== this.submitToken || !this.submitting) return false;
     this.submitting = false;
     return true;
   }
 
   canApplySubmit(snapshot: OrderSubmitSnapshot, current: OrderContextSnapshot): boolean {
-    return snapshot.submitToken === this.submitToken && orderReadCanRender(snapshot, current);
+    return this.routeActive
+      && snapshot.routeGeneration === this.routeGeneration
+      && snapshot.submitToken === this.submitToken
+      && orderReadCanRender(snapshot, current);
   }
 
   beginRequest(kind: OrderRequestKind, context: OrderContextSnapshot, extra: Partial<Pick<OrderRequestSnapshot, 'savedOrderId' | 'requestedOrderId'>> = {}): OrderRequestSnapshot {
     this.generations[kind] += 1;
-    return { ...context, kind, generation: this.generations[kind], submitToken: this.submitToken, ...extra };
+    return {
+      ...context,
+      kind,
+      generation: this.generations[kind],
+      submitToken: this.submitToken,
+      ...(kind === 'productionReconciliation' ? { reconciliationEpoch: this.productionReconciliation?.epoch ?? 0 } : {}),
+      ...extra,
+    };
   }
 
   invalidateRequest(kind: OrderRequestKind): number {
@@ -154,19 +294,336 @@ export class OrderMutationController {
   }
 
   canApplyRequest(snapshot: OrderRequestSnapshot, current: OrderContextSnapshot): boolean {
-    return this.isCurrentRequest(snapshot) && orderReadCanRender(snapshot, current);
+    return this.routeActive
+      && snapshot.routeGeneration === this.routeGeneration
+      && this.isCurrentRequest(snapshot)
+      && orderReadCanRender(snapshot, current);
   }
 
   canApplyPostSaveRefresh(snapshot: OrderRequestSnapshot, current: OrderContextSnapshot): boolean {
     return snapshot.kind === 'postSaveRefresh'
+      && this.routeActive
+      && snapshot.routeGeneration === this.routeGeneration
       && this.isCurrentRequest(snapshot)
       && snapshot.submitToken === this.submitToken
       && orderReadCanRender(snapshot, current);
   }
+
+  settleRequest(snapshot: OrderRequestSnapshot): OrderRequestSettlement {
+    const key = this.requestKey(snapshot);
+    if (this.settledRequests.has(key)) {
+      return { accepted: false, canPresent: false, detached: snapshot.routeGeneration !== this.routeGeneration || !this.routeActive };
+    }
+    this.settledRequests.add(key);
+    const current = this.isCurrentRequest(snapshot);
+    return {
+      accepted: true,
+      canPresent: current && this.routeActive && snapshot.routeGeneration === this.routeGeneration,
+      detached: snapshot.routeGeneration !== this.routeGeneration || !this.routeActive,
+    };
+  }
+
+  requireProductionReconciliation(
+    snapshot: OrderRequestSnapshot,
+    orderId: number,
+  ): Readonly<OrderProductionReconciliationObligation> {
+    const existing = this.productionReconciliation;
+    if (existing && existing.productionGeneration === snapshot.generation && existing.orderId === orderId) {
+      if (!this.routeActive || snapshot.routeGeneration !== this.routeGeneration) existing.detachedSettlement = true;
+      return { ...existing };
+    }
+    this.reconciliationEpoch += 1;
+    this.productionReconciliation = {
+      operation: 'production',
+      orderId,
+      productionGeneration: snapshot.generation,
+      routeGeneration: snapshot.routeGeneration,
+      epoch: this.reconciliationEpoch,
+      detachedSettlement: !this.routeActive || snapshot.routeGeneration !== this.routeGeneration,
+      automaticAttemptConsumed: false,
+    };
+    return { ...this.productionReconciliation };
+  }
+
+  productionReconciliationRequired(orderId?: number): boolean {
+    return Boolean(this.productionReconciliation && (orderId === undefined || this.productionReconciliation.orderId === orderId));
+  }
+
+  productionReconciliationObligation(): Readonly<OrderProductionReconciliationObligation> | null {
+    return this.productionReconciliation ? { ...this.productionReconciliation } : null;
+  }
+
+  consumeAutomaticProductionReconciliation(): Readonly<OrderProductionReconciliationObligation> | null {
+    const obligation = this.productionReconciliation;
+    if (!this.routeActive || !obligation || obligation.automaticAttemptConsumed) return null;
+    obligation.automaticAttemptConsumed = true;
+    return { ...obligation };
+  }
+
+  canStartProductionReconciliation(orderId: number): boolean {
+    return Boolean(
+      this.routeActive
+      && this.productionReconciliation?.orderId === orderId
+      && !this.productionReconciliationRequiredForAnotherOrder(orderId),
+    );
+  }
+
+  completeProductionReconciliation(
+    snapshot: OrderRequestSnapshot,
+    order: unknown,
+    batch: unknown,
+  ): boolean {
+    const obligation = this.productionReconciliation;
+    if (
+      !obligation
+      || !this.routeActive
+      || snapshot.routeGeneration !== this.routeGeneration
+      || snapshot.kind !== 'productionReconciliation'
+      || snapshot.reconciliationEpoch !== obligation.epoch
+      || snapshot.requestedOrderId !== obligation.orderId
+      || !this.isCurrentRequest(snapshot)
+      || !productionReconciliationIsCoherent(order, batch, obligation.orderId)
+    ) return false;
+    this.productionReconciliation = null;
+    return true;
+  }
+
+  private productionReconciliationRequiredForAnotherOrder(orderId: number): boolean {
+    return Boolean(this.productionReconciliation && this.productionReconciliation.orderId !== orderId);
+  }
+
+  private requestKey(snapshot: OrderRequestSnapshot): string {
+    return `${snapshot.kind}:${snapshot.generation}`;
+  }
 }
 
-export function createOrderMutationController(): OrderMutationController {
-  return new OrderMutationController();
+export function createOrderMutationController(options: { routeActive?: boolean } = {}): OrderMutationController {
+  return new OrderMutationController(options.routeActive ?? true);
+}
+
+const ORDER_STATUSES = new Set(['new', 'waiting_for_materials', 'ready_to_produce', 'in_progress', 'produced', 'delivered', 'cancelled', 'archived']);
+const READINESS_STATUSES = new Set(['ready', 'warning', 'blocked']);
+const READINESS_SEVERITIES = new Set(['blocking', 'warning', 'info']);
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function positiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function nullablePositiveInteger(value: unknown): boolean {
+  return value === null || positiveInteger(value);
+}
+
+function stringOrNull(value: unknown): boolean {
+  return value === null || typeof value === 'string';
+}
+
+export function orderDtoIsValid(value: unknown, expectedOrderId?: number): boolean {
+  const item = record(value);
+  return Boolean(
+    item
+    && positiveInteger(item.id)
+    && (expectedOrderId === undefined || item.id === expectedOrderId)
+    && positiveInteger(item.client_id)
+    && nullablePositiveInteger(item.recipe_version_id)
+    && nullablePositiveInteger(item.client_recipe_id)
+    && typeof item.product_name === 'string'
+    && typeof item.target_batch_size_value === 'string'
+    && typeof item.target_batch_size_unit === 'string'
+    && nullablePositiveInteger(item.packaging_item_id)
+    && stringOrNull(item.packaging_quantity)
+    && typeof item.status === 'string'
+    && ORDER_STATUSES.has(item.status)
+    && stringOrNull(item.sale_price)
+    && stringOrNull(item.ordered_at)
+    && stringOrNull(item.planned_production_at)
+    && stringOrNull(item.produced_at)
+    && stringOrNull(item.delivered_at)
+    && typeof item.notes === 'string'
+    && typeof item.is_active === 'boolean'
+    && typeof item.created_at === 'string'
+    && typeof item.updated_at === 'string',
+  );
+}
+
+export function ordersDtoIsValid(value: unknown): boolean {
+  const payload = record(value);
+  return Boolean(payload && Array.isArray(payload.orders) && payload.orders.every((item) => orderDtoIsValid(item)));
+}
+
+export function orderReferenceDataIsValid(value: unknown): boolean {
+  const payload = record(value);
+  if (!payload) return false;
+  for (const key of ['clients', 'templates', 'versions', 'clientRecipes', 'packagingItems']) {
+    const list = payload[key];
+    if (!Array.isArray(list) || !list.every((item) => positiveInteger(record(item)?.id))) return false;
+  }
+  return true;
+}
+
+function readinessIssueIsValid(value: unknown): boolean {
+  const issue = record(value);
+  return Boolean(
+    issue
+    && typeof issue.code === 'string'
+    && typeof issue.severity === 'string'
+    && READINESS_SEVERITIES.has(issue.severity)
+    && typeof issue.message === 'string'
+    && stringOrNull(issue.field)
+    && stringOrNull(issue.entity_type)
+    && nullablePositiveInteger(issue.entity_id),
+  );
+}
+
+function readinessLotSelectionIsValid(value: unknown): boolean {
+  const lot = record(value);
+  return Boolean(
+    lot
+    && positiveInteger(lot.lot_id)
+    && typeof lot.lot_code === 'string'
+    && typeof lot.selected_quantity === 'string'
+    && typeof lot.unit === 'string'
+    && stringOrNull(lot.expires_at)
+    && typeof lot.is_expired === 'boolean'
+    && typeof lot.expires_soon === 'boolean',
+  );
+}
+
+function readinessIngredientLineIsValid(value: unknown): boolean {
+  const line = record(value);
+  return Boolean(
+    line
+    && positiveInteger(line.ingredient_id)
+    && typeof line.ingredient_name === 'string'
+    && typeof line.required_quantity === 'string'
+    && typeof line.required_unit === 'string'
+    && typeof line.available_quantity === 'string'
+    && stringOrNull(line.missing_quantity)
+    && typeof line.can_fulfill === 'boolean'
+    && Array.isArray(line.selected_lots)
+    && line.selected_lots.every(readinessLotSelectionIsValid)
+    && Array.isArray(line.warnings)
+    && line.warnings.every(readinessIssueIsValid),
+  );
+}
+
+function readinessPackagingLineIsValid(value: unknown): boolean {
+  const line = record(value);
+  return Boolean(
+    line
+    && positiveInteger(line.packaging_item_id)
+    && typeof line.name === 'string'
+    && typeof line.required_quantity === 'string'
+    && typeof line.available_quantity === 'string'
+    && stringOrNull(line.missing_quantity)
+    && typeof line.can_fulfill === 'boolean',
+  );
+}
+
+export function productionReadinessDtoIsValid(value: unknown, expectedOrderId: number): boolean {
+  const payload = record(value);
+  return Boolean(
+    payload
+    && payload.order_id === expectedOrderId
+    && typeof payload.can_produce === 'boolean'
+    && typeof payload.status === 'string'
+    && READINESS_STATUSES.has(payload.status)
+    && Array.isArray(payload.blocking_issues)
+    && payload.blocking_issues.every(readinessIssueIsValid)
+    && Array.isArray(payload.warnings)
+    && payload.warnings.every(readinessIssueIsValid)
+    && Array.isArray(payload.ingredients)
+    && payload.ingredients.every(readinessIngredientLineIsValid)
+    && Array.isArray(payload.packaging)
+    && payload.packaging.every(readinessPackagingLineIsValid)
+    && stringOrNull(payload.estimated_cost)
+    && stringOrNull(payload.estimated_tax)
+    && stringOrNull(payload.estimated_margin)
+    && typeof payload.generated_at === 'string',
+  );
+}
+
+function productionBatchIngredientDtoIsValid(value: unknown, batchId: number): boolean {
+  const item = record(value);
+  return Boolean(
+    item
+    && positiveInteger(item.id)
+    && item.production_batch_id === batchId
+    && positiveInteger(item.ingredient_id)
+    && positiveInteger(item.ingredient_lot_id)
+    && typeof item.ingredient_name_snapshot === 'string'
+    && typeof item.lot_code_snapshot === 'string'
+    && typeof item.required_quantity === 'string'
+    && typeof item.consumed_quantity === 'string'
+    && typeof item.unit === 'string'
+    && stringOrNull(item.unit_cost_snapshot)
+    && stringOrNull(item.total_cost_snapshot)
+    && stringOrNull(item.expiration_date_snapshot)
+    && typeof item.created_at === 'string',
+  );
+}
+
+function productionBatchPackagingDtoIsValid(value: unknown, batchId: number): boolean {
+  const item = record(value);
+  return Boolean(
+    item
+    && positiveInteger(item.id)
+    && item.production_batch_id === batchId
+    && positiveInteger(item.packaging_item_id)
+    && typeof item.packaging_name_snapshot === 'string'
+    && typeof item.quantity === 'string'
+    && typeof item.unit === 'string'
+    && stringOrNull(item.unit_cost_snapshot)
+    && stringOrNull(item.total_cost_snapshot)
+    && typeof item.created_at === 'string',
+  );
+}
+
+export function productionBatchDtoIsValid(value: unknown, expectedOrderId: number): boolean {
+  const payload = record(value);
+  if (
+    !payload
+    || !positiveInteger(payload.id)
+    || payload.order_id !== expectedOrderId
+    || !stringOrNull(payload.product_name)
+    || !nullablePositiveInteger(payload.client_id)
+    || !stringOrNull(payload.client_name)
+    || !nullablePositiveInteger(payload.recipe_version_id)
+    || !nullablePositiveInteger(payload.client_recipe_id)
+    || typeof payload.final_batch_value !== 'string'
+    || typeof payload.final_batch_unit !== 'string'
+    || !stringOrNull(payload.component_cost)
+    || !stringOrNull(payload.packaging_cost)
+    || typeof payload.other_cost !== 'string'
+    || !stringOrNull(payload.total_cost)
+    || !stringOrNull(payload.sale_price)
+    || !stringOrNull(payload.tax)
+    || !stringOrNull(payload.margin)
+    || !stringOrNull(payload.margin_percent)
+    || typeof payload.produced_at !== 'string'
+    || typeof payload.notes !== 'string'
+    || typeof payload.created_at !== 'string'
+    || !Array.isArray(payload.ingredients)
+    || !Array.isArray(payload.packaging)
+  ) return false;
+  return payload.ingredients.every((item) => productionBatchIngredientDtoIsValid(item, payload.id as number))
+    && payload.packaging.every((item) => productionBatchPackagingDtoIsValid(item, payload.id as number));
+}
+
+export function productionReconciliationIsCoherent(
+  order: unknown,
+  batch: unknown,
+  expectedOrderId: number,
+): boolean {
+  const orderRecord = record(order);
+  return orderDtoIsValid(order, expectedOrderId)
+    && Boolean(orderRecord && (orderRecord.status === 'produced' || orderRecord.status === 'delivered'))
+    && productionBatchDtoIsValid(batch, expectedOrderId);
 }
 
 
