@@ -17,7 +17,18 @@ import { purchaseFeedbackItems } from './purchase-suggestions-presentation.js';
 import { completeManualPurchaseDraft, completeEditPurchaseDraft, tryStartPurchaseSuggestionEdit } from './purchase-suggestions-form-state.js';
 import { createInitialPurchaseReferenceState, createPurchaseSuggestionsReferenceDataController } from './purchase-suggestions-reference-data.js';
 import { filterHelpArticles as filterHelpArticlesForState, helpRelatedNavigation, resetHelpFilters as resetHelpFilterState, selectHelpArticle as selectHelpArticleState } from './help-passive-regression.js';
-import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, createStockMovementLotDetailLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientDeactivationMutationControls, disableClientFeedbackCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientFeedbackMutationControls, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState, runClientRecipeCompositionMutation, runClientRecipeCreateMutation, type StockMovementLotDetailRequest } from './mutation-lifecycle.js';
+import { bindFormulaClientWorkspaceControls } from './formula-client-workspace-bindings.js';
+import { FormulaClientWorkspaceFeedbackLifecycle, isEntityDto, isRecipeVersionDetailDto } from './formula-client-workspace-feedback.js';
+import { FormulaClientWorkspaceRuntime, requestRecipeTemplateSnapshot } from './formula-client-workspace-runtime.js';
+import { formulaClientRouteForSection, transitionFormulaClientRouteOwnership } from './formula-client-workspace-route.js';
+import { formulaClientWorkspacePresentation } from './formula-client-workspace-presentation.js';
+import { bindInventoryCatalogWorkspaceControls } from './inventory-catalog-workspace-bindings.js';
+import { InventoryCatalogWorkspaceFeedbackLifecycle, isInventoryEntityDto } from './inventory-catalog-workspace-feedback.js';
+import { InventoryCatalogWorkspaceRuntime } from './inventory-catalog-workspace-runtime.js';
+import { inventoryCatalogRouteForSection, transitionInventoryCatalogRouteOwnership } from './inventory-catalog-workspace-route.js';
+import { inventoryCatalogWorkspacePresentation } from './inventory-catalog-workspace-presentation.js';
+import { finalizeWorkspaceMutationUi, type WorkspaceFinishResult } from './core-workspace-feedback.js';
+import { createRecipeMutationLifecycle, createRequestGenerationLifecycle, disableClientRecipeArchiveRestoreMutationControls, disableClientRecipeCompositionMutationControls, disableClientRecipeCreateMutationControls, disableClientDeactivationMutationControls, disableClientFeedbackCreateMutationControls, disableClientWishCreateMutationControls, disableRecipeTemplateMutationControls, disableRecipeVersionMutationControls, mutationDisabled, mutationReadonly, restoreClientFeedbackMutationControls, restoreClientRecipeMutationControls, restoreClientWishMutationControls, restoreMutationGuards, restoreRecipeMutationControls, clientCardRenderAllowedForCapturedContext, clientRecipePageMutationActiveState, packagingPageMutationActiveState } from './mutation-lifecycle.js';
 type FeedbackTone = 'neutral' | 'success' | 'warning' | 'error';
 const feedbackToneLabels: Record<FeedbackTone, string> = { neutral: 'Сообщение', success: 'Готово', warning: 'Внимание', error: 'Не удалось' };
 
@@ -570,6 +581,7 @@ let onboardingActionStatus: 'idle' | 'loading' | 'mutating' = 'idle';
 let inventoryStatus: InventoryStatus = 'idle';
 let inventoryState: InventoryState = { overview: null, ingredientLots: [], packagingItems: [] };
 let inventoryError = '';
+let inventoryRefreshWarning = '';
 let clientsStatus: ClientsStatus = 'idle';
 let clientsState: ClientsState = { items: [], formMode: 'create', form: emptyClientForm(), includeInactive: false, showCreateForm: false, filters: { search: '', status: 'active' } };
 let clientsError = '';
@@ -589,7 +601,6 @@ let clientWishContextToken = 0;
 let clientCardTargetedValidationToken = 0;
 let clientSubmitting = false;
 let clientDeactivatingId: number | null = null;
-const clientDeactivationLifecycle = createRecipeMutationLifecycle();
 let clientSubmitToken = 0;
 let clientCardState: ClientCardState = emptyClientCardState();
 let clientRecipesStatus: ClientRecipesStatus = 'idle';
@@ -648,7 +659,6 @@ let stockMovementsRefreshWarning = '';
 let stockMovementValidation = emptyFormValidationState();
 let stockMovementSubmitting = false;
 let stockMovementSubmitToken = 0;
-const stockMovementLotDetailLifecycle = createStockMovementLotDetailLifecycle();
 let packagingItemsStatus: PackagingItemsStatus = 'idle';
 let packagingItemsState: PackagingItemsState = { items: [], formMode: 'create', form: emptyPackagingItemForm(), catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, showCreateForm: false, filters: emptyCatalogBrowserFilters(), assignmentDraft: emptyAssignmentDraft() };
 let packagingItemsError = '';
@@ -673,8 +683,6 @@ let recipeTemplateSubmitting = false;
 let recipeVersionSubmitting = false;
 let recipeTemplateSubmitToken = 0;
 let recipeVersionSubmitToken = 0;
-const recipeTemplateMutationLifecycle = createRecipeMutationLifecycle();
-const recipeVersionMutationLifecycle = createRecipeMutationLifecycle();
 let recipeVersionRefreshToken = 0;
 let clientRecipeCreateValidation = emptyFormValidationState();
 let clientRecipeCompositionValidation = emptyFormValidationState();
@@ -687,11 +695,25 @@ let clientRecipeArchiveRestoreSubmittingId: number | null = null;
 const clientRecipeCreateDependenciesLifecycle = createRequestGenerationLifecycle();
 const clientRecipeVersionRequestLifecycle = createRequestGenerationLifecycle();
 const clientRecipeCompositionIngredientsLifecycle = createRequestGenerationLifecycle();
-let clientRecipeCreateLifecycle = createRecipeMutationLifecycle();
-let clientRecipeCompositionLifecycle = createRecipeMutationLifecycle();
 let calculationStatus: CalculationStatus = 'idle';
 let calculationError = '';
 let recipesState: RecipesState = { templates: [], selectedTemplate: null, versions: [], selectedVersionDetail: null, versionDetailStatus: 'idle', ingredients: [], templateForm: emptyRecipeTemplateForm(), versionForm: emptyRecipeVersionForm(), calculation: null, calculationTargetValue: '', calculationTargetUnit: 'g', catalogCategories: [], catalogTags: [], catalogSaving: 'idle', catalogCreating: null, showCreateForm: false, filters: emptyCatalogBrowserFilters() };
+const formulaClientWorkspaceLifecycle = new FormulaClientWorkspaceFeedbackLifecycle();
+const formulaClientWorkspaceRuntime = new FormulaClientWorkspaceRuntime({
+  lifecycle: formulaClientWorkspaceLifecycle,
+  ownsRoute: (route) => formulaClientRouteForSection(activeSection) === route,
+  render: () => render(),
+  announce: (message, kind) => kind === 'assertive' ? announceAssertive(message) : announcePolite(message),
+  focus: focusCoreWorkspaceTarget,
+});
+const inventoryCatalogWorkspaceLifecycle = new InventoryCatalogWorkspaceFeedbackLifecycle();
+const inventoryCatalogWorkspaceRuntime = new InventoryCatalogWorkspaceRuntime({
+  lifecycle: inventoryCatalogWorkspaceLifecycle,
+  ownsRoute: (route) => inventoryCatalogRouteForSection(activeSection) === route,
+  render: () => render(),
+  announce: (message, kind) => kind === 'assertive' ? announceAssertive(message) : announcePolite(message),
+  focus: focusCoreWorkspaceTarget,
+});
 let ingredientCatalogControls: CatalogControlState = { categorySearch: '', tagSearch: '', showAllTags: false };
 let packagingCatalogControls: CatalogControlState = { categorySearch: '', tagSearch: '', showAllTags: false };
 let helpUiState: HelpUiState = { search: '', category: '', selectedArticleId: 'getting-started' };
@@ -850,6 +872,31 @@ function render() {
 }
 
 function bindEvents(root: HTMLElement) {
+  bindFormulaClientWorkspaceControls(root, {
+    reloadRecipes: () => { if (!recipePageMutationActive()) loadRecipes(true); },
+    submitRecipeTemplate: (event) => submitRecipeTemplateForm(event as SubmitEvent),
+    submitRecipeVersion: (event) => submitRecipeVersionForm(event as SubmitEvent),
+    submitRecipeCalculation: (event) => submitCalculationForm(event as SubmitEvent),
+    reloadClients: () => loadClients(true),
+    submitClient: (event) => submitClientForm(event as SubmitEvent),
+    submitClientWish: (event) => submitClientWishForm(event as SubmitEvent),
+    submitClientFeedback: (event) => submitClientFeedbackForm(event as SubmitEvent),
+    reloadClientRecipes: () => { if (!clientRecipePageMutationActive()) loadClientRecipes(true); },
+    submitClientRecipe: (event) => submitClientRecipeForm(event as SubmitEvent),
+    submitClientRecipeComposition: (event) => submitClientRecipeCompositionEditor(event as SubmitEvent),
+  });
+  bindInventoryCatalogWorkspaceControls(root, {
+    reloadInventory: () => loadInventory(true),
+    reloadIngredients: () => loadIngredients(true),
+    submitIngredient: (event) => submitIngredientForm(event as SubmitEvent),
+    reloadLots: () => loadIngredientLots(true),
+    submitLot: (event) => submitIngredientLotForm(event as SubmitEvent),
+    reloadStock: () => loadStockMovements(true),
+    reconcileStock: reconcileSelectedStockMovement,
+    submitStockMovement: (event) => submitStockMovementForm(event as SubmitEvent),
+    reloadPackaging: () => { if (!packagingPageMutationActive()) loadPackagingItems(true); },
+    submitPackaging: (event) => submitPackagingItemForm(event as SubmitEvent),
+  });
   root.querySelector<HTMLImageElement>('.brand-mark img')?.addEventListener('error', (event) => { (event.currentTarget as HTMLImageElement).hidden = true; });
   root.querySelectorAll<HTMLButtonElement>('.nav-group-toggle').forEach((button) => {
     button.addEventListener('click', () => {
@@ -983,14 +1030,11 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLSelectElement>('[data-action="filter-orders-status"]')?.addEventListener('change', (event) => { if (orderFormMutationActive()) return; ordersState.filters.status = (event.currentTarget as HTMLSelectElement).value as OrderStatusFilter; render(); });
   root.querySelector<HTMLButtonElement>('[data-action="reset-order-filters"]')?.addEventListener('click', () => { if (orderFormMutationActive()) return; ordersState.filters = { search: '', status: 'active' }; render(); });
   root.querySelector<HTMLSelectElement>('[data-action="select-order-source-type"]')?.addEventListener('change', (event) => { if (orderFormMutationActive()) return; saveOrderFormDraftFromDom(); ordersState.form.source_type = (event.currentTarget as HTMLSelectElement).value as OrderSourceType; ordersState.form.recipe_version_id = ''; ordersState.form.client_recipe_id = ''; clearOrderSourceRelatedValidation(['recipe_source', 'recipe_version_id', 'client_recipe_id']); orderValidation = clearFieldValidation(clearFieldValidation(clearFieldValidation(orderValidation, 'source_type'), 'recipe_version_id'), 'client_recipe_id'); render(); });
-  root.querySelector<HTMLButtonElement>('[data-action="reload-inventory"]')?.addEventListener('click', () => loadInventory(true));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-ingredients"]')?.addEventListener('click', () => loadIngredients(true));
   root.querySelectorAll<HTMLButtonElement>('[data-action="new-ingredient"]').forEach((button) => button.addEventListener('click', openIngredientCreateForm));
   root.querySelector<HTMLButtonElement>('[data-action="hide-ingredient-create-form"]')?.addEventListener('click', hideIngredientCreateForm);
   root.querySelector<HTMLButtonElement>('[data-action="cancel-ingredient-edit"]')?.addEventListener('click', cancelIngredientEdit);
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient"]').forEach((button) => button.addEventListener('click', () => startEditIngredient(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient"]').forEach((button) => button.addEventListener('click', () => deactivateIngredient(Number(button.dataset.id))));
-  root.querySelector<HTMLFormElement>('[data-form="ingredient"]')?.addEventListener('submit', submitIngredientForm);
   root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-form="ingredient"] [name]').forEach((input) => input.addEventListener('input', () => { saveIngredientFormFromDom(); clearIngredientFieldError(input.name, input); }));
   root.querySelectorAll<HTMLSelectElement>('[data-form="ingredient"] select[name]').forEach((input) => input.addEventListener('change', () => { saveIngredientFormFromDom(); clearIngredientFieldError(input.name, input); }));
   root.querySelector<HTMLFormElement>('[data-form="ingredient-catalog-category"]')?.addEventListener('submit', submitIngredientCatalogCategoryForm);
@@ -1010,19 +1054,14 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLInputElement>('[data-action="search-ingredient-category"]')?.addEventListener('input', (event) => updateCatalogSearch(ingredientCatalogControls, 'categorySearch', event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLInputElement>('[data-action="search-ingredient-tags"]')?.addEventListener('input', (event) => updateCatalogSearch(ingredientCatalogControls, 'tagSearch', event.currentTarget as HTMLInputElement));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-ingredient-tags"]')?.addEventListener('click', () => { ingredientCatalogControls.showAllTags = !ingredientCatalogControls.showAllTags; render(); });
-  root.querySelector<HTMLButtonElement>('[data-action="reload-ingredient-lots"]')?.addEventListener('click', () => loadIngredientLots(true));
   root.querySelector<HTMLButtonElement>('[data-action="new-ingredient-lot"]')?.addEventListener('click', openIngredientLotCreateForm);
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-ingredient-lot"]').forEach((button) => button.addEventListener('click', () => startEditIngredientLot(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-ingredient-lot"]').forEach((button) => button.addEventListener('click', () => deactivateIngredientLot(Number(button.dataset.id))));
-  root.querySelector<HTMLFormElement>('[data-form="ingredient-lot"]')?.addEventListener('submit', submitIngredientLotForm);
   root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-form="ingredient-lot"] [name]').forEach((input) => input.addEventListener('input', () => { saveIngredientLotFormFromDom(); clearIngredientLotFieldError(input.name, input); }));
   root.querySelectorAll<HTMLSelectElement>('[data-form="ingredient-lot"] select[name]').forEach((input) => input.addEventListener('change', () => { saveIngredientLotFormFromDom(); clearIngredientLotFieldError(input.name, input); }));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-stock-movements"]')?.addEventListener('click', () => loadStockMovements(true));
   root.querySelector<HTMLSelectElement>('[data-action="select-stock-lot"]')?.addEventListener('change', (event) => selectStockMovementLot(Number((event.currentTarget as HTMLSelectElement).value)));
-  root.querySelector<HTMLFormElement>('[data-form="stock-movement"]')?.addEventListener('submit', submitStockMovementForm);
   root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-form="stock-movement"] [name]').forEach((input) => input.addEventListener('input', () => { saveStockMovementFormFromDom(); clearStockMovementFieldError(input.name, input); }));
   root.querySelectorAll<HTMLSelectElement>('[data-form="stock-movement"] select[name]').forEach((input) => input.addEventListener('change', () => { saveStockMovementFormFromDom(); clearStockMovementFieldError(input.name, input); }));
-  root.querySelector<HTMLButtonElement>('[data-action="reload-recipes"]')?.addEventListener('click', () => { if (recipePageMutationActive()) return; loadRecipes(true); });
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-recipe-create"]').forEach((button) => button.addEventListener('click', openRecipeCreateForm));
   root.querySelectorAll<HTMLButtonElement>('[data-action="hide-recipe-create"]').forEach((button) => button.addEventListener('click', hideRecipeCreateForm));
   root.querySelector<HTMLButtonElement>('[data-action="close-recipe-detail"]')?.addEventListener('click', closeRecipeDetail);
@@ -1032,7 +1071,6 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="clear-recipe-filter"]').forEach((button) => button.addEventListener('click', () => { if (recipePageMutationActive()) return; clearRecipeFilter(button.dataset.filter ?? ''); }));
   root.querySelectorAll<HTMLButtonElement>('[data-action="reset-recipe-filters"]').forEach((button) => button.addEventListener('click', () => { if (recipePageMutationActive()) return; recipesState.filters = emptyCatalogBrowserFilters(); render(); }));
   root.querySelector<HTMLButtonElement>('[data-action="reload-recipe-ingredients"]')?.addEventListener('click', () => { if (recipePageMutationActive()) return; refreshRecipeIngredientOptions(true); });
-  root.querySelector<HTMLButtonElement>('[data-action="reload-clients"]')?.addEventListener('click', () => loadClients(true));
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-client-create"]').forEach((button) => button.addEventListener('click', openClientCreateForm));
   root.querySelectorAll<HTMLButtonElement>('[data-action="hide-client-create"]').forEach((button) => button.addEventListener('click', hideClientCreateForm));
   root.querySelectorAll<HTMLButtonElement>('[data-action="start-client-edit"]').forEach((button) => button.addEventListener('click', () => startEditClient(Number(button.dataset.id))));
@@ -1042,23 +1080,19 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="reset-client-filters"]').forEach((button) => button.addEventListener('click', resetClientFilters));
   root.querySelectorAll<HTMLButtonElement>('[data-action="clear-client-filter"]').forEach((button) => button.addEventListener('click', () => clearClientFilter(button.dataset.filter ?? '')));
   root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client"]').forEach((button) => button.addEventListener('click', () => deactivateClient(Number(button.dataset.id))));
-  root.querySelector<HTMLFormElement>('[data-form="client"]')?.addEventListener('submit', submitClientForm);
   root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-form="client"] [name]').forEach((input) => input.addEventListener('input', () => { saveClientFormFromDom(); clearClientFieldError(input.name, input); }));
   root.querySelectorAll<HTMLInputElement>('[data-form="client"] input[type="date"][name]').forEach((input) => input.addEventListener('change', () => { saveClientFormFromDom(); clearClientFieldError(input.name, input); }));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-client-wish-form"]')?.addEventListener('click', toggleClientWishForm);
   root.querySelector<HTMLButtonElement>('[data-action="toggle-archived-client-wishes"]')?.addEventListener('click', toggleArchivedClientWishes);
-  root.querySelector<HTMLFormElement>('[data-form="client-wish"]')?.addEventListener('submit', submitClientWishForm);
   root.querySelector<HTMLFormElement>('[data-form="client-wish"]')?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[name]').forEach((control) => control.addEventListener('input', () => { syncClientCardDraftFormsFromDom(); clearClientWishFieldError(control.getAttribute('name') ?? '', control); }));
   root.querySelector<HTMLFormElement>('[data-form="client-wish"]')?.querySelectorAll<HTMLSelectElement>('select[name]').forEach((control) => control.addEventListener('change', () => { syncClientCardDraftFormsFromDom(); clearClientWishFieldError(control.getAttribute('name') ?? '', control); }));
   root.querySelector<HTMLButtonElement>('[data-action="close-client-wish-form"]')?.addEventListener('click', closeClientWishForm);
   root.querySelectorAll<HTMLButtonElement>('[data-action="change-client-wish-status"]').forEach((button) => button.addEventListener('click', () => changeClientWishStatus(Number(button.dataset.id), button.dataset.status as ClientWishStatus)));
   root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client-wish"]').forEach((button) => button.addEventListener('click', () => archiveClientWishFromCard(Number(button.dataset.id))));
   root.querySelector<HTMLButtonElement>('[data-action="toggle-client-feedback-form"]')?.addEventListener('click', toggleClientFeedbackForm);
-  root.querySelector<HTMLFormElement>('[data-form="client-feedback"]')?.addEventListener('submit', submitClientFeedbackForm);
   root.querySelector<HTMLFormElement>('[data-form="client-feedback"]')?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[name]').forEach((control) => control.addEventListener('input', () => { syncClientCardDraftFormsFromDom(); clearClientFeedbackFieldError(control.getAttribute('name') ?? '', control); }));
   root.querySelector<HTMLFormElement>('[data-form="client-feedback"]')?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('select[name], input[type="checkbox"], input[type="date"], input[type="number"]').forEach((control) => control.addEventListener('change', () => { syncClientCardDraftFormsFromDom(); clearClientFeedbackFieldError(control.getAttribute('name') ?? '', control); }));
   root.querySelector<HTMLButtonElement>('[data-action="close-client-feedback-form"]')?.addEventListener('click', closeClientFeedbackForm);
-  root.querySelector<HTMLButtonElement>('[data-action="reload-client-recipes"]')?.addEventListener('click', () => { if (!clientRecipePageMutationActive()) loadClientRecipes(true); });
   root.querySelectorAll<HTMLButtonElement>('[data-action="open-client-recipe-create"]').forEach((button) => button.addEventListener('click', openClientRecipeCreate));
   root.querySelectorAll<HTMLButtonElement>('[data-action="hide-client-recipe-create"]').forEach((button) => button.addEventListener('click', hideClientRecipeCreate));
   root.querySelector<HTMLButtonElement>('[data-action="close-client-recipe-detail"]')?.addEventListener('click', closeClientRecipeDetail);
@@ -1068,7 +1102,6 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="reset-client-recipe-filters"]').forEach((button) => button.addEventListener('click', resetClientRecipeFilters));
   root.querySelectorAll<HTMLButtonElement>('[data-action="clear-client-recipe-filter"]').forEach((button) => button.addEventListener('click', () => clearClientRecipeFilter(button.dataset.filter ?? '')));
   root.querySelector<HTMLSelectElement>('[data-action="select-client-recipe-template"]')?.addEventListener('change', (event) => selectClientRecipeTemplate((event.currentTarget as HTMLSelectElement).value));
-  root.querySelector<HTMLFormElement>('[data-form="client-recipe"]')?.addEventListener('submit', submitClientRecipeForm);
   root.querySelector<HTMLFormElement>('[data-form="client-recipe"]')?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[name]').forEach((control) => control.addEventListener('input', () => clearClientRecipeCreateFieldError(control.getAttribute('name') ?? '', control)));
   root.querySelector<HTMLFormElement>('[data-form="client-recipe"]')?.querySelectorAll<HTMLSelectElement>('select[name]').forEach((control) => control.addEventListener('change', () => clearClientRecipeCreateFieldError(control.getAttribute('name') ?? '', control)));
   root.querySelector<HTMLFormElement>('[data-form="client-recipe-composition"]')?.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[name]').forEach((control) => control.addEventListener('input', () => clearClientRecipeCompositionFieldError(control.getAttribute('name') ?? '', control)));
@@ -1077,19 +1110,16 @@ function bindEvents(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-action="archive-client-recipe"]').forEach((button) => button.addEventListener('click', () => deactivateClientRecipe(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="restore-client-recipe"]').forEach((button) => button.addEventListener('click', () => restoreClientRecipe(Number(button.dataset.id))));
   root.querySelector<HTMLButtonElement>('[data-action="open-client-recipe-composition-editor"]')?.addEventListener('click', openClientRecipeCompositionEditor);
-  root.querySelector<HTMLFormElement>('[data-form="client-recipe-composition"]')?.addEventListener('submit', submitClientRecipeCompositionEditor);
   root.querySelector<HTMLButtonElement>('[data-action="add-client-recipe-composition-line"]')?.addEventListener('click', addClientRecipeCompositionLine);
   root.querySelectorAll<HTMLButtonElement>('[data-action="remove-client-recipe-composition-line"]').forEach((button) => button.addEventListener('click', () => removeClientRecipeCompositionLine(Number(button.dataset.index))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="move-client-recipe-composition-line"]').forEach((button) => button.addEventListener('click', () => moveClientRecipeCompositionLine(Number(button.dataset.index), Number(button.dataset.direction))));
   root.querySelector<HTMLButtonElement>('[data-action="reset-client-recipe-composition-editor"]')?.addEventListener('click', resetClientRecipeCompositionEditor);
   root.querySelector<HTMLButtonElement>('[data-action="close-client-recipe-composition-editor"]')?.addEventListener('click', closeClientRecipeCompositionEditor);
-  root.querySelector<HTMLButtonElement>('[data-action="reload-packaging-items"]')?.addEventListener('click', () => { if (packagingPageMutationActive()) return; loadPackagingItems(true); });
   root.querySelectorAll<HTMLButtonElement>('[data-action="new-packaging-item"]').forEach((button) => button.addEventListener('click', openPackagingCreateForm));
   root.querySelector<HTMLButtonElement>('[data-action="hide-packaging-create-form"]')?.addEventListener('click', hidePackagingCreateForm);
   root.querySelector<HTMLButtonElement>('[data-action="cancel-packaging-edit"]')?.addEventListener('click', cancelPackagingEdit);
   root.querySelectorAll<HTMLButtonElement>('[data-action="edit-packaging-item"]').forEach((button) => button.addEventListener('click', () => startEditPackagingItem(Number(button.dataset.id))));
   root.querySelectorAll<HTMLButtonElement>('[data-action="deactivate-packaging-item"]').forEach((button) => button.addEventListener('click', () => deactivatePackagingItem(Number(button.dataset.id))));
-  root.querySelector<HTMLFormElement>('[data-form="packaging-item"]')?.addEventListener('submit', submitPackagingItemForm);
   root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-form="packaging-item"] [name]').forEach((input) => input.addEventListener('input', () => { savePackagingItemFormFromDom(); clearPackagingItemFieldError(input.name, input); }));
   root.querySelectorAll<HTMLSelectElement>('[data-form="packaging-item"] select[name]').forEach((input) => input.addEventListener('change', () => { savePackagingItemFormFromDom(); clearPackagingItemFieldError(input.name, input); }));
   root.querySelector<HTMLInputElement>('[data-action="filter-packaging-search"]')?.addEventListener('input', (event) => { if (packagingPageMutationActive()) return; updatePackagingFilterSearch(event.currentTarget as HTMLInputElement); });
@@ -1109,12 +1139,9 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLInputElement>('[data-action="search-packaging-category"]')?.addEventListener('input', (event) => { if (packagingPageMutationActive()) return; updateCatalogSearch(packagingCatalogControls, 'categorySearch', event.currentTarget as HTMLInputElement); });
   root.querySelector<HTMLInputElement>('[data-action="search-packaging-tags"]')?.addEventListener('input', (event) => { if (packagingPageMutationActive()) return; updateCatalogSearch(packagingCatalogControls, 'tagSearch', event.currentTarget as HTMLInputElement); });
   root.querySelector<HTMLButtonElement>('[data-action="toggle-packaging-tags"]')?.addEventListener('click', () => { if (packagingPageMutationActive()) return; packagingCatalogControls.showAllTags = !packagingCatalogControls.showAllTags; render(); });
-  root.querySelector<HTMLFormElement>('[data-form="recipe-template"]')?.addEventListener('submit', submitRecipeTemplateForm);
   root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-form="recipe-template"] [name]').forEach((input) => input.addEventListener('input', () => { saveRecipeTemplateFormFromDom(); clearRecipeTemplateFieldError(input.name, input); }));
-  root.querySelector<HTMLFormElement>('[data-form="recipe-version"]')?.addEventListener('submit', submitRecipeVersionForm);
   root.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('[data-form="recipe-version"] [name]').forEach((input) => input.addEventListener('input', () => { saveVersionFormFromDom(); clearRecipeVersionFieldError(input.name, input); }));
   root.querySelectorAll<HTMLSelectElement>('[data-form="recipe-version"] select[name]').forEach((input) => input.addEventListener('change', () => { saveVersionFormFromDom(); clearRecipeVersionFieldError(input.name, input); }));
-  root.querySelector<HTMLFormElement>('[data-form="recipe-calculation"]')?.addEventListener('submit', submitCalculationForm);
   root.querySelector<HTMLFormElement>('[data-form="recipe-catalog-category"]')?.addEventListener('submit', (event) => { if (recipePageMutationActive()) { event.preventDefault(); return; } submitRecipeCatalogCategoryForm(event); });
   root.querySelector<HTMLFormElement>('[data-form="recipe-catalog-tag"]')?.addEventListener('submit', (event) => { if (recipePageMutationActive()) { event.preventDefault(); return; } submitRecipeCatalogTagForm(event); });
   root.querySelector<HTMLSelectElement>('[data-action="assign-recipe-category"]')?.addEventListener('change', (event) => { if (recipePageMutationActive()) return; assignRecipeCategory(Number((event.currentTarget as HTMLSelectElement).dataset.id), (event.currentTarget as HTMLSelectElement).value); });
@@ -1856,11 +1883,62 @@ function applyReportsLifecycleState() {
 }
 function applyLocalArtifactsReportsLifecycleState() { applyBackupLifecycleState(); applyExportLifecycleState(); applyReportDocumentsLifecycleState(); applyReportsLifecycleState(); }
 function focusLocalArtifactTarget(key: string | null) { if (!key) return; document.querySelector<HTMLElement>(`[data-focus-key="${key}"]`)?.focus(); }
+function focusCoreWorkspaceTarget(key: string) {
+  const fallbacks: Record<string, string> = {
+    'core-recipes-refresh': '[data-action="reload-recipes"]',
+    'core-recipes-form': '[data-form="recipe-template"], [data-form="recipe-version"], [data-form="recipe-calculation"], [data-form^="recipe-catalog-"]',
+    'core-recipes-content': '.recipes-layout',
+    'core-clients-refresh': '[data-action="reload-clients"]',
+    'core-clients-form': '[data-form="client"], [data-form="client-wish"], [data-form="client-feedback"]',
+    'core-clients-content': '[data-clients-route-root]',
+    'core-client-recipes-refresh': '[data-action="reload-client-recipes"]',
+    'core-client-recipes-form': '[data-form="client-recipe"], [data-form="client-recipe-composition"]',
+    'core-client-recipes-content': '.recipes-layout',
+    'core-ingredients-refresh': '[data-action="reload-ingredients"]',
+    'core-ingredients-form': '[data-form="ingredient"], [data-form^="ingredient-catalog-"]',
+    'core-ingredients-content': '.catalog-layout',
+    'core-lots-refresh': '[data-action="reload-ingredient-lots"], [data-action="new-ingredient-lot"]',
+    'core-lots-form': '[data-form="ingredient-lot"]',
+    'core-lots-content': '.catalog-layout',
+    'core-stock-retry': '[data-action="reload-stock-movements"]',
+    'core-stock-form': '[data-form="stock-movement"]',
+    'core-stock-content': '.catalog-layout',
+    'core-packaging-refresh': '[data-action="reload-packaging-items"]',
+    'core-packaging-form': '[data-form="packaging-item"], [data-form^="packaging-catalog-"]',
+    'core-packaging-content': '.packaging-items-workspace',
+  };
+  requestAnimationFrame(() => {
+    const fallback = fallbacks[key];
+    const target = document.querySelector<HTMLElement>(`[data-focus-key="${key}"]`)
+      ?? (fallback ? document.querySelector<HTMLElement>(fallback) : null);
+    if (!target) return;
+    if (target.tabIndex < 0 && !/^(BUTTON|INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) target.tabIndex = -1;
+    target.focus();
+  });
+}
+
+function presentFormulaClientCompletion(route: 'recipes' | 'clients' | 'clientRecipes', result: WorkspaceFinishResult) {
+  if (!result.accepted || formulaClientRouteForSection(activeSection) !== route) return;
+  if (formulaClientWorkspaceLifecycle.shouldAnnounce(result) && result.announcement !== 'none') {
+    result.announcement === 'assertive' ? announceAssertive(result.message) : announcePolite(result.message);
+  }
+  if (result.focusKey) focusCoreWorkspaceTarget(result.focusKey);
+}
+
+function presentInventoryCatalogCompletion(route: 'inventory' | 'ingredients' | 'ingredientLots' | 'stockMovements' | 'packaging', result: WorkspaceFinishResult) {
+  if (!result.accepted || inventoryCatalogRouteForSection(activeSection) !== route) return;
+  if (inventoryCatalogWorkspaceLifecycle.shouldAnnounce(result) && result.announcement !== 'none') {
+    result.announcement === 'assertive' ? announceAssertive(result.message) : announcePolite(result.message);
+  }
+  if (result.focusKey) focusCoreWorkspaceTarget(result.focusKey);
+}
 
 function updateRouteOwnership(previousSection: NavigationSection | null, nextSection: NavigationSection) {
   transitionAlertsRouteOwnership(alertsLifecycle, previousSection ?? 'Главная', nextSection);
   purchaseRouteCoordinator.transition(previousSection, nextSection);
   transitionLocalArtifactsReportsRouteOwnership({ backups: backupRuntime, exports: exportRuntime, reportDocuments: reportDocumentsRuntime, reports: reportsRuntime } as any, localArtifactRouteForSection(previousSection), localArtifactRouteForSection(nextSection));
+  transitionFormulaClientRouteOwnership(formulaClientWorkspaceLifecycle, previousSection, nextSection);
+  transitionInventoryCatalogRouteOwnership(inventoryCatalogWorkspaceLifecycle, previousSection, nextSection);
   applyLocalArtifactsReportsLifecycleState();
 }
 
@@ -1876,6 +1954,10 @@ function clearRouteOwnedFeedbackOnNavigation(nextSection: NavigationSection) {
   if (nextSection !== 'Экспорт') exportLifecycle.clearTransientFeedback();
   if (nextSection !== 'Документы отчетов') reportDocumentsLifecycle.clearTransientFeedback();
   if (nextSection !== 'Отчеты') reportsLifecycle.clearTransientFeedback();
+  const formulaRoute = formulaClientRouteForSection(nextSection);
+  for (const route of ['recipes', 'clients', 'clientRecipes'] as const) if (route !== formulaRoute) formulaClientWorkspaceLifecycle.clearTransientFeedback(route);
+  const inventoryRoute = inventoryCatalogRouteForSection(nextSection);
+  for (const route of ['inventory', 'ingredients', 'ingredientLots', 'stockMovements', 'packaging'] as const) if (route !== inventoryRoute) inventoryCatalogWorkspaceLifecycle.clearTransientFeedback(route);
   applyLocalArtifactsReportsLifecycleState();
   applyDashboardLifecycleState();
   applyOnboardingLifecycleState();
@@ -2295,11 +2377,12 @@ function humanOrderError(e: unknown){ const msg=e instanceof Error ? e.message :
 
 
 function clientRecipesPage() {
+  const lifecycleFeedback = formulaClientWorkspacePresentation(formulaClientWorkspaceLifecycle, 'clientRecipes').feedback;
   if (clientRecipesStatus === 'idle' || clientRecipesStatus === 'loading') return `<section class="card"><p class="card-kicker">Индивидуальные рецепты клиентов</p><h2>Загружаем индивидуальные рецепты клиентов…</h2><p>Получаем персональные формулы, клиентов и базовые рецепты из локального приложения.</p></section>`;
-  if (clientRecipesStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Индивидуальные рецепты клиентов</p><h2>Не удалось загрузить индивидуальные рецепты клиентов</h2><p>${clientRecipesError || 'Локальное приложение временно недоступно.'}</p><p class="next-step">Проверьте, что локальное приложение запущено, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-client-recipes">Повторить загрузку</button></section>`;
+  if (clientRecipesStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Индивидуальные рецепты клиентов</p><h2>Не удалось загрузить индивидуальные рецепты клиентов</h2><p>${clientRecipesError || 'Локальное приложение временно недоступно.'}</p><p class="next-step">Проверьте, что локальное приложение запущено, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-client-recipes" data-focus-key="core-client-recipes-retry">Повторить загрузку</button></section>`;
   const workspace = clientRecipesState.showCreateForm ? clientRecipeForm() : clientRecipesState.selectedDetail || clientRecipesState.detailStatus === 'loading' ? clientRecipeDetailPanel() : '';
   const items = filteredClientRecipes();
-  return `<div class="recipes-layout"><section class="card recipes-intro"><div><p class="card-kicker">Индивидуальные рецепты клиентов</p><h2>Индивидуальные рецепты клиентов</h2><p>Здесь хранятся отдельные формулы, которые были адаптированы под конкретного клиента.</p><p class="next-step">Сначала найдите персональную формулу в списке. Создание и карточка открываются только когда нужны, а базовые версии рецептов не меняются автоматически.</p></div><div class="actions"><button class="primary-action" type="button" data-action="open-client-recipe-create" ${clientRecipePageMutationActive() ? 'disabled' : ''}>Создать индивидуальный рецепт</button><button class="secondary-action" type="button" data-action="reload-client-recipes" ${clientRecipePageMutationActive() ? 'disabled' : ''}>Обновить</button></div></section>${clientRecipesMessage ? `<p class="page-message">${clientRecipesMessage}</p>` : ''}${clientRecipesRefreshWarning ? `<p class="page-message warning-message">${clientRecipesRefreshWarning}</p>` : ''}${clientRecipesError ? `<p class="page-message error-message">${clientRecipesError}</p>` : ''}${clientRecipeFilterToolbar(items.length)}${workspace}${clientRecipeList(items)}${!workspace ? clientRecipeCreateHelper() : ''}</div>`;
+  return `<div class="recipes-layout"><section class="card recipes-intro"><div><p class="card-kicker">Индивидуальные рецепты клиентов</p><h2>Индивидуальные рецепты клиентов</h2><p>Здесь хранятся отдельные формулы, которые были адаптированы под конкретного клиента.</p><p class="next-step">Сначала найдите персональную формулу в списке. Создание и карточка открываются только когда нужны, а базовые версии рецептов не меняются автоматически.</p></div><div class="actions"><button class="primary-action" type="button" data-action="open-client-recipe-create" ${clientRecipePageMutationActive() ? 'disabled' : ''}>Создать индивидуальный рецепт</button><button class="secondary-action" type="button" data-action="reload-client-recipes" ${clientRecipePageMutationActive() ? 'disabled' : ''}>Обновить</button></div></section>${clientRecipesMessage ? `<p class="page-message">${clientRecipesMessage}</p>` : ''}${clientRecipesRefreshWarning || lifecycleFeedback.warning ? `<p class="page-message warning-message">${clientRecipesRefreshWarning || lifecycleFeedback.warning}</p>` : ''}${clientRecipesError ? `<p class="page-message error-message">${clientRecipesError}</p>` : ''}${clientRecipeFilterToolbar(items.length)}${workspace}${clientRecipeList(items)}${!workspace ? clientRecipeCreateHelper() : ''}</div>`;
 }
 
 function clientRecipeFilterToolbar(resultCount: number) {
@@ -2327,10 +2410,11 @@ function clientRecipeDetailPanel() { if (clientRecipesState.detailStatus === 'lo
 function clientRecipeCreateHelper() { return `<section class="card catalog-helper-card"><p class="card-kicker">Создание</p><h2>Нужна новая персональная формула?</h2><p>Форма создания открывается отдельно, чтобы список индивидуальных рецептов оставался на виду.</p><button class="primary-action" type="button" data-action="open-client-recipe-create" ${clientRecipePageMutationActive() ? 'disabled' : ''}>Создать индивидуальный рецепт</button><p class="next-step">Выберите клиента, базовый рецепт и сохранённую версию состава. Будет создана отдельная копия состава для клиента.</p></section>`; }
 
 function clientsPage() {
+  const lifecycleFeedback = formulaClientWorkspacePresentation(formulaClientWorkspaceLifecycle, 'clients').feedback;
   if (clientsStatus === 'idle' || clientsStatus === 'loading') return `<section class="card"><p class="card-kicker">Клиенты</p><h2>Загружаем клиентов…</h2><p>Загружаем карточки клиентов.</p></section>`;
-  if (clientsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Клиенты</p><h2>Не удалось загрузить клиентов</h2><p>${clientsError || 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'}</p><p class="next-step">Проверьте, что локальное приложение запущено, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-clients">Повторить загрузку</button></section>`;
+  if (clientsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Клиенты</p><h2>Не удалось загрузить клиентов</h2><p>${clientsError || 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'}</p><p class="next-step">Проверьте, что локальное приложение запущено, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-clients" data-focus-key="core-clients-retry">Повторить загрузку</button></section>`;
   const workspace = clientsState.formMode === 'edit' || clientsState.showCreateForm ? clientForm() : '';
-  return `<div class="catalog-layout clients-workspace" data-clients-route-root><section class="card catalog-intro clients-intro"><div><p class="card-kicker">Клиенты</p><h2>Клиенты</h2><p>Карточки клиентов, пожелания, ограничения и заметки для индивидуальных рецептов.</p><p class="next-step">Сначала найдите клиента в списке. Создание и редактирование открываются только когда нужно.</p></div><div class="actions"><button class="primary-action" type="button" data-action="open-client-create" ${clientSubmitting ? 'disabled' : ''}>Создать клиента</button><button class="secondary-action" type="button" data-action="reload-clients">Обновить</button></div></section>${clientsMessage ? `<p class="page-message">${clientsMessage}</p>` : ''}${clientsRefreshWarning ? `<p class="page-message warning-message">${clientsRefreshWarning}</p>` : ''}${clientsError ? `<p class="page-message error-message">${clientsError}</p>` : ''}${clientFilterToolbar()}${workspace}${clientList()}${!workspace ? clientCreateHelper() : ''}</div>`;
+  return `<div class="catalog-layout clients-workspace" data-clients-route-root><section class="card catalog-intro clients-intro"><div><p class="card-kicker">Клиенты</p><h2>Клиенты</h2><p>Карточки клиентов, пожелания, ограничения и заметки для индивидуальных рецептов.</p><p class="next-step">Сначала найдите клиента в списке. Создание и редактирование открываются только когда нужно.</p></div><div class="actions"><button class="primary-action" type="button" data-action="open-client-create" ${clientSubmitting ? 'disabled' : ''}>Создать клиента</button><button class="secondary-action" type="button" data-action="reload-clients">Обновить</button></div></section>${clientsMessage ? `<p class="page-message">${clientsMessage}</p>` : ''}${clientsRefreshWarning || lifecycleFeedback.warning ? `<p class="page-message warning-message">${clientsRefreshWarning || lifecycleFeedback.warning}</p>` : ''}${clientsError ? `<p class="page-message error-message">${clientsError}</p>` : ''}${clientFilterToolbar()}${workspace}${clientList()}${!workspace ? clientCreateHelper() : ''}</div>`;
 }
 
 function clientFilterToolbar() {
@@ -2410,14 +2494,15 @@ function clientCreateHelper() {
 }
 
 function ingredientsPage() {
+  const lifecycleFeedback = inventoryCatalogWorkspacePresentation(inventoryCatalogWorkspaceLifecycle, 'ingredients').feedback;
   if (ingredientsStatus === 'idle' || ingredientsStatus === 'loading') return `<section class="card"><p class="card-kicker">Компоненты</p><h2>Загружаем компоненты…</h2><p>Загружаем справочник компонентов.</p></section>`;
-  if (ingredientsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Компоненты</p><h2>Не удалось загрузить компоненты</h2><p>${ingredientsError || 'Данные временно недоступны.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredients">Повторить загрузку</button></section>`;
+  if (ingredientsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Компоненты</p><h2>Не удалось загрузить компоненты</h2><p>${ingredientsError || 'Данные временно недоступны.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredients" data-focus-key="core-ingredients-retry">Повторить загрузку</button></section>`;
   const filtered = filteredIngredients();
   const isEdit = ingredientsState.formMode === 'edit';
   const isCreateActive = ingredientsState.formMode === 'create' && ingredientsState.showCreateForm;
   const activeWorkspace = isEdit ? `${ingredientForm()}${ingredientCatalogPanel()}` : isCreateActive ? ingredientForm() : '';
   const secondaryWorkspace = isEdit ? '' : isCreateActive ? ingredientCatalogPanel() : `${ingredientForm()}${ingredientCatalogPanel()}`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Каталог компонентов</p><h2>Компоненты</h2><p>Сначала найдите существующий компонент по названию, группе, меткам, системному типу или статусу. Создание и редактирование доступны ниже, чтобы каталог оставался главным рабочим местом.</p><p class="next-step">Системный тип используется программой. Группа и метки — ваш способ организовать компоненты для поиска.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-ingredients">Обновить список</button><button class="primary-action" type="button" data-action="new-ingredient" ${ingredientSubmitting ? 'disabled' : ''}>Создать компонент</button></div></section>${ingredientsMessage ? `<p class="page-message">${ingredientsMessage}</p>` : ''}${ingredientsRefreshWarning ? `<p class="page-message warning-message">${ingredientsRefreshWarning}</p>` : ''}${ingredientsError ? `<p class="page-message error-message">${ingredientsError}</p>` : ''}${ingredientCatalogToolbar(filtered.length)}${activeWorkspace}${ingredientList(filtered)}${secondaryWorkspace}</div>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Каталог компонентов</p><h2>Компоненты</h2><p>Сначала найдите существующий компонент по названию, группе, меткам, системному типу или статусу. Создание и редактирование доступны ниже, чтобы каталог оставался главным рабочим местом.</p><p class="next-step">Системный тип используется программой. Группа и метки — ваш способ организовать компоненты для поиска.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-ingredients">Обновить список</button><button class="primary-action" type="button" data-action="new-ingredient" ${ingredientSubmitting ? 'disabled' : ''}>Создать компонент</button></div></section>${ingredientsMessage ? `<p class="page-message">${ingredientsMessage}</p>` : ''}${ingredientsRefreshWarning || lifecycleFeedback.warning ? `<p class="page-message warning-message">${ingredientsRefreshWarning || lifecycleFeedback.warning}</p>` : ''}${ingredientsError ? `<p class="page-message error-message">${ingredientsError}</p>` : ''}${ingredientCatalogToolbar(filtered.length)}${activeWorkspace}${ingredientList(filtered)}${secondaryWorkspace}</div>`;
 }
 
 function ingredientCatalogToolbar(resultCount: number) {
@@ -2464,14 +2549,15 @@ function ingredientCatalogCreateControls() {
 }
 
 function packagingItemsPage() {
+  const lifecycleFeedback = inventoryCatalogWorkspacePresentation(inventoryCatalogWorkspaceLifecycle, 'packaging').feedback;
   if (packagingItemsStatus === 'idle' || packagingItemsStatus === 'loading') return `<section class="card"><p class="card-kicker">Тара</p><h2>Загружаем тару…</h2><p>Загружаем справочник тары.</p></section>`;
-  if (packagingItemsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Тара</p><h2>Не удалось загрузить тару</h2><p>${packagingItemsError || 'Данные временно недоступны.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-packaging-items">Повторить загрузку</button></section>`;
+  if (packagingItemsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Тара</p><h2>Не удалось загрузить тару</h2><p>${packagingItemsError || 'Данные временно недоступны.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-packaging-items" data-focus-key="core-packaging-retry">Повторить загрузку</button></section>`;
   const filtered = filteredPackagingItems();
   const isEdit = packagingItemsState.formMode === 'edit';
   const isCreateActive = packagingItemsState.formMode === 'create' && packagingItemsState.showCreateForm;
   const activeWorkspace = isEdit ? `${packagingItemForm()}${packagingCatalogPanel()}` : isCreateActive ? packagingItemForm() : '';
   const secondaryWorkspace = isEdit ? '' : isCreateActive ? packagingCatalogPanel() : `${packagingItemForm()}${packagingCatalogPanel()}`;
-  return `<div class="catalog-layout packaging-items-workspace" data-route="packaging-items"><section class="card catalog-intro packaging-items-intro"><div><p class="card-kicker">Каталог тары</p><h2>Тара и расходники</h2><p>Сначала найдите тару по названию, группе, меткам, типу или статусу. Создание и редактирование доступны ниже, чтобы каталог оставался главным рабочим местом.</p><p class="next-step">Тип тары используется системой. Группа и метки — ваш способ организовать каталог для поиска.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-packaging-items" ${packagingPageMutationActive() ? 'disabled' : ''}>Обновить список</button><button class="primary-action" type="button" data-action="new-packaging-item" ${packagingPageMutationActive() ? 'disabled' : ''}>Создать тару</button></div></section>${packagingItemsMessage ? `<p class="page-message">${packagingItemsMessage}</p>` : ''}${packagingItemsRefreshWarning ? `<p class="page-message warning-message">${packagingItemsRefreshWarning}</p>` : ''}${packagingItemsError ? `<p class="page-message error-message">${packagingItemsError}</p>` : ''}${packagingCatalogToolbar(filtered.length)}${activeWorkspace}${packagingItemsList(filtered)}${secondaryWorkspace}</div>`;
+  return `<div class="catalog-layout packaging-items-workspace" data-route="packaging-items"><section class="card catalog-intro packaging-items-intro"><div><p class="card-kicker">Каталог тары</p><h2>Тара и расходники</h2><p>Сначала найдите тару по названию, группе, меткам, типу или статусу. Создание и редактирование доступны ниже, чтобы каталог оставался главным рабочим местом.</p><p class="next-step">Тип тары используется системой. Группа и метки — ваш способ организовать каталог для поиска.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-packaging-items" ${packagingPageMutationActive() ? 'disabled' : ''}>Обновить список</button><button class="primary-action" type="button" data-action="new-packaging-item" ${packagingPageMutationActive() ? 'disabled' : ''}>Создать тару</button></div></section>${packagingItemsMessage ? `<p class="page-message">${packagingItemsMessage}</p>` : ''}${packagingItemsRefreshWarning || lifecycleFeedback.warning ? `<p class="page-message warning-message">${packagingItemsRefreshWarning || lifecycleFeedback.warning}</p>` : ''}${packagingItemsError ? `<p class="page-message error-message">${packagingItemsError}</p>` : ''}${packagingCatalogToolbar(filtered.length)}${activeWorkspace}${packagingItemsList(filtered)}${secondaryWorkspace}</div>`;
 }
 
 function packagingItemForm() {
@@ -2514,9 +2600,10 @@ function packagingItemsList(items: PackagingItem[]) {
 }
 
 function ingredientLotsPage() {
+  const lifecycleFeedback = inventoryCatalogWorkspacePresentation(inventoryCatalogWorkspaceLifecycle, 'ingredientLots').feedback;
   if (ingredientLotsStatus === 'idle' || ingredientLotsStatus === 'loading') return `<section class="card"><p class="card-kicker">Приходы и партии</p><h2>Загружаем приходы и партии…</h2><p>Загружаем партии компонентов.</p></section>`;
-  if (ingredientLotsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Приходы и партии</p><h2>Не удалось загрузить приходы и партии</h2><p>${ingredientLotsError || 'Не удалось получить данные о партиях.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredient-lots">Повторить загрузку</button></section>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Приходы и партии</p><h2>Приходы и партии сырья</h2><p>Здесь хранится паспорт партии: компонент, поставщик, срок годности, цена и единица учета. Остаток не редактируется здесь и считается отдельными движениями сырья.</p></div><button class="secondary-action" type="button" data-action="new-ingredient-lot" ${ingredientLotSubmitting ? 'disabled' : ''}>Очистить форму</button></section>${ingredientLotsMessage ? `<p class="page-message">${ingredientLotsMessage}</p>` : ''}${ingredientLotsRefreshWarning ? `<p class="page-message warning-message">${ingredientLotsRefreshWarning}</p>` : ''}${ingredientLotsError ? `<p class="page-message error-message">${ingredientLotsError}</p>` : ''}${ingredientLotForm()}${ingredientLotList()}</div>`;
+  if (ingredientLotsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Приходы и партии</p><h2>Не удалось загрузить приходы и партии</h2><p>${ingredientLotsError || 'Не удалось получить данные о партиях.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-ingredient-lots" data-focus-key="core-lots-retry">Повторить загрузку</button></section>`;
+  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Приходы и партии</p><h2>Приходы и партии сырья</h2><p>Здесь хранится паспорт партии: компонент, поставщик, срок годности, цена и единица учета. Остаток не редактируется здесь и считается отдельными движениями сырья.</p></div><button class="secondary-action" type="button" data-action="new-ingredient-lot" ${ingredientLotSubmitting ? 'disabled' : ''}>Очистить форму</button></section>${ingredientLotsMessage ? `<p class="page-message">${ingredientLotsMessage}</p>` : ''}${ingredientLotsRefreshWarning || lifecycleFeedback.warning ? `<p class="page-message warning-message">${ingredientLotsRefreshWarning || lifecycleFeedback.warning}</p>` : ''}${ingredientLotsError ? `<p class="page-message error-message">${ingredientLotsError}</p>` : ''}${ingredientLotForm()}${ingredientLotList()}</div>`;
 }
 
 function ingredientLotForm() {
@@ -2533,10 +2620,17 @@ function ingredientLotList() {
 
 
 function stockMovementsPage() {
+  const lifecycleFeedback = inventoryCatalogWorkspacePresentation(inventoryCatalogWorkspaceLifecycle, 'stockMovements').feedback;
+  const reconciliationRequired = inventoryCatalogWorkspaceLifecycle.reconciliationRequired('stockMovements');
+  const obligatedLotId = inventoryCatalogWorkspaceRuntime.stockMovementObligationLotId();
+  const obligatedLot = obligatedLotId ? stockMovementsState.lots.find((lot) => lot.id === obligatedLotId) ?? null : null;
+  const obligationCopy = obligatedLot
+    ? ` Проверка относится к партии «${escapeHtml(stockLotLabel(obligatedLot))}».`
+    : '';
   if (stockMovementsStatus === 'idle' || stockMovementsStatus === 'loading') return `<section class="card"><p class="card-kicker">Движения сырья</p><h2>Загружаем движения…</h2><p>Загружаем партии компонентов и историю движений.</p></section>`;
   if (stockMovementsStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Движения сырья</p><h2>Не удалось загрузить движения сырья</h2><p>${stockMovementsError || 'Не удалось получить данные о движениях склада.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-stock-movements">Повторить загрузку</button></section>`;
   if (stockMovementsState.lots.length === 0) return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>История движений компонентов</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements" ${stockMovementSubmitting ? 'disabled' : ''}>Обновить</button></section><section class="card empty-card"><h2>Пока нет партий для движений</h2><p>Сначала создайте компонент и партию. После этого можно будет добавить приход или списание.</p><p class="next-step">Текущий остаток нельзя ввести вручную: он появится после первого движения сырья.</p></section></div>`;
-  return `<div class="catalog-layout"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>Движения сырья</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><button class="secondary-action" type="button" data-action="reload-stock-movements" ${stockMovementSubmitting ? 'disabled' : ''}>Обновить</button></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsRefreshWarning ? `<p class="page-message warning-message">${stockMovementsRefreshWarning}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
+  return `<div class="catalog-layout" tabindex="-1" data-focus-key="core-stock-content"><section class="card catalog-intro"><div><p class="card-kicker">Движения сырья</p><h2>Движения сырья</h2><p>Остаток партии считается по движениям. Старые движения не редактируются, чтобы история склада оставалась честной.</p></div><div class="actions"><button class="secondary-action" type="button" data-action="reload-stock-movements" ${stockMovementSubmitting ? 'disabled' : ''}>Обновить</button>${reconciliationRequired ? `<button class="primary-action" type="button" data-action="reconcile-stock-movement" data-reconciliation-context="${obligatedLotId ? `lot:${obligatedLotId}` : ''}" data-focus-key="core-stock-reconcile">Проверить результат</button>` : ''}</div></section>${stockMovementsMessage ? `<p class="page-message">${stockMovementsMessage}</p>` : ''}${stockMovementsRefreshWarning || lifecycleFeedback.warning ? `<p class="page-message warning-message">${stockMovementsRefreshWarning || lifecycleFeedback.warning}${obligationCopy}</p>` : ''}${stockMovementsError ? `<p class="page-message error-message">${stockMovementsError}</p>` : ''}${stockLotSelector()}${stockMovementForm()}${stockMovementHistory()}</div>`;
 }
 
 function stockLotSelector() {
@@ -2556,7 +2650,8 @@ function stockMovementForm() {
   const lot = selectedStockLot();
   if (!lot) return '';
   const form = stockMovementsState.form;
-  return `<section class="card form-card"><p class="card-kicker">Новое движение</p><h2>Добавить движение по выбранной партии</h2><p class="next-step">Приложение не позволит списать или вернуть больше, чем доступно в выбранной партии. История движений не редактируется и не удаляется.</p><form data-form="stock-movement" class="ingredient-form" novalidate>${validationSummary(stockMovementValidation, 'Проверьте движение склада')}<div class="form-grid">${stockMovementField(`Партия<input name="ingredient_lot_id" value="${escapeHtml(stockLotLabel(lot))}" readonly${stockMovementFieldAttrs('ingredient_lot_id')} />`, 'ingredient_lot_id')}${stockMovementField(`Тип движения<select name="movement_type" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('movement_type')}>${movementTypeOptions(form.movement_type)}</select>`, 'movement_type')}${stockMovementField(`Количество<input name="quantity" required inputmode="decimal" value="${escapeHtml(form.quantity)}" placeholder="Например, 100 или 12.500" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('quantity')} />`, 'quantity')}${stockMovementField(`Единица<input name="unit" value="${unitLabel(lot.unit)}" readonly${stockMovementFieldAttrs('unit')} />`, 'unit')}${stockMovementField(`Дата движения<input name="occurred_at" type="datetime-local" value="${escapeHtml(form.occurred_at)}" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('occurred_at')} />`, 'occurred_at')}${stockMovementField(`Источник<select name="source" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('source')}><option value="manual" ${form.source === 'manual' ? 'selected' : ''}>Вручную</option><option value="import" ${form.source === 'import' ? 'selected' : ''}>Импорт</option><option value="system" ${form.source === 'system' ? 'selected' : ''}>Система</option></select>`, 'source')}${stockMovementField(`Причина<input name="reason" maxlength="240" value="${escapeHtml(form.reason)}" placeholder="Например, закупка, списание просрочки" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('reason')} />`, 'reason', true)}${stockMovementField(`Заметки<textarea name="note" rows="3" maxlength="1200" placeholder="Необязательно" ${stockMovementSubmitting ? 'disabled' : ''}${stockMovementFieldAttrs('note')}>${escapeHtml(form.note)}</textarea>`, 'note', true)}</div><div class="actions"><button class="primary-action" type="submit" ${stockMovementSubmitting ? 'disabled' : ''}>${stockMovementSubmitting ? 'Создаём…' : 'Создать движение'}</button></div></form></section>`;
+  const locked = stockMovementSubmitting || inventoryCatalogWorkspaceLifecycle.reconciliationRequired('stockMovements');
+  return `<section class="card form-card"><p class="card-kicker">Новое движение</p><h2>Добавить движение по выбранной партии</h2><p class="next-step">Приложение не позволит списать или вернуть больше, чем доступно в выбранной партии. История движений не редактируется и не удаляется.</p>${inventoryCatalogWorkspaceLifecycle.reconciliationRequired('stockMovements') ? '<p class="page-message warning-message">Повторное создание заблокировано, пока результат предыдущей операции не проверен по истории и остатку партии.</p>' : ''}<form data-form="stock-movement" data-focus-key="core-stock-form" class="ingredient-form" novalidate>${validationSummary(stockMovementValidation, 'Проверьте движение склада')}<div class="form-grid">${stockMovementField(`Партия<input name="ingredient_lot_id" value="${escapeHtml(stockLotLabel(lot))}" readonly${stockMovementFieldAttrs('ingredient_lot_id')} />`, 'ingredient_lot_id')}${stockMovementField(`Тип движения<select name="movement_type" ${locked ? 'disabled' : ''}${stockMovementFieldAttrs('movement_type')}>${movementTypeOptions(form.movement_type)}</select>`, 'movement_type')}${stockMovementField(`Количество<input name="quantity" required inputmode="decimal" value="${escapeHtml(form.quantity)}" placeholder="Например, 100 или 12.500" ${locked ? 'disabled' : ''}${stockMovementFieldAttrs('quantity')} />`, 'quantity')}${stockMovementField(`Единица<input name="unit" value="${unitLabel(lot.unit)}" readonly${stockMovementFieldAttrs('unit')} />`, 'unit')}${stockMovementField(`Дата движения<input name="occurred_at" type="datetime-local" value="${escapeHtml(form.occurred_at)}" ${locked ? 'disabled' : ''}${stockMovementFieldAttrs('occurred_at')} />`, 'occurred_at')}${stockMovementField(`Источник<select name="source" ${locked ? 'disabled' : ''}${stockMovementFieldAttrs('source')}><option value="manual" ${form.source === 'manual' ? 'selected' : ''}>Вручную</option><option value="import" ${form.source === 'import' ? 'selected' : ''}>Импорт</option><option value="system" ${form.source === 'system' ? 'selected' : ''}>Система</option></select>`, 'source')}${stockMovementField(`Причина<input name="reason" maxlength="240" value="${escapeHtml(form.reason)}" placeholder="Например, закупка, списание просрочки" ${locked ? 'disabled' : ''}${stockMovementFieldAttrs('reason')} />`, 'reason', true)}${stockMovementField(`Заметки<textarea name="note" rows="3" maxlength="1200" placeholder="Необязательно" ${locked ? 'disabled' : ''}${stockMovementFieldAttrs('note')}>${escapeHtml(form.note)}</textarea>`, 'note', true)}</div><div class="actions"><button class="primary-action" type="submit" ${locked ? 'disabled' : ''}>${stockMovementSubmitting ? 'Создаём…' : 'Создать движение'}</button></div></form></section>`;
 }
 
 function stockMovementHistory() {
@@ -2566,10 +2661,11 @@ function stockMovementHistory() {
 }
 
 function inventoryPage() {
+  const lifecycleFeedback = inventoryCatalogWorkspacePresentation(inventoryCatalogWorkspaceLifecycle, 'inventory').feedback;
   if (inventoryStatus === 'idle' || inventoryStatus === 'loading') return `<section class="card"><p class="card-kicker">Склад</p><h2>Загружаем остатки…</h2><p>Загружаем сводку по партиям компонентов и таре.</p></section>`;
-  if (inventoryStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Склад</p><h2>Не удалось загрузить склад</h2><p>${inventoryError || 'Данные временно недоступны.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-inventory">Повторить загрузку</button></section>`;
+  if (inventoryStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Склад</p><h2>Не удалось загрузить склад</h2><p>${inventoryError || 'Данные временно недоступны.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-inventory" data-focus-key="core-inventory-retry">Повторить загрузку</button></section>`;
   const overview = inventoryState.overview;
-  return `<div class="inventory-layout" data-route="inventory"><section class="card inventory-intro"><p class="card-kicker">Склад</p><h2>Обзор запасов</h2><p>Здесь показаны только текущие остатки, которые уже посчитаны приложением. На этой странице нет действий изменения склада.</p></section>${overview ? overviewCards(overview) : emptyCard('Сводка пока пуста', 'Когда появятся партии компонентов или тара, здесь будет краткая сводка.')} ${ingredientLotsTable(inventoryState.ingredientLots)} ${packagingTable(inventoryState.packagingItems)}</div>`;
+  return `<div class="inventory-layout" data-route="inventory" tabindex="-1" data-focus-key="core-inventory-content"><section class="card inventory-intro"><div><p class="card-kicker">Склад</p><h2>Обзор запасов</h2><p>Здесь показаны только текущие остатки, которые уже посчитаны приложением. На этой странице нет действий изменения склада.</p></div><button class="secondary-action" type="button" data-action="reload-inventory" data-focus-key="core-inventory-refresh">Обновить</button></section>${inventoryRefreshWarning || lifecycleFeedback.warning ? feedbackMessage('warning', inventoryRefreshWarning || lifecycleFeedback.warning) : ''}${overview ? overviewCards(overview) : emptyCard('Сводка пока пуста', 'Когда появятся партии компонентов или тара, здесь будет краткая сводка.')} ${ingredientLotsTable(inventoryState.ingredientLots)} ${packagingTable(inventoryState.packagingItems)}</div>`;
 }
 
 function overviewCards(overview: InventoryOverview) {
@@ -2759,11 +2855,12 @@ function plannedSectionPlaceholder(section: NavigationSection) {
 
 
 function recipesPage() {
+  const lifecycleFeedback = formulaClientWorkspacePresentation(formulaClientWorkspaceLifecycle, 'recipes').feedback;
   if (recipesStatus === 'idle' || recipesStatus === 'loading') return `<section class="card"><p class="card-kicker">Рецепты</p><h2>Загружаем рецепты…</h2><p>Загружаем сохранённые шаблоны рецептов, версии и компоненты.</p></section>`;
-  if (recipesStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Рецепты</p><h2>Не удалось загрузить рецепты</h2><p>${recipesError || 'Данные временно недоступны.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-recipes">Повторить загрузку</button></section>`;
+  if (recipesStatus === 'error') return `<section class="card error-card"><p class="card-kicker">Рецепты</p><h2>Не удалось загрузить рецепты</h2><p>${recipesError || 'Данные временно недоступны.'}</p><p class="next-step">Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.</p><button class="primary-action" type="button" data-action="reload-recipes" data-focus-key="core-recipes-retry">Повторить загрузку</button></section>`;
   const workspace = recipesState.showCreateForm ? recipeTemplateForm() : recipesState.selectedTemplate ? recipeDetailWorkspace() : '';
   const helper = !recipesState.showCreateForm && !recipesState.selectedTemplate ? recipeCreateHelperCard() : '';
-  return `<div class="recipes-layout"><section class="card recipes-intro"><div><p class="card-kicker">Рецепты</p><h2>Каталог рецептов</h2><p>Сначала найдите сохраненный рецепт, затем открывайте создание, карточку или версии. Сохраненные версии только просматриваются и рассчитываются — история не редактируется.</p></div><div class="actions"><button class="primary-action" type="button" data-action="open-recipe-create">Создать рецепт</button><button class="secondary-action" type="button" data-action="reload-recipes">Обновить</button></div></section>${recipesMessage ? `<p class="page-message">${recipesMessage}</p>` : ''}${recipesRefreshWarning ? feedbackMessage('warning', recipesRefreshWarning) : ''}${recipesError ? `<p class="page-message error-message">${recipesError}</p>` : ''}${recipeFilterToolbar()}${workspace}${recipeTemplateList()}${helper}</div>`;
+  return `<div class="recipes-layout"><section class="card recipes-intro"><div><p class="card-kicker">Рецепты</p><h2>Каталог рецептов</h2><p>Сначала найдите сохраненный рецепт, затем открывайте создание, карточку или версии. Сохраненные версии только просматриваются и рассчитываются — история не редактируется.</p></div><div class="actions"><button class="primary-action" type="button" data-action="open-recipe-create">Создать рецепт</button><button class="secondary-action" type="button" data-action="reload-recipes">Обновить</button></div></section>${recipesMessage ? `<p class="page-message">${recipesMessage}</p>` : ''}${recipesRefreshWarning || lifecycleFeedback.warning ? feedbackMessage('warning', recipesRefreshWarning || lifecycleFeedback.warning) : ''}${recipesError ? `<p class="page-message error-message">${recipesError}</p>` : ''}${recipeFilterToolbar()}${workspace}${recipeTemplateList()}${helper}</div>`;
 }
 function recipeFilterToolbar() { const f = recipesState.filters; const categoryOptionsHtml = [`<option value="" ${f.categoryId === '' ? 'selected' : ''}>Все группы</option>`, `<option value="none" ${f.categoryId === 'none' ? 'selected' : ''}>Без группы</option>`, ...recipesState.catalogCategories.map((category) => `<option value="${category.id}" ${f.categoryId === category.id ? 'selected' : ''}>${escapeHtml(category.name)}</option>`)].join(''); const activeFilters = recipeActiveFilterChips(); return `<section class="card data-card catalog-browser"><p class="card-kicker">Каталог рецептов</p><h2>Найти рецепт</h2><div class="catalog-toolbar"><label class="full-span">Поиск<input type="search" data-action="filter-recipes-search" value="${escapeHtml(f.search)}" placeholder="Название, тип продукта, описание, заметки или статус" /></label><label>Моя группа<select data-action="filter-recipes-category">${categoryOptionsHtml}</select></label><label>Статус<select data-action="filter-recipes-status"><option value="active" ${f.status === 'active' ? 'selected' : ''}>Активные</option><option value="archived" ${f.status === 'archived' ? 'selected' : ''}>Неактивные</option><option value="all" ${f.status === 'all' ? 'selected' : ''}>Все</option></select></label></div>${activeFilters ? `<div class="active-filter-row"><strong>Активные фильтры:</strong>${activeFilters}</div>` : ''}<div class="catalog-summary"><span>Показаны рецепты: ${filteredRecipeTemplates().length} из ${recipesState.templates.length}</span><button class="secondary-action compact" type="button" data-action="reset-recipe-filters">Сбросить фильтры</button></div></section>`; }
 function recipeTemplateForm() { const f = recipesState.templateForm; const busy = recipeTemplateSubmitting; return `<section class="card form-card"><div class="section-heading"><div><p class="card-kicker">Новый рецепт</p><h2>Создать рецепт</h2></div><button class="secondary-action compact" type="button" data-action="hide-recipe-create" ${busy ? 'disabled' : ''}>Вернуться к каталогу</button></div><form data-form="recipe-template" class="ingredient-form" novalidate ${busy ? 'aria-busy="true"' : ''}>${validationSummary(recipeTemplateValidation, 'Проверьте рецепт')}<div class="form-grid">${recipeTemplateField(`<input name="name" data-field="recipe-template-name" required maxlength="160" value="${escapeHtml(f.name)}" placeholder="Например, базовый дневной крем"${fieldErrorAttrs(recipeTemplateValidation, 'name', 'recipe-template-name-error')} ${busy ? 'readonly' : ''} />`, 'name')}${recipeTemplateField(`<input name="product_type" maxlength="120" value="${escapeHtml(f.product_type)}" placeholder="Крем, гель, тоник…"${fieldErrorAttrs(recipeTemplateValidation, 'product_type', 'recipe-template-product_type-error')} ${busy ? 'readonly' : ''} />`, 'product_type')}${recipeTemplateField(`<textarea name="description" rows="3" maxlength="1200"${fieldErrorAttrs(recipeTemplateValidation, 'description', 'recipe-template-description-error')} ${busy ? 'readonly' : ''}>${escapeHtml(f.description)}</textarea>`, 'description', true)}${recipeTemplateField(`<textarea name="notes" rows="3" maxlength="1200"${fieldErrorAttrs(recipeTemplateValidation, 'notes', 'recipe-template-notes-error')} ${busy ? 'readonly' : ''}>${escapeHtml(f.notes)}</textarea>`, 'notes', true)}</div><div class="actions"><button class="primary-action" type="submit" ${busy ? 'disabled' : ''}>${busy ? 'Создаём…' : 'Создать рецепт'}</button><button class="secondary-action" type="button" data-action="hide-recipe-create" ${busy ? 'disabled' : ''}>Вернуться к каталогу</button></div></form></section>`; }
@@ -2822,95 +2919,348 @@ function updateClientRecipeFilterSearch(input: HTMLInputElement) { const cursor 
 function updateClientRecipeStatusFilter(status: ClientRecipeStatusFilter) { clientRecipesState.filters.status = status; clientRecipesState.includeInactive = status !== 'active'; loadClientRecipes(true); }
 function resetClientRecipeFilters() { if (clientRecipePageMutationActive()) return; const shouldReload = clientRecipesState.includeInactive; clientRecipesState.filters = { search: '', status: 'active', clientId: '' }; clientRecipesState.includeInactive = false; if (shouldReload) loadClientRecipes(true); else render(); }
 function clearClientRecipeFilter(filter: string) { if (clientRecipePageMutationActive()) return; if (filter === 'search') { clientRecipesState.filters.search = ''; render(); return; } if (filter === 'client') { clientRecipesState.filters.clientId = ''; render(); return; } if (filter === 'status') updateClientRecipeStatusFilter('active'); }
-function openClientRecipeCreate() { if (clientRecipePageMutationActive()) return; if (clientRecipesState.showCreateForm) { saveClientRecipeFormFromDom(); render(); focusClientRecipeTitle(); return; } clientRecipeDetailRequestToken += 1; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCompositionLifecycle.invalidate(); clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.showCreateForm = true; clientRecipesState.selectedDetail = null; clientRecipesState.detailStatus = 'idle'; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; render(); focusClientRecipeTitle(); refreshClientRecipeCreateDependencies(); }
-function hideClientRecipeCreate() { if (clientRecipePageMutationActive()) return; clientRecipeCreateSubmitToken += 1; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCreateLifecycle.invalidate(); clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesState.showCreateForm = false; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; render(); }
+function openClientRecipeCreate() { if (clientRecipePageMutationActive()) return; if (clientRecipesState.showCreateForm) { saveClientRecipeFormFromDom(); render(); focusClientRecipeTitle(); return; } clientRecipeDetailRequestToken += 1; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.showCreateForm = true; clientRecipesState.selectedDetail = null; clientRecipesState.detailStatus = 'idle'; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; render(); focusClientRecipeTitle(); refreshClientRecipeCreateDependencies(); }
+function hideClientRecipeCreate() { if (clientRecipePageMutationActive()) return; clientRecipeCreateSubmitToken += 1; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesState.showCreateForm = false; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; render(); }
 
 function focusClientRecipeTitle() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="client-recipe-title"]')?.focus()); }
-function refreshClientRecipeCreateDependencies() { const token = clientRecipeCreateDependenciesLifecycle.begin(); Promise.all([getClients(true), getRecipeTemplates(), getIngredients()]).then(([clients, templates, ingredients]) => { if (!clientRecipeCreateDependenciesLifecycle.isCurrent(token) || !clientRecipesState.showCreateForm || clientRecipePageMutationActive()) return; saveClientRecipeFormFromDom(); clientRecipesState.clients = clients.clients; clientRecipesState.templates = templates.recipe_templates; recipesState.ingredients = ingredients.ingredients; render(); focusClientRecipeTitle(); }).catch(() => { if (!clientRecipeCreateDependenciesLifecycle.isCurrent(token) || !clientRecipesState.showCreateForm || clientRecipePageMutationActive()) return; clientRecipesError = 'Не удалось обновить клиентов и базовые рецепты. Проверьте локальное приложение и попробуйте ещё раз.'; render(); }); }
-function closeClientRecipeDetail() { if (clientRecipePageMutationActive()) return; clientRecipeDetailRequestToken += 1; clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCompositionLifecycle.invalidate(); clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.selectedDetail = null; clientRecipesState.detailStatus = 'idle'; clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); render(); }
+function refreshClientRecipeCreateDependencies() {
+  const token = clientRecipeCreateDependenciesLifecycle.begin();
+  formulaClientWorkspaceRuntime.read({
+    route: 'clientRecipes',
+    operation: 'client-recipe-references',
+    kind: 'reference',
+    contextKey: 'create',
+    ownsContext: () => clientRecipeCreateDependenciesLifecycle.isCurrent(token) && clientRecipesState.showCreateForm && !clientRecipePageMutationActive(),
+    request: () => Promise.all([getClients(true), getRecipeTemplates(), getIngredients()]),
+    validate: ([clients, templates, ingredients]) => Array.isArray(clients?.clients) && Array.isArray(templates?.recipe_templates) && Array.isArray(ingredients?.ingredients),
+    apply: ([clients, templates, ingredients]) => {
+      if (!clientRecipeCreateDependenciesLifecycle.isCurrent(token) || !clientRecipesState.showCreateForm || clientRecipePageMutationActive()) return;
+      saveClientRecipeFormFromDom();
+      clientRecipesState.clients = clients.clients;
+      clientRecipesState.templates = templates.recipe_templates;
+      recipesState.ingredients = ingredients.ingredients;
+      focusClientRecipeTitle();
+    },
+    failed: () => {
+      if (!clientRecipeCreateDependenciesLifecycle.isCurrent(token) || !clientRecipesState.showCreateForm || clientRecipePageMutationActive()) return;
+      clientRecipesError = 'Не удалось обновить клиентов и базовые рецепты. Черновик сохранён; попробуйте ещё раз.';
+    },
+  });
+}
+function closeClientRecipeDetail() { if (clientRecipePageMutationActive()) return; clientRecipeDetailRequestToken += 1; clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.selectedDetail = null; clientRecipesState.detailStatus = 'idle'; clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); render(); }
 function clientRecipeClientName(id: number) { return clientRecipesState.clients.find((c)=>c.id===id)?.full_name ?? `Клиент #${id}`; }
 function clientRecipeIngredientName(id: number) { return recipesState.ingredients.find((i)=>i.id===id)?.name ?? ingredientsState.items.find((i)=>i.id===id)?.name ?? `Компонент #${id}`; }
 function clientRecipePayloadFromForm(form: HTMLFormElement): ClientRecipePayload { const data = new FormData(form); const batch = String(data.get('target_batch_size_value') ?? '').trim(); return { client_id: Number(data.get('client_id')), source_recipe_version_id: Number(data.get('source_recipe_version_id')), title: String(data.get('title') ?? '').trim(), target_batch_size_value: batch || null, target_batch_size_unit: batch ? String(data.get('target_batch_size_unit') ?? 'g') : null, personalization_notes: String(data.get('personalization_notes') ?? '').trim(), allergy_notes: String(data.get('allergy_notes') ?? '').trim(), preference_notes: String(data.get('preference_notes') ?? '').trim(), contraindication_notes: String(data.get('contraindication_notes') ?? '').trim(), notes: String(data.get('notes') ?? '').trim() }; }
 function saveClientRecipeFormFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="client-recipe"]'); if (!form) return; const data = new FormData(form); clientRecipesState.form = { client_id: String(data.get('client_id') ?? ''), recipe_template_id: String(data.get('recipe_template_id') ?? ''), source_recipe_version_id: String(data.get('source_recipe_version_id') ?? ''), title: String(data.get('title') ?? '').trim(), target_batch_size_value: String(data.get('target_batch_size_value') ?? '').trim(), target_batch_size_unit: String(data.get('target_batch_size_unit') ?? 'g'), personalization_notes: String(data.get('personalization_notes') ?? '').trim(), allergy_notes: String(data.get('allergy_notes') ?? '').trim(), preference_notes: String(data.get('preference_notes') ?? '').trim(), contraindication_notes: String(data.get('contraindication_notes') ?? '').trim(), notes: String(data.get('notes') ?? '').trim() }; }
 function humanClientRecipeError(error: unknown) { const message = error instanceof Error ? error.message : ''; if (message.includes('Source recipe version has no ingredient lines')) return 'Не удалось создать индивидуальный рецепт: выбранная версия рецепта пустая. Добавьте состав в версии рецепта.'; if (message.includes('Client is inactive')) return 'Не удалось создать индивидуальный рецепт: выбранный клиент находится в архиве. Выберите активного клиента.'; if (message.includes('Ingredient is inactive')) return 'Не удалось создать индивидуальный рецепт: в версии рецепта есть архивный компонент. Проверьте состав версии.'; if (message.includes('Client was not found')) return 'Не удалось создать индивидуальный рецепт: выбранный клиент не найден. Обновите список клиентов.'; if (message.includes('Source recipe version was not found')) return 'Не удалось создать индивидуальный рецепт: выбранная версия рецепта не найдена. Обновите рецепты.'; return 'Не удалось создать индивидуальный рецепт. Проверьте клиента, версию рецепта и обязательные поля.'; }
-function loadClientRecipes(force = false) { if (clientRecipePageMutationActive()) return; if (!force && (clientRecipesStatus === 'loading' || clientRecipesStatus === 'ready')) return; clientRecipesStatus = 'loading'; clientRecipesError = ''; render(); Promise.all([getClientRecipes(clientRecipesState.includeInactive), getClients(true), getRecipeTemplates(), getIngredients()]).then(([recipes, clients, templates, ingredients]) => { clientRecipesState.items = recipes.client_recipes; clientRecipesState.clients = clients.clients; clientRecipesState.templates = templates.recipe_templates; recipesState.ingredients = ingredients.ingredients; clientRecipesStatus = 'ready'; clientRecipesRefreshWarning = ''; render(); }).catch(() => { clientRecipesStatus = 'error'; clientRecipesError = 'Не получилось получить индивидуальные рецепты, клиентов или базовые рецепты из локального приложения.'; render(); }); }
-function selectClientRecipeTemplate(value: string) { if (clientRecipePageMutationActive()) return; saveClientRecipeFormFromDom(); clientRecipesState.form.recipe_template_id = value; clientRecipesState.form.source_recipe_version_id = ''; clientRecipesState.selectedTemplateId = value ? Number(value) : null; clientRecipesState.versions = []; clientRecipesState.versionsStatus = value ? 'loading' : 'idle'; clientRecipesError = ''; clientRecipeVersionRequestLifecycle.invalidate(); if (!value) { render(); return; } const templateId = Number(value); const token = clientRecipeVersionRequestLifecycle.begin(); render(); getRecipeVersions(templateId).then((response) => { if (!clientRecipeVersionRequestLifecycle.isCurrent(token) || clientRecipePageMutationActive() || !clientRecipesState.showCreateForm || clientRecipesState.form.recipe_template_id !== String(templateId)) return; saveClientRecipeFormFromDom(); if (clientRecipesState.form.recipe_template_id !== String(templateId)) return; clientRecipesState.versions = response.recipe_versions; clientRecipesState.versionsStatus = 'ready'; render(); }).catch(() => { if (!clientRecipeVersionRequestLifecycle.isCurrent(token) || clientRecipePageMutationActive() || !clientRecipesState.showCreateForm || clientRecipesState.form.recipe_template_id !== String(templateId)) return; clientRecipesState.versionsStatus = 'error'; clientRecipesError = 'Не удалось загрузить сохранённые версии состава. Попробуйте выбрать базовый рецепт ещё раз.'; render(); }); }
+function reconcileClientRecipeWorkspaceObligation() {
+  const obligation = formulaClientWorkspaceLifecycle.reconciliationObligation('clientRecipes');
+  if (!obligation || obligation.readOperation !== 'client-recipe-detail') return false;
+  const match = obligation.readContextKey.match(/^client-recipe:(\d+)$/);
+  if (!match) return false;
+  const recipeId = Number(match[1]);
+  const started = formulaClientWorkspaceRuntime.read({
+    route: 'clientRecipes',
+    operation: 'client-recipe-detail',
+    kind: 'reconciliation',
+    contextKey: obligation.readContextKey,
+    request: () => getClientRecipe(recipeId),
+    validate: (detail) => Boolean(detail && isEntityDto(detail.client_recipe) && Array.isArray(detail.ingredients)),
+    apply: (detail) => {
+      if (clientRecipesState.selectedDetail?.client_recipe.id === recipeId) {
+        clientRecipesState.selectedDetail = detail;
+        clientRecipesState.detailStatus = 'ready';
+      }
+      clientRecipesRefreshWarning = '';
+    },
+    failed: () => {
+      clientRecipesRefreshWarning = 'Не удалось проверить сохранённый состав исходного индивидуального рецепта. Нажмите «Обновить» ещё раз.';
+    },
+  });
+  return started.accepted;
+}
+function loadClientRecipes(force = false) {
+  if (clientRecipePageMutationActive()) return;
+  if (force) reconcileClientRecipeWorkspaceObligation();
+  if (!force && (clientRecipesStatus === 'loading' || clientRecipesStatus === 'ready')) return;
+  const retained = clientRecipesStatus === 'ready';
+  if (!retained) clientRecipesStatus = 'loading';
+  clientRecipesError = '';
+  clientRecipesRefreshWarning = '';
+  formulaClientWorkspaceRuntime.read({
+    route: 'clientRecipes',
+    operation: 'client-recipe-list',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('clientRecipes', 'client-recipe-list', 'client-recipes:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'client-recipes:list',
+    request: () => Promise.all([getClientRecipes(clientRecipesState.includeInactive), getClients(true), getRecipeTemplates(), getIngredients()]),
+    validate: ([recipes, clients, templates, ingredients]) => Array.isArray(recipes?.client_recipes) && Array.isArray(clients?.clients) && Array.isArray(templates?.recipe_templates) && Array.isArray(ingredients?.ingredients),
+    apply: ([recipes, clients, templates, ingredients]) => {
+      clientRecipesState.items = recipes.client_recipes;
+      clientRecipesState.clients = clients.clients;
+      clientRecipesState.templates = templates.recipe_templates;
+      recipesState.ingredients = ingredients.ingredients;
+      clientRecipesStatus = 'ready';
+    },
+    failed: (hasSnapshot) => {
+      clientRecipesStatus = hasSnapshot ? 'ready' : 'error';
+      clientRecipesError = hasSnapshot ? '' : 'Не получилось получить индивидуальные рецепты, клиентов или базовые рецепты из локального приложения.';
+      clientRecipesRefreshWarning = hasSnapshot ? formulaClientWorkspaceLifecycle.feedback('clientRecipes').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') clientRecipesStatus = retained ? 'ready' : 'idle';
+    },
+  });
+}
+function selectClientRecipeTemplate(value: string) {
+  if (clientRecipePageMutationActive()) return;
+  saveClientRecipeFormFromDom();
+  clientRecipesState.form.recipe_template_id = value;
+  clientRecipesState.form.source_recipe_version_id = '';
+  clientRecipesState.selectedTemplateId = value ? Number(value) : null;
+  clientRecipesState.versions = [];
+  clientRecipesState.versionsStatus = value ? 'loading' : 'idle';
+  clientRecipesError = '';
+  clientRecipeVersionRequestLifecycle.invalidate();
+  if (!value) { render(); return; }
+  const templateId = Number(value);
+  const token = clientRecipeVersionRequestLifecycle.begin();
+  render();
+  formulaClientWorkspaceRuntime.read({
+    route: 'clientRecipes',
+    operation: 'recipe-version-list',
+    kind: 'reference',
+    contextKey: `template:${templateId}`,
+    ownsContext: () => clientRecipeVersionRequestLifecycle.isCurrent(token) && clientRecipesState.showCreateForm && clientRecipesState.form.recipe_template_id === String(templateId) && !clientRecipePageMutationActive(),
+    request: () => getRecipeVersions(templateId),
+    validate: (response) => Array.isArray(response?.recipe_versions),
+    apply: (response) => {
+      if (!clientRecipeVersionRequestLifecycle.isCurrent(token) || clientRecipePageMutationActive() || !clientRecipesState.showCreateForm || clientRecipesState.form.recipe_template_id !== String(templateId)) return;
+      saveClientRecipeFormFromDom();
+      if (clientRecipesState.form.recipe_template_id !== String(templateId)) return;
+      clientRecipesState.versions = response.recipe_versions;
+      clientRecipesState.versionsStatus = 'ready';
+    },
+    failed: () => {
+      if (!clientRecipeVersionRequestLifecycle.isCurrent(token) || clientRecipePageMutationActive() || !clientRecipesState.showCreateForm || clientRecipesState.form.recipe_template_id !== String(templateId)) return;
+      clientRecipesState.versionsStatus = 'error';
+      clientRecipesError = 'Не удалось загрузить сохранённые версии состава. Черновик сохранён; выберите базовый рецепт ещё раз.';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read' && clientRecipesState.form.recipe_template_id === String(templateId)) {
+        clientRecipesState.versionsStatus = 'idle';
+      }
+    },
+  });
+}
 function submitClientRecipeForm(event: SubmitEvent) {
   event.preventDefault();
   if (clientRecipePageMutationActive()) return;
   const form = event.currentTarget as HTMLFormElement;
   saveClientRecipeFormFromDom();
   const payload = clientRecipePayloadFromForm(form);
-  const token = clientRecipeCreateSubmitToken + 1;
-  let shouldRenderOnFinish = true;
-  runClientRecipeCreateMutation<ClientRecipeDetail, ClientRecipe>({
-    lifecycle: clientRecipeCreateLifecycle,
-    blocked: clientRecipePageMutationActive,
-    create: () => createClientRecipe(payload),
-    refresh: () => getClientRecipes(clientRecipesState.includeInactive).then((response) => response.client_recipes),
-    onStart: () => { clientRecipeCreateSubmitToken = token; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCreateSubmitting = true; clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation); disableClientRecipeCreateMutationControls(document); },
-    onCreateSuccess: (detail) => { clientRecipesMessage = 'Индивидуальный рецепт создан.'; clientRecipesError = ''; clientRecipeCreateValidation = emptyFormValidationState(); clientRecipesState.selectedDetail = detail; clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipesState.detailStatus = 'ready'; clientRecipesState.showCreateForm = false; clientRecipesState.form = emptyClientRecipeForm(); clientRecipesState.versions = []; clientRecipesState.versionsStatus = 'idle'; clientRecipesState.selectedTemplateId = null; },
-    onRefreshSuccess: (items) => { clientRecipesState.items = items; clientRecipesStatus = 'ready'; },
-    onRefreshFailure: () => { clientRecipesStatus = 'ready'; clientRecipesRefreshWarning = 'Индивидуальный рецепт создан, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальные данные.'; },
-    onCreateFailure: (error) => { shouldRenderOnFinish = false; restoreClientRecipeMutationControls(document); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; clientRecipeCreateValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCreateFieldLabels, 'Не удалось создать индивидуальный рецепт. Проверьте поля и попробуйте ещё раз.'); clientRecipesStatus = 'ready'; applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation); announceAssertive('Проверьте индивидуальный рецепт. Ошибки показаны рядом с полями.'); },
-    isContextCurrent: () => token === clientRecipeCreateSubmitToken,
-    onFinish: () => { clientRecipeCreateSubmitting = false; if (shouldRenderOnFinish) render(); },
+  clientRecipeCreateSubmitToken += 1;
+  clientRecipeCreateDependenciesLifecycle.invalidate();
+  clientRecipeVersionRequestLifecycle.invalidate();
+  clientRecipeCompositionIngredientsLifecycle.invalidate();
+  clientRecipeCreateSubmitting = true;
+  clientRecipeCreateValidation = emptyFormValidationState();
+  clientRecipesMessage = '';
+  clientRecipesError = '';
+  clientRecipesRefreshWarning = '';
+  applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation);
+  disableClientRecipeCreateMutationControls(document);
+  formulaClientWorkspaceRuntime.mutate({
+    route: 'clientRecipes',
+    operation: 'client-recipe-create',
+    contextKey: `client:${payload.client_id}:version:${payload.source_recipe_version_id}`,
+    ownsContext: () => clientRecipeCreateSubmitting,
+    request: () => createClientRecipe(payload),
+    validate: (detail) => Boolean(detail && isEntityDto(detail.client_recipe) && Array.isArray(detail.ingredients)),
+    successMessage: 'Индивидуальный рецепт создан.',
+    apply: (detail) => {
+      clientRecipeCreateSubmitting = false;
+      clientRecipesMessage = 'Индивидуальный рецепт создан.';
+      clientRecipeCreateValidation = emptyFormValidationState();
+      clientRecipesState.selectedDetail = detail;
+      clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor();
+      clientRecipesState.detailStatus = 'ready';
+      clientRecipesState.showCreateForm = false;
+      clientRecipesState.form = emptyClientRecipeForm();
+      clientRecipesState.versions = [];
+      clientRecipesState.versionsStatus = 'idle';
+      clientRecipesState.selectedTemplateId = null;
+      restoreClientRecipeMutationControls(document);
+      formulaClientWorkspaceRuntime.read({
+        route: 'clientRecipes',
+        operation: 'client-recipe-list',
+        kind: 'mutation-refresh',
+        contextKey: 'client-recipes:list',
+        request: () => getClientRecipes(clientRecipesState.includeInactive),
+        validate: (response) => Array.isArray(response?.client_recipes),
+        apply: (response) => { clientRecipesState.items = response.client_recipes; clientRecipesStatus = 'ready'; },
+        failed: () => { clientRecipesStatus = 'ready'; clientRecipesRefreshWarning = 'Индивидуальный рецепт создан, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальные данные.'; },
+      });
+    },
+    failed: (error, ambiguous) => {
+      clientRecipeCreateSubmitting = false;
+      restoreClientRecipeMutationControls(document);
+      clientRecipesMessage = '';
+      clientRecipesError = '';
+      if (ambiguous) {
+        clientRecipesRefreshWarning = formulaClientWorkspaceLifecycle.feedback('clientRecipes').warning;
+        return;
+      }
+      clientRecipeCreateValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCreateFieldLabels, 'Не удалось создать индивидуальный рецепт. Проверьте поля и попробуйте ещё раз.');
+      clientRecipesStatus = 'ready';
+      applyValidationToClientRecipeCreateForm(clientRecipeCreateValidation);
+    },
+    rejected: () => {
+      clientRecipeCreateSubmitting = false;
+      restoreClientRecipeMutationControls(document);
+      render();
+    },
+    settled: (result) => {
+      clientRecipeCreateSubmitting = false;
+      restoreClientRecipeMutationControls(document);
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clientRecipes')) return;
+      if (result.reconciliationRequired) loadClientRecipes(true);
+      else render();
+    },
   });
 }
-function openClientRecipe(id: number) { if (clientRecipePageMutationActive()) return; const token = ++clientRecipeDetailRequestToken; clientRecipeCreateDependenciesLifecycle.invalidate(); clientRecipeVersionRequestLifecycle.invalidate(); clientRecipeCompositionIngredientsLifecycle.invalidate(); clientRecipeCreateLifecycle.invalidate(); clientRecipeCompositionLifecycle.invalidate(); clientRecipeCreateValidation = emptyFormValidationState(); clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.showCreateForm = false; clientRecipesState.selectedDetail = null; clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipesState.detailStatus = 'loading'; clientRecipesError = ''; render(); getClientRecipe(id).then((detail) => { if (token !== clientRecipeDetailRequestToken) return; clientRecipesState.selectedDetail = detail; clientRecipesState.detailStatus = 'ready'; render(); }).catch(() => { if (token !== clientRecipeDetailRequestToken) return; clientRecipesState.detailStatus = 'error'; clientRecipesError = 'Не удалось открыть индивидуальный рецепт. Обновите список и попробуйте еще раз.'; render(); }); }
+function openClientRecipe(id: number) {
+  if (clientRecipePageMutationActive()) return;
+  clientRecipeDetailRequestToken += 1;
+  clientRecipeCreateDependenciesLifecycle.invalidate();
+  clientRecipeVersionRequestLifecycle.invalidate();
+  clientRecipeCompositionIngredientsLifecycle.invalidate();
+  clientRecipeCreateValidation = emptyFormValidationState();
+  clientRecipeCompositionValidation = emptyFormValidationState();
+  clientRecipesState.showCreateForm = false;
+  clientRecipesState.selectedDetail = null;
+  clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor();
+  clientRecipesState.detailStatus = 'loading';
+  clientRecipesError = '';
+  formulaClientWorkspaceRuntime.read({
+    route: 'clientRecipes',
+    operation: 'client-recipe-detail',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('clientRecipes', 'client-recipe-detail', `client-recipe:${id}`) ? 'reconciliation' : 'detail',
+    contextKey: `client-recipe:${id}`,
+    request: () => getClientRecipe(id),
+    validate: (detail) => Boolean(detail && isEntityDto(detail.client_recipe) && Array.isArray(detail.ingredients)),
+    apply: (detail) => {
+      clientRecipesState.selectedDetail = detail;
+      clientRecipesState.detailStatus = 'ready';
+    },
+    failed: () => {
+      clientRecipesState.detailStatus = 'error';
+      clientRecipesError = 'Не удалось открыть индивидуальный рецепт. Обновите список и попробуйте еще раз.';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') clientRecipesState.detailStatus = 'idle';
+    },
+  });
+}
 function deactivateClientRecipe(id: number) {
   if (clientRecipePageMutationActive()) return;
   const recipe = clientRecipesState.items.find((item)=>item.id===id);
   if (!recipe || !window.confirm('Архивировать индивидуальный рецепт? Карточка останется в истории, но не будет отображаться как активная.')) return;
   clientRecipeArchiveRestoreSubmittingId = id;
   disableClientRecipeArchiveRestoreMutationControls(document);
-  deactivateClientRecipeRequest(id).then(() => {
-    clientRecipesMessage = 'Индивидуальный рецепт архивирован.';
-    clientRecipesError = '';
-    return getClientRecipes(clientRecipesState.includeInactive);
-  }).then((response) => {
-    clientRecipesState.items = response.client_recipes;
-    if (clientRecipesState.selectedDetail?.client_recipe.id === id) clientRecipesState.selectedDetail = null;
-    clientRecipesStatus = 'ready';
-    clientRecipeArchiveRestoreSubmittingId = null;
-    render();
-  }).catch(() => {
-    clientRecipesMessage = '';
-    clientRecipesError = 'Не удалось архивировать индивидуальный рецепт. Попробуйте еще раз.';
-    clientRecipesStatus = 'ready';
-    clientRecipeArchiveRestoreSubmittingId = null;
-    restoreClientRecipeMutationControls(document);
-    render();
+  const started = formulaClientWorkspaceRuntime.mutate({
+    route: 'clientRecipes',
+    operation: 'client-recipe-deactivate',
+    contextKey: `client-recipe:${id}`,
+    request: () => deactivateClientRecipeRequest(id),
+    validate: isEntityDto,
+    successMessage: 'Индивидуальный рецепт архивирован.',
+    apply: (archived) => {
+      clientRecipesState.items = clientRecipesState.items.map((item) => item.id === id ? archived as ClientRecipe : item);
+      if (clientRecipesState.selectedDetail?.client_recipe.id === id) clientRecipesState.selectedDetail = null;
+      clientRecipesMessage = 'Индивидуальный рецепт архивирован.';
+      clientRecipesError = '';
+      clientRecipeArchiveRestoreSubmittingId = null;
+      formulaClientWorkspaceRuntime.read({
+        route: 'clientRecipes',
+        operation: 'client-recipe-list',
+        kind: 'mutation-refresh',
+        contextKey: 'client-recipes:list',
+        request: () => getClientRecipes(clientRecipesState.includeInactive),
+        validate: (response) => Array.isArray(response?.client_recipes),
+        apply: (response) => { clientRecipesState.items = response.client_recipes; clientRecipesStatus = 'ready'; },
+        failed: () => { clientRecipesStatus = 'ready'; clientRecipesRefreshWarning = 'Индивидуальный рецепт архивирован, но список не обновился. Нажмите «Обновить».'; },
+      });
+    },
+    failed: (_error, ambiguous) => {
+      clientRecipeArchiveRestoreSubmittingId = null;
+      clientRecipesMessage = '';
+      clientRecipesError = ambiguous ? '' : 'Не удалось архивировать индивидуальный рецепт. Попробуйте еще раз.';
+      clientRecipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('clientRecipes').warning : '';
+      restoreClientRecipeMutationControls(document);
+    },
+    settled: (result) => {
+      if (clientRecipeArchiveRestoreSubmittingId === id) clientRecipeArchiveRestoreSubmittingId = null;
+      restoreClientRecipeMutationControls(document);
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clientRecipes')) return;
+      if (result.reconciliationRequired) loadClientRecipes(true);
+      else render();
+    },
   });
+  if (!started.accepted) { clientRecipeArchiveRestoreSubmittingId = null; restoreClientRecipeMutationControls(document); }
 }
 function restoreClientRecipe(id: number) {
   if (clientRecipePageMutationActive()) return;
   if (!window.confirm('Вернуть индивидуальный рецепт из архива?')) return;
   clientRecipeArchiveRestoreSubmittingId = id;
   disableClientRecipeArchiveRestoreMutationControls(document);
-  restoreClientRecipeRequest(id).then((restored) => {
-    clientRecipesMessage = 'Индивидуальный рецепт возвращён в работу.';
-    clientRecipesError = '';
-    clientRecipesState.filters.status = 'active';
-    clientRecipesState.includeInactive = false;
-    clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor();
-    return Promise.all([getClientRecipes(false), getClientRecipe(restored.id)]);
-  }).then(([response, detail]) => {
-    clientRecipesState.items = response.client_recipes;
-    clientRecipesState.selectedDetail = detail;
-    clientRecipesState.detailStatus = 'ready';
-    clientRecipesState.showCreateForm = false;
-    clientRecipesStatus = 'ready';
-    clientRecipeArchiveRestoreSubmittingId = null;
-    render();
-  }).catch(() => {
-    clientRecipesMessage = '';
-    clientRecipesError = 'Не удалось вернуть индивидуальный рецепт из архива. Проверьте, что клиент активен, и попробуйте ещё раз.';
-    clientRecipesStatus = 'ready';
-    clientRecipeArchiveRestoreSubmittingId = null;
-    restoreClientRecipeMutationControls(document);
-    render();
+  const started = formulaClientWorkspaceRuntime.mutate({
+    route: 'clientRecipes',
+    operation: 'client-recipe-restore',
+    contextKey: `client-recipe:${id}`,
+    request: () => restoreClientRecipeRequest(id),
+    validate: isEntityDto,
+    successMessage: 'Индивидуальный рецепт возвращён в работу.',
+    apply: (restored) => {
+      clientRecipesState.filters.status = 'active';
+      clientRecipesState.includeInactive = false;
+      clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor();
+      clientRecipesState.items = clientRecipesState.items.map((item) => item.id === id ? restored as ClientRecipe : item);
+      clientRecipesMessage = 'Индивидуальный рецепт возвращён в работу.';
+      clientRecipesError = '';
+      clientRecipeArchiveRestoreSubmittingId = null;
+      formulaClientWorkspaceRuntime.read({
+        route: 'clientRecipes',
+        operation: 'client-recipe-list',
+        kind: 'mutation-refresh',
+        contextKey: `restored:${id}`,
+        request: () => Promise.all([getClientRecipes(false), getClientRecipe(id)]),
+        validate: ([response, detail]) => Array.isArray(response?.client_recipes) && isEntityDto(detail?.client_recipe) && Array.isArray(detail?.ingredients),
+        apply: ([response, detail]) => {
+          clientRecipesState.items = response.client_recipes;
+          clientRecipesState.selectedDetail = detail;
+          clientRecipesState.detailStatus = 'ready';
+          clientRecipesState.showCreateForm = false;
+          clientRecipesStatus = 'ready';
+        },
+        failed: () => { clientRecipesStatus = 'ready'; clientRecipesRefreshWarning = 'Индивидуальный рецепт восстановлен, но карточка не обновилась. Нажмите «Обновить».'; },
+      });
+    },
+    failed: (_error, ambiguous) => {
+      clientRecipeArchiveRestoreSubmittingId = null;
+      clientRecipesMessage = '';
+      clientRecipesError = ambiguous ? '' : 'Не удалось вернуть индивидуальный рецепт из архива. Проверьте, что клиент активен, и попробуйте ещё раз.';
+      clientRecipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('clientRecipes').warning : '';
+      restoreClientRecipeMutationControls(document);
+    },
+    settled: (result) => {
+      if (clientRecipeArchiveRestoreSubmittingId === id) clientRecipeArchiveRestoreSubmittingId = null;
+      restoreClientRecipeMutationControls(document);
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clientRecipes')) return;
+      if (result.reconciliationRequired) loadClientRecipes(true);
+      else render();
+    },
   });
+  if (!started.accepted) { clientRecipeArchiveRestoreSubmittingId = null; restoreClientRecipeMutationControls(document); }
 }
 
 function clientRecipeCompositionEditorPanel() { const editor = clientRecipesState.compositionEditor; if (!editor.isOpen) return ''; const locked = editor.draft.some((line) => line.lockedReason); const noActiveIngredients = activeClientRecipeIngredients().length === 0; return `<form data-form="client-recipe-composition" class="ingredient-form" novalidate ${editor.isSaving ? 'aria-busy="true"' : ''}>${validationSummary(clientRecipeCompositionValidation, 'Проверьте состав индивидуального рецепта')}<h3>Редактирование состава</h3><p class="next-step">Вы меняете копию состава для этого клиента. Базовый рецепт и его сохранённые версии не изменятся.</p>${locked ? '<p class="next-step warning-text">Некоторые строки используют архивные или недоступные компоненты. Их можно оставить без изменений или удалить, но нельзя редактировать.</p><p class="next-step warning-text">Порядок строк нельзя менять, пока в составе есть архивные или недоступные компоненты. Их можно оставить без изменений или удалить.</p>' : ''}${editor.error ? `<p class="page-message error-message">${escapeHtml(editor.error)}</p>` : ''}${noActiveIngredients ? '<p class="empty-hint">Нет активных компонентов для добавления. Создайте компонент в разделе «Компоненты» или обновите список.</p>' : ''}<div class="recipe-lines">${editor.draft.map(clientRecipeCompositionLineForm).join('')}</div><div class="actions"><button class="secondary-action" type="button" data-action="add-client-recipe-composition-line" ${noActiveIngredients ? 'disabled' : ''}>Добавить компонент</button><button class="secondary-action" type="button" data-action="reset-client-recipe-composition-editor">Сбросить изменения</button><button class="secondary-action" type="button" data-action="close-client-recipe-composition-editor">Закрыть редактирование</button><button class="primary-action" type="submit" ${editor.isSaving ? 'disabled' : ''}>${editor.isSaving ? 'Сохраняем…' : 'Сохранить состав'}</button></div></form>`; }
@@ -2920,7 +3270,39 @@ function emptyClientRecipeCompositionEditor(): ClientRecipeCompositionEditorStat
 function clientRecipeCompositionDraftFromDetail(detail: ClientRecipeDetail) { return detail.ingredients.slice().sort((a,b)=>a.position-b.position).map((line, index) => { const active = activeClientRecipeIngredients().some((i)=>i.id===line.ingredient_id); return { id: line.id, ingredient_id: String(line.ingredient_id), position: line.position || index + 1, phase: line.phase || '', amount_value: String(line.amount_value ?? ''), amount_unit: line.amount_unit || 'g', personalization_note: line.personalization_note || '', notes: line.notes || '', lockedReason: active ? undefined : `Компонент #${line.ingredient_id} — архивный или недоступный` }; }); }
 function saveClientRecipeCompositionDraftFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="client-recipe-composition"]'); if (!form) return; const data = new FormData(form); clientRecipesState.compositionEditor.draft = clientRecipesState.compositionEditor.draft.map((line, index) => line.lockedReason ? line : { ...line, ingredient_id: String(data.get(`ingredients.${index}.ingredient_id`) ?? line.ingredient_id ?? '').trim(), position: Number(data.get(`ingredients.${index}.position`) ?? index + 1), phase: String(data.get(`ingredients.${index}.phase`) ?? line.phase ?? '').trim(), amount_value: String(data.get(`ingredients.${index}.amount_value`) ?? line.amount_value ?? '').trim(), amount_unit: String(data.get(`ingredients.${index}.amount_unit`) ?? line.amount_unit ?? 'g'), personalization_note: String(data.get(`ingredients.${index}.personalization_note`) ?? '').trim(), notes: String(data.get(`ingredients.${index}.notes`) ?? '').trim() }); }
 function clientRecipeCompositionDraftIsDirty() { const detail = clientRecipesState.selectedDetail; if (!detail) return false; return JSON.stringify(clientRecipesState.compositionEditor.draft) !== JSON.stringify(clientRecipeCompositionDraftFromDetail(detail)); }
-function openClientRecipeCompositionEditor() { if (clientRecipePageMutationActive()) return; const detail = clientRecipesState.selectedDetail; if (!detail || !detail.client_recipe.is_active || detail.client_recipe.status === 'archived') return; clientRecipeCompositionIngredientsLifecycle.invalidate(); const contextId = detail.client_recipe.id; const open = () => { if (!clientRecipeCompositionIngredientsLifecycle.isCurrent(token) || clientRecipePageMutationActive() || clientRecipesState.selectedDetail?.client_recipe.id !== contextId || !clientRecipesState.selectedDetail.client_recipe.is_active || clientRecipesState.selectedDetail.client_recipe.status === 'archived') return; clientRecipesState.compositionEditor = { isOpen: true, isSaving: false, draft: clientRecipeCompositionDraftFromDetail(clientRecipesState.selectedDetail), error: '' }; clientRecipeCompositionValidation = emptyFormValidationState(); render(); }; const token = clientRecipeCompositionIngredientsLifecycle.begin(); if (recipesState.ingredients.length === 0) getIngredients().then((r)=>{ if (!clientRecipeCompositionIngredientsLifecycle.isCurrent(token) || clientRecipePageMutationActive() || clientRecipesState.selectedDetail?.client_recipe.id !== contextId) return; recipesState.ingredients = r.ingredients; open(); }).catch(()=>{ if (!clientRecipeCompositionIngredientsLifecycle.isCurrent(token) || clientRecipePageMutationActive() || clientRecipesState.selectedDetail?.client_recipe.id !== contextId) return; clientRecipesState.compositionEditor.error = 'Не удалось обновить список компонентов. Попробуйте ещё раз.'; render(); }); else open(); }
+function openClientRecipeCompositionEditor() {
+  if (clientRecipePageMutationActive()) return;
+  const detail = clientRecipesState.selectedDetail;
+  if (!detail || !detail.client_recipe.is_active || detail.client_recipe.status === 'archived') return;
+  clientRecipeCompositionIngredientsLifecycle.invalidate();
+  const contextId = detail.client_recipe.id;
+  const token = clientRecipeCompositionIngredientsLifecycle.begin();
+  const open = () => {
+    if (!clientRecipeCompositionIngredientsLifecycle.isCurrent(token) || clientRecipePageMutationActive() || clientRecipesState.selectedDetail?.client_recipe.id !== contextId || !clientRecipesState.selectedDetail.client_recipe.is_active || clientRecipesState.selectedDetail.client_recipe.status === 'archived') return;
+    clientRecipesState.compositionEditor = { isOpen: true, isSaving: false, draft: clientRecipeCompositionDraftFromDetail(clientRecipesState.selectedDetail), error: '' };
+    clientRecipeCompositionValidation = emptyFormValidationState();
+    render();
+  };
+  if (recipesState.ingredients.length > 0) { open(); return; }
+  formulaClientWorkspaceRuntime.read({
+    route: 'clientRecipes',
+    operation: 'client-recipe-references',
+    kind: 'reference',
+    contextKey: `composition:${contextId}`,
+    ownsContext: () => clientRecipeCompositionIngredientsLifecycle.isCurrent(token) && clientRecipesState.selectedDetail?.client_recipe.id === contextId && !clientRecipePageMutationActive(),
+    request: getIngredients,
+    validate: (response) => Array.isArray(response?.ingredients),
+    apply: (response) => {
+      if (!clientRecipeCompositionIngredientsLifecycle.isCurrent(token) || clientRecipesState.selectedDetail?.client_recipe.id !== contextId) return;
+      recipesState.ingredients = response.ingredients;
+      open();
+    },
+    failed: () => {
+      if (!clientRecipeCompositionIngredientsLifecycle.isCurrent(token) || clientRecipesState.selectedDetail?.client_recipe.id !== contextId) return;
+      clientRecipesState.compositionEditor.error = 'Не удалось обновить список компонентов. Попробуйте ещё раз.';
+    },
+  });
+}
 function addClientRecipeCompositionLine() { if (clientRecipePageMutationActive()) return; saveClientRecipeCompositionDraftFromDom(); clientRecipesState.compositionEditor.draft.push({ id: null, ingredient_id: '', position: clientRecipesState.compositionEditor.draft.length + 1, phase: 'A', amount_value: '', amount_unit: 'g', personalization_note: '', notes: '' }); render(); }
 function removeClientRecipeCompositionLine(index: number) { if (clientRecipePageMutationActive()) return; saveClientRecipeCompositionDraftFromDom(); clientRecipesState.compositionEditor.draft.splice(index, 1); clientRecipeCompositionValidation = clearIndexedCollectionValidation(clientRecipeCompositionValidation, 'ingredients'); render(); }
 function moveClientRecipeCompositionLine(index: number, direction: number) { if (clientRecipePageMutationActive()) return; saveClientRecipeCompositionDraftFromDom(); if (clientRecipesState.compositionEditor.draft.some((line) => line.lockedReason)) return; const next = index + direction; const draft = clientRecipesState.compositionEditor.draft; if (next < 0 || next >= draft.length) return; [draft[index], draft[next]] = [draft[next], draft[index]]; clientRecipeCompositionValidation = clearIndexedCollectionValidation(clientRecipeCompositionValidation, 'ingredients'); render(); }
@@ -2934,19 +3316,63 @@ function submitClientRecipeCompositionEditor(event: SubmitEvent) {
   if (!detail) return;
   saveClientRecipeCompositionDraftFromDom();
   const contextId = detail.client_recipe.id;
-  const token = clientRecipeCompositionSubmitToken + 1;
   const payload = clientRecipeCompositionPayload();
-  let shouldRenderOnFinish = true;
-  runClientRecipeCompositionMutation<ClientRecipeDetail>({
-    lifecycle: clientRecipeCompositionLifecycle,
-    blocked: clientRecipePageMutationActive,
-    contextId,
-    update: () => updateClientRecipeIngredients(contextId, payload),
-    onStart: () => { clientRecipeCompositionSubmitToken = token; clientRecipeCompositionSubmitting = true; clientRecipesState.compositionEditor.isSaving = true; clientRecipesState.compositionEditor.error = ''; clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation); disableClientRecipeCompositionMutationControls(document); },
-    onSuccess: (updated) => { clientRecipesState.selectedDetail = updated; clientRecipesState.detailStatus = 'ready'; clientRecipeCompositionValidation = emptyFormValidationState(); clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor(); clientRecipesMessage = 'Состав индивидуального рецепта сохранён. Базовый рецепт не изменён.'; clientRecipesError = ''; },
-    onFailure: (error) => { shouldRenderOnFinish = false; clientRecipesState.compositionEditor.isSaving = false; restoreClientRecipeMutationControls(document); clientRecipesMessage = ''; clientRecipesError = ''; clientRecipesRefreshWarning = ''; clientRecipeCompositionValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCompositionFieldLabels(clientRecipesState.compositionEditor.draft), 'Не удалось сохранить состав индивидуального рецепта. Проверьте строки и попробуйте ещё раз.'); applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation); announceAssertive('Проверьте состав индивидуального рецепта. Ошибки показаны рядом со строками.'); },
-    isContextCurrent: (id) => token === clientRecipeCompositionSubmitToken && clientRecipesState.selectedDetail?.client_recipe.id === id,
-    onFinish: () => { clientRecipeCompositionSubmitting = false; if (shouldRenderOnFinish) render(); },
+  clientRecipeCompositionSubmitToken += 1;
+  clientRecipeCompositionSubmitting = true;
+  clientRecipesState.compositionEditor.isSaving = true;
+  clientRecipesState.compositionEditor.error = '';
+  clientRecipeCompositionValidation = emptyFormValidationState();
+  clientRecipesMessage = '';
+  clientRecipesError = '';
+  clientRecipesRefreshWarning = '';
+  applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation);
+  disableClientRecipeCompositionMutationControls(document);
+  formulaClientWorkspaceRuntime.mutate({
+    route: 'clientRecipes',
+    operation: 'client-recipe-composition',
+    contextKey: `client-recipe:${contextId}`,
+    ownsContext: () => clientRecipeCompositionSubmitting && clientRecipesState.selectedDetail?.client_recipe.id === contextId,
+    request: () => updateClientRecipeIngredients(contextId, payload),
+    validate: (updated) => Boolean(updated && updated.client_recipe?.id === contextId && Array.isArray(updated.ingredients)),
+    successMessage: 'Состав индивидуального рецепта сохранён. Базовый рецепт не изменён.',
+    apply: (updated) => {
+      if (clientRecipesState.selectedDetail?.client_recipe.id !== contextId) return;
+      clientRecipeCompositionSubmitting = false;
+      clientRecipesState.selectedDetail = updated;
+      clientRecipesState.detailStatus = 'ready';
+      clientRecipeCompositionValidation = emptyFormValidationState();
+      clientRecipesState.compositionEditor = emptyClientRecipeCompositionEditor();
+      clientRecipesMessage = 'Состав индивидуального рецепта сохранён. Базовый рецепт не изменён.';
+      clientRecipesError = '';
+      restoreClientRecipeMutationControls(document);
+    },
+    failed: (error, ambiguous) => {
+      clientRecipeCompositionSubmitting = false;
+      clientRecipesState.compositionEditor.isSaving = false;
+      restoreClientRecipeMutationControls(document);
+      clientRecipesMessage = '';
+      clientRecipesError = '';
+      if (ambiguous) {
+        clientRecipesRefreshWarning = formulaClientWorkspaceLifecycle.feedback('clientRecipes').warning;
+        return;
+      }
+      clientRecipeCompositionValidation = normalizeBackendValidation(apiValidationPayload(error), clientRecipeCompositionFieldLabels(clientRecipesState.compositionEditor.draft), 'Не удалось сохранить состав индивидуального рецепта. Проверьте строки и попробуйте ещё раз.');
+      applyValidationToClientRecipeCompositionForm(clientRecipeCompositionValidation);
+    },
+    rejected: () => {
+      clientRecipeCompositionSubmitting = false;
+      clientRecipesState.compositionEditor.isSaving = false;
+      restoreClientRecipeMutationControls(document);
+      render();
+    },
+    settled: (result) => {
+      clientRecipeCompositionSubmitting = false;
+      clientRecipesState.compositionEditor.isSaving = false;
+      restoreClientRecipeMutationControls(document);
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clientRecipes')) return;
+      if (result.reconciliationRequired) loadClientRecipes(true);
+      else render();
+    },
   });
 }
 function humanClientRecipeCompositionError(error: unknown) { const message = error instanceof Error ? error.message : ''; if (message.includes('Archived')) return 'Архивный индивидуальный рецепт нельзя изменять.'; if (message.includes('Inactive ingredient') || message.includes('inactive')) return 'Архивный компонент нельзя добавлять или изменять. Оставьте существующую строку без изменений или удалите её.'; if (message.includes('not found') || message.includes('Not Found')) return 'Не удалось сохранить состав: индивидуальный рецепт или компонент не найден. Обновите раздел и попробуйте ещё раз.'; if (message.includes('duplicate') || message.includes('validation') || message.includes('position') || message.includes('amount')) return 'Проверьте строки состава: количество, единицы измерения и порядок строк.'; return 'Не удалось сохранить состав индивидуального рецепта. Проверьте строки и попробуйте ещё раз.'; }
@@ -3247,19 +3673,27 @@ function loadClientCardData(clientId: number) {
   refreshClientWishes();
   refreshClientFeedback();
   clientCardState.recipesStatus = 'loading';
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startRead('clients', 'client-related', 'related', `client:${clientId}`);
+  if (!workspaceOwner.accepted) { clientCardState.recipesStatus = 'ready'; return; }
   const cardContextToken = clientCardContextToken;
   const targetedValidationToken = clientCardTargetedValidationToken;
   const isCurrentClientCardRecipes = () => clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
   const canRenderRecipesResponse = () => clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
   getClientRecipes(true).then((response) => {
-    if (!isCurrentClientCardRecipes()) return;
+    if (!isCurrentClientCardRecipes()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishReadSuccess(workspaceOwner.owner, response, (value) => Array.isArray(value?.client_recipes));
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.canApply) return;
     clientCardState.recipes = response.client_recipes.filter((recipe) => recipe.client_id === clientId);
     clientCardState.recipesStatus = 'ready';
     if (!canRenderRecipesResponse()) return;
     syncClientCardDraftFormsFromDom();
     render();
   }).catch(() => {
-    if (!isCurrentClientCardRecipes()) return;
+    if (!isCurrentClientCardRecipes()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishReadFailure(workspaceOwner.owner);
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.accepted) return;
     clientCardState.recipesStatus = 'error';
     if (!canRenderRecipesResponse()) return;
     syncClientCardDraftFormsFromDom();
@@ -3271,6 +3705,14 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
   if (!clientId) return Promise.resolve();
   if (!clientWishFormDomLocked()) syncClientCardDraftFormsFromDom();
   const includeArchived = clientCardState.includeArchivedWishes;
+  const wishContextKey = `client:${clientId}:archived:${includeArchived}`;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startRead(
+    'clients',
+    'client-wishes',
+    formulaClientWorkspaceLifecycle.isRequiredReconciliation('clients', 'client-wishes', wishContextKey) ? 'reconciliation' : 'related',
+    wishContextKey,
+  );
+  if (!workspaceOwner.accepted) return Promise.resolve();
   const cardContextToken = clientCardContextToken;
   const targetedValidationToken = clientCardTargetedValidationToken;
   const requestGeneration = clientWishListRequestLifecycle.begin();
@@ -3278,14 +3720,20 @@ function refreshClientWishes(renderLoading = true, rejectOnError = false, showLo
   const canRenderWishesResponse = () => isCurrentWishesRequest() && clientCardCanRenderCapturedClientWishContext(clientId, cardContextToken, targetedValidationToken);
   if (renderLoading) { clientCardState.wishesStatus = 'loading'; if (canRenderWishesResponse()) render(); }
   return fetchClientWishes(clientId, includeArchived).then((wishes) => {
-    if (!isCurrentWishesRequest()) return;
+    if (!isCurrentWishesRequest()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishReadSuccess(workspaceOwner.owner, wishes, Array.isArray);
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.canApply) return;
     clientCardState.wishes = wishes;
     clientCardState.wishesStatus = 'ready';
     if (!canRenderWishesResponse()) return;
     syncClientCardDraftFormsFromDom();
     render();
   }).catch((error) => {
-    if (!isCurrentWishesRequest()) return;
+    if (!isCurrentWishesRequest()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishReadFailure(workspaceOwner.owner);
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.accepted) return;
     if (showLoadError) {
       clientCardState.wishesStatus = 'error';
       clientCardState.wishError = 'Не удалось загрузить пожелания клиента. Обновите карточку и попробуйте ещё раз.';
@@ -3309,6 +3757,14 @@ function refreshClientFeedback(renderLoading = true, rejectOnError = false, show
   const clientId = clientCardState.clientId;
   if (!clientId) return Promise.resolve();
   const cardContextToken = clientCardContextToken;
+  const feedbackContextKey = `client:${clientId}`;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startRead(
+    'clients',
+    'client-feedback',
+    formulaClientWorkspaceLifecycle.isRequiredReconciliation('clients', 'client-feedback', feedbackContextKey) ? 'reconciliation' : 'related',
+    feedbackContextKey,
+  );
+  if (!workspaceOwner.accepted) return Promise.resolve();
   const targetedValidationToken = clientCardTargetedValidationToken;
   const requestGeneration = clientFeedbackListRequestLifecycle.begin();
   const isCurrentClientCardFeedback = () => clientFeedbackListRequestLifecycle.isCurrent(requestGeneration) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
@@ -3316,14 +3772,20 @@ function refreshClientFeedback(renderLoading = true, rejectOnError = false, show
   if (!clientCardFormDomLocked()) syncClientCardDraftFormsFromDom();
   if (renderLoading) { clientCardState.feedbackStatus = 'loading'; if (canRenderFeedbackResponse()) render(); }
   return fetchClientFeedback(clientId).then((feedback) => {
-    if (!isCurrentClientCardFeedback()) return;
+    if (!isCurrentClientCardFeedback()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishReadSuccess(workspaceOwner.owner, feedback, Array.isArray);
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.canApply) return;
     clientCardState.feedback = feedback;
     clientCardState.feedbackStatus = 'ready';
     if (!canRenderFeedbackResponse()) return;
     syncClientCardDraftFormsFromDom();
     render();
   }).catch((error) => {
-    if (!isCurrentClientCardFeedback()) return;
+    if (!isCurrentClientCardFeedback()) { formulaClientWorkspaceLifecycle.discardRead(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishReadFailure(workspaceOwner.owner);
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.accepted) return;
     if (showLoadError) {
       clientCardState.feedbackStatus = 'error';
       clientCardState.feedbackError = 'Не удалось загрузить обратную связь клиента. Обновите карточку и попробуйте ещё раз.';
@@ -3339,14 +3801,15 @@ function submitClientWishForm(event: SubmitEvent) {
   event.preventDefault();
   const clientId = clientCardState.clientId;
   if (!clientId || clientPageMutationActive()) return;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-create', `client:${clientId}:archived:${clientCardState.includeArchivedWishes}`);
+  if (!workspaceOwner.accepted) return;
   syncClientCardDraftFormsFromDom();
   const token = clientWishCreateLifecycle.begin();
-  if (token === null) return;
+  if (token === null) { formulaClientWorkspaceLifecycle.cancelMutation(workspaceOwner.owner); return; }
   const contextToken = clientWishContextToken;
   const isCurrentClientWishMutation = () => clientWishCreateLifecycle.isCurrent(token) && clientCardState.clientId === clientId && contextToken === clientWishContextToken;
   const submittedDraft: ClientWishFormState = { ...clientCardState.wishForm };
   const payload: ClientWishCreatePayload = { title: submittedDraft.title, description: submittedDraft.description, category: submittedDraft.category, priority: submittedDraft.priority, client_recipe_id: nullableNumber(submittedDraft.client_recipe_id) };
-  let createRejected = false;
   clientWishValidation = emptyFormValidationState();
   clientCardState.savingWish = true;
   clientCardState.wishError = '';
@@ -3356,7 +3819,10 @@ function submitClientWishForm(event: SubmitEvent) {
   disableClientWishCreateMutationControls(document);
   clearFeedbackAnnouncement();
   createClientWish(clientId, payload).then((created) => {
-    if (!isCurrentClientWishMutation()) return;
+    if (!isCurrentClientWishMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, created, isEntityDto, 'Пожелание клиента сохранено.');
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.knownSuccess || !owned.canApply) return;
     clientCardState.wishes = [created, ...clientCardState.wishes.filter((wish) => wish.id !== created.id)];
     clientCardState.wishesStatus = 'ready';
     clientCardState.showWishForm = false;
@@ -3365,7 +3831,6 @@ function submitClientWishForm(event: SubmitEvent) {
     clientCardState.savingWish = false;
     clientCardState.wishMessage = 'Пожелание клиента сохранено.';
     restoreClientWishMutationControls(document);
-    announcePolite(clientCardState.wishMessage);
     render();
     return refreshClientWishes(false, true, false).catch(() => {
       if (!isCurrentClientWishMutation()) return;
@@ -3376,9 +3841,16 @@ function submitClientWishForm(event: SubmitEvent) {
       render();
     });
   }).catch((error) => {
-    if (!isCurrentClientWishMutation()) return;
-    createRejected = true;
+    if (!isCurrentClientWishMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+    presentFormulaClientCompletion('clients', owned);
     clientCardState.wishForm = submittedDraft;
+    if (!owned.accepted || owned.reconciliationRequired) {
+      clientCardState.savingWish = false;
+      clientCardState.wishRefreshWarning = owned.message;
+      restoreClientWishMutationControls(document);
+      return;
+    }
     clientWishValidation = normalizeBackendValidation(apiValidationPayload(error), clientWishFieldLabels, humanWishFeedbackError(error, 'Не удалось сохранить пожелание. Проверьте поля и попробуйте ещё раз.'));
     clientCardState.savingWish = false;
     clientCardState.wishError = '';
@@ -3387,34 +3859,119 @@ function submitClientWishForm(event: SubmitEvent) {
     clientCardTargetedValidationToken += 1;
     applyValidationToClientWishForm(clientWishValidation);
     restoreClientWishMutationControls(document);
-    announceAssertive('Не удалось сохранить пожелание. Проверьте подсказки в форме.');
   }).finally(() => {
-    if (!clientWishCreateLifecycle.finish(token) || clientCardState.clientId !== clientId || contextToken !== clientWishContextToken) return;
-    if (createRejected) return;
-    if (clientCardState.savingWish) {
+    clientWishCreateLifecycle.finish(token);
+    if (clientCardState.clientId === clientId && clientCardState.savingWish) {
       clientCardState.savingWish = false;
       restoreClientWishMutationControls(document);
-      render();
     }
+    if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+    if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) reconcileClientWorkspaceObligation();
+    render();
   });
 }
-function changeClientWishStatus(wishId: number, status: ClientWishStatus) { if (clientPageMutationActive() || !['open','planned','resolved'].includes(status)) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.changingWishId = wishId; clientCardState.wishError = ''; render(); updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then(() => { clientCardState.changingWishId = null; if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientPageMutationActive()); }).catch(() => { clientCardState.changingWishId = null; clientCardState.wishError = 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.'; if (clientPageMutationActive()) return; syncClientCardDraftFormsFromDom(); render(); }); }
-function archiveClientWishFromCard(wishId: number) { if (clientPageMutationActive() || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return; clientWishListRequestLifecycle.invalidate(); syncClientCardDraftFormsFromDom(); clientCardState.archivingWishId = wishId; clientCardState.wishError = ''; render(); archiveClientWish(wishId).then(() => { clientCardState.archivingWishId = null; if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom(); return refreshClientWishes(!clientPageMutationActive()); }).catch(() => { clientCardState.archivingWishId = null; clientCardState.wishError = 'Не удалось архивировать пожелание. Попробуйте ещё раз.'; if (clientPageMutationActive()) return; syncClientCardDraftFormsFromDom(); render(); }); }
+function changeClientWishStatus(wishId: number, status: ClientWishStatus) {
+  if (clientPageMutationActive() || !['open','planned','resolved'].includes(status)) return;
+  const clientId = clientCardState.clientId;
+  if (!clientId) return;
+  const owner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-status', `client:${clientId}:archived:${clientCardState.includeArchivedWishes}:wish:${wishId}`);
+  if (!owner.accepted) return;
+  const cardContextToken = clientCardContextToken;
+  const isCurrentWishStatus = () => clientCardState.clientId === clientId && clientCardContextToken === cardContextToken && clientCardState.changingWishId === wishId;
+  clientWishListRequestLifecycle.invalidate();
+  syncClientCardDraftFormsFromDom();
+  clientCardState.changingWishId = wishId;
+  clientCardState.wishError = '';
+  render();
+  updateClientWishStatus(wishId, status as 'open' | 'planned' | 'resolved').then((updated) => {
+    if (!isCurrentWishStatus()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(owner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(owner.owner, updated, isEntityDto, 'Статус пожелания изменён.');
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.knownSuccess || !owned.canApply) {
+      clientCardState.changingWishId = null;
+      clientCardState.wishRefreshWarning = owned.message;
+      render();
+      return;
+    }
+    clientCardState.changingWishId = null;
+    if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom();
+    return refreshClientWishes(!clientPageMutationActive());
+  }).catch((error) => {
+    if (!isCurrentWishStatus()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(owner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(owner.owner, error);
+    presentFormulaClientCompletion('clients', owned);
+    clientCardState.changingWishId = null;
+    clientCardState.wishError = owned.reconciliationRequired ? '' : 'Не удалось изменить статус пожелания. Обновите карточку клиента и попробуйте ещё раз.';
+    if (owned.reconciliationRequired) clientCardState.wishRefreshWarning = owned.message;
+    if (clientPageMutationActive()) return;
+    syncClientCardDraftFormsFromDom();
+    render();
+  }).finally(() => {
+    if (clientCardState.changingWishId === wishId) clientCardState.changingWishId = null;
+    if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+    if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) reconcileClientWorkspaceObligation();
+    render();
+  });
+}
+function archiveClientWishFromCard(wishId: number) {
+  if (clientPageMutationActive() || !window.confirm('Архивировать пожелание клиента? Оно останется в истории.')) return;
+  const clientId = clientCardState.clientId;
+  if (!clientId) return;
+  const owner = formulaClientWorkspaceLifecycle.startMutation('clients', 'wish-archive', `client:${clientId}:archived:${clientCardState.includeArchivedWishes}:wish:${wishId}`);
+  if (!owner.accepted) return;
+  const cardContextToken = clientCardContextToken;
+  const isCurrentWishArchive = () => clientCardState.clientId === clientId && clientCardContextToken === cardContextToken && clientCardState.archivingWishId === wishId;
+  clientWishListRequestLifecycle.invalidate();
+  syncClientCardDraftFormsFromDom();
+  clientCardState.archivingWishId = wishId;
+  clientCardState.wishError = '';
+  render();
+  archiveClientWish(wishId).then((archived) => {
+    if (!isCurrentWishArchive()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(owner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(owner.owner, archived, isEntityDto, 'Пожелание архивировано.');
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.knownSuccess || !owned.canApply) {
+      clientCardState.archivingWishId = null;
+      clientCardState.wishRefreshWarning = owned.message;
+      render();
+      return;
+    }
+    clientCardState.archivingWishId = null;
+    if (!clientPageMutationActive()) syncClientCardDraftFormsFromDom();
+    return refreshClientWishes(!clientPageMutationActive());
+  }).catch((error) => {
+    if (!isCurrentWishArchive()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(owner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(owner.owner, error);
+    presentFormulaClientCompletion('clients', owned);
+    clientCardState.archivingWishId = null;
+    clientCardState.wishError = owned.reconciliationRequired ? '' : 'Не удалось архивировать пожелание. Попробуйте ещё раз.';
+    if (owned.reconciliationRequired) clientCardState.wishRefreshWarning = owned.message;
+    if (clientPageMutationActive()) return;
+    syncClientCardDraftFormsFromDom();
+    render();
+  }).finally(() => {
+    if (clientCardState.archivingWishId === wishId) clientCardState.archivingWishId = null;
+    if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+    if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) reconcileClientWorkspaceObligation();
+    render();
+  });
+}
 function toggleClientFeedbackForm() { if (clientPageMutationActive()) return; if (clientCardState.showFeedbackForm) syncClientCardDraftFormsFromDom(); clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = !clientCardState.showFeedbackForm; if (clientCardState.showFeedbackForm) clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; clientCardState.feedbackMessage = ''; clientCardState.feedbackRefreshWarning = ''; render(); }
 function closeClientFeedbackForm() { if (clientPageMutationActive()) return; clientFeedbackCreateLifecycle.invalidate(); clientFeedbackValidation = emptyFormValidationState(); clientCardState.showFeedbackForm = false; clientCardState.feedbackForm = emptyClientFeedbackForm(); clientCardState.feedbackError = ''; render(); }
 function submitClientFeedbackForm(event: SubmitEvent) {
   event.preventDefault();
   const clientId = clientCardState.clientId;
   if (!clientId || clientPageMutationActive()) return;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('clients', 'feedback-create', `client:${clientId}`);
+  if (!workspaceOwner.accepted) return;
   syncClientCardDraftFormsFromDom();
   const token = clientFeedbackCreateLifecycle.begin();
-  if (token === null) return;
+  if (token === null) { formulaClientWorkspaceLifecycle.cancelMutation(workspaceOwner.owner); return; }
   const cardContextToken = clientCardContextToken;
   const isCurrentClientFeedbackMutation = () => clientFeedbackCreateLifecycle.isCurrent(token) && clientCardState.clientId === clientId && cardContextToken === clientCardContextToken;
   const submittedDraft: ClientFeedbackFormState = { ...clientCardState.feedbackForm };
   const ratingRaw = submittedDraft.rating.trim();
   const payload: ClientFeedbackCreatePayload = { feedback_type: submittedDraft.feedback_type, sentiment: submittedDraft.sentiment, rating: ratingRaw ? Number(ratingRaw) : null, text: submittedDraft.text, follow_up_needed: submittedDraft.follow_up_needed, follow_up_note: submittedDraft.follow_up_note, occurred_at: submittedDraft.occurred_at || null, client_recipe_id: nullableNumber(submittedDraft.client_recipe_id) };
-  let createRejected = false;
   clientFeedbackValidation = emptyFormValidationState();
   clientCardState.savingFeedback = true;
   clientCardState.feedbackError = '';
@@ -3423,7 +3980,10 @@ function submitClientFeedbackForm(event: SubmitEvent) {
   applyValidationToClientFeedbackForm(clientFeedbackValidation);
   disableClientFeedbackCreateMutationControls(document);
   createClientFeedback(clientId, payload).then((created) => {
-    if (!isCurrentClientFeedbackMutation()) return;
+    if (!isCurrentClientFeedbackMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, created, isEntityDto, 'Отзыв клиента сохранён.');
+    presentFormulaClientCompletion('clients', owned);
+    if (!owned.knownSuccess || !owned.canApply) return;
     clientCardState.feedback = [created, ...clientCardState.feedback.filter((item) => item.id !== created.id)];
     clientCardState.feedbackStatus = 'ready';
     clientCardState.showFeedbackForm = false;
@@ -3433,7 +3993,6 @@ function submitClientFeedbackForm(event: SubmitEvent) {
     clientCardState.feedbackMessage = 'Отзыв клиента сохранён.';
     clientCardState.feedbackError = '';
     restoreClientFeedbackMutationControls(document);
-    announcePolite(clientCardState.feedbackMessage);
     render();
     return refreshClientFeedback(false, true, false).catch(() => {
       if (!isCurrentClientFeedbackMutation()) return;
@@ -3444,9 +4003,16 @@ function submitClientFeedbackForm(event: SubmitEvent) {
       render();
     });
   }).catch((error) => {
-    if (!isCurrentClientFeedbackMutation()) return;
-    createRejected = true;
+    if (!isCurrentClientFeedbackMutation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+    presentFormulaClientCompletion('clients', owned);
     clientCardState.feedbackForm = submittedDraft;
+    if (!owned.accepted || owned.reconciliationRequired) {
+      clientCardState.savingFeedback = false;
+      clientCardState.feedbackRefreshWarning = owned.message;
+      restoreClientFeedbackMutationControls(document);
+      return;
+    }
     clientFeedbackValidation = normalizeBackendValidation(apiValidationPayload(error), clientFeedbackFieldLabels, humanWishFeedbackError(error, 'Не удалось сохранить отзыв. Проверьте поля и попробуйте ещё раз.'));
     clientCardState.savingFeedback = false;
     clientCardState.feedbackError = '';
@@ -3455,15 +4021,15 @@ function submitClientFeedbackForm(event: SubmitEvent) {
     clientCardTargetedValidationToken += 1;
     applyValidationToClientFeedbackForm(clientFeedbackValidation);
     restoreClientFeedbackMutationControls(document);
-    announceAssertive('Не удалось сохранить отзыв. Проверьте подсказки в форме.');
   }).finally(() => {
-    if (!clientFeedbackCreateLifecycle.finish(token) || clientCardState.clientId !== clientId || cardContextToken !== clientCardContextToken) return;
-    if (createRejected) return;
-    if (clientCardState.savingFeedback) {
+    clientFeedbackCreateLifecycle.finish(token);
+    if (clientCardState.clientId === clientId && clientCardState.savingFeedback) {
       clientCardState.savingFeedback = false;
       restoreClientFeedbackMutationControls(document);
-      render();
     }
+    if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+    if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) reconcileClientWorkspaceObligation();
+    render();
   });
 }
 function nullableNumber(value: string) { const trimmed = value.trim(); return trimmed ? Number(trimmed) : null; }
@@ -3484,13 +4050,103 @@ function clientFeedbackSentimentOptions(current: string) { return ['positive','n
 function closeClientEdit() { if (clientPageMutationActive()) return; clientSubmitToken += 1; clientsState.formMode = 'create'; clientsState.showCreateForm = false; clientsState.form = emptyClientForm(); clientCardState = emptyClientCardState(); clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); render(); }
 function focusClientName() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="client-full-name"]')?.focus()); }
 
-function loadClients(force = false) { if (clientPageMutationActive()) return; if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return; clientsStatus = 'loading'; clientsError = ''; if (!clientPageMutationActive()) render(); getClients(clientsState.includeInactive).then((response) => { clientsState.items = response.clients; clientsStatus = 'ready'; if (!clientPageMutationActive()) render(); }).catch(() => { clientsStatus = 'error'; clientsError = 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.'; if (!clientPageMutationActive()) render(); }); }
+function loadClients(force = false) {
+  if (force) reconcileClientWorkspaceObligation();
+  if (clientPageMutationActive()) return;
+  if (!force && (clientsStatus === 'loading' || clientsStatus === 'ready')) return;
+  const retained = clientsStatus === 'ready';
+  if (!retained) clientsStatus = 'loading';
+  clientsError = '';
+  clientsRefreshWarning = '';
+  formulaClientWorkspaceRuntime.read({
+    route: 'clients',
+    operation: 'client-list',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('clients', 'client-list', 'clients:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'clients:list',
+    request: () => getClients(clientsState.includeInactive),
+    validate: (response) => Array.isArray(response?.clients),
+    apply: (response) => {
+      clientsState.items = response.clients;
+      clientsStatus = 'ready';
+    },
+    failed: (hasSnapshot) => {
+      clientsStatus = hasSnapshot ? 'ready' : 'error';
+      clientsError = hasSnapshot ? '' : 'Не удалось загрузить клиентов. Проверьте, что локальное приложение запущено.';
+      clientsRefreshWarning = hasSnapshot ? formulaClientWorkspaceLifecycle.feedback('clients').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') clientsStatus = retained ? 'ready' : 'idle';
+    },
+  });
+}
+
+function reconcileClientWorkspaceObligation() {
+  const obligation = formulaClientWorkspaceLifecycle.reconciliationObligation('clients');
+  if (!obligation) return false;
+  if (obligation.readOperation === 'client-wishes') {
+    const match = obligation.readContextKey.match(/^client:(\d+):archived:(true|false)$/);
+    if (!match) return false;
+    const clientId = Number(match[1]);
+    const includeArchived = match[2] === 'true';
+    const started = formulaClientWorkspaceRuntime.read({
+      route: 'clients',
+      operation: 'client-wishes',
+      kind: 'reconciliation',
+      contextKey: obligation.readContextKey,
+      request: () => fetchClientWishes(clientId, includeArchived),
+      validate: Array.isArray,
+      apply: (wishes) => {
+        if (clientCardState.clientId === clientId && clientCardState.includeArchivedWishes === includeArchived) {
+          clientCardState.wishes = wishes;
+          clientCardState.wishesStatus = 'ready';
+          clientCardState.wishRefreshWarning = '';
+        }
+      },
+      failed: () => {
+        if (clientCardState.clientId === clientId) {
+          clientCardState.wishRefreshWarning = 'Не удалось проверить пожелания исходного клиента. Нажмите «Обновить» ещё раз.';
+        }
+      },
+    });
+    return started.accepted;
+  }
+  if (obligation.readOperation === 'client-feedback') {
+    const match = obligation.readContextKey.match(/^client:(\d+)$/);
+    if (!match) return false;
+    const clientId = Number(match[1]);
+    const started = formulaClientWorkspaceRuntime.read({
+      route: 'clients',
+      operation: 'client-feedback',
+      kind: 'reconciliation',
+      contextKey: obligation.readContextKey,
+      request: () => fetchClientFeedback(clientId),
+      validate: Array.isArray,
+      apply: (feedback) => {
+        if (clientCardState.clientId === clientId) {
+          clientCardState.feedback = feedback;
+          clientCardState.feedbackStatus = 'ready';
+          clientCardState.feedbackRefreshWarning = '';
+        }
+      },
+      failed: () => {
+        if (clientCardState.clientId === clientId) {
+          clientCardState.feedbackRefreshWarning = 'Не удалось проверить отзывы исходного клиента. Нажмите «Обновить» ещё раз.';
+        }
+      },
+    });
+    return started.accepted;
+  }
+  return false;
+}
 function startEditClient(id: number) { if (clientPageMutationActive()) return; clientSubmitToken += 1; const client = clientsState.items.find((item) => item.id === id); if (!client) return; clientsState.formMode = 'edit'; clientsState.showCreateForm = false; clientsState.form = { id: client.id, full_name: client.full_name, phone: client.phone, email: client.email, address: client.address, birthday: client.birthday, skin_notes: client.skin_notes, allergy_notes: client.allergy_notes, preference_notes: client.preference_notes, contraindication_notes: client.contraindication_notes, notes: client.notes }; clientsMessage = ''; clientsError = ''; clientsRefreshWarning = ''; clientValidation = emptyFormValidationState(); loadClientCardData(id); render(); focusClientName(); }
 function submitClientForm(event: SubmitEvent) {
   event.preventDefault();
   if (clientPageMutationActive()) return;
   const isEdit = Boolean(clientsState.formMode === 'edit' && clientsState.form.id);
   const submittedFormId = clientsState.form.id;
+  const operation = isEdit ? 'client-update' : 'client-create';
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('clients', operation, isEdit ? `client:${submittedFormId}` : 'client:new');
+  if (!workspaceOwner.accepted) return;
   if (isEdit) syncClientCardDraftFormsFromDom();
   const payload = clientPayloadFromForm(event.currentTarget as HTMLFormElement);
   clientsState.form = { ...payload, id: isEdit ? submittedFormId : null };
@@ -3504,7 +4160,15 @@ function submitClientForm(event: SubmitEvent) {
   const request = isEdit ? updateClient(submittedFormId!, payload) : createClient(payload);
   request
     .then((client) => {
-      if (token !== clientSubmitToken) return;
+      if (token !== clientSubmitToken) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+      const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, client, isEntityDto, isEdit ? 'Карточка клиента обновлена.' : 'Клиент создан.');
+      presentFormulaClientCompletion('clients', owned);
+      if (!owned.knownSuccess || !owned.canApply) {
+        clientSubmitting = false;
+        clientsRefreshWarning = owned.message;
+        render();
+        return;
+      }
       clientsMessage = isEdit ? 'Карточка клиента обновлена.' : 'Клиент создан.';
       clientsError = '';
       clientsRefreshWarning = '';
@@ -3513,27 +4177,31 @@ function submitClientForm(event: SubmitEvent) {
       clientsState.showCreateForm = false;
       clientsState.form = isEdit ? { ...payload, id: client.id } : emptyClientForm();
       clientsStatus = 'ready';
+      clientSubmitting = false;
       render();
-      getClients(clientsState.includeInactive)
-        .then((response) => {
-          if (token !== clientSubmitToken) return;
-          clientsState.items = response.clients;
-          clientsStatus = 'ready';
-          clientSubmitting = false;
-          render();
-        })
-        .catch(() => {
-          if (token !== clientSubmitToken) return;
-          clientSubmitting = false;
-          clientsRefreshWarning = 'Клиент сохранён, но список не обновился. Нажмите «Обновить», чтобы получить актуальные данные.';
-          clientsStatus = 'ready';
-          render();
-        });
+      formulaClientWorkspaceRuntime.read({
+        route: 'clients',
+        operation: 'client-list',
+        kind: 'mutation-refresh',
+        contextKey: 'clients:list',
+        request: () => getClients(clientsState.includeInactive),
+        validate: (response) => Array.isArray(response?.clients),
+        apply: (response) => { if (token === clientSubmitToken) clientsState.items = response.clients; clientsStatus = 'ready'; },
+        failed: () => { clientsStatus = 'ready'; clientsRefreshWarning = 'Клиент сохранён, но список не обновился. Нажмите «Обновить», чтобы получить актуальные данные.'; },
+      });
     })
     .catch((error) => {
-      if (token !== clientSubmitToken) return;
+      if (token !== clientSubmitToken) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+      const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+      presentFormulaClientCompletion('clients', owned);
       if (isEdit) syncClientCardDraftFormsFromDom();
       clientSubmitting = false;
+      if (!owned.accepted || owned.reconciliationRequired) {
+        clientsRefreshWarning = owned.message;
+        reenableClientSubmitButtons();
+        render();
+        return;
+      }
       clientsMessage = '';
       clientsError = '';
       clientsRefreshWarning = '';
@@ -3541,7 +4209,21 @@ function submitClientForm(event: SubmitEvent) {
       clientsStatus = 'ready';
       applyValidationToClientForm(clientValidation);
       reenableClientSubmitButtons();
-      announceAssertive('Проверьте форму клиента. Ошибки показаны рядом с полями.');
+    })
+    .finally(() => {
+      finalizeWorkspaceMutationUi({
+        clearBusy: () => {
+          if (token === clientSubmitToken) {
+            clientSubmitting = false;
+            reenableClientSubmitButtons();
+          }
+        },
+        ownsRoute: () => formulaClientWorkspaceLifecycle.ownsRoute('clients'),
+        resumeRoute: () => {
+          if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) loadClients(true);
+          else render();
+        },
+      });
     });
 }
 
@@ -3549,18 +4231,22 @@ function deactivateClient(id: number) {
   if (clientPageMutationActive()) return;
   const client = clientsState.items.find((item) => item.id === id);
   if (!client || !window.confirm('Архивировать клиента? Карточка останется в истории, но не будет отображаться в активном списке.')) return;
-  const token = clientDeactivationLifecycle.begin();
-  if (token === null) return;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('clients', 'client-deactivate', `client:${id}`);
+  if (!workspaceOwner.accepted) return;
+  const token = ++clientSubmitToken;
   const archivedClientId = id;
   clientDeactivatingId = archivedClientId;
   clientsMessage = '';
   clientsError = '';
   clientsRefreshWarning = '';
   disableClientDeactivationMutationControls(document, archivedClientId);
-  const isCurrentClientDeactivation = () => clientDeactivationLifecycle.isCurrent(token) && clientDeactivatingId === archivedClientId;
+  const isCurrentClientDeactivation = () => clientSubmitToken === token && clientDeactivatingId === archivedClientId;
   deactivateClientRequest(archivedClientId)
     .then((archivedClient) => {
-      if (!isCurrentClientDeactivation()) return;
+      if (!isCurrentClientDeactivation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+      const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, archivedClient, isEntityDto, 'Клиент архивирован.');
+      presentFormulaClientCompletion('clients', owned);
+      if (!owned.knownSuccess || !owned.canApply) return;
       clientsState.items = clientsState.items.map((item) => item.id === archivedClientId ? { ...item, ...archivedClient, is_active: false } : item);
       clientsStatus = 'ready';
       clientsMessage = 'Клиент архивирован.';
@@ -3572,34 +4258,42 @@ function deactivateClient(id: number) {
         clientsState.form = emptyClientForm();
         clientCardState = emptyClientCardState();
       }
-      return getClients(clientsState.includeInactive)
-        .then((response) => {
-          if (!isCurrentClientDeactivation()) return;
+      formulaClientWorkspaceRuntime.read({
+        route: 'clients',
+        operation: 'client-list',
+        kind: 'mutation-refresh',
+        contextKey: 'clients:list',
+        request: () => getClients(clientsState.includeInactive),
+        validate: (response) => Array.isArray(response?.clients),
+        apply: (response) => {
           clientsState.items = response.clients;
           clientsStatus = 'ready';
           clientsMessage = 'Клиент архивирован.';
-          clientsError = '';
-          clientsRefreshWarning = '';
-        })
-        .catch(() => {
-          if (!isCurrentClientDeactivation()) return;
+        },
+        failed: () => {
           clientsStatus = 'ready';
           clientsMessage = 'Клиент архивирован.';
-          clientsError = '';
           clientsRefreshWarning = 'Клиент архивирован, но список не удалось обновить автоматически.';
-        });
-    }, () => {
-      if (!isCurrentClientDeactivation()) return;
+        },
+      });
+    }, (error) => {
+      if (!isCurrentClientDeactivation()) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+      const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+      presentFormulaClientCompletion('clients', owned);
       clientsMessage = '';
-      clientsError = 'Не удалось архивировать клиента. Попробуйте еще раз.';
-      clientsRefreshWarning = '';
+      clientsError = owned.reconciliationRequired ? '' : 'Не удалось архивировать клиента. Попробуйте еще раз.';
+      clientsRefreshWarning = owned.reconciliationRequired ? owned.message : '';
       clientsStatus = 'ready';
     })
     .finally(() => {
-      if (!clientDeactivationLifecycle.finish(token) || clientDeactivatingId !== archivedClientId) return;
-      clientDeactivatingId = null;
-      restoreMutationGuards(document);
-      render();
+      const busyStateIsObsolete = clientSubmitToken !== token || clientDeactivatingId !== archivedClientId;
+      if (!busyStateIsObsolete) {
+        clientDeactivatingId = null;
+        restoreMutationGuards(document);
+      }
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('clients')) return;
+      if (formulaClientWorkspaceLifecycle.reconciliationRequired('clients')) loadClients(true);
+      else render();
     });
 }
 
@@ -3646,9 +4340,9 @@ function updateRecipeFilterSearch(input: HTMLInputElement) { const cursor = inpu
 function clearRecipeFilter(filter: string) { if (filter === 'search') recipesState.filters.search = ''; if (filter === 'category') recipesState.filters.categoryId = ''; if (filter === 'status') recipesState.filters.status = 'active'; render(); }
 function clearableRecipeFilterChip(label: string, filter: 'search' | 'category' | 'status') { return `<span class="tag-chip selected">${label} <button type="button" data-action="clear-recipe-filter" data-filter="${filter}" aria-label="Убрать фильтр ${label}">×</button></span>`; }
 function recipeActiveFilterChips() { const f = recipesState.filters; const chips: string[] = []; if (f.search.trim()) chips.push(clearableRecipeFilterChip(`Поиск: ${escapeHtml(f.search.trim())}`, 'search')); if (f.categoryId === 'none') chips.push(clearableRecipeFilterChip('Группа: Без группы', 'category')); if (typeof f.categoryId === 'number') chips.push(clearableRecipeFilterChip(`Группа: ${escapeHtml(recipesState.catalogCategories.find((category) => category.id === f.categoryId)?.name ?? 'Выбранная группа')}`, 'category')); if (f.status !== 'active') chips.push(clearableRecipeFilterChip(`Статус: ${f.status === 'archived' ? 'Неактивные' : 'Все'}`, 'status')); return chips.join(''); }
-function openRecipeCreateForm() { if (recipePageMutationActive()) return; recipeTemplateSubmitToken += 1; recipeTemplateMutationLifecycle.invalidate(); recipeTemplateValidation = emptyFormValidationState(); recipesState.showCreateForm = true; recipesState.selectedTemplate = null; recipesState.versions = []; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); focusRecipeTemplateName(); }
-function hideRecipeCreateForm() { if (recipePageMutationActive()) return; recipeTemplateSubmitToken += 1; recipeTemplateMutationLifecycle.invalidate(); saveRecipeTemplateFormFromDom(); recipeTemplateValidation = emptyFormValidationState(); recipesState.showCreateForm = false; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); }
-function closeRecipeDetail() { if (recipePageMutationActive()) return; recipeVersionSubmitToken += 1; recipeVersionMutationLifecycle.invalidate(); recipeVersionRefreshToken += 1; recipeVersionValidation = emptyFormValidationState(); recipesState.versionForm = emptyRecipeVersionForm(); recipesState.selectedTemplate = null; recipesState.versions = []; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); }
+function openRecipeCreateForm() { if (recipePageMutationActive()) return; recipeTemplateSubmitToken += 1; recipeTemplateValidation = emptyFormValidationState(); recipesState.showCreateForm = true; recipesState.selectedTemplate = null; recipesState.versions = []; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); focusRecipeTemplateName(); }
+function hideRecipeCreateForm() { if (recipePageMutationActive()) return; recipeTemplateSubmitToken += 1; saveRecipeTemplateFormFromDom(); recipeTemplateValidation = emptyFormValidationState(); recipesState.showCreateForm = false; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); }
+function closeRecipeDetail() { if (recipePageMutationActive()) return; recipeVersionSubmitToken += 1; recipeVersionRefreshToken += 1; recipeVersionValidation = emptyFormValidationState(); recipesState.versionForm = emptyRecipeVersionForm(); recipesState.selectedTemplate = null; recipesState.versions = []; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; recipesMessage = ''; recipesError = ''; recipesRefreshWarning = ''; render(); }
 function focusRecipeTemplateName() { requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[data-field="recipe-template-name"]')?.focus()); }
 function saveRecipeTemplateFormFromDom() { const form = document.querySelector<HTMLFormElement>('[data-form="recipe-template"]'); if (!form) return; recipesState.templateForm = recipeTemplatePayloadFromForm(form); }
 
@@ -3832,68 +4526,386 @@ function saveStockMovementFormFromDom() { const form = document.querySelector<HT
 
 function loadStockMovements(force = false) {
   if (!force && (stockMovementsStatus === 'loading' || stockMovementsStatus === 'ready')) return;
-  stockMovementsStatus = 'loading'; stockMovementsError = ''; render();
-  Promise.all([getIngredientLots(), getIngredients()]).then(([lots, ingredients]) => {
-    stockMovementsState.lots = lots.lots.filter((lot) => lot.is_active);
-    stockMovementsState.ingredients = ingredients.ingredients;
-    stockMovementsStatus = 'ready';
-    if (!stockMovementsState.selectedLotId && stockMovementsState.lots.length > 0) stockMovementsState.selectedLotId = stockMovementsState.lots[0].id;
-    render();
-    if (stockMovementsState.selectedLotId) loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
-  }).catch(() => { stockMovementsStatus = 'error'; stockMovementsError = 'Не удалось получить данные о движениях склада.'; render(); });
+  const retained = stockMovementsStatus === 'ready';
+  if (!retained) stockMovementsStatus = 'loading';
+  stockMovementsError = '';
+  stockMovementsRefreshWarning = '';
+  inventoryCatalogWorkspaceRuntime.read({
+    route: 'stockMovements',
+    operation: 'stock-references',
+    kind: retained ? 'refresh' : 'initial',
+    contextKey: 'stock:references',
+    request: () => Promise.all([getIngredientLots(), getIngredients()]),
+    validate: ([lots, ingredients]) => Array.isArray(lots?.lots) && Array.isArray(ingredients?.ingredients),
+    apply: ([lots, ingredients]) => {
+      stockMovementsState.lots = lots.lots.filter((lot) => lot.is_active);
+      stockMovementsState.ingredients = ingredients.ingredients;
+      stockMovementsStatus = 'ready';
+      if (!stockMovementsState.selectedLotId && stockMovementsState.lots.length > 0) stockMovementsState.selectedLotId = stockMovementsState.lots[0].id;
+      const recoveryStarted = startQueuedStockMovementRecovery();
+      if (!recoveryStarted && stockMovementsState.selectedLotId) loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
+    },
+    failed: (hasSnapshot) => {
+      stockMovementsStatus = hasSnapshot ? 'ready' : 'error';
+      stockMovementsError = hasSnapshot ? '' : 'Не удалось получить данные о движениях склада.';
+      stockMovementsRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('stockMovements').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') stockMovementsStatus = retained ? 'ready' : 'idle';
+    },
+  });
 }
-function selectStockMovementLot(lotId: number) { if (stockMovementSubmitting) return; stockMovementSubmitToken += 1; stockMovementLotDetailLifecycle.invalidate(); saveStockMovementFormFromDom(); stockMovementsState.selectedLotId = lotId || null; stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: lotId ? String(lotId) : '' }; stockMovementValidation = emptyFormValidationState(); stockMovementsRefreshWarning = ''; stockMovementsMessage = ''; stockMovementsError = ''; render(); if (lotId) loadSelectedStockMovementLot(lotId); }
+function selectStockMovementLot(lotId: number) { if (stockMovementSubmitting) return; stockMovementSubmitToken += 1; saveStockMovementFormFromDom(); stockMovementsState.selectedLotId = lotId || null; stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: lotId ? String(lotId) : '' }; stockMovementValidation = emptyFormValidationState(); stockMovementsRefreshWarning = ''; stockMovementsMessage = ''; stockMovementsError = ''; render(); if (lotId) loadSelectedStockMovementLot(lotId); }
 function fetchStockMovementLotDetail(lotId: number) { return Promise.all([getIngredientLotBalance(lotId), getStockMovementsByLot(lotId)]).then(([balance, movements]) => ({ balance, movements: movements.movements })); }
-function stockMovementLotDetailIsCurrent(request: StockMovementLotDetailRequest, submitToken: number | null = request.submitToken) { return stockMovementLotDetailLifecycle.isCurrent(request, stockMovementsState.selectedLotId, submitToken); }
-function commitStockMovementLotDetail(request: StockMovementLotDetailRequest, detail: { balance: IngredientLotBalanceResponse; movements: StockMovement[] }, submitToken: number | null = request.submitToken) { if (!stockMovementLotDetailIsCurrent(request, submitToken)) return false; stockMovementsState.balance = detail.balance; stockMovementsState.movements = detail.movements; stockMovementsState.detailStatus = 'ready'; return true; }
-function loadSelectedStockMovementLot(lotId: number) { const request = stockMovementLotDetailLifecycle.begin(lotId); stockMovementsState.detailStatus = 'loading'; stockMovementsState.balance = null; stockMovementsState.movements = []; if (!stockMovementSubmitting) render(); fetchStockMovementLotDetail(lotId).then((detail) => { if (!commitStockMovementLotDetail(request, detail)) return; render(); }).catch(() => { if (!stockMovementLotDetailIsCurrent(request)) return; stockMovementsState.detailStatus = 'error'; stockMovementsError = 'Не удалось загрузить остаток или историю выбранной партии.'; render(); }); }
-function refreshSelectedStockMovementLot(lotId: number, submitToken: number) { const request = stockMovementLotDetailLifecycle.begin(lotId, submitToken); stockMovementsState.detailStatus = 'loading'; return fetchStockMovementLotDetail(lotId).then((detail) => { if (!commitStockMovementLotDetail(request, detail, submitToken)) return false; return true; }); }
-function submitStockMovementForm(event: SubmitEvent) { event.preventDefault(); if (stockMovementSubmitting) return; const payload = stockMovementPayloadFromForm(event.currentTarget as HTMLFormElement); stockMovementsState.form = { ingredient_lot_id: String(payload.ingredient_lot_id || ''), movement_type: payload.movement_type, quantity: payload.quantity, unit: payload.unit, occurred_at: payload.occurred_at ?? '', reason: payload.reason, source: payload.source, note: payload.note }; const token = ++stockMovementSubmitToken; stockMovementLotDetailLifecycle.invalidate(); stockMovementSubmitting = true; stockMovementValidation = emptyFormValidationState(); stockMovementsMessage = ''; stockMovementsError = ''; stockMovementsRefreshWarning = ''; applyValidationToStockMovementForm(stockMovementValidation); disableStockMovementSubmitControls(); if (!payload.ingredient_lot_id) { stockMovementSubmitting = false; stockMovementValidation = { fieldErrors: { ingredient_lot_id: ['Партия: выберите партию для движения.'] }, formErrors: [] }; applyValidationToStockMovementForm(stockMovementValidation); reenableStockMovementSubmitButtons(); return; } createStockMovement(payload).then(() => { if (token !== stockMovementSubmitToken) return; stockMovementsMessage = 'Движение создано. Текущий остаток пересчитан по истории движений.'; stockMovementsError = ''; stockMovementValidation = emptyFormValidationState(); stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: String(payload.ingredient_lot_id) }; return refreshSelectedStockMovementLot(payload.ingredient_lot_id, token).then((applied) => { if (token !== stockMovementSubmitToken || !applied) return; stockMovementSubmitting = false; render(); }).catch(() => { if (token !== stockMovementSubmitToken || stockMovementsState.selectedLotId !== payload.ingredient_lot_id) return; stockMovementSubmitting = false; stockMovementsState.detailStatus = 'error'; stockMovementsRefreshWarning = 'Движение создано, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальный остаток.'; render(); }); }).catch((error) => { if (token !== stockMovementSubmitToken) return; stockMovementSubmitting = false; stockMovementsMessage = ''; stockMovementsError = ''; stockMovementsRefreshWarning = ''; stockMovementValidation = normalizeBackendValidation(apiValidationPayload(error), stockMovementFieldLabels, 'Не удалось создать движение. Проверьте количество, единицу и остаток выбранной партии.'); stockMovementsStatus = 'ready'; applyValidationToStockMovementForm(stockMovementValidation); reenableStockMovementSubmitButtons(); announceAssertive('Проверьте движение склада. Ошибки показаны рядом с полями.'); }); }
+function loadSelectedStockMovementLot(lotId: number) {
+  const retained = stockMovementsState.detailStatus === 'ready' && stockMovementsState.selectedLotId === lotId;
+  if (!retained) {
+    stockMovementsState.detailStatus = 'loading';
+    stockMovementsState.balance = null;
+    stockMovementsState.movements = [];
+  }
+  inventoryCatalogWorkspaceRuntime.read({
+    route: 'stockMovements',
+    operation: 'stock-lot-detail',
+    kind: 'detail',
+    contextKey: `lot:${lotId}`,
+    request: () => fetchStockMovementLotDetail(lotId),
+    validate: (detail) => Boolean(detail && detail.balance?.ingredient_lot_id === lotId && Array.isArray(detail.movements)),
+    apply: (detail) => {
+      if (stockMovementsState.selectedLotId !== lotId) return;
+      stockMovementsState.balance = detail.balance;
+      stockMovementsState.movements = detail.movements;
+      stockMovementsState.detailStatus = 'ready';
+    },
+    failed: () => {
+      if (stockMovementsState.selectedLotId !== lotId) return;
+      stockMovementsState.detailStatus = retained ? 'ready' : 'error';
+      stockMovementsError = retained ? '' : 'Не удалось загрузить остаток или историю выбранной партии.';
+      stockMovementsRefreshWarning = retained ? inventoryCatalogWorkspaceLifecycle.feedback('stockMovements').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read' && stockMovementsState.selectedLotId === lotId) {
+        stockMovementsState.detailStatus = retained ? 'ready' : 'idle';
+      }
+    },
+  });
+}
+function submitStockMovementForm(event: SubmitEvent) {
+  event.preventDefault();
+  if (stockMovementSubmitting || inventoryCatalogWorkspaceLifecycle.reconciliationRequired('stockMovements')) return;
+  const payload = stockMovementPayloadFromForm(event.currentTarget as HTMLFormElement);
+  stockMovementsState.form = { ingredient_lot_id: String(payload.ingredient_lot_id || ''), movement_type: payload.movement_type, quantity: payload.quantity, unit: payload.unit, occurred_at: payload.occurred_at ?? '', reason: payload.reason, source: payload.source, note: payload.note };
+  if (!payload.ingredient_lot_id) {
+    stockMovementValidation = { fieldErrors: { ingredient_lot_id: ['Партия: выберите партию для движения.'] }, formErrors: [] };
+    applyValidationToStockMovementForm(stockMovementValidation);
+    return;
+  }
+  const token = ++stockMovementSubmitToken;
+  stockMovementSubmitting = true;
+  stockMovementValidation = emptyFormValidationState();
+  stockMovementsMessage = '';
+  stockMovementsError = '';
+  stockMovementsRefreshWarning = '';
+  applyValidationToStockMovementForm(stockMovementValidation);
+  disableStockMovementSubmitControls();
+  const applyReconciliation = (detail: { balance: IngredientLotBalanceResponse; movements: StockMovement[] }) => {
+    if (token !== stockMovementSubmitToken) return;
+    if (stockMovementsState.selectedLotId === payload.ingredient_lot_id) {
+      stockMovementsState.balance = detail.balance;
+      stockMovementsState.movements = detail.movements;
+      stockMovementsState.detailStatus = 'ready';
+    }
+    stockMovementSubmitting = false;
+    reenableStockMovementSubmitButtons();
+  };
+  const started = inventoryCatalogWorkspaceRuntime.createStockMovement({
+    lotId: payload.ingredient_lot_id,
+    create: () => createStockMovement(payload),
+    reconcile: () => fetchStockMovementLotDetail(payload.ingredient_lot_id),
+    applyCreated: () => {
+      if (token !== stockMovementSubmitToken) return;
+      stockMovementsMessage = 'Движение создано. Текущий остаток пересчитан по истории движений.';
+      stockMovementsError = '';
+      stockMovementValidation = emptyFormValidationState();
+      stockMovementsState.form = { ...emptyStockMovementForm(), ingredient_lot_id: String(payload.ingredient_lot_id) };
+    },
+    applyReconciliation,
+    definiteFailure: (error) => {
+      if (token !== stockMovementSubmitToken) return;
+      stockMovementSubmitting = false;
+      stockMovementsMessage = '';
+      stockMovementsError = '';
+      stockMovementsRefreshWarning = '';
+      stockMovementValidation = normalizeBackendValidation(apiValidationPayload(error), stockMovementFieldLabels, 'Не удалось создать движение. Проверьте количество, единицу и остаток выбранной партии.');
+      stockMovementsStatus = 'ready';
+      applyValidationToStockMovementForm(stockMovementValidation);
+      reenableStockMovementSubmitButtons();
+    },
+    reconciliationFailed: () => {
+      if (token !== stockMovementSubmitToken) return;
+      stockMovementSubmitting = false;
+      stockMovementsState.detailStatus = stockMovementsState.movements.length || stockMovementsState.balance ? 'ready' : 'error';
+      stockMovementsRefreshWarning = inventoryCatalogWorkspaceLifecycle.reconciliationRequired('stockMovements')
+        ? 'Результат движения пока не подтверждён. Не создавайте его повторно; нажмите «Проверить результат».'
+        : 'Движение создано, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальный остаток.';
+      reenableStockMovementSubmitButtons();
+    },
+    settled: (result) => {
+      if (token !== stockMovementSubmitToken) return;
+      if (result.reconciliationRequired || result.detached || !result.accepted) {
+        stockMovementSubmitting = false;
+        reenableStockMovementSubmitButtons();
+      }
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('stockMovements')) return;
+      if (result.reconciliationRequired) startQueuedStockMovementRecovery();
+      render();
+    },
+  });
+  if (!started.accepted) {
+    stockMovementSubmitting = false;
+    reenableStockMovementSubmitButtons();
+    render();
+  }
+}
+
+function reconcileSelectedStockMovement() {
+  const lotId = inventoryCatalogWorkspaceRuntime.stockMovementObligationLotId() ?? stockMovementsState.selectedLotId;
+  if (!lotId || stockMovementSubmitting) return;
+  stockMovementsError = '';
+  stockMovementsRefreshWarning = '';
+  inventoryCatalogWorkspaceRuntime.reconcileStockMovement(
+    lotId,
+    () => fetchStockMovementLotDetail(lotId),
+    (detail) => {
+      if (stockMovementsState.selectedLotId === lotId) {
+        stockMovementsState.balance = detail.balance;
+        stockMovementsState.movements = detail.movements;
+        stockMovementsState.detailStatus = 'ready';
+      }
+      stockMovementsMessage = stockMovementsState.selectedLotId === lotId
+        ? 'История и остаток партии обновлены. Можно продолжить работу.'
+        : 'Результат предыдущего движения проверен по исходной партии. Выбранная сейчас партия не изменялась.';
+    },
+    true,
+    () => {
+      stockMovementsRefreshWarning = 'Не удалось проверить историю и остаток партии. Повторите проверку вручную.';
+    },
+  );
+}
+
+function startQueuedStockMovementRecovery() {
+  const lotId = inventoryCatalogWorkspaceRuntime.stockMovementObligationLotId();
+  if (!lotId) return false;
+  const started = inventoryCatalogWorkspaceRuntime.startQueuedStockReconciliation(
+    lotId,
+    () => fetchStockMovementLotDetail(lotId),
+    (detail) => {
+      stockMovementSubmitting = false;
+      if (stockMovementsState.selectedLotId === lotId) {
+        stockMovementsState.balance = detail.balance;
+        stockMovementsState.movements = detail.movements;
+        stockMovementsState.detailStatus = 'ready';
+      } else if (stockMovementsState.selectedLotId) {
+        loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
+      }
+      stockMovementsMessage = 'Результат предыдущего движения проверен по исходной партии.';
+      reenableStockMovementSubmitButtons();
+    },
+    () => {
+      stockMovementSubmitting = false;
+      stockMovementsRefreshWarning = 'Не удалось проверить историю и остаток исходной партии. Нажмите «Проверить результат», чтобы повторить проверку вручную.';
+      reenableStockMovementSubmitButtons();
+      if (stockMovementsState.selectedLotId && stockMovementsState.selectedLotId !== lotId) {
+        loadSelectedStockMovementLot(stockMovementsState.selectedLotId);
+      }
+    },
+  );
+  return Boolean(started?.accepted);
+}
 
 function setRecipeIngredientOptions(ingredients: Ingredient[]) { recipesState.ingredients = ingredients.filter((i)=>i.is_active); }
 function refreshRecipeIngredientOptions(showMessage = false) {
   saveVersionFormFromDom();
-  return getIngredients().then((ingredients) => {
-    setRecipeIngredientOptions(ingredients.ingredients);
-    recipesStatus = 'ready';
-    recipesError = '';
-    if (showMessage) recipesMessage = 'Список активных компонентов обновлен. Если компонента нет в списке, проверьте, что он не архивирован.';
-    render();
-  }).catch(() => {
-    recipesError = 'Не удалось обновить компоненты для конструктора рецепта. Проверьте локальное приложение и попробуйте обновить рецепты.';
-    render();
+  return formulaClientWorkspaceRuntime.read({
+    route: 'recipes',
+    operation: 'recipe-references',
+    kind: showMessage ? 'refresh' : 'reference',
+    contextKey: 'recipes:ingredients',
+    request: getIngredients,
+    validate: (ingredients) => Array.isArray(ingredients?.ingredients),
+    apply: (ingredients) => {
+      setRecipeIngredientOptions(ingredients.ingredients);
+      recipesStatus = 'ready';
+      recipesError = '';
+      if (showMessage) recipesMessage = 'Список активных компонентов обновлен. Если компонента нет в списке, проверьте, что он не архивирован.';
+    },
+    failed: () => {
+      recipesError = 'Не удалось обновить компоненты для конструктора рецепта. Черновик версии сохранён; попробуйте обновить рецепты.';
+    },
   });
 }
+function reconcileRecipeWorkspaceObligation() {
+  const obligation = formulaClientWorkspaceLifecycle.reconciliationObligation('recipes');
+  if (!obligation || obligation.readOperation !== 'recipe-version-list') return false;
+  const match = obligation.readContextKey.match(/^template:(\d+)$/);
+  if (!match) return false;
+  const templateId = Number(match[1]);
+  const started = formulaClientWorkspaceRuntime.read({
+    route: 'recipes',
+    operation: 'recipe-version-list',
+    kind: 'reconciliation',
+    contextKey: obligation.readContextKey,
+    request: () => getRecipeVersions(templateId),
+    validate: (versions) => Array.isArray(versions?.recipe_versions),
+    apply: (versions) => {
+      if (recipesState.selectedTemplate?.id === templateId) recipesState.versions = versions.recipe_versions;
+      recipesRefreshWarning = '';
+    },
+    failed: () => {
+      recipesRefreshWarning = 'Не удалось проверить список версий исходного рецепта. Нажмите «Обновить» ещё раз.';
+    },
+  });
+  return started.accepted;
+}
 function loadRecipes(force = false) {
+  if (force) reconcileRecipeWorkspaceObligation();
   if (!force && recipesStatus === 'loading') return;
   if (!force && recipesStatus === 'ready') { refreshRecipeIngredientOptions(); return; }
   saveVersionFormFromDom();
-  recipesStatus = 'loading'; recipesError = ''; render();
-  Promise.all([getRecipeTemplates(), getIngredients(), getRecipeCatalogCategories(), getRecipeCatalogTags()])
-    .then(([templates, ingredients, categories, tags]) => { recipesState.templates = templates.recipe_templates; setRecipeIngredientOptions(ingredients.ingredients); recipesState.catalogCategories = categories.categories; recipesState.catalogTags = tags.tags; recipesStatus = 'ready'; render(); })
-    .catch(() => { recipesStatus = 'error'; recipesError = 'Не получилось загрузить рецепты. Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.'; render(); });
+  const retained = recipesStatus === 'ready';
+  if (!retained) recipesStatus = 'loading';
+  recipesError = '';
+  recipesRefreshWarning = '';
+  formulaClientWorkspaceRuntime.read({
+    route: 'recipes',
+    operation: 'recipe-list',
+    kind: formulaClientWorkspaceLifecycle.isRequiredReconciliation('recipes', 'recipe-list', 'recipes:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'recipes:list',
+    request: () => Promise.all([getRecipeTemplates(), getIngredients(), getRecipeCatalogCategories(), getRecipeCatalogTags()]),
+    validate: ([templates, ingredients, categories, tags]) => Array.isArray(templates?.recipe_templates) && Array.isArray(ingredients?.ingredients) && Array.isArray(categories?.categories) && Array.isArray(tags?.tags),
+    apply: ([templates, ingredients, categories, tags]) => {
+      recipesState.templates = templates.recipe_templates;
+      setRecipeIngredientOptions(ingredients.ingredients);
+      recipesState.catalogCategories = categories.categories;
+      recipesState.catalogTags = tags.tags;
+      recipesStatus = 'ready';
+    },
+    failed: (hasSnapshot) => {
+      recipesStatus = hasSnapshot ? 'ready' : 'error';
+      recipesError = hasSnapshot ? '' : 'Не получилось загрузить рецепты. Проверьте, что приложение запущено полностью, и попробуйте обновить раздел.';
+      recipesRefreshWarning = hasSnapshot ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') recipesStatus = retained ? 'ready' : 'idle';
+    },
+  });
 }
 function openRecipeTemplate(id: number) {
   if (recipePageMutationActive()) return;
   saveRecipeTemplateFormFromDom();
   recipeTemplateSubmitToken += 1;
-  recipeTemplateMutationLifecycle.invalidate();
   recipeVersionSubmitToken += 1;
-  recipeVersionMutationLifecycle.invalidate();
   recipeVersionRefreshToken += 1;
   recipeTemplateValidation = emptyFormValidationState();
   recipeVersionValidation = emptyFormValidationState();
   recipesState.showCreateForm = false;
   recipesError = ''; recipesMessage = ''; recipesRefreshWarning = '';
-  const token = recipeVersionRefreshToken;
-  Promise.all([getRecipeTemplate(id), getRecipeVersions(id)]).then(([template, versions]) => { if (token !== recipeVersionRefreshToken) return; recipesState.selectedTemplate = template; recipesState.versions = versions.recipe_versions; recipesState.selectedVersionDetail = null; recipesState.versionDetailStatus = 'idle'; recipesState.calculation = null; calculationStatus = 'idle'; render(); }).catch(() => { if (token !== recipeVersionRefreshToken) return; recipesError = 'Не удалось открыть рецепт. Попробуйте обновить страницу.'; render(); });
+  formulaClientWorkspaceRuntime.read({
+    route: 'recipes',
+    operation: 'recipe-template-detail',
+    kind: 'detail',
+    contextKey: `template:${id}`,
+    request: () => requestRecipeTemplateSnapshot(
+      () => getRecipeTemplate(id),
+      () => getRecipeVersions(id),
+    ),
+    validate: ([template, versions]) => (
+      isEntityDto(template)
+      && template.id === id
+      && Array.isArray(versions?.recipe_versions)
+      && versions.recipe_versions.every((version: RecipeVersion) => version.recipe_template_id === id)
+    ),
+    apply: ([template, versions]) => {
+      recipesState.selectedTemplate = template;
+      recipesState.versions = versions.recipe_versions;
+      recipesState.selectedVersionDetail = null;
+      recipesState.versionDetailStatus = 'idle';
+      recipesState.calculation = null;
+      calculationStatus = 'idle';
+    },
+    failed: () => { recipesError = 'Не удалось открыть рецепт и его версии. Попробуйте обновить страницу.'; },
+    rejected: () => {},
+  });
 }
-function openRecipeVersion(id: number) { if (recipePageMutationActive()) return; const token = ++recipeVersionRefreshToken; recipesError = ''; recipesRefreshWarning = ''; calculationError = ''; recipesState.versionDetailStatus = 'loading'; recipesState.calculation = null; calculationStatus = 'loading'; render(); getRecipeVersionDetail(id).then((detail)=>{ if (token !== recipeVersionRefreshToken) return null; recipesState.selectedVersionDetail = detail; recipesState.versionDetailStatus = 'ready'; recipesState.calculationTargetValue = detail.version.target_batch_size_value ?? ''; recipesState.calculationTargetUnit = detail.version.target_batch_size_unit === 'ml' ? 'ml' : 'g'; render(); return getRecipeCalculation(detail.version.id, recipesState.calculationTargetValue, recipesState.calculationTargetUnit); }).then((result)=>{ if (!result || token !== recipeVersionRefreshToken) return; recipesState.calculation = result; calculationStatus = 'ready'; render(); }).catch(()=>{ if (token !== recipeVersionRefreshToken) return; if (recipesState.versionDetailStatus === 'ready') { calculationStatus = 'error'; calculationError = 'Не удалось выполнить расчет. Состав версии открыт, попробуйте пересчитать позже.'; } else { recipesState.versionDetailStatus = 'error'; calculationStatus = 'idle'; recipesError = 'Не удалось загрузить версию рецепта.'; } render(); }); }
+function openRecipeVersion(id: number) {
+  if (recipePageMutationActive()) return;
+  recipeVersionRefreshToken += 1;
+  recipesError = '';
+  recipesRefreshWarning = '';
+  calculationError = '';
+  recipesState.versionDetailStatus = 'loading';
+  recipesState.calculation = null;
+  calculationStatus = 'loading';
+  formulaClientWorkspaceRuntime.read({
+    route: 'recipes',
+    operation: 'recipe-version-detail',
+    kind: 'detail',
+    contextKey: `version:${id}`,
+    request: () => getRecipeVersionDetail(id),
+    validate: isRecipeVersionDetailDto,
+    apply: (detail) => {
+      recipesState.selectedVersionDetail = detail;
+      recipesState.versionDetailStatus = 'ready';
+      recipesState.calculationTargetValue = detail.version.target_batch_size_value ?? '';
+      recipesState.calculationTargetUnit = detail.version.target_batch_size_unit === 'ml' ? 'ml' : 'g';
+      runRecipeCalculation(detail.version.id, recipesState.calculationTargetValue, recipesState.calculationTargetUnit, 'initial');
+    },
+    failed: () => {
+      recipesState.versionDetailStatus = 'error';
+      calculationStatus = 'idle';
+      recipesError = 'Не удалось загрузить версию рецепта.';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') {
+        recipesState.versionDetailStatus = 'idle';
+        calculationStatus = 'idle';
+      }
+    },
+  });
+}
+
+function runRecipeCalculation(versionId: number, value: string, unit: string, kind: 'initial' | 'manual') {
+  calculationStatus = 'loading';
+  calculationError = '';
+  formulaClientWorkspaceRuntime.read({
+    route: 'recipes',
+    operation: 'recipe-calculation',
+    kind: 'calculation',
+    contextKey: `version:${versionId}:value:${value}:unit:${unit}`,
+    request: () => getRecipeCalculation(versionId, value, unit),
+    validate: (result) => Boolean(result && typeof result === 'object' && 'recipe_version_id' in result),
+    apply: (result) => {
+      if (recipesState.selectedVersionDetail?.version.id !== versionId) return;
+      recipesState.calculation = result;
+      calculationStatus = 'ready';
+    },
+    failed: () => {
+      if (recipesState.selectedVersionDetail?.version.id !== versionId) return;
+      calculationStatus = 'error';
+      calculationError = kind === 'manual'
+        ? 'Не удалось выполнить расчет. Проверьте размер партии и попробуйте еще раз.'
+        : 'Не удалось выполнить расчет. Состав версии открыт, попробуйте пересчитать позже.';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read' && recipesState.selectedVersionDetail?.version.id === versionId) calculationStatus = 'idle';
+    },
+  });
+}
 function submitRecipeTemplateForm(event: SubmitEvent) {
   event.preventDefault();
   if (recipeVersionSubmitting) return;
-  const lifecycleToken = recipeTemplateMutationLifecycle.begin();
-  if (lifecycleToken === null) return;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('recipes', 'recipe-template-create', 'template:new');
+  if (!workspaceOwner.accepted) return;
   const payload = recipeTemplatePayloadFromForm(event.currentTarget as HTMLFormElement);
   recipesState.templateForm = payload;
   const token = ++recipeTemplateSubmitToken;
@@ -3905,58 +4917,209 @@ function submitRecipeTemplateForm(event: SubmitEvent) {
   applyValidationToRecipeTemplateForm(recipeTemplateValidation);
   disableRecipeTemplateMutationControls(document);
   createRecipeTemplate(payload).then((template)=>{
-    if (token !== recipeTemplateSubmitToken) return;
+    if (token !== recipeTemplateSubmitToken) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, template, isEntityDto, 'Рецепт создан.');
+    presentFormulaClientCompletion('recipes', owned);
+    if (!owned.knownSuccess || !owned.canApply) {
+      recipeTemplateSubmitting = false;
+      recipesRefreshWarning = owned.message;
+      render();
+      return;
+    }
     recipesMessage = 'Рецепт создан.';
     recipesError = '';
     recipeTemplateValidation = emptyFormValidationState();
     recipesState.templateForm = emptyRecipeTemplateForm();
     recipesState.showCreateForm = false;
-    return Promise.all([getRecipeTemplates(), getRecipeTemplate(template.id), getRecipeVersions(template.id)]).then(([templates, opened, versions])=>{
-      if (token !== recipeTemplateSubmitToken) return;
-      recipesState.templates = templates.recipe_templates;
-      recipesState.selectedTemplate = opened;
-      recipesState.versions = versions.recipe_versions;
-      recipesState.selectedVersionDetail = null;
-      recipesState.versionDetailStatus = 'idle';
-      recipesState.calculation = null;
-      calculationStatus = 'idle';
-      recipesStatus = 'ready';
-      recipeTemplateSubmitting = false;
-      recipeTemplateMutationLifecycle.finish(lifecycleToken);
-      render();
-    }).catch(()=>{
-      if (token !== recipeTemplateSubmitToken) return;
-      recipeTemplateSubmitting = false;
-      recipeTemplateMutationLifecycle.finish(lifecycleToken);
-      recipesRefreshWarning = 'Рецепт создан, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальные данные.';
-      recipesStatus = 'ready';
-      render();
+    recipesState.templates = [...recipesState.templates.filter((item) => item.id !== template.id), template as RecipeTemplate];
+    recipesState.selectedTemplate = template as RecipeTemplate;
+    recipesState.versions = [];
+    recipesState.selectedVersionDetail = null;
+    recipesState.versionDetailStatus = 'idle';
+    recipesState.calculation = null;
+    calculationStatus = 'idle';
+    recipesStatus = 'ready';
+    recipeTemplateSubmitting = false;
+    render();
+    formulaClientWorkspaceRuntime.read({
+      route: 'recipes',
+      operation: 'recipe-template-detail',
+      kind: 'mutation-refresh',
+      contextKey: `created:${template.id}`,
+      request: () => Promise.all([getRecipeTemplates(), getRecipeTemplate(template.id), getRecipeVersions(template.id)]),
+      validate: ([templates, opened, versions]) => Array.isArray(templates?.recipe_templates) && isEntityDto(opened) && Array.isArray(versions?.recipe_versions),
+      apply: ([templates, opened, versions]) => {
+        if (token !== recipeTemplateSubmitToken) return;
+        recipesState.templates = templates.recipe_templates;
+        recipesState.selectedTemplate = opened;
+        recipesState.versions = versions.recipe_versions;
+        recipesStatus = 'ready';
+      },
+      failed: () => {
+        recipesStatus = 'ready';
+        recipesRefreshWarning = 'Рецепт создан, но список не обновился. Нажмите «Обновить», чтобы увидеть актуальные данные.';
+      },
     });
   }).catch((error)=>{
-    if (token !== recipeTemplateSubmitToken) return;
+    if (token !== recipeTemplateSubmitToken) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+    presentFormulaClientCompletion('recipes', owned);
     recipeTemplateSubmitting = false;
-    recipeTemplateMutationLifecycle.finish(lifecycleToken);
     restoreRecipeMutationControls(document);
+    if (!owned.accepted || owned.reconciliationRequired) {
+      recipesRefreshWarning = owned.message;
+      render();
+      return;
+    }
     recipesMessage = '';
     recipesError = '';
     recipesRefreshWarning = '';
     recipeTemplateValidation = normalizeBackendValidation(apiValidationPayload(error), recipeTemplateFieldLabels, 'Не удалось создать рецепт. Проверьте поля и попробуйте ещё раз.');
     recipesStatus = 'ready';
     applyValidationToRecipeTemplateForm(recipeTemplateValidation);
-    announceAssertive('Проверьте рецепт. Ошибки показаны рядом с полями.');
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === recipeTemplateSubmitToken) {
+          recipeTemplateSubmitting = false;
+          restoreRecipeMutationControls(document);
+        }
+      },
+      ownsRoute: () => formulaClientWorkspaceLifecycle.ownsRoute('recipes'),
+      resumeRoute: () => {
+        if (formulaClientWorkspaceLifecycle.reconciliationRequired('recipes')) loadRecipes(true);
+        else render();
+      },
+    });
   });
 }
-function reloadRecipeCatalogData() { return Promise.all([getRecipeTemplates(), getRecipeCatalogCategories(), getRecipeCatalogTags()]).then(([templates, categories, tags]) => { recipesState.templates = templates.recipe_templates; recipesState.catalogCategories = categories.categories; recipesState.catalogTags = tags.tags; if (recipesState.selectedTemplate) recipesState.selectedTemplate = templates.recipe_templates.find((template) => template.id === recipesState.selectedTemplate?.id) ?? recipesState.selectedTemplate; recipesStatus = 'ready'; }); }
-function submitRecipeCatalogCategoryForm(event: SubmitEvent) { event.preventDefault(); const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) { recipesError = 'Укажите название группы, например «Кремы».'; recipesMessage = ''; render(); return; } recipesState.catalogCreating = 'category'; recipesError = ''; render(); createRecipeCatalogCategory(name).then(() => reloadRecipeCatalogData()).then(() => { recipesMessage = 'Группа рецептов создана.'; recipesState.catalogCreating = null; render(); }).catch(() => { recipesState.catalogCreating = null; recipesMessage = ''; recipesError = 'Не удалось создать группу рецептов. Проверьте название и попробуйте еще раз.'; render(); }); }
-function submitRecipeCatalogTagForm(event: SubmitEvent) { event.preventDefault(); const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) { recipesError = 'Укажите название метки, например «Для сухой кожи».'; recipesMessage = ''; render(); return; } recipesState.catalogCreating = 'tag'; recipesError = ''; render(); createRecipeCatalogTag(name).then(() => reloadRecipeCatalogData()).then(() => { recipesMessage = 'Метка рецепта создана.'; recipesState.catalogCreating = null; render(); }).catch(() => { recipesState.catalogCreating = null; recipesMessage = ''; recipesError = 'Не удалось создать метку рецепта. Проверьте название и попробуйте еще раз.'; render(); }); }
-function assignRecipeCategory(recipeTemplateId: number, value: string) { if (!recipeTemplateId) return; recipesState.catalogSaving = 'saving'; recipesError = ''; render(); updateRecipeCatalogCategory(recipeTemplateId, value ? Number(value) : null).then(() => reloadRecipeCatalogData()).then(() => { recipesMessage = 'Моя группа рецепта сохранена.'; recipesState.catalogSaving = 'idle'; render(); }).catch(() => { recipesState.catalogSaving = 'idle'; recipesMessage = ''; recipesError = 'Не удалось сохранить группу рецепта. Проверьте, что группа активна, и попробуйте еще раз.'; render(); }); }
-function assignRecipeTags(recipeTemplateId: number) { if (!recipeTemplateId) return; const tagIds = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-action="toggle-recipe-tag"][data-recipe-template-id="${recipeTemplateId}"]:checked`)).map((input) => Number(input.value)); recipesState.catalogSaving = 'saving'; recipesError = ''; render(); updateRecipeCatalogTags(recipeTemplateId, tagIds).then(() => reloadRecipeCatalogData()).then(() => { recipesMessage = 'Метки рецепта сохранены.'; recipesState.catalogSaving = 'idle'; render(); }).catch(() => { recipesState.catalogSaving = 'idle'; recipesMessage = ''; recipesError = 'Не удалось сохранить метки рецепта. Проверьте, что метки активны, и попробуйте еще раз.'; render(); }); }
+function submitRecipeCatalogCategoryForm(event: SubmitEvent) {
+  event.preventDefault();
+  const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim();
+  if (!name) { recipesError = 'Укажите название группы, например «Кремы».'; recipesMessage = ''; render(); return; }
+  recipesState.catalogCreating = 'category'; recipesError = ''; recipesMessage = '';
+  const started = formulaClientWorkspaceRuntime.mutate({
+    route: 'recipes',
+    operation: 'recipe-category-create',
+    contextKey: 'recipes:catalog',
+    request: () => createRecipeCatalogCategory(name),
+    validate: isEntityDto,
+    successMessage: 'Группа рецептов создана.',
+    apply: () => {
+      recipesState.catalogCreating = null;
+      recipesMessage = 'Группа рецептов создана.';
+      loadRecipes(true);
+    },
+    failed: (_error, ambiguous) => {
+      recipesState.catalogCreating = null;
+      recipesError = ambiguous ? '' : 'Не удалось создать группу рецептов. Проверьте название и попробуйте еще раз.';
+      recipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    settled: (result) => {
+      recipesState.catalogCreating = null;
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('recipes')) return;
+      if (result.reconciliationRequired) loadRecipes(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { recipesState.catalogCreating = null; render(); }
+}
+function submitRecipeCatalogTagForm(event: SubmitEvent) {
+  event.preventDefault();
+  const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim();
+  if (!name) { recipesError = 'Укажите название метки, например «Для сухой кожи».'; recipesMessage = ''; render(); return; }
+  recipesState.catalogCreating = 'tag'; recipesError = ''; recipesMessage = '';
+  const started = formulaClientWorkspaceRuntime.mutate({
+    route: 'recipes',
+    operation: 'recipe-tag-create',
+    contextKey: 'recipes:catalog',
+    request: () => createRecipeCatalogTag(name),
+    validate: isEntityDto,
+    successMessage: 'Метка рецепта создана.',
+    apply: () => {
+      recipesState.catalogCreating = null;
+      recipesMessage = 'Метка рецепта создана.';
+      loadRecipes(true);
+    },
+    failed: (_error, ambiguous) => {
+      recipesState.catalogCreating = null;
+      recipesError = ambiguous ? '' : 'Не удалось создать метку рецепта. Проверьте название и попробуйте еще раз.';
+      recipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    settled: (result) => {
+      recipesState.catalogCreating = null;
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('recipes')) return;
+      if (result.reconciliationRequired) loadRecipes(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { recipesState.catalogCreating = null; render(); }
+}
+function assignRecipeCategory(recipeTemplateId: number, value: string) {
+  if (!recipeTemplateId) return;
+  recipesState.catalogSaving = 'saving'; recipesError = ''; recipesMessage = '';
+  const started = formulaClientWorkspaceRuntime.mutate({
+    route: 'recipes',
+    operation: 'recipe-category-assign',
+    contextKey: `template:${recipeTemplateId}`,
+    request: () => updateRecipeCatalogCategory(recipeTemplateId, value ? Number(value) : null),
+    validate: (result) => result?.entity_type === 'recipe_template' && result.entity_id === recipeTemplateId,
+    successMessage: 'Моя группа рецепта сохранена.',
+    apply: () => {
+      recipesState.catalogSaving = 'idle';
+      recipesMessage = 'Моя группа рецепта сохранена.';
+      loadRecipes(true);
+    },
+    failed: (_error, ambiguous) => {
+      recipesState.catalogSaving = 'idle';
+      recipesError = ambiguous ? '' : 'Не удалось сохранить группу рецепта. Проверьте, что группа активна, и попробуйте еще раз.';
+      recipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    settled: (result) => {
+      recipesState.catalogSaving = 'idle';
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('recipes')) return;
+      if (result.reconciliationRequired) loadRecipes(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { recipesState.catalogSaving = 'idle'; render(); }
+}
+function assignRecipeTags(recipeTemplateId: number) {
+  if (!recipeTemplateId) return;
+  const tagIds = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-action="toggle-recipe-tag"][data-recipe-template-id="${recipeTemplateId}"]:checked`)).map((input) => Number(input.value));
+  recipesState.catalogSaving = 'saving'; recipesError = ''; recipesMessage = '';
+  const started = formulaClientWorkspaceRuntime.mutate({
+    route: 'recipes',
+    operation: 'recipe-tags-assign',
+    contextKey: `template:${recipeTemplateId}`,
+    request: () => updateRecipeCatalogTags(recipeTemplateId, tagIds),
+    validate: (result) => result?.entity_type === 'recipe_template' && result.entity_id === recipeTemplateId && Array.isArray(result.tag_ids),
+    successMessage: 'Метки рецепта сохранены.',
+    apply: () => {
+      recipesState.catalogSaving = 'idle';
+      recipesMessage = 'Метки рецепта сохранены.';
+      loadRecipes(true);
+    },
+    failed: (_error, ambiguous) => {
+      recipesState.catalogSaving = 'idle';
+      recipesError = ambiguous ? '' : 'Не удалось сохранить метки рецепта. Проверьте, что метки активны, и попробуйте еще раз.';
+      recipesRefreshWarning = ambiguous ? formulaClientWorkspaceLifecycle.feedback('recipes').warning : '';
+    },
+    settled: (result) => {
+      recipesState.catalogSaving = 'idle';
+      if (!formulaClientWorkspaceLifecycle.ownsRoute('recipes')) return;
+      if (result.reconciliationRequired) loadRecipes(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { recipesState.catalogSaving = 'idle'; render(); }
+}
 function submitRecipeVersionForm(event: SubmitEvent) {
   event.preventDefault();
   if (recipeTemplateSubmitting || !recipesState.selectedTemplate) return;
-  const lifecycleToken = recipeVersionMutationLifecycle.begin();
-  if (lifecycleToken === null) return;
   const templateId = recipesState.selectedTemplate.id;
+  const workspaceOwner = formulaClientWorkspaceLifecycle.startMutation('recipes', 'recipe-version-create', `template:${templateId}`);
+  if (!workspaceOwner.accepted) return;
   const form = recipeVersionFormFromForm(event.currentTarget as HTMLFormElement);
   recipesState.versionForm = form;
   const token = ++recipeVersionSubmitToken;
@@ -3969,52 +5132,106 @@ function submitRecipeVersionForm(event: SubmitEvent) {
   applyValidationToRecipeVersionForm(recipeVersionValidation);
   disableRecipeVersionMutationControls(document);
   createRecipeVersion(templateId, recipeVersionPayload(form)).then((detail)=>{
-    if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) return;
+    if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, detail, isRecipeVersionDetailDto, 'Новая версия рецепта сохранена.');
+    presentFormulaClientCompletion('recipes', owned);
+    if (!owned.knownSuccess || !owned.canApply) {
+      recipeVersionSubmitting = false;
+      recipesRefreshWarning = owned.message;
+      render();
+      return;
+    }
     recipesMessage = 'Новая версия рецепта сохранена. Теперь ее можно использовать для индивидуального рецепта клиента.';
     recipesError = '';
     recipeVersionValidation = emptyFormValidationState();
     recipesState.versionForm = emptyRecipeVersionForm();
     recipesState.selectedVersionDetail = detail;
     recipesState.versionDetailStatus = 'ready';
-    return Promise.all([getRecipeVersions(templateId), getRecipeVersionDetail(detail.version.id), getRecipeCalculation(detail.version.id, detail.version.target_batch_size_value ?? '', detail.version.target_batch_size_unit === 'ml' ? 'ml' : 'g')]).then(([versions, opened, calculation])=>{
-      if (token !== recipeVersionSubmitToken || refreshToken !== recipeVersionRefreshToken || recipesState.selectedTemplate?.id !== templateId) return;
-      recipesState.versions = versions.recipe_versions;
-      recipesState.selectedVersionDetail = opened;
-      recipesState.versionDetailStatus = 'ready';
-      recipesState.calculationTargetValue = opened.version.target_batch_size_value ?? '';
-      recipesState.calculationTargetUnit = opened.version.target_batch_size_unit === 'ml' ? 'ml' : 'g';
-      recipesState.calculation = calculation;
-      calculationStatus = 'ready';
-      recipeVersionSubmitting = false;
-      recipeVersionMutationLifecycle.finish(lifecycleToken);
-      render();
-    }).catch(()=>{
-      if (token !== recipeVersionSubmitToken || refreshToken !== recipeVersionRefreshToken || recipesState.selectedTemplate?.id !== templateId) return;
-      recipeVersionSubmitting = false;
-      recipeVersionMutationLifecycle.finish(lifecycleToken);
-      recipesRefreshWarning = 'Версия сохранена, но список или расчёт не обновились. Нажмите «Обновить» или откройте версию из списка.';
-      render();
+    recipeVersionSubmitting = false;
+    render();
+    formulaClientWorkspaceRuntime.read({
+      route: 'recipes',
+      operation: 'recipe-version-list',
+      kind: 'mutation-refresh',
+      contextKey: `template:${templateId}`,
+      request: () => Promise.all([getRecipeVersions(templateId), getRecipeVersionDetail(detail.version.id)]),
+      validate: ([versions, opened]) => Array.isArray(versions?.recipe_versions) && isRecipeVersionDetailDto(opened),
+      apply: ([versions, opened]) => {
+        if (token !== recipeVersionSubmitToken || refreshToken !== recipeVersionRefreshToken || recipesState.selectedTemplate?.id !== templateId) return;
+        recipesState.versions = versions.recipe_versions;
+        recipesState.selectedVersionDetail = opened;
+        recipesState.versionDetailStatus = 'ready';
+        recipesState.calculationTargetValue = opened.version.target_batch_size_value ?? '';
+        recipesState.calculationTargetUnit = opened.version.target_batch_size_unit === 'ml' ? 'ml' : 'g';
+        runRecipeCalculation(opened.version.id, recipesState.calculationTargetValue, recipesState.calculationTargetUnit, 'initial');
+      },
+      failed: () => {
+        recipesRefreshWarning = 'Версия сохранена, но список или расчёт не обновились. Нажмите «Обновить» или откройте версию из списка.';
+      },
     });
   }).catch((error)=>{
-    if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) return;
+    if (token !== recipeVersionSubmitToken || recipesState.selectedTemplate?.id !== templateId) { formulaClientWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = formulaClientWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+    presentFormulaClientCompletion('recipes', owned);
     recipeVersionSubmitting = false;
-    recipeVersionMutationLifecycle.finish(lifecycleToken);
     restoreRecipeMutationControls(document);
+    if (!owned.accepted || owned.reconciliationRequired) {
+      recipesRefreshWarning = owned.message;
+      render();
+      return;
+    }
     recipesMessage = '';
     recipesError = '';
     recipesRefreshWarning = '';
     recipeVersionValidation = normalizeBackendValidation(apiValidationPayload(error), recipeVersionFieldLabels(form), 'Не удалось сохранить версию. Проверьте строки состава и попробуйте ещё раз.');
     applyValidationToRecipeVersionForm(recipeVersionValidation);
-    announceAssertive('Проверьте версию рецепта. Ошибки показаны рядом с полями.');
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === recipeVersionSubmitToken) {
+          recipeVersionSubmitting = false;
+          restoreRecipeMutationControls(document);
+        }
+      },
+      ownsRoute: () => formulaClientWorkspaceLifecycle.ownsRoute('recipes'),
+      resumeRoute: () => {
+        if (formulaClientWorkspaceLifecycle.reconciliationRequired('recipes')) loadRecipes(true);
+        else render();
+      },
+    });
   });
 }
-function submitCalculationForm(event: SubmitEvent) { event.preventDefault(); const detail = recipesState.selectedVersionDetail; if (!detail) return; const data = new FormData(event.currentTarget as HTMLFormElement); const value = String(data.get('target_batch_size_value') ?? '').trim(); const unit = String(data.get('target_batch_size_unit') ?? 'g'); recipesState.calculationTargetValue = value; recipesState.calculationTargetUnit = unit; calculationStatus = 'loading'; calculationError = ''; render(); getRecipeCalculation(detail.version.id, value, unit).then((result)=>{ recipesState.calculation = result; calculationStatus = 'ready'; render(); }).catch(()=>{ calculationStatus = 'error'; calculationError = 'Не удалось выполнить расчет. Проверьте размер партии и попробуйте еще раз.'; render(); }); }
+function submitCalculationForm(event: SubmitEvent) { event.preventDefault(); const detail = recipesState.selectedVersionDetail; if (!detail) return; const data = new FormData(event.currentTarget as HTMLFormElement); const value = String(data.get('target_batch_size_value') ?? '').trim(); const unit = String(data.get('target_batch_size_unit') ?? 'g'); recipesState.calculationTargetValue = value; recipesState.calculationTargetUnit = unit; runRecipeCalculation(detail.version.id, value, unit, 'manual'); }
 
 
 function loadPackagingItems(force = false) {
   if (!force && (packagingItemsStatus === 'loading' || packagingItemsStatus === 'ready')) return;
-  packagingItemsStatus = 'loading'; packagingItemsError = ''; render();
-  Promise.all([getPackagingItems(), getPackagingCatalogCategories(), getPackagingCatalogTags()]).then(([response, categories, tags]) => { packagingItemsState.items = response.packaging_items; packagingItemsState.catalogCategories = categories.categories; packagingItemsState.catalogTags = tags.tags; packagingItemsStatus = 'ready'; render(); }).catch(() => { packagingItemsStatus = 'error'; packagingItemsError = 'Не получилось загрузить справочник тары.'; render(); });
+  const retained = packagingItemsStatus === 'ready';
+  if (!retained) packagingItemsStatus = 'loading';
+  packagingItemsError = '';
+  packagingItemsRefreshWarning = '';
+  inventoryCatalogWorkspaceRuntime.read({
+    route: 'packaging',
+    operation: 'packaging-list',
+    kind: inventoryCatalogWorkspaceLifecycle.isRequiredReconciliation('packaging', 'packaging-list', 'packaging:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'packaging:list',
+    request: () => Promise.all([getPackagingItems(), getPackagingCatalogCategories(), getPackagingCatalogTags()]),
+    validate: ([items, categories, tags]) => Array.isArray(items?.packaging_items) && Array.isArray(categories?.categories) && Array.isArray(tags?.tags),
+    apply: ([items, categories, tags]) => {
+      packagingItemsState.items = items.packaging_items;
+      packagingItemsState.catalogCategories = categories.categories;
+      packagingItemsState.catalogTags = tags.tags;
+      packagingItemsStatus = 'ready';
+    },
+    failed: (hasSnapshot) => {
+      packagingItemsStatus = hasSnapshot ? 'ready' : 'error';
+      packagingItemsError = hasSnapshot ? '' : 'Не получилось загрузить справочник тары.';
+      packagingItemsRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('packaging').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') packagingItemsStatus = retained ? 'ready' : 'idle';
+    },
+  });
 }
 function startEditPackagingItem(id: number) {
   if (packagingPageMutationActive()) return;
@@ -4063,6 +5280,8 @@ function submitPackagingItemForm(event: SubmitEvent) {
   if (packagingPageMutationActive()) return;
   const isEdit = packagingItemsState.formMode === 'edit' && Boolean(packagingItemsState.form.id);
   const submittedId = packagingItemsState.form.id;
+  const workspaceOwner = inventoryCatalogWorkspaceLifecycle.startMutation('packaging', isEdit ? 'packaging-update' : 'packaging-create', isEdit ? `packaging:${submittedId}` : 'packaging:new');
+  if (!workspaceOwner.accepted) return;
   const payload = packagingItemPayloadFromForm(event.currentTarget as HTMLFormElement);
   packagingItemsState.form = { ...payload, id: isEdit ? submittedId : null };
   const token = ++packagingItemSubmitToken;
@@ -4075,29 +5294,43 @@ function submitPackagingItemForm(event: SubmitEvent) {
   disablePackagingItemSubmitControls();
   const request = isEdit && submittedId ? updatePackagingItem(submittedId, payload) : createPackagingItem(payload);
   request.then((saved) => {
-    if (token !== packagingItemSubmitToken) return;
+    if (token !== packagingItemSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, saved, isInventoryEntityDto, isEdit ? 'Тара сохранена.' : 'Тара создана.');
+    presentInventoryCatalogCompletion('packaging', owned);
+    if (!owned.knownSuccess || !owned.canApply) {
+      packagingItemSubmitting = false;
+      packagingItemsRefreshWarning = owned.message;
+      render();
+      return;
+    }
     packagingItemsMessage = isEdit ? 'Тара сохранена. Остатки не изменялись.' : 'Тара создана. Остатки добавляются отдельными складскими операциями.';
     packagingItemsError = '';
     packagingItemValidation = emptyFormValidationState();
     packagingItemsState.formMode = isEdit ? 'edit' : 'create';
     packagingItemsState.showCreateForm = false;
     packagingItemsState.form = isEdit ? { ...payload, id: saved.id } : emptyPackagingItemForm();
-    return getPackagingItems().then((response) => {
-      if (token !== packagingItemSubmitToken) return;
-      packagingItemsState.items = response.packaging_items;
-      packagingItemsStatus = 'ready';
-      packagingItemSubmitting = false;
-      render();
-    }).catch(() => {
-      if (token !== packagingItemSubmitToken) return;
-      packagingItemsRefreshWarning = 'Тара сохранена, но список не обновился. Нажмите «Обновить список», чтобы увидеть актуальные данные.';
-      packagingItemsStatus = 'ready';
-      packagingItemSubmitting = false;
-      render();
+    packagingItemSubmitting = false;
+    inventoryCatalogWorkspaceRuntime.read({
+      route: 'packaging',
+      operation: 'packaging-list',
+      kind: 'mutation-refresh',
+      contextKey: 'packaging:list',
+      request: getPackagingItems,
+      validate: (response) => Array.isArray(response?.packaging_items),
+      apply: (response) => { if (token === packagingItemSubmitToken) packagingItemsState.items = response.packaging_items; packagingItemsStatus = 'ready'; },
+      failed: () => { packagingItemsStatus = 'ready'; packagingItemsRefreshWarning = 'Тара сохранена, но список не обновился. Нажмите «Обновить список», чтобы увидеть актуальные данные.'; },
     });
   }).catch((error) => {
-    if (token !== packagingItemSubmitToken) return;
+    if (token !== packagingItemSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+    presentInventoryCatalogCompletion('packaging', owned);
     packagingItemSubmitting = false;
+    if (!owned.accepted || owned.reconciliationRequired) {
+      packagingItemsRefreshWarning = owned.message;
+      reenablePackagingItemSubmitButtons();
+      render();
+      return;
+    }
     packagingItemsMessage = '';
     packagingItemsError = '';
     packagingItemsRefreshWarning = '';
@@ -4105,22 +5338,126 @@ function submitPackagingItemForm(event: SubmitEvent) {
     packagingItemsStatus = 'ready';
     applyValidationToPackagingItemForm(packagingItemValidation);
     reenablePackagingItemSubmitButtons();
-    announceAssertive('Проверьте форму тары. Ошибки показаны рядом с полями.');
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === packagingItemSubmitToken) {
+          packagingItemSubmitting = false;
+          reenablePackagingItemSubmitButtons();
+        }
+      },
+      ownsRoute: () => inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging'),
+      resumeRoute: () => {
+        if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('packaging')) loadPackagingItems(true);
+        else render();
+      },
+    });
   });
 }
 function deactivatePackagingItem(id: number) {
   if (packagingPageMutationActive()) return;
   const item = packagingItemsState.items.find((packagingItem) => packagingItem.id === id);
   if (!item || !window.confirm(`Деактивировать тару «${item.name}»? Она не будет удалена из истории.`)) return;
+  const owner = inventoryCatalogWorkspaceLifecycle.startMutation('packaging', 'packaging-deactivate', `packaging:${id}`);
+  if (!owner.accepted) return;
   packagingItemDeactivatingId = id;
   packagingItemsError = '';
   render();
-  deactivatePackagingItemRequest(id).then(() => { packagingItemsMessage = 'Тара деактивирована. История и остатки склада не изменялись.'; packagingItemsError = ''; return getPackagingItems(); }).then((response) => { packagingItemsState.items = response.packaging_items; packagingItemsStatus = 'ready'; packagingItemDeactivatingId = null; render(); }).catch(() => { packagingItemDeactivatingId = null; packagingItemsMessage = ''; packagingItemsError = 'Не удалось деактивировать тару. Попробуйте еще раз.'; packagingItemsStatus = 'ready'; render(); });
+  deactivatePackagingItemRequest(id).then((saved) => {
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(owner.owner, saved, isInventoryEntityDto, 'Тара деактивирована.');
+    presentInventoryCatalogCompletion('packaging', owned);
+    if (!owned.knownSuccess || !owned.canApply) {
+      packagingItemDeactivatingId = null;
+      packagingItemsRefreshWarning = owned.message;
+      render();
+      return;
+    }
+    packagingItemsState.items = packagingItemsState.items.map((packagingItem) => packagingItem.id === id ? saved : packagingItem);
+    packagingItemsMessage = 'Тара деактивирована. История и остатки склада не изменялись.';
+    packagingItemsError = '';
+    packagingItemDeactivatingId = null;
+    loadPackagingItems(true);
+  }).catch((error) => {
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(owner.owner, error);
+    presentInventoryCatalogCompletion('packaging', owned);
+    packagingItemDeactivatingId = null;
+    packagingItemsMessage = '';
+    packagingItemsError = owned.reconciliationRequired ? '' : 'Не удалось деактивировать тару. Попробуйте еще раз.';
+    packagingItemsRefreshWarning = owned.reconciliationRequired ? owned.message : '';
+    packagingItemsStatus = 'ready';
+    render();
+  }).finally(() => {
+    if (packagingItemDeactivatingId === id) packagingItemDeactivatingId = null;
+    if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging')) return;
+    if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('packaging')) loadPackagingItems(true);
+    else render();
+  });
 }
 
-function reloadPackagingCatalogData() { return Promise.all([getPackagingItems(), getPackagingCatalogCategories(), getPackagingCatalogTags()]).then(([items, categories, tags]) => { packagingItemsState.items = items.packaging_items; packagingItemsState.catalogCategories = categories.categories; packagingItemsState.catalogTags = tags.tags; packagingItemsStatus = 'ready'; }); }
-function submitPackagingCatalogCategoryForm(event: SubmitEvent) { event.preventDefault(); if (packagingPageMutationActive()) return; const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) return; packagingItemsState.catalogCreating = 'category'; packagingItemsError = ''; render(); createPackagingCatalogCategory(name).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Группа тары создана.'; packagingItemsState.catalogCreating = null; render(); }).catch(() => { packagingItemsState.catalogCreating = null; packagingItemsError = 'Не удалось создать группу тары. Проверьте название и попробуйте еще раз.'; render(); }); }
-function submitPackagingCatalogTagForm(event: SubmitEvent) { event.preventDefault(); if (packagingPageMutationActive()) return; const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim(); if (!name) return; packagingItemsState.catalogCreating = 'tag'; packagingItemsError = ''; render(); createPackagingCatalogTag(name).then(() => reloadPackagingCatalogData()).then(() => { packagingItemsMessage = 'Метка тары создана.'; packagingItemsState.catalogCreating = null; render(); }).catch(() => { packagingItemsState.catalogCreating = null; packagingItemsError = 'Не удалось создать метку тары. Проверьте название и попробуйте еще раз.'; render(); }); }
+function submitPackagingCatalogCategoryForm(event: SubmitEvent) {
+  event.preventDefault();
+  if (packagingPageMutationActive()) return;
+  const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim();
+  if (!name) { packagingItemsError = 'Укажите название группы тары.'; render(); return; }
+  packagingItemsState.catalogCreating = 'category'; packagingItemsError = ''; packagingItemsMessage = '';
+  const started = inventoryCatalogWorkspaceRuntime.mutate({
+    route: 'packaging',
+    operation: 'packaging-category-create',
+    contextKey: 'packaging:catalog',
+    request: () => createPackagingCatalogCategory(name),
+    validate: isInventoryEntityDto,
+    successMessage: 'Группа тары создана.',
+    apply: () => {
+      packagingItemsState.catalogCreating = null;
+      packagingItemsMessage = 'Группа тары создана.';
+      loadPackagingItems(true);
+    },
+    failed: (_error, ambiguous) => {
+      packagingItemsState.catalogCreating = null;
+      packagingItemsError = ambiguous ? '' : 'Не удалось создать группу тары. Проверьте название и попробуйте еще раз.';
+      packagingItemsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('packaging').warning : '';
+    },
+    settled: (result) => {
+      packagingItemsState.catalogCreating = null;
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging')) return;
+      if (result.reconciliationRequired) loadPackagingItems(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { packagingItemsState.catalogCreating = null; render(); }
+}
+function submitPackagingCatalogTagForm(event: SubmitEvent) {
+  event.preventDefault();
+  if (packagingPageMutationActive()) return;
+  const name = String(new FormData(event.currentTarget as HTMLFormElement).get('name') ?? '').trim();
+  if (!name) { packagingItemsError = 'Укажите название метки тары.'; render(); return; }
+  packagingItemsState.catalogCreating = 'tag'; packagingItemsError = ''; packagingItemsMessage = '';
+  const started = inventoryCatalogWorkspaceRuntime.mutate({
+    route: 'packaging',
+    operation: 'packaging-tag-create',
+    contextKey: 'packaging:catalog',
+    request: () => createPackagingCatalogTag(name),
+    validate: isInventoryEntityDto,
+    successMessage: 'Метка тары создана.',
+    apply: () => {
+      packagingItemsState.catalogCreating = null;
+      packagingItemsMessage = 'Метка тары создана.';
+      loadPackagingItems(true);
+    },
+    failed: (_error, ambiguous) => {
+      packagingItemsState.catalogCreating = null;
+      packagingItemsError = ambiguous ? '' : 'Не удалось создать метку тары. Проверьте название и попробуйте еще раз.';
+      packagingItemsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('packaging').warning : '';
+    },
+    settled: (result) => {
+      packagingItemsState.catalogCreating = null;
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging')) return;
+      if (result.reconciliationRequired) loadPackagingItems(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { packagingItemsState.catalogCreating = null; render(); }
+}
 function updatePackagingDraftCategory(packagingItemId: number, value: string) { if (packagingPageMutationActive()) return; if (packagingItemsState.assignmentDraft.itemId !== packagingItemId) return; updateDraftCategory(packagingItemsState.assignmentDraft, value); packagingItemsMessage = ''; render(); }
 function updatePackagingDraftTag(packagingItemId: number, tagId: number, checked: boolean) { if (packagingPageMutationActive()) return; if (packagingItemsState.assignmentDraft.itemId !== packagingItemId || !tagId) return; updateDraftTag(packagingItemsState.assignmentDraft, tagId, checked); packagingItemsMessage = ''; render(); }
 function resetPackagingAssignmentDraft() { if (packagingPageMutationActive()) return; const item = packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null; packagingItemsState.assignmentDraft = resetAssignmentDraft(item); packagingItemsMessage = ''; render(); }
@@ -4129,19 +5466,65 @@ function applyPackagingAssignmentDraft() {
   const item = packagingItemsState.form.id ? packagingItemsState.items.find((packagingItem) => packagingItem.id === packagingItemsState.form.id) ?? null : null;
   const draft = packagingItemsState.assignmentDraft;
   if (!item || !draft.itemId || !assignmentDraftIsDirty(item, draft)) return;
-  packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; render();
-  const request = (draft.catalogCategoryId !== item.catalog_category_id ? updatePackagingCatalogCategory(item.id, draft.catalogCategoryId) : Promise.resolve() as Promise<unknown>)
-    .then(() => (!sameNumberSet(draft.catalogTagIds, item.catalog_tag_ids) ? updatePackagingCatalogTags(item.id, draft.catalogTagIds) : Promise.resolve() as Promise<unknown>))
-    .then(() => reloadPackagingCatalogData());
-  request.then(() => { const saved = packagingItemsState.items.find((packagingItem) => packagingItem.id === item.id) ?? null; packagingItemsState.assignmentDraft = resetAssignmentDraft(saved); packagingItemsMessage = 'Группа и метки тары сохранены.'; packagingItemsState.catalogSaving = 'idle'; render(); }).catch(() => { packagingItemsState.catalogSaving = 'idle'; packagingItemsMessage = ''; packagingItemsError = 'Не удалось сохранить группу или метки тары. Проверьте данные и попробуйте еще раз.'; render(); });
+  packagingItemsState.catalogSaving = 'saving'; packagingItemsError = ''; packagingItemsMessage = '';
+  const started = inventoryCatalogWorkspaceRuntime.mutate({
+    route: 'packaging',
+    operation: 'packaging-assignment',
+    contextKey: `packaging:${item.id}`,
+    request: () => Promise.all([
+      draft.catalogCategoryId !== item.catalog_category_id ? updatePackagingCatalogCategory(item.id, draft.catalogCategoryId) : Promise.resolve(null),
+      !sameNumberSet(draft.catalogTagIds, item.catalog_tag_ids) ? updatePackagingCatalogTags(item.id, draft.catalogTagIds) : Promise.resolve(null),
+    ]),
+    validate: ([category, tags]) => (!category || category.entity_id === item.id) && (!tags || tags.entity_id === item.id),
+    successMessage: 'Группа и метки тары сохранены.',
+    apply: () => {
+      packagingItemsState.catalogSaving = 'idle';
+      packagingItemsMessage = 'Группа и метки тары сохранены.';
+      packagingItemsState.assignmentDraft = { ...draft };
+      loadPackagingItems(true);
+    },
+    failed: (_error, ambiguous) => {
+      packagingItemsState.catalogSaving = 'idle';
+      packagingItemsError = ambiguous ? '' : 'Не удалось сохранить группу или метки тары. Проверьте данные и попробуйте еще раз.';
+      packagingItemsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('packaging').warning : '';
+    },
+    settled: (result) => {
+      packagingItemsState.catalogSaving = 'idle';
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('packaging')) return;
+      if (result.reconciliationRequired) loadPackagingItems(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { packagingItemsState.catalogSaving = 'idle'; render(); }
 }
 
 function loadIngredientLots(force = false) {
   if (!force && (ingredientLotsStatus === 'loading' || ingredientLotsStatus === 'ready')) return;
-  ingredientLotsStatus = 'loading'; ingredientLotsError = ''; render();
-  Promise.all([getIngredientLots(), getIngredients()])
-    .then(([lots, ingredients]) => { ingredientLotsState.lots = lots.lots; ingredientLotsState.ingredients = ingredients.ingredients.filter((i)=>i.is_active); ingredientLotsStatus = 'ready'; render(); })
-    .catch(() => { ingredientLotsStatus = 'error'; ingredientLotsError = 'Не удалось получить данные о партиях.'; render(); });
+  const retained = ingredientLotsStatus === 'ready';
+  if (!retained) ingredientLotsStatus = 'loading';
+  ingredientLotsError = '';
+  ingredientLotsRefreshWarning = '';
+  inventoryCatalogWorkspaceRuntime.read({
+    route: 'ingredientLots',
+    operation: 'lot-list',
+    kind: inventoryCatalogWorkspaceLifecycle.isRequiredReconciliation('ingredientLots', 'lot-list', 'lots:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'lots:list',
+    request: () => Promise.all([getIngredientLots(), getIngredients()]),
+    validate: ([lots, ingredients]) => Array.isArray(lots?.lots) && Array.isArray(ingredients?.ingredients),
+    apply: ([lots, ingredients]) => {
+      ingredientLotsState.lots = lots.lots;
+      ingredientLotsState.ingredients = ingredients.ingredients.filter((ingredient) => ingredient.is_active);
+      ingredientLotsStatus = 'ready';
+    },
+    failed: (hasSnapshot) => {
+      ingredientLotsStatus = hasSnapshot ? 'ready' : 'error';
+      ingredientLotsError = hasSnapshot ? '' : 'Не удалось получить данные о партиях.';
+      ingredientLotsRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('ingredientLots').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') ingredientLotsStatus = retained ? 'ready' : 'idle';
+    },
+  });
 }
 function openIngredientLotCreateForm() { if (ingredientLotSubmitting) return; ingredientLotSubmitToken += 1; ingredientLotsState.formMode = 'create'; ingredientLotsState.form = emptyIngredientLotForm(); ingredientLotsMessage = ''; ingredientLotsError = ''; ingredientLotsRefreshWarning = ''; ingredientLotValidation = emptyFormValidationState(); render(); }
 function startEditIngredientLot(id: number) { if (ingredientLotSubmitting) return; ingredientLotSubmitToken += 1; const lot = ingredientLotsState.lots.find((item) => item.id === id); if (!lot) return; ingredientLotsState.formMode = 'edit'; ingredientLotsState.form = { id: lot.id, ingredient_id: String(lot.ingredient_id), lot_code: lot.lot_code, supplier_name: lot.supplier_name, purchased_at: lot.purchased_at ?? '', expires_at: lot.expires_at ?? '', unit: lot.unit, unit_cost: lot.unit_cost ?? '', total_cost: lot.total_cost ?? '', density_g_per_ml: lot.density_g_per_ml ?? '', notes: lot.notes }; ingredientLotsMessage = ''; ingredientLotsError = ''; ingredientLotsRefreshWarning = ''; ingredientLotValidation = emptyFormValidationState(); render(); }
@@ -4151,6 +5534,8 @@ function submitIngredientLotForm(event: SubmitEvent) {
   const form = event.currentTarget as HTMLFormElement;
   const isEdit = Boolean(ingredientLotsState.formMode === 'edit' && ingredientLotsState.form.id);
   const submittedFormId = ingredientLotsState.form.id;
+  const workspaceOwner = inventoryCatalogWorkspaceLifecycle.startMutation('ingredientLots', isEdit ? 'lot-update' : 'lot-create', isEdit ? `lot:${submittedFormId}` : 'lot:new');
+  if (!workspaceOwner.accepted) return;
   const payload = ingredientLotPayloadFromForm(form);
   ingredientLotsState.form = { id: isEdit ? submittedFormId : null, ingredient_id: String(payload.ingredient_id || ''), lot_code: payload.lot_code, supplier_name: payload.supplier_name, purchased_at: payload.purchased_at ?? '', expires_at: payload.expires_at ?? '', unit: payload.unit, unit_cost: payload.unit_cost ?? '', total_cost: payload.total_cost ?? '', density_g_per_ml: payload.density_g_per_ml ?? '', notes: payload.notes };
   const token = ++ingredientLotSubmitToken;
@@ -4162,8 +5547,16 @@ function submitIngredientLotForm(event: SubmitEvent) {
   ingredientLotsRefreshWarning = '';
   disableIngredientLotFormButtons();
   const request = isEdit ? updateIngredientLot(submittedFormId!, payload) : createIngredientLot(payload);
-  request.then(() => {
-    if (token !== ingredientLotSubmitToken) return;
+  request.then((saved) => {
+    if (token !== ingredientLotSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, saved, isInventoryEntityDto, isEdit ? 'Партия сохранена.' : 'Партия создана.');
+    presentInventoryCatalogCompletion('ingredientLots', owned);
+    if (!owned.knownSuccess || !owned.canApply) {
+      ingredientLotSubmitting = false;
+      ingredientLotsRefreshWarning = owned.message;
+      render();
+      return;
+    }
     ingredientLotsMessage = isEdit ? 'Партия сохранена. Остаток не изменялся.' : 'Партия создана. Количество добавляется отдельным движением сырья.';
     ingredientLotsError = '';
     ingredientLotsRefreshWarning = '';
@@ -4171,25 +5564,29 @@ function submitIngredientLotForm(event: SubmitEvent) {
     ingredientLotsState.formMode = 'create';
     ingredientLotsState.form = emptyIngredientLotForm();
     ingredientLotsStatus = 'ready';
-    render();
-    getIngredientLots()
-      .then((response) => {
-        if (token !== ingredientLotSubmitToken) return;
-        ingredientLotsState.lots = response.lots;
-        ingredientLotsStatus = 'ready';
-        ingredientLotSubmitting = false;
-        render();
-      })
-      .catch(() => {
-        if (token !== ingredientLotSubmitToken) return;
-        ingredientLotSubmitting = false;
-        ingredientLotsRefreshWarning = 'Партия сохранена, но список не обновился. Нажмите «Обновить», чтобы получить актуальные данные.';
-        ingredientLotsStatus = 'ready';
-        render();
-      });
-  }).catch((error) => {
-    if (token !== ingredientLotSubmitToken) return;
     ingredientLotSubmitting = false;
+    render();
+    inventoryCatalogWorkspaceRuntime.read({
+      route: 'ingredientLots',
+      operation: 'lot-list',
+      kind: 'mutation-refresh',
+      contextKey: 'lots:list',
+      request: getIngredientLots,
+      validate: (response) => Array.isArray(response?.lots),
+      apply: (response) => { if (token === ingredientLotSubmitToken) ingredientLotsState.lots = response.lots; ingredientLotsStatus = 'ready'; },
+      failed: () => { ingredientLotsStatus = 'ready'; ingredientLotsRefreshWarning = 'Партия сохранена, но список не обновился. Нажмите «Обновить», чтобы получить актуальные данные.'; },
+    });
+  }).catch((error) => {
+    if (token !== ingredientLotSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+    presentInventoryCatalogCompletion('ingredientLots', owned);
+    ingredientLotSubmitting = false;
+    if (!owned.accepted || owned.reconciliationRequired) {
+      ingredientLotsRefreshWarning = owned.message;
+      reenableIngredientLotSubmitButtons();
+      render();
+      return;
+    }
     ingredientLotsMessage = '';
     ingredientLotsError = '';
     ingredientLotsRefreshWarning = '';
@@ -4197,20 +5594,79 @@ function submitIngredientLotForm(event: SubmitEvent) {
     ingredientLotsStatus = 'ready';
     applyValidationToIngredientLotForm(ingredientLotValidation);
     reenableIngredientLotSubmitButtons();
-    announceAssertive('Проверьте форму партии. Ошибки показаны рядом с полями.');
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === ingredientLotSubmitToken) {
+          ingredientLotSubmitting = false;
+          reenableIngredientLotSubmitButtons();
+        }
+      },
+      ownsRoute: () => inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredientLots'),
+      resumeRoute: () => {
+        if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredientLots')) loadIngredientLots(true);
+        else render();
+      },
+    });
   });
 }
 function deactivateIngredientLot(id: number) {
   if (ingredientLotSubmitting) return;
   const lot = ingredientLotsState.lots.find((item) => item.id === id);
   if (!lot || !window.confirm(`Деактивировать партию «${lot.lot_code || lotIngredientName(lot.ingredient_id)}»? Она не будет удалена из истории.`)) return;
-  deactivateIngredientLotRequest(id).then(() => { ingredientLotsMessage = 'Партия деактивирована. История склада не изменялась.'; ingredientLotsError = ''; return getIngredientLots(); }).then((response) => { ingredientLotsState.lots = response.lots; ingredientLotsStatus = 'ready'; render(); }).catch(() => { ingredientLotsMessage = ''; ingredientLotsError = 'Не удалось деактивировать партию. Попробуйте еще раз.'; ingredientLotsStatus = 'ready'; render(); });
+  const owner = inventoryCatalogWorkspaceLifecycle.startMutation('ingredientLots', 'lot-deactivate', `lot:${id}`);
+  if (!owner.accepted) return;
+  deactivateIngredientLotRequest(id).then((saved) => {
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(owner.owner, saved, isInventoryEntityDto, 'Партия деактивирована.');
+    presentInventoryCatalogCompletion('ingredientLots', owned);
+    if (!owned.knownSuccess || !owned.canApply) return;
+    ingredientLotsState.lots = ingredientLotsState.lots.map((item) => item.id === id ? saved : item);
+    ingredientLotsMessage = 'Партия деактивирована. История склада не изменялась.';
+    ingredientLotsError = '';
+    loadIngredientLots(true);
+  }).catch((error) => {
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(owner.owner, error);
+    presentInventoryCatalogCompletion('ingredientLots', owned);
+    ingredientLotsMessage = '';
+    ingredientLotsError = owned.reconciliationRequired ? '' : 'Не удалось деактивировать партию. Попробуйте еще раз.';
+    ingredientLotsRefreshWarning = owned.reconciliationRequired ? owned.message : '';
+    ingredientLotsStatus = 'ready';
+    render();
+  }).finally(() => {
+    if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredientLots')) return;
+    if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredientLots')) loadIngredientLots(true);
+    else render();
+  });
 }
 
 function loadIngredients(force = false) {
   if (!force && (ingredientsStatus === 'loading' || ingredientsStatus === 'ready')) return;
-  ingredientsStatus = 'loading'; ingredientsError = ''; render();
-  Promise.all([getIngredients(), getIngredientCatalogCategories(), getIngredientCatalogTags()]).then(([response, categories, tags]) => { ingredientsState.items = response.ingredients; ingredientsState.catalogCategories = categories.categories; ingredientsState.catalogTags = tags.tags; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsStatus = 'error'; ingredientsError = 'Не получилось загрузить справочник компонентов или каталог групп и меток.'; render(); });
+  const retained = ingredientsStatus === 'ready';
+  if (!retained) ingredientsStatus = 'loading';
+  ingredientsError = '';
+  ingredientsRefreshWarning = '';
+  inventoryCatalogWorkspaceRuntime.read({
+    route: 'ingredients',
+    operation: 'ingredient-list',
+    kind: inventoryCatalogWorkspaceLifecycle.isRequiredReconciliation('ingredients', 'ingredient-list', 'ingredients:list') ? 'reconciliation' : retained ? 'refresh' : 'initial',
+    contextKey: 'ingredients:list',
+    request: () => Promise.all([getIngredients(), getIngredientCatalogCategories(), getIngredientCatalogTags()]),
+    validate: ([items, categories, tags]) => Array.isArray(items?.ingredients) && Array.isArray(categories?.categories) && Array.isArray(tags?.tags),
+    apply: ([items, categories, tags]) => {
+      ingredientsState.items = items.ingredients;
+      ingredientsState.catalogCategories = categories.categories;
+      ingredientsState.catalogTags = tags.tags;
+      ingredientsStatus = 'ready';
+    },
+    failed: (hasSnapshot) => {
+      ingredientsStatus = hasSnapshot ? 'ready' : 'error';
+      ingredientsError = hasSnapshot ? '' : 'Не получилось загрузить справочник компонентов или каталог групп и меток.';
+      ingredientsRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('ingredients').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') ingredientsStatus = retained ? 'ready' : 'idle';
+    },
+  });
 }
 function submitIngredientForm(event: SubmitEvent) {
   event.preventDefault();
@@ -4218,6 +5674,8 @@ function submitIngredientForm(event: SubmitEvent) {
   const form = event.currentTarget as HTMLFormElement;
   const isEdit = Boolean(ingredientsState.formMode === 'edit' && ingredientsState.form.id);
   const submittedFormId = ingredientsState.form.id;
+  const workspaceOwner = inventoryCatalogWorkspaceLifecycle.startMutation('ingredients', isEdit ? 'ingredient-update' : 'ingredient-create', isEdit ? `ingredient:${submittedFormId}` : 'ingredient:new');
+  if (!workspaceOwner.accepted) return;
   const payload = ingredientPayloadFromForm(form);
   ingredientsState.form = { ...payload, id: isEdit ? submittedFormId : null };
   const token = ++ingredientSubmitToken;
@@ -4228,8 +5686,16 @@ function submitIngredientForm(event: SubmitEvent) {
   ingredientsRefreshWarning = '';
   disableIngredientFormButtons();
   const request = isEdit ? updateIngredient(submittedFormId!, payload) : createIngredient(payload);
-  request.then(() => {
-    if (token !== ingredientSubmitToken) return;
+  request.then((saved) => {
+    if (token !== ingredientSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(workspaceOwner.owner, saved, isInventoryEntityDto, isEdit ? 'Компонент сохранён.' : 'Компонент создан.');
+    presentInventoryCatalogCompletion('ingredients', owned);
+    if (!owned.knownSuccess || !owned.canApply) {
+      ingredientSubmitting = false;
+      ingredientsRefreshWarning = owned.message;
+      render();
+      return;
+    }
     ingredientsMessage = isEdit ? 'Компонент сохранен.' : 'Компонент создан.';
     ingredientsError = '';
     ingredientsRefreshWarning = '';
@@ -4238,26 +5704,33 @@ function submitIngredientForm(event: SubmitEvent) {
     ingredientsState.form = emptyIngredientForm();
     ingredientsState.showCreateForm = false;
     ingredientsStatus = 'ready';
+    ingredientSubmitting = false;
     render();
-    getIngredients()
-      .then((response) => {
-        if (token !== ingredientSubmitToken) return;
-        ingredientsState.items = response.ingredients;
+    inventoryCatalogWorkspaceRuntime.read({
+      route: 'ingredients',
+      operation: 'ingredient-list',
+      kind: 'mutation-refresh',
+      contextKey: 'ingredients:list',
+      request: getIngredients,
+      validate: (response) => Array.isArray(response?.ingredients),
+      apply: (response) => {
+        if (token === ingredientSubmitToken) ingredientsState.items = response.ingredients;
         if (recipesStatus === 'ready') setRecipeIngredientOptions(response.ingredients);
         ingredientsStatus = 'ready';
-        ingredientSubmitting = false;
-        render();
-      })
-      .catch(() => {
-        if (token !== ingredientSubmitToken) return;
-        ingredientSubmitting = false;
-        ingredientsRefreshWarning = 'Компонент сохранён, но список не обновился. Нажмите «Обновить список», чтобы получить актуальные данные.';
-        ingredientsStatus = 'ready';
-        render();
-      });
+      },
+      failed: () => { ingredientsStatus = 'ready'; ingredientsRefreshWarning = 'Компонент сохранён, но список не обновился. Нажмите «Обновить список», чтобы получить актуальные данные.'; },
+    });
   }).catch((error) => {
-    if (token !== ingredientSubmitToken) return;
+    if (token !== ingredientSubmitToken) { inventoryCatalogWorkspaceLifecycle.settleMutationObsolete(workspaceOwner.owner); return; }
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(workspaceOwner.owner, error);
+    presentInventoryCatalogCompletion('ingredients', owned);
     ingredientSubmitting = false;
+    if (!owned.accepted || owned.reconciliationRequired) {
+      ingredientsRefreshWarning = owned.message;
+      reenableIngredientSubmitButtons();
+      render();
+      return;
+    }
     ingredientsMessage = '';
     ingredientsError = '';
     ingredientsRefreshWarning = '';
@@ -4265,7 +5738,20 @@ function submitIngredientForm(event: SubmitEvent) {
     ingredientsStatus = 'ready';
     applyValidationToIngredientForm(ingredientValidation);
     reenableIngredientSubmitButtons();
-    announceAssertive('Проверьте форму компонента. Ошибки показаны рядом с полями.');
+  }).finally(() => {
+    finalizeWorkspaceMutationUi({
+      clearBusy: () => {
+        if (token === ingredientSubmitToken) {
+          ingredientSubmitting = false;
+          reenableIngredientSubmitButtons();
+        }
+      },
+      ownsRoute: () => inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients'),
+      resumeRoute: () => {
+        if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredients')) loadIngredients(true);
+        else render();
+      },
+    });
   });
 }
 
@@ -4274,16 +5760,64 @@ function submitIngredientCatalogCategoryForm(event: SubmitEvent) {
   const form = event.currentTarget as HTMLFormElement;
   const name = String(new FormData(form).get('name') ?? '').trim();
   if (!name) { ingredientsError = 'Укажите название группы, например «Масла».'; ingredientsMessage = ''; render(); return; }
-  ingredientsState.catalogCreating = 'category'; ingredientsError = ''; render();
-  createIngredientCatalogCategory(name).then(() => Promise.all([getIngredientCatalogCategories(), getIngredients()])).then(([categories, response]) => { ingredientsState.catalogCategories = categories.categories; ingredientsState.items = response.ingredients; ingredientsState.catalogCreating = null; ingredientsMessage = 'Группа создана и доступна для компонентов.'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogCreating = null; ingredientsMessage = ''; ingredientsError = 'Не удалось создать группу. Проверьте название и попробуйте еще раз.'; render(); });
+  ingredientsState.catalogCreating = 'category'; ingredientsError = ''; ingredientsMessage = '';
+  const started = inventoryCatalogWorkspaceRuntime.mutate({
+    route: 'ingredients',
+    operation: 'ingredient-category-create',
+    contextKey: 'ingredients:catalog',
+    request: () => createIngredientCatalogCategory(name),
+    validate: isInventoryEntityDto,
+    successMessage: 'Группа создана и доступна для компонентов.',
+    apply: () => {
+      ingredientsState.catalogCreating = null;
+      ingredientsMessage = 'Группа создана и доступна для компонентов.';
+      loadIngredients(true);
+    },
+    failed: (_error, ambiguous) => {
+      ingredientsState.catalogCreating = null;
+      ingredientsError = ambiguous ? '' : 'Не удалось создать группу. Проверьте название и попробуйте еще раз.';
+      ingredientsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('ingredients').warning : '';
+    },
+    settled: (result) => {
+      ingredientsState.catalogCreating = null;
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients')) return;
+      if (result.reconciliationRequired) loadIngredients(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { ingredientsState.catalogCreating = null; render(); }
 }
 function submitIngredientCatalogTagForm(event: SubmitEvent) {
   event.preventDefault();
   const form = event.currentTarget as HTMLFormElement;
   const name = String(new FormData(form).get('name') ?? '').trim();
   if (!name) { ingredientsError = 'Укажите название метки, например «Для лица».'; ingredientsMessage = ''; render(); return; }
-  ingredientsState.catalogCreating = 'tag'; ingredientsError = ''; render();
-  createIngredientCatalogTag(name).then(() => Promise.all([getIngredientCatalogTags(), getIngredients()])).then(([tags, response]) => { ingredientsState.catalogTags = tags.tags; ingredientsState.items = response.ingredients; ingredientsState.catalogCreating = null; ingredientsMessage = 'Метка создана и доступна для компонентов.'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogCreating = null; ingredientsMessage = ''; ingredientsError = 'Не удалось создать метку. Проверьте название и попробуйте еще раз.'; render(); });
+  ingredientsState.catalogCreating = 'tag'; ingredientsError = ''; ingredientsMessage = '';
+  const started = inventoryCatalogWorkspaceRuntime.mutate({
+    route: 'ingredients',
+    operation: 'ingredient-tag-create',
+    contextKey: 'ingredients:catalog',
+    request: () => createIngredientCatalogTag(name),
+    validate: isInventoryEntityDto,
+    successMessage: 'Метка создана и доступна для компонентов.',
+    apply: () => {
+      ingredientsState.catalogCreating = null;
+      ingredientsMessage = 'Метка создана и доступна для компонентов.';
+      loadIngredients(true);
+    },
+    failed: (_error, ambiguous) => {
+      ingredientsState.catalogCreating = null;
+      ingredientsError = ambiguous ? '' : 'Не удалось создать метку. Проверьте название и попробуйте еще раз.';
+      ingredientsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('ingredients').warning : '';
+    },
+    settled: (result) => {
+      ingredientsState.catalogCreating = null;
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients')) return;
+      if (result.reconciliationRequired) loadIngredients(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { ingredientsState.catalogCreating = null; render(); }
 }
 function updateIngredientDraftCategory(ingredientId: number, value: string) { if (ingredientsState.assignmentDraft.itemId !== ingredientId) return; updateDraftCategory(ingredientsState.assignmentDraft, value); ingredientsMessage = ''; render(); }
 function updateIngredientDraftTag(ingredientId: number, tagId: number, checked: boolean) { if (ingredientsState.assignmentDraft.itemId !== ingredientId || !tagId) return; updateDraftTag(ingredientsState.assignmentDraft, tagId, checked); ingredientsMessage = ''; render(); }
@@ -4292,17 +5826,64 @@ function applyIngredientAssignmentDraft() {
   const item = ingredientsState.form.id ? ingredientsState.items.find((ingredient) => ingredient.id === ingredientsState.form.id) ?? null : null;
   const draft = ingredientsState.assignmentDraft;
   if (!item || !draft.itemId || !assignmentDraftIsDirty(item, draft)) return;
-  ingredientsState.catalogSaving = 'saving'; ingredientsError = ''; render();
-  const request = (draft.catalogCategoryId !== item.catalog_category_id ? updateIngredientCatalogCategory(item.id, draft.catalogCategoryId) : Promise.resolve() as Promise<unknown>)
-    .then(() => (!sameNumberSet(draft.catalogTagIds, item.catalog_tag_ids) ? updateIngredientCatalogTags(item.id, draft.catalogTagIds) : Promise.resolve() as Promise<unknown>))
-    .then(() => getIngredients());
-  request.then((response) => { ingredientsState.items = response.ingredients; const saved = response.ingredients.find((ingredient) => ingredient.id === item.id) ?? null; ingredientsState.assignmentDraft = resetAssignmentDraft(saved); ingredientsMessage = 'Группа и метки компонента сохранены.'; ingredientsState.catalogSaving = 'idle'; ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsState.catalogSaving = 'idle'; ingredientsMessage = ''; ingredientsError = 'Не удалось сохранить группу или метки. Проверьте данные и попробуйте еще раз.'; render(); });
+  ingredientsState.catalogSaving = 'saving'; ingredientsError = ''; ingredientsMessage = '';
+  const started = inventoryCatalogWorkspaceRuntime.mutate({
+    route: 'ingredients',
+    operation: 'ingredient-assignment',
+    contextKey: `ingredient:${item.id}`,
+    request: () => Promise.all([
+      draft.catalogCategoryId !== item.catalog_category_id ? updateIngredientCatalogCategory(item.id, draft.catalogCategoryId) : Promise.resolve(null),
+      !sameNumberSet(draft.catalogTagIds, item.catalog_tag_ids) ? updateIngredientCatalogTags(item.id, draft.catalogTagIds) : Promise.resolve(null),
+    ]),
+    validate: ([category, tags]) => (!category || category.ok === true) && (!tags || tags.ok === true),
+    successMessage: 'Группа и метки компонента сохранены.',
+    apply: () => {
+      ingredientsState.catalogSaving = 'idle';
+      ingredientsMessage = 'Группа и метки компонента сохранены.';
+      ingredientsState.assignmentDraft = { ...draft };
+      loadIngredients(true);
+    },
+    failed: (_error, ambiguous) => {
+      ingredientsState.catalogSaving = 'idle';
+      ingredientsError = ambiguous ? '' : 'Не удалось сохранить группу или метки. Проверьте данные и попробуйте еще раз.';
+      ingredientsRefreshWarning = ambiguous ? inventoryCatalogWorkspaceLifecycle.feedback('ingredients').warning : '';
+    },
+    settled: (result) => {
+      ingredientsState.catalogSaving = 'idle';
+      if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients')) return;
+      if (result.reconciliationRequired) loadIngredients(true);
+      else render();
+    },
+  });
+  if (!started.accepted) { ingredientsState.catalogSaving = 'idle'; render(); }
 }
 
 function deactivateIngredient(id: number) {
   const item = ingredientsState.items.find((ingredient) => ingredient.id === id);
   if (!item || !window.confirm(`Деактивировать компонент «${item.name}»? Он не будет удален из истории.`)) return;
-  deactivateIngredientRequest(id).then(() => { ingredientsMessage = 'Компонент деактивирован.'; ingredientsError = ''; return getIngredients(); }).then((response) => { ingredientsState.items = response.ingredients; if (recipesStatus === 'ready') setRecipeIngredientOptions(response.ingredients); ingredientsStatus = 'ready'; render(); }).catch(() => { ingredientsMessage = ''; ingredientsError = 'Не удалось деактивировать компонент. Попробуйте еще раз.'; ingredientsStatus = 'ready'; render(); });
+  const owner = inventoryCatalogWorkspaceLifecycle.startMutation('ingredients', 'ingredient-deactivate', `ingredient:${id}`);
+  if (!owner.accepted) return;
+  deactivateIngredientRequest(id).then((saved) => {
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationSuccess(owner.owner, saved, isInventoryEntityDto, 'Компонент деактивирован.');
+    presentInventoryCatalogCompletion('ingredients', owned);
+    if (!owned.knownSuccess || !owned.canApply) return;
+    ingredientsState.items = ingredientsState.items.map((ingredient) => ingredient.id === id ? saved : ingredient);
+    ingredientsMessage = 'Компонент деактивирован.';
+    ingredientsError = '';
+    loadIngredients(true);
+  }).catch((error) => {
+    const owned = inventoryCatalogWorkspaceLifecycle.finishMutationFailure(owner.owner, error);
+    presentInventoryCatalogCompletion('ingredients', owned);
+    ingredientsMessage = '';
+    ingredientsError = owned.reconciliationRequired ? '' : 'Не удалось деактивировать компонент. Попробуйте еще раз.';
+    ingredientsRefreshWarning = owned.reconciliationRequired ? owned.message : '';
+    ingredientsStatus = 'ready';
+    render();
+  }).finally(() => {
+    if (!inventoryCatalogWorkspaceLifecycle.ownsRoute('ingredients')) return;
+    if (inventoryCatalogWorkspaceLifecycle.reconciliationRequired('ingredients')) loadIngredients(true);
+    else render();
+  });
 }
 
 
@@ -4325,10 +5906,30 @@ function loadReports(force = false) {
 
 function loadInventory(force = false) {
   if (!force && (inventoryStatus === 'loading' || inventoryStatus === 'ready')) return;
-  inventoryStatus = 'loading'; inventoryError = ''; render();
-  Promise.all([getInventoryOverview(), getIngredientLotBalances(), getPackagingBalances()])
-    .then(([overview, lots, packaging]) => { inventoryState = { overview, ingredientLots: lots.ingredient_lot_balances, packagingItems: packaging.packaging_balances }; inventoryStatus = 'ready'; render(); })
-    .catch(() => { inventoryStatus = 'error'; inventoryError = 'Не получилось загрузить складскую сводку.'; render(); });
+  const retained = inventoryStatus === 'ready';
+  if (!retained) inventoryStatus = 'loading';
+  inventoryError = '';
+  inventoryRefreshWarning = '';
+  inventoryCatalogWorkspaceRuntime.read({
+    route: 'inventory',
+    operation: 'inventory-overview',
+    kind: retained ? 'refresh' : 'initial',
+    contextKey: 'inventory:overview',
+    request: () => Promise.all([getInventoryOverview(), getIngredientLotBalances(), getPackagingBalances()]),
+    validate: ([overview, lots, packaging]) => Boolean(overview) && Array.isArray(lots?.ingredient_lot_balances) && Array.isArray(packaging?.packaging_balances),
+    apply: ([overview, lots, packaging]) => {
+      inventoryState = { overview, ingredientLots: lots.ingredient_lot_balances, packagingItems: packaging.packaging_balances };
+      inventoryStatus = 'ready';
+    },
+    failed: (hasSnapshot) => {
+      inventoryStatus = hasSnapshot ? 'ready' : 'error';
+      inventoryError = hasSnapshot ? '' : 'Не получилось загрузить складскую сводку.';
+      inventoryRefreshWarning = hasSnapshot ? inventoryCatalogWorkspaceLifecycle.feedback('inventory').warning : '';
+    },
+    rejected: (reason) => {
+      if (reason !== 'duplicate-read') inventoryStatus = retained ? 'ready' : 'idle';
+    },
+  });
 }
 function applyOnboardingLifecycleState() {
   const source = dashboardOnboardingLifecycle.state.onboarding;

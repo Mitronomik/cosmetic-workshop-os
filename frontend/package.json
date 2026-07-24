@@ -15,7 +15,10 @@
     "test:help-passive-regression": "rm -rf dist-tests/help-passive-regression && tsc -p tsconfig.test.help-passive-regression.json && node --test test/help-passive-regression.test.mjs",
     "test:alerts-feedback": "rm -rf dist-tests/alerts-feedback && tsc -p tsconfig.test.alerts-feedback.json && node --test test/alerts-feedback.test.mjs",
     "test:purchase-suggestions-feedback": "rm -rf dist-tests/purchase-suggestions-feedback && tsc -p tsconfig.test.purchase-suggestions-feedback.json && node --test test/purchase-suggestions-feedback.test.mjs",
-    "test:local-artifacts-reports-feedback": "rm -rf dist-tests/local-artifacts-reports-feedback && tsc -p tsconfig.test.local-artifacts-reports-feedback.json && node --test test/local-artifacts-reports-feedback.test.mjs"
+    "test:local-artifacts-reports-feedback": "rm -rf dist-tests/local-artifacts-reports-feedback && tsc -p tsconfig.test.local-artifacts-reports-feedback.json && node --test test/local-artifacts-reports-feedback.test.mjs",
+    "test:formula-client-workspace-feedback": "rm -rf dist-tests/formula-client-workspace-feedback && tsc -p tsconfig.test.formula-client-workspace-feedback.json && node --test test/formula-client-workspace-feedback.test.mjs",
+    "test:inventory-catalog-workspace-feedback": "rm -rf dist-tests/inventory-catalog-workspace-feedback && tsc -p tsconfig.test.inventory-catalog-workspace-feedback.json && node --test test/inventory-catalog-workspace-feedback.test.mjs",
+    "test:core-workspace-feedback": "npm run test:formula-client-workspace-feedback && npm run test:inventory-catalog-workspace-feedback"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

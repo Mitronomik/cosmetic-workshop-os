@@ -629,18 +629,32 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 
 - Known backend baseline failures remain: `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`, `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`, `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`, `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`.
 - Local head/published head must be verified after push; this runner had no GitHub remote or `gh`.
-- Next slice: B3.4 — Recipes and Clients shared-feedback lifecycle.
+- Historical next-slice note superseded by the combined B3.4+B3.5 slice recorded below.
 - Block B smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
 ## 2026-07-23 — B3.3 PR #136 correction handoff
 
-- PR #136 remains the active B3.3 pull request; no replacement PR or branch is intended.
-- Actual branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before correction `e0138cc9a05a7e5529bf9f0e16b2283eb080d55a`; state open; draft false.
+- PR #136 is merged; B3.3 is complete at merge commit `e7c2d97473070f361052325fd6476208629af1cc`.
+- Historical correction branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; its earlier base was `b11160cc1a06df24fa6666969154c37389e6ab65`.
 - Runtime correction: detached mutations are irreversible and require read reconciliation; ambiguous outcomes lock create/generate until authoritative GET reconciliation; success, warning, and error remain separate; production focus callbacks are invoked only for accepted current-route completions.
 - Test correction: the focused B3.3 suite now uses production runtime and route modules with deferred API dependencies, render/announcement/focus recording, and exact GET/POST call assertions.
 - Backend remains unchanged; known baseline failures are unchanged.
-- Next slice remains B3.4 — Recipes and Clients shared-feedback lifecycle.
+- Historical next-slice note superseded by the combined B3.4+B3.5 slice recorded below.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.4+B3.5 implementation handoff
+
+- PR #136 is merged and B3.3 is complete at merge commit `e7c2d97473070f361052325fd6476208629af1cc`.
+- The active branch is `codex/b3.4-b3.5-core-workspace-feedback`, based on the same verified `main` SHA.
+- Formula/Client coverage includes Recipe Template list/detail/create, rendered recipe category/tag operations, immutable Recipe Version list/detail/create with complete composition, backend calculation GET, Client list/related/create/update/deactivate, ClientRecipe list/detail/create/composition/deactivate/restore, Wish list/create/status/archive, and Feedback list/create.
+- Inventory/Catalog coverage includes composed read-only Inventory overview/balances, Ingredient list/create/update/deactivate/category/tag operations, Ingredient Lot list/references/create/update/deactivate, selected-lot StockMovement history/balance plus append-only create, and Packaging list/create/update/deactivate/category/tag operations.
+- The two bounded production lifecycle families own route generations, request identity, stale/detached rejection, snapshots, DTO boundaries, reconciliation locks, one-shot GET queues, announcements, focus, binding, and presentation.
+- StockMovement creation performs exactly one POST. Ambiguous or invalid results lock repetition; reconciliation uses authoritative movement/balance GETs only, never loops, and remains manually repeatable.
+- Accepted mutation success is not downgraded when its follow-up GET fails; definite failures preserve drafts; obsolete same-route reference requests are discarded silently.
+- Unsupported paths remain absent: RecipeTemplate update, in-place RecipeVersion editing, persisted RecipeIngredient CRUD, ClientRecipe calculation, Feedback update, Packaging StockMovement, Orders, Production, backend expansion, and migrations.
+- External smoke-authoring contract not stored in the repository; not required for this smoke-deferred runtime slice.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next slice: B3.6 — Order-to-production shared-feedback lifecycle.
 
 ## 2026-07-23 — B3.3 PR #136 DOM binding and reconciliation correction handoff
 
@@ -667,3 +681,43 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - Snapshot-aware ordering tests now create a readable initial snapshot before mutation, then cover provisional failure before settlement, provisional failure after settlement, authoritative failure without loop, authoritative success without extra GET, and POST count staying at one.
 - Runtime result boundary now exposes `knownMutationSuccess`; `commitAccepted` and `applyCreated` run only for validated known-success mutation results after route ownership is confirmed.
 - GitHub PR body was not updated by this correction. Browser smoke remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.4+B3.5 verification handoff
+
+- Formula/Client focused tests: 34/34 passed twice.
+- Inventory/Catalog focused tests: 41/41 passed twice.
+- Frontend regressions: 19 form-validation, 62 targeted-validation, 32 order-mutation, 15 order-readiness, 17 Dashboard/Onboarding, 3 Help, 56 Alerts, 116 Purchases, and 32 Local Artifacts/Reports checks passed.
+- Frontend build passed.
+- Focused backend Formula/Client/Inventory/Catalog suites: 190 passed.
+- Complete backend comparison: 496 collected, 492 passed, 4 accepted baseline failures, 0 skipped; branch-only failure delta 0.
+- No browser smoke was run or claimed. Status remains: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next slice remains B3.6 — Order-to-production shared-feedback lifecycle.
+
+## 2026-07-23 — PR #137 ownership correction handoff
+
+- PR #137 remains open, non-draft, and under review on `codex/b3.4-b3.5-core-workspace-feedback`; do not create a replacement PR or branch.
+- Published head before this correction: `8c58e5e1466f05aa27950e2157f597e3fa4414b3`.
+- The correction closes the reviewed same-route context defect by making reads and mutations entity-context-owned in addition to route, operation, generation, and request identity.
+- The selected policy is explicit supersession: a read for Context B removes the prior same-operation Context A owner, while a duplicate for the exact same context remains rejected.
+- Production runtime callbacks discard obsolete read owners or settle obsolete mutation owners before returning, so a later request for the same operation/context is accepted.
+- Reconciliation is a structured domain-mapped obligation. Only the required validated operation and exact context at the obligation epoch, after mutation settlement, can clear it.
+- StockMovement create remains exactly one POST. Its obligation records `stock-movement-create`, `lot:<originalLotId>`, and `stock-reconciliation` for the same lot. Only the composed history and balance GET result for that original lot can unlock creation.
+- Route re-entry and general StockMovement references do not unlock detached work. One authoritative original-lot GET may run after settlement; failure does not loop, and the recovery control continues to target the original obligated lot.
+- No backend production, schema, migration, dependency, lockfile, Orders, Production, unsupported mutation, or smoke-infrastructure change belongs to this correction.
+- Final pre-publication verification: Formula/Client 47/47 twice; Inventory/Catalog 51/51 twice; all required frontend regressions and build passed; focused backend domains 186/186; complete backend 496 collected, 492 passed, the same 4 accepted failures, 0 skipped, branch-only delta 0.
+- B3.4+B3.5 remains under review; B3.6 remains next.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — PR #137 detached settlement and recipe snapshot correction handoff
+
+- Continue only on PR #137 and `codex/b3.4-b3.5-core-workspace-feedback`; the published head before this correction was `b95b0b293f6f381495fa9e08d36b1ad27a214252`.
+- Both bounded production runtimes now expose an exactly-once settlement callback for every accepted mutation request. A rejected start neither issues the request nor invokes settlement.
+- Settlement only restores route-local UI availability. DTO application, form/draft reset, selection/list updates, announcements, focus, and reconciliation clearing remain owned by accepted validated lifecycle results.
+- Direct RecipeTemplate/RecipeVersion/Client and Ingredient/Ingredient Lot/Packaging handlers use the shared route-local UI finalizer so detached completion cannot strand a route-level saving flag.
+- ClientRecipe create/composition/deactivate/restore settlement can resume the existing exact GET-only reconciliation loader after route return; user drafts remain intact unless a current-context validated success explicitly owns their reset.
+- RecipeTemplate opening now requests template detail and that template's version list together and commits one coherent snapshot only after both responses validate. Partial failure preserves the prior coherent snapshot.
+- The independent RecipeVersion reconciliation path remains `recipe-version-list` with context `template:<id>` and cannot update versions for a different selected template.
+- StockMovement safety is unchanged: one POST, original-lot obligation, exact history-plus-balance GET validation, at most one post-settlement automatic attempt, no loop, and manual original-lot retry.
+- Final pre-publication verification: Formula/Client 60/60 twice; Inventory/Catalog 62/62 twice; all required frontend regressions and build passed; focused backend domains 186/186; complete backend 496 collected, 492 passed, the same 4 accepted failures, 0 skipped, branch-only delta 0.
+- B3.4+B3.5 remains under review; B3.6 remains next. Do not claim browser smoke.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

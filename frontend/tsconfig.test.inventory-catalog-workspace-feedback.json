@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-tests/inventory-catalog-workspace-feedback",
+    "rootDir": "src",
+    "noEmit": false
+  },
+  "include": [
+    "src/core-workspace-feedback.ts",
+    "src/inventory-catalog-workspace-feedback.ts",
+    "src/inventory-catalog-workspace-runtime.ts",
+    "src/inventory-catalog-workspace-route.ts",
+    "src/inventory-catalog-workspace-presentation.ts",
+    "src/inventory-catalog-workspace-bindings.ts"
+  ]
+}

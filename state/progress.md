@@ -1174,12 +1174,57 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 - Publication metadata is inconclusive in this runner: no GitHub remote is configured and `gh` is unavailable, so a GitHub-assigned PR number and published head could not be verified here.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
 
+## 2026-07-23 — B3.4+B3.5 core workspace shared-feedback lifecycle
+
+- PR #136 is merged; B3.3 is complete at merge commit `e7c2d97473070f361052325fd6476208629af1cc`.
+- Active combined slice: B3.4+B3.5 on `codex/b3.4-b3.5-core-workspace-feedback`, starting from the same `main` SHA.
+- Backend production change count remains zero; no schema, migration, dependency, lockfile, Orders, or Production expansion is included.
+
+### Supported Formula/Client operation matrix
+
+| Area | Supported reads | Supported mutations | Lifecycle boundary |
+|---|---|---|---|
+| Recipe Templates | `GET /api/recipe-templates`, `GET /api/recipe-templates/{id}` | `POST /api/recipe-templates`; rendered recipe category/tag create and assignment | list/detail/reference owners; authoritative entity DTO before clear/select; mutation-follow-up GET |
+| Recipe Versions | `GET /api/recipe-templates/{id}/versions`, `GET /api/recipe-versions/{id}` | `POST /api/recipe-templates/{id}/versions` with complete ingredient composition | immutable version-create owner; version list/detail owners; prior snapshots are never mutated |
+| Recipe Calculation | `GET /api/recipe-versions/{id}/calculation` | none | independent calculation owner keyed by version and requested target |
+| Clients | `GET /api/clients`; selected-client related reads | `POST /api/clients`, `PUT /api/clients/{id}`, `POST /api/clients/{id}/deactivate` | list/related owners; client-context mutation owners; structured validation preserves drafts |
+| Client Recipes | list/detail GETs and client-owned list reads | create, full composition replacement, deactivate, restore through existing endpoints | list/detail/reference owners and selected-ClientRecipe mutation context; source RecipeVersion remains unchanged |
+| Wishes | client wish list GET | create, status PUT, archive POST | client-context related-read and mutation owners; submitted sensitive text is excluded from technical feedback |
+| Feedback | client feedback list GET | create only | client-context related-read and create owner; no update/archive/delete path |
+
+Explicitly unsupported: RecipeTemplate update, in-place RecipeVersion update/delete/archive, persisted RecipeIngredient row CRUD, ClientRecipe calculation, and Client Feedback update/archive/delete.
+
+### Supported Inventory/Catalog operation matrix
+
+| Area | Supported reads | Supported mutations | Lifecycle boundary |
+|---|---|---|---|
+| Inventory | overview, ingredient-lot balances, packaging balances | none | one composed read-only snapshot with retained data after refresh failure |
+| Ingredients | ingredient list plus category/tag reference GETs | create, update, deactivate, category/tag create and assignment | list/reference owners and entity/catalog mutation owners; filters and drafts remain local |
+| Ingredient Lots | lot list and ingredient references | create, update, deactivate | list/reference owners and lot-context mutation owners; backend remains authoritative for identity, units, costs, and balance |
+| Stock Movements | selected-lot movement list and balance GETs | one append-only create POST | exactly one POST; validated response; ambiguous lock; GET-only one-shot/manual reconciliation; no loop |
+| Packaging | packaging list plus category/tag reference GETs | create, update, deactivate, category/tag create and assignment | list/reference owners and item/catalog mutation owners; no stock-movement behavior |
+
+Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/delete, Packaging StockMovement/write-off, Orders, and Production.
+
+### Implementation decisions
+
+- Production modules provide bounded lifecycle, runtime, route ownership, binding, and presentation adapters for each family; `main.ts` composes those same modules.
+- Reads distinguish initial, manual refresh, detail, related, reference, calculation, mutation-follow-up, and reconciliation work.
+- Route leave rejects stale presentation and detaches mutations; obsolete same-route references are discarded silently through their current context predicate.
+- Mutation completion must match the current owner, active route/context, and authoritative DTO before any form reset or selected-entity/list side effect.
+- Definite backend failures preserve drafts. Ambiguous transport outcomes lock repeat mutation until authoritative GET reconciliation.
+- Accepted success remains visible when a follow-up read fails; refresh failure is a warning over the retained readable snapshot.
+- Focus targets resolve to actual controls/forms/workspaces, and announcements are owned by the accepted request result.
+- External smoke-authoring contract not stored in the repository; not required for this smoke-deferred runtime slice.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next slice: B3.6 — Order-to-production shared-feedback lifecycle.
+
 ## 2026-07-23 — B3.3 PR #136 correction
 
 - Earlier local runner notes could not verify publication, but GitHub publication was subsequently verified by the product owner.
 - Authoritative PR: #136 — B3.3 — Local artifacts and reports shared-feedback lifecycle.
 - Authoritative branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`.
-- Base: `main` at `b11160cc1a06df24fa6666969154c37389e6ab65`; published head before correction: `e0138cc9a05a7e5529bf9f0e16b2283eb080d55a`; state open; draft false.
+- Historical correction base was `b11160cc1a06df24fa6666969154c37389e6ab65`; PR #136 is now merged and B3.3 is complete at `e7c2d97473070f361052325fd6476208629af1cc`.
 - Correction addresses five review gaps: irreversible detached mutation ownership, production-composed runtime tests, real production focus recovery, separate warning/error presentation, and reconciliation lock after ambiguous outcomes.
 - Focused and regression test counts are recorded in the PR body and final correction response after execution.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
@@ -1193,7 +1238,7 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 
 ## 2026-07-23 — B3.3 PR #136 remaining reconciliation/result-boundary correction
 
-- Active PR remains #136 — B3.3 — Local artifacts and reports shared-feedback lifecycle.
+- Historical correction entry for PR #136; the PR is now merged and B3.3 is complete at `e7c2d97473070f361052325fd6476208629af1cc`.
 - Branch: `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`.
 - Published head before this correction: `aae116536c2b68dec0808ccd0cae099f325e09ae`.
 - Correction scope closes remaining B3.3 gaps for detached-mutation reconciliation ordering, failed provisional reconciliation GET queueing, focusable create targets, accepted-only Export entity counts, accepted-only Report Document reason clearing, restored stale/absent and same-route tests, and dead helper cleanup.
@@ -1202,9 +1247,49 @@ B3.1 remains ACTIVE and is not DONE. PR #133 is not merge-ready until browser sm
 
 ## 2026-07-23 — B3.3 PR #136 reconciliation retry ownership correction
 
-- Active PR remains #136 on `codex/b3.3-local-artifacts-and-reports-shared-feedback-lifecycle`; base `main`; base SHA `b11160cc1a06df24fa6666969154c37389e6ab65`.
+- Historical correction entry for PR #136; the PR is now merged and B3.3 is complete at `e7c2d97473070f361052325fd6476208629af1cc`.
 - Published head before this correction: `1e8a9fa8f063346cab5cb28c24c6eacf38e526a1`.
 - Corrected retry ownership so `reconciliationRequired` controls the mutation lock, while automatic GET execution is allowed only by one unconsumed post-settlement queue represented by `pendingReconciliationAfterRead`.
 - Added snapshot-aware focused tests proving provisional failure before settlement does not auto-retry, detached settlement later starts exactly one authoritative GET, authoritative failure does not loop, authoritative success does not add extra GETs, and validated known success is the only path to `commitAccepted`/`applyCreated`.
 - GitHub PR body remains product-owner-owned and was not updated by this correction.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — B3.4+B3.5 verification evidence
+
+- New Formula/Client suite passed twice: 34 collected, 34 passed, 0 failed, 0 skipped on each run.
+- New Inventory/Catalog suite passed twice: 41 collected, 41 passed, 0 failed, 0 skipped on each run.
+- Existing frontend regressions passed: form validation 19/19; targeted validation 62/62; order mutation lifecycle 32/32; order readiness presentation 15/15; Dashboard/Onboarding 17/17; Help 3/3; Alerts 56/56; Purchases 116/116; Local Artifacts/Reports 32/32.
+- Frontend build passed after the final lifecycle and regression-test alignment.
+- Focused backend domain suites discovered from the repository collected 190 and passed 190 with 0 failures/skips.
+- Complete backend suite matched the accepted baseline exactly: 496 collected, 492 passed, 4 failed, 0 skipped. The four failing node IDs are the accepted backup reason, export reason, import issue-count, and purchase manual-smoke baseline failures; branch-only failure delta is 0.
+- Browser smoke was not run or claimed: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Publication and exact final-head evidence are recorded after commits, push, and PR creation.
+
+## 2026-07-23 — PR #137 context and reconciliation ownership correction
+
+- PR #137 remains open and under review; B3.4+B3.5 is not marked DONE.
+- Corrected same-route entity ownership so read identity includes route, operation, context key, route generation, and request identity. A different context explicitly supersedes the previous same-operation owner; obsolete callbacks settle without presentation effects or owner leaks.
+- Corrected mutation ownership so exact entity context participates in completion matching and rejected/obsolete callbacks cannot reset or apply a different context.
+- Replaced route-level boolean-only reconciliation with a structured, epoch-owned obligation mapped by the Formula/Client and Inventory/Catalog domain adapters.
+- Exact authoritative operation and context are now required to clear a lock; unrelated, wrong-context, invalid, stale, detached, and provisional reads preserve it.
+- StockMovement reconciliation is attached to the original lot and requires validated movement-history plus lot-balance GETs for that lot. Reference loading, lot lists, overview reads, and another lot cannot clear it.
+- StockMovement remains one POST per user action. The post-settlement automatic GET queue is consumed at most once, failure does not loop, and manual original-lot retry remains available.
+- Final correction verification before publication: Formula/Client 47/47 twice; Inventory/Catalog 51/51 twice; form validation 19/19; targeted validation 62/62; Order mutation 32/32; Order readiness 15/15; Dashboard/Onboarding 17/17; Help 3/3; Alerts 56/56; Purchases 116/116; Local Artifacts/Reports 32/32; frontend build passed.
+- Focused backend domain verification passed 186/186. Complete backend comparison collected 496: 492 passed, the same 4 accepted failures, 0 skipped; branch-only failure delta 0.
+- Publication SHA is recorded after the correction commit and push.
+- Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-23 — PR #137 detached settlement and recipe snapshot correction
+
+- PR #137 remains open and under review; B3.4+B3.5 is not marked DONE. Published head before this correction: `b95b0b293f6f381495fa9e08d36b1ad27a214252`.
+- Added an exactly-once mutation settlement callback to both B3.4+B3.5 production runtimes. It runs only after an accepted mutation start and covers success, definite/ambiguous failure, invalid DTO, detached completion, obsolete context, and stale ownership.
+- Route-local finalizers clear busy/saving/deactivating state and restore controls without applying DTOs, clearing drafts, announcing, focusing, clearing reconciliation, or repeating the write.
+- Direct RecipeTemplate, RecipeVersion, Client, Ingredient, Ingredient Lot, and Packaging handlers use the shared route-local finalization primitive and resume GET-only reconciliation when the user has returned to the route.
+- ClientRecipe create, composition, deactivate, and restore now recover from detached settlement without leaving the route permanently blocked.
+- RecipeTemplate opening is one context-owned atomic detail-plus-version snapshot. Partial failure commits neither half, and a late Template A snapshot cannot overwrite Template B.
+- Exact RecipeVersion reconciliation remains independent and can clear only the matching `recipe-version-list` / `template:<id>` obligation; it does not overwrite another selected template.
+- Focused production-aware coverage includes every mutation settlement path, rejected-start exclusion, direct and runtime route-return recovery, retained drafts, atomic snapshot delay/failure/context-switch cases, and the existing exact StockMovement contract.
+- Final verification before publication: Formula/Client 60/60 passed twice; Inventory/Catalog 62/62 passed twice; form validation 19/19; targeted validation 62/62; Order mutation 32/32; Order readiness 15/15; Dashboard/Onboarding 17/17; Help 3/3; Alerts 56/56; Purchases 116/116; Local Artifacts/Reports 32/32; frontend build passed.
+- Focused backend domain verification passed 186/186. Complete backend comparison collected 496: 492 passed, the same 4 accepted failures, 0 skipped; branch-only failure delta 0.
+- Publication SHA is recorded after the correction commit and push.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.

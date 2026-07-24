@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-tests/formula-client-workspace-feedback",
+    "rootDir": "src",
+    "noEmit": false
+  },
+  "include": [
+    "src/core-workspace-feedback.ts",
+    "src/formula-client-workspace-feedback.ts",
+    "src/formula-client-workspace-runtime.ts",
+    "src/formula-client-workspace-route.ts",
+    "src/formula-client-workspace-presentation.ts",
+    "src/formula-client-workspace-bindings.ts"
+  ]
+}
