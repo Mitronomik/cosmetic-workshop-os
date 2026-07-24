@@ -721,3 +721,17 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 - Final pre-publication verification: Formula/Client 60/60 twice; Inventory/Catalog 62/62 twice; all required frontend regressions and build passed; focused backend domains 186/186; complete backend 496 collected, 492 passed, the same 4 accepted failures, 0 skipped, branch-only delta 0.
 - B3.4+B3.5 remains under review; B3.6 remains next. Do not claim browser smoke.
 - Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-24 — B3.6 implementation handoff
+
+- Branch: `codex/b3.6-order-production-feedback`; exact base: `10e985229e8020fcf98c67427cde889b5cd934f8`. The implementation head is the commit containing this handoff; its exact local and published SHA must be taken from the pushed branch/PR after commit creation.
+- Runtime changes are bounded to `frontend/src/main.ts`, `frontend/src/order-mutation-lifecycle.ts`, and `frontend/src/order-readiness-presentation.ts`.
+- Covered operations: Order list/manual refresh; atomic references; detail; create/update; cancel/archive; readiness; Production Confirmation; production; exact Order production-history opening; exact production reconciliation.
+- Reconciliation contract: one production POST only; uncertain/untrusted completion records the original Order and production generation; automatic exact GET reconciliation is consumed at most once and never loops; manual exact retry remains available; only a fully validated produced/delivered Order plus a fully validated ProductionBatch whose `order_id` matches can unlock.
+- Feedback contract: neutral, success, warning and error are mutually controlled; mutation success is retained across refresh failure; passive reads do not announce success; stale/detached/wrong-context callbacks do not announce or move focus.
+- Verification: new focused suite 19/19 twice; existing Order lifecycle 32/32 twice; readiness presentation 15/15 twice; required frontend regressions 19, 62, 17, 3, 56, 116, 32, 60 and 62 all passed; core wrapper 122/122; build passed.
+- Backend verification: affected suites 95/95. Complete suite: 496 collected, 492 passed, 4 failed, 0 skipped; branch-only failure delta 0.
+- Known baseline failures remain `test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`, `test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`, `test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`, and `test_purchase_suggestions.py::test_manual_api_smoke`.
+- Limitations: backend semantics are unchanged; no browser, responsive, keyboard or screen-reader verification is claimed; B3.6 is not DONE and full Block B is not accepted.
+- Smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next human action: review the exact published PR head, request any blocker correction in that same PR, then run the separately authorized full Block B exact-head integration smoke.

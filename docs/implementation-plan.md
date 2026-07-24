@@ -732,14 +732,17 @@ B1 fixture/backend implementation and B2 backend read-model implementation are n
 - PR #136 is merged; B3.3 is complete at merge commit `e7c2d97473070f361052325fd6476208629af1cc`.
 - B3.3 scope remains `/backups`, `/exports`, `/report-documents`, and `/reports`.
 
-## B3.4+B3.5 — Core workspace shared-feedback lifecycle (ACTIVE)
+## B3.4+B3.5 — Core workspace shared-feedback lifecycle (DONE)
 
-- Starting `main` SHA: `e7c2d97473070f361052325fd6476208629af1cc`.
-- Combined bounded scope: Formula/Client Workspace and Inventory/Catalog Workspace.
-- Formula/Client operations: recipe template list/detail/create; recipe version list/detail/create with complete immutable composition; calculation GET; recipe category/tag create and assignment; client list/related reads/create/update/deactivate; ClientRecipe list/detail/create/composition/deactivate/restore; wish list/create/status/archive; feedback list/create.
-- Inventory/Catalog operations: read-only inventory overview and balances; ingredient list/create/update/deactivate and category/tag operations; lot list/reference/create/update/deactivate; selected-lot movements and balance; append-only StockMovement create; packaging list/create/update/deactivate and category/tag operations.
-- Lifecycle ownership: bounded route generations, explicit read/mutation owners, stale and detached rejection, readable snapshot retention, authoritative DTO validation, request-owned announcements, route-owned focus, and GET-only reconciliation locks with one-shot automatic queues.
-- Explicit exclusions: RecipeTemplate update, in-place RecipeVersion editing, persisted RecipeIngredient row CRUD, ClientRecipe calculation, Client Feedback update, Packaging StockMovement support, Orders, Production, backend expansion, and migrations.
-- External smoke-authoring contract not stored in the repository; not required for this smoke-deferred runtime slice.
+- PR #137 is merged at `10e985229e8020fcf98c67427cde889b5cd934f8`.
+- Formula/Client Workspace and Inventory/Catalog Workspace shared-feedback lifecycle is complete.
+
+## B3.6 — Order-to-production shared-feedback lifecycle (ACTIVE)
+
+- Starting `main` SHA: `10e985229e8020fcf98c67427cde889b5cd934f8`.
+- Bounded scope: `/orders` list, reference and detail reads; create/update; cancel/archive; readiness; Production Confirmation; production request and history handoff; exact original-Order production reconciliation.
+- Lifecycle ownership: route generation, exact Order context, request generation, validated DTO boundaries, exactly-once accepted settlement, retained readable snapshots/drafts, request-owned announcements, and route-owned focus.
+- Production safety: one POST per accepted confirmation; no automatic production retry; uncertain or untrusted outcomes create an exact original-Order obligation that only a coherent exact Order plus its exact ProductionBatch can clear.
+- Backend production semantics, APIs, schema, migrations, and persistence remain unchanged.
 - Browser smoke policy: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
-- Next slice: B3.6 — Order-to-production shared-feedback lifecycle.
+- B3.6 remains under review until the exact published head is reviewed and the later full Block B integration smoke gate is completed.
