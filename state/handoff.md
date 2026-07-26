@@ -830,9 +830,9 @@ The known baseline failures remain:
 - PR #139 — `Fix Backups page responsive containment`:
   - accepted runtime head: `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`;
   - merge commit: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
-- B3.1–B3.6 are complete. The earlier pending-smoke wording is superseded by this handoff; accurate historical entries remain unchanged.
+- B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4, beginning with B4.1. The earlier pending-smoke wording is superseded by this handoff; accurate historical entries remain unchanged.
 
-### Accepted full integration smoke
+### Accepted full integration smoke for the implemented B3 scope
 
 - Exact tested and published head: `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
 - Exact checked-out head matched the tested head.
@@ -876,11 +876,13 @@ Do not describe these as fixed and do not correct them inside B4.1.
 The only active next runtime slice is `B4.1 — Safe GET timeout and recovery foundation`.
 
 - Use the existing Dashboard read lifecycle as the initial pilot.
-- Cover bounded timeout for explicitly selected Dashboard GET/read operations, clear timeout feedback, explicit manual retry/refresh, last-valid-snapshot preservation where safe, and stale/late route-owned result rejection.
+- Treat all required Dashboard source GET requests as one composed read owner/request generation, and commit a new snapshot only after every required result for that generation validates successfully.
+- A required-source timeout or failure must not commit a partial or mixed snapshot. A refresh timeout preserves the previous coherent snapshot where safe; an initial timeout without one presents explicit recoverable failure.
+- Manual retry creates a clean new composed generation. Late individual-source callbacks cannot mutate Dashboard state, feedback, announcements, focus, or busy state; duplicate starts remain rejected and busy state settles exactly once.
 - Reuse `DashboardOnboardingFeedbackLifecycle` and the current API client boundary; do not create a second lifecycle system or perform a global fetch rewrite.
-- The runtime PR must choose, document, and test the timeout policy; no duration is selected by this lifecycle closure.
+- The runtime PR must choose, document, and test whether its timeout deadline applies to the whole composed read or to each request without allowing excessive multiplied sequential waits; no duration is selected by this lifecycle closure.
 - Do not include onboarding mutations, Alerts/Purchases mutations, production, Import Apply, stock movement creation, backup/export/report generation, hidden polling, cloud/offline sync, framework migration, backend/API/schema/migration changes, or new dependencies.
-- Automatic retry for any mutation is explicitly forbidden.
+- No source timeout may authorize an automatic retry. Automatic retry for any mutation is explicitly forbidden, and no mutation path may use the safe-GET timeout primitive.
 - Required future evidence: focused timeout/lifecycle tests, existing Dashboard/Onboarding regressions, frontend production build, and exact-head Dashboard browser smoke covering initial timeout, refresh timeout with retained snapshot, explicit recovery, late-result rejection, route ownership, desktop/narrow behavior, keyboard focus, and intentional-fault classification.
 
 This lifecycle closure is documentation-only. It does not implement B4.1 and does not claim browser smoke for the documentation commit.

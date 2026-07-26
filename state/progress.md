@@ -1322,5 +1322,5 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
   - `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`
   - `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`
   - `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`
-- The stale Block B acceptance gate is closed.
+- B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
 - Next focused runtime slice: `B4.1 — Safe GET timeout and recovery foundation`.

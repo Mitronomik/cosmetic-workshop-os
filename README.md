@@ -25,7 +25,7 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 ## Status
 
-Block B3 is complete. PR #138 merged the B3.6 Order-to-production shared-feedback lifecycle, PR #139 fixed the Backups narrow-width blocker found during the first integration-smoke attempt, and the final exact-head full integration smoke passed on published head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72` with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
+B3 is complete. PR #138 merged the B3.6 Order-to-production shared-feedback lifecycle, PR #139 fixed the Backups narrow-width blocker found during the first integration-smoke attempt, and the final exact-head integration smoke for the implemented B3 scope passed on published head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72` with verdict `PASS — FULL AUTOMATED SMOKE PASSED`. Block B remains active through B4.
 
 The next focused runtime slice is `B4.1 — Safe GET timeout and recovery foundation`. It is a bounded Dashboard safe-read pilot and is not yet implemented. No future PR number is assigned.
 

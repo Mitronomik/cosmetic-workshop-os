@@ -47,12 +47,12 @@
 
 ## 3. Текущая базовая точка
 
-Block B3 is DONE. B3.1–B3.6 are merged and the deferred integration gate is closed.
+B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
 
 - PR #138 accepted runtime head: `a8cf9d3e21aa46af3f9b2837a44b918cad638910`; merge commit: `bac8672ecb04c96e25bf00c50cfba07f79eadb99`.
 - The first full-smoke attempt found a narrow-width Backups containment blocker.
 - PR #139 closed that blocker at accepted runtime head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`; merge commit: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
-- The final exact-head full integration smoke ran against `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72` and passed with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
+- The final exact-head integration smoke for the implemented B3 scope ran against `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72` and passed with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
 - Backend branch-only failure delta was `0`. The four known backend baseline failures remain unresolved separate findings.
 
 The active next implementation window is B4, beginning with the focused runtime slice `B4.1 — Safe GET timeout and recovery foundation`. B4.1 is not implemented by this documentation update, and no future PR number is assigned.
@@ -311,7 +311,7 @@ Import Apply сохраняет отдельный structured-error contract и 
 
 A4.1 must not change `/orders`, `/clients`, `/inventory`, or `/packaging-items` route implementations. Those routes remain separate A4 follow-ups except for unavoidable passive effects from a shared CSS containment correction, which must be inspected and reported.
 
-A4.1–A4.4 are complete. The final Block B integration smoke also passed the desktop, narrow-width, and keyboard scenario after the Backups-specific blocker was closed by PR #139.
+A4.1–A4.4 are complete. The final B3 integration smoke also passed the desktop, narrow-width, and keyboard scenario after the Backups-specific blocker was closed by PR #139.
 
 ### Требования
 
@@ -380,34 +380,28 @@ A4.1–A4.4 are complete. The final Block B integration smoke also passed the de
 
 Статус: `DONE — diagnostic gate closed; no correction PR required`
 
-Сначала:
+Accepted diagnostic outcome:
 
-- повторно проверить dual feedback после PR106;
-- явно regenerate alerts и purchases;
-- проверить fixture на low stock, expiration и order shortage;
-- определить: UI copy, fixture или backend rules.
+- demo-data installation is explicit;
+- duplicate installation is safely rejected;
+- alert and purchase-suggestion regeneration is stable;
+- the operational fixture is meaningful;
+- passive reads do not mutate the database;
+- no separate fixture/backend correction PR was required.
 
-Только после доказательства:
-
-- исправить dual state;
-- заменить install form на стабильное installed state;
-- улучшить demo fixture, если он не демонстрирует MVP;
-- не запускать скрытые mutations при page load.
+Any later newly discovered Demo Data product request must enter through `state/change-requests.md`; it does not silently reopen B1.
 
 ## B2 — Dashboard operational truth
 
 Статус: `DONE — diagnostic gate closed; no backend read-model correction required`
 
-Разрешены только:
+Accepted diagnostic and verification outcome:
 
-- active orders;
-- critical alerts;
-- open purchases;
-- recent production;
-- backup reminder;
-- onboarding/next action.
-
-Без charts, forecasting, analytics и скрытого regeneration.
+- the Dashboard backend read-model diagnostic gate is complete;
+- no backend read-model correction PR was required;
+- the accepted B3.1 exact-head smoke subsequently verified Dashboard initial load, manual refresh, stale-data preservation, initial-load failure, explicit retry, route ownership, keyboard focus, and responsive browser behavior;
+- the final B3 integration smoke also passed its Dashboard, onboarding, Help Center, and route-matrix scenario;
+- charts, forecasting, advanced analytics, hidden regeneration, and hidden mutations remain outside scope.
 
 ## B3 — миграция shared feedback на остальные маршруты
 
@@ -422,7 +416,9 @@ Completed in bounded groups:
 - stock/catalog;
 - orders/production history.
 
-For each batch, success, mutation failure, refresh failure, busy state, stale-result clearing, and keyboard focus were covered. B3.1–B3.6 are complete through PR #138. The Backups narrow-width blocker found during the first full-smoke attempt was fixed by PR #139, and the final full integration smoke passed on exact published head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
+For each batch, success, mutation failure, refresh failure, busy state, stale-result clearing, and keyboard focus were covered. B3.1–B3.6 are complete through PR #138. The Backups narrow-width blocker found during the first full-smoke attempt was fixed by PR #139, and the final integration smoke for the implemented B3 scope passed on exact published head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
+
+B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
 
 ## B4 — безопасная frontend resilience foundation
 
@@ -438,21 +434,38 @@ Initial bounded pilot:
 
 - Dashboard initial read;
 - Dashboard manual refresh;
+- one composed Dashboard read owner/request generation for all required source GET requests;
+- atomic snapshot commit only after every required source result for the same generation validates successfully;
+- no partial or mixed new snapshot when any required source times out or fails;
 - explicit timeout feedback and manual retry/refresh;
-- preservation of the last valid Dashboard snapshot after failed/timed-out refresh where safe;
-- stale and late response rejection;
+- preservation of the previous coherent Dashboard snapshot after failed/timed-out refresh where safe;
+- explicit recoverable initial-load failure when no previous snapshot exists;
+- rejection of stale and late individual-source results after timeout, supersession, route leave, or a newer request;
+- no late individual-source success or failure may mutate Dashboard state, feedback, announcements, focus, or busy state;
 - route/context ownership;
 - reuse and extension of the existing `DashboardOnboardingFeedbackLifecycle` and current API client boundary rather than a second lifecycle system or global fetch rewrite.
 
-The runtime PR must select, document, and test the timeout duration/policy. This plan does not choose a hidden duration.
+Manual retry creates a clean new composed read generation. Duplicate starts remain rejected, busy state settles exactly once, and no timeout authorizes an automatic retry.
+
+The runtime PR must select, document, and test the timeout duration/policy. It must explicitly choose whether the deadline applies to the whole composed Dashboard read or to each request, while ensuring that timeouts cannot multiply into an excessive sequential wait. This plan does not choose a hidden duration.
 
 Required runtime evidence:
 
-- focused timeout/lifecycle tests for initial timeout, refresh timeout with retained snapshot, explicit recovery, no automatic retry, late-result rejection, route/context change, and busy-state release;
+- focused timeout/lifecycle tests for one required source timing out while the other source reads succeed;
+- one required source failing while the other source reads succeed;
+- no partial or mixed snapshot;
+- previous coherent snapshot retained after refresh timeout;
+- initial timeout without previous data;
+- late individual-source callback rejection;
+- retry creating a clean new request generation;
+- timeout and busy settlement exactly once;
+- explicit recovery, no automatic retry, and route/context change;
 - proof that mutation request paths are not wrapped or retried;
 - existing Dashboard/Onboarding regressions;
 - frontend production build;
 - exact-head Dashboard browser smoke at desktop and narrow widths, including keyboard focus, intentional delay fault injection, manual recovery, retained snapshot, late-result rejection, and zero unexpected browser/network failures.
+
+No source timeout may authorize an automatic retry, and no mutation path may use the safe-GET timeout primitive.
 
 Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, production, Import Apply, stock movement creation, backup/export/report generation, other mutation flows, health polling, hidden polling, automatic mutation retry, global request rewrite, cloud/offline sync, framework migration, backend/API/schema/migration changes, and new dependencies.
 
@@ -759,4 +772,4 @@ B1 fixture/backend implementation and B2 backend read-model implementation are n
 - PR #139 accepted runtime head: `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`; merge commit: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
 - The Backups narrow-width blocker found during the first smoke attempt is closed.
 - Final exact-head integration verdict: `PASS — FULL AUTOMATED SMOKE PASSED` on `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
-- B3.1–B3.6 and the full Block B acceptance gate are complete.
+- B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
