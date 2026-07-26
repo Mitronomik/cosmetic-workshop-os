@@ -120,6 +120,70 @@ tbody tr:hover { background: #fffaf6; }
 @media (max-width: 820px) { .overview-grid { grid-template-columns: 1fr 1fr; } .metric-card strong { font-size: 28px; } .metric-card.wide { grid-column: span 1; } }
 @media (max-width: 520px) { .overview-grid { grid-template-columns: 1fr; } }
 
+/* Backups/local-artifact pages: keep long local paths and filenames inside the workspace. */
+.backup-page,
+.backup-page > *,
+.backup-page .card,
+.backup-page .overview-grid,
+.backup-page .overview-grid > *,
+.backup-page .metric-card,
+.backup-page .backup-item,
+.backup-page .local-artifact-card,
+.backup-page .local-artifact-created-summary,
+.backup-page .section-heading,
+.backup-page .section-heading > *,
+.backup-page .technical-details,
+.backup-page .metadata-list,
+.backup-page .metadata-list > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.backup-page {
+  width: 100%;
+}
+
+.backup-page .overview-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  width: 100%;
+}
+
+.backup-page .metric-card {
+  overflow-wrap: anywhere;
+}
+
+.backup-page p,
+.backup-page h2,
+.backup-page h3,
+.backup-page strong,
+.backup-page span,
+.backup-page small,
+.backup-page summary,
+.backup-page dt,
+.backup-page dd {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.backup-page .path-text {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  width: 100%;
+  word-break: break-word;
+}
+
+@media (max-width: 520px) {
+  .backup-page .overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .backup-page .metric-card.wide {
+    grid-column: 1 / -1;
+  }
+}
+
 /* A4.4a: scoped responsive containment for the read-only Inventory workspace. */
 .inventory-layout,
 .inventory-layout > *,
