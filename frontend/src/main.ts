@@ -9,6 +9,7 @@ import { createLocalArtifactRouteRuntime } from './local-artifacts-reports-runti
 import { transitionLocalArtifactsReportsRouteOwnership } from './local-artifacts-reports-route.js';
 import { bindActionControls, DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, selectOnboardingFocusTarget, type FocusCandidate, type OnboardingAction } from './dashboard-onboarding-feedback.js';
 import { DashboardReadCoordinator, type DashboardReadOutcome } from './dashboard-read-runtime.js';
+import { alertListResponseDtoIsValid, clientsListDtoIsValid, productionBatchListResponseDtoIsValid, purchaseSuggestionListResponseDtoIsValid } from './dashboard-read-validators.js';
 import { ALERT_REGENERATION_REFRESH_WARNING_ANNOUNCEMENT, AlertsFeedbackLifecycle, alertsPresentation, bindAlertsActionControls, filterDisplayedAlerts, selectAlertFocusTarget, transitionAlertsRouteOwnership, type AlertFilters } from './alerts-feedback.js';
 import { PurchaseSuggestionsFeedbackLifecycle, purchaseSuggestionsPresentation, DEFAULT_PURCHASE_FILTERS, type PurchaseSuggestionFilters as LifecyclePurchaseSuggestionFilters } from './purchase-suggestions-feedback.js';
 import { createPurchaseSuggestionsRuntime } from './purchase-suggestions-runtime.js';
@@ -626,10 +627,10 @@ const dashboardOnboardingLifecycle = new DashboardOnboardingFeedbackLifecycle<Da
 const dashboardReadCoordinator = new DashboardReadCoordinator<DashboardSourceResponses, DashboardData>({
   sources: {
     orders: { read: (signal) => getOrders(true, signal), validate: (response): response is DashboardSourceResponses['orders'] => ordersDtoIsValid(response) },
-    clients: { read: (signal) => getClients(true, signal), validate: (response): response is DashboardSourceResponses['clients'] => Boolean(response && typeof response === 'object' && Array.isArray((response as { clients?: unknown }).clients)) },
-    alerts: { read: (signal) => getAlerts({ status: 'open', type: '', search: '' }, signal), validate: (response): response is DashboardSourceResponses['alerts'] => Boolean(response && typeof response === 'object' && Array.isArray((response as { alerts?: unknown }).alerts)) },
-    purchaseSuggestions: { read: (signal) => getPurchaseSuggestions({ status: 'open', reason: '', itemType: '', search: '' }, signal), validate: (response): response is DashboardSourceResponses['purchaseSuggestions'] => Boolean(response && typeof response === 'object' && Array.isArray((response as { purchase_suggestions?: unknown }).purchase_suggestions)) },
-    productionBatches: { read: (signal) => getProductionBatches(signal), validate: (response): response is DashboardSourceResponses['productionBatches'] => Boolean(response && typeof response === 'object' && Array.isArray((response as { production_batches?: unknown }).production_batches)) },
+    clients: { read: (signal) => getClients(true, signal), validate: (response): response is DashboardSourceResponses['clients'] => clientsListDtoIsValid(response) },
+    alerts: { read: (signal) => getAlerts({ status: 'open', type: '', search: '' }, signal), validate: (response): response is DashboardSourceResponses['alerts'] => alertListResponseDtoIsValid(response) },
+    purchaseSuggestions: { read: (signal) => getPurchaseSuggestions({ status: 'open', reason: '', itemType: '', search: '' }, signal), validate: (response): response is DashboardSourceResponses['purchaseSuggestions'] => purchaseSuggestionListResponseDtoIsValid(response) },
+    productionBatches: { read: (signal) => getProductionBatches(signal), validate: (response): response is DashboardSourceResponses['productionBatches'] => productionBatchListResponseDtoIsValid(response) },
   },
   buildCandidate: ({ orders, clients, alerts, purchaseSuggestions, productionBatches }) => ({
     orders: orders.orders,

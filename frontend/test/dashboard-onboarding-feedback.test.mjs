@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { bindActionControls, DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, selectOnboardingFocusTarget } from '../dist-tests/dashboard-onboarding-feedback/dashboard-onboarding-feedback.js';
 import { DASHBOARD_READ_SOURCE_KEYS, DASHBOARD_READ_TIMEOUT_MS, DashboardReadCoordinator } from '../dist-tests/dashboard-onboarding-feedback/dashboard-read-runtime.js';
+import { alertListResponseDtoIsValid, clientsListDtoIsValid, productionBatchListResponseDtoIsValid, purchaseSuggestionListResponseDtoIsValid } from '../dist-tests/dashboard-onboarding-feedback/dashboard-read-validators.js';
 const data=(n)=>({orders:Array(n).fill({}),clients:[],alerts:[],purchaseSuggestions:[],productionBatches:[]});
 const emptyData=()=>data(0);
 const state=(step='welcome')=>({has_started:true,is_completed:false,current_step:step,completed_steps:[],available_steps:['welcome','stock']});
@@ -26,6 +27,76 @@ function dashboardHarness(){
     buildCandidate(responses){ return {orders:responses.orders.orders,clients:responses.clients.clients,alerts:responses.alerts.alerts,purchaseSuggestions:responses.purchaseSuggestions.purchase_suggestions,productionBatches:responses.productionBatches.production_batches}; },
   });
   return {scheduler,deferredByKey,calls,coordinator,outcomes:[]};
+}
+const validClient=()=>({id:1,full_name:'Анна',phone:'',email:'',address:'',birthday:null,skin_notes:'',allergy_notes:'',preference_notes:'',contraindication_notes:'',notes:'',is_active:true,created_at:'2026-07-26T10:00:00',updated_at:'2026-07-26T10:00:00'});
+const validAlert=()=>({id:1,alert_key:'low-stock-1',type:'low_ingredient_stock',severity:'warning',message:'Низкий остаток',related_entity_type:'ingredient',related_entity_id:1,recommended_action:'Пополнить запас',status:'open',created_at:'2026-07-26T10:00:00',updated_at:'2026-07-26T10:00:00',resolved_at:null,dismissed_at:null});
+const validPurchaseSuggestion=()=>({id:1,suggestion_key:'buy-1',item_type:'ingredient',item_id:1,item_name_snapshot:'Масло',recommended_quantity:'100',unit:'g',reason:'below_minimum_stock',source_entity_type:'alert',source_entity_id:1,message:'Купить масло',status:'open',notes:'',created_at:'2026-07-26T10:00:00',updated_at:'2026-07-26T10:00:00',resolved_at:null});
+const validProductionBatch=()=>({id:1,order_id:1,product_name:'Крем',client_id:1,client_name:'Анна',recipe_version_id:1,client_recipe_id:null,final_batch_value:'50',final_batch_unit:'g',total_cost:'200',sale_price:'800',tax:'48',margin:'552',margin_percent:'69',produced_at:'2026-07-26T10:00:00',ingredient_line_count:3,packaging_line_count:1,notes:''});
+function productionResponseFor(key){
+  if(key==='orders') return {orders:[]};
+  if(key==='clients') return {clients:[validClient()]};
+  if(key==='alerts') return {alerts:[validAlert()],limit:100,offset:0};
+  if(key==='purchaseSuggestions') return {purchase_suggestions:[validPurchaseSuggestion()],limit:100,offset:0};
+  return {production_batches:[validProductionBatch()],limit:50,offset:0};
+}
+function productionValidationHarness(){
+  const scheduler=fakeScheduler();
+  const deferredByKey=Object.fromEntries(DASHBOARD_READ_SOURCE_KEYS.map((key)=>[key,[]]));
+  const calls=[];
+  const validators={
+    orders:(response)=>Boolean(response&&typeof response==='object'&&!Array.isArray(response)&&Array.isArray(response.orders)),
+    clients:clientsListDtoIsValid,
+    alerts:alertListResponseDtoIsValid,
+    purchaseSuggestions:purchaseSuggestionListResponseDtoIsValid,
+    productionBatches:productionBatchListResponseDtoIsValid,
+  };
+  let candidateBuildCount=0;
+  const sources=Object.fromEntries(DASHBOARD_READ_SOURCE_KEYS.map((key)=>[key,{
+    read(signal){ const request=deferred(); deferredByKey[key].push(request); calls.push({key,signal}); return request.promise; },
+    validate:validators[key],
+  }]));
+  const coordinator=new DashboardReadCoordinator({
+    scheduler,
+    sources,
+    buildCandidate(responses){ candidateBuildCount+=1; return {orders:responses.orders.orders,clients:responses.clients.clients,alerts:responses.alerts.alerts,purchaseSuggestions:responses.purchaseSuggestions.purchase_suggestions,productionBatches:responses.productionBatches.production_batches}; },
+  });
+  return {scheduler,deferredByKey,calls,coordinator,outcomes:[],candidateBuildCount:()=>candidateBuildCount};
+}
+async function verifyProductionInvalidItemCase({source,response},previousSnapshot){
+  const h=productionValidationHarness();
+  const lifecycle=new DashboardOnboardingFeedbackLifecycle();
+  if(previousSnapshot){
+    const loaded=lifecycle.startDashboardLoad('initial');
+    lifecycle.finishDashboardSuccess(loaded.requestId,previousSnapshot);
+  }
+  wireDashboardOperation(h,lifecycle,previousSnapshot?'refresh':'initial');
+  await flush();
+  assert.equal(h.calls.length,5);
+  h.deferredByKey[source][0].resolve(response);
+  await flush();
+  assert.equal(h.outcomes.length,1);
+  assert.equal(h.outcomes[0].kind,'invalid-response');
+  assert.equal(h.candidateBuildCount(),0);
+  assert.equal(lifecycle.state.dashboard.active,false);
+  assert.equal(h.coordinator.activeGeneration(),null);
+  assert.equal(h.scheduler.activeCount(),0);
+  assert.equal(h.scheduler.cleared.length,1);
+  assert.equal(h.calls.every((call)=>call.signal.aborted),true);
+  if(previousSnapshot){
+    assert.equal(lifecycle.state.dashboard.data,previousSnapshot);
+    assert.equal(lifecycle.state.dashboard.hasLoadedSnapshot,true);
+  }else{
+    assert.equal(lifecycle.state.dashboard.data,null);
+    assert.equal(lifecycle.state.dashboard.hasLoadedSnapshot,false);
+  }
+  for(const key of DASHBOARD_READ_SOURCE_KEYS){
+    if(key!==source) h.deferredByKey[key][0].resolve(productionResponseFor(key));
+  }
+  await flush();
+  assert.equal(h.outcomes.length,1);
+  assert.equal(h.candidateBuildCount(),0);
+  assert.equal(lifecycle.state.dashboard.data,previousSnapshot);
+  assert.equal(lifecycle.state.dashboard.active,false);
 }
 function wireDashboardOperation(h,lifecycle,kind='initial',owns=true){
   const started=lifecycle.startDashboardLoad(kind);
@@ -64,6 +135,24 @@ test('one timed-out source discards four completed results and rejects late call
 test('one ordinary failure discards four completed results and clears operation resources',async()=>{ const h=dashboardHarness(); const c=new DashboardOnboardingFeedbackLifecycle(); wireDashboardOperation(h,c); await flush(); for(const key of DASHBOARD_READ_SOURCE_KEYS.slice(0,4)) h.deferredByKey[key][0].resolve(responseFor(key,1)); h.deferredByKey.productionBatches[0].reject(new Error('network')); await flush(); assert.equal(h.outcomes.length,1); assert.equal(h.outcomes[0].kind,'failure'); assert.equal(c.state.dashboard.data,null); assert.equal(c.state.dashboard.active,false); assert.equal(h.scheduler.activeCount(),0); assert.equal(h.scheduler.cleared.length,1); assert.equal(h.calls.every((call)=>call.signal.aborted),true); });
 
 test('one invalid response discards the complete candidate and clears its timer',async()=>{ const h=dashboardHarness(); const c=new DashboardOnboardingFeedbackLifecycle(); wireDashboardOperation(h,c); await flush(); for(const key of DASHBOARD_READ_SOURCE_KEYS) h.deferredByKey[key][0].resolve(responseFor(key,1,key!=='alerts')); await flush(); assert.equal(h.outcomes.length,1); assert.equal(h.outcomes[0].kind,'invalid-response'); assert.equal(c.state.dashboard.hasLoadedSnapshot,false); assert.equal(c.state.dashboard.data,null); assert.equal(h.scheduler.activeCount(),0); assert.equal(h.scheduler.cleared.length,1); });
+
+const invalidDashboardItemCases=[
+  {name:'clients rejects null item',source:'clients',response:{clients:[null]}},
+  {name:'clients rejects empty object item',source:'clients',response:{clients:[{}]}},
+  {name:'alerts rejects null item',source:'alerts',response:{alerts:[null],limit:100,offset:0}},
+  {name:'alerts rejects empty object item',source:'alerts',response:{alerts:[{}],limit:100,offset:0}},
+  {name:'purchase suggestions rejects null item',source:'purchaseSuggestions',response:{purchase_suggestions:[null],limit:100,offset:0}},
+  {name:'purchase suggestions rejects invalid stable ID',source:'purchaseSuggestions',response:{purchase_suggestions:[{...validPurchaseSuggestion(),id:'wrong'}],limit:100,offset:0}},
+  {name:'production batches rejects null item',source:'productionBatches',response:{production_batches:[null],limit:50,offset:0}},
+  {name:'production batches rejects invalid required produced_at',source:'productionBatches',response:{production_batches:[{...validProductionBatch(),produced_at:null}],limit:50,offset:0}},
+];
+for(const invalidCase of invalidDashboardItemCases){
+  test(`production Dashboard validator ${invalidCase.name} without committing initial or refresh snapshots`,async()=>{
+    await verifyProductionInvalidItemCase(invalidCase,null);
+    const previousSnapshot={orders:[{id:91}],clients:[validClient()],alerts:[validAlert()],purchaseSuggestions:[validPurchaseSuggestion()],productionBatches:[validProductionBatch()]};
+    await verifyProductionInvalidItemCase(invalidCase,previousSnapshot);
+  });
+}
 
 test('refresh timeout preserves non-empty and valid empty coherent snapshots',async()=>{ for(const snapshot of [data(3),emptyData()]){ const h=dashboardHarness(); const c=new DashboardOnboardingFeedbackLifecycle(); const initial=c.startDashboardLoad('initial'); c.finishDashboardSuccess(initial.requestId,snapshot); wireDashboardOperation(h,c,'refresh'); await flush(); h.scheduler.run(); assert.equal(c.state.dashboard.data,snapshot); assert.equal(c.state.dashboard.hasLoadedSnapshot,true); assert.match(c.state.dashboard.warning,/устаревшими/); assert.equal(c.state.dashboard.active,false); assert.equal(h.calls.length,5); } });
 
