@@ -50,6 +50,73 @@ test('focus targets and duplicate focus attributes are valid markup contracts',a
 
 test('main wiring delegates B3.3 controls to production binding module',async()=>{const fs=await import('node:fs/promises');const source=await fs.readFile(new URL('../src/main.ts', import.meta.url),'utf8');assert.match(source,/bindLocalArtifactsReportsControls\(root/);assert.doesNotMatch(source,/\[data-[^\]]+"\s+data-[^\]]+\]/);assert.doesNotMatch(source,/mutation\.detached = false/);assert.doesNotMatch(source,/lastAnnouncement\s*=/);});
 
+function cssRules(source) {
+  const rules = [];
+  const clean = source.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const match of clean.matchAll(/([^{}@]+)\{([^{}]*)\}/g)) {
+    const selectors = match[1].split(',').map((selector) => selector.trim()).filter(Boolean);
+    const declarations = Object.fromEntries(match[2].split(';').map((entry) => entry.trim()).filter(Boolean).map((entry) => {
+      const separator = entry.indexOf(':');
+      return [entry.slice(0, separator).trim(), entry.slice(separator + 1).trim()];
+    }));
+    rules.push({ selectors, declarations });
+  }
+  return rules;
+}
+
+function declarationsFor(rules, selector) {
+  return Object.assign({}, ...rules.filter((rule) => rule.selectors.includes(selector)).map((rule) => rule.declarations));
+}
+
+test('Backups responsive containment is workspace-scoped and shrink-safe', async () => {
+  const fs = await import('node:fs/promises');
+  const [source, styles] = await Promise.all([
+    fs.readFile(new URL('../src/main.ts', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../src/styles.css', import.meta.url), 'utf8'),
+  ]);
+  const rules = cssRules(styles);
+  assert.match(source, /function backupPage\(\)[\s\S]*?class="page-grid backup-page"[^>]*data-focus-key="b3-backups-content"/);
+
+  const grid = declarationsFor(rules, '.backup-page .overview-grid');
+  assert.match(grid['grid-template-columns'], /minmax\(min\(100%,\s*180px\),\s*1fr\)|minmax\(0,\s*1fr\)/);
+  assert.equal(grid.width, '100%');
+
+  for (const selector of ['.backup-page', '.backup-page > *', '.backup-page .overview-grid > *', '.backup-page .metric-card']) {
+    const declarations = declarationsFor(rules, selector);
+    assert.equal(declarations['min-width'], '0', `${selector} must be allowed to shrink`);
+    assert.equal(declarations['max-width'], '100%', `${selector} must stay inside the Backups workspace`);
+  }
+
+  const card = declarationsFor(rules, '.backup-page .metric-card');
+  assert.equal(card['overflow-wrap'], 'anywhere');
+
+  const path = declarationsFor(rules, '.backup-page .path-text');
+  assert.equal(path['min-width'], '0');
+  assert.equal(path['max-width'], '100%');
+  assert.equal(path.width, '100%');
+  assert.equal(path['overflow-wrap'], 'anywhere');
+  assert.equal(path['word-break'], 'break-word');
+  assert.equal(path['white-space'], 'normal');
+
+  for (const selector of ['.backup-page p', '.backup-page h3', '.backup-page strong', '.backup-page span', '.backup-page dd']) {
+    const declarations = declarationsFor(rules, selector);
+    assert.equal(declarations['overflow-wrap'], 'anywhere', `${selector} must wrap long labels, filenames, or descriptions`);
+  }
+
+  const narrowWideCard = declarationsFor(rules, '.backup-page .metric-card.wide');
+  assert.equal(narrowWideCard['grid-column'], '1 / -1');
+});
+
+test('Backups containment does not mask overflow at a root layout boundary', async () => {
+  const fs = await import('node:fs/promises');
+  const styles = await fs.readFile(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const rules = cssRules(styles);
+  for (const selector of ['html', 'body', '#root', '.app-shell', '.content']) {
+    const declarations = declarationsFor(rules, selector);
+    assert.notEqual(declarations['overflow-x'], 'hidden', `${selector} must not conceal page-level overflow`);
+  }
+});
+
 
 test('provisional reconciliation GET success before detached settlement cannot clear lock until post-settlement GET',async()=>{const {h,runtime}=makeRoute('backups');runtime.enter();runtime.create({});runtime.leave();h.active=false;h.active=true;runtime.enter();runtime.reconcile();assert.equal(h.readCount,1);h.reads[0].resolve({items:['provisional']});await flush();assert.equal(runtime.lifecycle.state.reconciliationRequired,true);assert.equal(runtime.presentation().canCreate,false);assert.equal(h.readCount,1);h.mutations[0].resolve({created:artifact(10),message:'detached created'});await flush();assert.equal(runtime.lifecycle.state.reconciliationRequired,true);assert.equal(h.readCount,2);assert.deepEqual(h.polite,[]);assert.deepEqual(h.focus,[]);h.reads[1].resolve({items:[artifact(10)]});await flush();assert.equal(runtime.lifecycle.state.reconciliationRequired,false);assert.equal(h.postCount,1);});
 
