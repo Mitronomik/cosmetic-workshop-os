@@ -1,26 +1,16 @@
-# Current focus — PR #137 detached settlement and recipe snapshot correction
+# Current focus — B3.6 Order-to-production shared-feedback lifecycle
 
-- PR #136 is merged; B3.3 is complete at merge commit `e7c2d97473070f361052325fd6476208629af1cc`.
-- PR #137 remains open, non-draft, and under review on `codex/b3.4-b3.5-core-workspace-feedback`.
-- Active combined slice: B3.4+B3.5 — Formula/Client Workspace plus Inventory/Catalog Workspace.
-- Starting `main` SHA: `e7c2d97473070f361052325fd6476208629af1cc`.
-- Published PR head before this correction: `b95b0b293f6f381495fa9e08d36b1ad27a214252`.
-- B3.4+B3.5 is not DONE. B3.6 remains the next slice after review and merge.
-
-## Correction under review
-
-- Both production workspace runtimes now finalize every accepted mutation request exactly once, including known success, definite failure, ambiguous failure, invalid DTO, detached completion, obsolete context, and stale ownership. Rejected mutation starts do not run a finalizer.
-- Finalization is limited to route-local busy-state/control recovery and route-loader resumption. It does not apply DTOs, clear drafts/forms, announce, move focus, clear reconciliation, or retry a write.
-- Direct RecipeTemplate, RecipeVersion, Client, Ingredient, Ingredient Lot, and Packaging mutations use the same route-local finalization primitive, so leaving and returning cannot strand saving flags.
-- ClientRecipe create, composition, archive, and restore recover after detached settlement while retaining their exact reconciliation obligation.
-- RecipeTemplate detail and its RecipeVersion list now load as one context-owned atomic snapshot. Neither half is committed until both validate for the same template; a partial failure commits neither half.
-- RecipeVersion reconciliation remains a separate exact `recipe-version-list` / `template:<id>` read and updates visible versions only when that template is still selected.
-- Structured reconciliation and original-lot StockMovement safety from the prior correction remain unchanged: exactly one POST, one post-settlement automatic GET opportunity, no automatic retry loop, and manual original-lot recovery.
-
-## Scope boundaries
-
-No backend production code, backend APIs, migrations, dependencies, lockfiles, Orders, Production, unsupported RecipeTemplate/RecipeVersion updates, persisted RecipeIngredient CRUD, ClientRecipe calculation, Feedback update, Packaging StockMovement, or StockMovement update/delete are included.
-
-External smoke-authoring contract not stored in the repository; not required for this smoke-deferred runtime slice.
-
-Browser smoke: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- B3.4+B3.5 is DONE: PR #137 merged at `10e985229e8020fcf98c67427cde889b5cd934f8`.
+- B3.6 is the active slice. PR #138 is open and non-draft on branch `codex/b3.6-order-production-feedback`.
+- Exact starting `main` SHA: `10e985229e8020fcf98c67427cde889b5cd934f8`.
+- Current reviewed runtime head before this documentation commit: `a02d5a89f56421ab55f3d75c2ef4699a6a4946a2`.
+- Published correction commit: `a02d5a8 Prevent cross-order production reconciliation loss`.
+- Exact-head review found a cross-Order production reconciliation collision; the published correction closes that blocker.
+- Runtime scope: `/orders` route ownership; list/reference/detail reads; create/update; cancel/archive; readiness; Production Confirmation; exactly one production POST; production-history handoff; exact original-Order GET-only reconciliation.
+- While any production reconciliation obligation is unresolved, Production Confirmation and production POST operations are globally blocked. Another Order cannot replace the originating obligation.
+- Only coherent exact reconciliation of the originating Order and its exact ProductionBatch releases the production lock. Stale, wrong-Order, invalid, partial, mismatched, or detached reads cannot unlock it.
+- Backend production semantics, APIs, persistence, schema, migrations, dependencies, and lockfiles remain unchanged.
+- Implementation and blocker correction are published and reviewed; this documentation commit aligns project memory with that runtime state.
+- B3.6 is not DONE before the full Block B exact-head integration smoke.
+- Smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+- Next acceptance gate: run one full Block B integration smoke against the final exact head of PR #138 after this documentation commit. Do not merge before that smoke is reviewed.

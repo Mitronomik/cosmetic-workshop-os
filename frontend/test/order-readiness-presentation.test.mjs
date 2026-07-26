@@ -246,10 +246,12 @@ test('production confirmation pending and failure states render stable controls 
   assert.equal(failure.querySelector('button[data-action="reconcile-production-outcome"]'), null);
   assert.equal(failure.querySelector('button[data-action="open-production-confirmation"]'), null);
   assert.equal(failure.querySelector('[data-order-production-focus-anchor="failure"]').getAttribute('tabindex'), '-1');
+  assert.equal(failure.querySelector('[data-order-production-focus-anchor="failure"]').getAttribute('class').includes('error-message'), true);
 
   const uncertain = productionGate({ readiness: null, error: 'Исход неизвестен', recoveryAction: 'Проверить заказ', uncertain: true });
   assert.equal(uncertain.querySelector('button[data-action="reconcile-production-outcome"]').textContent, 'Проверить результат изготовления');
   assert.match(uncertain.textContent, /Исход неизвестен/);
+  assert.equal(uncertain.querySelector('[data-order-production-focus-anchor="failure"]').getAttribute('class').includes('warning-message'), true);
 });
 
 

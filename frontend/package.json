@@ -11,6 +11,7 @@
     "test:targeted-validation-update": "rm -rf dist-tests/targeted-validation-update && tsc -p tsconfig.test.targeted-validation-update.json && node --test test/targeted-validation-update.test.mjs",
     "test:order-mutation-lifecycle": "rm -rf dist-tests/order-mutation-lifecycle && tsc -p tsconfig.test.order-mutation-lifecycle.json && node --test test/order-mutation-lifecycle.test.mjs",
     "test:order-readiness-presentation": "rm -rf dist-tests/order-readiness-presentation && tsc -p tsconfig.test.order-readiness-presentation.json && node --test test/order-readiness-presentation.test.mjs",
+    "test:order-production-feedback": "rm -rf dist-tests/order-production-feedback && tsc -p tsconfig.test.order-production-feedback.json && node --test test/order-production-feedback.test.mjs",
     "test:dashboard-onboarding-feedback": "rm -rf dist-tests/dashboard-onboarding-feedback && tsc -p tsconfig.test.dashboard-onboarding-feedback.json && node --test test/dashboard-onboarding-feedback.test.mjs",
     "test:help-passive-regression": "rm -rf dist-tests/help-passive-regression && tsc -p tsconfig.test.help-passive-regression.json && node --test test/help-passive-regression.test.mjs",
     "test:alerts-feedback": "rm -rf dist-tests/alerts-feedback && tsc -p tsconfig.test.alerts-feedback.json && node --test test/alerts-feedback.test.mjs",
