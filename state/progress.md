@@ -1308,3 +1308,19 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
 - Backend was not rerun because the correction changes no backend file. Preserved evidence: focused Orders/Production/Stock suites 95/95; complete suite collected 496, passed 492, failed the same 4 accepted baseline tests, skipped 0; branch-only backend failure delta 0.
 - No backend production, migration, dependency, lockfile, database, smoke runner, screenshot, or browser artifact belongs to this slice.
 - Smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-26 — B3 implementation window closed; B4.1 activated
+
+- PR #138 is merged: accepted runtime head `a8cf9d3e21aa46af3f9b2837a44b918cad638910`; merge commit `bac8672ecb04c96e25bf00c50cfba07f79eadb99`.
+- PR #139 is merged: accepted runtime head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`; merge commit `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
+- B3.1–B3.6 are complete.
+- The Backups narrow-width blocker found during the first full-smoke attempt was closed by PR #139.
+- Final exact-head smoke on `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`: `PASS — FULL AUTOMATED SMOKE PASSED`.
+- Backend branch-only failure delta: `0`.
+- The four known backend baseline failures remain unresolved:
+  - `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`
+  - `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`
+  - `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`
+  - `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`
+- The stale Block B acceptance gate is closed.
+- Next focused runtime slice: `B4.1 — Safe GET timeout and recovery foundation`.

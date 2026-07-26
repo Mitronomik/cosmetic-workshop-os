@@ -818,3 +818,69 @@ The known baseline failures remain:
 - PR #138 must not be merged before the full Block B exact-head integration smoke is reviewed.
 - Run the smoke once against the final PR head after this documentation commit.
 - Smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
+
+## 2026-07-26 — Authoritative B3 closure and B4.1 handoff
+
+### Repository and merge state
+
+- Current `main`: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
+- PR #138 — `B3.6 — Order-to-production shared-feedback lifecycle`:
+  - accepted runtime head: `a8cf9d3e21aa46af3f9b2837a44b918cad638910`;
+  - merge commit: `bac8672ecb04c96e25bf00c50cfba07f79eadb99`.
+- PR #139 — `Fix Backups page responsive containment`:
+  - accepted runtime head: `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`;
+  - merge commit: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
+- B3.1–B3.6 are complete. The earlier pending-smoke wording is superseded by this handoff; accurate historical entries remain unchanged.
+
+### Accepted full integration smoke
+
+- Exact tested and published head: `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
+- Exact checked-out head matched the tested head.
+- Verdict: `PASS — FULL AUTOMATED SMOKE PASSED`.
+- Runner exit code: `0`.
+- Repository clean after smoke: `true`.
+- PR head unchanged after smoke: `true`.
+- Backend branch-only failure delta: `0`.
+- Isolated database migrations passed.
+- Frontend production build passed.
+- All required focused and regression frontend suites passed.
+- Unexpected console errors: `0`.
+- Unexpected HTTP failures: `0`.
+- Request failures: `0`.
+
+### Scenario summary
+
+- Scenario A: isolated seed and backend cross-module reads passed.
+- Scenario B: Dashboard, onboarding, Help Center, and route matrix passed.
+- Scenario C: alerts, purchase suggestions, backups, exports, and report documents passed.
+- Scenario D: blocked production readiness could not start production.
+- Scenario E: normal Order production was exactly once and transactional.
+- Scenario F: uncertain production created the global production lock; another Order could not replace the originating obligation; exact coherent reconciliation unlocked production.
+- Scenario G: narrow viewport and keyboard focus remained usable, including corrected Backups responsive containment.
+- Scenario P1: restart preserved produced Orders, ProductionBatch records, and local artifacts.
+- The `502 Bad Gateway` in Scenario F for `drop-production-response` was intentional fault injection, correctly classified as expected, and was not a product failure.
+
+### Known backend baseline failures
+
+These remain unresolved separate findings and are not regressions from PR #138 or PR #139:
+
+1. `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`
+2. `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`
+3. `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`
+4. `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`
+
+Do not describe these as fixed and do not correct them inside B4.1.
+
+### Next task boundary
+
+The only active next runtime slice is `B4.1 — Safe GET timeout and recovery foundation`.
+
+- Use the existing Dashboard read lifecycle as the initial pilot.
+- Cover bounded timeout for explicitly selected Dashboard GET/read operations, clear timeout feedback, explicit manual retry/refresh, last-valid-snapshot preservation where safe, and stale/late route-owned result rejection.
+- Reuse `DashboardOnboardingFeedbackLifecycle` and the current API client boundary; do not create a second lifecycle system or perform a global fetch rewrite.
+- The runtime PR must choose, document, and test the timeout policy; no duration is selected by this lifecycle closure.
+- Do not include onboarding mutations, Alerts/Purchases mutations, production, Import Apply, stock movement creation, backup/export/report generation, hidden polling, cloud/offline sync, framework migration, backend/API/schema/migration changes, or new dependencies.
+- Automatic retry for any mutation is explicitly forbidden.
+- Required future evidence: focused timeout/lifecycle tests, existing Dashboard/Onboarding regressions, frontend production build, and exact-head Dashboard browser smoke covering initial timeout, refresh timeout with retained snapshot, explicit recovery, late-result rejection, route ownership, desktop/narrow behavior, keyboard focus, and intentional-fault classification.
+
+This lifecycle closure is documentation-only. It does not implement B4.1 and does not claim browser smoke for the documentation commit.
