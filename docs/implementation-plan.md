@@ -4,7 +4,7 @@
 Клиентское название: **Мастерская косметолога**
 Целевой путь в репозитории: `docs/implementation-plan.md`
 Тип документа: активный рабочий план ближайших окон реализации
-Статус: **активен после merge и проверки PR #106**
+Статус: **активен после закрытия B3 и merge PR #139**
 Правило нумерации: идентификаторы slices ниже не являются номерами PR. Номер указывается только после фактического создания PR.
 
 ---
@@ -47,23 +47,15 @@
 
 ## 3. Текущая базовая точка
 
-Slice A5 is DONE. PR #131 merged at `62d372644d00fab38ccb1d652ab44556d8241b6a` (`Merge pull request #131 from Mitronomik/codex/implement-a5-local-artifact-presentation`).
+B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
 
-The B1/B2 diagnostic audit found no demo-fixture or backend Dashboard read-model implementation defect requiring a correction PR. It confirmed explicit demo-data installation, safe duplicate-install rejection, stable alert regeneration, stable purchase-suggestion regeneration, meaningful operational source data, and no passive database mutations. No B1 backend/fixture correction and no B2 backend read-model correction is currently required.
+- PR #138 accepted runtime head: `a8cf9d3e21aa46af3f9b2837a44b918cad638910`; merge commit: `bac8672ecb04c96e25bf00c50cfba07f79eadb99`.
+- The first full-smoke attempt found a narrow-width Backups containment blocker.
+- PR #139 closed that blocker at accepted runtime head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`; merge commit: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
+- The final exact-head integration smoke for the implemented B3 scope ran against `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72` and passed with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
+- Backend branch-only failure delta was `0`. The four known backend baseline failures remain unresolved separate findings.
 
-B2 browser presentation was not fully verified by that diagnostic audit. The current focused task is frontend focused-test infrastructure repair, with no runtime product behavior changes. B3.1 — Shared feedback for Dashboard, Onboarding and Help — remains the next runtime slice after this repair. No B1 or B2 implementation PR is active, and no future PR number is assigned.
-
-
-### B3.2 Alerts and Purchases shared-feedback lifecycle status
-- B3.2a Alerts: DONE.
-- PR #134 merged.
-- Accepted Alerts head: `ac8656c2357b50fa755fef58349501d072e298a7`.
-- Main merge commit: `4692bdfa4d5171fb270687cb385a37571a8e9e2d`.
-- B3.2b Purchases: ACTIVE in PR #135.
-- Current PR #135 correction: neutral feedback ownership, retryable reconciliation, route ownership, result-owned feedback, and real focused route/runtime/form/render/reference/binding tests.
-- Product-owner temporary sequencing decision: per-PR browser smoke for the remaining B slices is deferred.
-- Required smoke gate remains: one full Block B integration browser smoke after all Block B slices are implemented.
-- Scope split is narrow: each sub-slice must preserve backend-owned business rules and route-specific lifecycle ownership.
+The active next implementation window is B4, beginning with the focused runtime slice `B4.1 — Safe GET timeout and recovery foundation`. B4.1 is not implemented by this documentation update, and no future PR number is assigned.
 
 ## 4. Неизменяемые продуктовые правила
 
@@ -177,9 +169,9 @@ Gate 0 закрыт. Следующий runtime slice может стартов�
 
 ---
 
-# 9. CURRENT WINDOW — доверие и ежедневная работа
+# 9. COMPLETED WINDOW — доверие и ежедневная работа
 
-Текущее окно должно состоять из отдельных последовательных PR.
+Это окно было выполнено отдельными последовательными PR.
 
 ## Slice A1 — очистка пользовательского технического текста
 
@@ -307,7 +299,7 @@ Import Apply сохраняет отдельный structured-error contract и 
 
 ## Slice A4 — responsive table containment
 
-Статус: `ACTIVE — A4.4b /packaging-items responsive workspace containment`
+Статус: `DONE`
 
 ### Маршруты
 
@@ -319,7 +311,7 @@ Import Apply сохраняет отдельный structured-error contract и 
 
 A4.1 must not change `/orders`, `/clients`, `/inventory`, or `/packaging-items` route implementations. Those routes remain separate A4 follow-ups except for unavoidable passive effects from a shared CSS containment correction, which must be inspected and reported.
 
-A4.1 is DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08`; runtime head `effb5ee270c9fbddc777e57c41ad0b53acd77f9d`). PR #126 / A4.2 is DONE (merge commit `4487e4044d89d88538226c5b36543e6009f279f9`; runtime head `010bd1bf3791dd6a6d754ea2ed0efdcd2ab564d3`) with product-owner manual responsive verification passed at `1440×900`, `1024×768`, `768×900`, and `390×844`. PR #127 / A4.3 is DONE (merge commit `255703d26d9e166f00f2c9ba3030cf4bc41fe044`; runtime head `1f6930d8f2e3367372a384a51e7d04a3a7c96bee`) with product-owner manual exact-head smoke passed. PR #128 / A4.4a `/inventory` is DONE (merge commit `b89a40f2651f3e2ae7174cfdb7989ddf03a6221e`; runtime head `4a39c815ac8fdb73bc0c7dd5f88d0779e9eb6dd5`) with exact-head responsive smoke passed. PR #129 is merged as a test-only baseline repair. A4.4b `/packaging-items` is the active focused runtime slice. The final cross-route responsive regression remains a separate gate after A4.4b; do not mark Slice A4 DONE.
+A4.1–A4.4 are complete. The final B3 integration smoke also passed the desktop, narrow-width, and keyboard scenario after the Backups-specific blocker was closed by PR #139.
 
 ### Требования
 
@@ -347,7 +339,7 @@ A4.1 is DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08
 
 ## Slice A5 — человекопонятное представление локальных файлов
 
-Статус: `BLOCKED` A4
+Статус: `DONE`
 
 ### Маршруты
 
@@ -380,48 +372,42 @@ A4.1 is DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08
 
 ---
 
-# 10. NEXT WINDOW — runtime truth и resilience
+# 10. ACTIVE WINDOW — runtime truth и resilience
 
-Детализировать после завершения Current Window.
+Активное окно начинается с одного ограниченного runtime slice; последующие B4 slices требуют отдельного решения после его проверки.
 
 ## B1 — Demo state и operational fixture
 
-Статус: `NEEDS EVIDENCE`
+Статус: `DONE — diagnostic gate closed; no correction PR required`
 
-Сначала:
+Accepted diagnostic outcome:
 
-- повторно проверить dual feedback после PR106;
-- явно regenerate alerts и purchases;
-- проверить fixture на low stock, expiration и order shortage;
-- определить: UI copy, fixture или backend rules.
+- demo-data installation is explicit;
+- duplicate installation is safely rejected;
+- alert and purchase-suggestion regeneration is stable;
+- the operational fixture is meaningful;
+- passive reads do not mutate the database;
+- no separate fixture/backend correction PR was required.
 
-Только после доказательства:
-
-- исправить dual state;
-- заменить install form на стабильное installed state;
-- улучшить demo fixture, если он не демонстрирует MVP;
-- не запускать скрытые mutations при page load.
+Any later newly discovered Demo Data product request must enter through `state/change-requests.md`; it does not silently reopen B1.
 
 ## B2 — Dashboard operational truth
 
-Статус: `NEEDS EVIDENCE`
+Статус: `DONE — diagnostic gate closed; no backend read-model correction required`
 
-Разрешены только:
+Accepted diagnostic and verification outcome:
 
-- active orders;
-- critical alerts;
-- open purchases;
-- recent production;
-- backup reminder;
-- onboarding/next action.
-
-Без charts, forecasting, analytics и скрытого regeneration.
+- the Dashboard backend read-model diagnostic gate is complete;
+- no backend read-model correction PR was required;
+- the accepted B3.1 exact-head smoke subsequently verified Dashboard initial load, manual refresh, stale-data preservation, initial-load failure, explicit retry, route ownership, keyboard focus, and responsive browser behavior;
+- the final B3 integration smoke also passed its Dashboard, onboarding, Help Center, and route-matrix scenario;
+- charts, forecasting, advanced analytics, hidden regeneration, and hidden mutations remain outside scope.
 
 ## B3 — миграция shared feedback на остальные маршруты
 
-Статус: `READY` после PR106 и Current Window
+Статус: `DONE`
 
-Мигрировать небольшими группами, не одним системным PR:
+Completed in bounded groups:
 
 - dashboard/onboarding/help;
 - alerts/purchases;
@@ -430,20 +416,58 @@ A4.1 is DONE via PR #125 (merge commit `50c44ff0919401d51c165d6ebec1266c688bfb08
 - stock/catalog;
 - orders/production history.
 
-Для каждого batch: success, mutation failure, refresh failure, busy, stale-result clearing, keyboard focus.
+For each batch, success, mutation failure, refresh failure, busy state, stale-result clearing, and keyboard focus were covered. B3.1–B3.6 are complete through PR #138. The Backups narrow-width blocker found during the first full-smoke attempt was fixed by PR #139, and the final integration smoke for the implemented B3 scope passed on exact published head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
+
+B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
 
 ## B4 — безопасная frontend resilience foundation
 
-Статус: `READY` после validation/feedback foundation
+Статус: `ACTIVE NEXT IMPLEMENTATION WINDOW`
 
-- timeout прежде всего для safe GET;
-- без automatic retry non-idempotent mutations;
-- render/runtime fallback;
-- safe `unhandledrejection` diagnostics без чувствительных данных;
-- явный recovery action;
-- сохранение stale readable data при failed refresh, где безопасно.
+### B4.1 — Safe GET timeout and recovery foundation
 
-Без health polling и framework migration.
+Статус: `ACTIVE NEXT RUNTIME SLICE — NOT YET IMPLEMENTED`
+
+Goal: introduce a bounded timeout and recovery contract for explicitly selected safe frontend GET/read operations without changing backend business rules or introducing mutation retries.
+
+Initial bounded pilot:
+
+- Dashboard initial read;
+- Dashboard manual refresh;
+- one composed Dashboard read owner/request generation for all required source GET requests;
+- atomic snapshot commit only after every required source result for the same generation validates successfully;
+- no partial or mixed new snapshot when any required source times out or fails;
+- explicit timeout feedback and manual retry/refresh;
+- preservation of the previous coherent Dashboard snapshot after failed/timed-out refresh where safe;
+- explicit recoverable initial-load failure when no previous snapshot exists;
+- rejection of stale and late individual-source results after timeout, supersession, route leave, or a newer request;
+- no late individual-source success or failure may mutate Dashboard state, feedback, announcements, focus, or busy state;
+- route/context ownership;
+- reuse and extension of the existing `DashboardOnboardingFeedbackLifecycle` and current API client boundary rather than a second lifecycle system or global fetch rewrite.
+
+Manual retry creates a clean new composed read generation. Duplicate starts remain rejected, busy state settles exactly once, and no timeout authorizes an automatic retry.
+
+The runtime PR must select, document, and test the timeout duration/policy. It must explicitly choose whether the deadline applies to the whole composed Dashboard read or to each request, while ensuring that timeouts cannot multiply into an excessive sequential wait. This plan does not choose a hidden duration.
+
+Required runtime evidence:
+
+- focused timeout/lifecycle tests for one required source timing out while the other source reads succeed;
+- one required source failing while the other source reads succeed;
+- no partial or mixed snapshot;
+- previous coherent snapshot retained after refresh timeout;
+- initial timeout without previous data;
+- late individual-source callback rejection;
+- retry creating a clean new request generation;
+- timeout and busy settlement exactly once;
+- explicit recovery, no automatic retry, and route/context change;
+- proof that mutation request paths are not wrapped or retried;
+- existing Dashboard/Onboarding regressions;
+- frontend production build;
+- exact-head Dashboard browser smoke at desktop and narrow widths, including keyboard focus, intentional delay fault injection, manual recovery, retained snapshot, late-result rejection, and zero unexpected browser/network failures.
+
+No source timeout may authorize an automatic retry, and no mutation path may use the safe-GET timeout primitive.
+
+Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, production, Import Apply, stock movement creation, backup/export/report generation, other mutation flows, health polling, hidden polling, automatic mutation retry, global request rewrite, cloud/offline sync, framework migration, backend/API/schema/migration changes, and new dependencies.
 
 ---
 
@@ -737,12 +761,15 @@ B1 fixture/backend implementation and B2 backend read-model implementation are n
 - PR #137 is merged at `10e985229e8020fcf98c67427cde889b5cd934f8`.
 - Formula/Client Workspace and Inventory/Catalog Workspace shared-feedback lifecycle is complete.
 
-## B3.6 — Order-to-production shared-feedback lifecycle (ACTIVE)
+## B3.6 — Order-to-production shared-feedback lifecycle (DONE)
 
 - Starting `main` SHA: `10e985229e8020fcf98c67427cde889b5cd934f8`.
 - Bounded scope: `/orders` list, reference and detail reads; create/update; cancel/archive; readiness; Production Confirmation; production request and history handoff; exact original-Order production reconciliation.
 - Lifecycle ownership: route generation, exact Order context, request generation, validated DTO boundaries, exactly-once accepted settlement, retained readable snapshots/drafts, request-owned announcements, and route-owned focus.
 - Production safety: one POST per accepted confirmation; no automatic production retry; uncertain or untrusted outcomes create an exact original-Order obligation that only a coherent exact Order plus its exact ProductionBatch can clear.
 - Backend production semantics, APIs, schema, migrations, and persistence remain unchanged.
-- Browser smoke policy: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
-- B3.6 remains under review until the exact published head is reviewed and the later full Block B integration smoke gate is completed.
+- PR #138 accepted runtime head: `a8cf9d3e21aa46af3f9b2837a44b918cad638910`; merge commit: `bac8672ecb04c96e25bf00c50cfba07f79eadb99`.
+- PR #139 accepted runtime head: `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`; merge commit: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
+- The Backups narrow-width blocker found during the first smoke attempt is closed.
+- Final exact-head integration verdict: `PASS — FULL AUTOMATED SMOKE PASSED` on `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
+- B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
