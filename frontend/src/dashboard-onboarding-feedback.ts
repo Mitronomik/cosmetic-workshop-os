@@ -70,7 +70,7 @@ export class DashboardOnboardingFeedbackLifecycle<TDashboardData, TOnboardingSta
   }
 
   finishDashboardSuccess(requestId: number, data: TDashboardData, ownsPresentation = true): FinishResult {
-    if (requestId !== this.dashboardRequestId) return finish(false);
+    if (requestId !== this.dashboardRequestId || !this.state.dashboard.active) return finish(false);
     const kind = this.state.dashboard.activeKind;
     this.state.dashboard.status = 'ready';
     this.state.dashboard.active = false;
@@ -84,7 +84,7 @@ export class DashboardOnboardingFeedbackLifecycle<TDashboardData, TOnboardingSta
   }
 
   finishDashboardFailure(requestId: number, ownsPresentation = true): FinishResult {
-    if (requestId !== this.dashboardRequestId) return finish(false);
+    if (requestId !== this.dashboardRequestId || !this.state.dashboard.active) return finish(false);
     const hasSnapshot = this.state.dashboard.hasLoadedSnapshot;
     this.state.dashboard.active = false;
     this.state.dashboard.activeKind = null;
@@ -99,6 +99,40 @@ export class DashboardOnboardingFeedbackLifecycle<TDashboardData, TOnboardingSta
     this.state.dashboard.error = hasSnapshot ? '' : 'Не удалось загрузить обзор мастерской. Проверьте, что локальное приложение запущено, и попробуйте снова.';
     this.state.dashboard.warning = hasSnapshot ? 'Не удалось обновить обзор. Показываем ранее загруженные данные — они могут быть устаревшими.' : '';
     return finish(true, 'assertive', hasSnapshot ? this.state.dashboard.warning : this.state.dashboard.error);
+  }
+
+  finishDashboardTimeout(requestId: number, ownsPresentation = true): FinishResult {
+    if (requestId !== this.dashboardRequestId || !this.state.dashboard.active) return finish(false);
+    const hasSnapshot = this.state.dashboard.hasLoadedSnapshot;
+    this.state.dashboard.active = false;
+    this.state.dashboard.activeKind = null;
+    this.state.dashboard.message = '';
+    if (!ownsPresentation) {
+      this.state.dashboard.status = hasSnapshot ? 'ready' : 'idle';
+      this.state.dashboard.warning = '';
+      this.state.dashboard.error = '';
+      return finish(true);
+    }
+    this.state.dashboard.status = 'error';
+    this.state.dashboard.error = hasSnapshot ? '' : 'Обзор загружается слишком долго. Данные мастерской не изменялись. Проверьте, что локальное приложение запущено, и нажмите «Повторить».';
+    this.state.dashboard.warning = hasSnapshot ? 'Обновление заняло слишком много времени. Показываем ранее загруженные данные — они могут быть устаревшими. Нажмите «Обновить», чтобы попробовать снова.' : '';
+    return finish(
+      true,
+      hasSnapshot ? 'polite' : 'assertive',
+      hasSnapshot ? this.state.dashboard.warning : this.state.dashboard.error,
+    );
+  }
+
+  finishDashboardCancellation(requestId: number): FinishResult {
+    if (requestId !== this.dashboardRequestId || !this.state.dashboard.active) return finish(false);
+    const hasSnapshot = this.state.dashboard.hasLoadedSnapshot;
+    this.state.dashboard.status = hasSnapshot ? 'ready' : 'idle';
+    this.state.dashboard.active = false;
+    this.state.dashboard.activeKind = null;
+    this.state.dashboard.message = '';
+    this.state.dashboard.warning = '';
+    this.state.dashboard.error = '';
+    return finish(true);
   }
 
   clearDashboardTransientFeedback(): void {

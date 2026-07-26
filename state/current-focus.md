@@ -1,6 +1,6 @@
 # Current focus — B4.1 Safe GET timeout and recovery foundation
 
-Status: `ACTIVE NEXT RUNTIME SLICE` — documented here, not yet implemented. No future PR number is assigned.
+Status: `IMPLEMENTED — EXACT-HEAD BROWSER SMOKE REQUIRED`. Starting `origin/main`: `f3fc8d0c8872908801f1b667731c5792c82448ea`. The runtime PR must remain Draft until its final published head passes the required browser smoke.
 
 ## Goal
 
@@ -15,7 +15,7 @@ Use the existing Dashboard read lifecycle as the only initial pilot:
 - one composed Dashboard read owner/request generation for every required source GET;
 - atomic commit of a new Dashboard snapshot only after all required source results for that same generation validate successfully;
 - no partial or mixed new snapshot when any required source times out or fails;
-- a bounded timeout policy selected, documented, and tested by the runtime PR;
+- one tested `8_000 ms` whole-operation timeout for the five concurrent Dashboard source GETs;
 - clear Russian user-facing timeout feedback;
 - explicit manual retry or refresh;
 - preservation of the previous coherent Dashboard snapshot after a timed-out refresh where safe;
@@ -60,7 +60,7 @@ Do not include:
 - Treat all required Dashboard source reads as one composed read owner/request generation.
 - Commit a new Dashboard snapshot only after every required source result for the same generation validates successfully.
 - A timeout or failure from any required source must not commit a partial or mixed new snapshot.
-- Make the timeout policy explicit in the runtime PR; it must choose whether the deadline applies to the whole composed read or to each request while ensuring that timeouts cannot multiply into an excessive sequential wait. This documentation does not choose an exact duration.
+- Use the production `8_000 ms` whole-operation deadline. It applies once to all five concurrent source GETs and must not become five sequential or independent timeout windows.
 - Accept a result only when its request identity and current Dashboard route/context ownership are still valid.
 - A late success or late failure from any individual source after timeout, supersession, route leave, or a newer request must not mutate Dashboard state, feedback, announcements, focus, or busy state.
 - Preserve the previous coherent readable Dashboard snapshot after refresh timeout where safe and label it as potentially stale.

@@ -886,3 +886,30 @@ The only active next runtime slice is `B4.1 — Safe GET timeout and recovery fo
 - Required future evidence: focused timeout/lifecycle tests, existing Dashboard/Onboarding regressions, frontend production build, and exact-head Dashboard browser smoke covering initial timeout, refresh timeout with retained snapshot, explicit recovery, late-result rejection, route ownership, desktop/narrow behavior, keyboard focus, and intentional-fault classification.
 
 This lifecycle closure is documentation-only. It does not implement B4.1 and does not claim browser smoke for the documentation commit.
+
+## 2026-07-26 — B4.1 Dashboard safe GET timeout handoff
+
+### Runtime scope
+
+- Branch: `codex/b4.1-dashboard-safe-get-timeout`.
+- Exact starting `origin/main`: `f3fc8d0c8872908801f1b667731c5792c82448ea`, the PR #140 merge.
+- The pilot covers only Dashboard initial read and manual refresh.
+- `frontend/src/dashboard-read-runtime.ts` owns one five-source generation, the `8_000 ms` whole-operation deadline, one abort controller, deterministic scheduling, validation aggregation, atomic candidate construction, race rejection, and exactly-once cleanup.
+- `DashboardOnboardingFeedbackLifecycle` remains the Dashboard state/presentation owner; `main.ts` remains the dependency, route-ownership, rendering, announcement, and control-binding boundary.
+- Route leave aborts and settles silently. Timeout, ordinary failure, invalid DTO, abort rejection, late result, duplicate start, and supersession cannot commit partial or mixed state or settle busy ownership twice.
+- Initial timeout offers `Повторить` and states that workshop data was not changed. Refresh timeout retains the prior coherent snapshot and warns that it may be stale. Recovery is manual only.
+
+### Transport and startup findings
+
+- Only `getOrders`, `getClients`, `getAlerts`, `getPurchaseSuggestions`, and `getProductionBatches` accept an optional signal. Non-Dashboard callers pass none.
+- `apiGet` is structurally GET-only; `apiSend` and mutation functions accept no signal from this boundary. No mutation is retried.
+- The launcher completes startup initialization and waits one second for the backend process to remain alive before opening the browser, but does not poll health readiness. The selected eight-second localhost deadline bounds this remaining startup gap and indefinite hangs without adding health polling.
+
+### Verification and acceptance state
+
+- Dashboard/Onboarding focused suite: 33/33 passed twice.
+- Direct regressions: Help 3/3; form validation 19/19; targeted validation 62/62; Alerts 56/56; Purchases 116/116; Orders/Production 21/21; Formula/Clients 60/60.
+- Frontend production build passed.
+- Backend base/head comparison: both runs collected 496, passed 492, failed the same 4 accepted baseline tests, and skipped 0; branch-only failure delta is `0`.
+- Publication SHA, PR URL, and browser smoke status are added to the PR/final report after publication.
+- Current status: `IMPLEMENTED — EXACT-HEAD BROWSER SMOKE REQUIRED`. Do not mark B4.1, B4, or Block B DONE, and do not activate B4.2.
