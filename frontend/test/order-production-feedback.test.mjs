@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  canOpenOrderProductionConfirmation,
   createOrderMutationController,
   orderDtoIsValid,
   ordersDtoIsValid,
@@ -10,6 +11,7 @@ import {
   productionReadinessDtoIsValid,
   productionReconciliationIsCoherent,
 } from '../dist-tests/order-production-feedback/order-mutation-lifecycle.js';
+import { renderOrderProductionGate } from '../dist-tests/order-production-feedback/order-readiness-presentation.js';
 
 function workspace(overrides = {}) {
   return { formMode: 'create', editedOrderId: null, selectedOrderId: null, showForm: false, ...overrides };
@@ -82,6 +84,23 @@ function batch(orderId = 7, overrides = {}) {
       created_at: '2026-07-24T10:00:00Z',
     }],
     packaging: [],
+    ...overrides,
+  };
+}
+
+function readiness(orderId = 7, overrides = {}) {
+  return {
+    order_id: orderId,
+    can_produce: true,
+    status: 'ready',
+    blocking_issues: [],
+    warnings: [],
+    ingredients: [],
+    packaging: [],
+    estimated_cost: null,
+    estimated_tax: null,
+    estimated_margin: null,
+    generated_at: '2026-07-24T10:00:00Z',
     ...overrides,
   };
 }
@@ -229,6 +248,61 @@ test('production uncertainty creates one exact obligation and automatic reconcil
   assert.equal(controller.consumeAutomaticProductionReconciliation(), null);
 });
 
+test('a different Order cannot replace the existing production reconciliation obligation', () => {
+  const controller = createOrderMutationController();
+  const productionA = controller.beginRequest('production', context(controller, { selectedOrderId: 7 }), { requestedOrderId: 7 });
+  const obligationA = controller.requireProductionReconciliation(productionA, 7);
+  const productionB = controller.beginRequest('production', context(controller, { selectedOrderId: 8 }), { requestedOrderId: 8 });
+  const conflictingRegistration = controller.requireProductionReconciliation(productionB, 8);
+  const stored = controller.productionReconciliationObligation();
+
+  assert.equal(controller.hasProductionReconciliation(), true);
+  assert.equal(conflictingRegistration.orderId, 7);
+  assert.deepEqual(stored, obligationA);
+  assert.equal(stored?.epoch, obligationA.epoch);
+  assert.equal(stored?.productionGeneration, obligationA.productionGeneration);
+  assert.notEqual(stored?.productionGeneration, productionB.generation);
+});
+
+test('an unresolved obligation globally blocks another Order production until exact reconciliation unlocks it', () => {
+  const controller = createOrderMutationController();
+  const productionA = controller.beginRequest('production', context(controller, { selectedOrderId: 7 }), { requestedOrderId: 7 });
+  controller.requireProductionReconciliation(productionA, 7);
+  const orderB = order(8, { status: 'ready_to_produce', produced_at: null });
+  const readinessB = readiness(8);
+  let productionPostCountB = 0;
+
+  const canOpenWhileAIsUnresolved = !controller.hasProductionReconciliation()
+    && canOpenOrderProductionConfirmation(false, orderB, readinessB);
+  if (canOpenWhileAIsUnresolved) productionPostCountB += 1;
+  assert.equal(canOpenWhileAIsUnresolved, false);
+  assert.equal(productionPostCountB, 0);
+
+  const blockedMarkup = renderOrderProductionGate({
+    orderId: 8,
+    readiness: readinessB,
+    hasCachedReadiness: true,
+    confirming: false,
+    loading: false,
+    blockedByOperation: false,
+    persistentWriteActive: false,
+    notes: '',
+    error: 'Сначала нужно проверить результат предыдущего изготовления.',
+    recoveryAction: 'Откройте исходный заказ и проверьте результат.',
+    uncertain: false,
+    globalReconciliationLock: true,
+    reconciliationLoading: false,
+  }, String);
+  assert.match(blockedMarkup, /предыдущего изготовления/);
+  assert.match(blockedMarkup, /data-action="open-production-confirmation"[^>]*disabled/);
+  assert.doesNotMatch(blockedMarkup, /data-action="reconcile-production-outcome"/);
+
+  const reconciliationA = controller.beginRequest('productionReconciliation', context(controller, { selectedOrderId: 7 }), { requestedOrderId: 7 });
+  assert.equal(controller.completeProductionReconciliation(reconciliationA, order(7), batch(7)), true);
+  assert.equal(controller.hasProductionReconciliation(), false);
+  assert.equal(canOpenOrderProductionConfirmation(false, orderB, readinessB), true);
+});
+
 test('reconciliation targets only the original Order and partial, wrong or invalid facts cannot unlock', () => {
   const controller = createOrderMutationController();
   const production = controller.beginRequest('production', context(controller, { selectedOrderId: 7 }), { requestedOrderId: 7 });
@@ -237,7 +311,9 @@ test('reconciliation targets only the original Order and partial, wrong or inval
   const reconciliation = controller.beginRequest('productionReconciliation', context(controller, { selectedOrderId: 7 }), { requestedOrderId: 7 });
   assert.equal(controller.completeProductionReconciliation(reconciliation, order(7), null), false);
   assert.equal(controller.completeProductionReconciliation(reconciliation, null, batch(7)), false);
+  assert.equal(controller.completeProductionReconciliation(reconciliation, order(8), batch(7)), false);
   assert.equal(controller.completeProductionReconciliation(reconciliation, order(7), batch(8)), false);
+  assert.equal(controller.completeProductionReconciliation(reconciliation, { id: 7 }, batch(7)), false);
   assert.equal(controller.completeProductionReconciliation(reconciliation, order(7, { status: 'new' }), batch(7)), false);
   assert.equal(controller.productionReconciliationRequired(7), true);
 });
@@ -291,6 +367,10 @@ test('production source validates exact DTOs and keeps reference snapshots atomi
 test('production source sends one production POST path and reconciliation uses exact GET composition only', () => {
   const source = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
   const confirmationBody = source.slice(source.indexOf('function confirmProduction'), source.indexOf('function apiErrorCode'));
+  const openBody = source.slice(source.indexOf('function openProductionConfirmation'), source.indexOf('function cancelProductionConfirmation'));
+  assert.match(openBody, /hasProductionReconciliation\(\)/);
+  assert.match(confirmationBody, /hasProductionReconciliation\(\)/);
+  assert.ok(confirmationBody.indexOf('hasProductionReconciliation()') < confirmationBody.indexOf('produceOrder(id,'));
   assert.equal((confirmationBody.match(/produceOrder\(id,/g) || []).length, 1);
   const reconciliationBody = source.slice(source.indexOf('function reconcileProductionOutcome'), source.indexOf('function editOrder'));
   assert.match(reconciliationBody, /Promise\.all\(\[getOrder\(id\), getProductionBatchByOrder\(id\)\]\)/);
@@ -298,6 +378,7 @@ test('production source sends one production POST path and reconciliation uses e
   assert.doesNotMatch(reconciliationBody, /getOrders\(/);
   assert.doesNotMatch(reconciliationBody, /getProductionBatches\(/);
   assert.doesNotMatch(reconciliationBody, /Promise\.allSettled/);
+  assert.match(source, /apiGet<ProductionBatchDetailResponse>\(`\/api\/orders\/\$\{orderId\}\/production-batch`\)/);
 });
 
 test('production source preserves mutation success when exact refresh fails and uses non-assertive warning', () => {
@@ -309,8 +390,12 @@ test('production source preserves mutation success when exact refresh fails and 
 
 test('production source blocks unsafe actions while exact reconciliation remains required', () => {
   const source = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+  const lifecycleSource = readFileSync(new URL('../src/order-mutation-lifecycle.ts', import.meta.url), 'utf8');
+  assert.match(source, /hasProductionReconciliation\(\)/);
   assert.match(source, /productionReconciliationRequired\(id\)/);
   assert.match(source, /canStartProductionReconciliation\(id\)/);
   assert.match(source, /consumeAutomaticProductionReconciliation\(\)/);
   assert.match(source, /reconcileProductionOutcome\(obligation\.orderId, true\)/);
+  assert.match(lifecycleSource, /if \(existing\) \{/);
+  assert.doesNotMatch(lifecycleSource, /existing && existing\.productionGeneration[\s\S]{0,300}this\.productionReconciliation = \{/);
 });

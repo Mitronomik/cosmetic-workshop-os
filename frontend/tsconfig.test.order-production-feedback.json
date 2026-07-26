@@ -8,6 +8,7 @@
   },
   "files": [
     "src/form-validation.ts",
-    "src/order-mutation-lifecycle.ts"
+    "src/order-mutation-lifecycle.ts",
+    "src/order-readiness-presentation.ts"
   ]
 }

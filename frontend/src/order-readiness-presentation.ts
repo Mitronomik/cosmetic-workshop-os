@@ -36,6 +36,7 @@ export type OrderProductionGateInput = {
   error: string;
   recoveryAction: string;
   uncertain: boolean;
+  globalReconciliationLock: boolean;
   reconciliationLoading: boolean;
 };
 
@@ -98,7 +99,7 @@ export function renderOrderProductionGate(
 ): string {
   const showReconciliationAction = input.uncertain || input.reconciliationLoading;
   const reconciliationAction = showReconciliationAction ? `<button class="primary-action" type="button" data-action="reconcile-production-outcome" data-id="${input.orderId}" ${input.reconciliationLoading ? 'disabled aria-busy="true"' : ''}>${input.reconciliationLoading ? 'Проверяем…' : 'Проверить результат изготовления'}</button>` : '';
-  const error = input.error ? `<div class="page-message ${input.uncertain ? 'warning-message' : 'error-message'}" data-order-production-failure="true" data-order-production-focus-anchor="failure" tabindex="-1" ${input.reconciliationLoading ? 'aria-busy="true"' : ''}><p>${escapeHtml(input.error)}</p>${input.recoveryAction ? `<p class="next-step">${escapeHtml(input.recoveryAction)}</p>` : ''}${reconciliationAction}</div>` : '';
+  const error = input.error ? `<div class="page-message ${input.uncertain || input.globalReconciliationLock ? 'warning-message' : 'error-message'}" data-order-production-failure="true" data-order-production-focus-anchor="failure" tabindex="-1" ${input.reconciliationLoading ? 'aria-busy="true"' : ''}><p>${escapeHtml(input.error)}</p>${input.recoveryAction ? `<p class="next-step">${escapeHtml(input.recoveryAction)}</p>` : ''}${reconciliationAction}</div>` : '';
   if (!input.readiness) {
     if (input.error) return `<section class="card data-card" data-order-production-state="failure"><p class="card-kicker">Изготовление</p><h2>Нужно проверить результат изготовления</h2>${error}</section>`;
     return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2><p class="next-step">${input.hasCachedReadiness ? 'Текущий результат проверки отсутствует. Повторите проверку перед изготовлением.' : 'Сначала проверьте готовность изготовления.'}</p></section>`;
@@ -106,11 +107,13 @@ export function renderOrderProductionGate(
   if (!input.readiness.can_produce || input.readiness.status === 'blocked') {
     return `<section class="card data-card"><p class="card-kicker">Изготовление</p><h2>Подтверждение изготовления</h2>${error}<p class="next-step">Производство недоступно, пока есть блокирующие замечания.</p></section>`;
   }
-  const operationBlocked = input.blockedByOperation || input.persistentWriteActive || input.reconciliationLoading;
+  const operationBlocked = input.blockedByOperation || input.persistentWriteActive || input.globalReconciliationLock || input.reconciliationLoading;
   const operationNote = input.loading
     ? '<p class="next-step">Изготовление выполняется… Дождитесь завершения, прежде чем запускать другое действие с заказом.</p>'
     : input.persistentWriteActive
       ? '<p class="next-step">Сейчас выполняется изготовление, отмена или архивирование заказа. Дождитесь завершения текущего действия.</p>'
+      : input.globalReconciliationLock
+        ? '<p class="next-step">Сначала проверьте результат предыдущего изготовления. До этого новое изготовление недоступно для всех заказов.</p>'
       : input.reconciliationLoading
         ? '<p class="next-step">Проверяем результат изготовления… Дождитесь завершения безопасной проверки перед новым действием.</p>'
         : input.blockedByOperation

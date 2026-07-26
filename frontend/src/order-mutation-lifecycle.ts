@@ -328,8 +328,12 @@ export class OrderMutationController {
     orderId: number,
   ): Readonly<OrderProductionReconciliationObligation> {
     const existing = this.productionReconciliation;
-    if (existing && existing.productionGeneration === snapshot.generation && existing.orderId === orderId) {
-      if (!this.routeActive || snapshot.routeGeneration !== this.routeGeneration) existing.detachedSettlement = true;
+    if (existing) {
+      if (
+        existing.productionGeneration === snapshot.generation
+        && existing.orderId === orderId
+        && (!this.routeActive || snapshot.routeGeneration !== this.routeGeneration)
+      ) existing.detachedSettlement = true;
       return { ...existing };
     }
     this.reconciliationEpoch += 1;
@@ -349,6 +353,10 @@ export class OrderMutationController {
     return Boolean(this.productionReconciliation && (orderId === undefined || this.productionReconciliation.orderId === orderId));
   }
 
+  hasProductionReconciliation(): boolean {
+    return this.productionReconciliation !== null;
+  }
+
   productionReconciliationObligation(): Readonly<OrderProductionReconciliationObligation> | null {
     return this.productionReconciliation ? { ...this.productionReconciliation } : null;
   }
@@ -363,8 +371,7 @@ export class OrderMutationController {
   canStartProductionReconciliation(orderId: number): boolean {
     return Boolean(
       this.routeActive
-      && this.productionReconciliation?.orderId === orderId
-      && !this.productionReconciliationRequiredForAnotherOrder(orderId),
+      && this.productionReconciliation?.orderId === orderId,
     );
   }
 
@@ -386,10 +393,6 @@ export class OrderMutationController {
     ) return false;
     this.productionReconciliation = null;
     return true;
-  }
-
-  private productionReconciliationRequiredForAnotherOrder(orderId: number): boolean {
-    return Boolean(this.productionReconciliation && this.productionReconciliation.orderId !== orderId);
   }
 
   private requestKey(snapshot: OrderRequestSnapshot): string {
