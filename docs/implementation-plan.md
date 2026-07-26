@@ -426,7 +426,7 @@ B3 implementation and its deferred full integration-smoke gate are complete. Blo
 
 ### B4.1 — Safe GET timeout and recovery foundation
 
-Статус: `ACTIVE NEXT RUNTIME SLICE — NOT YET IMPLEMENTED`
+Статус: `IMPLEMENTED — EXACT-HEAD BROWSER SMOKE REQUIRED`
 
 Goal: introduce a bounded timeout and recovery contract for explicitly selected safe frontend GET/read operations without changing backend business rules or introducing mutation retries.
 
@@ -447,7 +447,7 @@ Initial bounded pilot:
 
 Manual retry creates a clean new composed read generation. Duplicate starts remain rejected, busy state settles exactly once, and no timeout authorizes an automatic retry.
 
-The runtime PR must select, document, and test the timeout duration/policy. It must explicitly choose whether the deadline applies to the whole composed Dashboard read or to each request, while ensuring that timeouts cannot multiply into an excessive sequential wait. This plan does not choose a hidden duration.
+The B4.1 runtime uses one explicit `8_000 ms` deadline for the complete composed Dashboard read. All five required GET requests start concurrently with one opt-in `AbortSignal`; the deadline does not multiply by source count. The coordinator commits only one fully validated candidate snapshot and releases its timer/controller ownership exactly once. The launcher completes database initialization before starting the backend, then waits one second and checks that the process remains alive before opening the browser; it does not perform a health-readiness poll. The eight-second localhost deadline therefore also bounds that small remaining startup-readiness gap without creating polling or a global timeout.
 
 Required runtime evidence:
 

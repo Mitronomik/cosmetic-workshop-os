@@ -27,7 +27,7 @@ Local-first web app for a cosmetic workshop: recipes, recipe versions, individua
 
 B3 is complete. PR #138 merged the B3.6 Order-to-production shared-feedback lifecycle, PR #139 fixed the Backups narrow-width blocker found during the first integration-smoke attempt, and the final exact-head integration smoke for the implemented B3 scope passed on published head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72` with verdict `PASS — FULL AUTOMATED SMOKE PASSED`. Block B remains active through B4.
 
-The next focused runtime slice is `B4.1 — Safe GET timeout and recovery foundation`. It is a bounded Dashboard safe-read pilot and is not yet implemented. No future PR number is assigned.
+`B4.1 — Safe GET timeout and recovery foundation` is implemented on its focused runtime branch and requires exact-head browser smoke before review acceptance. The Dashboard pilot uses one 8-second deadline for five concurrent, opt-in safe GET requests, commits only a fully validated coherent snapshot, preserves the previous snapshot after refresh timeout, and recovers only through an explicit user action. B4 and Block B remain active; this runtime slice does not declare either complete.
 
 Runtime product implementation includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
 

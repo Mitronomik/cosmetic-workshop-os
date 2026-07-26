@@ -1324,3 +1324,14 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
   - `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`
 - B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
 - Next focused runtime slice: `B4.1 — Safe GET timeout and recovery foundation`.
+
+## 2026-07-26 — B4.1 Dashboard safe GET timeout implementation
+
+- Started from clean `origin/main` `f3fc8d0c8872908801f1b667731c5792c82448ea` on `codex/b4.1-dashboard-safe-get-timeout`; PR #138, PR #139, and PR #140 remain merged and untouched.
+- Added one production-used Dashboard read coordinator with a single `8_000 ms` whole-operation deadline, one `AbortController`, five concurrent source GETs, per-source validation, atomic candidate construction, and exactly-once terminal cleanup.
+- Extended the existing Dashboard lifecycle for timeout and silent cancellation presentation. Initial timeout shows explicit Russian recovery copy; refresh timeout preserves the prior coherent snapshot, including a valid empty snapshot.
+- Abort support is opt-in through the five shared Dashboard GET functions. Existing non-Dashboard callers omit the signal, mutations cannot pass through the GET-only helper, and no automatic retry, polling, backend change, API change, schema change, migration, dependency, lockfile, or CSS change was added.
+- Launcher inspection found that database initialization completes before backend process start, followed by a one-second process-alive check before the browser opens; there is no health-readiness poll. The eight-second localhost deadline safely bounds the remaining startup gap and indefinite read hangs without adding polling.
+- Frontend verification: Dashboard/Onboarding 33/33 passed twice; Help 3/3; form validation 19/19; targeted validation 62/62; Alerts 56/56; Purchases 116/116; Orders/Production 21/21; Formula/Clients 60/60; production build passed.
+- Backend base/head comparison: both runs collected 496, passed 492, failed the same 4 accepted baseline tests, and skipped 0; branch-only failure delta is `0`. Exact-head browser smoke is recorded after final implementation publication.
+- Status: `IMPLEMENTED — EXACT-HEAD BROWSER SMOKE REQUIRED`. B4.1, B4, and Block B are not marked DONE.

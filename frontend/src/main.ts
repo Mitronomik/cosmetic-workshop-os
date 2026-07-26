@@ -8,6 +8,8 @@ import { bindLocalArtifactsReportsControls } from './local-artifacts-reports-bin
 import { createLocalArtifactRouteRuntime } from './local-artifacts-reports-runtime.js';
 import { transitionLocalArtifactsReportsRouteOwnership } from './local-artifacts-reports-route.js';
 import { bindActionControls, DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, selectOnboardingFocusTarget, type FocusCandidate, type OnboardingAction } from './dashboard-onboarding-feedback.js';
+import { DashboardReadCoordinator, type DashboardReadOutcome } from './dashboard-read-runtime.js';
+import { alertListResponseDtoIsValid, clientsListDtoIsValid, productionBatchListResponseDtoIsValid, purchaseSuggestionListResponseDtoIsValid } from './dashboard-read-validators.js';
 import { ALERT_REGENERATION_REFRESH_WARNING_ANNOUNCEMENT, AlertsFeedbackLifecycle, alertsPresentation, bindAlertsActionControls, filterDisplayedAlerts, selectAlertFocusTarget, transitionAlertsRouteOwnership, type AlertFilters } from './alerts-feedback.js';
 import { PurchaseSuggestionsFeedbackLifecycle, purchaseSuggestionsPresentation, DEFAULT_PURCHASE_FILTERS, type PurchaseSuggestionFilters as LifecyclePurchaseSuggestionFilters } from './purchase-suggestions-feedback.js';
 import { createPurchaseSuggestionsRuntime } from './purchase-suggestions-runtime.js';
@@ -197,6 +199,13 @@ type ProductionHistoryState = { batches: ProductionBatchListItem[]; selectedBatc
 type DashboardStatus = 'idle' | 'loading' | 'ready' | 'error';
 type DashboardData = { orders: Order[]; clients: Client[]; alerts: AlertResponse[]; purchaseSuggestions: PurchaseSuggestionResponse[]; productionBatches: ProductionBatchListItem[] };
 type DashboardState = DashboardData & { status: DashboardStatus; error: string; message: string; warning: string; hasLoadedSnapshot: boolean };
+type DashboardSourceResponses = {
+  orders: { orders: Order[] };
+  clients: { clients: Client[] };
+  alerts: AlertListResponse;
+  purchaseSuggestions: PurchaseSuggestionListResponse;
+  productionBatches: { production_batches: ProductionBatchListItem[]; limit: number; offset: number };
+};
 type BackupFileResponse = { filename: string; path: string; created_at: string | null; reason: string | null; size_bytes: number };
 type BackupStatusResponse = { database_path: string; database_exists: boolean; database_size_bytes: number | null; backup_dir: string; backup_dir_exists: boolean; backup_count: number; latest_backup: BackupFileResponse | null };
 type BackupListResponse = { backups: BackupFileResponse[]; backup_dir: string };
@@ -615,6 +624,22 @@ let productionHistoryState: ProductionHistoryState = { batches: [], selectedBatc
 let dashboardState: DashboardState = { status: 'idle', error: '', message: '', warning: '', hasLoadedSnapshot: false, orders: [], clients: [], alerts: [], purchaseSuggestions: [], productionBatches: [] };
 let routePresentationGeneration = 0;
 const dashboardOnboardingLifecycle = new DashboardOnboardingFeedbackLifecycle<DashboardData, OnboardingState>();
+const dashboardReadCoordinator = new DashboardReadCoordinator<DashboardSourceResponses, DashboardData>({
+  sources: {
+    orders: { read: (signal) => getOrders(true, signal), validate: (response): response is DashboardSourceResponses['orders'] => ordersDtoIsValid(response) },
+    clients: { read: (signal) => getClients(true, signal), validate: (response): response is DashboardSourceResponses['clients'] => clientsListDtoIsValid(response) },
+    alerts: { read: (signal) => getAlerts({ status: 'open', type: '', search: '' }, signal), validate: (response): response is DashboardSourceResponses['alerts'] => alertListResponseDtoIsValid(response) },
+    purchaseSuggestions: { read: (signal) => getPurchaseSuggestions({ status: 'open', reason: '', itemType: '', search: '' }, signal), validate: (response): response is DashboardSourceResponses['purchaseSuggestions'] => purchaseSuggestionListResponseDtoIsValid(response) },
+    productionBatches: { read: (signal) => getProductionBatches(signal), validate: (response): response is DashboardSourceResponses['productionBatches'] => productionBatchListResponseDtoIsValid(response) },
+  },
+  buildCandidate: ({ orders, clients, alerts, purchaseSuggestions, productionBatches }) => ({
+    orders: orders.orders,
+    clients: clients.clients,
+    alerts: alerts.alerts,
+    purchaseSuggestions: purchaseSuggestions.purchase_suggestions,
+    productionBatches: productionBatches.production_batches,
+  }),
+});
 let backupUiState: BackupUiState = { status: 'idle', actionStatus: 'idle', error: '', warning: '', message: '', backupStatus: null, backups: [], reason: 'manual', customReason: '', lastCreatedBackup: null };
 let exportUiState: ExportUiState = { status: 'idle', actionStatus: 'idle', error: '', warning: '', message: '', exportStatus: null, exports: [], reason: 'manual', customReason: '', lastCreatedExport: null, lastEntityCounts: {} };
 let demoDataUiState: DemoDataUiState = { status: 'idle', actionStatus: 'idle', error: '', message: '', demoStatus: null, installConfirmChecked: false, understandDemoChecked: false, clearConfirmChecked: false, showInstallConfirm: false, showClearConfirm: false, lastInstallResult: null, lastClearResult: null };
@@ -1361,6 +1386,22 @@ function applyDashboardLifecycleState() {
 }
 
 function dashboardOwnsPresentation(ownerGeneration: number) { return activeSection === 'Главная' && ownerGeneration === routePresentationGeneration; }
+function settleDashboardRead(outcome: DashboardReadOutcome<DashboardData>, ownerGeneration: number) {
+  const ownsPresentation = dashboardOwnsPresentation(ownerGeneration);
+  const result = outcome.kind === 'route-detached' || outcome.kind === 'superseded' || !ownsPresentation
+    ? dashboardOnboardingLifecycle.finishDashboardCancellation(outcome.generation)
+    : outcome.kind === 'success'
+      ? dashboardOnboardingLifecycle.finishDashboardSuccess(outcome.generation, outcome.data, true)
+      : outcome.kind === 'timeout'
+        ? dashboardOnboardingLifecycle.finishDashboardTimeout(outcome.generation, true)
+        : dashboardOnboardingLifecycle.finishDashboardFailure(outcome.generation, true);
+  if (!result.accepted) return;
+  applyDashboardLifecycleState();
+  if (!ownsPresentation || outcome.kind === 'route-detached' || outcome.kind === 'superseded') return;
+  if (result.announcement === 'polite' && result.message) announcePolite(result.message);
+  if (result.announcement === 'assertive' && result.message) announceAssertive(result.message);
+  render();
+}
 function loadDashboard(force = false) {
   const kind = force ? 'refresh' : 'initial';
   const ownerGeneration = routePresentationGeneration;
@@ -1370,31 +1411,8 @@ function loadDashboard(force = false) {
   if (started.announceClear) clearFeedbackAnnouncement();
   applyDashboardLifecycleState();
   render();
-  Promise.all([
-    getOrders(true),
-    getClients(true),
-    getAlerts({ status: 'open', type: '', search: '' }),
-    getPurchaseSuggestions({ status: 'open', reason: '', itemType: '', search: '' }),
-    getProductionBatches(),
-  ]).then(([orders, clients, alerts, purchaseSuggestions, productionBatches]) => {
-    const result = dashboardOnboardingLifecycle.finishDashboardSuccess(started.requestId, {
-      orders: orders.orders,
-      clients: clients.clients,
-      alerts: alerts.alerts,
-      purchaseSuggestions: purchaseSuggestions.purchase_suggestions,
-      productionBatches: productionBatches.production_batches,
-    }, dashboardOwnsPresentation(ownerGeneration));
-    if (!result.accepted) return;
-    applyDashboardLifecycleState();
-    if (result.announcement === 'polite' && result.message) announcePolite(result.message);
-    render();
-  }).catch(() => {
-    const result = dashboardOnboardingLifecycle.finishDashboardFailure(started.requestId, dashboardOwnsPresentation(ownerGeneration));
-    if (!result.accepted) return;
-    applyDashboardLifecycleState();
-    if (result.message) announceAssertive(result.message);
-    render();
-  });
+  const coordinated = dashboardReadCoordinator.start(started.requestId, (outcome) => settleDashboardRead(outcome, ownerGeneration));
+  if (!coordinated.accepted) settleDashboardRead({ generation: started.requestId, kind: 'failure' }, ownerGeneration);
 }
 
 function dashboardPage() {
@@ -1413,7 +1431,7 @@ function dashboardLoadingCard() { return '<section class="card"><p>Загруж�
 function dashboardMessage() { return `<p class="page-message">${escapeHtml(dashboardState.message)}</p>`; }
 function dashboardRefreshingMessage() { return '<p class="page-message">Обновляем обзор…</p>'; }
 function dashboardSoftWarningMessage() { return feedbackMessage('warning', dashboardState.warning || 'Не удалось обновить обзор. Показываем ранее загруженные данные — они могут быть устаревшими.', '<p class="next-step"><button class="secondary-action compact" type="button" data-action="reload-dashboard">Повторить обновление</button></p>'); }
-function dashboardErrorCard() { return `<section class="card error-card"><h2>Не удалось загрузить обзор мастерской</h2><p>Проверьте, что локальное приложение запущено, и попробуйте снова.</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-dashboard">Повторить</button></div></section>`; }
+function dashboardErrorCard() { return `<section class="card error-card"><h2>Не удалось загрузить обзор мастерской</h2><p>${escapeHtml(dashboardState.error || 'Проверьте, что локальное приложение запущено, и попробуйте снова.')}</p><div class="actions"><button class="secondary-action" type="button" data-action="reload-dashboard">Повторить</button></div></section>`; }
 function dashboardActiveOrders() { return dashboardState.orders.filter((order) => order.is_active && !['cancelled', 'archived', 'delivered'].includes(order.status)); }
 function dashboardPriorityCards(activeOrders: Order[], waitingOrders: Order[], readyOrders: Order[], recentBatches: ProductionBatchListItem[]) { const cards = [['Активные заказы', activeOrders.length], ['Ждут материалов', waitingOrders.length], ['Готовы к производству', readyOrders.length], ['Открытые алерты', dashboardState.alerts.length], ['Купить', dashboardState.purchaseSuggestions.length], ['Последние партии', recentBatches.length]]; return `<section class="overview-grid">${cards.map(([label, value]) => `<div class="metric-card"><span>${escapeHtml(String(label))}</span><strong>${value}</strong></div>`).join('')}</section>`; }
 function dashboardNextActions(waitingOrders: Order[], readyOrders: Order[]) { const hasCriticalAlerts = dashboardState.alerts.some((alert) => alert.severity === 'critical' || alert.severity === 'blocking'); const actions: string[] = []; if (hasCriticalAlerts) actions.push('Сначала проверьте критичные алерты.'); if (waitingOrders.length) actions.push('Проверьте заказы, которые ждут компонентов или тары.'); if (dashboardState.purchaseSuggestions.length) actions.push('Откройте закупки и обработайте позиции, которые нужно купить.'); if (readyOrders.length) actions.push('Есть заказы, которые можно готовить к изготовлению.'); if (!actions.length) actions.push('Критичных задач сейчас нет. Можно продолжать плановую работу.'); return `<section class="card data-card"><p class="card-kicker">Что сделать сегодня</p><h2>Следующие шаги</h2><ul class="checklist dashboard-actions-list">${actions.map((action, index) => `<li><span>${index + 1}</span><strong>${escapeHtml(action)}</strong><small>Это подсказка по текущим данным. Действия выполняются только в соответствующих разделах.</small></li>`).join('')}</ul></section>`; }
@@ -1934,6 +1952,7 @@ function presentInventoryCatalogCompletion(route: 'inventory' | 'ingredients' | 
 }
 
 function updateRouteOwnership(previousSection: NavigationSection | null, nextSection: NavigationSection) {
+  if (previousSection === 'Главная' && nextSection !== 'Главная') dashboardReadCoordinator.cancelActive('route-detached');
   transitionAlertsRouteOwnership(alertsLifecycle, previousSection ?? 'Главная', nextSection);
   purchaseRouteCoordinator.transition(previousSection, nextSection);
   transitionLocalArtifactsReportsRouteOwnership({ backups: backupRuntime, exports: exportRuntime, reportDocuments: reportDocumentsRuntime, reports: reportsRuntime } as any, localArtifactRouteForSection(previousSection), localArtifactRouteForSection(nextSection));
@@ -4746,7 +4765,7 @@ function cancelIngredientEdit() {
   ingredientsState.formMode = 'create'; ingredientsState.form = emptyIngredientForm(); ingredientsState.assignmentDraft = emptyAssignmentDraft(); ingredientsState.showCreateForm = false; ingredientsMessage = ''; ingredientsError = ''; ingredientsRefreshWarning = ''; ingredientValidation = emptyFormValidationState(); render();
 }
 
-function apiGet<T>(url: string): Promise<T> { return fetch(url).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
+function apiGet<T>(url: string, signal?: AbortSignal): Promise<T> { return fetch(url, signal ? { signal } : undefined).then(async (response) => { if (!response.ok) { let payload: unknown = null; try { payload = await response.json(); } catch { payload = null; } throw apiErrorFromPayload(payload, response.status); } return response.json() as Promise<T>; }); }
 function apiErrorMessage(payload: unknown) { if (typeof payload === 'string') return payload; if (payload && typeof payload === 'object' && 'detail' in payload) { const detail = (payload as { detail?: unknown }).detail; if (typeof detail === 'string') return detail; if (detail && typeof detail === 'object' && 'message' in detail) return String((detail as { message?: unknown }).message ?? 'API request failed'); } return 'API request failed'; }
 function apiIssues(payload: unknown): ApiIssue[] { if (!payload || typeof payload !== 'object' || !('detail' in payload)) return []; const detail = (payload as { detail?: unknown }).detail; if (!detail || typeof detail !== 'object' || !('issues' in detail)) return []; const issues = (detail as { issues?: unknown }).issues; return Array.isArray(issues) ? issues as ApiIssue[] : []; }
 function apiErrorFromPayload(payload: unknown, status: number): ApiErrorWithDetails { const error = new Error(apiErrorMessage(payload)) as ApiErrorWithDetails; error.status = status; error.issues = apiIssues(payload); error.payload = payload; return error; }
@@ -4778,20 +4797,20 @@ function createExport(payload: ExportCreateRequest): Promise<ExportCreateRespons
 function getDemoDataStatus(): Promise<DemoDataStatusResponse> { return apiGet<DemoDataStatusResponse>('/api/demo-data/status'); }
 function installDemoData(payload: DemoDataInstallRequest): Promise<DemoDataInstallResponse> { return apiSend<DemoDataInstallResponse>('/api/demo-data/install', 'POST', payload); }
 function clearDemoData(payload: DemoDataClearRequest): Promise<DemoDataClearResponse> { return apiSend<DemoDataClearResponse>('/api/demo-data/clear', 'POST', payload); }
-function getPurchaseSuggestions(filters: LifecyclePurchaseSuggestionFilters): Promise<PurchaseSuggestionListResponse> { const params = new URLSearchParams({ status: filters.status, limit: '100', offset: '0' }); if (filters.reason) params.set('reason', filters.reason); if (filters.itemType) params.set('item_type', filters.itemType); return apiGet<PurchaseSuggestionListResponse>(`/api/purchase-suggestions?${params.toString()}`); }
+function getPurchaseSuggestions(filters: LifecyclePurchaseSuggestionFilters, signal?: AbortSignal): Promise<PurchaseSuggestionListResponse> { const params = new URLSearchParams({ status: filters.status, limit: '100', offset: '0' }); if (filters.reason) params.set('reason', filters.reason); if (filters.itemType) params.set('item_type', filters.itemType); return apiGet<PurchaseSuggestionListResponse>(`/api/purchase-suggestions?${params.toString()}`, signal); }
 function regeneratePurchaseSuggestions(): Promise<PurchaseSuggestionGenerationResponse> { return apiSend<PurchaseSuggestionGenerationResponse>('/api/purchase-suggestions/regenerate', 'POST'); }
 function createManualPurchaseSuggestion(payload: ManualPurchaseSuggestionRequest): Promise<PurchaseSuggestionResponse> { return apiSend<PurchaseSuggestionResponse>('/api/purchase-suggestions', 'POST', payload); }
 function updatePurchaseSuggestion(id: number, payload: PurchaseSuggestionUpdateRequest): Promise<PurchaseSuggestionResponse> { return apiSend<PurchaseSuggestionResponse>(`/api/purchase-suggestions/${id}`, 'PATCH', payload); }
 function markPurchaseSuggestionPurchased(id: number): Promise<PurchaseSuggestionResponse> { return apiSend<PurchaseSuggestionResponse>(`/api/purchase-suggestions/${id}/mark-purchased`, 'POST'); }
 function dismissPurchaseSuggestion(id: number): Promise<PurchaseSuggestionResponse> { return apiSend<PurchaseSuggestionResponse>(`/api/purchase-suggestions/${id}/dismiss`, 'POST'); }
-function getAlerts(filters: AlertsState['filters']): Promise<AlertListResponse> { const params = new URLSearchParams({ status: filters.status, limit: '100', offset: '0' }); if (filters.type) params.set('type', filters.type); return apiGet<AlertListResponse>(`/api/alerts?${params.toString()}`); }
+function getAlerts(filters: AlertsState['filters'], signal?: AbortSignal): Promise<AlertListResponse> { const params = new URLSearchParams({ status: filters.status, limit: '100', offset: '0' }); if (filters.type) params.set('type', filters.type); return apiGet<AlertListResponse>(`/api/alerts?${params.toString()}`, signal); }
 function regenerateAlerts(): Promise<AlertGenerationResponse> { return apiSend<AlertGenerationResponse>('/api/alerts/regenerate', 'POST'); }
 function resolveAlert(id: number): Promise<AlertResponse> { return apiSend<AlertResponse>(`/api/alerts/${id}/resolve`, 'POST'); }
 function dismissAlert(id: number): Promise<AlertResponse> { return apiSend<AlertResponse>(`/api/alerts/${id}/dismiss`, 'POST'); }
-function getProductionBatches() { return apiGet<{ production_batches: ProductionBatchListItem[]; limit: number; offset: number }>('/api/production-batches'); }
+function getProductionBatches(signal?: AbortSignal) { return apiGet<{ production_batches: ProductionBatchListItem[]; limit: number; offset: number }>('/api/production-batches', signal); }
 function getProductionBatch(batchId: number) { return apiGet<ProductionBatchDetailResponse>(`/api/production-batches/${batchId}`); }
 function getProductionBatchByOrder(orderId: number) { return apiGet<ProductionBatchDetailResponse>(`/api/orders/${orderId}/production-batch`); }
-function getOrders(includeInactive = true) { return apiGet<{ orders: Order[] }>(`/api/orders?include_inactive=${includeInactive ? 'true' : 'false'}`); }
+function getOrders(includeInactive = true, signal?: AbortSignal) { return apiGet<{ orders: Order[] }>(`/api/orders?include_inactive=${includeInactive ? 'true' : 'false'}`, signal); }
 function getOrder(id: number) { return apiGet<Order>(`/api/orders/${id}`); }
 function createOrder(payload: OrderPayload) { return apiSend<Order>('/api/orders', 'POST', payload); }
 function updateOrder(id: number, payload: OrderPayload) { return apiSend<Order>(`/api/orders/${id}`, 'PUT', payload); }
@@ -4799,7 +4818,7 @@ function cancelOrderRequest(id: number) { return apiSend<Order>(`/api/orders/${i
 function archiveOrderRequest(id: number) { return apiSend<Order>(`/api/orders/${id}/archive`, 'POST'); }
 function checkOrderProductionReadiness(orderId: number): Promise<ProductionReadinessResponse> { return apiSend<ProductionReadinessResponse>(`/api/orders/${orderId}/check-production-readiness`, 'POST'); }
 function produceOrder(orderId: number, notes?: string): Promise<ProductionBatchDetailResponse> { return apiSend<ProductionBatchDetailResponse>(`/api/orders/${orderId}/produce`, 'POST', { confirm: true, notes: notes?.trim() || null }); }
-function getClients(includeInactive = false) { return apiGet<{ clients: Client[] }>(`/api/clients${includeInactive ? '?include_inactive=true' : ''}`); }
+function getClients(includeInactive = false, signal?: AbortSignal) { return apiGet<{ clients: Client[] }>(`/api/clients${includeInactive ? '?include_inactive=true' : ''}`, signal); }
 function getClientRecipes(includeInactive = false) { return apiGet<{ client_recipes: ClientRecipe[] }>(`/api/client-recipes?include_inactive=${includeInactive ? 'true' : 'false'}`); }
 function getClientRecipe(id: number) { return apiGet<ClientRecipeDetail>(`/api/client-recipes/${id}`); }
 function fetchClientWishes(clientId: number, includeInactive = false) { return apiGet<{ wishes: ClientWish[] }>(`/api/clients/${clientId}/wishes?include_inactive=${includeInactive ? 'true' : 'false'}`).then((response) => response.wishes); }
