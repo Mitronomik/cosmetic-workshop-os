@@ -724,14 +724,97 @@ Focused Purchases tests now pass with 116 checks. Browser smoke remains: DEFERRE
 
 ## 2026-07-24 — B3.6 implementation handoff
 
-- Branch: `codex/b3.6-order-production-feedback`; exact base: `10e985229e8020fcf98c67427cde889b5cd934f8`. The implementation head is the commit containing this handoff; its exact local and published SHA must be taken from the pushed branch/PR after commit creation.
-- Runtime changes are bounded to `frontend/src/main.ts`, `frontend/src/order-mutation-lifecycle.ts`, and `frontend/src/order-readiness-presentation.ts`.
-- Covered operations: Order list/manual refresh; atomic references; detail; create/update; cancel/archive; readiness; Production Confirmation; production; exact Order production-history opening; exact production reconciliation.
-- Reconciliation contract: one production POST only; uncertain/untrusted completion records the original Order and production generation; automatic exact GET reconciliation is consumed at most once and never loops; manual exact retry remains available; only a fully validated produced/delivered Order plus a fully validated ProductionBatch whose `order_id` matches can unlock.
-- Feedback contract: neutral, success, warning and error are mutually controlled; mutation success is retained across refresh failure; passive reads do not announce success; stale/detached/wrong-context callbacks do not announce or move focus.
-- Verification: new focused suite 19/19 twice; existing Order lifecycle 32/32 twice; readiness presentation 15/15 twice; required frontend regressions 19, 62, 17, 3, 56, 116, 32, 60 and 62 all passed; core wrapper 122/122; build passed.
-- Backend verification: affected suites 95/95. Complete suite: 496 collected, 492 passed, 4 failed, 0 skipped; branch-only failure delta 0.
-- Known baseline failures remain `test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`, `test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`, `test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`, and `test_purchase_suggestions.py::test_manual_api_smoke`.
-- Limitations: backend semantics are unchanged; no browser, responsive, keyboard or screen-reader verification is claimed; B3.6 is not DONE and full Block B is not accepted.
+### Repository state
+
+- PR: #138
+- Branch: `codex/b3.6-order-production-feedback`
+- Base `main` SHA: `10e985229e8020fcf98c67427cde889b5cd934f8`
+- Reviewed runtime head before this documentation commit: `a02d5a89f56421ab55f3d75c2ef4699a6a4946a2`
+
+### Commit history
+
+- `32cec36 Add Order-to-production shared feedback lifecycle`
+- `a02d5a8 Prevent cross-order production reconciliation loss`
+
+### Runtime scope
+
+- Order list and refresh.
+- Atomic Order reference reads.
+- Exact Order detail reads.
+- Order create/update.
+- Cancel/archive.
+- Production readiness.
+- Production Confirmation.
+- Exactly one production POST per accepted confirmation.
+- Production-history handoff.
+- Exact original-Order GET-only reconciliation.
+- Shared neutral, success, warning, and error feedback.
+- Request-owned announcements.
+- Route/context-owned focus.
+- Exactly-once accepted request settlement.
+
+### Reconciliation safety
+
+- Uncertain or untrusted production outcomes create one exact originating-Order reconciliation obligation.
+- Another Order or later production generation cannot replace an existing obligation.
+- While any obligation remains unresolved, Production Confirmation and the production POST are globally blocked.
+- Unrelated Orders remain readable.
+- Unrelated readiness checks may remain available, but they cannot authorize production while the global lock exists.
+- Automatic reconciliation is GET-only, runs at most once, and never loops.
+- Reconciliation never retries production.
+- Manual reconciliation remains available only for the originating Order.
+- Only the exact coherent originating Order plus its exact ProductionBatch clears the production lock.
+- Exact reconciliation endpoints:
+  - `GET /api/orders/{original_order_id}`
+  - `GET /api/orders/{original_order_id}/production-batch`
+
+### Feedback and presentation safety
+
+- Neutral, success, warning, and error feedback are mutually controlled.
+- Known mutation success remains success when a follow-up refresh fails.
+- Passive reads do not announce action success.
+- Stale, detached, wrong-context, partial, invalid, or mismatched callbacks cannot present, announce, move focus, or clear reconciliation.
+- Backend production semantics remain unchanged.
+
+### Verification evidence
+
+- Order production feedback: 21/21 PASS, repeated twice.
+- Order mutation lifecycle: 32/32 PASS, repeated twice.
+- Order readiness presentation: 15/15 PASS, repeated twice.
+- Form validation: 19/19 PASS.
+- Targeted validation: 62/62 PASS.
+- Formula/Client Workspace: 60/60 PASS.
+- Inventory/Catalog Workspace: 62/62 PASS.
+- Core Workspace wrapper: 122/122 PASS.
+- Frontend build: PASS.
+
+Previously accepted evidence for unaffected suites was not rerun for the frontend-only correction:
+
+- Dashboard/Onboarding: 17/17 PASS.
+- Help passive regression: 3/3 PASS.
+- Alerts: 56/56 PASS.
+- Purchases: 116/116 PASS.
+- Local Artifacts/Reports: 32/32 PASS.
+
+Backend was not rerun for the frontend-only correction.
+
+- Preserved focused backend evidence: 95/95 PASS.
+- Preserved complete backend evidence: 496 collected, 492 passed, 4 known baseline failures, 0 skipped.
+- Branch-only backend failure delta: 0.
+
+The known baseline failures remain:
+
+- `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`
+- `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`
+- `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`
+- `app/tests/test_purchase_suggestions.py::test_manual_api_smoke`
+
+### Current acceptance state
+
+- Runtime exact-head review passed for `a02d5a8`.
+- The cross-Order production reconciliation blocker is closed.
+- This documentation commit aligns project memory with the published and reviewed runtime state.
+- B3.6 remains not DONE.
+- PR #138 must not be merged before the full Block B exact-head integration smoke is reviewed.
+- Run the smoke once against the final PR head after this documentation commit.
 - Smoke status: DEFERRED BY PRODUCT OWNER — FULL BLOCK B INTEGRATION SMOKE.
-- Next human action: review the exact published PR head, request any blocker correction in that same PR, then run the separately authorized full Block B exact-head integration smoke.
