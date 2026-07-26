@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { bindActionControls, DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, selectOnboardingFocusTarget } from '../dist-tests/dashboard-onboarding-feedback/dashboard-onboarding-feedback.js';
 import { DASHBOARD_READ_SOURCE_KEYS, DASHBOARD_READ_TIMEOUT_MS, DashboardReadCoordinator } from '../dist-tests/dashboard-onboarding-feedback/dashboard-read-runtime.js';
 import { alertListResponseDtoIsValid, clientsListDtoIsValid, productionBatchListResponseDtoIsValid, purchaseSuggestionListResponseDtoIsValid } from '../dist-tests/dashboard-onboarding-feedback/dashboard-read-validators.js';
+import { ordersDtoIsValid } from '../dist-tests/dashboard-onboarding-feedback/order-mutation-lifecycle.js';
 const data=(n)=>({orders:Array(n).fill({}),clients:[],alerts:[],purchaseSuggestions:[],productionBatches:[]});
 const emptyData=()=>data(0);
 const state=(step='welcome')=>({has_started:true,is_completed:false,current_step:step,completed_steps:[],available_steps:['welcome','stock']});
@@ -29,11 +30,12 @@ function dashboardHarness(){
   return {scheduler,deferredByKey,calls,coordinator,outcomes:[]};
 }
 const validClient=()=>({id:1,full_name:'Анна',phone:'',email:'',address:'',birthday:null,skin_notes:'',allergy_notes:'',preference_notes:'',contraindication_notes:'',notes:'',is_active:true,created_at:'2026-07-26T10:00:00',updated_at:'2026-07-26T10:00:00'});
+const validOrder=()=>({id:1,client_id:1,recipe_version_id:1,client_recipe_id:null,product_name:'Крем',target_batch_size_value:'50',target_batch_size_unit:'g',packaging_item_id:1,packaging_quantity:'1',status:'ready_to_produce',sale_price:'800',ordered_at:'2026-07-26',planned_production_at:'2026-07-27',produced_at:null,delivered_at:null,notes:'',is_active:true,created_at:'2026-07-26T10:00:00',updated_at:'2026-07-26T10:00:00'});
 const validAlert=()=>({id:1,alert_key:'low-stock-1',type:'low_ingredient_stock',severity:'warning',message:'Низкий остаток',related_entity_type:'ingredient',related_entity_id:1,recommended_action:'Пополнить запас',status:'open',created_at:'2026-07-26T10:00:00',updated_at:'2026-07-26T10:00:00',resolved_at:null,dismissed_at:null});
 const validPurchaseSuggestion=()=>({id:1,suggestion_key:'buy-1',item_type:'ingredient',item_id:1,item_name_snapshot:'Масло',recommended_quantity:'100',unit:'g',reason:'below_minimum_stock',source_entity_type:'alert',source_entity_id:1,message:'Купить масло',status:'open',notes:'',created_at:'2026-07-26T10:00:00',updated_at:'2026-07-26T10:00:00',resolved_at:null});
 const validProductionBatch=()=>({id:1,order_id:1,product_name:'Крем',client_id:1,client_name:'Анна',recipe_version_id:1,client_recipe_id:null,final_batch_value:'50',final_batch_unit:'g',total_cost:'200',sale_price:'800',tax:'48',margin:'552',margin_percent:'69',produced_at:'2026-07-26T10:00:00',ingredient_line_count:3,packaging_line_count:1,notes:''});
 function productionResponseFor(key){
-  if(key==='orders') return {orders:[]};
+  if(key==='orders') return {orders:[validOrder()]};
   if(key==='clients') return {clients:[validClient()]};
   if(key==='alerts') return {alerts:[validAlert()],limit:100,offset:0};
   if(key==='purchaseSuggestions') return {purchase_suggestions:[validPurchaseSuggestion()],limit:100,offset:0};
@@ -44,7 +46,7 @@ function productionValidationHarness(){
   const deferredByKey=Object.fromEntries(DASHBOARD_READ_SOURCE_KEYS.map((key)=>[key,[]]));
   const calls=[];
   const validators={
-    orders:(response)=>Boolean(response&&typeof response==='object'&&!Array.isArray(response)&&Array.isArray(response.orders)),
+    orders:ordersDtoIsValid,
     clients:clientsListDtoIsValid,
     alerts:alertListResponseDtoIsValid,
     purchaseSuggestions:purchaseSuggestionListResponseDtoIsValid,
@@ -60,7 +62,7 @@ function productionValidationHarness(){
     sources,
     buildCandidate(responses){ candidateBuildCount+=1; return {orders:responses.orders.orders,clients:responses.clients.clients,alerts:responses.alerts.alerts,purchaseSuggestions:responses.purchaseSuggestions.purchase_suggestions,productionBatches:responses.productionBatches.production_batches}; },
   });
-  return {scheduler,deferredByKey,calls,coordinator,outcomes:[],candidateBuildCount:()=>candidateBuildCount};
+  return {scheduler,deferredByKey,calls,coordinator,outcomes:[],mutationCalls:[],candidateBuildCount:()=>candidateBuildCount};
 }
 async function verifyProductionInvalidItemCase({source,response},previousSnapshot){
   const h=productionValidationHarness();
@@ -135,6 +137,59 @@ test('one timed-out source discards four completed results and rejects late call
 test('one ordinary failure discards four completed results and clears operation resources',async()=>{ const h=dashboardHarness(); const c=new DashboardOnboardingFeedbackLifecycle(); wireDashboardOperation(h,c); await flush(); for(const key of DASHBOARD_READ_SOURCE_KEYS.slice(0,4)) h.deferredByKey[key][0].resolve(responseFor(key,1)); h.deferredByKey.productionBatches[0].reject(new Error('network')); await flush(); assert.equal(h.outcomes.length,1); assert.equal(h.outcomes[0].kind,'failure'); assert.equal(c.state.dashboard.data,null); assert.equal(c.state.dashboard.active,false); assert.equal(h.scheduler.activeCount(),0); assert.equal(h.scheduler.cleared.length,1); assert.equal(h.calls.every((call)=>call.signal.aborted),true); });
 
 test('one invalid response discards the complete candidate and clears its timer',async()=>{ const h=dashboardHarness(); const c=new DashboardOnboardingFeedbackLifecycle(); wireDashboardOperation(h,c); await flush(); for(const key of DASHBOARD_READ_SOURCE_KEYS) h.deferredByKey[key][0].resolve(responseFor(key,1,key!=='alerts')); await flush(); assert.equal(h.outcomes.length,1); assert.equal(h.outcomes[0].kind,'invalid-response'); assert.equal(c.state.dashboard.hasLoadedSnapshot,false); assert.equal(c.state.dashboard.data,null); assert.equal(h.scheduler.activeCount(),0); assert.equal(h.scheduler.cleared.length,1); });
+
+test('production Dashboard validators accept a complete non-empty composed response',async()=>{
+  const h=productionValidationHarness();
+  const lifecycle=new DashboardOnboardingFeedbackLifecycle();
+  const responses=Object.fromEntries(DASHBOARD_READ_SOURCE_KEYS.map((key)=>[key,productionResponseFor(key)]));
+  assert.equal(ordersDtoIsValid(responses.orders),true);
+  assert.equal(clientsListDtoIsValid(responses.clients),true);
+  assert.equal(alertListResponseDtoIsValid(responses.alerts),true);
+  assert.equal(purchaseSuggestionListResponseDtoIsValid(responses.purchaseSuggestions),true);
+  assert.equal(productionBatchListResponseDtoIsValid(responses.productionBatches),true);
+  const started=wireDashboardOperation(h,lifecycle);
+  assert.equal(started.accepted,true);
+  await flush();
+  assert.equal(h.calls.length,5);
+  assert.deepEqual(h.calls.map((call)=>call.key),DASHBOARD_READ_SOURCE_KEYS);
+  assert.equal(new Set(h.calls.map((call)=>call.signal)).size,1);
+  assert.equal(h.coordinator.activeGeneration(),started.requestId);
+  assert.equal(lifecycle.state.dashboard.data,null);
+  assert.equal(lifecycle.state.dashboard.hasLoadedSnapshot,false);
+  for(const key of ['productionBatches','alerts','orders','purchaseSuggestions']){
+    h.deferredByKey[key][0].resolve(responses[key]);
+  }
+  await flush();
+  assert.equal(h.outcomes.length,0);
+  assert.equal(h.candidateBuildCount(),0);
+  assert.equal(lifecycle.state.dashboard.data,null);
+  h.deferredByKey.clients[0].resolve(responses.clients);
+  await flush();
+  assert.equal(h.candidateBuildCount(),1);
+  assert.equal(h.outcomes.length,1);
+  assert.equal(h.outcomes[0].kind,'success');
+  assert.equal(lifecycle.state.dashboard.hasLoadedSnapshot,true);
+  assert.deepEqual(lifecycle.state.dashboard.data,{
+    orders:responses.orders.orders,
+    clients:responses.clients.clients,
+    alerts:responses.alerts.alerts,
+    purchaseSuggestions:responses.purchaseSuggestions.purchase_suggestions,
+    productionBatches:responses.productionBatches.production_batches,
+  });
+  for(const key of DASHBOARD_READ_SOURCE_KEYS) assert.equal(lifecycle.state.dashboard.data[key].length,1);
+  assert.equal(lifecycle.state.dashboard.active,false);
+  assert.equal(h.scheduler.activeCount(),0);
+  assert.equal(h.scheduler.cleared.length,1);
+  assert.equal(h.coordinator.activeGeneration(),null);
+  assert.equal(h.calls.every((call)=>call.signal.aborted===false),true);
+  assert.deepEqual(h.mutationCalls,[]);
+  h.deferredByKey.orders[0].resolve(responses.orders);
+  h.scheduler.run(h.scheduler.cleared[0]);
+  await flush();
+  assert.equal(h.outcomes.length,1);
+  assert.equal(h.candidateBuildCount(),1);
+  assert.equal(lifecycle.state.dashboard.active,false);
+});
 
 const invalidDashboardItemCases=[
   {name:'clients rejects null item',source:'clients',response:{clients:[null]}},

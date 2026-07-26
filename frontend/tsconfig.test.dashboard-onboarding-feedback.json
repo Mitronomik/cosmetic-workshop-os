@@ -5,5 +5,5 @@
     "rootDir": "src",
     "noEmit": false
   },
-  "include": ["src/dashboard-onboarding-feedback.ts", "src/dashboard-read-runtime.ts", "src/dashboard-read-validators.ts"]
+  "include": ["src/dashboard-onboarding-feedback.ts", "src/dashboard-read-runtime.ts", "src/dashboard-read-validators.ts", "src/order-mutation-lifecycle.ts"]
 }
