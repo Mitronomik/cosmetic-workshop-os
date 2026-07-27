@@ -9,6 +9,10 @@ from typing import Any
 
 from app.db.config import get_database_config
 from app.db.paths import USER_DATA_DIR_ENV, resolve_user_data_paths
+from app.services.local_artifact_filenames import (
+    normalize_artifact_reason,
+    normalize_artifact_reason_segment,
+)
 
 
 class ExportError(RuntimeError):
@@ -77,16 +81,8 @@ class ExportResult:
 
 
 def normalize_export_reason(reason: str | None) -> str:
-    text = (reason or "manual").strip()
-    return text or "manual"
-
-
-def _safe_filename_part(value: str) -> str:
-    cleaned = "".join(
-        character if character.isalnum() or character in {"-", "_"} else "_"
-        for character in value.strip()
-    )
-    return cleaned.strip("_") or "manual"
+    """Return the human export reason preserved in the export manifest."""
+    return normalize_artifact_reason(reason)
 
 
 def _database_location_kind(database_path: Path) -> str:
@@ -115,7 +111,7 @@ def resolve_export_paths() -> ExportPaths:
 
 def _export_filename(created_at: datetime, reason: str, suffix: int | None = None) -> str:
     timestamp = created_at.strftime("%Y%m%dT%H%M%S%fZ")
-    reason_part = _safe_filename_part(reason)
+    reason_part = normalize_artifact_reason_segment(reason)
     suffix_part = f"-{suffix}" if suffix is not None else ""
     return f"{timestamp}-cosmetic_workshop-export-{reason_part}{suffix_part}.json"
 

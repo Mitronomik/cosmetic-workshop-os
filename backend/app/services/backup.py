@@ -7,6 +7,10 @@ import os
 
 from app.db.config import get_database_config
 from app.db.paths import USER_DATA_DIR_ENV, resolve_user_data_paths
+from app.services.local_artifact_filenames import (
+    normalize_artifact_reason,
+    normalize_artifact_reason_segment,
+)
 
 
 class BackupError(RuntimeError):
@@ -44,7 +48,12 @@ class BackupFileMetadata:
     size_bytes: int
 
 
-def _safe_filename_part(value: str) -> str:
+def _safe_source_stem_part(value: str) -> str:
+    """Sanitize the source database stem.
+
+    This is deliberately separate from the canonical reason segment: a source
+    database stem may legitimately keep hyphens.
+    """
     cleaned = "".join(
         character if character.isalnum() or character in {"-", "_"} else "_"
         for character in value.strip()
@@ -56,8 +65,8 @@ def _backup_filename(
     source_path: Path, created_at: datetime, reason: str, suffix: int | None = None
 ) -> str:
     timestamp = created_at.strftime("%Y%m%dT%H%M%S%fZ")
-    reason_part = _safe_filename_part(reason)
-    stem_part = _safe_filename_part(source_path.stem)
+    reason_part = normalize_artifact_reason_segment(reason)
+    stem_part = _safe_source_stem_part(source_path.stem)
     suffix_part = f"-{suffix}" if suffix is not None else ""
     return f"{timestamp}-{stem_part}-{reason_part}{suffix_part}{source_path.suffix or '.sqlite'}"
 
@@ -110,8 +119,8 @@ def backup_sqlite_database(source_path: Path, backup_dir: Path, reason: str = "m
 
 
 def normalize_backup_reason(reason: str | None) -> str:
-    text = (reason or "manual").strip()
-    return text or "manual"
+    """Return the human backup reason kept for display and request handling."""
+    return normalize_artifact_reason(reason)
 
 
 def resolve_backup_paths() -> BackupPaths:

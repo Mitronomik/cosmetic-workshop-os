@@ -392,7 +392,7 @@ This subsection documents the semantics of the **existing** `reason` field on th
 - The **export JSON manifest** `reason` continues to hold the normalized **human** reason, not the canonical filename segment. For the request `before-import`, the API `reason` is `before_import` while the manifest `reason` is `before-import`. The export schema version is unchanged.
 - These semantics apply to **newly created** artifacts. Reason parsing for pre-existing legacy artifacts is **best-effort**: legacy files are listed with their filename, path, created-timestamp fallback, and size, but an ambiguous legacy reason may not round-trip exactly and no such guarantee is made.
 
-At the time this subsection was written the correcting implementation slice `R4` was authorized but **not implemented**, so the running services still produced the older one-underscore-per-replaced-character segment. This subsection records the decided contract, not a shipped runtime state.
+**Implementation status: `IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE`.** The correcting slice `R4` is implemented on branch `claude/r4-canonical-artifact-reason-normalization` and is **not merged**; on `main` the running services still produce the older one-underscore-per-replaced-character segment. `R4` changes **no response shape and no schema file** — `backend/app/api/backups.py`, `backend/app/api/exports.py`, `backend/app/schemas/backups.py`, and `backend/app/schemas/exports.py` are untouched — so this subsection documents the same fields before and after.
 
 ## Export API (PR75)
 

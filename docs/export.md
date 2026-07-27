@@ -69,7 +69,9 @@ IDs and relationship fields are preserved as stored in SQLite. Date/time values 
 
 ## Canonical filename reason contract (CR-005, decided 2026-07-27)
 
-`CR-005` is **accepted**. This section is the durable product contract for the export filename reason segment. It is a **decision record**: at the time it was written the runtime still produced the older one-underscore-per-character output, and the correcting implementation slice `R4` was authorized but not implemented. See `docs/implementation-plan.md` and `docs/backend-baseline-failure-triage.md`.
+`CR-005` is **accepted**. This section is the durable product contract for the export filename reason segment. The contract itself, including the rule that the export JSON manifest keeps the normalized **human** reason and that the export schema version is unchanged, is not altered by any implementation slice.
+
+**Implementation status: `IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE`.** The correcting slice `R4 — Canonical backup/export filename reason normalization` is implemented on branch `claude/r4-canonical-artifact-reason-normalization` and is **not merged**. On `main` the runtime still produces the older one-underscore-per-replaced-character output. New export filenames on the `R4` branch use the shared helper `normalize_artifact_reason_segment` in `backend/app/services/local_artifact_filenames.py`, while `manifest.reason` continues to hold the normalized human reason. See `docs/implementation-plan.md` and `docs/backend-baseline-failure-triage.md`.
 
 ### Human manifest reason versus canonical filename reason
 
