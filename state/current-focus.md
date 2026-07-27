@@ -31,8 +31,13 @@ Make the purchase-suggestions API smoke test reach and exercise the `/api/purcha
 
 ## Allowed scope
 
-- The seeding call at `backend/app/tests/test_purchase_suggestions.py:214` only.
-- Replace `lot_qty="0"` with a positive lot quantity and raise the minimum-stock threshold so the below-minimum condition the test needs still holds, following the proven in-repo idiom at `backend/app/tests/test_purchase_suggestions.py:79`.
+Change exactly one value, and nothing else:
+
+- In the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`, change `lot_qty="0"` to `lot_qty="1"`.
+- Leave `packaging_qty="2"` on that same line unchanged.
+- Leave the existing `minimum_stock='10'` setup at `backend/app/tests/test_purchase_suggestions.py:215-216` unchanged.
+- The existing threshold of `10` is already higher than the new lot quantity of `1`, so the below-minimum condition the test needs remains true without touching the threshold.
+- No other line in the test may change.
 
 ## Expected affected area
 
@@ -46,6 +51,7 @@ The runtime task must inspect the final baseline before naming its exact changed
 - Any production-code change. This slice is **test-only**.
 - Any change to `seed_ready`'s signature or body in `backend/app/tests/test_production_confirmation.py`, or to any other of its 45 call sites.
 - Any change to the zero-quantity domain rule at `backend/app/domain/stock_movements.py:84-93`.
+- Any change to the existing `minimum_stock='10'` setup, or to any line of the test other than the `lot_qty` value on line 214.
 - The backups and exports filename nodes, which have no slice and are blocked on a product decision.
 - The import draft node (deferred slice `R2`).
 - The separate SQLite backup transaction-consistency candidate.
@@ -58,6 +64,8 @@ The runtime task must inspect the final baseline before naming its exact changed
 - The zero-quantity rejection rule stays intact and unmodified; it is correct behavior and is not the subject of this slice.
 - Stock changes stay routed through `StockMovement`.
 - The test's three no-mutation assertions stay intact and must execute.
+- The existing `minimum_stock='10'` threshold stays unchanged; the below-minimum condition is preserved by the threshold already exceeding the new lot quantity of `1`, not by editing the threshold.
+- The diff for this slice is exactly one changed value on one line.
 - No production file is modified.
 
 ## Required tests

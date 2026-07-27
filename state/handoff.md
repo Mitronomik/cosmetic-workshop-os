@@ -960,8 +960,10 @@ No data loss or unsafe mutation was found. Detailed evidence and the mandatory p
 
 Exactly one: `R3 — Repair purchase-suggestions API smoke seeding`, **test-only**. Contract in `state/current-focus.md`.
 
-- Change only the invalid `lot_qty="0"` seed at `backend/app/tests/test_purchase_suggestions.py:214`.
-- Use a positive lot quantity and a higher minimum-stock threshold, following the proven idiom at `:79`.
+- Change exactly one value: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`.
+- Leave `packaging_qty="2"` on that same line unchanged.
+- Leave the existing `minimum_stock='10'` setup at `backend/app/tests/test_purchase_suggestions.py:215-216` unchanged. The existing threshold of `10` is already higher than the new lot quantity of `1`, so the below-minimum condition the test needs remains true without touching the threshold.
+- Do not change any other line in the test. The diff is exactly one changed value on one line.
 - Preserve and execute all existing API and no-mutation assertions.
 - No production-code change. No skip, `xfail`, deletion, rename, or weakened assertion.
 - Run the complete backend suite from `backend/`.

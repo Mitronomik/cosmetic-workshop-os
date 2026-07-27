@@ -526,7 +526,7 @@ No node showed data loss or unsafe mutation. Import integrity and the zero-quant
 
 ## Bounded correction sequence
 
-1. `R3` — **active**. Repair purchase-suggestions API smoke seeding (test-only).
+1. `R3` — **active**. Repair purchase-suggestions API smoke seeding (test-only). Exactly one changed value: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. The existing `minimum_stock='10'` setup at `:215-216` stays unchanged, because the existing threshold of `10` is already higher than the new lot quantity of `1` and the below-minimum condition therefore remains true. No other line in the test may change.
 2. `R2` — deferred, next. Import draft issue-count contract alignment (test-only).
 3. Backups and exports filename nodes — **no slice**. Blocked on the `needs product decision` change request covering collapsing, literal hyphens, filename-to-metadata reason round-trip, whether the displayed reason is filename-derived or stored independently, and the required focused smoke after implementation.
 
