@@ -988,3 +988,30 @@ Clearing the four baseline failures does not make the product release-ready. Sti
 9. continued documentation accuracy.
 
 C1, C2, C3, and C4 remain inactive. Packaging is blocked and release smoke is blocked. Product release readiness is not claimed.
+
+## 2026-07-27 — Handoff after R3 implementation
+
+- `R3 — Repair purchase-suggestions API smoke seeding` is **implemented but not DONE**. Status: `IMPLEMENTED — REVIEW AND MERGE REQUIRED`. It is not merged. It stays the active slice until it is reviewed and merged.
+- Branch: `claude/r3-repair-purchase-suggestions-api-smoke-seeding`, created from clean `origin/main` `6cb6f446c2a47a5272c51bfb63b3159d23cb5db2`, which contains the final reviewed PR #142 head `64850b3aa508d63ca1f1cefe240b2eaba50d9e72`. No rebase, no force-push, no history rewrite.
+- Exact runtime/test diff — one changed value on one line:
+
+```diff
+- c = config(tmp_path); _, ingredient, _, _, _ = seed_ready(c, lot_qty="0", packaging_qty="2")
++ c = config(tmp_path); _, ingredient, _, _, _ = seed_ready(c, lot_qty="1", packaging_qty="2")
+```
+
+  `packaging_qty="2"` on that same line and the `minimum_stock='10'` setup at `backend/app/tests/test_purchase_suggestions.py:215-216` are unchanged, and no other line of the test changed. No production file changed; the zero-quantity domain rule and `seed_ready(...)` are untouched.
+- Exact test evidence (EXECUTED IN THIS TASK, from `backend/`, Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, temporary venv outside the repository, removed and verified absent):
+  - pre-change complete suite `496 collected, 492 passed, 4 failed, 0 skipped` — the four accepted gate nodes;
+  - pre-change isolated target node failed during arrangement inside `seed_ready(...)`, before the API;
+  - post-change isolated target node `PASSED` twice;
+  - `app/tests/test_purchase_suggestions.py` `11 passed`;
+  - post-change complete suite `496 collected, 493 passed, 3 failed, 0 skipped`.
+  - The three no-mutation assertions executed and passed; the node now exercises the real `/api/purchase-suggestions` HTTP surface.
+- Remaining failures, exactly three:
+  - `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`
+  - `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`
+  - `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`
+- `R2 — Import draft issue-count contract alignment` remains deferred and next. **Do not start `R2` from the unmerged `R3` branch.** Start it only from `origin/main` after `R3` is reviewed and merged.
+- Nodes 1 and 2 — the backups and exports filename-reason nodes — remain blocked on `CR-005` (`needs product decision`) and still have no slice. `CR-004` remains a separate `needs evidence` row and is not activated.
+- Smoke for `R3` was the **backend suite only — PASS**. No browser, visual, keyboard, responsive, packaging, or release smoke was required, executed, or claimed. C1–C4 remain inactive, packaging and release smoke remain blocked, and product release readiness is not claimed.

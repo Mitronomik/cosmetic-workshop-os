@@ -211,7 +211,7 @@ def test_regeneration_and_mark_purchased_are_read_only_for_business_tables(tmp_p
 def test_manual_api_smoke(tmp_path, monkeypatch):
     if TestClient is None:
         pytest.skip("FastAPI TestClient is unavailable with the installed dependency set.")
-    c = config(tmp_path); _, ingredient, _, _, _ = seed_ready(c, lot_qty="0", packaging_qty="2")
+    c = config(tmp_path); _, ingredient, _, _, _ = seed_ready(c, lot_qty="1", packaging_qty="2")
     with sqlite3.connect(c.path) as con:
         con.execute("UPDATE ingredients SET minimum_stock='10' WHERE id=?", (ingredient.id,))
     monkeypatch.setenv(DATABASE_PATH_ENV, str(c.path))
