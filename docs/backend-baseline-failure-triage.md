@@ -23,7 +23,7 @@ app/tests/test_purchase_suggestions.py::test_manual_api_smoke
 ```
 
 This gate does not authorize any correction beyond the one active slice named in `state/current-focus.md`.
-No correction is implemented by the pull request that carries this document.
+The pull request that originally carried this document implemented no correction. Corrections are implemented by their own focused slice pull requests, and their lifecycle is tracked in §10 and §13.
 
 ---
 
@@ -218,7 +218,7 @@ A third sanitizer, `backend/app/services/report_documents.py:174 sanitize_reason
 
 ## 10. Slices
 
-### Slice R3 — Repair purchase-suggestions API smoke seeding — **ACTIVE**
+### Slice R3 — Repair purchase-suggestions API smoke seeding — **DONE**
 
 - **Title** — `R3 — Repair purchase-suggestions API smoke seeding`
 - **Scope** — Exactly one changed value. In the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`, change `lot_qty="0"` to `lot_qty="1"`. Leave `packaging_qty="2"` on that same line unchanged. Leave the existing `minimum_stock='10'` setup at `backend/app/tests/test_purchase_suggestions.py:215-216` unchanged. **The existing threshold of `10` is already higher than the new lot quantity of `1`, so the below-minimum condition the test needs remains true without touching the threshold.** No other line in the test may change.
@@ -240,19 +240,31 @@ A third sanitizer, `backend/app/services/report_documents.py:174 sanitize_reason
   - the remaining three failures are exactly the two undecided filename nodes (§5, §6) and the deferred `R2` node (§7); no new failure and no skip appeared.
   - Environment: Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, temporary venv outside the repository, removed and verified absent after the run.
   - The classification of nodes 1–3 is unchanged by this implementation, and `CR-005` remains undecided.
+- **Merge closure** — `R3` is **DONE** (VERIFIED FROM REPOSITORY / GITHUB). PR #143 `R3 — Repair purchase-suggestions API smoke seeding`, state `MERGED`, final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`, merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`, merged at `2026-07-27T04:01:23Z`. Accepted `R3` backend result: `496 collected, 493 passed, 3 failed, 0 skipped`. No production code changed in `R3`. Node 4 now passes on `origin/main` and is closed. The pre-merge `R3` record above is preserved unchanged as historical evidence and is superseded by this closure line.
 
-### Slice R2 — Import draft issue-count contract alignment — deferred, next
+### Slice R2 — Import draft issue-count contract alignment — **ACTIVE**
 
 - **Title** — `R2 — Align import draft baseline test with the documented date-normalization contract`
-- **Scope** — `backend/app/tests/test_imports_api.py` lines 107 and 110 only.
-- **Non-goals** — No production change; no change to `docs/import-format.md`; no change to nodes 1, 2, and 4.
-- **Architecture constraints** — Direct Apply stays prohibited; row issues are never discarded; validation is never weakened; no production data is mutated.
+- **Scope** — The assertion block of `backend/app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues` only.
+- **Non-goals** — No production change; no change to `docs/import-format.md`; no change to nodes 1, 2, and 4; no change to `_normalize_date_value`, readiness calculation, issue counting, required-column behavior, `missing_required_value`, import Apply, or the import preview/confirmation flow; no change to the test date `05.07.2026`; no skip, `xfail`, deletion, rename, or weakened assertion.
+- **Architecture constraints** — Direct Apply stays prohibited; row issues are never discarded; validation is never weakened; no production data is mutated; deterministic `DD.MM.YYYY` normalization stays supported; `date_format_normalized` stays a warning; `invalid_date` stays reserved for genuinely invalid dates; missing required columns keep blocking Apply.
 - **Backend requirements** — None. Test-only.
 - **Frontend requirements** — None.
 - **Data model / migrations** — None.
 - **Tests** — As §7 field 17.
 - **Smoke** — Backend suite only.
 - **Acceptance criteria** — The node passes with assertions strictly more specific than `>= 4`, and the documented `DD.MM.YYYY` → `date_format_normalized` behavior is asserted rather than removed.
+- **Implementation result** — `IMPLEMENTED — REVIEW AND MERGE REQUIRED` (EXECUTED IN THIS TASK, on the `R2` PR branch from starting `origin/main` `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`; **not merged**). The authorized assertion-block change was applied and nothing else in the runtime/test tree changed:
+  - the runtime/test diff is exactly the assertion block of the target test — `error_count >= 4` → `error_count == 3`, added `warning_count == 1`, added `apply_readiness.can_apply is False`, and the row-code subset assertion `{"invalid_decimal", "invalid_unit", "invalid_date"} <= row_codes` → the exact-set assertion `row_codes == {"invalid_decimal", "invalid_unit", "date_format_normalized"}`; the response status assertion, request payload, CSV data, date `05.07.2026`, target type, and the global `missing_required_column` assertion are unchanged, and no other line of the file changed;
+  - no production file changed; `_normalize_date_value`, `_readiness`, `_issue_counts`, the required-column and `missing_required_value` behavior, and import Apply are untouched, and `docs/import-format.md` was not modified;
+  - observed contract confirmed before editing: `201`, `error_count` `3`, `warning_count` `1`, readiness `blocked`, `can_apply` `false`, global codes `{missing_required_column}`, row-0 codes `{invalid_decimal, invalid_unit, date_format_normalized}` with `date_format_normalized` carrying severity `warning` and the message "В строке 2 дата «05.07.2026» будет прочитана как 2026-07-05";
+  - the target node now **passes twice** in isolation;
+  - the surrounding file `app/tests/test_imports_api.py` passes `7/7`;
+  - the sibling file `app/tests/test_import_parsing.py` passes `16/16` with zero skips, so `date_format_normalized` still works and genuinely invalid dates still emit `invalid_date`;
+  - the complete backend suite, run from `backend/`, is `496 collected / 494 passed / 2 failed / 0 skipped`;
+  - the remaining two failures are exactly nodes 1 and 2 (§5, §6); `app/tests/test_purchase_suggestions.py::test_manual_api_smoke` passes; no new failure and no skip appeared.
+  - Environment: Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, temporary venv outside the repository, removed and verified absent after the run.
+  - The classification of nodes 1 and 2 is unchanged by this implementation, and `CR-005` remains undecided. No correction slice for the filename nodes is created or authorized here.
 
 ### Nodes 1 and 2 — no slice
 
@@ -281,7 +293,7 @@ Any focused visual or route-rendering check for `/backups` and `/exports` belong
 
 Both candidates are fully evidenced from repository sources alone and need no product decision, which is why one of them can be activated while nodes 1 and 2 cannot.
 
-**Active slice: `R3`.** `R2` is the next deferred slice. Nodes 1 and 2 have no slice and are blocked on a product decision. Exactly one slice is active.
+**Selection at diagnosis time: `R3` first, then `R2`.** `R3` is now merged and DONE, so the **active slice is `R2`**, implemented and pending review and merge. Nodes 1 and 2 have no slice and are blocked on a product decision. Exactly one slice is active.
 
 ---
 
@@ -296,3 +308,25 @@ This task records only the need for a separate evidence-based diagnostic.
 Do not classify the behavior as unsafe and do not prescribe a correction design here.
 
 This finding is **not** one of the four current failures, is **not** diagnosed, scoped, or activated here, and is tracked as a `needs evidence` row in `state/change-requests.md`. It is distinct from the `needs product decision` filename-contract row in §10.
+
+---
+
+## 13. Slice lifecycle
+
+The original diagnostic evidence in §2–§9 and §11 is preserved unchanged. This section records only how the gate's slices have progressed since diagnosis.
+
+| Slice | Node | Status | Evidence |
+|---|---|---|---|
+| `R3` | Node 4 — purchase suggestions manual API smoke | **DONE** | PR #143 `MERGED`; final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`; merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`; merged `2026-07-27T04:01:23Z`; accepted result `496 / 493 / 3 / 0` (VERIFIED FROM REPOSITORY / GITHUB) |
+| `R2` | Node 3 — import draft issue count | **ACTIVE — `IMPLEMENTED — REVIEW AND MERGE REQUIRED`** | See §10; target passes twice, `app/tests/test_imports_api.py` `7/7`, `app/tests/test_import_parsing.py` `16/16`, complete suite `496 / 494 / 2 / 0` (EXECUTED IN THIS TASK) |
+| — | Node 1 — backups reason sanitization | **no slice** | `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`; blocked on `CR-005` |
+| — | Node 2 — exports reason sanitization | **no slice** | `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`; blocked on `CR-005` |
+
+After `R2`, the complete backend suite run from `backend/` is `496 collected, 494 passed, 2 failed, 0 skipped`, and the remaining failures are exactly nodes 1 and 2:
+
+```text
+app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters
+app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters
+```
+
+No production file changed in `R3` or in `R2`; both slices are test-only. The classifications of nodes 1 and 2 are **unchanged**: they remain `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`, they are **not** reclassified as product defects, no correction slice is invented for them, and `CR-005` remains unresolved. Their correction must not be started from the unmerged `R2` branch.

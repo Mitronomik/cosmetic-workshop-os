@@ -1375,3 +1375,40 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
 - Smoke: backend suite only — `PASS`. No browser, visual, keyboard, responsive, packaging, or release smoke was required, executed, or claimed.
 - `R2` remains deferred and was not implemented. The two filename nodes remain blocked on `CR-005`. `CR-004` remains separate and unactivated. C1–C4 remain inactive and product release readiness is not claimed.
 - PR publication state: the branch is pushed and a Ready-for-review pull request targeting `main` is opened immediately after this commit; GitHub assigns the number at creation time. `R3` is `IMPLEMENTED — REVIEW AND MERGE REQUIRED` and is not DONE until reviewed and merged.
+
+## 2026-07-27 — PR #143 merged (R3 DONE); R2 import draft baseline test contract aligned
+
+- **`R3` — DONE.** PR #143 `R3 — Repair purchase-suggestions API smoke seeding` is merged (VERIFIED FROM REPOSITORY / GITHUB): state `MERGED`, final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`, merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`, merged at `2026-07-27T04:01:23Z`. Accepted `R3` backend result: `496 collected, 493 passed, 3 failed, 0 skipped`. No production code changed in `R3`. The prior dated `R3` entry above described the pre-merge state and is superseded by this line, not edited.
+- Branch: `claude/r2-align-import-draft-baseline-test`. Starting `origin/main`: `f6468fae04f9dc7ae03a491560a32fac94f3a1ec` (the PR #143 merge commit, which contains the final reviewed PR #143 head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`). No rebase, no force-push, no history rewrite.
+- Exact test assertion changes, confined to the assertion block of `backend/app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`:
+
+```diff
+-    assert body["draft"]["error_count"] >= 4
++    assert body["draft"]["error_count"] == 3
++    assert body["draft"]["warning_count"] == 1
++    assert body["draft"]["apply_readiness"]["can_apply"] is False
+     assert {issue["code"] for issue in body["issues"]} >= {"missing_required_column"}
+     row_codes = {issue["code"] for issue in body["preview_rows"][0]["issues"]}
+-    assert {"invalid_decimal", "invalid_unit", "invalid_date"} <= row_codes
++    assert row_codes == {
++        "invalid_decimal",
++        "invalid_unit",
++        "date_format_normalized",
++    }
+```
+
+- The response status assertion, the request payload, the CSV data, the date `05.07.2026`, the target type, and the global `missing_required_column` assertion are unchanged. The corrected assertions are strictly more specific than the ones they replace: exact counts, an explicit blocked-apply assertion, and an exact row-code set instead of a subset.
+- No production change of any kind. `_normalize_date_value`, `_readiness`, `_issue_counts`, required-column handling, `missing_required_value`, import Apply, and the import preview/confirmation flow are untouched, and `docs/import-format.md` was not modified. This slice is test-only.
+- Test environment (EXECUTED IN THIS TASK): Python `3.12.13` in a temporary venv outside the repository, pytest `8.4.2`, run from `backend/` with rootdir `backend/` and configfile `pyproject.toml`. The environment was removed and verified absent afterwards.
+- Pre-change complete backend suite reproduced the accepted post-`R3` baseline exactly: `496 collected, 493 passed, 3 failed, 0 skipped`, failing exactly the two filename nodes and the import node.
+- Pre-change isolated target node: the endpoint returned `201` and the test failed at `assert 3 >= 4` at `backend/app/tests/test_imports_api.py:107`. Observed values were `error_count` `3`, `warning_count` `1`, readiness `blocked`, `apply_readiness.can_apply` `false`, global codes `{missing_required_column}`, and row-0 codes `{invalid_decimal, invalid_unit, date_format_normalized}` — the date issue carrying severity `warning` with the message "В строке 2 дата «05.07.2026» будет прочитана как 2026-07-05". No import Apply occurred and no production data was written.
+- Post-change target-node results: `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues` `PASSED` on both isolated runs.
+- Surrounding file result: `app/tests/test_imports_api.py` `7 passed`.
+- Import parsing sibling result: `app/tests/test_import_parsing.py` `16 passed`, `0 skipped` — proving that deterministic `DD.MM.YYYY` normalization still emits `date_format_normalized` and that genuinely invalid dates still emit `invalid_date`.
+- Complete backend result after the change: `496 collected, 494 passed, 2 failed, 0 skipped`. `app/tests/test_purchase_suggestions.py::test_manual_api_smoke` passes.
+- Remaining two failing node IDs, exactly and with no new failure and no skip:
+  - `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`
+  - `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`
+- Smoke: backend suite only — `PASS`. No browser, visual, keyboard, responsive, route-rendering, packaging, restore, migration, or release smoke was required, executed, or claimed.
+- The two filename nodes keep their `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED` classification, have no slice, and remain blocked on `CR-005`. They must not be started from the unmerged `R2` branch. `CR-004` remains separate and unactivated. `state/change-requests.md` was not modified. C1–C4 remain inactive and product release readiness is not claimed.
+- PR publication state: the branch is pushed and a Ready-for-review pull request targeting `main` is opened immediately after this commit; GitHub assigns the number at creation time. `R2` is `IMPLEMENTED — REVIEW AND MERGE REQUIRED` and is not DONE until reviewed and merged.

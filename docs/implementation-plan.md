@@ -496,31 +496,62 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 Статус: `IN PROGRESS`
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
-- Active correction slice: `R3 — Repair purchase-suggestions API smoke seeding`
-- `R3` implementation status: `IMPLEMENTED — REVIEW AND MERGE REQUIRED`
+- `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
+- Active correction slice: `R2 — Align import draft baseline test with the documented date-normalization contract`
+- `R2` implementation status: `IMPLEMENTED — REVIEW AND MERGE REQUIRED`
 
-## R3 implementation record
+## R3 closure record
 
-`R3` is implemented on its own PR branch and is **not merged and not DONE**.
+`R3` is **DONE** (VERIFIED FROM REPOSITORY / GITHUB).
 
-- Exact runtime/test change: one changed value on one line — `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. `packaging_qty="2"` on that same line is unchanged, the `minimum_stock='10'` setup at `:215-216` is unchanged, and no other line of the test changed.
-- No production file changed. The zero-quantity domain rule, `seed_ready(...)`, and every other `seed_ready(...)` call site are untouched.
-- Executed backend evidence, run from `backend/` with Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, in a temporary environment outside the repository:
-  - pre-change complete suite `496 collected, 492 passed, 4 failed, 0 skipped`, failing exactly the four accepted gate nodes;
-  - pre-change isolated target node failed during arrangement inside `seed_ready(...)`, before the API surface was reached;
+- PR #143 `R3 — Repair purchase-suggestions API smoke seeding`, state `MERGED`.
+- Final reviewed head: `c5fc27059a7aea0435c84535d2d15e6a0fc58428`.
+- Merge commit: `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`.
+- Merged at: `2026-07-27T04:01:23Z`.
+- Accepted `R3` backend result: `496 collected, 493 passed, 3 failed, 0 skipped`.
+- No production code changed in `R3`; the slice was test-only, one changed value on one line.
+
+`R3` is no longer active. Exactly one slice is active and it is `R2`.
+
+## R2 implementation record
+
+`R2` is implemented on its own PR branch, from starting `origin/main` `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`, and is **not merged and not DONE**.
+
+- Exact runtime/test change: one assertion block inside `backend/app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`:
+
+```diff
+-    assert body["draft"]["error_count"] >= 4
++    assert body["draft"]["error_count"] == 3
++    assert body["draft"]["warning_count"] == 1
++    assert body["draft"]["apply_readiness"]["can_apply"] is False
+     assert {issue["code"] for issue in body["issues"]} >= {"missing_required_column"}
+     row_codes = {issue["code"] for issue in body["preview_rows"][0]["issues"]}
+-    assert {"invalid_decimal", "invalid_unit", "invalid_date"} <= row_codes
++    assert row_codes == {
++        "invalid_decimal",
++        "invalid_unit",
++        "date_format_normalized",
++    }
+```
+
+- The response status assertion, the request payload, the CSV data, the date `05.07.2026`, the target type, and the global `missing_required_column` assertion are unchanged. The corrected assertions are strictly more specific than the ones they replace: an exact `error_count`, an exact `warning_count`, an explicit blocked-apply assertion, and an exact row-code set instead of a subset.
+- No production file changed. `_normalize_date_value`, readiness calculation, issue counting, required-column behavior, `missing_required_value`, import Apply, and the import preview/confirmation flow are untouched, and `docs/import-format.md` was not modified.
+- Executed backend evidence, run from `backend/` with Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, in a temporary environment outside the repository, removed and verified absent afterwards:
+  - pre-change complete suite `496 collected, 493 passed, 3 failed, 0 skipped`, failing exactly the three accepted post-`R3` gate nodes;
+  - pre-change isolated target node returned `201` and failed at `assert 3 >= 4` at `backend/app/tests/test_imports_api.py:107`, with observed `error_count` `3`, `warning_count` `1`, readiness `blocked`, `can_apply` `false`;
   - post-change isolated target node `PASSED` twice;
-  - post-change `app/tests/test_purchase_suggestions.py` `11 passed`;
-  - post-change complete suite `496 collected, 493 passed, 3 failed, 0 skipped`.
-- Expected remaining failures, exactly three and no others:
+  - post-change `app/tests/test_imports_api.py` `7 passed`;
+  - post-change `app/tests/test_import_parsing.py` `16 passed`, proving `date_format_normalized` still works and genuinely invalid dates still emit `invalid_date`;
+  - post-change complete suite `496 collected, 494 passed, 2 failed, 0 skipped`.
+- Expected remaining failures, exactly two and no others:
 
 ```text
 app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters
 app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters
-app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues
 ```
 
-- `R2` remains deferred and next; it is **not** implemented in this PR and must not start before `R3` is reviewed and merged.
-- The backups and exports filename nodes remain blocked on the `CR-005` product decision and still have no slice.
+- The backups and exports filename nodes remain blocked on the `CR-005` product decision and still have no slice. **The filename implementation is not authorized here**, and it must not be started from the unmerged `R2` branch.
+- `CR-004` remains a separate `needs evidence` row and is not activated.
 - C1, C2, C3, and C4 remain inactive.
 - Packaging smoke and release smoke remain blocked. Product release readiness is not claimed.
 
@@ -552,13 +583,13 @@ No node showed data loss or unsafe mutation. Import integrity and the zero-quant
 
 ## Bounded correction sequence
 
-1. `R3` — **active**, `IMPLEMENTED — REVIEW AND MERGE REQUIRED`. Repair purchase-suggestions API smoke seeding (test-only). Exactly one changed value: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. The existing `minimum_stock='10'` setup at `:215-216` stays unchanged, because the existing threshold of `10` is already higher than the new lot quantity of `1` and the below-minimum condition therefore remains true. No other line in the test may change.
-2. `R2` — deferred, next. Import draft issue-count contract alignment (test-only).
+1. `R3` — **DONE**. Repair purchase-suggestions API smoke seeding (test-only). PR #143 merged 2026-07-27 at merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec` from final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`.
+2. `R2` — **active**, `IMPLEMENTED — REVIEW AND MERGE REQUIRED`. Align the import draft baseline test with the documented date-normalization contract (test-only). Exactly one assertion block in `backend/app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`: exact `error_count == 3`, exact `warning_count == 1`, explicit `apply_readiness.can_apply is False`, preserved global `missing_required_column`, and the exact row-code set `{invalid_decimal, invalid_unit, date_format_normalized}`. The CSV input and the date `05.07.2026` may not change.
 3. Backups and exports filename nodes — **no slice**. Blocked on the `needs product decision` change request covering collapsing, literal hyphens, filename-to-metadata reason round-trip, whether the displayed reason is filename-derived or stored independently, and the required focused smoke after implementation.
 
-`R3` and `R2` tie on primary priority; `R3` precedes `R2` on greater direct user/data impact because it restores execution of a real no-mutation guarantee that is currently unverified at the API layer. Both are fully evidenced from repository sources alone and need no product decision, which is why one of them can be activated while the filename nodes cannot. Exactly one slice is active. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
+`R3` and `R2` tied on primary priority; `R3` preceded `R2` on greater direct user/data impact because it restored execution of a real no-mutation guarantee that was unverified at the API layer. Both were fully evidenced from repository sources alone and needed no product decision, which is why one could be activated while the filename nodes could not. `R3` is now merged, so exactly one slice is active and it is `R2`. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
 
-Active `R3` is test-only, so its required smoke is the **backend suite only**; no browser, visual, or route-rendering check applies. Any focused `/backups` and `/exports` visual check belongs to the unresolved filename product decision and its future implementation slice.
+Active `R2` is test-only, so its required smoke is the **backend suite only**; no browser, visual, or route-rendering check applies. Any focused `/backups` and `/exports` visual check belongs to the unresolved filename product decision and its future implementation slice.
 
 ## Separate candidate — not activated
 
@@ -822,11 +853,12 @@ MVP release candidate допускается только после выпол�
 
 Slice A1 завершён давно; прежняя инструкция «Первое действие после добавления документа» устарела и удалена.
 
-1. Смержить текущий documentation-only PR, закрывающий Block B и открывающий backend baseline correction gate.
-2. Подготовить английский Codex prompt только для `R3 — Repair purchase-suggestions API smoke seeding` по контракту из `state/current-focus.md`.
-3. Создать `R3` как отдельный focused test-only backend PR.
-4. Не смешивать `R3` с `R2`, с нерешённым контрактом имён файлов backup/export, с кандидатом на проверку backup transaction consistency, C1–C4, restore, packaging или release smoke.
-5. Не назначать будущий номер PR заранее.
+1. `R3` смержен: PR #143, merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`. Отдельный documentation-only PR для закрытия `R3` не создаётся.
+2. Проверить и смержить текущий focused test-only PR `R2 — Align import draft baseline test with date normalization`.
+3. После merge `R2` бэкенд-базовая линия остаётся `496 / 494 / 2 / 0`; оставшиеся два падения — только backups и exports.
+4. Не начинать исправление имён файлов backup/export: оно заблокировано `CR-005` и не имеет slice. Не начинать его с несмерженной ветки `R2`.
+5. Не смешивать `R2` с `CR-004`, C1–C4, restore, packaging или release smoke.
+6. Не назначать будущий номер PR заранее.
 
 ## 2026-07-18 — A3.6 Client Feedback structured validation
 

@@ -1015,3 +1015,41 @@ C1, C2, C3, and C4 remain inactive. Packaging is blocked and release smoke is bl
 - `R2 — Import draft issue-count contract alignment` remains deferred and next. **Do not start `R2` from the unmerged `R3` branch.** Start it only from `origin/main` after `R3` is reviewed and merged.
 - Nodes 1 and 2 — the backups and exports filename-reason nodes — remain blocked on `CR-005` (`needs product decision`) and still have no slice. `CR-004` remains a separate `needs evidence` row and is not activated.
 - Smoke for `R3` was the **backend suite only — PASS**. No browser, visual, keyboard, responsive, packaging, or release smoke was required, executed, or claimed. C1–C4 remain inactive, packaging and release smoke remain blocked, and product release readiness is not claimed.
+
+## 2026-07-27 — Handoff after R3 merge and R2 implementation
+
+- **`R3` — DONE.** PR #143 `R3 — Repair purchase-suggestions API smoke seeding` is merged (VERIFIED FROM REPOSITORY / GITHUB): state `MERGED`, final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`, merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`, merged at `2026-07-27T04:01:23Z`, accepted backend result `496 collected, 493 passed, 3 failed, 0 skipped`, no production code changed. The previous dated handoff described the pre-merge `R3` state and is superseded by this entry, not edited.
+- **`R2 — Align import draft baseline test with the documented date-normalization contract` is implemented but not DONE.** Status: `IMPLEMENTED — REVIEW AND MERGE REQUIRED`. It is not merged. It is the single current slice and stays active until it is reviewed and merged.
+- Branch: `claude/r2-align-import-draft-baseline-test`, created from clean `origin/main` `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`. No rebase, no force-push, no history rewrite.
+- Exact test-only diff — the assertion block of `backend/app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`:
+
+```diff
+-    assert body["draft"]["error_count"] >= 4
++    assert body["draft"]["error_count"] == 3
++    assert body["draft"]["warning_count"] == 1
++    assert body["draft"]["apply_readiness"]["can_apply"] is False
+     assert {issue["code"] for issue in body["issues"]} >= {"missing_required_column"}
+     row_codes = {issue["code"] for issue in body["preview_rows"][0]["issues"]}
+-    assert {"invalid_decimal", "invalid_unit", "invalid_date"} <= row_codes
++    assert row_codes == {
++        "invalid_decimal",
++        "invalid_unit",
++        "date_format_normalized",
++    }
+```
+
+  The response status assertion, the request payload, the CSV data, the date `05.07.2026`, the target type, and the global `missing_required_column` assertion are unchanged, and no other line of the file changed. No production file changed: `_normalize_date_value`, `_readiness`, `_issue_counts`, required-column handling, `missing_required_value`, and import Apply are untouched, and `docs/import-format.md` was not modified.
+- Contract evidence: `05.07.2026` is a deterministic Russian `DD.MM.YYYY` date that `docs/import-format.md` requires to normalize to ISO with a `date_format_normalized` **warning**. `invalid_date` stays reserved for genuinely invalid dates. The corrected assertions are strictly more specific than the ones they replace, and no validation was weakened.
+- Exact test evidence (EXECUTED IN THIS TASK, from `backend/`, Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, temporary venv outside the repository, removed and verified absent):
+  - pre-change complete suite `496 collected, 493 passed, 3 failed, 0 skipped`;
+  - pre-change isolated target node returned `201` and failed at `assert 3 >= 4`, with observed `error_count` `3`, `warning_count` `1`, readiness `blocked`, `can_apply` `false`;
+  - post-change isolated target node `PASSED` twice;
+  - `app/tests/test_imports_api.py` `7 passed`;
+  - `app/tests/test_import_parsing.py` `16 passed`, `0 skipped`;
+  - post-change complete suite `496 collected, 494 passed, 2 failed, 0 skipped`, with `app/tests/test_purchase_suggestions.py::test_manual_api_smoke` passing.
+- Remaining failures, exactly two:
+  - `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`
+  - `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`
+- Nodes 1 and 2 — the backups and exports filename-reason nodes — remain `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`, still have no slice, and remain blocked on `CR-005` (`needs product decision`). **Do not begin the filename correction work, and in particular do not begin it from the unmerged `R2` branch.** Start any future filename slice only from `origin/main` after `CR-005` is decided.
+- `CR-004` remains a separate `needs evidence` row and is not activated. `state/change-requests.md` was not modified.
+- Smoke for `R2` was the **backend suite only — PASS**. No browser, visual, keyboard, responsive, route-rendering, packaging, restore, migration, or release smoke was required, executed, or claimed. C1–C4 remain inactive, packaging and release smoke remain blocked, and **product release readiness is not claimed**.
