@@ -4,7 +4,20 @@ Active phase: **Pre-release hardening — backend baseline correction gate**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - Active correction slice: `R3 — Repair purchase-suggestions API smoke seeding`
-- Starting `origin/main`: `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa`
+- Slice status: `IMPLEMENTED — REVIEW AND MERGE REQUIRED`
+- Starting `origin/main` for the `R3` implementation: `6cb6f446c2a47a5272c51bfb63b3159d23cb5db2`
+- Earlier starting `origin/main` for the diagnostic gate: `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa`
+
+## Implementation status
+
+`R3` is implemented on branch `claude/r3-repair-purchase-suggestions-api-smoke-seeding` and is **not merged and not DONE**. It stays the current active slice until it is reviewed and merged.
+
+- Exact test change: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. `packaging_qty="2"` and the `minimum_stock='10'` setup at `:215-216` are unchanged; no other line of the test changed. The runtime/test diff is exactly one changed value on one line.
+- No production change. Test-only.
+- Executed backend results, from `backend/` with Python `3.12.13` and pytest `8.4.2`: pre-change complete suite `496 / 492 / 4 / 0`; target node failed during arrangement before the API; post-change target node `PASSED` twice; `app/tests/test_purchase_suggestions.py` `11 passed`; post-change complete suite `496 collected, 493 passed, 3 failed, 0 skipped`.
+- Remaining failures are exactly the two undecided filename nodes and the deferred `R2` node.
+- Smoke: **backend suite only — PASS**. No browser, visual, keyboard, responsive, packaging, or release smoke was required, executed, or claimed.
+- `R2` remains deferred and must not start before `R3` is reviewed and merged. Do not start `R2` from the unmerged `R3` branch.
 
 Block B is complete. C1, C2, C3, and C4 remain inactive. Current work is release hardening, not feature expansion. Packaging is blocked and release smoke is blocked.
 

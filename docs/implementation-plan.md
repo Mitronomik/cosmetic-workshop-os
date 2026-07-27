@@ -497,6 +497,32 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - Active correction slice: `R3 — Repair purchase-suggestions API smoke seeding`
+- `R3` implementation status: `IMPLEMENTED — REVIEW AND MERGE REQUIRED`
+
+## R3 implementation record
+
+`R3` is implemented on its own PR branch and is **not merged and not DONE**.
+
+- Exact runtime/test change: one changed value on one line — `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. `packaging_qty="2"` on that same line is unchanged, the `minimum_stock='10'` setup at `:215-216` is unchanged, and no other line of the test changed.
+- No production file changed. The zero-quantity domain rule, `seed_ready(...)`, and every other `seed_ready(...)` call site are untouched.
+- Executed backend evidence, run from `backend/` with Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, in a temporary environment outside the repository:
+  - pre-change complete suite `496 collected, 492 passed, 4 failed, 0 skipped`, failing exactly the four accepted gate nodes;
+  - pre-change isolated target node failed during arrangement inside `seed_ready(...)`, before the API surface was reached;
+  - post-change isolated target node `PASSED` twice;
+  - post-change `app/tests/test_purchase_suggestions.py` `11 passed`;
+  - post-change complete suite `496 collected, 493 passed, 3 failed, 0 skipped`.
+- Expected remaining failures, exactly three and no others:
+
+```text
+app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters
+app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters
+app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues
+```
+
+- `R2` remains deferred and next; it is **not** implemented in this PR and must not start before `R3` is reviewed and merged.
+- The backups and exports filename nodes remain blocked on the `CR-005` product decision and still have no slice.
+- C1, C2, C3, and C4 remain inactive.
+- Packaging smoke and release smoke remain blocked. Product release readiness is not claimed.
 
 Block B is complete. C1, C2, C3, and C4 remain inactive. Current work is release hardening, not feature expansion. Packaging is blocked and release smoke is blocked.
 
@@ -526,7 +552,7 @@ No node showed data loss or unsafe mutation. Import integrity and the zero-quant
 
 ## Bounded correction sequence
 
-1. `R3` — **active**. Repair purchase-suggestions API smoke seeding (test-only). Exactly one changed value: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. The existing `minimum_stock='10'` setup at `:215-216` stays unchanged, because the existing threshold of `10` is already higher than the new lot quantity of `1` and the below-minimum condition therefore remains true. No other line in the test may change.
+1. `R3` — **active**, `IMPLEMENTED — REVIEW AND MERGE REQUIRED`. Repair purchase-suggestions API smoke seeding (test-only). Exactly one changed value: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. The existing `minimum_stock='10'` setup at `:215-216` stays unchanged, because the existing threshold of `10` is already higher than the new lot quantity of `1` and the below-minimum condition therefore remains true. No other line in the test may change.
 2. `R2` — deferred, next. Import draft issue-count contract alignment (test-only).
 3. Backups and exports filename nodes — **no slice**. Blocked on the `needs product decision` change request covering collapsing, literal hyphens, filename-to-metadata reason round-trip, whether the displayed reason is filename-derived or stored independently, and the required focused smoke after implementation.
 

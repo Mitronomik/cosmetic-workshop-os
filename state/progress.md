@@ -1357,3 +1357,21 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
 - Recorded neutrally without diagnosis or activation: a potential SQLite backup transaction-consistency candidate needing a separate evidence-based diagnostic (`CR-004`), distinct from the `CR-005` filename-contract decision.
 - Product release readiness is not claimed. Packaging and release smoke remain blocked; C1–C4 remain inactive.
 - No browser, keyboard, responsive, packaging, or release smoke was executed or claimed for this documentation commit.
+
+## 2026-07-27 — R3 purchase-suggestions API smoke seeding repaired
+
+- Branch: `claude/r3-repair-purchase-suggestions-api-smoke-seeding`. Starting `origin/main`: `6cb6f446c2a47a5272c51bfb63b3159d23cb5db2` (PR #142 merge commit, which contains the final reviewed PR #142 head `64850b3aa508d63ca1f1cefe240b2eaba50d9e72`).
+- Exact changed value: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. `packaging_qty="2"` on that same line and the `minimum_stock='10'` setup at `:215-216` are unchanged, and no other line of the test changed. The runtime/test diff is exactly one changed value on one line.
+- No production change of any kind. The zero-quantity domain rule, `seed_ready(...)`, and every other `seed_ready(...)` call site are untouched. This slice is test-only.
+- Diagnostic environment (EXECUTED IN THIS TASK): Python `3.12.13` in a temporary venv outside the repository, pytest `8.4.2`, run from `backend/` with rootdir `backend/` and configfile `pyproject.toml`. The environment was removed and verified absent afterwards.
+- Pre-change complete backend suite reproduced the accepted baseline exactly: `496 collected, 492 passed, 4 failed, 0 skipped`, failing exactly the four accepted gate nodes. The isolated target node failed during arrangement inside `seed_ready(...)` with `DomainValidationError: Количество движения должно быть больше нуля.`, before the API surface was reached.
+- Post-change target-node results: `app/tests/test_purchase_suggestions.py::test_manual_api_smoke` `PASSED` on both isolated runs. It now reaches `POST /api/purchase-suggestions/regenerate`, `GET /api/purchase-suggestions`, `POST /api/purchase-suggestions/{id}/mark-purchased`, the default open-list filter, and `status=all`, and its three no-mutation assertions — stock movements, packaging stock movements, and ingredient lots unchanged — execute and pass.
+- Surrounding file result: `app/tests/test_purchase_suggestions.py` `11 passed`.
+- Complete backend result after the change: `496 collected, 493 passed, 3 failed, 0 skipped`.
+- Remaining three failing node IDs, exactly and with no new failure:
+  - `app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters`
+  - `app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters`
+  - `app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`
+- Smoke: backend suite only — `PASS`. No browser, visual, keyboard, responsive, packaging, or release smoke was required, executed, or claimed.
+- `R2` remains deferred and was not implemented. The two filename nodes remain blocked on `CR-005`. `CR-004` remains separate and unactivated. C1–C4 remain inactive and product release readiness is not claimed.
+- PR publication state: the branch is pushed and a Ready-for-review pull request targeting `main` is opened immediately after this commit; GitHub assigns the number at creation time. `R3` is `IMPLEMENTED — REVIEW AND MERGE REQUIRED` and is not DONE until reviewed and merged.

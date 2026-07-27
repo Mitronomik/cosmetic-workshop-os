@@ -230,6 +230,16 @@ A third sanitizer, `backend/app/services/report_documents.py:174 sanitize_reason
 - **Tests** — The node reaches and exercises the `/api/purchase-suggestions` HTTP surface: regenerate creates at least one suggestion, list returns it, mark-purchased returns `purchased`, the suggestion leaves the open list, it remains visible under `status=all`, and the stock-movement, packaging-stock-movement, and ingredient-lot counts are unchanged. Every existing assertion is preserved. No skip, `xfail`, deletion, rename, or weakened assertion. The **complete backend suite** must be run from `backend/`.
 - **Smoke** — **Backend suite only.** The slice changes no runtime surface, so no browser, visual, or route-rendering check applies or is claimed.
 - **Acceptance criteria** — The backend baseline improves from `4 failed` to `3 failed` with no new failure. The remaining three failures are exactly the two undecided filename nodes and the deferred `R2` node. The node's three no-mutation assertions execute and pass. No production file is modified. The test diff is exactly one changed value, `lot_qty="0"` → `lot_qty="1"`, on line 214.
+- **Implementation result** — `IMPLEMENTED — REVIEW AND MERGE REQUIRED` (EXECUTED IN THIS TASK, on the `R3` PR branch; **not merged**). The authorized one-value change was applied and nothing else in the runtime/test tree changed:
+  - runtime/test diff is exactly one changed value on one line — `lot_qty="0"` → `lot_qty="1"` at `backend/app/tests/test_purchase_suggestions.py:214`; `packaging_qty="2"` and the `minimum_stock='10'` setup at `:215-216` are unchanged, and no other line of the test changed;
+  - no production file changed; the zero-quantity rule at `backend/app/domain/stock_movements.py:84-93`, `seed_ready(...)`, and all other `seed_ready(...)` call sites are untouched;
+  - the target node now **passes twice** in isolation and reaches the `/api/purchase-suggestions` HTTP surface: `POST /api/purchase-suggestions/regenerate`, `GET /api/purchase-suggestions`, `POST /api/purchase-suggestions/{id}/mark-purchased`, the default open-list filter, and `status=all` all execute;
+  - the three no-mutation assertions execute and pass: stock-movement count, packaging-stock-movement count, and ingredient-lot count are unchanged across `mark-purchased`;
+  - the surrounding file `app/tests/test_purchase_suggestions.py` passes `11/11`;
+  - the complete backend suite, run from `backend/`, is `496 collected / 493 passed / 3 failed / 0 skipped`;
+  - the remaining three failures are exactly the two undecided filename nodes (§5, §6) and the deferred `R2` node (§7); no new failure and no skip appeared.
+  - Environment: Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, temporary venv outside the repository, removed and verified absent after the run.
+  - The classification of nodes 1–3 is unchanged by this implementation, and `CR-005` remains undecided.
 
 ### Slice R2 — Import draft issue-count contract alignment — deferred, next
 
