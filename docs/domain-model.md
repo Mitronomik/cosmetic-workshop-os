@@ -1690,7 +1690,7 @@ settings_updated
 
 ```text
 id
-tax_rate
+default_tax_rate
 expiration_alert_days
 low_stock_alert_enabled
 backup_reminder_enabled
@@ -1704,7 +1704,7 @@ updated_at
 
 ### Business rules
 
-- `tax_rate` default is 0.06.
+- `default_tax_rate` has **no default**. The former `tax_rate default is 0.06` rule is superseded by `CR-007`: the setting is a **percentage**, so `6.00` means `6%` and `0.06` would mean `0.06%`, and an unconfigured setting is `null`, which is never the same as `0.00`. Durable contract: `docs/settings.md`.
 - Changes should be audited.
 - `data_directory_path` should be visible to user but not casually editable without care.
 - Settings should support future expansion.
@@ -2092,12 +2092,14 @@ do not hide warning during production
 component_cost = sum(consumed_quantity * lot_unit_cost)
 packaging_cost = sum(packaging_quantity * packaging_unit_cost)
 total_cost = component_cost + packaging_cost + other_cost
-tax = sale_price * tax_rate
+tax = sale_price * tax_rate_percent / 100
 margin = sale_price - total_cost - tax
 margin_percent = margin / sale_price * 100
 ```
 
 All money calculations use Decimal.
+
+`tax_rate_percent` is a **percentage** in the range `0.00`–`100.00`, not a coefficient: `6.00` means `6%`. Only the final tax amount is rounded, at money quantum `0.01` with `ROUND_HALF_UP`. A missing rate makes tax — and any tax-dependent margin — **unavailable, never zero**. See `CR-007` and `docs/settings.md`.
 
 ---
 

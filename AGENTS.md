@@ -507,12 +507,18 @@ Cost must be based on actually consumed lots where possible.
 ```text
 component_cost = consumed_quantity * lot_unit_cost
 total_cost = component_cost + packaging_cost + other_costs
-tax = sale_price * tax_rate
+tax = sale_price * tax_rate_percent / 100
 margin = sale_price - total_cost - tax
 margin_percent = margin / sale_price * 100
 ```
 
-Tax rate must be a setting, default may be 6%.
+Tax rate is a backend-owned setting. Its contract was decided as `CR-007`; the durable contract is `docs/settings.md`.
+
+- The setting is `default_tax_rate` and `tax_rate_percent` is a **percentage**, not a coefficient, in the range `0.00`–`100.00`.
+- `6.00` means `6%`. A coefficient such as `0.06` would mean `0.06%`.
+- A missing rate is **unavailable, not zero**: tax and any tax-dependent margin are unavailable, and no fabricated zero is displayed. An explicitly configured `0.00` is a real value.
+- Changing the current setting **never recalculates historical production**, existing reports, prior audit records, or generated documents.
+- Once C2 implements them, production and reports use the **persisted snapshots** on `ProductionBatch`, not the currently configured rate.
 
 ### 6.7 Production confirmation
 
