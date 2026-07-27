@@ -6,6 +6,7 @@ import { SettingsTaxRateFeedbackLifecycle, TAX_RATE_CANCEL_MESSAGE, TAX_RATE_CLE
 import { TAX_RATE_HELPER_TEXT, TAX_RATE_MISSING_TEXT, TAX_RATE_SECTION_TITLE, settingsTaxRateCardMarkup, settingsTaxRatePresentation } from '../dist-tests/settings-tax-feedback/settings-tax-presentation.js';
 import { bindSettingsTaxRateControls } from '../dist-tests/settings-tax-feedback/settings-tax-bindings.js';
 import { SettingsTaxRateRuntime } from '../dist-tests/settings-tax-feedback/settings-tax-runtime.js';
+import { TAX_RATE_RECONCILE_FAILED_MESSAGE, TAX_RATE_RECONCILED_MESSAGE } from '../dist-tests/settings-tax-feedback/settings-tax-reconciliation.js';
 import { isWorkshopProfileDirty, isWorkshopProfileFormAvailable, workshopProfileCardMarkup } from '../dist-tests/settings-tax-feedback/settings-profile-presentation.js';
 
 const configured = (percent = '6.00', effective = '2026-07-27T10:28:54Z', message = 'Налоговая ставка для расчётов настроена.') => ({ tax_rate_percent: percent, is_configured: true, effective_at: effective, message });
@@ -347,9 +348,15 @@ test('an invalid mutation response is surfaced instead of being applied', async 
   h.saves[0].resolve({ tax_rate_percent: 7, is_configured: true, effective_at: null, message: 'ok' });
   await flush();
   const view = runtime.presentation();
-  assert.equal(view.valueLabel, '6.00%');
-  assert.deepEqual(view.feedbackItems, [{ tone: 'error', message: TAX_RATE_INVALID_RESPONSE }]);
-  assert.equal(h.reads.length, 1);
+  assert.equal(view.valueLabel, '6.00%', 'the invalid response is never applied');
+  assert.equal(view.feedbackItems.some((item) => item.tone === 'error' && item.message === TAX_RATE_INVALID_RESPONSE), true);
+  // The backend state is now unknown, so an authoritative read is required and
+  // the displayed value is not confirmed enough to mutate from.
+  assert.equal(view.reconciliationRequired, true);
+  assert.equal(view.canSave, false);
+  assert.equal(view.canClear, false);
+  assert.equal(h.reads.length, 2, 'exactly one authoritative read is started');
+  assert.equal(h.saves.length, 1, 'no duplicate mutation');
 });
 
 test('the section renders every stable smoke selector', async () => {
@@ -501,4 +508,287 @@ test('bindings attach exactly once to each stable tax control and ignore others'
   for (const control of controls) assert.equal(new Set(control.listeners.map((l) => l.type)).size, control.listeners.length);
   for (const control of controls.slice(0, 7)) control.listeners.forEach(({ cb }) => cb({ preventDefault() {}, currentTarget: { value: '6' } }));
   assert.deepEqual(calls, ['submit', 'draft', 'cancel', 'clear', 'clear-accept', 'clear-cancel', 'refresh']);
+});
+
+// ---------------------------------------------------------------------------
+// Detached-mutation reconciliation: a Save or Clear that outlives its route must
+// never leave the UI showing a value the backend no longer stores.
+// ---------------------------------------------------------------------------
+
+test('detached Save success reconciles to the newly saved value on re-entry', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  assert.equal(h.saves.length, 1);
+
+  runtime.leave();
+  h.active = false;
+  const rendersWhileAway = h.renders;
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Налоговая ставка для расчётов изменена.'));
+  await flush();
+  assert.equal(h.renders, rendersWhileAway, 'detached settlement must not render');
+  assert.deepEqual(h.polite, [], 'detached settlement must not announce');
+  assert.equal(h.reads.length, 1, 'no reconciliation GET may start while away');
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, true);
+
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+  assert.equal(h.reads.length, 2, 'exactly one reconciliation GET starts on re-entry');
+  h.reads[1].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+
+  const view = runtime.presentation();
+  assert.equal(view.valueLabel, '7.00%');
+  assert.equal(view.draft, '7.00');
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, false);
+  assert.equal(view.canSave, true);
+  assert.equal(h.saves.length, 1, 'no duplicate PUT');
+  assert.equal(h.polite.at(-1), TAX_RATE_RECONCILED_MESSAGE);
+});
+
+test('detached Clear success reconciles to the unconfigured state on re-entry', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.requestClear();
+  runtime.confirmClear();
+  assert.deepEqual(h.payloads, [{ tax_rate_percent: null }]);
+
+  runtime.leave();
+  h.active = false;
+  h.saves[0].resolve(unconfigured('Налоговая ставка для расчётов очищена.'));
+  await flush();
+  assert.deepEqual(h.polite, []);
+  assert.equal(runtime.lifecycle.state.confirmed.tax_rate_percent, '6.00', 'detached result is not applied');
+
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+  assert.equal(h.reads.length, 2);
+  h.reads[1].resolve(unconfigured());
+  await flush();
+
+  const view = runtime.presentation();
+  assert.equal(view.status, 'unconfigured');
+  assert.equal(view.valueLabel, null);
+  assert.equal(view.effectiveAtText, '');
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, false);
+  assert.equal(h.saves.length, 1, 'no duplicate Clear');
+});
+
+test('detached Save failure still reconciles to the authoritative backend state', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  runtime.leave();
+  h.active = false;
+  h.saves[0].reject(new Error('network lost'));
+  await flush();
+  assert.deepEqual(h.assertive, [], 'detached failure must not announce');
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, true);
+
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+  assert.equal(h.reads.length, 2);
+  // The backend had in fact committed the write before the socket died.
+  h.reads[1].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+  assert.equal(runtime.presentation().valueLabel, '7.00%');
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, false);
+});
+
+test('re-entering before the detached mutation settles starts no racing GET', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  runtime.leave();
+  h.active = false;
+
+  h.active = true;
+  runtime.enter();
+  const early = runtime.load('initial');
+  assert.equal(h.reads.length, 1, 'no GET may race the in-flight PUT');
+  assert.equal(early.accepted, false);
+  assert.equal(early.reason, 'detached-mutation-pending');
+  assert.equal(runtime.refresh().accepted, false, 'explicit refresh cannot race it either');
+  assert.equal(h.reads.length, 1);
+
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  assert.equal(h.reads.length, 2, 'the GET starts only after the mutation settles');
+  h.reads[1].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+  assert.equal(runtime.presentation().valueLabel, '7.00%');
+  assert.equal(h.saves.length, 1);
+});
+
+test('reconciliation failure keeps the last known value, warns, and blocks mutations', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  runtime.leave();
+  h.active = false;
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+  h.reads[1].reject(new Error('offline'));
+  await flush();
+
+  const view = runtime.presentation();
+  assert.equal(view.valueLabel, '6.00%', 'last known value may remain visible');
+  assert.equal(view.feedbackItems.some((item) => item.tone === 'warning' && item.message === TAX_RATE_RECONCILE_FAILED_MESSAGE), true);
+  assert.equal(view.reconciliationRequired, true);
+  assert.equal(view.canSave, false, 'Save stays blocked until confirmation');
+  assert.equal(view.canClear, false, 'Clear stays blocked until confirmation');
+  assert.equal(view.canRefresh, true, 'explicit retry stays available');
+
+  runtime.updateDraft('9');
+  assert.equal(runtime.submit().reason, 'reconciliation-required');
+  assert.equal(runtime.requestClear().accepted, false);
+  assert.equal(h.saves.length, 1, 'no mutation may be sent while unconfirmed');
+});
+
+test('an explicit refresh retry discharges the obligation and restores mutations', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  runtime.leave();
+  h.active = false;
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+  h.reads[1].reject(new Error('offline'));
+  await flush();
+  assert.equal(runtime.presentation().canSave, false);
+
+  runtime.refresh();
+  assert.equal(h.reads.length, 3);
+  h.reads[2].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+
+  const view = runtime.presentation();
+  assert.equal(view.valueLabel, '7.00%');
+  assert.equal(view.reconciliationRequired, false);
+  assert.equal(view.canSave, true);
+  assert.equal(view.canClear, true);
+  runtime.updateDraft('8');
+  assert.equal(runtime.submit().accepted, true);
+  assert.equal(h.saves.length, 2);
+});
+
+test('duplicate reconciliation reads are blocked while one is in flight', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  runtime.leave();
+  h.active = false;
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+  assert.equal(h.reads.length, 2);
+
+  assert.equal(runtime.load('initial').accepted, false);
+  assert.equal(runtime.refresh().accepted, false);
+  assert.equal(runtime.reconcile().accepted, false);
+  assert.equal(h.reads.length, 2, 'still exactly one reconciliation GET');
+
+  h.reads[1].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, false);
+});
+
+test('repeated route transitions never orphan a mutation or permanently disable the section', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  for (let i = 0; i < 3; i += 1) {
+    runtime.leave();
+    h.active = false;
+    h.active = true;
+    runtime.enter();
+    runtime.load('initial');
+  }
+  assert.equal(h.reads.length, 1, 'no GET races the still-pending PUT');
+  assert.equal(h.saves.length, 1, 'the mutation is never duplicated');
+
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  assert.equal(h.reads.length, 2);
+  h.reads[1].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+
+  const view = runtime.presentation();
+  assert.equal(view.valueLabel, '7.00%');
+  assert.equal(view.canSave, true);
+  assert.equal(view.canClear, true);
+  assert.equal(view.controlsDisabled, false, 'the section is usable again');
+  assert.equal(runtime.lifecycle.state.mutation, null);
+  assert.equal(runtime.lifecycle.state.detachedMutationPending, false);
+});
+
+test('a stale reconciliation response cannot discharge a newer obligation', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  runtime.leave();
+  h.active = false;
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+
+  // The route is lost again while the reconciliation GET is still in flight.
+  runtime.leave();
+  h.active = false;
+  h.reads[1].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, true, 'a read from a dead route cannot confirm');
+
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+  assert.equal(h.reads.length, 3);
+  h.reads[2].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, false);
+});
+
+test('an invalid mutation response raises an obligation that blocks further mutations', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.updateDraft('7');
+  runtime.submit();
+  h.saves[0].resolve({ tax_rate_percent: 7, is_configured: true, effective_at: null, message: 'ok' });
+  await flush();
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, true);
+  assert.equal(runtime.presentation().canSave, false);
+  assert.equal(h.reads.length, 2, 'an authoritative read is started');
+  h.reads[1].resolve(configured('6.00', '2026-07-27T10:28:54Z'));
+  await flush();
+  assert.equal(runtime.presentation().canSave, true);
+  assert.equal(runtime.presentation().valueLabel, '6.00%');
+});
+
+test('normal in-route behavior is unaffected by the reconciliation contract', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, false);
+  runtime.updateDraft('7');
+  runtime.submit();
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Налоговая ставка для расчётов изменена.'));
+  await flush();
+  assert.equal(h.reads.length, 2, 'the ordinary mutation refresh still runs');
+  h.reads[1].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+  const view = runtime.presentation();
+  assert.equal(view.valueLabel, '7.00%');
+  assert.equal(view.reconciliationRequired, false);
+  assert.deepEqual(view.feedbackItems, [{ tone: 'success', message: 'Налоговая ставка для расчётов изменена.' }]);
+  assert.equal(view.canSave, true);
+  assert.equal(view.canClear, true);
 });

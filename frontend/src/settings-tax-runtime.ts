@@ -34,12 +34,26 @@ export class SettingsTaxRateRuntime {
   }
 
   load(kind: TaxRateReadKind = 'initial') {
+    // An open obligation always wins over the "already loaded" shortcut: the
+    // cached value may be behind a mutation that committed while we were away.
+    if (this.lifecycle.state.reconciliationRequired) return this.reconcile();
     if (kind === 'initial' && this.lifecycle.state.confirmed !== null) return null;
     return this.startRead(kind);
   }
 
   refresh() {
-    return this.startRead('refresh');
+    return this.startRead(this.lifecycle.state.reconciliationRequired ? 'reconciliation' : 'refresh');
+  }
+
+  /**
+   * Run the single authoritative read that discharges the obligation. It is a
+   * no-op while the detached mutation is still in flight — the read would race
+   * the PUT — and the settlement path calls it again once that mutation lands.
+   */
+  reconcile() {
+    if (!this.lifecycle.state.reconciliationRequired) return null;
+    if (!this.deps.ownsRoute()) return null;
+    return this.startRead('reconciliation');
   }
 
   updateDraft(text: string) {
@@ -107,8 +121,13 @@ export class SettingsTaxRateRuntime {
         const settled = this.lifecycle.finishMutationSuccess(owner, value);
         this.present(settled);
         if (settled.knownSuccess) this.startRead('mutation-refresh');
+        else if (settled.needsReconciliation) this.reconcile();
       },
-      (error) => this.present(this.lifecycle.finishMutationFailure(owner, this.deps.fieldErrorFromFailure?.(error) ?? '')),
+      (error) => {
+        const settled = this.lifecycle.finishMutationFailure(owner, this.deps.fieldErrorFromFailure?.(error) ?? '');
+        this.present(settled);
+        if (settled.needsReconciliation) this.reconcile();
+      },
     );
   }
 

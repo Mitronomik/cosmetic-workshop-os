@@ -16,6 +16,7 @@ export type TaxRatePresentation = {
   mutationBusy: boolean;
   clearConfirmVisible: boolean;
   controlsDisabled: boolean;
+  reconciliationRequired: boolean;
   canSave: boolean;
   canCancel: boolean;
   canClear: boolean;
@@ -37,6 +38,8 @@ export function settingsTaxRatePresentation(state: TaxRateState): TaxRatePresent
   const mutationBusy = state.mutation !== null;
   const busy = mutationBusy || state.read !== null;
   const editable = state.status === 'ready' && state.confirmed !== null && !mutationBusy;
+  // An unreconciled value is shown but is not confirmed enough to mutate from.
+  const blocked = state.reconciliationRequired || state.detachedMutationPending;
   const configured = Boolean(state.confirmed?.is_configured);
   return {
     status: statusKey(state),
@@ -50,10 +53,11 @@ export function settingsTaxRatePresentation(state: TaxRateState): TaxRatePresent
     mutationBusy,
     clearConfirmVisible: state.clearConfirmVisible,
     controlsDisabled: !editable,
-    canSave: editable,
+    reconciliationRequired: state.reconciliationRequired,
+    canSave: editable && !blocked,
     canCancel: editable,
-    canClear: editable && configured,
-    canRefresh: !busy,
+    canClear: editable && configured && !blocked,
+    canRefresh: !busy && !state.detachedMutationPending,
   };
 }
 
