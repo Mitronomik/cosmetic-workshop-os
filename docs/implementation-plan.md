@@ -59,7 +59,7 @@
 
 The four backend baseline failures are not regressions from PR #141 and are now handled by an explicit gate rather than being carried as loose findings.
 
-The active next implementation window is **Pre-release hardening — backend baseline correction gate** (section 10). No runtime feature slice is active. No future PR number is assigned.
+The **Pre-release hardening — backend baseline correction gate** window (section 10a) is now **DONE**: `R3`, `R2`, and `R4` are all merged, and the merged `main` backend baseline is green at `562 collected, 562 passed, 0 failed, 0 skipped`. **No runtime implementation slice is active and none is selected here**; the next gate must be separately selected and authorized. No future PR number is assigned. `CR-006` is a new `needs evidence` row and is not activated. Product release readiness is not claimed.
 
 ## 4. Неизменяемые продуктовые правила
 
@@ -491,16 +491,19 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 
 ---
 
-# 10a. ACTIVE WINDOW — Pre-release hardening: backend baseline correction gate
+# 10a. CLOSED WINDOW — Pre-release hardening: backend baseline correction gate
 
-Статус: `IN PROGRESS`
+Статус: `DONE`
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
 - `R2 — Align import draft baseline test with the documented date-normalization contract`: **DONE**
-- `CR-005 — backup/export filename reason contract`: **ACCEPTED / DECIDED**; decision PR #145 merged 2026-07-27 at merge commit `bef36822e50c245b72f813dad0afbffc7f772588` from final reviewed head `7d68b45bee1f223b67f105c30e3acbb89dc8d41d`
-- Single active implementation slice: `R4 — Canonical backup/export filename reason normalization`
-- `R4` status: `IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE`
+- `CR-005 — backup/export filename reason contract`: **ACCEPTED / DECIDED / IMPLEMENTED**; decision PR #145 merged 2026-07-27 at merge commit `bef36822e50c245b72f813dad0afbffc7f772588` from final reviewed head `7d68b45bee1f223b67f105c30e3acbb89dc8d41d`
+- `R4 — Canonical backup/export filename reason normalization`: **DONE**; PR #146 merged 2026-07-27 at merge commit `127191feb182ccf68a4d7b9f2be28f6aa5b42453` from final reviewed head `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb`
+- Backend baseline correction gate: **DONE** — all four accepted gate failures are closed on `main`
+- Merged `main` backend baseline: **GREEN** — `562 collected, 562 passed, 0 failed, 0 skipped`
+- **No active runtime implementation slice.** The next slice must be separately selected and authorized. No future PR number is assigned.
+- `CR-006 — Investigate export create-response fallback confirmation semantics`: **`needs evidence`**, non-blocking, **not activated** — see the `CR-006` subsection below
 
 ## R3 closure record
 
@@ -622,7 +625,62 @@ Shared root cause: duplicated one-character-at-a-time sanitizers that both prese
 
 ## R4 — Canonical backup/export filename reason normalization
 
-Статус: `IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE`
+Статус: `DONE`
+
+### R4 lifecycle closure
+
+`R4` is **DONE** (VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE). Nothing in this closure subsection was executed in the documentation task that wrote it.
+
+- PR #146 `R4 — Canonical backup/export filename reason normalization`, state `MERGED`.
+- Final reviewed head: `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb`.
+- Merge commit: `127191feb182ccf68a4d7b9f2be28f6aa5b42453`.
+- Merged at: `2026-07-27T08:51:06Z`.
+- `origin/main` equals that merge commit; both the final head and the merge commit were verified as ancestors of `origin/main`.
+
+Accepted merged evidence:
+
+| Check | Accepted result |
+|---|---|
+| Backend complete suite | `562 collected, 562 passed, 0 failed, 0 skipped` |
+| Frontend focused suite | `40 passed, 0 failed, 0 skipped` |
+| Frontend production build | `PASS` |
+| Focused exact-published-head `/backups` and `/exports` browser smoke | `PASS — FULL AUTOMATED SMOKE PASSED` |
+| Exact smoke-tested head | `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb` |
+
+The merged slice involved no frontend production change, no database migration, no filesystem migration, and no existing artifact renamed, rewritten, or deleted.
+
+**The backend baseline correction gate is DONE.** All four accepted gate failures are closed on `main`, and the two filename-reason nodes were the last open ones. The merged `main` backend baseline is **green**. `CR-005` remains accepted and is now implemented; neither `CR-005` nor `R4` is reopened.
+
+**No active runtime implementation slice is selected here.** Selecting the next slice requires a separate authorized task. No future PR number is assigned.
+
+### CR-006 — export create-response fallback — NEEDS EVIDENCE, not authorized
+
+`CR-006 — Investigate export create-response fallback confirmation semantics` is recorded as a **`needs evidence`** row in `state/change-requests.md`. It is **non-blocking**, is **not an active implementation slice**, and **its implementation is not authorized**.
+
+Exact current behavior in `backend/app/api/exports.py::create_export`: after `create_json_export` writes an export, the endpoint attempts to find the exact created file through `list_export_files`; when the exact file is found, the response uses parsed filename metadata and therefore returns the canonical filename-derived reason; when the exact file is **not** found, the defensive fallback constructs an `ExportFile` using `ExportResult.reason`, which is the normalized **human** reason preserved in the export manifest. The fallback may therefore return a human reason where the API contract normally expects the canonical filename-derived slug.
+
+This is **not** a confirmed product defect. No user-visible failure has been reproduced, no data loss, overwrite, incorrect file content, or unsafe mutation is proven, fallback reachability is not established, **no severity is assigned**, and **no correction design is authorized**. A future diagnostic must first establish reachability — artifact disappearance after write, a filesystem race, a permission or `stat` failure, a list/read failure, or mocked or injected repository/service behavior — and then establish the desired contract: return a canonical reason, fail explicitly because the created artifact cannot be confirmed, or another documented outcome. Do not prescribe an implementation before both are established.
+
+`CR-006` is not part of `CR-004`, is not a reason to reopen `CR-005`, is not a reason to reopen `R4`, and is not a fifth backend baseline failure. Evidence: `docs/backend-baseline-failure-triage.md` §17.
+
+### Remaining open work after R4
+
+None of these is activated here.
+
+- `CR-004` — SQLite backup transaction-consistency investigation — remains a separate `needs evidence` row.
+- Restore product decision and implementation remains **open**.
+- Final macOS packaging and user-ready launch remains **open**.
+- Installation verification remains **open**.
+- Packaged update flow and update smoke remain **open**.
+- Full release-candidate smoke remains **open**.
+- C1, C2, C3, and C4 remain **inactive**.
+- Continuing documentation accuracy remains an ongoing obligation. The durable `CR-005` contract documents `docs/backup-and-restore.md`, `docs/export.md`, and `docs/api.md` record the merged `R4` implementation status and agree with merged `main`.
+
+**Product release readiness is not claimed.**
+
+### R4 pre-merge branch record — historical, superseded by the closure above
+
+The record below describes the state at the time `R4` was implemented on its branch. It is preserved unchanged as history and is superseded, not edited, by the closure subsection above.
 
 The `CR-005` decision pull request #145 is **merged** (final reviewed head `7d68b45bee1f223b67f105c30e3acbb89dc8d41d`, merge commit `bef36822e50c245b72f813dad0afbffc7f772588`), which was the precondition for starting `R4`. `R4` is implemented on branch `claude/r4-canonical-artifact-reason-normalization`, created directly from `origin/main` at `bef36822e50c245b72f813dad0afbffc7f772588`.
 
@@ -789,7 +847,9 @@ No node showed data loss or unsafe mutation. Import integrity and the zero-quant
 
 1. `R3` — **DONE**. Repair purchase-suggestions API smoke seeding (test-only). PR #143 merged 2026-07-27 at merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec` from final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`.
 2. `R2` — **DONE**. Align the import draft baseline test with the documented date-normalization contract (test-only). PR #144 merged 2026-07-27 at merge commit `8efbdc5c85b5932f4aeef51045542c207cf4635c` from final reviewed head `52e2c64fc601b458cfd60e8b86a778efabd65671`.
-3. `R4` — **IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE**. Canonical backup/export filename reason normalization, covering nodes 1 and 2 in one bounded slice. Unblocked by the accepted `CR-005` decision, which merged as PR #145. Implemented on branch `claude/r4-canonical-artifact-reason-normalization` from `origin/main` `bef36822e50c245b72f813dad0afbffc7f772588`; not reviewed and not merged. Contract above.
+3. `R4` — **DONE**. Canonical backup/export filename reason normalization, covering nodes 1 and 2 in one bounded slice. Unblocked by the accepted `CR-005` decision, which merged as PR #145. PR #146 merged 2026-07-27 at merge commit `127191feb182ccf68a4d7b9f2be28f6aa5b42453` from final reviewed head `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb`; accepted merged backend result `562 collected, 562 passed, 0 failed, 0 skipped`; focused exact-head `/backups` and `/exports` browser smoke `PASS` against `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb`. Contract and closure above.
+
+The bounded correction sequence is complete and the gate is **DONE**. No successor runtime slice is selected here.
 
 `R3` and `R2` tied on primary priority; `R3` preceded `R2` on greater direct user/data impact because it restored execution of a real no-mutation guarantee that was unverified at the API layer. Both were fully evidenced from repository sources alone and needed no product decision, which is why one could be activated while the filename nodes could not. `R3` and `R2` are both now merged and DONE. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
 
