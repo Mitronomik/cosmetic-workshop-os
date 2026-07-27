@@ -875,7 +875,7 @@ Clearing these four failures does **not** make the product release-ready. The fo
 
 ## C1 — calculation-sensitive Settings
 
-Статус: `PRODUCT DECISION ACCEPTED — IMPLEMENTATION AUTHORIZED AS ONE SLICE, NOT IMPLEMENTED`
+Статус: `PRODUCT DECISION ACCEPTED — C1-I IMPLEMENTED ON ITS PR BRANCH; EXACT-HEAD /settings SMOKE REQUIRED BEFORE MERGE; NOT MERGED, NOT DONE`
 
 Минимум:
 
@@ -924,9 +924,24 @@ Clearing these four failures does **not** make the product release-ready. The fo
 
 ### C1-I — Backend-owned tax-rate setting
 
-Статус: `AUTHORIZED AFTER THIS DECISION PR MERGES — NOT IMPLEMENTED`
+Статус: `IMPLEMENTED — EXACT-HEAD /settings SMOKE REQUIRED BEFORE MERGE`
 
-Exactly one bounded follow-up slice. **Do not start `C1-I` from the unmerged decision branch.** Start it only from `origin/main` after the decision PR is reviewed and merged. No implementation PR number is assigned until GitHub creates it.
+Exactly one bounded follow-up slice, started from merged `origin/main` `80b83de3e838cf676669a1b627770300590c99c0` after the `CR-007` decision PR #148 merged.
+
+#### Delivered
+
+- `backend/app/domain/tax_rate.py` — percentage validation and canonical two-decimal formatting through `parse_decimal` plus an explicit shape and fractional-digit check, never `quantize_percentage`;
+- `backend/app/schemas/tax_rate_settings.py` — request/response schemas; the request field is deliberately untyped so wrong payload shapes reach the domain validator and get the project structured Russian error;
+- `backend/app/services/tax_rate_settings.py` — the backend-owned service: one transaction per mutation, read-compare-then-write no-op detection, the monotonic effective timestamp, Clear as row deletion of `default_tax_rate` only, and the atomic `AuditLog`;
+- `backend/app/api/tax_rate_settings.py` — the dedicated router registered in `backend/app/main.py` under the existing `/api/settings` namespace;
+- `backend/app/repositories/settings.py` — bounded extension only: optional `connection` on `get_setting`/`upsert_setting`, an optional caller-owned `updated_at` on `upsert_setting`, and the new `delete_setting(key, connection=None)`. No schema change, no new table, no parallel store;
+- `backend/app/services/settings.py` — Decision Matrix and capability wording only: `default_tax_rate` becomes `editable_now` and nothing else does;
+- frontend `settings-tax-contract.ts`, `settings-tax-feedback.ts`, `settings-tax-presentation.ts`, `settings-tax-bindings.ts`, `settings-tax-runtime.ts`, plus `settings-profile-presentation.ts` extracted from the Settings route so `frontend/src/main.ts` did not grow — `6406` lines before, `6399` after;
+- focused tests: `backend/app/tests/test_tax_rate_settings.py`, `backend/app/tests/test_tax_rate_settings_api.py`, `frontend/test/settings-tax-feedback.test.mjs` with `tsconfig.test.settings-tax-feedback.json` and the `test:settings-tax-feedback` script.
+
+**Not delivered, by design:** every C2 item — readiness tax, confirmation tax, `ProductionBatch` snapshot columns, the snapshot migration, tax amount, margin, margin percent, and report calculation — plus any migration, historical backfill, or recalculation.
+
+`C1-I` is **not `DONE`**: it is implemented on its PR branch and becomes `DONE` only after the exact-head `/settings` smoke passes and the PR is reviewed and merged. C2 remains blocked until then.
 
 #### Scope
 

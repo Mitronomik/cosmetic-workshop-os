@@ -27,7 +27,7 @@ def test_settings_status_response_builds_local_first_status(monkeypatch, tmp_pat
     assert response.local_data.backup_before_migration_required is True
     assert "отдельно от кода" in response.local_data.message
     assert response.editable_settings_available is True
-    assert "Профиль мастерской уже можно редактировать" in response.message
+    assert "Профиль мастерской и налоговую ставку для расчётов уже можно редактировать" in response.message
 
 
 def test_settings_status_capabilities_are_navigation_only():
@@ -38,7 +38,8 @@ def test_settings_status_capabilities_are_navigation_only():
     assert all(capability.mutates_from_settings is False for capability in response.capabilities)
     assert capabilities["backups"].route == "/backups"
     assert capabilities["settings"].route == "/settings"
-    assert "редактировать только профиль мастерской" in capabilities["settings"].description
+    assert "редактировать профиль мастерской и налоговую ставку для расчётов" in capabilities["settings"].description
+    assert "остальные расчетные настройки остаются закрыты" in capabilities["settings"].description
 
 
 def test_settings_decision_matrix_contains_required_groups_and_profile_items_are_editable():
@@ -161,8 +162,9 @@ def test_workshop_profile_update_does_not_create_files_or_mutate_business_tables
 
 
 def test_settings_status_marks_only_workshop_profile_editable():
+    """C1-I adds exactly one newly editable setting: `default_tax_rate`."""
     response = SettingsService().build_status()
     editable = {item.id for group in response.setting_groups for item in group.items if item.status == "editable_now"}
-    assert editable == {"workshop_name", "master_name", "workshop_contact_text", "workshop_note"}
+    assert editable == {"workshop_name", "master_name", "workshop_contact_text", "workshop_note", "default_tax_rate"}
     calculation_group = next(group for group in response.setting_groups if group.id == "calculation_sensitive_candidates")
-    assert all(item.status == "requires_backend_rules" for item in calculation_group.items)
+    assert {item.id for item in calculation_group.items if item.status != "requires_backend_rules"} == {"default_tax_rate"}

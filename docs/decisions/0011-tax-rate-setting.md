@@ -1,7 +1,11 @@
 # ADR - Workshop tax-rate setting (C1)
 
 ## Status
-Accepted — 2026-07-27. Recorded as `CR-007`. Not implemented.
+Accepted — 2026-07-27. Recorded as `CR-007`. Implemented by the `C1-I` slice on its PR branch; not merged, and the exact-head `/settings` smoke is required before merge.
+
+### Implementation note — monotonic effective timestamp
+
+`C1-I` added one implementation detail this decision did not specify. SQLite `CURRENT_TIMESTAMP` has one-second precision, so two real rate changes inside the same second would receive the same `effective_at` and break the “new timestamp on a real change” rule. The tax-setting service generates the current UTC second and, when it is not strictly later than the previous stored timestamp, persists the previous timestamp plus one second. It is written explicitly for `default_tax_rate` only, changes no column, default, or migration, keeps the rate effective immediately, and is a logical ordering marker rather than a scheduled future rate. Tests inject the clock instead of sleeping. This does not become a global settings policy.
 
 ## Context
 

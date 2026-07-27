@@ -29,6 +29,7 @@ from app.api.report_documents import router as report_documents_router
 from app.api.reports import router as reports_router
 from app.api.settings import router as settings_router
 from app.api.stock_movements import router as stock_movements_router
+from app.api.tax_rate_settings import router as tax_rate_settings_router
 
 APP_NAME = "cosmetic-workshop-os"
 PRODUCT_NAME = "Мастерская косметолога"
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(database_router, prefix="/api")
     app.include_router(demo_data_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
+    app.include_router(tax_rate_settings_router, prefix="/api")
     app.include_router(ingredients_router, prefix="/api")
     app.include_router(ingredient_lots_router, prefix="/api")
     app.include_router(stock_movements_router, prefix="/api")

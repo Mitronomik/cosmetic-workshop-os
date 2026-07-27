@@ -11,7 +11,7 @@ Settings (`/settings`) is a user-facing place to understand application/data sta
 - safe workflow capabilities;
 - Settings Decision Matrix;
 - `editable_settings_available: true`;
-- copy explaining that the Workshop profile is editable while calculation-sensitive settings remain a future backend-rule map.
+- copy explaining that the Workshop profile and the tax-rate setting are editable while the remaining calculation-sensitive settings remain a future backend-rule map.
 
 `GET /api/settings/status` is read-only. It must not create files, mutate business data, trigger backup/export/import/demo/report-document actions, regenerate alerts or purchases, or change app configuration.
 
@@ -26,6 +26,8 @@ The Workshop profile fields are editable now through `GET /api/settings/workshop
 - workshop contact text;
 - workshop note.
 
+The tax-rate setting is editable now through `GET /api/settings/tax-rate` and `PUT /api/settings/tax-rate` with backend-owned Decimal validation, `app_settings` persistence under the key `default_tax_rate`, and an atomic `AuditLog` for every real mutation. It is the only calculation-sensitive setting that is editable, and it changes no historical record.
+
 Other safe candidates remain future work:
 
 - default report document format;
@@ -34,10 +36,11 @@ Other safe candidates remain future work:
 
 ### Calculation-sensitive candidates
 
-These require backend domain rules before becoming editable:
+The default tax rate is **implemented and editable** (`CR-007` / `C1-I`, see “C1 — налоговая ставка для расчётов” below). It keeps `affects_calculations: true`, `affects_historical_data: true`, and `requires_backend_service: true`, and its safety note states that history is never recalculated.
+
+These still require backend domain rules before becoming editable:
 
 - currency display;
-- default tax rate — **product contract decided** (`CR-007`, see “C1 — налоговая ставка для расчётов” below); still **not implemented** and still not editable;
 - target margin;
 - default low-stock threshold;
 - expiry warning days;
@@ -107,11 +110,11 @@ Saved Workshop profile fields are display metadata for newly generated report do
 
 # C1 — налоговая ставка для расчётов (`default_tax_rate`)
 
-Status: **ACCEPTED PRODUCT CONTRACT — NOT IMPLEMENTED.**
+Status: **ACCEPTED PRODUCT CONTRACT — IMPLEMENTED ON THE `C1-I` PR BRANCH, NOT MERGED. EXACT-HEAD `/settings` SMOKE REQUIRED BEFORE MERGE.**
 
-This section is the durable contract for the single global workshop tax-rate setting. It was decided as `CR-007` and is the first calculation-sensitive setting to receive a full backend contract. Nothing in this section is implemented yet: on merged `main` no tax setting exists, `default_tax_rate` is still `requires_backend_rules` in the Settings Decision Matrix, and production readiness still returns `estimated_tax = null`.
+This section is the durable contract for the single global workshop tax-rate setting. It was decided as `CR-007` and is the first calculation-sensitive setting to receive a full backend contract.
 
-Implementation is authorized as exactly one bounded follow-up slice, `C1-I — Backend-owned tax-rate setting`, which may begin **only after this decision is merged**. Full slice contract: `docs/implementation-plan.md`.
+The authorized slice `C1-I — Backend-owned tax-rate setting` implements sections 1–4 and 7–12 of this contract on its PR branch: the `GET`/`PUT` endpoints, Decimal-string validation, the canonical two-decimal representation, the backend-generated `effective_at`, explicit Clear as row deletion, the atomic `AuditLog`, the no-op contract, and the `/settings` UI. `default_tax_rate` is `editable_now` in the Settings Decision Matrix. Sections 5, 6, and the tax/margin calculations in section 8 remain **C2 and unimplemented**: production readiness still returns `estimated_tax = null`, and `ProductionBatch` still has no tax snapshot columns. Full slice contract: `docs/implementation-plan.md`.
 
 ## 1. Product meaning
 
@@ -256,6 +259,8 @@ Per-event behavior:
 | no-op clear (already unconfigured) | stays `null`, nothing written |
 
 Clear does **not** receive a new active-setting effective timestamp. It removes the active setting, so the API returns `effective_at: null`. The time at which the clear happened is recorded by `AuditLog.created_at`, and the clear audit metadata carries `previous_effective_at` — the former setting timestamp — and `new_effective_at: null`.
+
+**Monotonic tie-break (`C1-I` implementation detail).** SQLite `CURRENT_TIMESTAMP` has one-second precision, so two real changes inside the same second would otherwise share an effective timestamp. The tax-setting service therefore generates the current UTC second itself and, when that second is not strictly later than the previous stored timestamp, persists the previous timestamp plus one second instead. The value is written explicitly for `default_tax_rate` only; no other setting uses this policy, the column, its default, and the migrations are unchanged, and the rate still becomes effective immediately. The timestamp is a logical ordering marker, never a user-scheduled future rate, and tests control the clock through service injection rather than `sleep()`.
 
 **Storage wording.** The source value is the existing `AppSetting.updated_at` column, which stays persisted in SQLite's `YYYY-MM-DD HH:MM:SS` UTC format. The service normalizes that stored value into the ISO-8601 UTC `effective_at` the API exposes. The database does **not** store ISO-8601, and `C1-I` does not change the column, its default, or any migration.
 

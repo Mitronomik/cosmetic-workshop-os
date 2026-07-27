@@ -1,18 +1,53 @@
-# Current focus — C1 tax-setting product decision; C1-I authorized after merge
+# Current focus — C1-I implemented on its PR branch; exact-head `/settings` smoke required before merge
 
-Active phase: **Roadmap completion window C1 — product contract decided, implementation not started**
+Active phase: **Roadmap completion window C1 — product contract decided; `C1-I` implemented and unmerged**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
 - `R2 — Align import draft baseline test with date normalization`: **DONE**
 - `R4 — Canonical backup/export filename reason normalization`: **DONE**
 - `CR-005 — backup/export filename reason contract`: **ACCEPTED AND IMPLEMENTED**
-- `CR-007 — C1 workshop tax-rate setting contract`: **ACCEPTED, NOT IMPLEMENTED**
+- `CR-007 — C1 workshop tax-rate setting contract`: **ACCEPTED**
+- `C1-I — Backend-owned tax-rate setting`: **IMPLEMENTED — EXACT-HEAD `/settings` SMOKE REQUIRED BEFORE MERGE** (not merged, not `DONE`)
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **No active runtime implementation slice.** `C1-I` becomes authorized only after this decision PR merges.
+- **Active runtime implementation slice: `C1-I`**, on branch `claude/c1-backend-owned-tax-rate-setting`, started from merged `origin/main` `80b83de3e838cf676669a1b627770300590c99c0`.
 
-All four accepted backend baseline gate failures are closed on `main`. This document now records the accepted `CR-007` product decision and authorizes exactly one bounded follow-up implementation slice, `C1-I`, **after** the decision PR merges. No runtime code, test, schema, or migration changes in the decision slice itself.
+All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merged at `80b83de3e838cf676669a1b627770300590c99c0` from final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now implemented on its PR branch.
+
+## C1-I — implemented, not merged
+
+Delivered on the PR branch, matching the accepted contract:
+
+- `GET /api/settings/tax-rate` and `PUT /api/settings/tax-rate` in a dedicated router, service, schema, and domain-validation module, registered under the existing `/api/settings` namespace;
+- persistence of the key `default_tax_rate` through the existing `app_settings` table — **no migration, no new table, no new column, no sentinel**;
+- strict decimal-string validation with structured Russian errors (`invalid_tax_rate_type`, `invalid_tax_rate_format`, `tax_rate_precision_exceeded`, `tax_rate_out_of_range`), rejecting JSON numbers, `bool`, `NaN`, `Infinity`, scientific notation, commas at the API boundary, empty strings, negatives, values above `100`, and more than two fractional digits; `6.005` is rejected and never becomes `6.01`;
+- the canonical exactly-two-decimal representation, persisted and returned;
+- a backend-generated `effective_at` with a monotonic one-second tie-break for `default_tax_rate` only, stored as SQLite `YYYY-MM-DD HH:MM:SS` UTC text and exposed as ISO-8601 UTC;
+- explicit Clear as deletion of the `default_tax_rate` row only, returning `is_configured: false`, `tax_rate_percent: null`, `effective_at: null`;
+- exactly one atomic `tax_rate_setting_changed` / `app_setting` / `default_tax_rate` `AuditLog` per real mutation, rolling the persistence change back when the audit insert fails — proven for configure, change, and Clear alike;
+- the no-op contract: no write, no delete, no timestamp change, no audit, no misleading message;
+- the `Налоговая ставка для расчётов` section inside `/settings` with percentage input and `%` unit, Save, Cancel, explicit confirmed Clear, refresh, scoped pending state, field errors, and distinct mutation and refresh failures;
+- the Settings Decision Matrix marking `default_tax_rate` — and only `default_tax_rate` — as newly editable;
+- the legacy `tax.default_rate = "0.06"` placeholder proven byte-for-byte unchanged after configure, change, and Clear, and never read as a configured rate.
+
+**Not implemented, by design:** readiness tax, confirmation tax, `ProductionBatch` snapshot columns, tax amount, margin, margin percent, report calculation changes, historical backfill or recalculation, tax regimes, and any accounting, invoicing, or filing feature.
+
+Test evidence executed on the PR branch:
+
+| Check | Result |
+|---|---|
+| Backend complete suite (`backend/`) | `671 collected, 671 passed, 0 failed, 0 skipped` |
+| Original merged node IDs still collected | `562 / 562` |
+| Targeted backend settings + tax suites | `123 passed, 0 failed, 0 skipped` |
+| Frontend `npm run test:settings-tax-feedback` | `34 pass, 0 fail, 0 skipped` |
+| All 13 focused frontend suites | `0 fail, 0 skipped` |
+| Frontend `npm run build` | `PASS` |
+| `frontend/src/main.ts` | `6406` before → `6399` after |
+
+No existing test was deleted, renamed, skipped, `xfail`-ed, or weakened. Four existing Settings assertions were updated to the newly accurate editable set and capability wording; their node IDs and strictness are preserved.
+
+The exact-head `/settings` browser smoke is **still required before merge**. `C1-I` is **not `DONE`** until it is reviewed and merged. **C2 remains blocked.**
 
 ## CR-007 — accepted C1 tax-setting decision
 
@@ -29,11 +64,9 @@ All four accepted backend baseline gate failures are closed on `main`. This docu
 - **Atomic audit.** Every real mutation writes `tax_rate_setting_changed` / `app_setting` / `default_tax_rate` in the same transaction as the persistence change — upsert and delete alike — and rolls that change back if the audit write fails. Reads, validation failures, failed persistence, and no-ops are not audited.
 - **C1 owns** the setting, validation, the effective timestamp, the GET/update API, explicit clear, the Settings UI, the atomic audit, persistence, and no-op behavior. **C2 owns** readiness estimates, stale-setting detection, `ProductionBatch` tax snapshots and their nullable migration, tax amount, margin and margin percent, reports from snapshots, and backward-compatibility tests. C2 stays blocked until C1 is merged and verified.
 
-## C1-I — authorized after merge, not implemented
+## C1-I — recorded repository constraints and how they were met
 
-`C1-I — Backend-owned tax-rate setting` is the single authorized follow-up slice. Status: `AUTHORIZED AFTER THIS DECISION PR MERGES — NOT IMPLEMENTED`. **Do not start it from this unmerged decision branch**; start it only from `origin/main` after the decision PR is reviewed and merged. No implementation PR number is assigned.
-
-Recorded repository constraints, verified read-only against `origin/main` at `09d11fc32db6ae57f99d522c4aa71e223e4e01a5`:
+Recorded when the decision was accepted, verified read-only against `origin/main` at `09d11fc32db6ae57f99d522c4aa71e223e4e01a5`. Every constraint below was respected by the implementation:
 
 - the seeded `app_settings` row `tax.default_rate = "0.06"` from `backend/app/migrations/versions/0001_infrastructure.py` is a **superseded coefficient-shaped placeholder** — use the distinct key `default_tax_rate`, and never read, reinterpret, migrate, rewrite, delete, or treat it as a configured rate; `default_tax_rate` and `tax.default_rate` are never conflated. The `tax_rate default 0.06` line in `docs/roadmap.md` and the coefficient formulas in `AGENTS.md` § 6.6, `docs/domain-model.md`, and `docs/architecture.md` § 8.6 were all corrected in the decision PR, so every active tax formula now reads `tax_rate_percent / 100` and no coefficient default for this setting is left anywhere;
 - `SettingsRepository.upsert_setting` opens its own session and accepts no external connection, while `AuditLogRepository.create_log` already accepts one, so atomic setting+audit requires a **bounded optional-`connection` extension** of the existing settings repository — **no schema change, no new settings table, no new settings architecture**; if even that cannot satisfy atomicity, stop, record evidence, and update the contract first;
@@ -106,7 +139,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 has an **accepted product contract** (`CR-007`) and **no implementation**; its single authorized slice `C1-I` starts only after the decision PR merges. C2, C3, and C4 remain **inactive** unless separately authorized, and C2 stays blocked until the C1 implementation is merged and verified.
+- C1 has an **accepted product contract** (`CR-007`) and its single authorized slice `C1-I` is **implemented on its PR branch and not merged**; the exact-head `/settings` smoke and review remain outstanding. C2, C3, and C4 remain **inactive** unless separately authorized, and C2 stays blocked until the C1 implementation is merged and verified.
 - Continuing documentation accuracy remains an ongoing obligation. The durable `CR-005` contract documents `docs/backup-and-restore.md`, `docs/export.md`, and `docs/api.md` record the merged `R4` implementation status and agree with merged `main`.
 
 **Product release readiness is not claimed.**
