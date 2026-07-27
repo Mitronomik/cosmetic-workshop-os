@@ -7,7 +7,7 @@ Accepted — 2026-07-27. Recorded as `CR-007`. Not implemented.
 
 `default_tax_rate` was the first calculation-sensitive Settings candidate to be scheduled for implementation, but it had no product contract. `docs/settings.md` only classified it as `requires_backend_rules`, and the surrounding repository state was ambiguous in ways that would have produced silently wrong money:
 
-- `backend/app/migrations/versions/0001_infrastructure.py` seeds `app_settings` with `tax.default_rate = "0.06"`, a coefficient-shaped placeholder, and `docs/roadmap.md` repeats `tax_rate default 0.06`, while `AGENTS.md` § 6.6 writes `tax = sale_price * tax_rate` — none of which says whether the user enters `6` or `0.06`;
+- `backend/app/migrations/versions/0001_infrastructure.py` seeds `app_settings` with `tax.default_rate = "0.06"`, a coefficient-shaped placeholder; at decision time `docs/roadmap.md` repeated `tax_rate default 0.06`, and `AGENTS.md` § 6.6, `docs/domain-model.md`, and `docs/architecture.md` § 8.6 all wrote the tax formula without dividing by 100 — none of which said whether the user enters `6` or `0.06`. Every one of those documents was corrected in the decision PR;
 - production readiness already returns `estimated_tax = null` with the warning `Налоговая ставка пока не настроена`, and production confirmation already snapshots `sale_price` while writing `tax`, `margin`, and `margin_percent` as `NULL`, so the missing-value path exists but has no defined completion;
 - historical `ProductionBatch` rows must never be silently recalculated, so the effective-time and snapshot semantics had to be decided before any rate could be persisted.
 
@@ -51,7 +51,7 @@ Positive:
 - C2 inherits a decided readiness, stale-setting, and snapshot contract instead of inventing one.
 
 Negative:
-- the seeded `tax.default_rate` row remains in the repository as a superseded placeholder, so future readers must be told which key is authoritative; the roadmap's `0.06` line and `AGENTS.md` § 6.6 were corrected in the decision PR, and the `tax = sale_price * tax_rate` formula still present in `docs/architecture.md` is outside its allowed file scope and remains to be corrected in a later documentation pass;
+- the seeded `tax.default_rate` row remains in the repository as a superseded placeholder, so future readers must be told which key is authoritative; the roadmap's `0.06` line, `AGENTS.md` § 6.6, `docs/domain-model.md`, and `docs/architecture.md` § 8.6 were all corrected in the decision PR, so no coefficient formula for this setting is left anywhere;
 - `SettingsRepository` needs a signature extension and one new `delete_setting` method before a mutation can be written atomically with its audit record;
 - Clear destroys the previous rate rather than versioning it, so the only record of what the rate used to be is the `AuditLog` metadata;
 - users cannot backdate or schedule a rate, so a mid-period rate change is only correct for production confirmed after the change;
