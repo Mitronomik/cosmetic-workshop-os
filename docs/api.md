@@ -875,6 +875,67 @@ The endpoint trims strings, allows empty values, rejects overlong values and uns
 
 `GET /api/settings/status` now marks only `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note` as `editable_now`; calculation-sensitive settings remain `requires_backend_rules`.
 
+## Tax-rate settings API — decided, not implemented
+
+Status: **ACCEPTED PRODUCT CONTRACT — NOT IMPLEMENTED.** These endpoints do not exist on merged `main`. They are the preferred future shape decided in `CR-007` and delivered by the authorized slice `C1-I — Backend-owned tax-rate setting`, which may begin only after the decision PR merges. The durable product contract is `docs/settings.md`; the slice contract is `docs/implementation-plan.md`.
+
+The endpoints live under the existing `/api/settings` surface and use the existing `app_settings` persistence with the preferred key `default_tax_rate`. No new settings table is expected.
+
+```text
+GET /api/settings/tax-rate
+PUT /api/settings/tax-rate
+```
+
+`PUT` request — configure or change the rate:
+
+```json
+{
+  "tax_rate_percent": "6.00"
+}
+```
+
+`PUT` request — explicit clear:
+
+```json
+{
+  "tax_rate_percent": null
+}
+```
+
+Response shape for both `GET` and `PUT`:
+
+```json
+{
+  "is_configured": true,
+  "tax_rate_percent": "6.00",
+  "effective_at": "2026-07-27T10:28:54Z",
+  "message": "Налоговая ставка для расчётов сохранена."
+}
+```
+
+When the setting is not configured — including after an explicit Clear — `is_configured` is `false`, `tax_rate_percent` is `null`, and `effective_at` is `null`.
+
+Contract rules:
+
+- `tax_rate_percent` is a **percentage** decimal string, not a coefficient — `"6.00"` is `6%` and `"0.06"` is `0.06%`;
+- the accepted range is `0.00` to `100.00` inclusive, with at most two fractional digits on input;
+- excess precision such as `"6.005"` is **rejected**, never rounded;
+- floats, `bool`, `NaN`, `Infinity`, and malformed values are rejected;
+- an empty string is not a substitute for `null`;
+- `null` means clear/unconfigure, and `0.00` means an explicitly configured zero-percent estimate — the two are never equivalent;
+- validation failures return the project structured error shape with a human-readable Russian `message`;
+- a real mutation writes an `AuditLog` (`tax_rate_setting_changed` / `app_setting` / `default_tax_rate`) **atomically** with the persistence change; if the audit write fails, the change rolls back;
+- a no-op — the canonical persisted state would not change — returns the current representation without writing or deleting the setting, without changing `effective_at`, without creating an `AuditLog`, and without claiming the rate changed;
+- `GET` is read-only and is never audited.
+
+**Canonical two-decimal representation.** `tax_rate_percent` in a response always carries exactly two fractional digits, and the persisted `default_tax_rate` value uses the same canonical form. Canonical formatting is applied after validation, never to absorb excess precision: `6` → `"6.00"`, `6.0` → `"6.00"`, `6.00` → `"6.00"`, `0` → `"0.00"`, `100` → `"100.00"`, while `6.005` is rejected and must never become `6.01`. The no-op comparison uses that exact canonical string, so `PUT` with `"6"` against a stored `"6.00"` is a no-op.
+
+**`effective_at` semantics.** It is the timestamp of the currently active setting, backend-generated, never client-supplied, and never backdated, scheduled, or edited. First configuration and a real rate change each produce a new value; a no-op keeps the existing one; an explicit Clear returns `effective_at: null`, because there is no active setting to timestamp — the clear event time lives in `AuditLog.created_at`, and the clear audit metadata carries `previous_effective_at` plus `new_effective_at: null`. The stored source is the existing `AppSetting.updated_at` column, which remains persisted in SQLite's `YYYY-MM-DD HH:MM:SS` UTC format; the service normalizes it and only the API exposes ISO-8601 UTC. The database does not store ISO-8601, and `C1-I` changes no column, default, or migration.
+
+**Clear is row deletion.** `PUT` with `tax_rate_percent: null` deletes the `default_tax_rate` `AppSetting` row and nothing else. It never touches the legacy `tax.default_rate` placeholder row, which is a different key and is never read, reinterpreted, migrated, or rewritten. The deletion and its `AuditLog` insert share one transaction, and a failed audit insert rolls the deletion back. Clearing when the row is already absent is a no-op: no delete, no timestamp change, no `AuditLog`, and no message claiming a change. No nullable-column migration, sentinel value, empty-string storage, new settings table, or parallel settings store is authorized — unconfigured is the absence of the row.
+
+The endpoints do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. Readiness tax estimates, production tax snapshots, and margin remain C2 work: `estimated_tax` and `estimated_margin` stay `null` in the production readiness response until C2 lands.
+
 ## Orders write validation contract
 
 `POST /api/orders` and `PUT /api/orders/{order_id}` use backend-authoritative validation. Domain validation failures from Order draft construction return HTTP `422` with a structured `detail` object containing `code`, `message`, `field`, `value`, and `next_action`. Standard FastAPI/Pydantic request validation, including forbidden lifecycle fields (`status`, `produced_at`, `delivered_at`) and invalid enum/type input, keeps the standard HTTP `422` detail-list shape.

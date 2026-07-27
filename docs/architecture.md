@@ -1827,10 +1827,24 @@ First Expired, First Out
 component_cost = sum(consumed_quantity * lot_unit_cost)
 packaging_cost = sum(packaging_quantity * packaging_unit_cost)
 total_cost = component_cost + packaging_cost + other_cost
-tax = sale_price * tax_rate
+tax = sale_price * tax_rate_percent / 100
 margin = sale_price - total_cost - tax
 margin_percent = margin / sale_price * 100
 ```
+
+Правила налоговой части (решение `CR-007`):
+
+- `tax_rate_percent` — это **процент, а не коэффициент**;
+- допустимый диапазон — `0.00`–`100.00`;
+- `6.00` означает `6%`;
+- отсутствующая ставка делает налог и зависящую от него маржу **недоступными, а не нулевыми**;
+- явно настроенный `0.00` — это реальное значение, а не «не настроено»;
+- расчёты выполняются только в `Decimal`;
+- округляется **только итоговая сумма налога**, до `0.01` с `ROUND_HALF_UP`;
+- текущие настройки **никогда** не пересчитывают исторические строки `ProductionBatch`;
+- после реализации налога в C2 производство и отчёты используют **сохранённые снапшоты**, а не текущую ставку;
+- действующий контракт: `docs/settings.md`;
+- контракт снапшотов: `docs/domain-model.md`.
 
 ---
 

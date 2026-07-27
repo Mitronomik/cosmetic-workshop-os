@@ -468,7 +468,7 @@ backend/app/
 ### AppSettings MVP fields
 
 ```text
-tax_rate default 0.06
+default_tax_rate — percentage, no default, unconfigured is null (см. примечание ниже)
 expiration_alert_days default 30
 low_stock_alert_enabled default true
 backup_reminder_enabled default true
@@ -476,6 +476,8 @@ default_recipe_unit default grams
 app_version
 schema_version
 ```
+
+> **Примечание по налоговой ставке — CR-007.** Прежняя строка `tax_rate default 0.06` **отменена** решением `CR-007` и больше не является действующим указанием. Она читалась как коэффициент; принятая настройка — это **процент**, поэтому `6.00` означает `6%`, а `0.06` означало бы `0.06%`. Авторитетное имя настройки — `default_tax_rate`. Значения по умолчанию нет: неконфигурированное состояние — это `null`, и оно **не равно нулю**. Реализация `C1-I` ещё **не выполнена**. Действующий контракт: `docs/settings.md`.
 
 ### AuditLog MVP fields
 
