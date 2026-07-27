@@ -913,3 +913,78 @@ This lifecycle closure is documentation-only. It does not implement B4.1 and doe
 - Backend base/head comparison: both runs collected 496, passed 492, failed the same 4 accepted baseline tests, and skipped 0; branch-only failure delta is `0`.
 - Publication SHA, PR URL, and browser smoke status are added to the PR/final report after publication.
 - Current status: `IMPLEMENTED — EXACT-HEAD BROWSER SMOKE REQUIRED`. Do not mark B4.1, B4, or Block B DONE, and do not activate B4.2.
+
+## 2026-07-26 — Block B closure and backend baseline correction gate handoff
+
+### Verified repository state
+
+- Current `origin/main`: `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa` — the PR #141 merge commit. Confirmed to contain the expected merge (VERIFIED FROM REPOSITORY / GITHUB).
+- Branch for this documentation task: `claude/close-block-b-authorize-backend-hardening`, created from that exact `origin/main`. Merge-base equals `origin/main`; no divergence.
+- PR #141 — `B4.1 — Dashboard safe GET timeout and recovery`: state `MERGED`, merged `2026-07-26T14:58:37Z`, base `main`, head branch `codex/b4.1-dashboard-safe-get-timeout`, final reviewed head `d0cde127355b146f101ddf3769d76d0226c71ec0`, merge commit `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa`. PR #141 and its merged branch were not modified or reused.
+- This change is documentation and state only. No backend or frontend production file, no test, no schema, no migration, no dependency, no lockfile, and no pytest configuration was touched.
+
+### Provenance of supplied evidence
+
+- `VERIFIED FROM REPOSITORY / GITHUB` — PR #141 merge state, final reviewed head, merge commit, merge date, and every production/test source relationship quoted in the triage document.
+- `EXECUTED IN THIS TASK` — the complete backend baseline, both isolated runs of each named node, all four surrounding test files, the diagnostic environment details, and the temporary-environment cleanup.
+- `SUPPLIED TASK BASELINE` — Dashboard/Onboarding `42/42`, frontend production build `PASS`, accepted backend baseline, and PR #141 backend branch-only failure delta `0`.
+- `SUPPLIED TASK BASELINE — product-owner-verified exact-head smoke of PR #141 on 2026-07-26; not re-run in this documentation task` — every browser, keyboard, responsive, network, and exact-head smoke result. These are **not** GitHub Actions evidence, **not** checks executed by this PR, and **not** checks executed by Claude Code.
+
+### Superseded wording
+
+- `IMPLEMENTED — EXACT-HEAD BROWSER SMOKE REQUIRED` for B4.1 is superseded: B4.1 is DONE.
+- `Block B remains active through B4` and `ACTIVE NEXT IMPLEMENTATION WINDOW` for B4 are superseded: B4 and Block B are DONE.
+- The `docs/implementation-plan.md` instruction to start Slice A1 is superseded and removed; Slice A1 completed long ago in PR #113.
+- Accurate historical dated entries in `state/progress.md` and `state/handoff.md` remain unedited, including the `33/33` record, which belongs to an earlier recorded branch state.
+
+### B4 limitation
+
+B4 is closed with the Dashboard safe-GET pilot only. Safe GET timeout and recovery coverage for the remaining read routes, including but not limited to Alerts, Purchases, Orders, Reports, Backups, Exports, and Report Documents, was deliberately deferred and was not delivered. Any future expansion requires a separately authorized slice and a change request. Closing B4 does not imply that those routes are protected against an indefinitely hanging local GET.
+
+No approved B4.2 contract exists. No B4.2 section was created and no B4.2 slice is authorized.
+
+### Diagnostic outcome
+
+`PATH A / COMPLETE`. Python `3.12.13` in an external venv outside the repository, pytest `8.4.2`, run from `backend/` with rootdir `backend/` and configfile `pyproject.toml`. The complete baseline reproduced `496 collected, 492 passed, 4 failed, 0 skipped` with zero drift and no additional failures. Every named node ran twice in isolation, every surrounding test file ran completely, and all four failures are deterministic. The temporary environment was removed and verified absent.
+
+- backups reason sanitization — `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`, call-phase.
+- exports reason sanitization — `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`, call-phase. Structurally duplicated implementation of the same filename contract as the backups node.
+- import draft issue count — `TEST DEFECT`, MEDIUM, call-phase. The documented `DD.MM.YYYY` normalization makes the observed `error_count` of `3` correct.
+- purchase-suggestions manual API smoke — `TEST DEFECT`, MEDIUM, setup/arrange. The API is never reached; the domain correctly rejects a zero-quantity movement.
+
+The two filename nodes are `INCONCLUSIVE` because no product documentation defines whether consecutive unsafe characters in a filename reason must collapse to a single underscore. The tests require collapsing; `backend/app/services/backup.py:47` and `backend/app/services/export.py:84` map each replaced character to one underscore. **Do not state that the production behavior is wrong.** Severity, root cause, correction surface, schema requirement, grouping, slice, tests, and smoke are all `NOT DETERMINED FROM CURRENT EVIDENCE` for those nodes. The blocker is a product decision, not missing diagnostic evidence — no further test execution would resolve it. It is tracked as `CR-005`, status `needs product decision`, covering collapsing, whether literal hyphens remain allowed, the filename-to-metadata reason round-trip, whether the displayed reason is filename-derived or stored independently, and the required focused smoke after implementation.
+
+No data loss or unsafe mutation was found. Detailed evidence and the mandatory per-node fields live in `docs/backend-baseline-failure-triage.md`; do not duplicate them into `state/`.
+
+### Active slice
+
+Exactly one: `R3 — Repair purchase-suggestions API smoke seeding`, **test-only**. Contract in `state/current-focus.md`.
+
+- Change exactly one value: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`.
+- Leave `packaging_qty="2"` on that same line unchanged.
+- Leave the existing `minimum_stock='10'` setup at `backend/app/tests/test_purchase_suggestions.py:215-216` unchanged. The existing threshold of `10` is already higher than the new lot quantity of `1`, so the below-minimum condition the test needs remains true without touching the threshold.
+- Do not change any other line in the test. The diff is exactly one changed value on one line.
+- Preserve and execute all existing API and no-mutation assertions.
+- No production-code change. No skip, `xfail`, deletion, rename, or weakened assertion.
+- Run the complete backend suite from `backend/`.
+- Required smoke is the **backend suite only**. The slice changes no runtime surface, so no browser, visual, or route-rendering check applies, is required, or may be claimed.
+
+`R2` (import draft issue-count contract alignment, test-only) is the next deferred slice. The two filename nodes have **no slice** and must not receive one until `CR-005` is decided. Any focused `/backups` and `/exports` visual check belongs to that product decision and its future implementation slice, not to the active slice. Do not start deferred work, do not combine it with `R3`, and do not assign a future PR number.
+
+Recorded neutrally without diagnosis or activation: a potential SQLite backup transaction-consistency candidate requiring a separate evidence-based diagnostic, tracked as `CR-004` / `needs evidence` in `state/change-requests.md`. It is distinct from the `CR-005` filename-contract decision.
+
+### Remaining release blockers
+
+Clearing the four baseline failures does not make the product release-ready. Still open and not activated here:
+
+1. final macOS `.app`/`.dmg` and user-ready launch;
+2. packaged update flow and update smoke;
+3. verified user/remote installation process;
+4. Restore product decision and implementation;
+5. C1 tax setting;
+6. C2 cost, tax, and margin completion;
+7. C3 user-facing read-only AuditLog workspace;
+8. full release-candidate smoke;
+9. continued documentation accuracy.
+
+C1, C2, C3, and C4 remain inactive. Packaging is blocked and release smoke is blocked. Product release readiness is not claimed.

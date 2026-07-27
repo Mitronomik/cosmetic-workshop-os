@@ -4,7 +4,7 @@
 Клиентское название: **Мастерская косметолога**
 Целевой путь в репозитории: `docs/implementation-plan.md`
 Тип документа: активный рабочий план ближайших окон реализации
-Статус: **активен после закрытия B3 и merge PR #139**
+Статус: **активен после закрытия Block B и merge PR #141**
 Правило нумерации: идентификаторы slices ниже не являются номерами PR. Номер указывается только после фактического создания PR.
 
 ---
@@ -47,15 +47,19 @@
 
 ## 3. Текущая базовая точка
 
-B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
+**Block B is complete.** B4.1 was the last runtime slice of Block B and is merged.
 
-- PR #138 accepted runtime head: `a8cf9d3e21aa46af3f9b2837a44b918cad638910`; merge commit: `bac8672ecb04c96e25bf00c50cfba07f79eadb99`.
-- The first full-smoke attempt found a narrow-width Backups containment blocker.
-- PR #139 closed that blocker at accepted runtime head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`; merge commit: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
-- The final exact-head integration smoke for the implemented B3 scope ran against `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72` and passed with verdict `PASS — FULL AUTOMATED SMOKE PASSED`.
-- Backend branch-only failure delta was `0`. The four known backend baseline failures remain unresolved separate findings.
+- Current baseline `origin/main`: `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa` — the PR #141 merge commit, merged `2026-07-26` (VERIFIED FROM REPOSITORY / GITHUB).
+- PR #141 — `B4.1 — Dashboard safe GET timeout and recovery`: final reviewed head `d0cde127355b146f101ddf3769d76d0226c71ec0`; merge commit `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa` (VERIFIED FROM REPOSITORY / GITHUB).
+- Accepted Dashboard/Onboarding focused suite for the final reviewed head: `42/42` (SUPPLIED TASK BASELINE).
+- Accepted frontend production build: `PASS` (SUPPLIED TASK BASELINE).
+- Accepted PR #141 backend branch-only failure delta: `0` (SUPPLIED TASK BASELINE).
+- Accepted browser, keyboard, responsive, network, and exact-head smoke: `PASS` — SUPPLIED TASK BASELINE — product-owner-verified exact-head smoke of PR #141 on 2026-07-26; not re-run in this documentation task.
+- Complete backend baseline: `496 collected, 492 passed, 4 failed, 0 skipped` — re-executed from `backend/` in the Block B closure task with zero drift (EXECUTED IN THIS TASK).
 
-The active next implementation window is B4, beginning with the focused runtime slice `B4.1 — Safe GET timeout and recovery foundation`. B4.1 is not implemented by this documentation update, and no future PR number is assigned.
+The four backend baseline failures are not regressions from PR #141 and are now handled by an explicit gate rather than being carried as loose findings.
+
+The active next implementation window is **Pre-release hardening — backend baseline correction gate** (section 10). No runtime feature slice is active. No future PR number is assigned.
 
 ## 4. Неизменяемые продуктовые правила
 
@@ -372,9 +376,11 @@ A4.1–A4.4 are complete. The final B3 integration smoke also passed the desktop
 
 ---
 
-# 10. ACTIVE WINDOW — runtime truth и resilience
+# 10. COMPLETED WINDOW — runtime truth и resilience (Block B)
 
-Активное окно начинается с одного ограниченного runtime slice; последующие B4 slices требуют отдельного решения после его проверки.
+Статус: `DONE`
+
+Это окно закрыто полностью: B1, B2, B3 и B4 завершены. Активное окно теперь — section 10a, backend baseline correction gate.
 
 ## B1 — Demo state и operational fixture
 
@@ -418,17 +424,31 @@ Completed in bounded groups:
 
 For each batch, success, mutation failure, refresh failure, busy state, stale-result clearing, and keyboard focus were covered. B3.1–B3.6 are complete through PR #138. The Backups narrow-width blocker found during the first full-smoke attempt was fixed by PR #139, and the final integration smoke for the implemented B3 scope passed on exact published head `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
 
-B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
+B3 implementation and its deferred full integration-smoke gate are complete.
 
 ## B4 — безопасная frontend resilience foundation
 
-Статус: `ACTIVE NEXT IMPLEMENTATION WINDOW`
+Статус: `DONE`
+
+### B4 limitation — deliberately deferred scope
+
+B4 is closed with the Dashboard safe-GET pilot only. Safe GET timeout and recovery coverage for the remaining read routes, including but not limited to Alerts, Purchases, Orders, Reports, Backups, Exports, and Report Documents, was deliberately deferred and was not delivered. Any future expansion requires a separately authorized slice and a change request. Closing B4 does not imply that those routes are protected against an indefinitely hanging local GET.
+
+B4.1 was the only approved B4 runtime slice. **No approved B4.2 contract exists, no B4.2 section exists, and no B4.2 slice is authorized.**
 
 ### B4.1 — Safe GET timeout and recovery foundation
 
-Статус: `IMPLEMENTED — EXACT-HEAD BROWSER SMOKE REQUIRED`
+Статус: `DONE`
 
-Goal: introduce a bounded timeout and recovery contract for explicitly selected safe frontend GET/read operations without changing backend business rules or introducing mutation retries.
+- PR #141 — `B4.1 — Dashboard safe GET timeout and recovery` — merged `2026-07-26`.
+- Final reviewed head: `d0cde127355b146f101ddf3769d76d0226c71ec0`.
+- Merge commit: `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa`.
+- Accepted Dashboard/Onboarding focused suite: `42/42` (SUPPLIED TASK BASELINE).
+- Accepted frontend production build: `PASS` (SUPPLIED TASK BASELINE).
+- Accepted backend branch-only failure delta: `0` (SUPPLIED TASK BASELINE).
+- Accepted exact-head smoke: `PASS` — SUPPLIED TASK BASELINE — product-owner-verified exact-head smoke of PR #141 on 2026-07-26; not re-run in this documentation task.
+
+Delivered: a bounded timeout and recovery contract for explicitly selected safe frontend GET/read operations without changing backend business rules or introducing mutation retries.
 
 Initial bounded pilot:
 
@@ -468,6 +488,65 @@ Required runtime evidence:
 No source timeout may authorize an automatic retry, and no mutation path may use the safe-GET timeout primitive.
 
 Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, production, Import Apply, stock movement creation, backup/export/report generation, other mutation flows, health polling, hidden polling, automatic mutation retry, global request rewrite, cloud/offline sync, framework migration, backend/API/schema/migration changes, and new dependencies.
+
+---
+
+# 10a. ACTIVE WINDOW — Pre-release hardening: backend baseline correction gate
+
+Статус: `IN PROGRESS`
+
+- Diagnostic audit: `DONE` (PATH A / COMPLETE)
+- Active correction slice: `R3 — Repair purchase-suggestions API smoke seeding`
+
+Block B is complete. C1, C2, C3, and C4 remain inactive. Current work is release hardening, not feature expansion. Packaging is blocked and release smoke is blocked.
+
+The gate covers exactly these four node IDs:
+
+```text
+app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters
+app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters
+app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues
+app/tests/test_purchase_suggestions.py::test_manual_api_smoke
+```
+
+## Diagnostic outcome
+
+The complete backend baseline was re-executed from `backend/` with Python `3.12.13` and pytest `8.4.2` (rootdir `backend/`, configfile `pyproject.toml`) and reproduced `496 collected, 492 passed, 4 failed, 0 skipped` with zero drift. Each named node ran twice in isolation and each surrounding test file ran completely. All four failures are deterministic. Full evidence: `docs/backend-baseline-failure-triage.md`.
+
+| Node | Classification | Severity | Setup vs call |
+|---|---|---|---|
+| backups reason sanitization | `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED` | `NOT DETERMINED FROM CURRENT EVIDENCE` | call — API reached, file created |
+| exports reason sanitization | `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED` | `NOT DETERMINED FROM CURRENT EVIDENCE` | call — API reached, file written |
+| import draft issue count | `TEST DEFECT` | MEDIUM | call — draft created, assertion stale |
+| purchase suggestions manual API smoke | `TEST DEFECT` | MEDIUM | setup/arrange — API never reached |
+
+The backups and exports nodes are `INCONCLUSIVE` because the product documentation does not currently define whether consecutive unsafe characters in a filename reason must collapse to a single underscore. The tests require collapsing; the services substitute one underscore per replaced character. **The production behavior is not stated to be wrong.** Deciding the contract is a product decision, not a further diagnostic, and it is tracked as a `needs product decision` change request. No severity, root cause, or correction surface is asserted for those two nodes.
+
+No node showed data loss or unsafe mutation. Import integrity and the zero-quantity stock-movement domain rule were verified intact. For the two undecided nodes the following were recorded as observed facts rather than as impact findings: traversal characters are neutralized, existing artifacts are not overwritten, the filename charset is restricted, and the source database is not modified.
+
+## Bounded correction sequence
+
+1. `R3` — **active**. Repair purchase-suggestions API smoke seeding (test-only). Exactly one changed value: `lot_qty="0"` → `lot_qty="1"` in the `seed_ready(...)` call at `backend/app/tests/test_purchase_suggestions.py:214`. The existing `minimum_stock='10'` setup at `:215-216` stays unchanged, because the existing threshold of `10` is already higher than the new lot quantity of `1` and the below-minimum condition therefore remains true. No other line in the test may change.
+2. `R2` — deferred, next. Import draft issue-count contract alignment (test-only).
+3. Backups and exports filename nodes — **no slice**. Blocked on the `needs product decision` change request covering collapsing, literal hyphens, filename-to-metadata reason round-trip, whether the displayed reason is filename-derived or stored independently, and the required focused smoke after implementation.
+
+`R3` and `R2` tie on primary priority; `R3` precedes `R2` on greater direct user/data impact because it restores execution of a real no-mutation guarantee that is currently unverified at the API layer. Both are fully evidenced from repository sources alone and need no product decision, which is why one of them can be activated while the filename nodes cannot. Exactly one slice is active. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
+
+Active `R3` is test-only, so its required smoke is the **backend suite only**; no browser, visual, or route-rendering check applies. Any focused `/backups` and `/exports` visual check belongs to the unresolved filename product decision and its future implementation slice.
+
+## Separate candidate — not activated
+
+**Potential backup consistency finding — not classified or activated.**
+
+The current backup helper copies the SQLite database file through `shutil.copy2`, and the startup before-migration path uses the same helper. This raises a transaction-consistency question when the database may be live or use auxiliary SQLite files. Some existing tests pass ordinary bytes rather than a real SQLite database to the helper, so a future diagnostic must inspect those fixtures.
+
+This task records only the need for a separate evidence-based diagnostic.
+
+Do not classify the behavior as unsafe and do not prescribe a correction design here.
+
+## Remaining release obligations
+
+Clearing these four failures does **not** make the product release-ready. The following stay outside the active slice and are not activated here: final macOS `.app`/`.dmg` and user-ready launch; packaged update flow and update smoke; verified user/remote installation process; Restore product decision and implementation; C1 tax setting; C2 cost, tax, and margin completion; C3 user-facing read-only AuditLog workspace; full release-candidate smoke; continued documentation accuracy. See section 7 and sections 11–13.
 
 ---
 
@@ -713,12 +792,15 @@ MVP release candidate допускается только после выпол�
 
 ---
 
-## 16. Первое действие после добавления документа
+## 16. Следующее действие
 
-1. Завершить и смержить текущий documentation-only implementation-plan PR.
-2. Подготовить английский Codex prompt только для Slice A1.
-3. Создать Slice A1 как отдельный focused runtime PR.
-4. Не смешивать A1 с validation errors, responsive tables, dashboard, tax/margin, restore или packaging.
+Slice A1 завершён давно; прежняя инструкция «Первое действие после добавления документа» устарела и удалена.
+
+1. Смержить текущий documentation-only PR, закрывающий Block B и открывающий backend baseline correction gate.
+2. Подготовить английский Codex prompt только для `R3 — Repair purchase-suggestions API smoke seeding` по контракту из `state/current-focus.md`.
+3. Создать `R3` как отдельный focused test-only backend PR.
+4. Не смешивать `R3` с `R2`, с нерешённым контрактом имён файлов backup/export, с кандидатом на проверку backup transaction consistency, C1–C4, restore, packaging или release smoke.
+5. Не назначать будущий номер PR заранее.
 
 ## 2026-07-18 — A3.6 Client Feedback structured validation
 
@@ -772,4 +854,4 @@ B1 fixture/backend implementation and B2 backend read-model implementation are n
 - PR #139 accepted runtime head: `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`; merge commit: `c33e7f32decabe74de68051ccdc9e87d75c58cb6`.
 - The Backups narrow-width blocker found during the first smoke attempt is closed.
 - Final exact-head integration verdict: `PASS — FULL AUTOMATED SMOKE PASSED` on `9ee94810f4dddbc03faf8c7cdbe188faa43a4e72`.
-- B3 implementation and its deferred full integration-smoke gate are complete. Block B remains active through B4.
+- B3 implementation and its deferred full integration-smoke gate are complete. Block B has since been closed by B4.1 / PR #141; see sections 3 and 10.
