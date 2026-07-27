@@ -67,7 +67,7 @@ def test_workshop_profile_api_get_put_and_status(monkeypatch, tmp_path):
 
     status_response = client.get("/api/settings/status")
     editable = {item["id"] for group in status_response.json()["setting_groups"] for item in group["items"] if item["status"] == "editable_now"}
-    assert editable == {"workshop_name", "master_name", "workshop_contact_text", "workshop_note"}
+    assert editable == {"workshop_name", "master_name", "workshop_contact_text", "workshop_note", "default_tax_rate"}
 
 
 @pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")

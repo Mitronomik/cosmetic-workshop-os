@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist-tests/settings-tax-feedback", "noEmit": false },
+  "include": ["src/settings-tax-contract.ts", "src/settings-tax-feedback.ts", "src/settings-tax-presentation.ts", "src/settings-tax-bindings.ts", "src/settings-tax-runtime.ts", "src/settings-profile-presentation.ts"]
+}

@@ -17,6 +17,10 @@ class DomainIssueCode(StrEnum):
     INVALID_UNIT = "invalid_unit"
     INVALID_EMAIL = "invalid_email"
     INVALID_DATE = "invalid_date"
+    INVALID_TAX_RATE_TYPE = "invalid_tax_rate_type"
+    INVALID_TAX_RATE_FORMAT = "invalid_tax_rate_format"
+    TAX_RATE_OUT_OF_RANGE = "tax_rate_out_of_range"
+    TAX_RATE_PRECISION_EXCEEDED = "tax_rate_precision_exceeded"
 
 
 @dataclass(frozen=True)

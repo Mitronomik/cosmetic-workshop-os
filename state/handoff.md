@@ -1130,3 +1130,28 @@ C1, C2, C3, and C4 remain inactive. Packaging is blocked and release smoke is bl
 - `state/change-requests.md` gained only the new `CR-007` row, which appears once and remains `accepted`; `CR-001` through `CR-006` are unchanged. `CR-004` — SQLite backup transaction consistency — and `CR-006` — export create-response fallback — remain separate, unresolved `needs evidence` rows, are not activated, and are not merged with `CR-007`. No `CLAUDE.md` or `.claude/` file was created or modified.
 - **Read before continuing:** `docs/settings.md` for the durable contract and the repository constraints, `docs/implementation-plan.md` § 11 for the `C1-I` slice contract and the C1/C2 boundary, `docs/decisions/0011-tax-rate-setting.md` for the decision rationale and rejected alternatives, `docs/api.md` for the preferred future endpoint shape, `docs/domain-model.md` § 6.14 for the snapshot semantics, `docs/reports.md` for the report boundary, and `state/current-focus.md` for current status.
 - Restore remains unimplemented, packaging, installation, update, and full release-candidate smoke remain open, C2, C3, and C4 remain inactive, and **the product is not release-ready.**
+
+## 2026-07-27 — Handoff after the C1-I implementation on its PR branch
+
+`C1-I — Backend-owned tax-rate setting` is **implemented on branch `claude/c1-backend-owned-tax-rate-setting` and not merged**. Status: `IMPLEMENTED — EXACT-HEAD /settings SMOKE REQUIRED BEFORE MERGE`. It is **not `DONE`**, **C2 remains blocked**, and **product release readiness is not claimed**.
+
+The branch was created from clean `origin/main` `80b83de3e838cf676669a1b627770300590c99c0` — the merge commit of the merged `CR-007` decision PR #148, whose final reviewed head was `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`. No rebase, no force-push, no history rewrite, no auto-merge.
+
+What exists now that did not exist on merged `main`:
+
+- `GET /api/settings/tax-rate` and `PUT /api/settings/tax-rate`, backed by `backend/app/domain/tax_rate.py`, `backend/app/schemas/tax_rate_settings.py`, `backend/app/services/tax_rate_settings.py`, and `backend/app/api/tax_rate_settings.py`;
+- the `default_tax_rate` key in the existing `app_settings` table, with **no migration and no schema change**;
+- a bounded `SettingsRepository` extension: optional `connection`, an optional caller-owned `updated_at`, and `delete_setting(key, connection=None)`;
+- the `Налоговая ставка для расчётов` section inside `/settings`, built from five focused frontend modules plus one extracted profile-presentation module, with `frontend/src/main.ts` shrinking from `6406` to `6399` lines;
+- focused suites `backend/app/tests/test_tax_rate_settings.py`, `backend/app/tests/test_tax_rate_settings_api.py`, and `frontend/test/settings-tax-feedback.test.mjs`.
+
+Executed evidence on that branch: backend `671 collected, 671 passed, 0 failed, 0 skipped` with all 562 original node IDs still collected; targeted settings/tax suites `123 passed`; `npm run test:settings-tax-feedback` `34 pass, 0 fail, 0 skipped`; all 13 focused frontend suites green; `npm run build` `PASS`.
+
+Outstanding before this slice can be called `DONE`:
+
+1. the focused exact-published-head `/settings` browser smoke at `1440 × 900`, from an external runner under a temporary root outside the repository, with an isolated database, user-data directory, `HOME`, browser profile, and runner-owned ports, and evidence kept outside Git;
+2. review and merge of the open PR.
+
+Do **not** start C2 before that. Readiness tax estimates, production tax snapshots, the nullable snapshot migration, tax amount, margin, margin percent, and report calculations from snapshots all remain C2 and are unimplemented; production readiness still returns `estimated_tax = null`, and `ProductionBatch` still has no tax snapshot columns.
+
+Other obligations are unchanged: `CR-004` remains `needs evidence` and inactive, `CR-006` remains `needs evidence` and non-blocking, and the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open.

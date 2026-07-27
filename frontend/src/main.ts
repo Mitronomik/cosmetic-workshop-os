@@ -5,6 +5,11 @@ import { renderOrderLifecycleActions, renderOrderPersistentWriteNotice, renderOr
 import { artifactFolderLabel, artifactReason, artifactSize, localArtifactPresentation } from './local-artifact-presentation.js';
 import { type LocalArtifactRouteKey } from './local-artifacts-reports-feedback.js';
 import { bindLocalArtifactsReportsControls } from './local-artifacts-reports-bindings.js';
+import { isWorkshopProfileDirty as isWorkshopProfileDirtyState, isWorkshopProfileFormAvailable as isWorkshopProfileFormAvailableState, workshopProfileCardMarkup } from './settings-profile-presentation.js';
+import { bindSettingsTaxRateControls } from './settings-tax-bindings.js';
+import { settingsTaxRateCardMarkup } from './settings-tax-presentation.js';
+import { SettingsTaxRateRuntime } from './settings-tax-runtime.js';
+import type { TaxRatePayload, TaxRateSettingDto } from './settings-tax-contract.js';
 import { createLocalArtifactRouteRuntime } from './local-artifacts-reports-runtime.js';
 import { transitionLocalArtifactsReportsRouteOwnership } from './local-artifacts-reports-route.js';
 import { bindActionControls, DashboardOnboardingFeedbackLifecycle, onboardingFailureMessage, onboardingSuccessMessage, selectOnboardingFocusTarget, type FocusCandidate, type OnboardingAction } from './dashboard-onboarding-feedback.js';
@@ -765,6 +770,7 @@ const reportsLifecycle = reportsRuntime.lifecycle;
 let settingsUiState: SettingsUiState = { status: 'idle', data: null, error: '' };
 const emptyWorkshopProfile = (): WorkshopProfile => ({ workshop_name: '', master_name: '', workshop_contact_text: '', workshop_note: '' });
 let workshopProfileUiState: WorkshopProfileUiState = { status: 'idle', actionStatus: 'idle', profile: null, draft: emptyWorkshopProfile(), error: '', message: '' };
+const settingsTaxRuntime = new SettingsTaxRateRuntime({ read: getTaxRateSetting, save: updateTaxRateSetting, ownsRoute: () => activeSection === 'Настройки', render: () => render(), announce: (message, kind) => (kind === 'assertive' ? announceAssertive(message) : announcePolite(message)), fieldErrorFromFailure: taxRateFieldErrorFromFailure });
 
 function sectionFromLocation(): NavigationSection {
   const routes: Record<string, NavigationSection> = {
@@ -823,7 +829,7 @@ function loadSectionData(section: NavigationSection) {
   if (section === 'Производство') loadProductionHistory();
   if (section === 'Тара') loadPackagingItems();
   if (section === 'Отчеты') loadReports();
-  if (section === 'Настройки') { loadSettingsStatus(); loadWorkshopProfile(); }
+  if (section === 'Настройки') { loadSettingsStatus(); loadWorkshopProfile(); settingsTaxRuntime.enter(); settingsTaxRuntime.load('initial'); } else settingsTaxRuntime.leave();
 }
 
 function renderActivePage(section: NavigationSection) {
@@ -992,6 +998,7 @@ function bindEvents(root: HTMLElement) {
   root.querySelector<HTMLFormElement>('[data-form="workshop-profile"]')?.addEventListener('submit', submitWorkshopProfileForm);
   root.querySelector<HTMLButtonElement>('[data-action="cancel-workshop-profile"]')?.addEventListener('click', cancelWorkshopProfileChanges);
   root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-workshop-profile-field]').forEach((input) => input.addEventListener('input', updateWorkshopProfileDraft));
+  bindSettingsTaxRateControls(root, { submitTaxRate: (event) => { event.preventDefault(); settingsTaxRuntime.submit(); }, updateTaxRateDraft: (event) => settingsTaxRuntime.updateDraft((event.currentTarget as HTMLInputElement).value), cancelTaxRateEdit: () => settingsTaxRuntime.cancelEdit(), requestTaxRateClear: () => settingsTaxRuntime.requestClear(), confirmTaxRateClear: () => settingsTaxRuntime.confirmClear(), cancelTaxRateClear: () => settingsTaxRuntime.cancelClear(), refreshTaxRate: () => settingsTaxRuntime.refresh() });
   root.querySelectorAll<HTMLButtonElement>('[data-nav-section]').forEach((button) => button.addEventListener('click', () => {
     navigateToSection((button.dataset.navSection as NavigationSection | undefined) ?? 'Главная');
   }));
@@ -3130,30 +3137,14 @@ function loadWorkshopProfile(force = false) {
 }
 
 function settingsPage() {
-  return `<div class="settings-layout"><section class="card data-card settings-hero"><p>Здесь можно сохранить данные мастерской для новых документов и перейти к безопасной работе с локальными файлами.</p></section>${settingsWorkshopProfileCard()}${settingsLocalDataSection()}</div>`;
+  return `<div class="settings-layout"><section class="card data-card settings-hero"><p>Здесь можно сохранить данные мастерской для новых документов и перейти к безопасной работе с локальными файлами.</p></section>${settingsWorkshopProfileCard()}${settingsTaxRateCard()}${settingsLocalDataSection()}</div>`;
 }
 
-function isWorkshopProfileDirty() {
-  const profile = workshopProfileUiState.profile;
-  const draft = workshopProfileUiState.draft;
-  return profile !== null && (draft.workshop_name !== profile.workshop_name || draft.master_name !== profile.master_name || draft.workshop_contact_text !== profile.workshop_contact_text || draft.workshop_note !== profile.workshop_note);
-}
-function isWorkshopProfileFormAvailable() { return workshopProfileUiState.status === 'ready' && workshopProfileUiState.profile !== null && workshopProfileUiState.actionStatus !== 'saving'; }
-
-function settingsWorkshopProfileCard() {
-  const state = workshopProfileUiState;
-  const draft = state.draft;
-  const saving = state.actionStatus === 'saving';
-  const loading = state.status === 'loading';
-  const available = isWorkshopProfileFormAvailable();
-  const dirty = available && isWorkshopProfileDirty();
-  const disabled = available ? '' : 'disabled';
-  const actionDisabled = dirty ? '' : 'disabled';
-  const retry = state.status === 'error' && state.profile === null ? '<div class="actions"><button class="secondary-action compact" type="button" data-action="reload-workshop-profile">Повторить загрузку</button></div>' : '';
-  const message = state.message && state.status === 'ready' ? `<div data-workshop-profile-result>${feedbackMessage('success', state.message)}</div>` : '';
-  const error = state.error ? `<div data-workshop-profile-result>${feedbackMessage('error', state.error)}</div>` : '';
-  return `<section class="card data-card settings-card settings-profile-card"><h2>Профиль мастерской</h2><p>Эти данные добавляются в новые Markdown- и PDF-документы «Сводка мастерской», которые создаются в разделе «Документы отчётов».</p><p class="next-step">Ранее созданные документы не меняются автоматически.</p><div class="actions">${settingsAction('Открыть документы отчётов', 'Документы отчетов')}</div>${loading ? '<p class="muted-text">Загружаем профиль мастерской…</p>' : ''}${error}${retry}${message}<div data-workshop-profile-dirty-notice ${dirty ? '' : 'hidden'}>${feedbackMessage('neutral', 'Есть несохранённые изменения.')}</div><form class="ingredient-form" data-form="workshop-profile" aria-busy="${saving ? 'true' : 'false'}"><div class="form-grid settings-profile-form"><label>Название мастерской<input data-workshop-profile-field="workshop_name" value="${escapeHtml(draft.workshop_name)}" maxlength="120" placeholder="Например, Мастерская Анны" ${disabled} /></label><label>Имя мастера / косметолога<input data-workshop-profile-field="master_name" value="${escapeHtml(draft.master_name)}" maxlength="120" placeholder="Например, Анна Иванова" ${disabled} /></label><label class="full-span">Контактная информация<textarea data-workshop-profile-field="workshop_contact_text" maxlength="500" rows="4" placeholder="Телефон, почта или удобный способ связи" ${disabled}>${escapeHtml(draft.workshop_contact_text)}</textarea></label><label class="full-span">Краткое описание / примечание<textarea data-workshop-profile-field="workshop_note" maxlength="500" rows="4" placeholder="Коротко о мастерской для новых сводок" ${disabled}>${escapeHtml(draft.workshop_note)}</textarea></label></div><div class="actions"><button class="primary-action" type="submit" data-workshop-profile-save ${actionDisabled}>${saving ? 'Сохраняем…' : 'Сохранить профиль'}</button><button class="secondary-action" type="button" data-action="cancel-workshop-profile" ${actionDisabled}>Отменить изменения</button></div></form></section>`;
-}
+function isWorkshopProfileDirty() { return isWorkshopProfileDirtyState(workshopProfileUiState); }
+function isWorkshopProfileFormAvailable() { return isWorkshopProfileFormAvailableState(workshopProfileUiState); }
+function settingsWorkshopProfileCard() { return workshopProfileCardMarkup(workshopProfileUiState, { renderFeedback: feedbackMessage, actionsMarkup: settingsAction('Открыть документы отчётов', 'Документы отчетов') }); }
+function settingsTaxRateCard() { return settingsTaxRateCardMarkup(settingsTaxRuntime.presentation(), feedbackMessage); }
+function taxRateFieldErrorFromFailure(error: unknown) { const detail = (error as { payload?: { detail?: { field?: string; message?: string } } })?.payload?.detail; return detail?.field === 'tax_rate_percent' && detail.message ? detail.message : ''; }
 
 
 function syncWorkshopProfileDraftUi() {
@@ -4774,6 +4765,8 @@ function apiForm<T>(url: string, method: 'POST', formData: FormData): Promise<T>
 function getSettingsStatus(): Promise<SettingsStatusResponse> { return apiGet<SettingsStatusResponse>('/api/settings/status'); }
 function getWorkshopProfile(): Promise<WorkshopProfileResponse> { return apiGet<WorkshopProfileResponse>('/api/settings/workshop-profile'); }
 function updateWorkshopProfile(payload: WorkshopProfile): Promise<WorkshopProfileResponse> { return apiSend<WorkshopProfileResponse>('/api/settings/workshop-profile', 'PUT', payload); }
+function getTaxRateSetting(): Promise<TaxRateSettingDto> { return apiGet<TaxRateSettingDto>('/api/settings/tax-rate'); }
+function updateTaxRateSetting(payload: TaxRatePayload): Promise<TaxRateSettingDto> { return apiSend<TaxRateSettingDto>('/api/settings/tax-rate', 'PUT', payload); }
 function getReportsOverview(): Promise<OverviewReportResponse> { return apiGet<OverviewReportResponse>('/api/reports/overview'); }
 function getInventoryReport(): Promise<InventoryReportResponse> { return apiGet<InventoryReportResponse>('/api/reports/inventory'); }
 function getOrdersReport(): Promise<OrdersReportResponse> { return apiGet<OrdersReportResponse>('/api/reports/orders'); }

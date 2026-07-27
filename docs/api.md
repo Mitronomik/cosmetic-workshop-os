@@ -873,13 +873,13 @@ The report uses Decimal-safe string values. It does not invent tax or apply a hi
 
 The endpoint trims strings, allows empty values, rejects overlong values and unsafe control characters, and updates only the grouped `workshop_profile` app setting. It does not mutate business data, create files, run backup/export/import/demo/report-document actions, or recalculate reports, recipes, orders, production, stock, costs, taxes, or margins.
 
-`GET /api/settings/status` now marks only `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note` as `editable_now`; calculation-sensitive settings remain `requires_backend_rules`.
+`GET /api/settings/status` marks `workshop_name`, `master_name`, `workshop_contact_text`, `workshop_note`, and — once `C1-I` is merged — `default_tax_rate` as `editable_now`; every other calculation-sensitive setting remains `requires_backend_rules`.
 
-## Tax-rate settings API — decided, not implemented
+## Tax-rate settings API
 
-Status: **ACCEPTED PRODUCT CONTRACT — NOT IMPLEMENTED.** These endpoints do not exist on merged `main`. They are the preferred future shape decided in `CR-007` and delivered by the authorized slice `C1-I — Backend-owned tax-rate setting`, which may begin only after the decision PR merges. The durable product contract is `docs/settings.md`; the slice contract is `docs/implementation-plan.md`.
+Status: **IMPLEMENTED ON THE `C1-I` PR BRANCH — NOT MERGED.** These endpoints do not yet exist on merged `main`. They were decided in `CR-007` and are delivered by the authorized slice `C1-I — Backend-owned tax-rate setting`; the exact-head `/settings` smoke is required before merge. The durable product contract is `docs/settings.md`; the slice contract is `docs/implementation-plan.md`.
 
-The endpoints live under the existing `/api/settings` surface and use the existing `app_settings` persistence with the preferred key `default_tax_rate`. No new settings table is expected.
+The endpoints live under the existing `/api/settings` surface and use the existing `app_settings` persistence with the key `default_tax_rate`. No new settings table, column, or migration is introduced.
 
 ```text
 GET /api/settings/tax-rate
@@ -923,14 +923,15 @@ Contract rules:
 - floats, `bool`, `NaN`, `Infinity`, and malformed values are rejected;
 - an empty string is not a substitute for `null`;
 - `null` means clear/unconfigure, and `0.00` means an explicitly configured zero-percent estimate — the two are never equivalent;
-- validation failures return the project structured error shape with a human-readable Russian `message`;
+- validation failures return HTTP `422` with the project structured `detail` object — `code`, `message`, `field` (`tax_rate_percent`), `value`, `next_action` — and a human-readable Russian `message`. The stable codes are `invalid_tax_rate_type`, `invalid_tax_rate_format`, `tax_rate_precision_exceeded`, and `tax_rate_out_of_range`;
+- a failure to persist the setting atomically with its audit record returns HTTP `500` with a safe structured `detail` and leaves the previous value, timestamp, and row presence unchanged;
 - a real mutation writes an `AuditLog` (`tax_rate_setting_changed` / `app_setting` / `default_tax_rate`) **atomically** with the persistence change; if the audit write fails, the change rolls back;
 - a no-op — the canonical persisted state would not change — returns the current representation without writing or deleting the setting, without changing `effective_at`, without creating an `AuditLog`, and without claiming the rate changed;
 - `GET` is read-only and is never audited.
 
 **Canonical two-decimal representation.** `tax_rate_percent` in a response always carries exactly two fractional digits, and the persisted `default_tax_rate` value uses the same canonical form. Canonical formatting is applied after validation, never to absorb excess precision: `6` → `"6.00"`, `6.0` → `"6.00"`, `6.00` → `"6.00"`, `0` → `"0.00"`, `100` → `"100.00"`, while `6.005` is rejected and must never become `6.01`. The no-op comparison uses that exact canonical string, so `PUT` with `"6"` against a stored `"6.00"` is a no-op.
 
-**`effective_at` semantics.** It is the timestamp of the currently active setting, backend-generated, never client-supplied, and never backdated, scheduled, or edited. First configuration and a real rate change each produce a new value; a no-op keeps the existing one; an explicit Clear returns `effective_at: null`, because there is no active setting to timestamp — the clear event time lives in `AuditLog.created_at`, and the clear audit metadata carries `previous_effective_at` plus `new_effective_at: null`. The stored source is the existing `AppSetting.updated_at` column, which remains persisted in SQLite's `YYYY-MM-DD HH:MM:SS` UTC format; the service normalizes it and only the API exposes ISO-8601 UTC. The database does not store ISO-8601, and `C1-I` changes no column, default, or migration.
+**`effective_at` semantics.** It is the timestamp of the currently active setting, backend-generated, never client-supplied, and never backdated, scheduled, or edited. Because SQLite `CURRENT_TIMESTAMP` has one-second precision, the service applies a monotonic tie-break for `default_tax_rate` only: successive real changes always receive strictly increasing timestamps, using the previous timestamp plus one second when the current second is not later. First configuration and a real rate change each produce a new value; a no-op keeps the existing one; an explicit Clear returns `effective_at: null`, because there is no active setting to timestamp — the clear event time lives in `AuditLog.created_at`, and the clear audit metadata carries `previous_effective_at` plus `new_effective_at: null`. The stored source is the existing `AppSetting.updated_at` column, which remains persisted in SQLite's `YYYY-MM-DD HH:MM:SS` UTC format; the service normalizes it and only the API exposes ISO-8601 UTC. The database does not store ISO-8601, and `C1-I` changes no column, default, or migration.
 
 **Clear is row deletion.** `PUT` with `tax_rate_percent: null` deletes the `default_tax_rate` `AppSetting` row and nothing else. It never touches the legacy `tax.default_rate` placeholder row, which is a different key and is never read, reinterpreted, migrated, or rewritten. The deletion and its `AuditLog` insert share one transaction, and a failed audit insert rolls the deletion back. Clearing when the row is already absent is a no-op: no delete, no timestamp change, no `AuditLog`, and no message claiming a change. No nullable-column migration, sentinel value, empty-string storage, new settings table, or parallel settings store is authorized — unconfigured is the absence of the row.
 

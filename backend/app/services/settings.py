@@ -53,7 +53,7 @@ class SettingsService:
             capabilities=_capabilities(),
             setting_groups=_setting_groups(),
             editable_settings_available=True,
-            message="Профиль мастерской уже можно редактировать. Остальные настройки пока показаны как безопасная карта будущих возможностей.",
+            message="Профиль мастерской и налоговую ставку для расчётов уже можно редактировать. Остальные настройки, влияющие на расчеты, пока показаны как безопасная карта будущих возможностей.",
             warnings=[],
         )
 
@@ -138,7 +138,7 @@ def _capabilities() -> list[SettingsCapability]:
         SettingsCapability(id="reports", title="Отчеты", status="ready", route="/reports", description="Отчеты читают данные и показывают сводки без изменения склада, заказов и производства.", mutates_from_settings=False),
         SettingsCapability(id="demo_data", title="Демо-данные", status="ready", route="/demo-data", description="Демо-данные устанавливаются и очищаются только через отдельный явный сценарий.", mutates_from_settings=False),
         SettingsCapability(id="help", title="Помощь", status="ready", route="/help", description="Справка объясняет рабочие сценарии и не меняет данные.", mutates_from_settings=False),
-        SettingsCapability(id="settings", title="Настройки", status="ready", route="/settings", description="Этот раздел показывает статус настроек и позволяет редактировать только профиль мастерской; расчетные настройки остаются закрыты.", mutates_from_settings=False),
+        SettingsCapability(id="settings", title="Настройки", status="ready", route="/settings", description="Этот раздел показывает статус настроек и позволяет редактировать профиль мастерской и налоговую ставку для расчётов; остальные расчетные настройки остаются закрыты.", mutates_from_settings=False),
     ]
 
 
@@ -168,7 +168,7 @@ def _setting_groups() -> list[SettingsGroup]:
         ]),
         SettingsGroup(id="calculation_sensitive_candidates", title="Кандидаты, влияющие на расчеты", description="Эти настройки нельзя добавлять как простые поля: нужны backend-правила, снапшоты и тесты исторической безопасности.", items=[
             _definition("currency_display", "Отображение валюты", "requires_backend_rules", "Будущий символ/подпись валюты для денежных значений.", "Нужно определить, это только отображение или часть денежных правил.", affects_calculations=True, affects_historical_data=True, requires_backend_service=True),
-            _definition("default_tax_rate", "Налоговая ставка по умолчанию", "requires_backend_rules", "Будущая ставка для новых расчетов заказов и производств.", "Должна применяться к будущим расчетам через backend и не менять старые production batch.", affects_calculations=True, affects_historical_data=True, requires_backend_service=True),
+            _definition("default_tax_rate", "Налоговая ставка для расчётов", "editable_now", "Ставка в процентах для внутренней оценки налога с цены продажи. Это не налоговая отчетность.", "Применяется только к будущим расчетам через backend; старые production batch, отчеты и документы не пересчитываются.", affects_calculations=True, affects_historical_data=True, requires_backend_service=True),
             _definition("target_margin", "Целевая маржа", "requires_backend_rules", "Будущая подсказка для планирования цены и прибыльности.", "Нельзя пересчитывать исторические цены без явного решения.", affects_calculations=True, affects_historical_data=True, requires_backend_service=True),
             _definition("default_low_stock_threshold", "Порог низкого остатка по умолчанию", "requires_backend_rules", "Будущий дефолт для новых компонентов или тары.", "Генерация алертов и закупок должна оставаться backend-логикой.", affects_calculations=False, affects_historical_data=False, requires_backend_service=True),
             _definition("expiry_warning_days", "Дней до предупреждения о сроке годности", "requires_backend_rules", "Будущий дефолт для предупреждений о скором истечении срока.", "Влияние на алерты и закупки должно быть протестировано на backend.", affects_calculations=False, affects_historical_data=False, requires_backend_service=True),
