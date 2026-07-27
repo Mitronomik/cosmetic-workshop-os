@@ -15,6 +15,11 @@ export type TaxRateReconciliationFields = {
   detachedMutationPending: boolean;
   reconciliationRequired: boolean;
   reconciliationReason: TaxRateReconciliationReason;
+  /**
+   * True only after an authoritative read actually rejected. An open obligation
+   * on its own is not a failure, so the two must never share one message.
+   */
+  reconciliationFailed: boolean;
   /** Bumped per obligation, so a stale read cannot discharge a newer one. */
   reconciliationEpoch: number;
 };
@@ -27,11 +32,15 @@ export const emptyReconciliation = (): TaxRateReconciliationFields => ({
   detachedMutationPending: false,
   reconciliationRequired: false,
   reconciliationReason: null,
+  reconciliationFailed: false,
   reconciliationEpoch: 0,
 });
 
 export function requireReconciliation(state: TaxRateReconciliationFields, reason: Exclude<TaxRateReconciliationReason, null>): void {
-  if (!state.reconciliationRequired || state.reconciliationReason !== reason) state.reconciliationEpoch += 1;
+  if (!state.reconciliationRequired || state.reconciliationReason !== reason) {
+    state.reconciliationEpoch += 1;
+    state.reconciliationFailed = false;
+  }
   state.reconciliationRequired = true;
   state.reconciliationReason = reason;
 }
@@ -39,6 +48,12 @@ export function requireReconciliation(state: TaxRateReconciliationFields, reason
 export function clearReconciliation(state: TaxRateReconciliationFields): void {
   state.reconciliationRequired = false;
   state.reconciliationReason = null;
+  state.reconciliationFailed = false;
+}
+
+/** Record that an authoritative read rejected, which is what licenses failure copy. */
+export function markReconciliationFailed(state: TaxRateReconciliationFields): void {
+  state.reconciliationFailed = true;
 }
 
 /** Record that a pending mutation outlived its route. */

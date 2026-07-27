@@ -14,16 +14,18 @@ import {
   settleDetachedMutation,
   TAX_RATE_RECONCILE_FAILED_MESSAGE,
   TAX_RATE_RECONCILED_MESSAGE,
+  markReconciliationFailed,
   TAX_RATE_RECONCILING_MESSAGE,
   type TaxRateReconciliationFields,
 } from './settings-tax-reconciliation.js';
-import { busyMessage, TAX_RATE_CANCEL_MESSAGE, TAX_RATE_CLEAR_ERROR, TAX_RATE_CLEARING_MESSAGE, TAX_RATE_INITIAL_ERROR, TAX_RATE_INVALID_RESPONSE, TAX_RATE_REFRESH_SUCCESS, TAX_RATE_REFRESH_WARNING, TAX_RATE_SAVE_ERROR, TAX_RATE_SAVING_MESSAGE } from './settings-tax-messages.js';
+import { TAX_RATE_CANCEL_MESSAGE, TAX_RATE_CLEAR_ERROR, TAX_RATE_CLEARING_MESSAGE, TAX_RATE_INITIAL_ERROR, TAX_RATE_INVALID_RESPONSE, TAX_RATE_REFRESH_SUCCESS, TAX_RATE_REFRESH_WARNING, TAX_RATE_SAVE_ERROR, TAX_RATE_SAVING_MESSAGE } from './settings-tax-messages.js';
+import { idleFeedback, readBusyFeedback, reconciliationBusyFeedback, reentryFeedback, type TaxRateFeedback } from './settings-tax-feedback-copy.js';
 
 export * from './settings-tax-messages.js';
+export * from './settings-tax-feedback-copy.js';
 
 export type TaxRateReadKind = 'initial' | 'refresh' | 'mutation-refresh' | 'reconciliation';
 export type TaxRateMutationKind = 'save' | 'clear';
-export type TaxRateFeedbackTone = 'none' | 'neutral' | 'success' | 'warning' | 'error';
 export type TaxRateAnnouncement = 'none' | 'polite' | 'assertive';
 
 export type TaxRateOwner = { requestId: number; routeGeneration: number };
@@ -50,7 +52,6 @@ export type TaxRateSettled = {
   needsReconciliation?: boolean;
 };
 
-export type TaxRateFeedback = { tone: TaxRateFeedbackTone; neutral: string; success: string; warning: string; error: string };
 export type TaxRateState = TaxRateReconciliationFields & {
   routeGeneration: number;
   status: 'idle' | 'loading' | 'ready' | 'error';
@@ -64,7 +65,6 @@ export type TaxRateState = TaxRateReconciliationFields & {
 };
 
 
-const idleFeedback = (): TaxRateFeedback => ({ tone: 'none', neutral: '', success: '', warning: '', error: '' });
 const ignored = (): TaxRateSettled => ({ accepted: false, announcement: 'none', message: '' });
 
 export class SettingsTaxRateFeedbackLifecycle {
@@ -79,9 +79,7 @@ export class SettingsTaxRateFeedbackLifecycle {
     this.state.routeGeneration += 1;
     this.state.read = null;
     this.state.clearConfirmVisible = false;
-    this.state.feedback = this.state.reconciliationRequired
-      ? { ...idleFeedback(), tone: 'warning', warning: this.state.feedback.warning || TAX_RATE_RECONCILE_FAILED_MESSAGE }
-      : idleFeedback();
+    this.state.feedback = reentryFeedback(this.state);
   }
 
   /**
@@ -108,12 +106,8 @@ export class SettingsTaxRateFeedbackLifecycle {
     if (kind === 'initial' && !this.state.confirmed) this.state.status = 'loading';
     // A mutation-refresh reconciles an already-confirmed success, so it must not
     // add a busy message next to that success.
-    if (kind !== 'mutation-refresh') {
-      // A reconciliation read keeps the error that caused it visible until it
-      // actually resolves, so the user is never left without an explanation.
-      const error = kind === 'reconciliation' ? this.state.feedback.error : '';
-      this.state.feedback = { ...this.state.feedback, tone: error ? 'error' : 'neutral', neutral: busyMessage(kind), error };
-    }
+    if (kind === 'reconciliation') this.state.feedback = reconciliationBusyFeedback(this.state, this.state.feedback);
+    else if (kind !== 'mutation-refresh') this.state.feedback = readBusyFeedback(this.state.feedback, kind);
     return { accepted: true, owner };
   }
 
@@ -146,19 +140,25 @@ export class SettingsTaxRateFeedbackLifecycle {
     }
     // A failed reconciliation keeps the last known value visible but never
     // upgrades it back to confirmed, so Save and Clear stay blocked.
+    if (this.state.reconciliationRequired) markReconciliationFailed(this.state);
     const message = this.state.reconciliationRequired ? TAX_RATE_RECONCILE_FAILED_MESSAGE : TAX_RATE_REFRESH_WARNING;
     this.state.feedback = { ...this.state.feedback, tone: 'warning', neutral: '', warning: message, error: '' };
     return { accepted: true, announcement: 'polite', message };
   }
 
   setDraft(text: string) {
+    // The input is disabled while unconfirmed; ignoring stray edits keeps the
+    // reconciliation warning from being cleared behind the user's back.
+    if (mutationsBlocked(this.state)) return;
     this.state.draft = text;
     this.state.fieldError = '';
     this.state.feedback = { ...idleFeedback(), tone: this.state.feedback.warning ? 'warning' : 'none', warning: this.state.feedback.warning };
   }
 
   cancelEdit(): TaxRateSettled {
-    if (!this.canEdit()) return ignored();
+    // Cancel must not replace a required reconciliation warning with a neutral
+    // message while Save and Clear are still blocked.
+    if (!this.canMutate()) return ignored();
     this.state.draft = taxRateInputValue(this.state.confirmed);
     this.state.fieldError = '';
     this.state.clearConfirmVisible = false;

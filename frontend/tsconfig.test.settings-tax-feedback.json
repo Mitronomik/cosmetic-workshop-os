@@ -7,7 +7,7 @@
   },
   "include": [
     "src/settings-tax-contract.ts",
-    "src/settings-tax-feedback.ts",
+    "src/settings-tax-feedback.ts", "src/settings-tax-feedback-copy.ts",
     "src/settings-tax-reconciliation.ts",
     "src/settings-tax-messages.ts",
     "src/settings-tax-presentation.ts",

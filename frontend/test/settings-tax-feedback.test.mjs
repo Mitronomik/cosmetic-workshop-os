@@ -6,7 +6,8 @@ import { SettingsTaxRateFeedbackLifecycle, TAX_RATE_CANCEL_MESSAGE, TAX_RATE_CLE
 import { TAX_RATE_HELPER_TEXT, TAX_RATE_MISSING_TEXT, TAX_RATE_SECTION_TITLE, settingsTaxRateCardMarkup, settingsTaxRatePresentation } from '../dist-tests/settings-tax-feedback/settings-tax-presentation.js';
 import { bindSettingsTaxRateControls } from '../dist-tests/settings-tax-feedback/settings-tax-bindings.js';
 import { SettingsTaxRateRuntime } from '../dist-tests/settings-tax-feedback/settings-tax-runtime.js';
-import { TAX_RATE_RECONCILE_FAILED_MESSAGE, TAX_RATE_RECONCILED_MESSAGE } from '../dist-tests/settings-tax-feedback/settings-tax-reconciliation.js';
+import { TAX_RATE_RECONCILE_FAILED_MESSAGE, TAX_RATE_RECONCILED_MESSAGE, TAX_RATE_RECONCILING_MESSAGE } from '../dist-tests/settings-tax-feedback/settings-tax-reconciliation.js';
+import { TAX_RATE_DETACHED_PENDING_MESSAGE } from '../dist-tests/settings-tax-feedback/settings-tax-messages.js';
 import { isWorkshopProfileDirty, isWorkshopProfileFormAvailable, workshopProfileCardMarkup } from '../dist-tests/settings-tax-feedback/settings-profile-presentation.js';
 
 const configured = (percent = '6.00', effective = '2026-07-27T10:28:54Z', message = 'Налоговая ставка для расчётов настроена.') => ({ tax_rate_percent: percent, is_configured: true, effective_at: effective, message });
@@ -791,4 +792,146 @@ test('normal in-route behavior is unaffected by the reconciliation contract', as
   assert.deepEqual(view.feedbackItems, [{ tone: 'success', message: 'Налоговая ставка для расчётов изменена.' }]);
   assert.equal(view.canSave, true);
   assert.equal(view.canClear, true);
+});
+
+// ---------------------------------------------------------------------------
+// Pending reconciliation is not a failure: copy and control availability must
+// distinguish "still completing" from "confirmation actually failed".
+// ---------------------------------------------------------------------------
+
+async function detachedPending(dto = configured('6.00')) {
+  const { h, runtime } = await loaded(dto);
+  runtime.updateDraft('7');
+  runtime.submit();
+  runtime.leave();
+  h.active = false;
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+  return { h, runtime };
+}
+
+test('re-entry while the PUT is still pending shows a neutral wait message, not a failure', async () => {
+  const { h, runtime } = await detachedPending();
+  const view = runtime.presentation();
+
+  assert.deepEqual(view.feedbackItems, [{ tone: 'neutral', message: TAX_RATE_DETACHED_PENDING_MESSAGE }]);
+  assert.equal(view.feedbackItems.some((item) => item.message === TAX_RATE_RECONCILE_FAILED_MESSAGE), false);
+  assert.equal(runtime.lifecycle.state.reconciliationFailed, false);
+  assert.equal(h.reads.length, 1, 'no reconciliation GET runs before the PUT settles');
+});
+
+test('only the checking message is shown once the reconciliation GET starts', async () => {
+  const { h, runtime } = await detachedPending();
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+
+  assert.equal(h.reads.length, 2);
+  assert.deepEqual(runtime.presentation().feedbackItems, [{ tone: 'neutral', message: TAX_RATE_RECONCILING_MESSAGE }]);
+});
+
+test('the failure warning appears only after the authoritative GET rejects', async () => {
+  const { h, runtime } = await detachedPending();
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  assert.equal(runtime.presentation().feedbackItems.some((item) => item.tone === 'warning'), false);
+
+  h.reads[1].reject(new Error('offline'));
+  await flush();
+
+  assert.deepEqual(runtime.presentation().feedbackItems, [{ tone: 'warning', message: TAX_RATE_RECONCILE_FAILED_MESSAGE }]);
+  assert.equal(runtime.lifecycle.state.reconciliationFailed, true);
+});
+
+test('input, Save, Cancel and Clear are all disabled while the value is unconfirmed', async () => {
+  const { h, runtime } = await detachedPending();
+  const pendingView = runtime.presentation();
+  assert.equal(pendingView.controlsDisabled, true, 'the input is disabled while pending');
+  assert.equal(pendingView.canSave, false);
+  assert.equal(pendingView.canCancel, false);
+  assert.equal(pendingView.canClear, false);
+
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  h.reads[1].reject(new Error('offline'));
+  await flush();
+
+  const failedView = runtime.presentation();
+  assert.equal(failedView.controlsDisabled, true, 'the input stays disabled while unconfirmed');
+  assert.equal(failedView.canSave, false);
+  assert.equal(failedView.canCancel, false);
+  assert.equal(failedView.canClear, false);
+  assert.equal(failedView.canRefresh, true, 'Refresh stays enabled after a real failure');
+
+  const markup = settingsTaxRateCardMarkup(failedView, (tone, message) => `<p data-tone="${tone}">${message}</p>`);
+  assert.match(markup, /data-tax-rate-input[^>]*disabled/);
+  assert.match(markup, /data-tax-rate-refresh (?!disabled)/);
+});
+
+test('Cancel cannot erase the reconciliation warning while confirmation is required', async () => {
+  const { h, runtime } = await detachedPending();
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  h.reads[1].reject(new Error('offline'));
+  await flush();
+
+  runtime.cancelEdit();
+  runtime.updateDraft('3');
+
+  const view = runtime.presentation();
+  assert.deepEqual(view.feedbackItems, [{ tone: 'warning', message: TAX_RATE_RECONCILE_FAILED_MESSAGE }]);
+  assert.equal(view.feedbackItems.some((item) => item.message === TAX_RATE_CANCEL_MESSAGE), false);
+  assert.equal(view.canSave, false, 'blocked controls stay explained by the warning');
+  // Cancel is blocked, so it neither restores the draft nor clears the warning,
+  // and the blocked input ignored the later edit.
+  assert.equal(view.draft, '7', 'the blocked edit is ignored and Cancel does not silently restore');
+});
+
+test('an explicit retry keeps the failure visible until it actually resolves, then restores controls', async () => {
+  const { h, runtime } = await detachedPending();
+  h.saves[0].resolve(configured('7.00', '2026-07-27T12:00:00Z', 'Изменена.'));
+  await flush();
+  h.reads[1].reject(new Error('offline'));
+  await flush();
+
+  runtime.refresh();
+  const retrying = runtime.presentation();
+  assert.equal(retrying.feedbackItems.some((item) => item.message === TAX_RATE_RECONCILING_MESSAGE), true);
+  assert.equal(retrying.feedbackItems.some((item) => item.message === TAX_RATE_RECONCILE_FAILED_MESSAGE), true, 'an explicit retry keeps the known failure visible');
+
+  h.reads[2].resolve(configured('7.00', '2026-07-27T12:00:00Z'));
+  await flush();
+
+  const view = runtime.presentation();
+  assert.deepEqual(view.feedbackItems, [{ tone: 'success', message: TAX_RATE_RECONCILED_MESSAGE }]);
+  assert.equal(view.valueLabel, '7.00%');
+  assert.equal(view.controlsDisabled, false);
+  assert.equal(view.canSave, true);
+  assert.equal(view.canCancel, true);
+  assert.equal(view.canClear, true);
+  assert.equal(runtime.lifecycle.state.reconciliationFailed, false);
+});
+
+test('a detached Clear shows the same pending copy and never claims failure early', async () => {
+  const { h, runtime } = await loaded(configured('6.00'));
+  runtime.requestClear();
+  runtime.confirmClear();
+  runtime.leave();
+  h.active = false;
+  h.active = true;
+  runtime.enter();
+  runtime.load('initial');
+
+  assert.deepEqual(runtime.presentation().feedbackItems, [{ tone: 'neutral', message: TAX_RATE_DETACHED_PENDING_MESSAGE }]);
+
+  h.saves[0].resolve(unconfigured('Налоговая ставка для расчётов очищена.'));
+  await flush();
+  assert.deepEqual(runtime.presentation().feedbackItems, [{ tone: 'neutral', message: TAX_RATE_RECONCILING_MESSAGE }]);
+
+  h.reads[1].resolve(unconfigured());
+  await flush();
+  const view = runtime.presentation();
+  assert.equal(view.status, 'unconfigured');
+  assert.equal(view.controlsDisabled, false);
+  assert.equal(view.canSave, true);
 });

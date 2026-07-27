@@ -13,6 +13,8 @@ export const TAX_RATE_CLEAR_ERROR = 'Не удалось убрать налог
 export const TAX_RATE_INVALID_RESPONSE = 'Локальное приложение вернуло неожиданный ответ. Обновите налоговую ставку и проверьте значение.';
 export const TAX_RATE_CANCEL_MESSAGE = 'Изменения отменены. Восстановлено последнее сохранённое значение.';
 export const TAX_RATE_REFRESH_SUCCESS = 'Налоговая ставка обновлена.';
+/** Shown while a mutation that outlived its route is still completing. */
+export const TAX_RATE_DETACHED_PENDING_MESSAGE = 'Сохранение ещё завершается. Дождитесь подтверждения значения.';
 
 export function busyMessage(kind: TaxRateReadKind): string {
   if (kind === 'initial') return TAX_RATE_LOADING_MESSAGE;

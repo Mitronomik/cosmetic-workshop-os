@@ -37,9 +37,10 @@ const HINT_ID = 'settings-tax-rate-hint';
 export function settingsTaxRatePresentation(state: TaxRateState): TaxRatePresentation {
   const mutationBusy = state.mutation !== null;
   const busy = mutationBusy || state.read !== null;
-  const editable = state.status === 'ready' && state.confirmed !== null && !mutationBusy;
-  // An unreconciled value is shown but is not confirmed enough to mutate from.
+  // An unreconciled value is shown but is not confirmed enough to edit or mutate
+  // from, so the whole form waits for the authoritative value.
   const blocked = state.reconciliationRequired || state.detachedMutationPending;
+  const editable = state.status === 'ready' && state.confirmed !== null && !mutationBusy && !blocked;
   const configured = Boolean(state.confirmed?.is_configured);
   return {
     status: statusKey(state),
@@ -54,9 +55,9 @@ export function settingsTaxRatePresentation(state: TaxRateState): TaxRatePresent
     clearConfirmVisible: state.clearConfirmVisible,
     controlsDisabled: !editable,
     reconciliationRequired: state.reconciliationRequired,
-    canSave: editable && !blocked,
+    canSave: editable,
     canCancel: editable,
-    canClear: editable && configured && !blocked,
+    canClear: editable && configured,
     canRefresh: !busy && !state.detachedMutationPending,
   };
 }
