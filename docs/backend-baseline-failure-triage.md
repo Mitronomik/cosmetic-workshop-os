@@ -377,7 +377,7 @@ Node 3 and node 4 are closed. Nodes 1 and 2 are the only open gate nodes.
 - an empty result becomes `manual`;
 - a numeric-only result is prefixed with `reason_`;
 - letter case and Unicode alphanumerics are preserved; no lowercasing, transliteration, or new truncation;
-- the create, list, and status `reason` values and the visible UI reason are the canonical **filename-derived** segment;
+- the create, list, and status `reason` values are the canonical **filename-derived** segment, and the visible UI reason resolves from that same segment — the frontend consumes the canonical slug without reconstructing, sanitizing, or normalizing it, mapping **known system slugs** to the **existing localized Russian display labels** and rendering **custom or unmapped slugs verbatim**, so the visible label is not always literally the slug;
 - the uniqueness suffix is never part of the reported reason;
 - the export JSON manifest keeps the **normalized human reason**;
 - existing artifacts are never renamed, rewritten, or migrated, and legacy listing stays best-effort.
@@ -430,7 +430,8 @@ Key boundaries:
 - the helper applies **only** to backup and export filename reason segments — never to backup source database stems, report-document reasons or filenames, uploaded filenames, recipe names, client names, or any other domain value;
 - expected production surface is bounded to `backend/app/services/local_artifact_filenames.py`, `backend/app/services/backup.py`, and `backend/app/services/export.py`; a parser change inside those same service modules is allowed **only** where required by the new-file round-trip contract, and a filename-format migration must not be authorized merely to simplify parsing;
 - the two existing failing tests must be preserved and made to pass **without being weakened**; no existing test may be deleted, renamed, skipped, or `xfail`-ed;
-- acceptance requires every collected backend test to pass with `0 failed` and `0 skipped`. Because `R4` adds tests, the collection count is **not** required to stay at `496`.
+- acceptance requires every collected backend test to pass with `0 failed` and `0 skipped`. Because `R4` adds tests, the collection count is **not** required to stay at `496`;
+- **no frontend production change is expected**, but focused **frontend test-only** changes are allowed so that the canonical-reason display contract is actually proven — either by adding reason-presentation assertions to the runnable `frontend/test/local-artifacts-reports-feedback.test.mjs` suite (preferred), or by making the standalone local-artifact-presentation suite runnable through an exact tsconfig and npm script without adding dependencies. The frontend production build and the final published-head browser smoke both remain required.
 
 ### 14.7 What this section does not claim
 

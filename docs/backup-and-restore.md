@@ -28,7 +28,16 @@ Current foundation behavior:
 - Ordinary status/settings reads and backup status/list reads must not create backup directories, backup files, databases, or migrations.
 - Manual backup creation is explicit through `POST /api/backups`; it may create the selected backup directory and copies only the current configured SQLite database.
 - Backup path selection keeps development backups next to the configured development database unless the database is the resolved user database path or `COSMETIC_WORKSHOP_USER_DATA_DIR` is explicitly set.
-- Restore, backup UI, scheduled backups, export files, CSV/XLSX export, and cloud backup are not implemented yet.
+Current implementation status:
+
+- the manual backup **UI is implemented** — `/backups` is a user-facing workspace that creates and lists local backups through the backup API;
+- **local JSON exports are implemented**, together with their user-facing `/exports` workspace; see `docs/export.md`;
+- **Restore is not implemented**;
+- **scheduled backups are not implemented**;
+- **CSV/XLSX export is not implemented**;
+- **cloud backup is not implemented**.
+
+`CR-004` — the potential SQLite backup transaction-consistency question — remains open and unresolved. Nothing in this document resolves it, and nothing here implements or authorizes Restore.
 
 ## Canonical filename reason contract (CR-005, decided 2026-07-27)
 
@@ -102,14 +111,35 @@ where `canonical_reason` contains no hyphen and is never numeric-only, and `-N` 
 
 ### Filename-to-metadata round trip
 
-For **newly generated** backup files, the create response reason, the list response reason, the `latest_backup` reason in `GET /api/backups/status`, and the visible UI reason must all resolve to the same canonical filename reason segment.
+For **newly generated** backup files, the create response reason, the list response reason, and the `latest_backup` reason in `GET /api/backups/status` must all be the same canonical filename reason segment. The visible UI reason must **resolve from** that same canonical segment — verbatim for an unmapped slug, or through the existing Russian display mapping for a known system slug, as described below.
 
 - `before-import` → `before_import`
 - `123` → `reason_123`
 
 The uniqueness suffix must never become part of the reported reason: `...-before_import-2.sqlite` reports `before_import`.
 
-The displayed reason is **filename-derived**. It is the canonical segment returned by the existing API `reason` field. No database metadata table, sidecar metadata file, new API field, hidden persistent metadata, or frontend-side reconstruction of the slug is authorized. The frontend additionally maps a small set of known canonical slugs — `manual`, `before_import`, `before_update`, `before_large_edit` — to Russian display labels, and renders any other canonical segment verbatim; that mapping is display-only and does not reconstruct or alter the slug.
+### Displayed reason — canonical slug versus display label
+
+The displayed reason is **filename-derived**, but the visible label is not always literally the canonical slug. The contract has two layers and both must be preserved:
+
+1. **Backend/API `reason` is the canonical filename-derived slug.** It is the single source of truth. No database metadata table, sidecar metadata file, new API field, or hidden persistent metadata is authorized.
+2. **The frontend receives that canonical slug from the API and must never reconstruct, sanitize, or normalize it.** It may only *present* it:
+   - **known system slugs** are mapped to the **existing localized Russian display labels**;
+   - **custom or unmapped canonical slugs are displayed verbatim.**
+
+The current backup mapping in `frontend/src/main.ts` (`backupReasonLabelRaw`) is exactly:
+
+| Canonical slug from the API | Visible label on `/backups` |
+|---|---|
+| `manual` | `Обычная резервная копия` |
+| `before_import` | `Перед импортом` |
+| `before_update` | `Перед обновлением приложения` |
+| `before_large_edit` | `Перед крупными изменениями` |
+| any other canonical slug | the canonical slug, verbatim |
+
+So a backup created with the human reason `before-import` stores and reports the canonical slug `before_import` in the filename and in every API response, and the `/backups` screen shows the existing Russian label `Перед импортом` for it. A backup created with `before/update ../unsafe` reports the canonical slug `before_update_unsafe`, which is not in the mapping and is therefore shown verbatim as `before_update_unsafe`.
+
+The label table above records existing frontend behavior. This decision does **not** introduce, remove, or reword any Russian label.
 
 ### Legacy artifacts
 

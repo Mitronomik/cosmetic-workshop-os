@@ -599,9 +599,9 @@ app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_u
 
 **Grammar preserved.** No new filename version, marker, sidecar format, or migration. New names remain conceptually `{timestamp}-{safe_source_stem}-{canonical_reason}[-N].{sqlite_suffix}` and `{timestamp}-cosmetic_workshop-export-{canonical_reason}[-N].json`, with `-N` reserved solely for uniqueness and existing non-overwrite behavior unchanged.
 
-**Round trip.** For newly generated artifacts the create, list, and status reasons and the visible UI reason all resolve to the same canonical segment, and the uniqueness suffix is never part of the reported reason. The source database stem keeps its own separate sanitization and may still contain hyphens; the implementation must prove a hyphenated stem does not break canonical reason parsing.
+**Round trip.** For newly generated artifacts the create, list, and status reasons are all the same canonical segment, the visible UI reason resolves from that same segment, and the uniqueness suffix is never part of the reported reason. The source database stem keeps its own separate sanitization and may still contain hyphens; the implementation must prove a hyphenated stem does not break canonical reason parsing.
 
-**Displayed reason.** Filename-derived, taken from the existing API `reason` field. No database metadata table, sidecar metadata file, new API field, frontend-only reconstruction rule, or hidden persistent metadata.
+**Displayed reason.** Filename-derived, taken from the existing API `reason` field. No database metadata table, sidecar metadata file, new API field, frontend-only reconstruction rule, or hidden persistent metadata. The contract has two layers and both are preserved: the **backend/API `reason` is the canonical slug** and the single source of truth, and the **frontend consumes that slug without reconstructing, sanitizing, or normalizing it**, presenting **known system slugs** through the **existing localized Russian display labels** and rendering **custom or unmapped slugs verbatim**. The visible label is therefore not always literally the canonical slug — canonical `before_import` renders as `Перед импортом`, canonical `before_update_unsafe` renders verbatim. Exact per-screen mappings: `docs/backup-and-restore.md` and `docs/export.md`. No Russian label is added, removed, or reworded by this decision.
 
 **Export manifest.** Continues to preserve the normalized human reason, not the filename slug. The export schema version does not change.
 
@@ -645,7 +645,7 @@ No database schema or migration; no artifact rename or migration; no sidecar met
 ### Architecture constraints
 
 - the backend owns filename normalization;
-- the frontend must not independently reconstruct the slug;
+- the frontend must not independently reconstruct, sanitize, or normalize the slug; it may only present it, mapping known system slugs to the existing Russian labels and rendering unmapped slugs verbatim;
 - one shared helper owns the backup/export reason-segment contract;
 - source database stem sanitization remains separate;
 - report-document behavior remains separate;
@@ -669,7 +669,29 @@ A parser change **inside those same service modules** is allowed only where requ
 
 ### Frontend requirements
 
-No frontend production change is expected. Even so, the implementation must run the focused existing local-artifact presentation and route suites covering Backups and Exports — `cd frontend && npm run test:local-artifacts-reports-feedback` — and the frontend production build, `cd frontend && npm run build`.
+**No frontend production change is expected.** `R4` is nevertheless allowed to make **focused frontend test-only changes**, because the canonical-reason display contract is not currently proven by any runnable suite.
+
+Current state, verified from the repository:
+
+- `npm run test:local-artifacts-reports-feedback` is runnable and its tsconfig already compiles `src/local-artifact-presentation.ts`, but the suite uses `reason: 'manual'` only as fixture data and asserts nothing about reason presentation;
+- `frontend/test/local-artifact-presentation.test.mjs` exists but is **not runnable**: it imports from `dist-tests/local-artifact-presentation/`, and no tsconfig emits to that path and no npm script invokes it;
+- the Russian display mapping itself lives in `backupReasonLabelRaw` / `exportReasonLabelRaw` in `frontend/src/main.ts`, which is not included in any focused test tsconfig.
+
+`R4` must therefore do **one** of the following:
+
+- **Preferred** — add focused reason-presentation assertions to the existing runnable `frontend/test/local-artifacts-reports-feedback.test.mjs` suite.
+- **Alternative** — make the standalone local-artifact-presentation suite runnable through an exact tsconfig and npm script, **without adding dependencies**.
+
+The `R4` frontend tests must prove:
+
+1. an unmapped canonical slug such as `before_update_unsafe` is rendered **verbatim**;
+2. a known canonical system slug uses the **existing localized Russian display mapping**;
+3. the frontend does **not** reconstruct, sanitize, or normalize the slug;
+4. no frontend production behavior changes unless implementation evidence proves such a change is required **and the contract is updated first**.
+
+Point 2 is the one to scope carefully: the mapping functions are currently in `frontend/src/main.ts` and are not reachable from a focused suite. If proving point 2 turns out to require a production change — for example extracting the existing mapping into a testable module — that change is **not** pre-authorized. `R4` must first record the implementation evidence and update this contract, per point 4. Existing Russian label text must not be introduced, removed, or reworded.
+
+The frontend production build requirement stands: `cd frontend && npm run build`.
 
 ### Tests
 
@@ -698,9 +720,11 @@ Focused browser smoke against the final published implementation head, using an 
 
 Create one backup and one export through the backend/API using a reason such as `before-update ../unsafe`, then verify:
 
-**`/backups`** — the route loads; the created artifact appears; the filename contains `before_update_unsafe`; the visible reason label equals `before_update_unsafe`; the value stays correct after route reload or refetch; the uniqueness suffix is not part of the reason; no unrelated file is overwritten.
+The smoke reason is chosen deliberately: `before_update_unsafe` is an **unmapped** canonical slug, so its visible label must be the slug rendered verbatim.
 
-**`/exports`** — the route loads; the created artifact appears; the filename contains `before_update_unsafe`; the visible reason label equals `before_update_unsafe`; the value stays correct after route reload or refetch; the export manifest still contains the normalized human reason `before-update ../unsafe`; no unrelated file is overwritten.
+**`/backups`** — the route loads; the created artifact appears; the filename contains `before_update_unsafe`; the visible reason label equals exactly `before_update_unsafe`; the value stays correct after route reload or refetch; the uniqueness suffix is not part of the reason; no unrelated file is overwritten.
+
+**`/exports`** — the route loads; the created artifact appears; the filename contains `before_update_unsafe`; the visible reason label equals exactly `before_update_unsafe`; the value stays correct after route reload or refetch; the export manifest still contains the normalized human reason `before-update ../unsafe`; no unrelated file is overwritten.
 
 **Browser evidence** — desktop viewport `1440 × 900`; zero unexpected console errors; zero unexpected console warnings; zero page errors; zero unexpected HTTP failures; zero unexpected request failures; no horizontal page overflow caused by the rendered filename or reason; no production data beyond the intended temporary artifacts.
 
@@ -714,7 +738,8 @@ Full release smoke must not be claimed.
 - neither of the two former baseline nodes remains failing;
 - no existing test is removed;
 - the decided canonical contract holds for collapse, hyphen, numeric-only, fallback, case, and Unicode;
-- create/list/status/UI reasons are the canonical filename-derived segment and exclude the uniqueness suffix;
+- create/list/status reasons are the canonical filename-derived segment and exclude the uniqueness suffix, and the UI label resolves from that segment — verbatim when unmapped, through the existing Russian mapping when it is a known system slug;
+- the focused frontend tests prove verbatim rendering of an unmapped slug, the existing mapping for a known system slug, and that the frontend does not reconstruct the slug;
 - the export manifest still carries the normalized human reason;
 - existing artifacts are neither renamed nor migrated, and legacy listing still works;
 - the required frontend focused suites and production build pass;
