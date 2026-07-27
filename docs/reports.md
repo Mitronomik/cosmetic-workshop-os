@@ -37,6 +37,16 @@ The finance report is an operational snapshot, not accounting or tax filing.
 - Tax is not invented or recalculated by reports.
 - Missing sale prices or costs are surfaced as warnings.
 
+### Tax snapshots — decided, not implemented
+
+`CR-007` decided the workshop tax-rate contract (`docs/settings.md`). It does not change reports now: no tax setting exists yet, and reports still contain no tax calculation. It does bind future report behavior once C2 introduces production tax snapshots:
+
+- reports read the immutable `ProductionBatch` tax snapshots;
+- reports never recalculate historical tax using the currently configured rate;
+- changing the tax setting never changes an existing report value;
+- a production batch without tax snapshots stays `Недоступно` and is never shown as `0.00`;
+- an explicitly configured `0%` rate is a real value and is not the same as an unconfigured rate.
+
 ## Incomplete data
 
 When data is missing or ambiguous, reports return warnings instead of silently inventing values. Examples:

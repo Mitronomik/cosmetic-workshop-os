@@ -1235,6 +1235,31 @@ ProductionBatch → StockMovement[]
 - Production requires explicit user confirmation.
 - Production cannot complete if blocking readiness issues exist, unless explicit override policy is later added.
 
+### Tax snapshot semantics — decided, not implemented
+
+Decided in `CR-007`. Durable contract: `docs/settings.md`. Current state: production confirmation snapshots `sale_price` and writes `tax`, `margin`, and `margin_percent` as `NULL`; the two snapshot fields below do not exist yet. Implementation belongs to **C2**, not to the authorized C1 Settings slice.
+
+| Field | Status | Meaning |
+|---|---|---|
+| `sale_price` | exists | taxable-base snapshot |
+| `tax_rate_percent_snapshot` | future, nullable | exact configured percentage used at confirmation |
+| `tax_rate_effective_at_snapshot` | future, nullable | exact backend effective timestamp/version used |
+| `tax` | exists | final rounded tax-amount snapshot |
+
+Rules:
+
+- the MVP taxable base is exactly the order sale price, so no separate `taxable_amount_snapshot` is required;
+- `tax_amount = ROUND_MONEY(sale_price_snapshot × tax_rate_percent_snapshot ÷ 100)` with `Decimal`, money quantum `0.01`, and `ROUND_HALF_UP`, rounding only the final amount;
+- the rate is a percentage, not a coefficient — `6.00` means `6%`;
+- the future columns are nullable for backward compatibility and are **never backfilled** with the current rate;
+- rows produced before the snapshot fields exist stay unknown and are displayed as `Недоступно`, never as a fabricated `0.00`;
+- changing the current tax setting never changes an existing ProductionBatch row, an existing report snapshot, a prior audit record, or a previously generated document;
+- reports and exports read the stored snapshots and must not recalculate historical tax with the current setting;
+- an order created before a rate change but produced after it uses the rate active at production confirmation;
+- confirmation must re-read the setting and reject a stale readiness result through a structured conflict such as `financial_settings_changed`, with no stock movement, batch, order-status change, or partial write on that conflict;
+- future margin must use the persisted rounded tax snapshot, not a freshly recalculated current-rate value;
+- adding the columns requires a migration under the normal backup-before-migration safety flow.
+
 ### Audit
 
 Log:

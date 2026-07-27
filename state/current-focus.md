@@ -1,17 +1,45 @@
-# Current focus — Post-R4 pre-release hardening and next-gate selection
+# Current focus — C1 tax-setting product decision; C1-I authorized after merge
 
-Active phase: **Pre-release hardening — backend baseline correction gate CLOSED; next gate not yet selected**
+Active phase: **Roadmap completion window C1 — product contract decided, implementation not started**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
 - `R2 — Align import draft baseline test with date normalization`: **DONE**
 - `R4 — Canonical backup/export filename reason normalization`: **DONE**
 - `CR-005 — backup/export filename reason contract`: **ACCEPTED AND IMPLEMENTED**
+- `CR-007 — C1 workshop tax-rate setting contract`: **ACCEPTED, NOT IMPLEMENTED**
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **No active runtime implementation slice.**
+- **No active runtime implementation slice.** `C1-I` becomes authorized only after this decision PR merges.
 
-All four accepted backend baseline gate failures are closed on `main`. **This document does not select the next implementation slice**; the next slice must be separately selected and authorized.
+All four accepted backend baseline gate failures are closed on `main`. This document now records the accepted `CR-007` product decision and authorizes exactly one bounded follow-up implementation slice, `C1-I`, **after** the decision PR merges. No runtime code, test, schema, or migration changes in the decision slice itself.
+
+## CR-007 — accepted C1 tax-setting decision
+
+`CR-007 — Decide the C1 workshop tax-rate setting contract` is **accepted** (RECORDED PRODUCT-OWNER DECISION, 2026-07-27) and **not implemented**. The durable contract is `docs/settings.md` § “C1 — налоговая ставка для расчётов”, with the API shape in `docs/api.md`, snapshot semantics in `docs/domain-model.md` § 6.14, the report boundary in `docs/reports.md`, the ADR in `docs/decisions/0011-tax-rate-setting.md`, and the slice contract in `docs/implementation-plan.md` § 11.
+
+- **One global setting** `default_tax_rate`, user-facing `Налоговая ставка для расчётов`. An internal planning estimate — never tax filing, a declaration, VAT accounting, legal advice, regime detection, or an accounting subsystem, and never labelled as a specific legal regime.
+- **Percentage, not coefficient.** `6` and `6.00` mean `6%`; `0.06` means `0.06%`. `Decimal` only, decimal strings on the wire, never binary float, at most two fractional digits, range `0.00`–`100.00` inclusive. `6.005` is **rejected, never rounded**.
+- **Taxable base is the order sale price.** `tax_amount = ROUND_MONEY(sale_price_snapshot × tax_rate_percent_snapshot ÷ 100)`, money quantum `0.01`, `ROUND_HALF_UP`, rounding only the final amount. Tax is deducted from gross revenue, never added on top.
+- **Immediate effectiveness** through a backend-generated ISO-8601 UTC `effective_at`; no backdating, scheduling, multiple active periods, or user-configurable effective date. A no-op does not move it.
+- **History is immutable.** A rate change never modifies completed `ProductionBatch` rows, report snapshots, prior audit records, generated documents, or persisted tax/margin values. Future C2 snapshot columns are nullable and **never backfilled**.
+- **Missing is not zero.** `null` produces a non-blocking warning, leaves tax and dependent margin unavailable, and does not block physical production; old rows show `Недоступно`; a configured `0.00` is a real value. No fabricated zero anywhere.
+- **Explicit clear** is `tax_rate_percent: null` — confirmed, warned about, audited, never retroactive; an empty string is not a backend substitute for `null`.
+- **Atomic audit.** Every real mutation writes `tax_rate_setting_changed` / `app_setting` / `default_tax_rate` in the same transaction as the setting write and rolls the setting back if the audit write fails. Reads, validation failures, failed persistence, and no-ops are not audited.
+- **C1 owns** the setting, validation, the effective timestamp, the GET/update API, explicit clear, the Settings UI, the atomic audit, persistence, and no-op behavior. **C2 owns** readiness estimates, stale-setting detection, `ProductionBatch` tax snapshots and their nullable migration, tax amount, margin and margin percent, reports from snapshots, and backward-compatibility tests. C2 stays blocked until C1 is merged and verified.
+
+## C1-I — authorized after merge, not implemented
+
+`C1-I — Backend-owned tax-rate setting` is the single authorized follow-up slice. Status: `AUTHORIZED AFTER THIS DECISION PR MERGES — NOT IMPLEMENTED`. **Do not start it from this unmerged decision branch**; start it only from `origin/main` after the decision PR is reviewed and merged. No implementation PR number is assigned.
+
+Recorded repository constraints, verified read-only against `origin/main` at `09d11fc32db6ae57f99d522c4aa71e223e4e01a5`:
+
+- the seeded `app_settings` row `tax.default_rate = "0.06"` from `backend/app/migrations/versions/0001_infrastructure.py` is a **superseded coefficient-shaped placeholder** — use the distinct key `default_tax_rate`, and do not read, reinterpret, migrate, rewrite, or treat it as a configured rate; the `tax_rate default 0.06` line in `docs/roadmap.md` is likewise superseded;
+- `SettingsRepository.upsert_setting` opens its own session and accepts no external connection, while `AuditLogRepository.create_log` already accepts one, so atomic setting+audit requires a **bounded optional-`connection` extension** of the existing settings repository — **no schema change, no new settings table, no new settings architecture**; if even that cannot satisfy atomicity, stop, record evidence, and update the contract first;
+- `app_settings.updated_at` is SQLite `CURRENT_TIMESTAMP` (`YYYY-MM-DD HH:MM:SS`), so `effective_at` must be normalized to ISO-8601 UTC at the service boundary without changing the column;
+- `upsert_setting` refreshes `updated_at` on every write, so the no-op contract requires a read-compare-then-write in the service;
+- `quantize_percentage` must not be reused for validation, because it would silently round `6.005` to `6.01`;
+- the Settings UI is inline in `frontend/src/main.ts` and no Settings test module exists, so a focused frontend test requires extracting a tax-setting feedback/presentation module into the existing focused-suite pattern without adding dependencies.
 
 ## R4 merge closure
 
@@ -76,7 +104,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1, C2, C3, and C4 remain **inactive** unless separately authorized.
+- C1 has an **accepted product contract** (`CR-007`) and **no implementation**; its single authorized slice `C1-I` starts only after the decision PR merges. C2, C3, and C4 remain **inactive** unless separately authorized, and C2 stays blocked until the C1 implementation is merged and verified.
 - Continuing documentation accuracy remains an ongoing obligation. The durable `CR-005` contract documents `docs/backup-and-restore.md`, `docs/export.md`, and `docs/api.md` record the merged `R4` implementation status and agree with merged `main`.
 
 **Product release readiness is not claimed.**

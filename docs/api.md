@@ -875,6 +875,62 @@ The endpoint trims strings, allows empty values, rejects overlong values and uns
 
 `GET /api/settings/status` now marks only `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note` as `editable_now`; calculation-sensitive settings remain `requires_backend_rules`.
 
+## Tax-rate settings API — decided, not implemented
+
+Status: **ACCEPTED PRODUCT CONTRACT — NOT IMPLEMENTED.** These endpoints do not exist on merged `main`. They are the preferred future shape decided in `CR-007` and delivered by the authorized slice `C1-I — Backend-owned tax-rate setting`, which may begin only after the decision PR merges. The durable product contract is `docs/settings.md`; the slice contract is `docs/implementation-plan.md`.
+
+The endpoints live under the existing `/api/settings` surface and use the existing `app_settings` persistence with the preferred key `default_tax_rate`. No new settings table is expected.
+
+```text
+GET /api/settings/tax-rate
+PUT /api/settings/tax-rate
+```
+
+`PUT` request — configure or change the rate:
+
+```json
+{
+  "tax_rate_percent": "6.00"
+}
+```
+
+`PUT` request — explicit clear:
+
+```json
+{
+  "tax_rate_percent": null
+}
+```
+
+Response shape for both `GET` and `PUT`:
+
+```json
+{
+  "is_configured": true,
+  "tax_rate_percent": "6.00",
+  "effective_at": "2026-07-27T10:28:54Z",
+  "message": "Налоговая ставка для расчётов сохранена."
+}
+```
+
+When the setting is not configured, `is_configured` is `false`, `tax_rate_percent` is `null`, and `effective_at` is `null`.
+
+Contract rules:
+
+- `tax_rate_percent` is a **percentage** decimal string, not a coefficient — `"6.00"` is `6%` and `"0.06"` is `0.06%`;
+- the accepted range is `0.00` to `100.00` inclusive, with at most two fractional digits;
+- excess precision such as `"6.005"` is **rejected**, never rounded;
+- floats, `bool`, `NaN`, `Infinity`, and malformed values are rejected;
+- an empty string is not a substitute for `null`;
+- `null` means clear/unconfigure, and `0.00` means an explicitly configured zero-percent estimate — the two are never equivalent;
+- `effective_at` is backend-generated ISO-8601 UTC, is never client-supplied, and cannot be backdated, scheduled, or edited;
+- validation failures return the project structured error shape with a human-readable Russian `message`;
+- a real mutation writes an `AuditLog` (`tax_rate_setting_changed` / `app_setting` / `default_tax_rate`) **atomically** with the setting write; if the audit write fails, the setting change rolls back;
+- a no-op — the canonical persisted state would not change — returns the current representation without writing the setting, without changing `effective_at`, without creating an `AuditLog`, and without claiming the rate changed;
+- `GET` is read-only and is never audited.
+
+The endpoints do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. Readiness tax estimates, production tax snapshots, and margin remain C2 work: `estimated_tax` and `estimated_margin` stay `null` in the production readiness response until C2 lands.
+
 ## Orders write validation contract
 
 `POST /api/orders` and `PUT /api/orders/{order_id}` use backend-authoritative validation. Domain validation failures from Order draft construction return HTTP `422` with a structured `detail` object containing `code`, `message`, `field`, `value`, and `next_action`. Standard FastAPI/Pydantic request validation, including forbidden lifecycle fields (`status`, `produced_at`, `delivered_at`) and invalid enum/type input, keeps the standard HTTP `422` detail-list shape.
