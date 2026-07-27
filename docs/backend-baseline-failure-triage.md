@@ -333,6 +333,8 @@ app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_u
 
 No production file changed in `R3` or in `R2`; both slices are test-only. The `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED` classification recorded for nodes 1 and 2 in §5 and §6 was **correct at diagnosis time** and is preserved unchanged as historical evidence. It has since been superseded by the accepted `CR-005` product decision; the resulting post-decision classification is recorded in §14 below and does not edit §5, §6, or §9.
 
+**Superseded.** The lifecycle table above records the state **before** `R4` merged, when `R4` was still `IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE` and the merged baseline was not yet green. It is preserved unchanged as the record of that state. `R4` has since merged as PR #146 and the gate is closed; the current lifecycle table is §16.3 and the closure evidence is §16.
+
 ---
 
 ## 14. R2 merge closure and post-decision classification of nodes 1 and 2
@@ -485,3 +487,126 @@ The two failures were exactly nodes 1 and 2. Each node was re-run twice in isola
 - **No claim that the merged `main` baseline is already green.** On `origin/main` at `bef36822e50c245b72f813dad0afbffc7f772588` both nodes still fail; `562 / 562 / 0 / 0` is a branch result only.
 - The focused exact-published-head `/backups` and `/exports` browser smoke is the remaining pre-merge gate and was **not** executed at the time this section was committed. A passing smoke is invalidated by any later commit.
 - `CR-004` remains a separate, unresolved `needs evidence` row. Restore remains unimplemented. Product release readiness is not claimed.
+
+---
+
+## 16. Gate closure — R4 merged; both filename nodes closed (2026-07-27)
+
+This section closes the gate. It **supersedes nothing**: §2–§9, §11, §14, and §15 are preserved unchanged, including the pre-merge `R4` branch record in §15 and its explicit statement that the merged baseline was not yet green at the time it was written.
+
+Every result in this section is **VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE**. None of it was executed in the documentation task that added this section.
+
+### 16.1 R4 merge closure
+
+`R4` is **DONE**.
+
+- PR #146 `R4 — Canonical backup/export filename reason normalization`, state `MERGED`.
+- Final reviewed head: `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb`.
+- Merge commit: `127191feb182ccf68a4d7b9f2be28f6aa5b42453`.
+- Merged at: `2026-07-27T08:51:06Z`.
+- `origin/main` equals that merge commit; both the final head and the merge commit were verified as ancestors of `origin/main`.
+
+**Both original filename nodes are closed on `main`:**
+
+```text
+app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters
+app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters
+```
+
+All four gate nodes are now closed: node 3 by `R2`, node 4 by `R3`, and nodes 1 and 2 by `R4`. **The backend baseline correction gate is DONE.**
+
+### 16.2 Accepted merged result
+
+Accepted merged backend result on `main`:
+
+```text
+562 collected
+562 passed
+0 failed
+0 skipped
+```
+
+| Check | Accepted result |
+|---|---|
+| Backend complete suite | `562 / 562 / 0 / 0` |
+| Frontend focused suite | `40 passed, 0 failed, 0 skipped` |
+| Frontend production build | `PASS` |
+| Focused exact-published-head `/backups` and `/exports` browser smoke | `PASS — FULL AUTOMATED SMOKE PASSED` |
+| Exact smoke-tested head | `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb` |
+
+The merged slice involved **no database migration**, **no filesystem migration**, **no existing artifact renamed, rewritten, or deleted**, and **no frontend production change**.
+
+The `PRODUCT DEFECT — CONTRACT MISMATCH` (MEDIUM, no proven data loss) classification recorded for nodes 1 and 2 in §14.3 and §14.4 stands as the accepted post-decision classification and is now **resolved by the merged `R4`**. `CR-005` remains accepted and is now implemented. Neither `CR-005` nor `R4` is reopened.
+
+### 16.3 Slice lifecycle — final
+
+| Slice | Node | Status | Evidence |
+|---|---|---|---|
+| `R3` | Node 4 — purchase suggestions manual API smoke | **DONE** | PR #143 `MERGED`; head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`; merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`; accepted result `496 / 493 / 3 / 0` |
+| `R2` | Node 3 — import draft issue count | **DONE** | PR #144 `MERGED`; head `52e2c64fc601b458cfd60e8b86a778efabd65671`; merge commit `8efbdc5c85b5932f4aeef51045542c207cf4635c`; accepted result `496 / 494 / 2 / 0` |
+| `R4` | Nodes 1 and 2 — backups and exports filename reason | **DONE** | PR #146 `MERGED`; head `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb`; merge commit `127191feb182ccf68a4d7b9f2be28f6aa5b42453`; accepted result `562 / 562 / 0 / 0`; exact-head smoke `PASS` |
+
+The §13 lifecycle table records the state before the `R4` merge and is preserved unchanged; this table supersedes it.
+
+**No successor runtime slice is selected by this closure.** The next gate must be separately selected and authorized.
+
+---
+
+## 17. Separate post-R4 observation — export create-response fallback
+
+This is **not** a fifth backend baseline failure and it is **not** part of the four-node gate scoped in §1. It is a separate observation recorded after `R4` merged, tracked as `CR-006` in `state/change-requests.md`.
+
+### 17.1 Exact current behavior
+
+Read-only inspection of `backend/app/api/exports.py::create_export` on `origin/main` at `127191feb182ccf68a4d7b9f2be28f6aa5b42453` (VERIFIED FROM REPOSITORY):
+
+- after `create_json_export` writes an export, the endpoint attempts to find the exact created file through `list_export_files`, matching on `export.path == result.export_path`;
+- when the exact file is found, the API response is built from the parsed filename metadata and therefore returns the **canonical filename-derived reason**, per the `CR-005` contract;
+- when the exact file is **not** found, the defensive fallback constructs an `ExportFile` using `ExportResult.reason`;
+- `ExportResult.reason` is the normalized **human** reason — the same value preserved in the export JSON manifest, produced by `normalize_export_reason`, not by `normalize_artifact_reason_segment`;
+- therefore the fallback **may** return a human reason where the API contract normally expects the canonical filename-derived slug.
+
+### 17.2 Classification
+
+**Classification — `NEEDS EVIDENCE`.**
+
+- **This is not classified as a confirmed product defect.**
+- **No user-visible failure has been reproduced.**
+- **No data loss, overwrite, incorrect file content, or unsafe mutation is proven.**
+- **No severity is assigned.**
+- **No correction design is authorized.**
+
+The normal path is green: the merged backend suite passes `562 / 562 / 0 / 0`, create/list/status integration coverage passes, and the focused exact-head browser smoke passed with the canonical slug reported on create, list, and status and rendered verbatim in the UI.
+
+**Fallback reachability is not established.** No evidence in this repository shows that the exact-match lookup can fail in normal operation immediately after a successful write.
+
+### 17.3 Required future diagnostic
+
+A future, separately authorized diagnostic must answer two questions **in order**, and must not skip to an implementation.
+
+First, whether the fallback can occur at all, under:
+
+- artifact disappearance after write;
+- a filesystem race;
+- a permission or `stat` failure;
+- a list/read failure;
+- mocked or injected repository/service behavior.
+
+Second, only once reachability is established, the desired contract:
+
+- return a canonical reason;
+- fail explicitly because the created artifact cannot be confirmed;
+- or another documented outcome.
+
+**No correction is authorized yet.** Do not change `backend/app/api/exports.py`, `ExportResult`, `list_export_files`, the API schemas, or the API error responses on the strength of this observation alone.
+
+### 17.4 Boundaries
+
+- **Non-blocking** for `R4` closure; `R4` remains **DONE**.
+- **Not** an active implementation slice.
+- **Not** part of `CR-004`.
+- **Not** a reason to reopen `CR-005`.
+- **Not** a reason to reopen `R4`.
+- **Not** added as a fifth backend baseline failure; the gate scope in §1 is unchanged and closed.
+
+Tracked as `CR-006 — Investigate export create-response fallback confirmation semantics`, status `needs evidence`, with no target PR assigned.
