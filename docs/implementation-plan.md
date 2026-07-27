@@ -497,8 +497,10 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
-- Active correction slice: `R2 — Align import draft baseline test with the documented date-normalization contract`
-- `R2` implementation status: `IMPLEMENTED — REVIEW AND MERGE REQUIRED`
+- `R2 — Align import draft baseline test with the documented date-normalization contract`: **DONE**
+- `CR-005 — backup/export filename reason contract`: **ACCEPTED / DECIDED**
+- Next correction slice: `R4 — Canonical backup/export filename reason normalization`
+- `R4` status: `AUTHORIZED AFTER THE CR-005 DECISION PR MERGES — NOT IMPLEMENTED`
 
 ## R3 closure record
 
@@ -555,6 +557,171 @@ app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_u
 - C1, C2, C3, and C4 remain inactive.
 - Packaging smoke and release smoke remain blocked. Product release readiness is not claimed.
 
+## R2 closure record
+
+`R2` is **DONE** (VERIFIED FROM REPOSITORY / GITHUB).
+
+- PR #144 `R2 — Align import draft baseline test with date normalization`, state `MERGED`.
+- Final reviewed head: `52e2c64fc601b458cfd60e8b86a778efabd65671`.
+- Merge commit: `8efbdc5c85b5932f4aeef51045542c207cf4635c`.
+- Merged at: `2026-07-27T04:21:16Z`.
+- Accepted `R2` backend result: `496 collected, 494 passed, 2 failed, 0 skipped` (VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE — not re-executed).
+- No production code changed in `R2`; the slice was test-only.
+
+The pre-merge `R2` implementation record above is preserved unchanged and is superseded by this closure record, not edited. Nodes 3 and 4 are closed. The two remaining backend failures are exactly the filename-reason nodes:
+
+```text
+app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters
+app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters
+```
+
+## CR-005 — accepted product decision
+
+`CR-005 — Decide the backup/export filename normalization and hyphen round-trip contract` is **accepted** (RECORDED PRODUCT-OWNER DECISION, 2026-07-27). The durable contract lives in `docs/backup-and-restore.md`, `docs/export.md`, and `docs/api.md`. Summary:
+
+**Two representations.** The *human reason* is the normalized user text, `text = (reason or "manual").strip() or "manual"`. The *filename reason segment* is a canonical, path-safe, unambiguous slug derived from it. They must not be silently conflated.
+
+**Canonical algorithm** for newly created backups and exports: preserve Unicode alphanumerics exactly; treat underscore and every non-alphanumeric character as a separator, including whitespace, hyphen, dot, slash, backslash, punctuation, and symbols; collapse each maximal run of separators to one underscore; strip leading and trailing underscores; use `manual` when the result is empty; prefix a digits-only result with `reason_`; preserve letter case; no lowercasing, no transliteration, and no new length limit.
+
+| Input | Canonical segment |
+|---|---|
+| `before/update ../unsafe` | `before_update_unsafe` |
+| `before-import` | `before_import` |
+| `___before---import___` | `before_import` |
+| `перед обновлением` | `перед_обновлением` |
+| `123` | `reason_123` |
+| whitespace only | `manual` |
+| punctuation only | `manual` |
+
+**Hyphen.** Literal hyphens are not allowed inside a newly generated filename reason segment and normalize to underscore, because the hyphen is already a structural filename separator, backup metadata parsing splits on it, allowing it makes the round trip ambiguous, and the uniqueness suffix is also a hyphen plus a number. Hyphens remain allowed in the human reason and in the export manifest reason.
+
+**Numeric-only.** A filename reason segment is never purely numeric; a numeric-only human reason receives the `reason_` prefix, so a reason such as `123` cannot be confused with the numeric uniqueness suffix `-1`, `-2`, `-3`.
+
+**Grammar preserved.** No new filename version, marker, sidecar format, or migration. New names remain conceptually `{timestamp}-{safe_source_stem}-{canonical_reason}[-N].{sqlite_suffix}` and `{timestamp}-cosmetic_workshop-export-{canonical_reason}[-N].json`, with `-N` reserved solely for uniqueness and existing non-overwrite behavior unchanged.
+
+**Round trip.** For newly generated artifacts the create, list, and status reasons and the visible UI reason all resolve to the same canonical segment, and the uniqueness suffix is never part of the reported reason. The source database stem keeps its own separate sanitization and may still contain hyphens; the implementation must prove a hyphenated stem does not break canonical reason parsing.
+
+**Displayed reason.** Filename-derived, taken from the existing API `reason` field. No database metadata table, sidecar metadata file, new API field, frontend-only reconstruction rule, or hidden persistent metadata.
+
+**Export manifest.** Continues to preserve the normalized human reason, not the filename slug. The export schema version does not change.
+
+**Legacy compatibility.** Existing artifacts are not renamed, rewritten, or deleted; no database or filesystem migration. Legacy listing stays best-effort and must preserve filename, path, created-timestamp fallback, size, and list availability. Exact round-trip recovery is not claimed for legacy ambiguous filenames.
+
+**Shared helper boundary.** One shared backend helper — recommended `normalize_artifact_reason_segment(value: str | None) -> str` in `backend/app/services/local_artifact_filenames.py`. An equivalently named narrowly scoped module is permitted only where repository conventions strongly require it, and the implementation PR must explain the choice. The helper applies only to backup and export filename reason segments — never to backup source database stems, report-document reasons or filenames, arbitrary uploaded filenames, recipe names, client names, or any unrelated domain value. `backend/app/services/report_documents.py` has a deliberately different contract and is **not** unified into it.
+
+## Post-decision classification of the two remaining nodes
+
+The original diagnostic evidence and its classification at diagnosis time are preserved unchanged in `docs/backend-baseline-failure-triage.md` §5, §6, and §9. The decision supersedes, but does not rewrite, that history.
+
+| Node | Post-decision classification | Severity | Impact |
+|---|---|---|---|
+| Node 1 — backups filename reason | **PRODUCT DEFECT — CONTRACT MISMATCH** | MEDIUM | user-visible filename/reason-label mismatch; ambiguous round-trip for hyphenated reasons; backend baseline failure; no proven data loss; no source database mutation; no overwrite regression |
+| Node 2 — exports filename reason | **PRODUCT DEFECT — CONTRACT MISMATCH** | MEDIUM | user-visible filename/reason-label mismatch; filename slug inconsistent with the decided contract; backend baseline failure; export manifest remains readable; no proven data loss; no overwrite regression |
+
+Shared root cause: duplicated one-character-at-a-time sanitizers that both preserve the hyphen in the reason segment and both lack the decided run-collapse and numeric-disambiguation rules. The two nodes now share one decided contract and are corrected in **one** bounded slice.
+
+## R4 — Canonical backup/export filename reason normalization
+
+Статус: `AUTHORIZED AFTER THE CR-005 DECISION PR MERGES — NOT IMPLEMENTED`
+
+**`R4` IS NOT IMPLEMENTED.** It may begin only after the `CR-005` decision pull request is merged, and only from `origin/main`. It must not be started from the unmerged decision branch.
+
+### Scope
+
+- add one narrowly scoped shared backend reason-segment helper;
+- use it for newly generated backup reason segments;
+- use it for newly generated export reason segments;
+- preserve backup source-stem behavior;
+- preserve the existing filename grammar;
+- preserve uniqueness behavior;
+- make create/list/status metadata round-trip match the decided contract;
+- add focused regression coverage;
+- close both remaining backend failures.
+
+### Non-goals
+
+No database schema or migration; no artifact rename or migration; no sidecar metadata; no new API field; no API response-shape change; no export schema-version change; no frontend redesign; no report-document sanitizer change; no restore implementation; no SQLite backup transaction-consistency investigation; no `CR-004` work; no cloud sync; no OCR; no roles or multi-user support; no accounting expansion; no C1, C2, C3, or C4 work; no packaging or release work.
+
+### Architecture constraints
+
+- the backend owns filename normalization;
+- the frontend must not independently reconstruct the slug;
+- one shared helper owns the backup/export reason-segment contract;
+- source database stem sanitization remains separate;
+- report-document behavior remains separate;
+- existing artifacts remain untouched;
+- non-overwrite guarantees remain intact;
+- API response schemas remain intact;
+- the export manifest keeps the normalized human reason;
+- new backup/export API reason values are canonical filename-derived segments.
+
+### Backend requirements
+
+The implementation should normally be bounded to:
+
+```text
+backend/app/services/local_artifact_filenames.py
+backend/app/services/backup.py
+backend/app/services/export.py
+```
+
+A parser change **inside those same service modules** is allowed only where required for the exact new-file round-trip contract. No other production surface is authorized without explicit evidence and an updated contract. A filename-format migration must not be authorized merely to simplify parsing.
+
+### Frontend requirements
+
+No frontend production change is expected. Even so, the implementation must run the focused existing local-artifact presentation and route suites covering Backups and Exports — `cd frontend && npm run test:local-artifacts-reports-feedback` — and the frontend production build, `cd frontend && npm run build`.
+
+### Tests
+
+The two existing failing tests must be preserved and made to pass **without being weakened**. Focused coverage must be added for at least:
+
+1. unsafe run collapse — `before/update ../unsafe` → `before_update_unsafe`;
+2. hyphen normalization — `before-import` → `before_import`;
+3. mixed separator collapse — `___before---import___` → `before_import`;
+4. Unicode — `перед обновлением` → `перед_обновлением`;
+5. numeric-only — `123` → `reason_123`;
+6. empty and unsafe-only fallback — `manual`;
+7. backup create/list/status round-trip;
+8. export create/list/status round-trip;
+9. duplicate filename suffix excluded from the metadata reason;
+10. backup source stem containing hyphens;
+11. export manifest preserving the normalized human reason;
+12. existing artifact non-overwrite behavior;
+13. legacy artifact listing without rename, deletion, or crash;
+14. current default `manual` behavior.
+
+No existing test may be deleted, renamed, skipped, `xfail`-ed, or weakened. The complete backend suite must be run from `backend/`. Because new tests are added, the old collection count of `496` is **not** required to stay exact.
+
+### Smoke
+
+Focused browser smoke against the final published implementation head, using an isolated temporary user-data directory, an isolated temporary SQLite database, an isolated browser profile, no real user data, and evidence kept outside Git.
+
+Create one backup and one export through the backend/API using a reason such as `before-update ../unsafe`, then verify:
+
+**`/backups`** — the route loads; the created artifact appears; the filename contains `before_update_unsafe`; the visible reason label equals `before_update_unsafe`; the value stays correct after route reload or refetch; the uniqueness suffix is not part of the reason; no unrelated file is overwritten.
+
+**`/exports`** — the route loads; the created artifact appears; the filename contains `before_update_unsafe`; the visible reason label equals `before_update_unsafe`; the value stays correct after route reload or refetch; the export manifest still contains the normalized human reason `before-update ../unsafe`; no unrelated file is overwritten.
+
+**Browser evidence** — desktop viewport `1440 × 900`; zero unexpected console errors; zero unexpected console warnings; zero page errors; zero unexpected HTTP failures; zero unexpected request failures; no horizontal page overflow caused by the rendered filename or reason; no production data beyond the intended temporary artifacts.
+
+Full release smoke must not be claimed.
+
+### Acceptance criteria
+
+- every collected backend test passes;
+- `0 failed`;
+- `0 skipped`;
+- neither of the two former baseline nodes remains failing;
+- no existing test is removed;
+- the decided canonical contract holds for collapse, hyphen, numeric-only, fallback, case, and Unicode;
+- create/list/status/UI reasons are the canonical filename-derived segment and exclude the uniqueness suffix;
+- the export manifest still carries the normalized human reason;
+- existing artifacts are neither renamed nor migrated, and legacy listing still works;
+- the required frontend focused suites and production build pass;
+- the required focused browser smoke passes with the evidence listed above.
+
+`CR-004` remains separate and inactive. C1, C2, C3, and C4 remain inactive. Packaging smoke and release smoke remain blocked, and product release readiness is not claimed.
+
 Block B is complete. C1, C2, C3, and C4 remain inactive. Current work is release hardening, not feature expansion. Packaging is blocked and release smoke is blocked.
 
 The gate covers exactly these four node IDs:
@@ -579,17 +746,19 @@ The complete backend baseline was re-executed from `backend/` with Python `3.12.
 
 The backups and exports nodes are `INCONCLUSIVE` because the product documentation does not currently define whether consecutive unsafe characters in a filename reason must collapse to a single underscore. The tests require collapsing; the services substitute one underscore per replaced character. **The production behavior is not stated to be wrong.** Deciding the contract is a product decision, not a further diagnostic, and it is tracked as a `needs product decision` change request. No severity, root cause, or correction surface is asserted for those two nodes.
 
+**This table records the classification at diagnosis time and is preserved as history.** `CR-005` has since been decided, `R2` has merged, and nodes 1 and 2 are reclassified as `PRODUCT DEFECT — CONTRACT MISMATCH` (MEDIUM) — see *Post-decision classification of the two remaining nodes* above and `docs/backend-baseline-failure-triage.md` §14.
+
 No node showed data loss or unsafe mutation. Import integrity and the zero-quantity stock-movement domain rule were verified intact. For the two undecided nodes the following were recorded as observed facts rather than as impact findings: traversal characters are neutralized, existing artifacts are not overwritten, the filename charset is restricted, and the source database is not modified.
 
 ## Bounded correction sequence
 
 1. `R3` — **DONE**. Repair purchase-suggestions API smoke seeding (test-only). PR #143 merged 2026-07-27 at merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec` from final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`.
-2. `R2` — **active**, `IMPLEMENTED — REVIEW AND MERGE REQUIRED`. Align the import draft baseline test with the documented date-normalization contract (test-only). Exactly one assertion block in `backend/app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues`: exact `error_count == 3`, exact `warning_count == 1`, explicit `apply_readiness.can_apply is False`, preserved global `missing_required_column`, and the exact row-code set `{invalid_decimal, invalid_unit, date_format_normalized}`. The CSV input and the date `05.07.2026` may not change.
-3. Backups and exports filename nodes — **no slice**. Blocked on the `needs product decision` change request covering collapsing, literal hyphens, filename-to-metadata reason round-trip, whether the displayed reason is filename-derived or stored independently, and the required focused smoke after implementation.
+2. `R2` — **DONE**. Align the import draft baseline test with the documented date-normalization contract (test-only). PR #144 merged 2026-07-27 at merge commit `8efbdc5c85b5932f4aeef51045542c207cf4635c` from final reviewed head `52e2c64fc601b458cfd60e8b86a778efabd65671`.
+3. `R4` — **AUTHORIZED, NOT IMPLEMENTED**. Canonical backup/export filename reason normalization, covering nodes 1 and 2 in one bounded slice. Unblocked by the accepted `CR-005` decision; may begin only after the decision PR merges. Contract above.
 
-`R3` and `R2` tied on primary priority; `R3` preceded `R2` on greater direct user/data impact because it restored execution of a real no-mutation guarantee that was unverified at the API layer. Both were fully evidenced from repository sources alone and needed no product decision, which is why one could be activated while the filename nodes could not. `R3` is now merged, so exactly one slice is active and it is `R2`. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
+`R3` and `R2` tied on primary priority; `R3` preceded `R2` on greater direct user/data impact because it restored execution of a real no-mutation guarantee that was unverified at the API layer. Both were fully evidenced from repository sources alone and needed no product decision, which is why one could be activated while the filename nodes could not. `R3` and `R2` are both now merged and DONE. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
 
-Active `R2` is test-only, so its required smoke is the **backend suite only**; no browser, visual, or route-rendering check applies. Any focused `/backups` and `/exports` visual check belongs to the unresolved filename product decision and its future implementation slice.
+`R3` and `R2` were test-only, so their required smoke was the **backend suite only**. `R4` is different: it changes runtime services, so it additionally requires the focused frontend suites, the frontend production build, and the focused `/backups` and `/exports` browser smoke specified in the `R4` contract above.
 
 ## Separate candidate — not activated
 

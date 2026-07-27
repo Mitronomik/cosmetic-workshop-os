@@ -242,7 +242,7 @@ A third sanitizer, `backend/app/services/report_documents.py:174 sanitize_reason
   - The classification of nodes 1–3 is unchanged by this implementation, and `CR-005` remains undecided.
 - **Merge closure** — `R3` is **DONE** (VERIFIED FROM REPOSITORY / GITHUB). PR #143 `R3 — Repair purchase-suggestions API smoke seeding`, state `MERGED`, final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`, merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`, merged at `2026-07-27T04:01:23Z`. Accepted `R3` backend result: `496 collected, 493 passed, 3 failed, 0 skipped`. No production code changed in `R3`. Node 4 now passes on `origin/main` and is closed. The pre-merge `R3` record above is preserved unchanged as historical evidence and is superseded by this closure line.
 
-### Slice R2 — Import draft issue-count contract alignment — **ACTIVE**
+### Slice R2 — Import draft issue-count contract alignment — **DONE**
 
 - **Title** — `R2 — Align import draft baseline test with the documented date-normalization contract`
 - **Scope** — The assertion block of `backend/app/tests/test_imports_api.py::test_missing_required_columns_and_row_errors_create_draft_with_issues` only.
@@ -265,8 +265,9 @@ A third sanitizer, `backend/app/services/report_documents.py:174 sanitize_reason
   - the remaining two failures are exactly nodes 1 and 2 (§5, §6); `app/tests/test_purchase_suggestions.py::test_manual_api_smoke` passes; no new failure and no skip appeared.
   - Environment: Python `3.12.13`, pytest `8.4.2`, rootdir `backend/`, configfile `pyproject.toml`, temporary venv outside the repository, removed and verified absent after the run.
   - The classification of nodes 1 and 2 is unchanged by this implementation, and `CR-005` remains undecided. No correction slice for the filename nodes is created or authorized here.
+- **Merge closure** — `R2` is **DONE** (VERIFIED FROM REPOSITORY / GITHUB). PR #144 `R2 — Align import draft baseline test with date normalization`, state `MERGED`, final reviewed head `52e2c64fc601b458cfd60e8b86a778efabd65671`, merge commit `8efbdc5c85b5932f4aeef51045542c207cf4635c`, merged at `2026-07-27T04:21:16Z`. Accepted `R2` backend result: `496 collected, 494 passed, 2 failed, 0 skipped`. No production code changed in `R2`. Node 3 now passes on `origin/main` and is closed. The pre-merge `R2` record above is preserved unchanged as historical evidence and is superseded by this closure line. See §14.1.
 
-### Nodes 1 and 2 — no slice
+### Nodes 1 and 2 — no slice at diagnosis time — superseded by §14
 
 No correction slice exists for the backups and exports filename nodes. They are blocked on the change request *"Decide the backup/export filename normalization and hyphen round-trip contract"* (`needs product decision`), recorded in `state/change-requests.md`. That decision must cover:
 
@@ -277,6 +278,8 @@ No correction slice exists for the backups and exports filename nodes. They are 
 - the required focused smoke after implementation.
 
 Any focused visual or route-rendering check for `/backups` and `/exports` belongs to that product decision and its future implementation slice, **not** to the current active slice.
+
+**Superseded.** `CR-005` has since been decided and accepted. All five listed questions are answered in §14.2, both nodes are reclassified in §14.3 and §14.4, and one bounded slice `R4` is authorized in §14.6. The paragraph above is preserved as the record of the pre-decision state.
 
 ---
 
@@ -318,9 +321,8 @@ The original diagnostic evidence in §2–§9 and §11 is preserved unchanged. T
 | Slice | Node | Status | Evidence |
 |---|---|---|---|
 | `R3` | Node 4 — purchase suggestions manual API smoke | **DONE** | PR #143 `MERGED`; final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`; merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`; merged `2026-07-27T04:01:23Z`; accepted result `496 / 493 / 3 / 0` (VERIFIED FROM REPOSITORY / GITHUB) |
-| `R2` | Node 3 — import draft issue count | **ACTIVE — `IMPLEMENTED — REVIEW AND MERGE REQUIRED`** | See §10; target passes twice, `app/tests/test_imports_api.py` `7/7`, `app/tests/test_import_parsing.py` `16/16`, complete suite `496 / 494 / 2 / 0` (EXECUTED IN THIS TASK) |
-| — | Node 1 — backups reason sanitization | **no slice** | `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`; blocked on `CR-005` |
-| — | Node 2 — exports reason sanitization | **no slice** | `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`; blocked on `CR-005` |
+| `R2` | Node 3 — import draft issue count | **DONE** | PR #144 `MERGED`; final reviewed head `52e2c64fc601b458cfd60e8b86a778efabd65671`; merge commit `8efbdc5c85b5932f4aeef51045542c207cf4635c`; merged `2026-07-27T04:21:16Z`; accepted result `496 / 494 / 2 / 0` (VERIFIED FROM REPOSITORY / GITHUB) |
+| `R4` | Nodes 1 and 2 — backups and exports filename reason | **AUTHORIZED — NOT IMPLEMENTED** | Authorized by the accepted `CR-005` decision in §14; may begin only after the decision PR merges |
 
 After `R2`, the complete backend suite run from `backend/` is `496 collected, 494 passed, 2 failed, 0 skipped`, and the remaining failures are exactly nodes 1 and 2:
 
@@ -329,4 +331,111 @@ app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_u
 app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters
 ```
 
-No production file changed in `R3` or in `R2`; both slices are test-only. The classifications of nodes 1 and 2 are **unchanged**: they remain `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`, they are **not** reclassified as product defects, no correction slice is invented for them, and `CR-005` remains unresolved. Their correction must not be started from the unmerged `R2` branch.
+No production file changed in `R3` or in `R2`; both slices are test-only. The `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED` classification recorded for nodes 1 and 2 in §5 and §6 was **correct at diagnosis time** and is preserved unchanged as historical evidence. It has since been superseded by the accepted `CR-005` product decision; the resulting post-decision classification is recorded in §14 below and does not edit §5, §6, or §9.
+
+---
+
+## 14. R2 merge closure and post-decision classification of nodes 1 and 2
+
+This section was added after `CR-005` was decided. It supersedes nothing in §2–§9 and §11; the original diagnostic evidence and its classification **at diagnosis time** stand unchanged. Nothing here is a test or runtime result: no implementation was performed and no backend suite was executed for the decision that produced this section.
+
+### 14.1 `R2` merge closure
+
+`R2` is **DONE** (VERIFIED FROM REPOSITORY / GITHUB).
+
+- PR #144 `R2 — Align import draft baseline test with date normalization`, state `MERGED`.
+- Final reviewed head: `52e2c64fc601b458cfd60e8b86a778efabd65671`.
+- Merge commit: `8efbdc5c85b5932f4aeef51045542c207cf4635c`.
+- Merged at: `2026-07-27T04:21:16Z`.
+- No production code changed in `R2`; the slice was test-only.
+
+Accepted backend result after `R2` (VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE — **not** re-executed for this section):
+
+```text
+496 collected
+494 passed
+2 failed
+0 skipped
+```
+
+The two remaining failing nodes are exactly:
+
+```text
+app/tests/test_backups_api.py::test_backup_reason_defaults_empty_and_sanitizes_unsafe_characters
+app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_unsafe_characters
+```
+
+Node 3 and node 4 are closed. Nodes 1 and 2 are the only open gate nodes.
+
+### 14.2 The decided contract
+
+`CR-005` is **accepted**. The full contract is durable in `docs/backup-and-restore.md` and `docs/export.md`, with the API-field semantics in `docs/api.md`. In summary, for **newly generated** backup and export artifacts:
+
+- runs of non-alphanumeric separators collapse to **one** underscore;
+- literal hyphens normalize to underscores inside the filename reason segment;
+- leading and trailing underscores are removed;
+- an empty result becomes `manual`;
+- a numeric-only result is prefixed with `reason_`;
+- letter case and Unicode alphanumerics are preserved; no lowercasing, transliteration, or new truncation;
+- the create, list, and status `reason` values and the visible UI reason are the canonical **filename-derived** segment;
+- the uniqueness suffix is never part of the reported reason;
+- the export JSON manifest keeps the **normalized human reason**;
+- existing artifacts are never renamed, rewritten, or migrated, and legacy listing stays best-effort.
+
+This settles the exact question that made nodes 1 and 2 inconclusive. The two independently written tests that assert the collapsed form are now confirmed to encode the intended contract.
+
+### 14.3 Node 1 — Backups filename reason — post-decision classification
+
+- **Post-decision classification** — **PRODUCT DEFECT — CONTRACT MISMATCH**
+- **Severity** — **MEDIUM**
+- **Impact**
+  - user-visible mismatch between the filename and the reason label;
+  - ambiguous round-trip for hyphenated reasons — a reason of `before-import` is recovered by the metadata parser as `import`;
+  - backend baseline failure;
+  - **no proven data loss**;
+  - no source database mutation;
+  - no overwrite regression — `_unique_backup_path` still avoids overwriting an existing backup.
+
+### 14.4 Node 2 — Exports filename reason — post-decision classification
+
+- **Post-decision classification** — **PRODUCT DEFECT — CONTRACT MISMATCH**
+- **Severity** — **MEDIUM**
+- **Impact**
+  - user-visible mismatch between the filename and the reason label;
+  - filename slug inconsistent with the newly decided contract;
+  - backend baseline failure;
+  - export manifest data remains readable;
+  - **no proven data loss**;
+  - no overwrite regression — `_unique_export_path` still avoids overwriting an existing export.
+
+### 14.5 Shared root cause and grouping
+
+The shared root cause is now decided rather than merely structural:
+
+- two duplicated one-character-at-a-time sanitizers — `backend/app/services/backup.py:47` and `backend/app/services/export.py:84` — differing only in their empty-result fallback;
+- both currently preserve a literal hyphen inside the reason segment;
+- both lack the decided run-collapse and numeric-disambiguation rules.
+
+§9 deferred grouping explicitly until a product decision existed, and stated that the duplicated-implementation evidence would then support a single bounded slice. That condition is now met. Nodes 1 and 2 share **one decided product contract** and are corrected in **one** bounded implementation slice, `R4`.
+
+`backend/app/services/report_documents.py:174 sanitize_reason` remains a deliberately **different** contract and stays out of scope. It must not be unified into the shared helper.
+
+### 14.6 `R4` contract
+
+`R4 — Canonical backup/export filename reason normalization` is authorized and is **NOT IMPLEMENTED**. It may begin only after the `CR-005` decision pull request is merged, and only from `origin/main`. The full `R4` Scope, Non-goals, Architecture constraints, Backend requirements, Frontend requirements, Tests, Smoke, and Acceptance criteria are recorded in `docs/implementation-plan.md`.
+
+Key boundaries:
+
+- one narrowly scoped shared backend helper — recommended `normalize_artifact_reason_segment(value: str | None) -> str` in `backend/app/services/local_artifact_filenames.py`;
+- the helper applies **only** to backup and export filename reason segments — never to backup source database stems, report-document reasons or filenames, uploaded filenames, recipe names, client names, or any other domain value;
+- expected production surface is bounded to `backend/app/services/local_artifact_filenames.py`, `backend/app/services/backup.py`, and `backend/app/services/export.py`; a parser change inside those same service modules is allowed **only** where required by the new-file round-trip contract, and a filename-format migration must not be authorized merely to simplify parsing;
+- the two existing failing tests must be preserved and made to pass **without being weakened**; no existing test may be deleted, renamed, skipped, or `xfail`-ed;
+- acceptance requires every collected backend test to pass with `0 failed` and `0 skipped`. Because `R4` adds tests, the collection count is **not** required to stay at `496`.
+
+### 14.7 What this section does not claim
+
+- **No implementation result.** `R4` is not implemented.
+- **The two failures are not fixed.** Both nodes still fail on `origin/main` at `8efbdc5c85b5932f4aeef51045542c207cf4635c`.
+- No backend `0-failure` state is claimed.
+- No backend suite, frontend suite, frontend build, or browser smoke was executed for the decision that produced this section.
+- `CR-004` — the potential SQLite backup transaction-consistency candidate in §12 — remains a separate `needs evidence` row and is **not** resolved, activated, or affected by this decision.
