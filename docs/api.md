@@ -353,7 +353,7 @@ Example response:
 
 Creates an explicit manual backup of the currently configured SQLite database by copying the source database into the selected backup directory. The API does not accept arbitrary source or destination paths. Existing backup files are never overwritten.
 
-Request body is optional; missing, null, or blank `reason` becomes `manual`. Reasons are limited to 80 characters and are sanitized for filenames by the backup service.
+Request body is optional; missing, null, or blank `reason` becomes `manual`. Reasons are limited to 80 characters and are sanitized for filenames by the backup service. The returned `reason` is the canonical filename-derived segment — see *Backup and export `reason` field semantics* below.
 
 ```json
 {
@@ -379,6 +379,20 @@ Success response:
 ```
 
 If the database file is missing, the endpoint returns `404` with a human-readable Russian message. If the configured database path exists but is not a file, it returns `409`.
+
+### Backup and export `reason` field semantics (CR-005, decided 2026-07-27)
+
+This subsection documents the semantics of the **existing** `reason` field on the backup and export create, list, and status responses. `CR-005` adds **no new API field** and changes **no response shape**. The full contract lives in `docs/backup-and-restore.md` and `docs/export.md`.
+
+- The `reason` field returned by `POST /api/backups`, `GET /api/backups`, `GET /api/backups/status`, `POST /api/exports`, `GET /api/exports`, and `GET /api/exports/status` is the **canonical filename-derived reason segment**, not the raw user-supplied text. This API value is the single source of truth for the reason.
+- **The frontend consumes this canonical slug and must never reconstruct, sanitize, or normalize it.** Presentation is a separate layer: the Backups and Exports screens map a small set of **known system slugs** to the **existing localized Russian display labels**, and display any **custom or unmapped** canonical slug **verbatim**. The visible label is therefore not always literally the API slug — for example the canonical `before_import` renders as `Перед импортом`, while the canonical `before_update_unsafe` renders verbatim. The exact per-screen mappings are recorded in `docs/backup-and-restore.md` and `docs/export.md`; this decision does not add, remove, or reword any label.
+- The canonical segment is path-safe: runs of non-alphanumeric characters collapse to a single underscore, hyphens normalize to underscores, leading and trailing underscores are removed, an empty result becomes `manual`, a numeric-only result is prefixed with `reason_`, and letter case and Unicode alphanumerics are preserved. There is no lowercasing, transliteration, or new truncation.
+- The numeric uniqueness suffix used to avoid overwriting an existing artifact is **never** part of the reported `reason`.
+- Request-side behavior is unchanged: `reason` remains optional, is trimmed, defaults to `manual` when missing/null/blank, and is limited to 80 characters.
+- The **export JSON manifest** `reason` continues to hold the normalized **human** reason, not the canonical filename segment. For the request `before-import`, the API `reason` is `before_import` while the manifest `reason` is `before-import`. The export schema version is unchanged.
+- These semantics apply to **newly created** artifacts. Reason parsing for pre-existing legacy artifacts is **best-effort**: legacy files are listed with their filename, path, created-timestamp fallback, and size, but an ambiguous legacy reason may not round-trip exactly and no such guarantee is made.
+
+At the time this subsection was written the correcting implementation slice `R4` was authorized but **not implemented**, so the running services still produced the older one-underscore-per-replaced-character segment. This subsection records the decided contract, not a shipped runtime state.
 
 ## Export API (PR75)
 
@@ -427,7 +441,7 @@ Request body:
 }
 ```
 
-`reason` is optional, trimmed, defaults to `manual` when empty, and is limited to 80 characters. It is stored in the export manifest and sanitized only for the filename segment.
+`reason` is optional, trimmed, defaults to `manual` when empty, and is limited to 80 characters. The **normalized human reason** is stored in the export manifest; the **canonical filename-derived segment** is what appears in the filename and in the response `reason` field. See *Backup and export `reason` field semantics* in the Manual Backups API section above.
 
 Successful response shape:
 
