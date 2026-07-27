@@ -496,7 +496,7 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 Статус: `IN PROGRESS`
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
-- Active correction slice: `R1 — Shared safe filename part for backup and export reasons`
+- Active correction slice: `R3 — Repair purchase-suggestions API smoke seeding`
 
 Block B is complete. C1, C2, C3, and C4 remain inactive. Current work is release hardening, not feature expansion. Packaging is blocked and release smoke is blocked.
 
@@ -515,20 +515,24 @@ The complete backend baseline was re-executed from `backend/` with Python `3.12.
 
 | Node | Classification | Severity | Setup vs call |
 |---|---|---|---|
-| backups reason sanitization | `PRODUCT DEFECT` | LOW | call — API reached, file created |
-| exports reason sanitization | `PRODUCT DEFECT` | LOW | call — API reached, file written |
+| backups reason sanitization | `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED` | `NOT DETERMINED FROM CURRENT EVIDENCE` | call — API reached, file created |
+| exports reason sanitization | `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED` | `NOT DETERMINED FROM CURRENT EVIDENCE` | call — API reached, file written |
 | import draft issue count | `TEST DEFECT` | MEDIUM | call — draft created, assertion stale |
 | purchase suggestions manual API smoke | `TEST DEFECT` | MEDIUM | setup/arrange — API never reached |
 
-No node showed data loss or unsafe mutation. Backup and recovery reliability, import integrity, and the zero-quantity stock-movement domain rule were all verified intact.
+The backups and exports nodes are `INCONCLUSIVE` because the product documentation does not currently define whether consecutive unsafe characters in a filename reason must collapse to a single underscore. The tests require collapsing; the services substitute one underscore per replaced character. **The production behavior is not stated to be wrong.** Deciding the contract is a product decision, not a further diagnostic, and it is tracked as a `needs product decision` change request. No severity, root cause, or correction surface is asserted for those two nodes.
+
+No node showed data loss or unsafe mutation. Import integrity and the zero-quantity stock-movement domain rule were verified intact. For the two undecided nodes the following were recorded as observed facts rather than as impact findings: traversal characters are neutralized, existing artifacts are not overwritten, the filename charset is restricted, and the source database is not modified.
 
 ## Bounded correction sequence
 
-1. `R1` — **active**. Shared safe filename part for backup and export reasons. Combined only because backups and exports are a proven duplicated implementation of one contract.
-2. `R3` — deferred. Purchase-suggestions API smoke seeding repair (test-only).
-3. `R2` — deferred. Import draft issue-count contract alignment (test-only).
+1. `R3` — **active**. Repair purchase-suggestions API smoke seeding (test-only).
+2. `R2` — deferred, next. Import draft issue-count contract alignment (test-only).
+3. Backups and exports filename nodes — **no slice**. Blocked on the `needs product decision` change request covering collapsing, literal hyphens, filename-to-metadata reason round-trip, whether the displayed reason is filename-derived or stored independently, and the required focused smoke after implementation.
 
-R2 and R3 tie on primary priority; R3 precedes R2 on greater direct user/data impact because it leaves a real no-mutation guarantee unverified at the API layer. Exactly one slice is active. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
+`R3` and `R2` tie on primary priority; `R3` precedes `R2` on greater direct user/data impact because it restores execution of a real no-mutation guarantee that is currently unverified at the API layer. Both are fully evidenced from repository sources alone and need no product decision, which is why one of them can be activated while the filename nodes cannot. Exactly one slice is active. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
+
+Active `R3` is test-only, so its required smoke is the **backend suite only**; no browser, visual, or route-rendering check applies. Any focused `/backups` and `/exports` visual check belongs to the unresolved filename product decision and its future implementation slice.
 
 ## Separate candidate — not activated
 
@@ -793,9 +797,9 @@ MVP release candidate допускается только после выпол�
 Slice A1 завершён давно; прежняя инструкция «Первое действие после добавления документа» устарела и удалена.
 
 1. Смержить текущий documentation-only PR, закрывающий Block B и открывающий backend baseline correction gate.
-2. Подготовить английский Codex prompt только для `R1 — Shared safe filename part for backup and export reasons` по контракту из `state/current-focus.md`.
-3. Создать `R1` как отдельный focused backend PR.
-4. Не смешивать `R1` с `R2`, `R3`, кандидатом на проверку backup transaction consistency, C1–C4, restore, packaging или release smoke.
+2. Подготовить английский Codex prompt только для `R3 — Repair purchase-suggestions API smoke seeding` по контракту из `state/current-focus.md`.
+3. Создать `R3` как отдельный focused test-only backend PR.
+4. Не смешивать `R3` с `R2`, с нерешённым контрактом имён файлов backup/export, с кандидатом на проверку backup transaction consistency, C1–C4, restore, packaging или release smoke.
 5. Не назначать будущий номер PR заранее.
 
 ## 2026-07-18 — A3.6 Client Feedback structured validation

@@ -947,20 +947,29 @@ No approved B4.2 contract exists. No B4.2 section was created and no B4.2 slice 
 
 `PATH A / COMPLETE`. Python `3.12.13` in an external venv outside the repository, pytest `8.4.2`, run from `backend/` with rootdir `backend/` and configfile `pyproject.toml`. The complete baseline reproduced `496 collected, 492 passed, 4 failed, 0 skipped` with zero drift and no additional failures. Every named node ran twice in isolation, every surrounding test file ran completely, and all four failures are deterministic. The temporary environment was removed and verified absent.
 
-- backups reason sanitization — `PRODUCT DEFECT`, LOW, call-phase.
-- exports reason sanitization — `PRODUCT DEFECT`, LOW, call-phase. Duplicated implementation of the same contract as the backups node.
+- backups reason sanitization — `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`, call-phase.
+- exports reason sanitization — `INCONCLUSIVE — PRODUCT CONTRACT NOT YET DECIDED`, call-phase. Structurally duplicated implementation of the same filename contract as the backups node.
 - import draft issue count — `TEST DEFECT`, MEDIUM, call-phase. The documented `DD.MM.YYYY` normalization makes the observed `error_count` of `3` correct.
 - purchase-suggestions manual API smoke — `TEST DEFECT`, MEDIUM, setup/arrange. The API is never reached; the domain correctly rejects a zero-quantity movement.
+
+The two filename nodes are `INCONCLUSIVE` because no product documentation defines whether consecutive unsafe characters in a filename reason must collapse to a single underscore. The tests require collapsing; `backend/app/services/backup.py:47` and `backend/app/services/export.py:84` map each replaced character to one underscore. **Do not state that the production behavior is wrong.** Severity, root cause, correction surface, schema requirement, grouping, slice, tests, and smoke are all `NOT DETERMINED FROM CURRENT EVIDENCE` for those nodes. The blocker is a product decision, not missing diagnostic evidence — no further test execution would resolve it. It is tracked as `CR-005`, status `needs product decision`, covering collapsing, whether literal hyphens remain allowed, the filename-to-metadata reason round-trip, whether the displayed reason is filename-derived or stored independently, and the required focused smoke after implementation.
 
 No data loss or unsafe mutation was found. Detailed evidence and the mandatory per-node fields live in `docs/backend-baseline-failure-triage.md`; do not duplicate them into `state/`.
 
 ### Active slice
 
-Exactly one: `R1 — Shared safe filename part for backup and export reasons`. Contract in `state/current-focus.md`.
+Exactly one: `R3 — Repair purchase-suggestions API smoke seeding`, **test-only**. Contract in `state/current-focus.md`.
 
-`R3` (purchase-suggestions seeding repair) and `R2` (import test contract alignment) are evidenced and deferred, in that order. Do not start them, do not combine them with `R1`, and do not assign a future PR number.
+- Change only the invalid `lot_qty="0"` seed at `backend/app/tests/test_purchase_suggestions.py:214`.
+- Use a positive lot quantity and a higher minimum-stock threshold, following the proven idiom at `:79`.
+- Preserve and execute all existing API and no-mutation assertions.
+- No production-code change. No skip, `xfail`, deletion, rename, or weakened assertion.
+- Run the complete backend suite from `backend/`.
+- Required smoke is the **backend suite only**. The slice changes no runtime surface, so no browser, visual, or route-rendering check applies, is required, or may be claimed.
 
-Recorded neutrally without diagnosis or activation: a potential SQLite backup transaction-consistency candidate requiring a separate evidence-based diagnostic, tracked as `needs evidence` in `state/change-requests.md`.
+`R2` (import draft issue-count contract alignment, test-only) is the next deferred slice. The two filename nodes have **no slice** and must not receive one until `CR-005` is decided. Any focused `/backups` and `/exports` visual check belongs to that product decision and its future implementation slice, not to the active slice. Do not start deferred work, do not combine it with `R3`, and do not assign a future PR number.
+
+Recorded neutrally without diagnosis or activation: a potential SQLite backup transaction-consistency candidate requiring a separate evidence-based diagnostic, tracked as `CR-004` / `needs evidence` in `state/change-requests.md`. It is distinct from the `CR-005` filename-contract decision.
 
 ### Remaining release blockers
 
