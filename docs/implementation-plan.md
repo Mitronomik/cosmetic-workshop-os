@@ -674,7 +674,7 @@ None of these is activated here.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
 - C1, C2, C3, and C4 remain **inactive**.
-- Continuing documentation accuracy remains an obligation: `docs/backup-and-restore.md`, `docs/export.md`, and `docs/api.md` still carry a pre-merge `R4` implementation-status line and were outside the scope of the closure slice.
+- Continuing documentation accuracy remains an ongoing obligation. The durable `CR-005` contract documents `docs/backup-and-restore.md`, `docs/export.md`, and `docs/api.md` record the merged `R4` implementation status and agree with merged `main`.
 
 **Product release readiness is not claimed.**
 
