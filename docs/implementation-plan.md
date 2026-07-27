@@ -498,9 +498,9 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
 - `R2 — Align import draft baseline test with the documented date-normalization contract`: **DONE**
-- `CR-005 — backup/export filename reason contract`: **ACCEPTED / DECIDED**
-- Next correction slice: `R4 — Canonical backup/export filename reason normalization`
-- `R4` status: `AUTHORIZED AFTER THE CR-005 DECISION PR MERGES — NOT IMPLEMENTED`
+- `CR-005 — backup/export filename reason contract`: **ACCEPTED / DECIDED**; decision PR #145 merged 2026-07-27 at merge commit `bef36822e50c245b72f813dad0afbffc7f772588` from final reviewed head `7d68b45bee1f223b67f105c30e3acbb89dc8d41d`
+- Single active implementation slice: `R4 — Canonical backup/export filename reason normalization`
+- `R4` status: `IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE`
 
 ## R3 closure record
 
@@ -622,9 +622,19 @@ Shared root cause: duplicated one-character-at-a-time sanitizers that both prese
 
 ## R4 — Canonical backup/export filename reason normalization
 
-Статус: `AUTHORIZED AFTER THE CR-005 DECISION PR MERGES — NOT IMPLEMENTED`
+Статус: `IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE`
 
-**`R4` IS NOT IMPLEMENTED.** It may begin only after the `CR-005` decision pull request is merged, and only from `origin/main`. It must not be started from the unmerged decision branch.
+The `CR-005` decision pull request #145 is **merged** (final reviewed head `7d68b45bee1f223b67f105c30e3acbb89dc8d41d`, merge commit `bef36822e50c245b72f813dad0afbffc7f772588`), which was the precondition for starting `R4`. `R4` is implemented on branch `claude/r4-canonical-artifact-reason-normalization`, created directly from `origin/main` at `bef36822e50c245b72f813dad0afbffc7f772588`.
+
+**`R4` is not DONE.** It is not merged and not reviewed. The backend correction gate stays open until `R4` is reviewed and merged. The final pre-merge gate is the focused `/backups` and `/exports` browser smoke against the exact published pull-request head; a passing smoke is invalidated by any later commit.
+
+Completed on the branch at the time this record was written:
+
+- backend: the complete suite from `backend/` gives `562 collected, 562 passed, 0 failed, 0 skipped` (pre-change baseline `496 collected, 494 passed, 2 failed, 0 skipped`); both former baseline nodes pass; all 496 previously collected node IDs are still collected;
+- frontend: `npm run test:local-artifacts-reports-feedback` gives `40 pass, 0 fail, 0 skipped` and `npm run build` succeeds; no frontend production file changed;
+- browser smoke: **not executed at commit time** — it runs only after publication, against the exact published head.
+
+`CR-004` remains separate and unresolved. C1, C2, C3, and C4 remain inactive. Packaging and release-candidate smoke remain blocked, and product release readiness is not claimed.
 
 ### Scope
 
@@ -779,7 +789,7 @@ No node showed data loss or unsafe mutation. Import integrity and the zero-quant
 
 1. `R3` — **DONE**. Repair purchase-suggestions API smoke seeding (test-only). PR #143 merged 2026-07-27 at merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec` from final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`.
 2. `R2` — **DONE**. Align the import draft baseline test with the documented date-normalization contract (test-only). PR #144 merged 2026-07-27 at merge commit `8efbdc5c85b5932f4aeef51045542c207cf4635c` from final reviewed head `52e2c64fc601b458cfd60e8b86a778efabd65671`.
-3. `R4` — **AUTHORIZED, NOT IMPLEMENTED**. Canonical backup/export filename reason normalization, covering nodes 1 and 2 in one bounded slice. Unblocked by the accepted `CR-005` decision; may begin only after the decision PR merges. Contract above.
+3. `R4` — **IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE**. Canonical backup/export filename reason normalization, covering nodes 1 and 2 in one bounded slice. Unblocked by the accepted `CR-005` decision, which merged as PR #145. Implemented on branch `claude/r4-canonical-artifact-reason-normalization` from `origin/main` `bef36822e50c245b72f813dad0afbffc7f772588`; not reviewed and not merged. Contract above.
 
 `R3` and `R2` tied on primary priority; `R3` preceded `R2` on greater direct user/data impact because it restored execution of a real no-mutation guarantee that was unverified at the API layer. Both were fully evidenced from repository sources alone and needed no product decision, which is why one could be activated while the filename nodes could not. `R3` and `R2` are both now merged and DONE. Slice contracts live in `state/current-focus.md` and `docs/backend-baseline-failure-triage.md`.
 

@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,15 @@ from app.db.paths import USER_DATA_DIR_ENV
 from app.main import create_app
 from app.schemas.exports import ExportCreateRequest
 from app.services.export import create_json_export, list_export_files
+
+
+class _FrozenDatetime(datetime):
+    """Fixed clock so an export filename collision, and therefore the ``-N``
+    uniqueness suffix, is reproducible."""
+
+    @classmethod
+    def now(cls, tz=None):  # noqa: D102 - mirrors datetime.now
+        return datetime(2026, 7, 27, 10, 15, 0, tzinfo=tz or UTC)
 
 
 def _create_database(path: Path) -> None:
@@ -283,3 +293,125 @@ def test_export_reason_defaults_empty_and_sanitizes_unsafe_characters(tmp_path, 
 def test_export_reason_rejects_too_long_values():
     with pytest.raises(ValidationError):
         ExportCreateRequest(reason="x" * 81)
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+@pytest.mark.parametrize(
+    ("human_reason", "canonical_reason"),
+    [
+        ("before-update ../unsafe", "before_update_unsafe"),
+        ("before-import", "before_import"),
+        ("___before---import___", "before_import"),
+        ("перед обновлением", "перед_обновлением"),
+        ("123", "reason_123"),
+        ("   ", "manual"),
+        ("../..", "manual"),
+    ],
+)
+def test_export_create_list_and_status_report_the_same_canonical_reason(
+    tmp_path, monkeypatch, human_reason, canonical_reason
+):
+    db_path = tmp_path / "cosmetic_workshop.sqlite"
+    _create_database(db_path)
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+    monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+
+    client = TestClient(create_app())
+    created = client.post("/api/exports", json={"reason": human_reason})
+
+    assert created.status_code == 201
+    export = created.json()["export"]
+    assert export["reason"] == canonical_reason
+    assert canonical_reason in export["filename"]
+
+    listed = client.get("/api/exports").json()["exports"]
+    assert [item["reason"] for item in listed] == [canonical_reason]
+    assert listed[0]["filename"] == export["filename"]
+
+    latest = client.get("/api/exports/status").json()["latest_export"]
+    assert latest["reason"] == canonical_reason
+    assert latest["filename"] == export["filename"]
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+@pytest.mark.parametrize(
+    ("human_reason", "expected_manifest_reason", "canonical_reason"),
+    [
+        ("before-update ../unsafe", "before-update ../unsafe", "before_update_unsafe"),
+        ("  перед обновлением  ", "перед обновлением", "перед_обновлением"),
+        ("123", "123", "reason_123"),
+        ("   ", "manual", "manual"),
+    ],
+)
+def test_export_manifest_keeps_the_human_reason_not_the_canonical_slug(
+    tmp_path, monkeypatch, human_reason, expected_manifest_reason, canonical_reason
+):
+    db_path = tmp_path / "cosmetic_workshop.sqlite"
+    _create_database(db_path)
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+    monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+
+    client = TestClient(create_app())
+    created = client.post("/api/exports", json={"reason": human_reason})
+
+    assert created.status_code == 201
+    export = created.json()["export"]
+    manifest = json.loads(Path(export["path"]).read_text(encoding="utf-8"))["manifest"]
+    assert manifest["reason"] == expected_manifest_reason
+    assert manifest["export_schema_version"] == 1
+    assert export["reason"] == canonical_reason
+    if expected_manifest_reason != canonical_reason:
+        assert manifest["reason"] != canonical_reason
+
+
+def test_export_uniqueness_suffix_is_never_reported_as_the_reason(tmp_path, monkeypatch):
+    db_path = tmp_path / "cosmetic_workshop.sqlite"
+    _create_database(db_path)
+    before_bytes = db_path.read_bytes()
+    export_dir = tmp_path / "exports"
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+    monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+    monkeypatch.setattr("app.services.export.datetime", _FrozenDatetime)
+
+    first = create_json_export(db_path, export_dir, reason="before-update ../unsafe")
+    second = create_json_export(db_path, export_dir, reason="before-update ../unsafe")
+    third = create_json_export(db_path, export_dir, reason="before-update ../unsafe")
+
+    assert first.export_path != second.export_path != third.export_path
+    assert second.export_path.name.endswith("-export-before_update_unsafe-1.json")
+    assert third.export_path.name.endswith("-export-before_update_unsafe-2.json")
+    assert db_path.read_bytes() == before_bytes
+
+    listed = list_export_files(export_dir)
+    assert len(listed) == 3
+    assert {item.reason for item in listed} == {"before_update_unsafe"}
+    for export_file in listed:
+        manifest = json.loads(export_file.path.read_text(encoding="utf-8"))["manifest"]
+        assert manifest["reason"] == "before-update ../unsafe"
+
+
+def test_legacy_export_files_are_listed_without_rename_delete_or_rewrite(tmp_path):
+    export_dir = tmp_path / "exports"
+    export_dir.mkdir()
+    legacy = {
+        "20260705T090000000000Z-cosmetic_workshop-export-before_import____unsafe.json": '{"legacy": 1}',
+        "20260705T091000000000Z-cosmetic_workshop-export-before-import.json": '{"legacy": 2}',
+        "20260705T092000000000Z-cosmetic_workshop-export-123.json": '{"legacy": 3}',
+        "ambiguous.json": '{"legacy": 4}',
+    }
+    for name, content in legacy.items():
+        (export_dir / name).write_text(content, encoding="utf-8")
+    before = {path.name: path.read_text(encoding="utf-8") for path in export_dir.iterdir()}
+
+    listed = list_export_files(export_dir)
+
+    assert sorted(item.filename for item in listed) == sorted(legacy)
+    assert {path.name: path.read_text(encoding="utf-8") for path in export_dir.iterdir()} == before
+    for item in listed:
+        assert item.path.exists()
+        assert item.created_at is not None
+    by_name = {item.filename: item for item in listed}
+    assert by_name["20260705T090000000000Z-cosmetic_workshop-export-before_import____unsafe.json"].reason == (
+        "before_import____unsafe"
+    )
+    assert by_name["ambiguous.json"].reason is None

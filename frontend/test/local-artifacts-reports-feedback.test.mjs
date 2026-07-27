@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createLocalArtifactRouteRuntime } from '../dist-tests/local-artifacts-reports-feedback/local-artifacts-reports-runtime.js';
 import { transitionLocalArtifactsReportsRouteOwnership } from '../dist-tests/local-artifacts-reports-feedback/local-artifacts-reports-route.js';
 import { bindLocalArtifactsReportsControls } from '../dist-tests/local-artifacts-reports-feedback/local-artifacts-reports-bindings.js';
-import { localArtifactPresentation } from '../dist-tests/local-artifacts-reports-feedback/local-artifact-presentation.js';
+import { artifactReason, localArtifactPresentation } from '../dist-tests/local-artifacts-reports-feedback/local-artifact-presentation.js';
 
 const messages = { loading:'loading', refreshing:'refreshing', reconciling:'reconciling', initialError:'initial error', refreshError:'refresh warning', refreshSuccess:'refresh ok', mutationBusy:'busy', mutationSuccess:'created', mutationError:'create failed', mutationAmbiguous:'Нельзя подтвердить результат: файл мог быть создан. Обновите список перед повтором.', invalidMutationResponse:'invalid created', mutationRefreshWarning:'created but refresh failed', reconciliationFailed:'still cannot confirm' };
 function deferred(){let resolve,reject;const promise=new Promise((res,rej)=>{resolve=res;reject=rej});return {promise,resolve,reject};}
@@ -148,3 +148,109 @@ test('snapshot-aware authoritative success clears lock without extra GET',async(
 test('validated known success is the only path to applyCreated and commitAccepted',async()=>{const calls=[];const h={active:true,renders:0,polite:[],assertive:[],focus:[],reads:[],mutations:[],postCount:0};const deps={route:'exports',mutationKind:'create-export',messages,read:()=>{const d=deferred();h.reads.push(d);return d.promise;},mutate:()=>{h.postCount++;const d=deferred();h.mutations.push(d);return d.promise;},validateCreated:(x)=>Boolean(x?.filename&&x?.path),ownsRoute:()=>h.active,applyRead(){},applyCreated:(c)=>calls.push(['apply',c.filename]),render(){h.renders++},announce:(m,k)=>h[k==='assertive'?'assertive':'polite'].push(m),focus:(k)=>h.focus.push(k)};const runtime=createLocalArtifactRouteRuntime(deps);runtime.enter();runtime.create({});h.mutations[0].resolve({created:{filename:'',path:''},message:'bad',commitAccepted:()=>calls.push(['commit','bad'])});await flush();assert.deepEqual(calls,[]);assert.equal(runtime.lifecycle.state.lastCreated,null);runtime.reconcile();h.reads[0].resolve({items:[]});await flush();runtime.create({});runtime.leave();h.active=false;h.mutations[1].resolve({created:artifact(34),message:'detached',commitAccepted:()=>calls.push(['commit','detached'])});await flush();assert.deepEqual(calls,[]);h.active=true;runtime.enter();runtime.reconcile();h.reads[1].resolve({items:[]});await flush();runtime.create({});const old=h.mutations[2];runtime.leave();runtime.enter();old.resolve({created:artifact(35),message:'stale',commitAccepted:()=>calls.push(['commit','stale'])});await flush();assert.deepEqual(calls,[]);runtime.reconcile();h.reads[2].resolve({items:[]});await flush();runtime.create({});h.mutations[3].resolve({created:artifact(36),message:'ok',commitAccepted:()=>calls.push(['commit','ok'])});await flush();assert.deepEqual(calls,[['commit','ok'],['apply','file-36.json']]);assert.equal(runtime.lifecycle.state.lastCreated.filename,'file-36.json');});
 
 test('local artifact presentation remains unchanged for open/download metadata',()=>{const p=localArtifactPresentation({filename:null,path:'/safe/export.json',folderKind:'exports'});assert.equal(p.filename,'export.json');assert.match(p.folderLabel,/экспорта/i);});
+
+// ---------------------------------------------------------------------------
+// CR-005 / R4 — canonical backup and export filename reason segment display.
+//
+// The backend API `reason` is the canonical slug and the single source of
+// truth. The frontend may only present it: known system slugs use the existing
+// localized Russian mapping, and custom or unmapped slugs render verbatim.
+// ---------------------------------------------------------------------------
+
+// Executable evidence: the generic presentation layer is importable and is
+// genuinely invoked below.
+test('CR-005: the generic presentation layer passes an unmapped API reason slug through verbatim', () => {
+  for (const slug of ['before_update_unsafe', 'перед_обновлением', 'reason_123', 'Before_Update', 'before_import_unsafe']) {
+    assert.equal(artifactReason(slug), slug, `${slug} must not be rewritten`);
+    for (const folderKind of ['backups', 'exports']) {
+      const presentation = localArtifactPresentation({ filename: `20260727T101500000000Z-cosmetic_workshop-${slug}.sqlite`, path: `/tmp/${slug}.sqlite`, reason: slug, sizeBytes: 10, folderKind });
+      assert.equal(presentation.reasonLabel, slug, `${slug} must render verbatim on /${folderKind}`);
+    }
+  }
+});
+
+test('CR-005: the generic presentation layer does not sanitize, collapse or re-slug a reason it receives', () => {
+  // Whatever the API sends is displayed as-is apart from the existing trim.
+  assert.equal(artifactReason('before/update ../unsafe'), 'before/update ../unsafe');
+  assert.equal(artifactReason('before-import'), 'before-import');
+  assert.equal(artifactReason('before__update'), 'before__update');
+  assert.equal(artifactReason('123'), '123');
+  assert.equal(artifactReason(null), 'Причина не указана');
+});
+
+// Static source-contract evidence. `backupReasonLabelRaw` and
+// `exportReasonLabelRaw` live inside `src/main.ts` and are not exported, so
+// they cannot be imported and invoked without a frontend production change,
+// which R4 is not authorized to make. These assertions therefore read the exact
+// production source and check the contract statically. They are NOT proof of
+// runtime behavior; the runtime proof for both the unmapped slug and the known
+// `before_import` mapping comes from the exact-published-head browser smoke.
+async function mainSource() {
+  const fs = await import('node:fs/promises');
+  return fs.readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
+}
+
+function singleLineFunction(source, name) {
+  const match = source.match(new RegExp(`function ${name}\\(reason: string \\| null\\): string \\{[^\\n]*\\}`));
+  assert.ok(match, `${name} must exist as a single-line production function`);
+  return match[0];
+}
+
+function reasonLabelMap(source, name) {
+  const body = singleLineFunction(source, name);
+  const literal = body.match(/\(\{(.*)\} as Record<string, string>\)/);
+  assert.ok(literal, `${name} must keep a plain slug-to-label record`);
+  return Object.fromEntries([...literal[1].matchAll(/(\w+): '([^']*)'/g)].map(([, slug, label]) => [slug, label]));
+}
+
+test('CR-005 (static source contract): known system slugs keep their exact existing Russian labels', async () => {
+  const source = await mainSource();
+
+  // Exact maps: no Russian label is added, removed or reworded.
+  assert.deepEqual(reasonLabelMap(source, 'backupReasonLabelRaw'), { manual: 'Обычная резервная копия', before_import: 'Перед импортом', before_update: 'Перед обновлением приложения', before_large_edit: 'Перед крупными изменениями' });
+  assert.deepEqual(reasonLabelMap(source, 'exportReasonLabelRaw'), { manual: 'Обычный экспорт', before_import: 'Перед импортом', before_update: 'Перед обновлением приложения', before_large_edit: 'Перед крупными изменениями', support_snapshot: 'Для поддержки' });
+
+  // The canonical known slug used by the R4 browser smoke is wired on both routes.
+  assert.equal(reasonLabelMap(source, 'backupReasonLabelRaw').before_import, 'Перед импортом');
+  assert.equal(reasonLabelMap(source, 'exportReasonLabelRaw').before_import, 'Перед импортом');
+
+  // Backup and export mappings stay distinct where they currently differ.
+  assert.notEqual(reasonLabelMap(source, 'backupReasonLabelRaw').manual, reasonLabelMap(source, 'exportReasonLabelRaw').manual);
+  assert.equal(reasonLabelMap(source, 'backupReasonLabelRaw').support_snapshot, undefined);
+  assert.equal(reasonLabelMap(source, 'exportReasonLabelRaw').support_snapshot, 'Для поддержки');
+
+  // The primary R4 smoke slug is deliberately unmapped on both routes.
+  assert.equal(reasonLabelMap(source, 'backupReasonLabelRaw').before_update_unsafe, undefined);
+  assert.equal(reasonLabelMap(source, 'exportReasonLabelRaw').before_update_unsafe, undefined);
+});
+
+test('CR-005 (static source contract): unmapped slugs fall back to the shared presentation layer verbatim', async () => {
+  const source = await mainSource();
+  for (const name of ['backupReasonLabelRaw', 'exportReasonLabelRaw']) {
+    const body = singleLineFunction(source, name);
+    assert.match(body, /\]\[reason \|\| ''\] \?\? artifactReason\(reason\)$|\?\? artifactReason\(reason\); \}$/, `${name} must fall back to artifactReason`);
+    // The frontend must not reconstruct, sanitize or normalize the API slug.
+    for (const forbidden of ['.replace(', '.toLowerCase(', '.toUpperCase(', '.normalize(', '.split(', 'slug']) {
+      assert.ok(!body.includes(forbidden), `${name} must not use ${forbidden} on the API reason`);
+    }
+  }
+});
+
+test('CR-005 (static source contract): the Backups and Exports routes render the API reason through the mapping', async () => {
+  const source = await mainSource();
+  for (const [fn, mapper, field] of [['backupHistoryItem', 'backupReasonLabelRaw', 'backup.reason'], ['lastCreatedBackupSummary', 'backupReasonLabelRaw', 'backup.reason'], ['exportHistoryItem', 'exportReasonLabelRaw', 'item.reason'], ['lastCreatedExportSummary', 'exportReasonLabelRaw', 'item.reason']]) {
+    const line = source.split('\n').find((candidate) => candidate.startsWith(`function ${fn}(`));
+    assert.ok(line, `${fn} must exist`);
+    assert.ok(line.includes(`reason: ${mapper}(${field})`), `${fn} must pass the API reason through ${mapper}`);
+    assert.ok(line.includes('p.reasonLabel') || fn.startsWith('lastCreated'), `${fn} must display the presented reason label`);
+  }
+});
+
+test('CR-005 (static source contract): no frontend code sanitizes or re-slugs a backup or export API reason', async () => {
+  const source = await mainSource();
+  for (const line of source.split('\n')) {
+    if (!/(backup|export|item|p)\.reason\b/.test(line)) continue;
+    assert.doesNotMatch(line, /(backup|export|item)\.reason\s*[.?]*\s*\.?(replace|toLowerCase|toUpperCase|normalize|split|padStart)\(/, `no frontend normalization of the API reason: ${line.slice(0, 120)}`);
+  }
+  assert.doesNotMatch(source, /function\s+\w*(slugify|canonicali[sz]e|sanitizeReason)\w*/i);
+});

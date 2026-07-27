@@ -41,7 +41,9 @@ Current implementation status:
 
 ## Canonical filename reason contract (CR-005, decided 2026-07-27)
 
-`CR-005` is **accepted**. This section is the durable product contract for the backup filename reason segment. It is a **decision record**: at the time it was written the runtime still produced the older one-underscore-per-character output, and the correcting implementation slice `R4` was authorized but not implemented. See `docs/implementation-plan.md` and `docs/backend-baseline-failure-triage.md`.
+`CR-005` is **accepted**. This section is the durable product contract for the backup filename reason segment. The contract itself is unchanged by any implementation slice.
+
+**Implementation status: `IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE`.** The correcting slice `R4 — Canonical backup/export filename reason normalization` is implemented on branch `claude/r4-canonical-artifact-reason-normalization` and is **not merged**. On `main` the runtime still produces the older one-underscore-per-replaced-character output. New backup filenames on the `R4` branch use the shared helper `normalize_artifact_reason_segment` in `backend/app/services/local_artifact_filenames.py`; the backup source database stem keeps its own separate sanitization and may still contain hyphens. `R4` changes neither the `CR-004` status above nor the Restore status. See `docs/implementation-plan.md` and `docs/backend-baseline-failure-triage.md`.
 
 ### Two distinct reason representations
 

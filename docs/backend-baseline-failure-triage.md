@@ -322,7 +322,7 @@ The original diagnostic evidence in §2–§9 and §11 is preserved unchanged. T
 |---|---|---|---|
 | `R3` | Node 4 — purchase suggestions manual API smoke | **DONE** | PR #143 `MERGED`; final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`; merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec`; merged `2026-07-27T04:01:23Z`; accepted result `496 / 493 / 3 / 0` (VERIFIED FROM REPOSITORY / GITHUB) |
 | `R2` | Node 3 — import draft issue count | **DONE** | PR #144 `MERGED`; final reviewed head `52e2c64fc601b458cfd60e8b86a778efabd65671`; merge commit `8efbdc5c85b5932f4aeef51045542c207cf4635c`; merged `2026-07-27T04:21:16Z`; accepted result `496 / 494 / 2 / 0` (VERIFIED FROM REPOSITORY / GITHUB) |
-| `R4` | Nodes 1 and 2 — backups and exports filename reason | **AUTHORIZED — NOT IMPLEMENTED** | Authorized by the accepted `CR-005` decision in §14; may begin only after the decision PR merges |
+| `R4` | Nodes 1 and 2 — backups and exports filename reason | **IMPLEMENTED — EXACT-HEAD SMOKE REQUIRED BEFORE MERGE** | `CR-005` decision PR #145 `MERGED` (head `7d68b45bee1f223b67f105c30e3acbb89dc8d41d`, merge commit `bef36822e50c245b72f813dad0afbffc7f772588`); implemented on branch `claude/r4-canonical-artifact-reason-normalization`; branch result `562 / 562 / 0 / 0`; not reviewed and not merged — see §15 |
 
 After `R2`, the complete backend suite run from `backend/` is `496 collected, 494 passed, 2 failed, 0 skipped`, and the remaining failures are exactly nodes 1 and 2:
 
@@ -435,8 +435,53 @@ Key boundaries:
 
 ### 14.7 What this section does not claim
 
+This subsection records the state **at decision time** and is preserved unedited. For the later `R4` branch implementation result see §15.
+
 - **No implementation result.** `R4` is not implemented.
 - **The two failures are not fixed.** Both nodes still fail on `origin/main` at `8efbdc5c85b5932f4aeef51045542c207cf4635c`.
 - No backend `0-failure` state is claimed.
 - No backend suite, frontend suite, frontend build, or browser smoke was executed for the decision that produced this section.
 - `CR-004` — the potential SQLite backup transaction-consistency candidate in §12 — remains a separate `needs evidence` row and is **not** resolved, activated, or affected by this decision.
+
+---
+
+## 15. R4 branch implementation result (2026-07-27)
+
+This section is a **branch** result. It supersedes nothing in §2–§9, §11, or §14; all earlier diagnostic evidence and its classification at diagnosis time stand unchanged.
+
+Branch: `claude/r4-canonical-artifact-reason-normalization`, created directly from `origin/main` at `bef36822e50c245b72f813dad0afbffc7f772588`, which is the merge commit of the `CR-005` decision PR #145.
+
+### 15.1 Pre-change baseline, re-executed on the branch
+
+Executed from `backend/` with Python `3.12.13` and pytest `8.4.2` (rootdir `backend/`, configfile `pyproject.toml`), in a temporary virtual environment created outside the repository:
+
+```text
+496 collected
+494 passed
+2 failed
+0 skipped
+```
+
+The two failures were exactly nodes 1 and 2. Each node was re-run twice in isolation and reproduced identically: the API call is reached, the artifact is created, unsafe characters are neutralized, the implementation emits one underscore per replaced character where the accepted contract requires one collapsed underscore run, and no overwrite or data-loss defect was observed. No baseline drift.
+
+### 15.2 Post-change result on the branch
+
+```text
+562 collected
+562 passed
+0 failed
+0 skipped
+```
+
+- Both former baseline nodes now pass; each was re-run twice in isolation after the change.
+- All 496 previously collected node IDs are still collected; the collection difference is 66 added tests.
+- No existing test was deleted, renamed, skipped, `xfail`-ed, or weakened.
+- Production change is confined to `backend/app/services/local_artifact_filenames.py` (new shared helper), `backend/app/services/backup.py`, and `backend/app/services/export.py`. No API, schema, model, repository, or migration file changed. No frontend production file changed.
+- Frontend: `npm run test:local-artifacts-reports-feedback` gives `40 pass, 0 fail, 0 skipped`; `npm run build` succeeds.
+
+### 15.3 What §15 does not claim
+
+- **`R4` is not DONE.** It is not reviewed and not merged.
+- **No claim that the merged `main` baseline is already green.** On `origin/main` at `bef36822e50c245b72f813dad0afbffc7f772588` both nodes still fail; `562 / 562 / 0 / 0` is a branch result only.
+- The focused exact-published-head `/backups` and `/exports` browser smoke is the remaining pre-merge gate and was **not** executed at the time this section was committed. A passing smoke is invalidated by any later commit.
+- `CR-004` remains a separate, unresolved `needs evidence` row. Restore remains unimplemented. Product release readiness is not claimed.
