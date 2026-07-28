@@ -1340,3 +1340,26 @@ ADR 0012 already required subdivision if `C2-III` was not one bounded, independe
 6. `C2 is not complete after C2-III-A.` Leave `CR-004` and `CR-006` inactive, do not reopen ADR 0011, `CR-007`, or `CR-008`, and leave C3 and C4 inactive.
 
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
+
+## C2-III-A handoff — implemented on an unmerged PR branch (2026-07-28)
+
+`C2-III-A — Order and ProductionBatch financial presentation` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`** on branch `codex/c2-iii-a-production-financial-presentation`, started from merged `origin/main` `1eb0d5420eaabbd8f61a66dba523f058a38826a6` — the PR #153 merge commit. It is **not** `DONE` and must not be recorded as `DONE` until it is merged and exact-head verified.
+
+### What is on the branch
+
+- Two focused frontend modules — `frontend/src/production-financial-contract.ts` (financial DTO types, the `available` / `partial` / `unavailable` status enum, readiness financial validation) and `frontend/src/production-financial-presentation.ts` (every financial render function, plus the two per-line batch cost-snapshot tables moved out of `frontend/src/main.ts`). The canonical tax-rate pair checks stay in the existing `frontend/src/order-production-context.ts`.
+- The readiness financial block inside the existing result card, with the three accepted Russian status labels, the human-readable `Ставка действует с:` line when a rate is configured, and no warning of its own — backend financial warnings are still shown once through the existing readiness warning section.
+- One shared `Фактическая экономика партии` block used by both the production-success card and the historical `ProductionBatch` detail.
+- A compact five-field financial summary in the `/production` history list, with the rate snapshots still detail-only.
+- Tightened DTO validation: the complete readiness financial contract, and both `ProductionBatch` rate-snapshot keys required present, with explicit `null/null` still valid.
+- `frontend/src/main.ts` `6399` → `6398` lines; no backend production source changed and no backend test changed.
+
+### What the next task must do
+
+1. Review and merge the `C2-III-A` PR. Do **not** merge it automatically and do not enable auto-merge.
+2. **Only after it merges and is exact-head verified**, record `C2-III-A` as `DONE — MERGED AND EXACT-HEAD VERIFIED` and close the active documentation and state consistently. Until then it stays `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
+3. `C2-III-B — Snapshot-backed reports and report documents` remains `PLANNED — BLOCKED` until `C2-III-A` is merged and exact-head verified. Do not authorize or start it now, and do not assign it a PR number. Its boundary and the ban on silently inventing an aggregate margin-percent formula are unchanged and stated in § *C2-II closure and C2-III subdivision handoff (2026-07-28)* above.
+4. Do not extend `C2-III-A` into reports, report DTOs, `/reports` UI, report documents, the overview finance summary, or dashboard financial cards — none of those changed here.
+5. `C2 is not complete after C2-III-A.` Leave `CR-004` and `CR-006` inactive, do not reopen ADR 0011, `CR-007`, or `CR-008`, and leave C3 and C4 inactive.
+
+Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist-tests/production-financial-presentation",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "files": ["src/production-financial-contract.ts", "src/production-financial-presentation.ts"]
+}

@@ -65,6 +65,10 @@ function batch(orderId = 7, overrides = {}) {
     tax: null,
     margin: null,
     margin_percent: null,
+    // C2-III-A: the detail DTO must carry both rate-snapshot keys; explicit
+    // null/null is the historical no-rate pair the backend returns.
+    tax_rate_percent_snapshot: null,
+    tax_rate_effective_at_snapshot: null,
     produced_at: '2026-07-24T10:00:00Z',
     notes: '',
     created_at: '2026-07-24T10:00:00Z',
@@ -97,13 +101,17 @@ function readiness(orderId = 7, overrides = {}) {
     warnings: [],
     ingredients: [],
     packaging: [],
+    sale_price: null,
     estimated_cost: null,
     estimated_tax: null,
     estimated_margin: null,
+    estimated_margin_percent: null,
     // C2-II: confirmation requires the readiness tax context, so a realistic
-    // readiness fixture now carries the pair the backend returns.
+    // readiness fixture now carries the pair the backend returns. C2-III-A adds
+    // the backend-stated availability of the estimate itself.
     tax_rate_percent: '6.00',
     tax_rate_effective_at: '2026-07-27T19:44:53Z',
+    financial_estimate_status: 'partial',
     generated_at: '2026-07-24T10:00:00Z',
     ...overrides,
   };
@@ -220,11 +228,14 @@ test('readiness DTO boundary keeps ready, warning and blocked valid but rejects 
       warnings: [],
       ingredients: [],
       packaging: [],
+      sale_price: null,
       estimated_cost: null,
       estimated_tax: null,
       estimated_margin: null,
+      estimated_margin_percent: null,
       tax_rate_percent: null,
       tax_rate_effective_at: null,
+      financial_estimate_status: 'unavailable',
       generated_at: '2026-07-24T10:00:00Z',
     };
     assert.equal(productionReadinessDtoIsValid(value, 7), true);

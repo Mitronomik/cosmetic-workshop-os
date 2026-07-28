@@ -153,13 +153,20 @@ export function isTaxRateContextStaleFailure(
   return failure?.status === 409 && failure?.code === TAX_RATE_CONTEXT_STALE_CODE;
 }
 
-/** Whether the two snapshot fields on a batch DTO are shaped as contracted. */
+/**
+ * Whether the two snapshot fields on a batch DTO are shaped as contracted.
+ *
+ * `C2-III-A` requires both keys to be present, matching the readiness context
+ * rule: a missing key is an outdated response, not a backend statement that no
+ * rate was snapshotted. Old database rows stay compatible because the backend
+ * always returns both keys, with `null` values when nothing was snapshotted.
+ */
 export function batchTaxRateSnapshotsAreValid(value: unknown): boolean {
   const payload = record(value);
   if (!payload) return false;
+  if (!('tax_rate_percent_snapshot' in payload) || !('tax_rate_effective_at_snapshot' in payload)) return false;
   const percent = payload.tax_rate_percent_snapshot;
   const effectiveAt = payload.tax_rate_effective_at_snapshot;
-  if (percent === undefined && effectiveAt === undefined) return true;
   if (percent === null && effectiveAt === null) return true;
   return isCanonicalRatePair(percent, effectiveAt);
 }
