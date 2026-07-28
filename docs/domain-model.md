@@ -1239,7 +1239,7 @@ ProductionBatch → StockMovement[]
 
 Decided in `CR-007` (the setting) and `CR-008` (the calculation and the snapshots). Durable contracts: `docs/settings.md` and `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
-**Current state.** On merged `main`, production readiness estimates `estimated_tax`, `estimated_margin`, and `estimated_margin_percent` (`C2-I`, PR #151). `C2-II` — the transactional snapshots, the two rate-snapshot columns below, migration `0019_production_batch_tax_rate_snapshots`, the required confirmation context, and `409 tax_rate_context_stale` — is merged as PR #152 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III` is subdivided into `C2-III-A` (Order and `ProductionBatch` financial presentation, merged as PR #154 and `DONE — MERGED AND EXACT-HEAD VERIFIED`) and `C2-III-B` (snapshot-backed reports and report documents, `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`). Reports are not snapshot-backed yet.
+**Current state.** On merged `main`, production readiness estimates `estimated_tax`, `estimated_margin`, and `estimated_margin_percent` (`C2-I`, PR #151). `C2-II` — the transactional snapshots, the two rate-snapshot columns below, migration `0019_production_batch_tax_rate_snapshots`, the required confirmation context, and `409 tax_rate_context_stale` — is merged as PR #152 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III` was subdivided into `C2-III-A` (Order and `ProductionBatch` financial presentation, merged as PR #154) and `C2-III-B` (snapshot-backed reports and report documents, merged as PR #157, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`); both are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **Reports are snapshot-backed and C2 is `COMPLETED`.**
 
 #### Calculation formulas (`CR-008`)
 
@@ -1742,6 +1742,10 @@ onboarding
 restore
 ```
 
+> **Persistence versus API name.** The database column created by `0001_infrastructure` and written by `AuditLogRepository.create_log` is **`actor_type`**. The durable domain and API name is **`source`**; the `C3-I` read model maps one to the other at read time. The column is not renamed, and no migration or backfill is authorized. Existing write call sites are not changed merely to rename this field.
+>
+> **Actual persisted values.** The vocabulary above is aspirational. Only **`system`** and **`user`** are actually written on merged `main`: `system` is the `create_log` default used by every call site except one, and `user` is written only for `tax_rate_setting_changed`. `manual`, `import`, `production`, `migration`, `backup` and `restore` are not persisted anywhere. `C3-I` presents what exists and routes anything else through the safe unknown-code label. Full inventory: `docs/audit-log.md` § 10.
+
 ### Business rules
 
 - AuditLog should be append-only.
@@ -1749,6 +1753,8 @@ restore
 - Store safe summaries.
 - Metadata can contain technical details, but no secrets.
 - Important business actions must create AuditLog.
+- `metadata_json` is **never** returned by the read API. It is dominated by internal foreign-key IDs, enum codes and counters — exactly the class of value a non-technical user must not see — so the `C3-I` read model excludes it in full rather than field by field.
+- The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
 
 ### Examples
 

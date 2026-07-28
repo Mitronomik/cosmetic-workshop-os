@@ -1294,7 +1294,7 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-II closure and C2-III subdivision handoff (2026-07-28)
 
-> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III` LIFECYCLE.** The `C2-II` closure evidence below stands. Its § *Next steps*, and its statement that there is no financial presentation in the UI, were true when written, before PR #154 merged. `C2-III-A` is now `DONE — MERGED AND EXACT-HEAD VERIFIED` and `C2-III-B` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` (PR #157); its statement that reports read no snapshots remains true of merged `main` only. See § *C2-III-B snapshot-backed reports implementation handoff (2026-07-28)* at the end of this file for the current state.
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III` LIFECYCLE.** The `C2-II` closure evidence below stands. Its § *Next steps*, and its statement that there is no financial presentation in the UI, were true when written, before PR #154 merged. `C2-III-A` merged as PR #154 and `C2-III-B` merged as PR #157; both are `DONE — MERGED AND EXACT-HEAD VERIFIED`, **C2 is `COMPLETED`**, and its statement that reports read no snapshots no longer describes merged `main`. See § *C2 closure and C3-I AuditLog authorization handoff (2026-07-29)* at the end of this file for the current state.
 
 `C2-II — Persist transactional production financial snapshots` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`**. The `C2-II` handoff section above is preserved as history.
 
@@ -1370,7 +1370,7 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-III-A closure and C2-III-B authorization handoff (2026-07-28)
 
-> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III-B` LIFECYCLE.** The `C2-III-A` closure evidence below stands and is not reopened. Its § *What a reviewer should know about the current state* and § *What the next task must do* describe `C2-III-B` as unstarted, unassigned and startable only from a future `main`; that was true when written and is now **superseded**. `C2-III-B` is implemented on PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, and is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. Its statement that reports are not snapshot-backed remains true **of merged `main` only**, which keeps the old Reports runtime until PR #157 merges. See § *C2-III-B snapshot-backed reports implementation handoff (2026-07-28)* at the end of this file.
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III-B` LIFECYCLE.** The `C2-III-A` closure evidence below stands and is not reopened. Its § *What a reviewer should know about the current state* and § *What the next task must do* describe `C2-III-B` as unstarted, unassigned and startable only from a future `main`; that was true when written and is now **superseded**. `C2-III-B` merged as PR #157 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`, so **C2 is `COMPLETED`** and its statement that reports are not snapshot-backed no longer describes merged `main`. See § *C2 closure and C3-I AuditLog authorization handoff (2026-07-29)* at the end of this file.
 
 `C2-III-A — Order and ProductionBatch financial presentation` is:
 
@@ -1407,7 +1407,7 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 ### What a reviewer should know about the current state
 
 - Merged `main` carries the `C2-I` readiness estimate, the `C2-II` transactional snapshots and migration `0019`, and the `C2-III-A` financial presentation in the Orders and `ProductionBatch` UI.
-- **Reports are still not snapshot-backed on merged `main`.** There, `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` read no `ProductionBatch` financial snapshots. *(Superseded for the branch: PR #157 implements them; merged `main` keeps this behaviour until that PR merges.)*
+- **Reports are still not snapshot-backed on merged `main`.** There, `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` read no `ProductionBatch` financial snapshots. *(Superseded: PR #157 merged, so reports on `main` now read the persisted snapshots.)*
 - The durable contracts remain `docs/decisions/0012-c2-financial-calculation-snapshots.md` and `docs/reports.md`. Neither was rewritten or reinterpreted; only the slice lifecycle and the `C2-III-B` authorization were recorded.
 
 ### What the next task must do
@@ -1424,6 +1424,8 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
 
 ## C2-III-B report aggregation contract clarification handoff (2026-07-28)
+
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III-B` LIFECYCLE.** The accepted aggregation contract recorded below stands and is unchanged. Its § *Next steps*, and every statement that `C2-III-B` is unimplemented, unmerged or has no PR number, were true when written and are **superseded**: `C2-III-B` merged as PR #157 (merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`), and **C2 is `COMPLETED`**. See § *C2 closure and C3-I AuditLog authorization handoff (2026-07-29)* at the end of this file.
 
 This is a **documentation-only** handoff. No backend or frontend production code, test, schema, migration, dependency, lockfile, package script, smoke runner or generated report document was changed.
 
@@ -1485,6 +1487,8 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-III-B snapshot-backed reports implementation handoff (2026-07-28)
 
+> **SUPERSEDED — the slice is now merged.** What was built, and the review corrections, stand. Its status line `IMPLEMENTED ON PR BRANCH — NOT MERGED`, its § *Next steps* asking for review and merge, and its statement that C2 is not complete were true when written and are superseded: PR #157 merged at `87410910aad472343c057f0bcbfcc3797f8b8e09` on `2026-07-28T22:21:18Z`, and **C2 is `COMPLETED`**. See § *C2 closure and C3-I AuditLog authorization handoff (2026-07-29)* at the end of this file.
+
 `C2-III-B — Snapshot-backed reports and report documents` is:
 
 ```text
@@ -1534,3 +1538,76 @@ C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
 - No change to Orders readiness, production confirmation, `ProductionBatch` persistence, `ProductionBatch` list or detail UI, the `C2-III-A` presentation modules, tax-rate Settings behaviour, or stock and production transactions.
 - Report reads remain read-only: no audit record, no file, no business mutation.
 - No accounting, tax filing, VAT, tax regimes, date filters, charts, forecasting, analytics, tax-rate averages, DOCX, automatic document regeneration, `C3`, `C4`, Restore, packaging or release work. No dependency and no lockfile changed.
+
+## C2 closure and C3-I AuditLog authorization handoff (2026-07-29)
+
+### Verified lifecycle
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C2-III-B — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-I — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+`VERIFIED FROM MERGED PR #157 EVIDENCE — NOT RE-EXECUTED IN THIS DOCUMENTATION PR`
+
+| Item | Verified value |
+|---|---|
+| PR | #157 — `C2-III-B — Implement snapshot-backed reports and report documents` |
+| State | `MERGED`, base `main`, not a draft |
+| Head branch | `codex/c2-iii-b-snapshot-backed-reports` |
+| Final reviewed head | `305d5421e79b8cb833df9588e705e9418781e021` |
+| Merge commit | `87410910aad472343c057f0bcbfcc3797f8b8e09` |
+| Merged at | `2026-07-28T22:21:18Z` |
+| `origin/main` at branch start | `87410910aad472343c057f0bcbfcc3797f8b8e09` — equal to the merge commit, with no commit after it |
+| Open pull requests at branch start | none |
+| Exact-head API smoke | `PASS — 53 checks / 0 failures` |
+| Exact-head browser smoke | `PASS — FULL AUTOMATED SMOKE PASSED` |
+| Complete backend suite | `942 passed / 0 failed / 0 skipped` |
+| Focused report frontend suite | `54 pass / 0 fail` |
+| All 17 frontend test scripts | `PASS` |
+| Production build | `PASS` |
+| `frontend/src/main.ts` | `6398` lines |
+
+### What this pull request did
+
+Exactly two things: it closed the merged C2 lifecycle, and it defined and authorized one bounded C3 runtime slice. It is documentation-only — every changed file ends in `.md`, and no runtime code, test, schema, migration, dependency, lockfile, package script, generated artifact, smoke runner or user data changed.
+
+Merged `main` reports now read persisted `ProductionBatch` financial snapshots. The former paired sale-price/cost margin derivation is gone from `main`, and every active document that still claimed otherwise was corrected.
+
+### The accepted `C3-I` contract
+
+Durable contract: **`docs/audit-log.md`**. It is authoritative; `docs/api.md`, `docs/domain-model.md`, `docs/roadmap.md` § PR27 and `docs/implementation-plan.md` § C3 defer to it.
+
+- **Purpose.** `Журнал действий` — a plain-language history of important workshop actions, so the user can understand what happened without opening SQLite, JSON, logs, GitHub or a terminal. Not a technical admin console, database browser, SIEM, analytics, rollback, event editor or debugging console.
+- **Persistence mapping.** The column stays `actor_type`; the durable domain and API name is `source`; the mapping is read-time only. No column rename, no migration, no backfill, no write-call-site change for the rename.
+- **API.** Exactly one new endpoint, `GET /api/audit-logs`. `GET /api/audit-logs/{id}` is **explicitly superseded for the MVP**. No create, update, delete, rollback or export endpoint.
+- **Safe read model.** `items`, `total`, `limit`, `offset`, `filter_options`; item fields `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `summary`, `source`, `source_label`. Raw `metadata_json`, `entity_id`, table names, stack traces, SQL, paths, payloads and secrets are never returned, and sensitive client text is never reconstructed. Unknown codes fall back to `Другое действие`, `Другая сущность`, `Другой источник`.
+- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` `50` / `1` / `200`; `offset` `0` / `0`. No unbounded history.
+- **Filters.** `created_from` inclusive, `created_before` exclusive, plus `action`, `entity_type`, `source`, `limit`, `offset`, combined with AND, ISO-8601 UTC, existing structured Russian validation response for malformed input, `created_before <= created_from` rejected, options derived from persisted values, no writes.
+- **Read-only.** No audit record, no business mutation, no file, no setting change, no regeneration, no normalization of historical rows. Append-only preserved.
+- **Frontend.** `/settings/audit-log`, title `Журнал действий`, full state set including filtered-empty and refresh-failure-retaining-previous-list, keyboard accessible, narrow viewport safe. No raw codes, JSON, `metadata_json`, table names, internal IDs, stack traces, SQL, developer paths or GitHub/PR terminology. Focused modules only; `frontend/src/main.ts` must not grow net from its current `6398` lines.
+
+### Findings the implementer must not rediscover
+
+- **Actual vocabulary.** 50 `action` codes, 19 `entity_type` values, and only two `actor_type` values — `system` (default) and `user` (only `tax_rate_setting_changed`). The documented sources `manual` / `import` / `production` / `migration` / `backup` / `restore` are **not persisted**. Required Russian labels for all of them are tabulated in `docs/audit-log.md` § 10.
+- **`ImportDraft` is PascalCase** while every other `entity_type` is snake_case. Match it as persisted; do not normalize, alias or rewrite it.
+- **Most persisted summaries are English** (`Client created: …`, `Order #4 produced as batch #7`); only the `onboarding.*`, `demo_data.*` and `tax_rate_setting_changed` summaries are Russian. Readability comes from `action_label` and `entity_label`; the summary is supplementary. Rewriting history is forbidden, and changing what future writes put in a summary is a separate slice.
+- **One flagged residual privacy risk:** `client_wish.*` summaries embed the user-authored wish title. `C3-I` returns the persisted summary verbatim and never joins to `client_wishes`, so nothing new is exposed — but narrowing future wish summaries is an open follow-up product decision, not something `C3-I` may decide.
+- **Coverage gap:** backups, exports, report-document generation and workshop-profile updates write **no** audit record on merged `main`. `Журнал действий` will not show them. Do not add those write call sites in `C3-I`.
+- **Route architecture:** every existing frontend route is a single path segment resolved through a flat exact-match table in `frontend/src/main.ts`. `/settings/audit-log` is the first nested route, so route resolution, the navigation entry under `Данные и настройки`, and the nested-path static fallback all need handling.
+
+### Next steps
+
+1. Merge this documentation pull request. Do not merge it here and do not enable auto-merge.
+2. **Only after it merges**, implement `C3-I` as one bounded backend-plus-frontend read-only slice on a new branch from clean `origin/main`. Do not start it from this unmerged branch and do not assign a PR number before GitHub creates it.
+3. Keep `C3-I` inside `docs/audit-log.md`. No second C3 slice is authorized.
+4. Leave `CR-004` and `CR-006` inactive; do not reopen ADR 0011, ADR 0012, `CR-007`, `CR-008` or the accepted report contract.
+5. **C4, Restore, packaging, the update flow and release-candidate work remain inactive.** Product release readiness is not claimed.
+
+### Verification performed here
+
+Level 0 documentation checks only: `git status --short --untracked-files=all`, `git diff --check`, `git diff --stat`, `git diff --name-only`, and the three-dot `origin/main...HEAD` variants, plus the semantic consistency audit across active documentation and state. Every changed file ends in `.md`. **Backend tests, frontend tests, the build, API smoke, browser smoke, migration smoke, packaging smoke and release smoke were not run.** No runtime command is claimed as executed.

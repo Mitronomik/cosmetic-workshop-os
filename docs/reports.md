@@ -28,7 +28,7 @@ This is not advanced analytics and not an accounting module.
 
 The finance report is an operational snapshot, not accounting or tax filing.
 
-> **IMPLEMENTED ON THE `C2-III-B` PR BRANCH — NOT MERGED.** The bullets below describe `ReportsService.get_finance_report()` as implemented on the `C2-III-B` runtime branch, where tax and margin come from persisted snapshots. On merged `main` the pre-`C2-III-B` behaviour still applies: margin is *derived* from paired `sale_price` and `total_cost`, and the additive fields do not exist. The accepted contract is § *Accepted `C2-III-B` snapshot aggregation contract*.
+> **IMPLEMENTED AND MERGED (`C2-III-B`, PR #157).** The bullets below describe `ReportsService.get_finance_report()` as it behaves on merged `main`, where tax and margin come from persisted snapshots. The former paired-input derivation, where margin was computed from `sale_price` and `total_cost`, is **historical**. The accepted contract is § *Accepted `C2-III-B` snapshot aggregation contract*.
 
 - `known_revenue` is the sum of all known sale prices.
 - `known_production_cost` is the sum of all known production costs.
@@ -41,11 +41,11 @@ The finance report is an operational snapshot, not accounting or tax filing.
 - Tax is not invented or recalculated by reports, and the current Settings tax rate is never read.
 - Missing sale prices, costs and snapshots are surfaced as warnings.
 
-### Tax snapshots — implemented on PR branch, not merged
+### Tax snapshots — implemented and merged
 
 `CR-007` decided the workshop tax-rate contract (`docs/settings.md`) and its implementation `C1-I` is **merged and `DONE`** (PR #149, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`). `CR-008` then decided the C2 calculation and snapshot contract (`docs/decisions/0012-c2-financial-calculation-snapshots.md`).
 
-On merged `main` the two `ProductionBatch` rate snapshot columns exist, production confirmation persists tax, margin, and margin percent (`C2-I` / PR #151 and `C2-II` / PR #152), and the Order and `ProductionBatch` financial presentation is merged (`C2-III-A` / PR #154) — but reports there still read no snapshots. Report changes belong to `C2-III-B`, which is `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
+On merged `main` the two `ProductionBatch` rate snapshot columns exist, production confirmation persists tax, margin, and margin percent (`C2-I` / PR #151 and `C2-II` / PR #152), the Order and `ProductionBatch` financial presentation is merged (`C2-III-A` / PR #154), and **reports read those snapshots** (`C2-III-B` / PR #157, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`). C2 is `COMPLETED`.
 
 The durable **report snapshot-only rule**, binding now that `C2-II` persists snapshots and `C2-III-B` reads them:
 
@@ -59,13 +59,13 @@ The durable **report snapshot-only rule**, binding now that `C2-II` persists sna
 - only existing report read models that already contain cost, revenue, tax, margin, or margin percent are updated;
 - no advanced analytics, tax declaration, accounting report, tax-regime reporting, or annual/quarterly filing calculation is added.
 
-### C2-III-B — snapshot-backed reports and report documents: implemented on its PR branch
+### C2-III-B — snapshot-backed reports and report documents: merged
 
-Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED.**
+Status: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #157).
 
-The runtime implementation lives on the `C2-III-B` branch: the pure aggregation in `backend/app/domain/report_financials.py`, the additive `FinanceReportResponse` fields, the `/reports` Overview and Finance presentation in `frontend/src/report-financial-contract.ts` and `frontend/src/report-financial-presentation.ts`, and the newly generated «Сводка мастерской» finance section. The authorized boundary below is unchanged and is what that branch implements.
+The runtime lives on merged `main`: the pure aggregation in `backend/app/domain/report_financials.py`, the additive `FinanceReportResponse` fields, the `/reports` Overview and Finance presentation in `frontend/src/report-financial-contract.ts` and `frontend/src/report-financial-presentation.ts`, and the newly generated «Сводка мастерской» finance section. The authorized boundary below is unchanged and is what the merged slice implements.
 
-`C2-III` was a planning umbrella and has been subdivided into exactly two runtime slices. `C2-III-A — Order and ProductionBatch financial presentation` covered Orders readiness and `ProductionBatch` UI, **excluded reports entirely**, and is **merged and `DONE`** (PR #154, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`). `C2-III-B` is the report slice and the only remaining C2 runtime slice. It is **implemented on its PR branch and not merged**: PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`. Merged `main` keeps the pre-`C2-III-B` Reports runtime until PR #157 merges.
+`C2-III` was a planning umbrella and has been subdivided into exactly two runtime slices. `C2-III-A — Order and ProductionBatch financial presentation` covered Orders readiness and `ProductionBatch` UI, **excluded reports entirely**, and is **merged and `DONE`** (PR #154, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`). `C2-III-B` is the report slice and was the last remaining C2 runtime slice. It is **merged and exact-head verified**: PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, final reviewed head `305d5421e79b8cb833df9588e705e9418781e021`, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`. Merged `main` carries the snapshot-backed Reports runtime.
 
 Authorized `C2-III-B` boundary — one bounded backend-plus-frontend report vertical:
 
@@ -86,7 +86,7 @@ The affected financial reports read persisted `ProductionBatch` financial snapsh
 
 ### The Phase 0 conflict this resolves
 
-> **HISTORICAL — the conflict record as written during Phase 0.** It is resolved in runtime on the PR #157 branch and still describes merged `main`, which keeps the pre-`C2-III-B` Reports runtime until PR #157 merges. The accepted answer it points to is the contract in the rest of this section, which is unchanged.
+> **HISTORICAL — the conflict record as written during Phase 0.** It is resolved in runtime and merged (PR #157); it no longer describes merged `main`. The accepted answer it points to is the contract in the rest of this section, which is unchanged.
 
 ```text
 C2-III-B — BLOCKED BY REPORT AGGREGATION CONTRACT CONFLICT
@@ -238,7 +238,7 @@ Previously generated documents remain immutable and are never rewritten, regener
 
 ### 10. Lifecycle
 
-`C2-III-B` is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. C2 remains **incomplete** until `C2-III-B` is reviewed, exact-head verified and merged, and its active lifecycle is closed. C3 and C4 remain inactive, and product release readiness is not claimed.
+`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3 has exactly one authorized runtime slice — `C3-I — Read-only AuditLog workspace`, `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`, contract `docs/audit-log.md` — and C4 remains inactive. Product release readiness is not claimed.
 
 ## Incomplete data
 
@@ -254,7 +254,7 @@ When data is missing or ambiguous, reports return warnings instead of silently i
 - `partial_tax_basis` — tax is returned, but only for batches that persisted one.
 - `margin_percent_unavailable_zero_basis` — margin is available, but the batches it covers sold for zero, so no percentage can be expressed.
 
-The two margin warnings above describe the `C2-III-B` snapshot behaviour; on merged `main` they still describe the older paired-input behaviour, and the three additive codes do not exist there. See § *Accepted `C2-III-B` snapshot aggregation contract* § 8. No code is renamed.
+The two margin warnings above describe the merged `C2-III-B` snapshot behaviour on `main`; the older paired-input meaning is historical. See § *Accepted `C2-III-B` snapshot aggregation contract* § 8. No code is renamed.
 
 ## Endpoints
 
