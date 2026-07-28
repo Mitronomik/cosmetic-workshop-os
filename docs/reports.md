@@ -28,24 +28,26 @@ This is not advanced analytics and not an accounting module.
 
 The finance report is an operational snapshot, not accounting or tax filing.
 
-> **CURRENT MERGED BEHAVIOUR — SUPERSEDED BY THE ACCEPTED `C2-III-B` CONTRACT BELOW.** The bullets in this subsection describe `ReportsService.get_finance_report()` exactly as implemented on merged `main` today, where margin is *derived* from paired `sale_price` and `total_cost`. `C2-III-B` replaces that derivation with persisted snapshots — see § *Accepted `C2-III-B` snapshot aggregation contract*. Until `C2-III-B` is implemented and merged, the behaviour below is what the API actually returns.
+> **IMPLEMENTED ON THE `C2-III-B` PR BRANCH — NOT MERGED.** The bullets below describe `ReportsService.get_finance_report()` as implemented on the `C2-III-B` runtime branch, where tax and margin come from persisted snapshots. On merged `main` the pre-`C2-III-B` behaviour still applies: margin is *derived* from paired `sale_price` and `total_cost`, and the additive fields do not exist. The accepted contract is § *Accepted `C2-III-B` snapshot aggregation contract*.
 
 - `known_revenue` is the sum of all known sale prices.
 - `known_production_cost` is the sum of all known production costs.
-- `known_margin` is currently **derived** as paired revenue minus paired cost, over production batches where both `sale_price` and `total_cost` are known on the same row. `C2-III-B` replaces this with the sum of persisted `ProductionBatch.margin`.
-- `known_margin_percent` currently uses that same paired basis, not the global known revenue total. `C2-III-B` restates the denominator explicitly; see the accepted formula below.
+- `known_tax` is the sum of every non-null persisted `ProductionBatch.tax`.
+- `known_margin` is the sum of persisted `ProductionBatch.margin` over exactly the rows that have one. It is never derived from sale price minus cost.
+- `known_margin_percent` divides that same margin total by the sale prices of exactly those rows — not by the global known revenue total, and never by aggregating persisted row percentages.
 - `complete_finance_record_count` is the count of production batches where sale price and total cost are both known. It is **legacy paired-input coverage**, not persisted-margin-snapshot coverage.
 - `incomplete_margin_count` is the count of production batches excluded because sale price or total cost is missing. It is **legacy paired-input coverage**, not persisted-margin-snapshot coverage.
-- Tax is not invented or recalculated by reports.
-- Missing sale prices or costs are surfaced as warnings.
+- `tax_snapshot_record_count` / `missing_tax_snapshot_count` and `margin_snapshot_record_count` / `missing_margin_snapshot_count` are the authoritative snapshot coverage counters. Each pair sums to `produced_order_count`.
+- Tax is not invented or recalculated by reports, and the current Settings tax rate is never read.
+- Missing sale prices, costs and snapshots are surfaced as warnings.
 
 ### Tax snapshots — decided, not implemented
 
 `CR-007` decided the workshop tax-rate contract (`docs/settings.md`) and its implementation `C1-I` is **merged and `DONE`** (PR #149, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`). `CR-008` then decided the C2 calculation and snapshot contract (`docs/decisions/0012-c2-financial-calculation-snapshots.md`).
 
-Neither changes reports now. On merged `main` the two `ProductionBatch` rate snapshot columns exist, production confirmation persists tax, margin, and margin percent (`C2-I` / PR #151 and `C2-II` / PR #152), and the Order and `ProductionBatch` financial presentation is merged (`C2-III-A` / PR #154) — but reports still read no snapshots and still contain **no tax calculation**. Report changes belong to `C2-III-B`, which is `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`.
+On merged `main` the two `ProductionBatch` rate snapshot columns exist, production confirmation persists tax, margin, and margin percent (`C2-I` / PR #151 and `C2-II` / PR #152), and the Order and `ProductionBatch` financial presentation is merged (`C2-III-A` / PR #154) — but reports there still read no snapshots. Report changes belong to `C2-III-B`, which is `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
 
-The durable **report snapshot-only rule**, binding now that `C2-II` persists snapshots and once `C2-III-B` reads them:
+The durable **report snapshot-only rule**, binding now that `C2-II` persists snapshots and `C2-III-B` reads them:
 
 - reports read the immutable `ProductionBatch` financial snapshots **only**;
 - reports never recalculate historical tax or margin using the currently configured rate;
@@ -57,9 +59,11 @@ The durable **report snapshot-only rule**, binding now that `C2-II` persists sna
 - only existing report read models that already contain cost, revenue, tax, margin, or margin percent are updated;
 - no advanced analytics, tax declaration, accounting report, tax-regime reporting, or annual/quarterly filing calculation is added.
 
-### C2-III-B — snapshot-backed reports and report documents: authorized, not implemented
+### C2-III-B — snapshot-backed reports and report documents: implemented on its PR branch
 
-Status: **AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED.**
+Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED.**
+
+The runtime implementation lives on the `C2-III-B` branch: the pure aggregation in `backend/app/domain/report_financials.py`, the additive `FinanceReportResponse` fields, the `/reports` Overview and Finance presentation in `frontend/src/report-financial-contract.ts` and `frontend/src/report-financial-presentation.ts`, and the newly generated «Сводка мастерской» finance section. The authorized boundary below is unchanged and is what that branch implements.
 
 `C2-III` was a planning umbrella and has been subdivided into exactly two runtime slices. `C2-III-A — Order and ProductionBatch financial presentation` covered Orders readiness and `ProductionBatch` UI, **excluded reports entirely**, and is **merged and `DONE`** (PR #154, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`). `C2-III-B` is the report slice and the only remaining C2 runtime slice. It is **not implemented**, and no future implementation PR number is assigned to it.
 
@@ -232,7 +236,7 @@ Previously generated documents remain immutable and are never rewritten, regener
 
 ### 10. Lifecycle
 
-`C2-III-B` is `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`. No implementation PR number is assigned. C2 remains **incomplete** until `C2-III-B` runtime implementation passes its focused and complete tests, its exact-head API and browser smoke pass, its runtime PR is reviewed and merged, and the active lifecycle documentation is closed. C3 and C4 remain inactive, and product release readiness is not claimed.
+`C2-III-B` is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. C2 remains **incomplete** until `C2-III-B` is reviewed, exact-head verified and merged, and its active lifecycle is closed. C3 and C4 remain inactive, and product release readiness is not claimed.
 
 ## Incomplete data
 
@@ -242,10 +246,13 @@ When data is missing or ambiguous, reports return warnings instead of silently i
 - `missing_production_cost` — some production batches do not have total cost.
 - `mixed_units` — produced quantities are shown by unit because grams, milliliters, and pieces cannot be safely summed together.
 - `no_production_data` — no production batches exist yet.
-- `margin_unavailable` — currently: no production batch has both sale price and cost, so margin is not returned.
-- `partial_margin_basis` — currently: margin is returned, but only for complete finance rows.
+- `margin_unavailable` — no production batch has a persisted margin snapshot, so margin is not returned.
+- `partial_margin_basis` — margin is returned, but only for batches that persisted one.
+- `tax_unavailable` — no production batch has a persisted tax snapshot.
+- `partial_tax_basis` — tax is returned, but only for batches that persisted one.
+- `margin_percent_unavailable_zero_basis` — margin is available, but the batches it covers sold for zero, so no percentage can be expressed.
 
-The two margin warnings above describe the **current merged** paired-input behaviour. `C2-III-B` restates both against persisted margin snapshots and adds `tax_unavailable`, `partial_tax_basis`, and `margin_percent_unavailable_zero_basis`; see § *Accepted `C2-III-B` snapshot aggregation contract* § 8. The codes themselves are not renamed.
+The two margin warnings above describe the `C2-III-B` snapshot behaviour; on merged `main` they still describe the older paired-input behaviour, and the three additive codes do not exist there. See § *Accepted `C2-III-B` snapshot aggregation contract* § 8. No code is renamed.
 
 ## Endpoints
 

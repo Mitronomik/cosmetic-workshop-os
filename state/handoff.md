@@ -1478,3 +1478,50 @@ Full contract: `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation co
 - **Not executed, because this PR is documentation-only:** backend tests, frontend tests, `npm run build`, API smoke, browser smoke, migration smoke, packaging smoke and release smoke.
 
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
+
+---
+
+## C2-III-B snapshot-backed reports implementation handoff (2026-07-28)
+
+`C2-III-B — Snapshot-backed reports and report documents` is:
+
+```text
+C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
+```
+
+| Item | Value |
+|---|---|
+| Branch | `codex/c2-iii-b-snapshot-backed-reports` |
+| Started from | clean `origin/main` `7369e7f133f0ce02aea5f2021cbb0e14104b7b34` (PR #156 merge commit) |
+| PR #156 verification | `MERGED`, head `75ae6d22dbe6ee556c6571596a1b7dd5fe8b517d`, merged `2026-07-28T16:56:28Z` — every expected value matched |
+| Backend aggregation | `backend/app/domain/report_financials.py` (pure; no connection, no FastAPI, no Pydantic, no Settings read) |
+| Frontend modules | `frontend/src/report-financial-contract.ts`, `frontend/src/report-financial-presentation.ts` |
+| `frontend/src/main.ts` | `6398` before → `6398` after |
+| Backend suite | `942 passed / 0 failed / 0 skipped` (baseline `883`, all `883` baseline node IDs still collected) |
+| Frontend suites | all 17 `test:*` scripts pass, `0 failed`, including the new `test:report-financial-presentation` (`40 pass`) |
+| Build | `npm run build` `PASS` |
+| Exact-head smoke | API and browser smoke are recorded in the PR body as this PR's evidence |
+
+### What changed
+
+- The contract conflict recorded by the Phase 0 audit is **resolved in runtime**. Reports read the persisted `ProductionBatch` snapshots only: `known_tax` is the sum of non-null persisted `tax`, `known_margin` is the sum of persisted `margin` over `M`, and `known_margin_percent` divides that margin total by the sale prices of exactly the rows in `M`.
+- The exact authorized additive DTO fields are implemented: `known_tax`, `tax_snapshot_record_count`, `missing_tax_snapshot_count`, `margin_snapshot_record_count`, `missing_margin_snapshot_count`. Each counter pair sums to `produced_order_count`.
+- `complete_finance_record_count` and `incomplete_margin_count` keep their legacy paired sale-price/cost meanings and are presented under `Полнота исходных данных` with truthful labels — never as snapshot coverage.
+- The three additive warnings `tax_unavailable`, `partial_tax_basis` and `margin_percent_unavailable_zero_basis` are implemented; `margin_unavailable` and `partial_margin_basis` are restated against persisted margin snapshots without being renamed.
+- `OverviewReportResponse.finance_summary` is the same `FinanceReportResponse`, and `/reports` renders both tabs through one presentation module. The frontend performs no financial arithmetic and validates the finance DTO strictly, failing the read into the existing retained-snapshot path rather than rendering a malformed response.
+- A newly generated `Сводка мастерской` shows the persisted tax and margin, both coverage counts, and wording that says the values were saved at production time and are not recalculated from the current rate. The old `Налог не рассчитывается в этом документе` line was false once tax is shown and is replaced. Previously generated documents and sidecars remain byte-identical.
+
+### Next steps
+
+1. Review and merge this runtime PR. Do not merge it here and do not enable auto-merge.
+2. **Only after it merges**, close the `C2-III-B` lifecycle in the active documentation and state, and only then may C2 be assessed as complete.
+3. `C2 is not complete.` C2 remains incomplete until `C2-III-B` is reviewed, exact-head verified and merged, and its active lifecycle is closed.
+4. Leave `CR-004` and `CR-006` inactive, do not reopen ADR 0011, `CR-007`, `CR-008` or the accepted report contract, and leave C3 and C4 inactive.
+5. Product release readiness is not claimed.
+
+### Boundaries honoured
+
+- No migration, no historical backfill, no report persistence table, no new endpoint.
+- No change to Orders readiness, production confirmation, `ProductionBatch` persistence, `ProductionBatch` list or detail UI, the `C2-III-A` presentation modules, tax-rate Settings behaviour, or stock and production transactions.
+- Report reads remain read-only: no audit record, no file, no business mutation.
+- No accounting, tax filing, VAT, tax regimes, date filters, charts, forecasting, analytics, tax-rate averages, DOCX, automatic document regeneration, `C3`, `C4`, Restore, packaging or release work. No dependency and no lockfile changed.

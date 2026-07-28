@@ -70,7 +70,7 @@ Current limitations: the Orders frontend presents this read-only check, but the 
 | C2-I readiness tax / margin / margin-percent calculation | **IMPLEMENTED** and merged (PR #151) |
 | C2-II `ProductionBatch` rate snapshots and transactional persistence | **IMPLEMENTED** and merged (PR #152) |
 | C2-III-A Order and `ProductionBatch` financial presentation | **IMPLEMENTED** and merged (PR #154) |
-| C2-III-B snapshot-backed reports and report documents | `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; report responses are unchanged |
+| C2-III-B snapshot-backed reports and report documents | `IMPLEMENTED ON PR BRANCH — NOT MERGED`; on merged `main` report responses are still unchanged |
 
 ### Financial estimate extension — `C2-I`
 
@@ -1052,20 +1052,23 @@ Returns a basic operational financial snapshot, not accounting:
 - produced orders with sale price;
 - known revenue;
 - known production cost;
-- known margin, currently derived only from rows where sale price and production cost are both known;
-- known margin percent, currently calculated from the same paired revenue basis;
+- known tax;
+- known margin;
+- known margin percent;
 - complete finance record count;
 - incomplete margin count;
 - missing sale price count;
-- missing cost count.
+- missing cost count;
+- tax snapshot record count and missing tax snapshot count;
+- margin snapshot record count and missing margin snapshot count.
 
-The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate. `known_revenue` and `known_production_cost` are independent known totals, but `known_margin` never combines revenue from one incomplete batch with cost from another incomplete batch. Warnings include `margin_unavailable` when no paired sale+cost row exists and `partial_margin_basis` when margin is based on a subset of complete rows.
+The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate, and it never reads the current Settings tax rate. `known_revenue` and `known_production_cost` are independent known totals over every non-null persisted value; `known_tax` and `known_margin` are sums of the persisted `ProductionBatch` snapshots and are never reconstructed from sale price and cost.
 
-#### Accepted `C2-III-B` snapshot-backed finance contract — not implemented
+#### `C2-III-B` snapshot-backed finance contract
 
-The field list above is the **current merged** response. `C2-III-B` replaces the derived margin with persisted `ProductionBatch` snapshots. That slice is `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`; none of the fields below exist in the API yet. The full contract is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*.
+Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`. On merged `main` the response is still the pre-`C2-III-B` shape, with margin derived from paired sale price and cost and without the additive fields below. The full contract is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*, and the aggregation lives in `backend/app/domain/report_financials.py`.
 
-When implemented, `known_margin` becomes the sum of persisted `ProductionBatch.margin` over exactly the rows whose margin snapshot is non-null (`M`), and:
+`known_margin` is the sum of persisted `ProductionBatch.margin` over exactly the rows whose margin snapshot is non-null (`M`), and:
 
 ```text
 known_margin_percent =

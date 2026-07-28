@@ -1,6 +1,6 @@
-# Current focus — `C2-III-B` report aggregation contract clarified; runtime still not implemented
+# Current focus — `C2-III-B` implemented on its PR branch; not merged
 
-Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` authorized as the last remaining C2 runtime slice, its report aggregation contract clarified after a blocking Phase 0 audit, and still not implemented**
+Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` implemented on its runtime PR branch as the last remaining C2 runtime slice, after its report aggregation contract was clarified following a blocking Phase 0 audit, and not merged**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -13,10 +13,10 @@ Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and
 - `C2-I — Backend financial readiness estimate`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #151)
 - `C2-II — Transactional production financial snapshots`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #152)
 - `C2-III-A — Order and ProductionBatch financial presentation`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #154)
-- `C2-III-B — Snapshot-backed reports and report documents`: **AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED**
+- `C2-III-B — Snapshot-backed reports and report documents`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **No runtime implementation slice is open.** `C2-III-A` merged as PR #154 at merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, which is the `origin/main` this documentation branch started from. `C2-III-B` is the **only** remaining authorized C2 runtime slice, it is **not implemented**, and no PR number is assigned to it.
+- **One runtime implementation slice is open and unmerged.** `C2-III-B` is implemented on branch `codex/c2-iii-b-snapshot-backed-reports`, started from clean `origin/main` `7369e7f133f0ce02aea5f2021cbb0e14104b7b34` (PR #156 merge commit). It is the **only** remaining C2 runtime slice. Its contract conflict is resolved, runtime now reads persisted `ProductionBatch` snapshots, the exact additive DTO fields are implemented, and its tests and exact-head smoke are PR evidence. It is **not merged** and is **not** `DONE`.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
@@ -163,7 +163,7 @@ Delivered on merged `main`, matching ADR 0012 and `docs/implementation-plan.md` 
 
 **Merged `main` contains the `C2-I` readiness estimate, the `C2-II` transactional snapshots and the `C2-III-A` financial presentation**, including migration `0019_production_batch_tax_rate_snapshots`, the required-but-nullable confirmation context, `409 tax_rate_context_stale`, the Order readiness financial block, the shared `Фактическая экономика партии` block, and the compact `ProductionBatch` list financial summary. There is still **no report change**: reports read no snapshots.
 
-`C2-III-B` is the **only** remaining C2 runtime slice, and this documentation PR authorizes it.
+`C2-III-B` is the **only** remaining C2 runtime slice. It was authorized by the merged documentation PR #156 and is now implemented on its own unmerged runtime PR branch.
 
 ```text
 C2-III-B — Snapshot-backed reports and report documents:
@@ -205,7 +205,7 @@ The accepted resolution is now recorded in `docs/reports.md` § *Accepted `C2-II
 C2 is not complete in this documentation PR.
 ```
 
-C2 becomes complete only after `C2-III-B` is implemented; its focused and complete tests pass; its exact-head API and browser smoke pass; it is reviewed and merged; and the final active C2 documentation and state are closed consistently. C2 is **not** complete merely because `C2-III-B` is now authorized. C3 and C4 remain inactive, and product release readiness is not claimed.
+C2 remains incomplete until `C2-III-B` is reviewed, exact-head verified and merged, and its active lifecycle is closed. C2 is **not** complete merely because `C2-III-B` is now implemented on a branch. C3 and C4 remain inactive, and product release readiness is not claimed.
 
 ## R4 merge closure
 
@@ -255,7 +255,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 is **complete**: `CR-007` is accepted and `C1-I` is merged and `DONE`. C2 has an **accepted product contract** (`CR-008`) and is **not complete**: `C2-I` is merged (PR #151), `C2-II` is merged (PR #152) and `C2-III-A` is merged (PR #154), while `C2-III-B` is authorized after this documentation PR merges and is **not implemented**. C3 and C4 remain **inactive** unless separately authorized.
+- C1 is **complete**: `CR-007` is accepted and `C1-I` is merged and `DONE`. C2 has an **accepted product contract** (`CR-008`) and is **not complete**: `C2-I` is merged (PR #151), `C2-II` is merged (PR #152) and `C2-III-A` is merged (PR #154), while `C2-III-B` is implemented on its runtime PR branch and is **not merged**. C3 and C4 remain **inactive** unless separately authorized.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**

@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
+from app.domain.report_financials import ReportFinancialRow, ReportFinancialWarningCode, aggregate_report_financials
 from app.schemas.reports import AlertsReportSummary, FinanceReportResponse, InventoryReportResponse, OrdersReportResponse, OverviewReportResponse, ProductionReportResponse, PurchaseReportSummary, QuantityTotal, ReportWarning
 
 EXPIRING_SOON_DAYS = 30
@@ -105,73 +106,45 @@ class ReportsService:
         return ProductionReportResponse(generated_at=generated_at or _now(), total_production_batches=len(rows), batches_in_period=len(rows), last_production_date=rows[0]["produced_at"] if rows else None, produced_orders_count=produced_orders, produced_quantity_totals=[QuantityTotal(unit=unit, quantity=str(quantity)) for unit, quantity in sorted(totals.items())], total_known_cost=str(total_cost) if rows and missing_cost < len(rows) else None, missing_cost_count=missing_cost, warnings=warnings)
 
     def get_finance_report(self, *, generated_at: str | None = None) -> FinanceReportResponse:
+        """The snapshot-backed finance report (`C2-III-B`).
+
+        The persisted `ProductionBatch` financial snapshots are read and handed
+        to the pure aggregation domain; this method calculates no tax and no
+        margin of its own, and deliberately reads no tax-rate setting. The
+        persisted row ``margin_percent`` is not selected at all, because it is a
+        historical per-row value and is never aggregated.
+        """
         with session(self.config) as connection:
-            rows = connection.execute("SELECT sale_price, total_cost FROM production_batches").fetchall()
+            rows = connection.execute("SELECT sale_price, total_cost, tax, margin FROM production_batches").fetchall()
 
-        warnings = []
-        revenue = Decimal("0")
-        cost = Decimal("0")
-        paired_revenue = Decimal("0")
-        paired_cost = Decimal("0")
-        with_sale = 0
-        with_cost = 0
-        missing_sale = 0
-        missing_cost = 0
-        complete_finance_record_count = 0
-        incomplete_margin_count = 0
-
-        for row in rows:
-            sale_known = row["sale_price"] is not None
-            cost_known = row["total_cost"] is not None
-
-            if sale_known:
-                with_sale += 1
-                revenue += Decimal(row["sale_price"])
-            else:
-                missing_sale += 1
-
-            if cost_known:
-                with_cost += 1
-                cost += Decimal(row["total_cost"])
-            else:
-                missing_cost += 1
-
-            if sale_known and cost_known:
-                complete_finance_record_count += 1
-                paired_revenue += Decimal(row["sale_price"])
-                paired_cost += Decimal(row["total_cost"])
-            else:
-                incomplete_margin_count += 1
-
-        if missing_sale:
-            warnings.append(_warning("missing_sale_price", "Не у всех произведённых заказов указана цена продажи.", "known_revenue"))
-        if missing_cost:
-            warnings.append(_warning("missing_production_cost", "Не для всех производственных партий известна себестоимость.", "known_production_cost"))
-        if rows and complete_finance_record_count == 0:
-            warnings.append(_warning("margin_unavailable", "Маржу нельзя рассчитать: нет произведённых партий, где одновременно известны цена продажи и себестоимость.", "known_margin"))
-        elif incomplete_margin_count and complete_finance_record_count:
-            warnings.append(_warning("partial_margin_basis", "Маржа рассчитана только по произведённым партиям, где одновременно известны цена продажи и себестоимость.", "known_margin"))
-
-        known_margin = None
-        margin_percent = None
-        if complete_finance_record_count:
-            known_margin = paired_revenue - paired_cost
-            if paired_revenue > 0:
-                margin_percent = (known_margin / paired_revenue * Decimal("100")).quantize(Decimal("0.01"))
+        aggregate = aggregate_report_financials(
+            ReportFinancialRow(
+                sale_price=_decimal(row["sale_price"]),
+                total_cost=_decimal(row["total_cost"]),
+                tax=_decimal(row["tax"]),
+                margin=_decimal(row["margin"]),
+            )
+            for row in rows
+        )
 
         return FinanceReportResponse(
             generated_at=generated_at or _now(),
-            produced_order_count=len(rows),
-            produced_orders_with_sale_price=with_sale,
-            known_revenue=str(revenue) if with_sale else None,
-            known_production_cost=str(cost) if with_cost else None,
-            known_margin=str(known_margin) if known_margin is not None else None,
-            known_margin_percent=str(margin_percent) if margin_percent is not None else None,
-            complete_finance_record_count=complete_finance_record_count,
-            incomplete_margin_count=incomplete_margin_count,
-            missing_sale_price_count=missing_sale,
-            missing_cost_count=missing_cost,
-            warnings=warnings,
+            produced_order_count=aggregate.produced_order_count,
+            produced_orders_with_sale_price=aggregate.produced_orders_with_sale_price,
+            known_revenue=aggregate.known_revenue,
+            known_production_cost=aggregate.known_production_cost,
+            known_tax=aggregate.known_tax,
+            known_margin=aggregate.known_margin,
+            known_margin_percent=aggregate.known_margin_percent,
+            complete_finance_record_count=aggregate.complete_finance_record_count,
+            incomplete_margin_count=aggregate.incomplete_margin_count,
+            missing_sale_price_count=aggregate.missing_sale_price_count,
+            missing_cost_count=aggregate.missing_cost_count,
+            tax_snapshot_record_count=aggregate.tax_snapshot_record_count,
+            missing_tax_snapshot_count=aggregate.missing_tax_snapshot_count,
+            margin_snapshot_record_count=aggregate.margin_snapshot_record_count,
+            missing_margin_snapshot_count=aggregate.missing_margin_snapshot_count,
+            warnings=[_finance_warning(code) for code in aggregate.warning_codes],
         )
 
     def _alerts_summary(self) -> AlertsReportSummary:
@@ -189,6 +162,36 @@ def _now() -> str:
 
 def _warning(code: str, message: str, field: str | None = None) -> ReportWarning:
     return ReportWarning(code=code, message=message, field=field)
+
+
+def _decimal(value: str | None) -> Decimal | None:
+    """A persisted money snapshot, or ``None`` when the row has none.
+
+    A missing snapshot stays missing here rather than becoming a zero, which is
+    what keeps an old batch out of the tax and margin totals instead of dragging
+    them down with a value the workshop never recorded.
+    """
+    return None if value is None else Decimal(value)
+
+
+# The user-facing meaning of every finance warning, with the report field it is
+# about. The wording says what was *saved when the batch was produced*: reports
+# read historical snapshots and never recalculate them from the current tax
+# setting, so no message may suggest a calculation happened here.
+_FINANCE_WARNING_TEXT: dict[ReportFinancialWarningCode, tuple[str, str]] = {
+    ReportFinancialWarningCode.MISSING_SALE_PRICE: ("Не у всех произведённых заказов указана цена продажи.", "known_revenue"),
+    ReportFinancialWarningCode.MISSING_PRODUCTION_COST: ("Не для всех производственных партий известна себестоимость.", "known_production_cost"),
+    ReportFinancialWarningCode.TAX_UNAVAILABLE: ("Для произведённых партий нет сохранённых данных о налоге.", "known_tax"),
+    ReportFinancialWarningCode.PARTIAL_TAX_BASIS: ("Налог показан только по партиям, где он был зафиксирован при изготовлении.", "known_tax"),
+    ReportFinancialWarningCode.MARGIN_UNAVAILABLE: ("Для произведённых партий нет сохранённых данных о марже.", "known_margin"),
+    ReportFinancialWarningCode.PARTIAL_MARGIN_BASIS: ("Маржа показана только по партиям, где она была зафиксирована при изготовлении.", "known_margin"),
+    ReportFinancialWarningCode.MARGIN_PERCENT_UNAVAILABLE_ZERO_BASIS: ("Процент маржи недоступен: у учтённых партий нулевая сумма цен продажи.", "known_margin_percent"),
+}
+
+
+def _finance_warning(code: ReportFinancialWarningCode) -> ReportWarning:
+    message, field = _FINANCE_WARNING_TEXT[code]
+    return _warning(code.value, message, field)
 
 
 def _count(connection, sql: str) -> int:

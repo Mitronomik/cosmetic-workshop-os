@@ -57,7 +57,7 @@
 
 ### Current implementation state
 
-`C2-I` merged as PR #151, `C2-II` merged as PR #152 and `C2-III-A` merged as PR #154; all three are `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III-B — snapshot-backed reports and report documents` is `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED` and is the only remaining C2 runtime slice. No implementation PR number is assigned to `C2-III-B`.
+`C2-I` merged as PR #151, `C2-II` merged as PR #152 and `C2-III-A` merged as PR #154; all three are `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III-B — snapshot-backed reports and report documents` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` and is the only remaining C2 runtime slice. It is implemented on its runtime branch, with focused and complete tests and exact-head smoke as its PR evidence; it is not merged, so C2 is not complete.
 
 `CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 and C4 remain inactive. Product release readiness is not claimed.
 
@@ -160,7 +160,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | User/remote install checklist | Есть частичные документы, финальный процесс не проверен | Обязательно |
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
-| Себестоимость, налог и маржа (расчёты и снапшоты) | **ЧАСТИЧНО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154). Отчёты снапшоты пока не читают | Обязательно — контракт принят как `CR-008`; `C2-I`, `C2-II` и `C2-III-A` влиты; `C2-III-B` (отчёты) авторизован после влития документационного PR закрытия и не реализован |
+| Себестоимость, налог и маржа (расчёты и снапшоты) | **ЧАСТИЧНО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154). Отчёты читают снапшоты на ветке `C2-III-B`, но она не влита | Обязательно — контракт принят как `CR-008`; `C2-I`, `C2-II` и `C2-III-A` влиты; `C2-III-B` (отчёты) реализован на PR-ветке и не влит |
 | AuditLog workspace | Логи пишутся, пользовательского read-only экрана нет | Обязательно либо нужен явный scope amendment |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
@@ -1087,7 +1087,7 @@ Authorization states:
 | `C2-I` — backend financial readiness estimate | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #151 |
 | `C2-II` — transactional production financial snapshots | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #152 |
 | `C2-III-A` — Order and `ProductionBatch` financial presentation | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #154 |
-| `C2-III-B` — snapshot-backed reports and report documents | `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED` |
+| `C2-III-B` — snapshot-backed reports and report documents | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
 
 `C2-I` merged as PR #151: reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, merged `2026-07-28T04:22:13Z`, exact-head readiness smoke `PASS — 113 checks / 0 failures`.
 
@@ -1095,13 +1095,13 @@ Authorization states:
 
 `C2-III-A` merged as PR #154: reviewed head `ef1103811a8f062f9129bfb465a98e0cfa388935`, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`, exact-head API smoke `PASS — 67 checks / 0 failures` and exact-head browser smoke `PASS — 28 checks / 0 failures`. Full closure evidence: `state/current-focus.md` § *C2-III-A — merged and exact-head verified*.
 
-`C2-III` was subdivided into exactly two runtime slices, as required by ADR 0012. `C2-III-B` is now the only remaining C2 runtime slice; no implementation PR number is assigned to it.
+`C2-III` was subdivided into exactly two runtime slices, as required by ADR 0012. `C2-III-B` is the only remaining C2 runtime slice; it is implemented on its runtime PR branch and is not merged.
 
 ```text
 C2 is not complete in this documentation PR.
 ```
 
-C2 becomes complete only after `C2-III-B` is implemented, its focused and complete tests pass, its exact-head API and browser smoke pass, it is reviewed and merged, and the final active C2 documentation and state are closed consistently. Authorizing `C2-III-B` does not make C2 complete. C3 and C4 remain inactive.
+C2 becomes complete only after `C2-III-B` is reviewed and merged and the final active C2 documentation and state are closed consistently. Its implementation, focused and complete tests, and exact-head API and browser smoke are PR evidence, not completion. C3 and C4 remain inactive.
 
 ### C2 — accepted product contract (`CR-008`)
 
@@ -1531,7 +1531,7 @@ These `C2-II` requirements were implemented and executed on the `C2-II` PR branc
 
 ### C2-III — subdivided into two runtime slices
 
-Статус: `SUBDIVIDED — C2-III-A DONE AND MERGED, C2-III-B AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED`
+Статус: `SUBDIVIDED — C2-III-A DONE AND MERGED, C2-III-B IMPLEMENTED ON PR BRANCH — NOT MERGED`
 
 The ADR 0012 subdivision rule required `C2-III` to be divided before implementation if it was not one bounded, independently reviewable vertical slice. It is not. `C2-III` is therefore divided into **exactly two** runtime slices — `C2-III-A` and `C2-III-B`, no more and no fewer. No document authorizes all of `C2-III` in one PR. No future implementation PR number is assigned to either slice.
 
@@ -1588,9 +1588,13 @@ Prefer focused frontend modules — `production-financial-contract.ts`, `product
 
 ### C2-III-B — Snapshot-backed reports and report documents
 
-Статус: `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`
+Статус: `C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED`
 
-`C2-III-A` is merged and exact-head verified, so `C2-III-B` is unblocked and is authorized as the **only** remaining C2 runtime slice. It must not be started from the unmerged documentation branch that authorizes it, and **no PR number is assigned**.
+`C2-III-A` is merged and exact-head verified, so `C2-III-B` was unblocked as the **only** remaining C2 runtime slice. It is now implemented on its own runtime branch, started from clean `origin/main` after PR #156 merged.
+
+The contract conflict recorded by the Phase 0 audit is resolved: reports read the persisted `ProductionBatch` snapshots, and `known_margin_percent` uses the sale prices of exactly the rows whose margin is in the numerator. The runtime pieces are the pure aggregation in `backend/app/domain/report_financials.py`, the additive `FinanceReportResponse` fields (`known_tax`, `tax_snapshot_record_count`, `missing_tax_snapshot_count`, `margin_snapshot_record_count`, `missing_margin_snapshot_count`), the three additive warning codes, the `/reports` Overview and Finance presentation in `frontend/src/report-financial-contract.ts` and `frontend/src/report-financial-presentation.ts`, and the newly generated «Сводка мастерской» finance section.
+
+Focused tests, the complete backend suite, every frontend `test:*` script, the production build, and the exact-head API and browser smoke belong to this PR as review evidence. The slice is **not merged**, so C2 is not complete and this slice is not `DONE`.
 
 #### Authorized boundary
 
