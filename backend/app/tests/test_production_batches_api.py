@@ -11,7 +11,12 @@ from app.main import create_app
 from app.repositories.production_batches import ProductionBatchNotFoundError, ProductionBatchRepository
 from app.services.database import initialize_database
 from app.services.orders import OrderService
+from app.domain.production_tax_context import ExpectedTaxRateContext
 from app.services.production_confirmation import ProductionConfirmationService
+
+# These batches predate any configured tax rate, so their honest expected
+# confirmation context is the explicit no-valid-rate pair.
+NO_RATE = ExpectedTaxRateContext.no_valid_rate()
 from app.tests.test_production_confirmation import counts, seed_ready
 
 
@@ -29,9 +34,9 @@ def scalar(c, sql, params=()):
 def test_repository_list_returns_newest_first_with_counts_and_context(tmp_path):
     c = config(tmp_path)
     *_, old_order = seed_ready(c)
-    old = ProductionConfirmationService(c).produce_order(old_order.id, True, notes="old")
+    old = ProductionConfirmationService(c).produce_order(old_order.id, True, notes="old", expected_tax_rate=NO_RATE)
     *_, new_order = seed_ready(c)
-    new = ProductionConfirmationService(c).produce_order(new_order.id, True, notes="new")
+    new = ProductionConfirmationService(c).produce_order(new_order.id, True, notes="new", expected_tax_rate=NO_RATE)
 
     batches = ProductionBatchRepository(c).list_batches()
 
@@ -46,7 +51,7 @@ def test_repository_list_returns_newest_first_with_counts_and_context(tmp_path):
 def test_repository_detail_returns_snapshots_and_preserves_values_after_source_changes(tmp_path):
     c = config(tmp_path)
     _, ingredient, lot, packaging, order = seed_ready(c)
-    created = ProductionConfirmationService(c).produce_order(order.id, True, notes="historical")
+    created = ProductionConfirmationService(c).produce_order(order.id, True, notes="historical", expected_tax_rate=NO_RATE)
     with sqlite3.connect(c.path) as con:
         con.execute("UPDATE ingredients SET name='Changed' WHERE id=?", (ingredient.id,))
         con.execute("UPDATE ingredient_lots SET lot_code='ChangedLot', unit_cost='9' WHERE id=?", (lot.id,))
@@ -68,7 +73,7 @@ def test_repository_detail_returns_snapshots_and_preserves_values_after_source_c
 def test_repository_get_by_order_and_not_found(tmp_path):
     c = config(tmp_path)
     *_, produced_order = seed_ready(c)
-    created = ProductionConfirmationService(c).produce_order(produced_order.id, True)
+    created = ProductionConfirmationService(c).produce_order(produced_order.id, True, expected_tax_rate=NO_RATE)
     *_, plain_order = seed_ready(c)
 
     assert ProductionBatchRepository(c).get_detail_by_order_id(produced_order.id).batch.id == created.batch.id
@@ -81,7 +86,7 @@ def test_repository_get_by_order_and_not_found(tmp_path):
 def test_read_repository_methods_do_not_mutate_orders_or_movements(tmp_path):
     c = config(tmp_path)
     *_, order = seed_ready(c)
-    created = ProductionConfirmationService(c).produce_order(order.id, True)
+    created = ProductionConfirmationService(c).produce_order(order.id, True, expected_tax_rate=NO_RATE)
     before = counts(c)
     status_before = scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,))
 
@@ -101,9 +106,9 @@ def test_api_read_endpoints(monkeypatch, tmp_path):
     c = DatabaseConfig(path=db)
     initialize_database(c)
     *_, old_order = seed_ready(c)
-    old = ProductionConfirmationService(c).produce_order(old_order.id, True)
+    old = ProductionConfirmationService(c).produce_order(old_order.id, True, expected_tax_rate=NO_RATE)
     *_, new_order = seed_ready(c)
-    new = ProductionConfirmationService(c).produce_order(new_order.id, True)
+    new = ProductionConfirmationService(c).produce_order(new_order.id, True, expected_tax_rate=NO_RATE)
     *_, plain_order = seed_ready(c)
     before = counts(c)
     api = TestClient(create_app())

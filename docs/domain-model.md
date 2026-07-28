@@ -1239,7 +1239,7 @@ ProductionBatch → StockMovement[]
 
 Decided in `CR-007` (the setting) and `CR-008` (the calculation and the snapshots). Durable contracts: `docs/settings.md` and `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
-**Current state on merged `main`** (VERIFIED FROM REPOSITORY): production confirmation snapshots the authoritative locked-order `sale_price` and the real component, packaging, other, and total cost, and writes `tax`, `margin`, and `margin_percent` as `NULL`; production readiness returns `estimated_cost` when cost inputs are available and leaves `estimated_tax` and `estimated_margin` unavailable; the two rate-snapshot fields below **do not exist**. Implementation belongs to **C2** — `C2-I` is `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED`, and `C2-II` and `C2-III` are `PLANNED — BLOCKED`.
+**Current state.** On merged `main`, production readiness estimates `estimated_tax`, `estimated_margin`, and `estimated_margin_percent` (`C2-I`, PR #151). `C2-II` — the transactional snapshots, the two rate-snapshot columns below, migration `0019_production_batch_tax_rate_snapshots`, the required confirmation context, and `409 tax_rate_context_stale` — is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. `C2-III` remains `PLANNED — BLOCKED` until `C2-II` is reviewed, exact-head verified, and merged.
 
 #### Calculation formulas (`CR-008`)
 
@@ -1294,8 +1294,8 @@ Financial warnings reuse the existing `ProductionReadinessIssue` structure and s
 |---|---|---|
 | `sale_price` | exists | taxable-base snapshot |
 | `total_cost` | exists | actual production total-cost snapshot |
-| `tax_rate_percent_snapshot` | future, nullable (`C2-II`) | exact configured percentage used at confirmation |
-| `tax_rate_effective_at_snapshot` | future, nullable (`C2-II`) | exact backend effective timestamp used |
+| `tax_rate_percent_snapshot` | nullable, added by `C2-II` migration `0019` | exact configured percentage used at confirmation |
+| `tax_rate_effective_at_snapshot` | nullable, added by `C2-II` migration `0019` | exact backend effective timestamp used |
 | `tax` | exists | final rounded tax-amount snapshot |
 | `margin` | exists | final rounded margin snapshot |
 | `margin_percent` | exists | final rounded margin-percent snapshot |
@@ -1304,17 +1304,17 @@ Rules:
 
 - the MVP taxable base is exactly the order sale price, so no separate `taxable_amount_snapshot` is required;
 - the existing financial fields are **reused**; duplicate monetary snapshot fields such as `sale_price_snapshot`, `total_cost_snapshot`, `tax_amount_snapshot`, or `margin_amount_snapshot` are **not** authorized;
-- the two future columns are nullable for backward compatibility and are **never backfilled** with the current rate;
-- rows produced before the snapshot fields exist stay unknown and are displayed as `Недоступно`, never as a fabricated `0.00`;
+- the two columns are nullable for backward compatibility and are **never backfilled** with the current rate;
+- rows produced before the snapshot fields existed stay unknown and map to `null`; they are displayed as `Недоступно` once `C2-III` adds the presentation, never as a fabricated `0.00`;
 - changing the current tax setting never changes an existing ProductionBatch row, an existing report snapshot, a prior audit record, or a previously generated document;
 - reports and exports read the stored snapshots and must not recalculate historical tax with the current setting;
 - an order created before a rate change but produced after it uses the rate active at production confirmation;
 - future margin must use the persisted rounded tax snapshot, not a freshly recalculated current-rate value;
-- adding the columns requires one nullable migration under the normal backup-before-migration safety flow.
+- the columns were added by exactly one additive nullable migration, `0019_production_batch_tax_rate_snapshots`, under the existing user-mode backup-before-migration safety flow.
 
 #### Required confirmation tax context (`C2-II`)
 
-The future production-confirmation request always carries both `expected_tax_rate_percent` and `expected_tax_rate_effective_at`. They are **required but nullable** and are declared without default values. Only two pairs are valid:
+The production-confirmation request always carries both `expected_tax_rate_percent` and `expected_tax_rate_effective_at`. They are **required but nullable** and are declared without default values. Only two pairs are valid:
 
 1. a canonical two-decimal percentage string with a canonical `YYYY-MM-DDTHH:MM:SSZ` timestamp;
 2. explicit `null` with explicit `null`, meaning **the latest readiness result observed no valid configured tax rate** — which covers both a missing setting row and an invalid persisted setting, not only an absent row.
@@ -1337,7 +1337,7 @@ The future production-confirmation request always carries both `expected_tax_rat
 
 An accepted no-valid-rate confirmation persists `tax_rate_percent_snapshot = null`, `tax_rate_effective_at_snapshot = null`, `tax = null`, `margin = null`, `margin_percent = null`, while every physical production snapshot is written normally. Confirmation never repairs, clears, rewrites, or audits the invalid setting, and never persists the raw invalid value.
 
-**Timestamp formats.** Database persistence — `AppSetting.updated_at` and the future `tax_rate_effective_at_snapshot` — uses `YYYY-MM-DD HH:MM:SS` UTC SQLite text with no `T`, no `Z`, and no offset. The API and confirmation-context representation is `YYYY-MM-DDTHH:MM:SSZ`. Local-time values, arbitrary offsets, fractional seconds, a space instead of `T`, and a missing `Z` are rejected with `422 invalid_tax_rate_context`. The API normalizes the stored snapshot and never exposes the raw SQLite form.
+**Timestamp formats.** Database persistence — `AppSetting.updated_at` and `tax_rate_effective_at_snapshot` — uses `YYYY-MM-DD HH:MM:SS` UTC SQLite text with no `T`, no `Z`, and no offset. The API and confirmation-context representation is `YYYY-MM-DDTHH:MM:SSZ`. Local-time values, arbitrary offsets, fractional seconds, a space instead of `T`, and a missing `Z` are rejected with `422 invalid_tax_rate_context`. The API normalizes the stored snapshot and never exposes the raw SQLite form.
 
 #### Transactional snapshot immutability
 

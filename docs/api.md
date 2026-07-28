@@ -41,7 +41,7 @@ Response summary:
 - `blocking_issues` and `warnings` with stable `code`, severity, human-readable `message`, optional `field`, `entity_type`, and `entity_id`;
 - ingredient requirement lines with required quantity, available quantity, missing quantity, FEFO-selected lots, and line warnings;
 - packaging availability lines when the order has selected packaging;
-- optional `estimated_cost` when existing unit costs support it, plus the financial estimate described under **Financial estimate extension — `C2-I`** below. **The explicit tax-rate setting exists and is editable** (`default_tax_rate`, merged `C1-I` / PR #149). On merged `main`, `estimated_tax` and `estimated_margin` are still `null`; `C2-I` activates them and is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. Production tax snapshots stay absent until `C2-II` is implemented.
+- optional `estimated_cost` when existing unit costs support it, plus the financial estimate described under **Financial estimate extension — `C2-I`** below. **The explicit tax-rate setting exists and is editable** (`default_tax_rate`, merged `C1-I` / PR #149), and `estimated_tax` / `estimated_margin` are active since merged `C2-I` (PR #151). Production tax snapshots are added by `C2-II`, which is `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
 
 Read-only boundary:
 
@@ -62,17 +62,18 @@ A blocked readiness DTO is not a request failure. Conversely, a transport or HTT
 
 Current limitations: the Orders frontend presents this read-only check, but the readiness operation itself does not confirm production, reserve stock, write off ingredients or packaging, create a `ProductionBatch`, generate or mutate alerts or purchase suggestions, or change the Order lifecycle status.
 
-**Financial limitation, stated precisely.** The default tax-rate setting **exists and is editable** on merged `main` (`GET`/`PUT /api/settings/tax-rate`, key `default_tax_rate`, merged `C1-I` / PR #149). On merged `main`, production readiness still returns `estimated_tax = null` and `estimated_margin = null`, because readiness does not read the setting there. The three lifecycle states are distinct:
+**Financial lifecycle, stated precisely.** The default tax-rate setting **exists and is editable** on merged `main` (`GET`/`PUT /api/settings/tax-rate`, key `default_tax_rate`, merged `C1-I` / PR #149), and readiness estimates tax and margin since merged `C2-I` (PR #151). The four lifecycle states are distinct:
 
 | Layer | Status |
 |---|---|
 | C1 tax-rate setting | **IMPLEMENTED** and merged (PR #149) |
-| C2-I readiness tax / margin / margin-percent calculation | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
-| C2-II `ProductionBatch` rate snapshots | `PLANNED — BLOCKED` |
+| C2-I readiness tax / margin / margin-percent calculation | **IMPLEMENTED** and merged (PR #151) |
+| C2-II `ProductionBatch` rate snapshots and transactional persistence | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
+| C2-III financial presentation and snapshot-backed reports | `PLANNED — BLOCKED` |
 
 ### Financial estimate extension — `C2-I`
 
-Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED.** Decided as `CR-008`; durable contract `docs/decisions/0012-c2-financial-calculation-snapshots.md`. The additive fields below do not exist on merged `main`, where `estimated_tax` and `estimated_margin` are still always `null`.
+Status: **IMPLEMENTED** and merged as PR #151. Decided as `CR-008`; durable contract `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
 `C2-I` extends this **existing** endpoint additively. No parallel financial-readiness endpoint is created, and no existing field is removed or renamed. The calculation is backend-owned and lives in `backend/app/domain/production_financials.py`; the readiness service supplies backend-owned inputs, reads the current rate through the existing C1 `TaxRateSettingsService.get_tax_rate()` boundary, and maps the returned warning codes onto the existing `ProductionReadinessIssue` structure.
 
@@ -172,9 +173,13 @@ Confirms actual production for an order. This endpoint is intentionally separate
 ```json
 {
   "confirm": true,
-  "notes": "optional production note"
+  "notes": "optional production note",
+  "expected_tax_rate_percent": "6.00",
+  "expected_tax_rate_effective_at": "2026-07-27T19:44:53Z"
 }
 ```
+
+Both tax-context keys are **required but nullable** since `C2-II`; see the financial snapshot extension below for their exact contract.
 
 Safety rules:
 
@@ -182,8 +187,8 @@ Safety rules:
 - The backend re-runs `ProductionReadinessService.check_order(order_id)` before writing anything.
 - Blocking readiness issues return `409`; the operation does not create a production batch and does not write off stock.
 - Cancelled, archived/inactive, delivered, already produced orders, and orders that already have a production batch return `409`.
-- The operation is transactional: production batch snapshot rows, ingredient write-off movements, packaging write-off movements, order status update, and audit log are committed together or rolled back together.
-- The endpoint does not use a hidden default tax rate. The `default_tax_rate` setting exists and is editable on merged `main`, but confirmation does not read it: `tax`, `margin`, and `margin_percent` remain `null` until `C2-II` adds the snapshot infrastructure.
+- The operation is transactional: production batch snapshot rows, the tax-rate and financial snapshots, ingredient write-off movements, packaging write-off movements, order status update, and audit log are committed together or rolled back together.
+- The endpoint uses no hidden default tax rate. Since `C2-II` it reads the current `default_tax_rate` **on the production transaction's own connection**, compares it with the expected context, and only then calculates `tax`, `margin`, and `margin_percent` from the locked Order sale price and the actual production cost.
 
 Successful response contains the historical production snapshot:
 
@@ -200,9 +205,11 @@ Successful response contains the historical production snapshot:
   "other_cost": "0.00",
   "total_cost": "110.00",
   "sale_price": "200.00",
-  "tax": null,
-  "margin": null,
-  "margin_percent": null,
+  "tax": "12.00",
+  "margin": "78.00",
+  "margin_percent": "39.00",
+  "tax_rate_percent_snapshot": "6.00",
+  "tax_rate_effective_at_snapshot": "2026-07-27T19:44:53Z",
   "produced_at": "2026-06-30T...",
   "notes": "",
   "created_at": "2026-06-30T...",
@@ -214,15 +221,15 @@ Successful response contains the historical production snapshot:
 Error mapping:
 
 - `404` — order or linked recipe record was not found.
-- `409` — order lifecycle conflict, existing production batch, or readiness blockers.
-- `422` — invalid request body or missing explicit confirmation.
+- `409` — order lifecycle conflict, existing production batch, readiness blockers, or a stale tax context (`tax_rate_context_stale`).
+- `422` — invalid request body, missing explicit confirmation, or an omitted/off-contract tax context (`tax_rate_context_required`, `invalid_tax_rate_context`).
 - `500` — unexpected server error only.
 
 ### Financial snapshot extension — `C2-II`
 
-Status: **PLANNED — BLOCKED** on merged and verified `C2-I`. Decided as `CR-008`; contract `docs/decisions/0012-c2-financial-calculation-snapshots.md`. None of this exists on merged `main`: the request body is still exactly `confirm` and `notes`, and the response still returns `tax`, `margin`, and `margin_percent` as `null` with no rate snapshots.
+Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED**. Decided as `CR-008`; contract `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
-**Required-but-nullable request context.** The future request always carries both keys, declared without default values:
+**Required-but-nullable request context.** The request always carries both keys, declared without default values:
 
 ```json
 {
@@ -255,11 +262,11 @@ Only two value pairs are valid:
 
 `null/null` means **"the latest readiness result observed no valid configured tax rate"**. That covers **both** a missing setting row **and** an invalid persisted setting. It does **not** mean only that the row is absent.
 
-The frontend passes the pair from the latest confirmed readiness response without calculating, normalizing, altering, or inventing any part of it.
+The frontend passes the pair from the latest accepted readiness response without calculating, normalizing, altering, or inventing any part of it. A readiness DTO that does not carry the pair is not treated as a valid no-rate result: confirmation is blocked until a fresh readiness check supplies one.
 
 **Omitting a key is not equivalent to explicit `null/null`.** Omission means an invalid or outdated client contract.
 
-Validation, rejected with HTTP `422` **before any production transaction writes**:
+Validation, rejected with HTTP `422` **before any production transaction writes**. The stable code is returned in the repository's normal structured `detail` shape, never as raw Pydantic internals:
 
 | Condition | Stable code |
 |---|---|
@@ -268,7 +275,7 @@ Validation, rejected with HTTP `422` **before any production transaction writes*
 | the percentage is malformed, non-canonical, out of range, or not a string | `invalid_tax_rate_context` |
 | the timestamp is malformed or not the canonical `YYYY-MM-DDTHH:MM:SSZ` form | `invalid_tax_rate_context` |
 
-**Stale conflict.** Inside the transaction the backend reduces the current tax setting to one of two comparable canonical contexts — a **valid context** (canonical percentage + canonical API timestamp) or a **no-valid-rate context** (`null` + `null`, covering both missing and invalid) — and compares it with the expected context:
+**Stale conflict.** Inside the existing `BEGIN IMMEDIATE` transaction the backend reads `default_tax_rate` through `TaxRateSettingsService.get_tax_rate(connection=...)` on that same connection — no second connection, no write, no `AuditLog` — and reduces it to one of two comparable canonical contexts — a **valid context** (canonical percentage + canonical API timestamp) or a **no-valid-rate context** (`null` + `null`, covering both missing and invalid) — and compares it with the expected context:
 
 | Expected context | Current backend context | Result |
 |---|---|---|
@@ -292,7 +299,7 @@ A `422` validation rejection and a `409` stale conflict both write **nothing**: 
 
 #### Timestamp contract
 
-**Database persistence** — the existing `AppSetting.updated_at` convention, and the same convention for the future `tax_rate_effective_at_snapshot` column:
+**Database persistence** — the existing `AppSetting.updated_at` convention, and the same convention for the `tax_rate_effective_at_snapshot` column:
 
 ```text
 YYYY-MM-DD HH:MM:SS
@@ -310,7 +317,7 @@ UTC, second precision, literal `T`, literal `Z`. Not accepted and not documented
 
 The API must never expose the raw SQLite storage representation: the confirmation response and the `ProductionBatch` detail response normalize `tax_rate_effective_at_snapshot` to the canonical `YYYY-MM-DDTHH:MM:SSZ` form. No backfill is authorized.
 
-**Response exposure boundary.** `C2-II` adds `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot` to the production confirmation response and to the `ProductionBatch` **detail** response, so the persisted snapshot is verifiable in that slice. It does **not** add them to the `ProductionBatch` list response, to report read models, or to report UI — those surfaces remain `C2-III` scope. The existing `sale_price`, `total_cost`, `tax`, `margin`, and `margin_percent` fields are reused; no duplicate alias is created.
+**Response exposure boundary.** `C2-II` exposes `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot` to the production confirmation response and to the `ProductionBatch` **detail** response, so the persisted snapshot is verifiable in that slice. It does **not** add them to the `ProductionBatch` list response, to report read models, or to report UI — those surfaces remain `C2-III` scope. The existing `sale_price`, `total_cost`, `tax`, `margin`, and `margin_percent` fields are reused; no duplicate alias is created.
 
 ## Production batch history (PR66)
 
@@ -1132,7 +1139,7 @@ Contract rules:
 
 **Clear is row deletion.** `PUT` with `tax_rate_percent: null` deletes the `default_tax_rate` `AppSetting` row and nothing else. It never touches the legacy `tax.default_rate` placeholder row, which is a different key and is never read, reinterpreted, migrated, or rewritten. The deletion and its `AuditLog` insert share one transaction, and a failed audit insert rolls the deletion back. Clearing when the row is already absent is a no-op: no delete, no timestamp change, no `AuditLog`, and no message claiming a change. No nullable-column migration, sentinel value, empty-string storage, new settings table, or parallel settings store is authorized — unconfigured is the absence of the row.
 
-The endpoints do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. Readiness tax estimates, production tax snapshots, and margin remain C2 work: on merged `main`, `estimated_tax` and `estimated_margin` are still `null` in the production readiness response, and `ProductionBatch` has no rate snapshot columns. `CR-008` decided that C2 contract and divided it into `C2-I` (`IMPLEMENTED ON PR BRANCH — NOT MERGED`), `C2-II` (`PLANNED — BLOCKED`), and `C2-III` (`PLANNED — BLOCKED`). The `C2-I` readiness estimate reads the setting through the existing C1 service and still writes nothing; the `GET`/`PUT` endpoints themselves are unchanged. See the `C2-I` financial estimate extension under production readiness and the `C2-II` financial snapshot extension under production confirmation.
+The endpoints themselves do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. `CR-008` decided the C2 contract and divided it into `C2-I` (**merged**, PR #151), `C2-II` (`IMPLEMENTED ON PR BRANCH — NOT MERGED`), and `C2-III` (`PLANNED — BLOCKED`). The `C2-I` readiness estimate reads the setting through the existing C1 service and writes nothing; `C2-II` reads it again inside the production transaction through the same service and persists immutable snapshots. The `GET`/`PUT` endpoints themselves are unchanged by both. See the `C2-I` financial estimate extension under production readiness and the `C2-II` financial snapshot extension under production confirmation.
 
 ## Orders write validation contract
 

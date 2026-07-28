@@ -28,12 +28,23 @@ from fastapi import HTTPException
 
 from app.api import production_confirmation as production_confirmation_api
 from app.repositories.stock_movements import StockMovementInsufficientBalanceError
+from app.domain.production_tax_context import ExpectedTaxRateContext
 from app.schemas.production_batches import ProductionConfirmRequest
 from app.services.production_confirmation import ProductionConfirmationLifecycleError, ProductionConfirmationReadinessError, ProductionConfirmationRequiredError, ProductionConfirmationService
 from app.services.production_readiness import ProductionReadinessService
 from app.services.recipes import RecipeService
 from app.services.stock_movements import StockMovementService
 from app.db.transactions import transaction
+
+
+# Every legacy scenario here seeds no tax-rate setting, so the honest expected
+# context is the explicit no-valid-rate pair rather than an omitted one.
+NO_RATE = ExpectedTaxRateContext.no_valid_rate()
+
+
+def confirm_request(**overrides):
+    """Build a confirmation request whose tax context is explicit `null/null`."""
+    return ProductionConfirmRequest(expected_tax_rate_percent=None, expected_tax_rate_effective_at=None, **overrides)
 
 
 def config(tmp_path):
@@ -79,7 +90,7 @@ def rollback_snapshot(c, order_id):
 def test_producing_ready_order_creates_batch_snapshots_movements_and_status(tmp_path):
     c = config(tmp_path)
     _, _, lot, packaging, order = seed_ready(c)
-    detail = ProductionConfirmationService(c).produce_order(order.id, confirm=True, notes="done")
+    detail = ProductionConfirmationService(c).produce_order(order.id, confirm=True, notes="done", expected_tax_rate=NO_RATE)
     assert detail.batch.order_id == order.id
     assert str(detail.batch.component_cost) == "100.00"
     assert str(detail.batch.packaging_cost) == "10.00"
@@ -106,7 +117,7 @@ def test_cannot_produce_without_explicit_confirmation(tmp_path):
     service = ProductionConfirmationService(c)
     for value in (False, None):
         with pytest.raises(ProductionConfirmationRequiredError):
-            service.produce_order(order.id, confirm=value)
+            service.produce_order(order.id, confirm=value, expected_tax_rate=NO_RATE)
     assert counts(c)["batches"] == 0
     assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
 
@@ -119,7 +130,7 @@ def test_cancelled_archived_and_inactive_orders_are_rejected(tmp_path):
     OrderService(c).archive(archived.id)
     for order in (cancelled, archived):
         with pytest.raises(ProductionConfirmationLifecycleError):
-            ProductionConfirmationService(c).produce_order(order.id, True)
+            ProductionConfirmationService(c).produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert counts(c)["batches"] == 0
 
 
@@ -127,9 +138,9 @@ def test_cannot_produce_order_twice(tmp_path):
     c = config(tmp_path)
     *_, order = seed_ready(c)
     service = ProductionConfirmationService(c)
-    service.produce_order(order.id, True)
+    service.produce_order(order.id, True, expected_tax_rate=NO_RATE)
     with pytest.raises(ProductionConfirmationLifecycleError):
-        service.produce_order(order.id, True)
+        service.produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert counts(c)["batches"] == 1
     assert counts(c)["stock"] == 1
 
@@ -138,7 +149,7 @@ def test_insufficient_ingredient_prevents_production(tmp_path):
     c = config(tmp_path)
     *_, order = seed_ready(c, lot_qty="10")
     with pytest.raises(ProductionConfirmationReadinessError):
-        ProductionConfirmationService(c).produce_order(order.id, True)
+        ProductionConfirmationService(c).produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert counts(c)["batches"] == 0
     assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
 
@@ -147,7 +158,7 @@ def test_missing_packaging_prevents_production(tmp_path):
     c = config(tmp_path)
     *_, order = seed_ready(c, packaging_qty=None)
     with pytest.raises(ProductionConfirmationReadinessError):
-        ProductionConfirmationService(c).produce_order(order.id, True)
+        ProductionConfirmationService(c).produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert counts(c)["batches"] == 0
 
 
@@ -163,14 +174,14 @@ def test_transaction_rolls_back_partial_writes_on_failure(tmp_path):
     service.packaging_movements = FailingPackagingMovementRepository()
     before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
-        service.produce_order(order.id, True)
+        service.produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert rollback_snapshot(c, order.id) == before
 
 
 def test_production_snapshots_are_immutable_after_source_changes(tmp_path):
     c = config(tmp_path)
     _, ingredient, lot, packaging, order = seed_ready(c)
-    detail = ProductionConfirmationService(c).produce_order(order.id, True)
+    detail = ProductionConfirmationService(c).produce_order(order.id, True, expected_tax_rate=NO_RATE)
     with sqlite3.connect(c.path) as con:
         con.execute("UPDATE ingredients SET name='Changed' WHERE id=?", (ingredient.id,))
         con.execute("UPDATE ingredient_lots SET lot_code='ChangedLot', unit_cost='9' WHERE id=?", (lot.id,))
@@ -202,7 +213,7 @@ def test_stale_order_change_after_readiness_rolls_back_without_writes(tmp_path):
     service.readiness = MutatingReadinessService(c, order.id)
 
     with pytest.raises(ProductionConfirmationLifecycleError, match="Готовность заказа изменилась"):
-        service.produce_order(order.id, True)
+        service.produce_order(order.id, True, expected_tax_rate=NO_RATE)
 
     assert counts(c) == {"batches": 0, "batch_ingredients": 0, "batch_packaging": 0, "stock": 0, "packaging": 0}
     assert scalar(c, "SELECT status FROM orders WHERE id=?", (order.id,)) == "new"
@@ -247,7 +258,7 @@ def test_transaction_rolls_back_batch_repository_failures(tmp_path, fail_at):
     service.batches = FailingBatchRepository(service.batches, fail_at)
     before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
-        service.produce_order(order.id, True)
+        service.produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert rollback_snapshot(c, order.id) == before
 
 def test_transaction_rolls_back_ingredient_movement_failure(tmp_path):
@@ -257,7 +268,7 @@ def test_transaction_rolls_back_ingredient_movement_failure(tmp_path):
     service.stock_movements = FailingStockMovementRepository()
     before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
-        service.produce_order(order.id, True)
+        service.produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert rollback_snapshot(c, order.id) == before
 
 def test_transaction_rolls_back_order_update_failure(tmp_path):
@@ -267,7 +278,7 @@ def test_transaction_rolls_back_order_update_failure(tmp_path):
     service.orders = FailingOrderRepository(service.orders)
     before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
-        service.produce_order(order.id, True)
+        service.produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert rollback_snapshot(c, order.id) == before
 
 def test_transaction_rolls_back_audit_failure(tmp_path):
@@ -277,16 +288,16 @@ def test_transaction_rolls_back_audit_failure(tmp_path):
     service.audit = FailingAuditRepository()
     before = rollback_snapshot(c, order.id)
     with pytest.raises(RuntimeError):
-        service.produce_order(order.id, True)
+        service.produce_order(order.id, True, expected_tax_rate=NO_RATE)
     assert rollback_snapshot(c, order.id) == before
 
 def test_api_unexpected_failure_uses_safe_error(monkeypatch):
     class BrokenProductionService:
-        def produce_order(self, order_id, confirm, notes=None):
+        def produce_order(self, order_id, confirm, notes=None, *, expected_tax_rate=None):
             raise RuntimeError("sqlite SELECT /workspace traceback secret")
     monkeypatch.setattr(production_confirmation_api, "ProductionConfirmationService", BrokenProductionService)
     with pytest.raises(HTTPException) as exc_info:
-        production_confirmation_api.produce_order(1, ProductionConfirmRequest(confirm=True))
+        production_confirmation_api.produce_order(1, confirm_request(confirm=True))
     assert exc_info.value.status_code == 500
     assert exc_info.value.detail["code"] == "production_unexpected_failure"
     assert "sqlite" not in str(exc_info.value.detail).lower()
@@ -294,7 +305,7 @@ def test_api_unexpected_failure_uses_safe_error(monkeypatch):
 
 
 class ConflictProductionService:
-    def produce_order(self, order_id, confirm, notes=None):
+    def produce_order(self, order_id, confirm, notes=None, *, expected_tax_rate=None):
         raise StockMovementInsufficientBalanceError("Outgoing movement would make lot balance negative.")
 
 
@@ -302,7 +313,7 @@ def test_api_maps_expected_transactional_conflicts_to_409(monkeypatch):
     monkeypatch.setattr(production_confirmation_api, "ProductionConfirmationService", ConflictProductionService)
 
     with pytest.raises(HTTPException) as exc_info:
-        production_confirmation_api.produce_order(1, ProductionConfirmRequest(confirm=True))
+        production_confirmation_api.produce_order(1, confirm_request(confirm=True))
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail["code"] == "production_conflict"
@@ -318,7 +329,9 @@ def test_api_produce_endpoint(monkeypatch, tmp_path):
     *_, order = seed_ready(c)
     api = TestClient(create_app())
     assert api.post(f"/api/orders/{order.id}/produce", json={}).status_code == 422
-    response = api.post(f"/api/orders/{order.id}/produce", json={"confirm": True, "notes": "ok"})
+    # C2-II: the tax context is required, so the pre-C2-II body is now rejected.
+    no_rate = {"expected_tax_rate_percent": None, "expected_tax_rate_effective_at": None}
+    response = api.post(f"/api/orders/{order.id}/produce", json={"confirm": True, "notes": "ok", **no_rate})
     assert response.status_code == 200
     body = response.json()
     assert body["order_id"] == order.id
@@ -326,10 +339,11 @@ def test_api_produce_endpoint(monkeypatch, tmp_path):
     assert body["packaging_cost"] == "10.00"
     assert body["total_cost"] == "110.00"
     assert body["tax"] is None and body["margin"] is None and body["margin_percent"] is None
+    assert body["tax_rate_percent_snapshot"] is None and body["tax_rate_effective_at_snapshot"] is None
     assert body["ingredients"][0]["total_cost_snapshot"] == "100.00"
     assert body["packaging"][0]["total_cost_snapshot"] == "10.00"
-    assert api.post("/api/orders/999/produce", json={"confirm": True}).status_code == 404
-    assert api.post(f"/api/orders/{order.id}/produce", json={"confirm": True}).status_code == 409
+    assert api.post("/api/orders/999/produce", json={"confirm": True, **no_rate}).status_code == 404
+    assert api.post(f"/api/orders/{order.id}/produce", json={"confirm": True, **no_rate}).status_code == 409
 
 
 def test_production_transaction_uses_immediate_write_lock(tmp_path):

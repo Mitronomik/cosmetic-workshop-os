@@ -21,6 +21,8 @@ class DomainIssueCode(StrEnum):
     INVALID_TAX_RATE_FORMAT = "invalid_tax_rate_format"
     TAX_RATE_OUT_OF_RANGE = "tax_rate_out_of_range"
     TAX_RATE_PRECISION_EXCEEDED = "tax_rate_precision_exceeded"
+    TAX_RATE_CONTEXT_REQUIRED = "tax_rate_context_required"
+    INVALID_TAX_RATE_CONTEXT = "invalid_tax_rate_context"
 
 
 @dataclass(frozen=True)

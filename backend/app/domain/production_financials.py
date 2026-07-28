@@ -62,6 +62,21 @@ class TaxRateContext:
     effective_at: str | None = None
     invalid: bool = False
 
+    def __post_init__(self) -> None:
+        """Reject the state combinations the contract says cannot exist.
+
+        A configured context always carries both a percentage and its effective
+        timestamp, and is never simultaneously the invalid-value state. Without
+        this, a half-built context could reach the stale comparison or a batch
+        snapshot and persist a rate with no effective time.
+        """
+        if self.percent is None and self.effective_at is not None:
+            raise ValueError("A tax-rate context without a percentage cannot carry an effective timestamp.")
+        if self.percent is not None and self.effective_at is None:
+            raise ValueError("A configured tax-rate context requires an effective timestamp.")
+        if self.percent is not None and self.invalid:
+            raise ValueError("A configured tax-rate context cannot also be the invalid-value context.")
+
     @classmethod
     def configured(cls, percent: Decimal, effective_at: str) -> "TaxRateContext":
         return cls(percent=percent, effective_at=effective_at)
@@ -77,6 +92,18 @@ class TaxRateContext:
     @property
     def is_configured(self) -> bool:
         return self.percent is not None
+
+    @property
+    def comparable_pair(self) -> tuple[str | None, str | None]:
+        """The canonical pair the stale-context check compares.
+
+        Missing and invalid both reduce to `(None, None)`: they produce exactly
+        the same financial result, so moving between them is nothing for the
+        user to re-review.
+        """
+        if self.percent is None:
+            return (None, None)
+        return (str(quantize_percentage(self.percent, field="tax_rate_percent")), self.effective_at)
 
 
 @dataclass(frozen=True, slots=True)

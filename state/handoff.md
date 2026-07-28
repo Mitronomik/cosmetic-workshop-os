@@ -1262,3 +1262,30 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 5. Leave `CR-004` and `CR-006` inactive, and leave C3 and C4 inactive.
 
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
+
+## C2-II handoff — implemented on an unmerged PR branch (2026-07-28)
+
+`C2-I` is now **merged and exact-head verified** (PR #151, reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, exact-head readiness smoke `PASS — 113 checks / 0 failures`). The earlier `C2-I` handoff section above is preserved as history.
+
+`C2-II — Transactional production financial snapshots` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`** on branch `codex/c2-ii-transactional-production-financial-snapshots`, started from merged `origin/main` `7b3dde8278f59658bfa3a81c09e643ea10319551`. It is **not** `DONE` and must not be recorded as `DONE` until it is merged and exact-head verified.
+
+### What a reviewer should know
+
+- The durable contract is unchanged: `docs/decisions/0012-c2-financial-calculation-snapshots.md`. ADR 0012 was not rewritten, reinterpreted, or expanded, and no conflict with the merged implementation was found.
+- The setting is read inside the production transaction through `TaxRateSettingsService.get_tax_rate(connection=...)`. The no-argument call is unchanged. There is no second tax-setting service, no direct raw `app_settings` read in `ProductionConfirmationService`, and no generic transaction abstraction.
+- Missing and invalid tax-rate states reduce to the same comparable `null/null` context in `backend/app/services/tax_rate_context.py`, which readiness and confirmation share. The missing-versus-invalid distinction survives only for readiness warning generation.
+- The stale check runs before the first production write and protects the editable tax context only. The existing locked-order snapshot check, physical readiness re-check, duplicate-batch check, and `transaction(..., immediate=True)` behavior are all unchanged.
+- The financial arithmetic is the merged `C2-I` domain calculation, called once. `ProductionConfirmationService` contains no formula.
+- Migration `0019_production_batch_tax_rate_snapshots` is additive and idempotent. Because Python's `sqlite3` runs DDL outside the implicit transaction, a mid-migration failure can leave the added column while the `schema_migrations` insert rolls back; idempotency is what makes the retry safe, and a test proves the data and the backup both survive.
+- `frontend/src/main.ts` is `6399` lines before and after. The only changes to it are two identifiers added to an existing import list and one call-site argument; all context ownership, validation, and stale handling live in `frontend/src/order-production-context.ts`.
+- Two superseded tests were intentionally renamed and strengthened; both renames are justified in the PR body. Every other previously collected node ID is still collected.
+
+### Next steps
+
+1. Review and merge the `C2-II` PR. Do **not** merge it automatically and do not enable auto-merge.
+2. **Only after it merges and is exact-head verified**, `C2-III — Financial presentation and snapshot-backed reports` becomes startable from the new `origin/main`. Do not start it from this unmerged branch, and do not assign it a PR number in advance.
+3. `C2-III` remains a **planning umbrella**. Before it is authorized, repository evidence must determine whether it is one bounded, independently reviewable vertical slice; if it is not, subdivide it — for example readiness and `ProductionBatch` financial presentation, and separately snapshot-backed reports. Do not merge readiness UI, batch UI, and report backend plus frontend into one catch-all PR.
+4. Reports still read no snapshots. Making them do so is `C2-III` work and must keep the snapshot-only rule: never recalculate history with the current rate, and show old rows as unavailable rather than `0.00`.
+5. Leave `CR-004` and `CR-006` inactive, and leave C3 and C4 inactive.
+
+Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.

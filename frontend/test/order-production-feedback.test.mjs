@@ -100,6 +100,10 @@ function readiness(orderId = 7, overrides = {}) {
     estimated_cost: null,
     estimated_tax: null,
     estimated_margin: null,
+    // C2-II: confirmation requires the readiness tax context, so a realistic
+    // readiness fixture now carries the pair the backend returns.
+    tax_rate_percent: '6.00',
+    tax_rate_effective_at: '2026-07-27T19:44:53Z',
     generated_at: '2026-07-24T10:00:00Z',
     ...overrides,
   };
@@ -219,6 +223,8 @@ test('readiness DTO boundary keeps ready, warning and blocked valid but rejects 
       estimated_cost: null,
       estimated_tax: null,
       estimated_margin: null,
+      tax_rate_percent: null,
+      tax_rate_effective_at: null,
       generated_at: '2026-07-24T10:00:00Z',
     };
     assert.equal(productionReadinessDtoIsValid(value, 7), true);

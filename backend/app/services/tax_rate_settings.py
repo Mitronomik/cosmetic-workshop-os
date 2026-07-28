@@ -13,6 +13,11 @@ from typing import Callable, Final
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
 from app.domain.tax_rate import canonical_tax_rate_percent, parse_tax_rate_percent
+from app.domain.tax_rate_timestamps import (
+    STORAGE_TIMESTAMP_FORMAT,
+    api_timestamp as _api_timestamp,
+    parse_storage_timestamp as _parse_storage_timestamp,
+)
 from app.models.settings import AppSetting
 from app.repositories.audit import AuditLogRepository
 from app.repositories.settings import SettingsNotInitializedError, SettingsRepository
@@ -38,10 +43,6 @@ CONFIGURE_AUDIT_SUMMARY: Final = "Настроена налоговая став
 CHANGE_AUDIT_SUMMARY: Final = "Изменена налоговая ставка для расчётов."
 CLEAR_AUDIT_SUMMARY: Final = "Налоговая ставка для расчётов очищена."
 
-STORAGE_TIMESTAMP_FORMAT: Final = "%Y-%m-%d %H:%M:%S"
-API_TIMESTAMP_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
-
-
 class TaxRateSettingPersistenceError(RuntimeError):
     """The setting could not be saved atomically with its audit record."""
 
@@ -53,9 +54,16 @@ class TaxRateSettingsService:
         self.audit_repository = AuditLogRepository(self.config)
         self._now = now or (lambda: datetime.now(UTC))
 
-    def get_tax_rate(self) -> TaxRateSettingResponse:
-        """Read the current setting. Never audited and never writes."""
-        return self._state_response(self.repository.get_setting(DEFAULT_TAX_RATE_KEY))
+    def get_tax_rate(self, connection: sqlite3.Connection | None = None) -> TaxRateSettingResponse:
+        """Read the current setting. Never audited and never writes.
+
+        The no-argument call is unchanged and opens its own short-lived
+        session. When a caller supplies its own connection — production
+        confirmation, reading inside its `BEGIN IMMEDIATE` transaction — the
+        read happens on that exact connection through the same repository, so
+        no second connection is opened while the write lock is held.
+        """
+        return self._state_response(self.repository.get_setting(DEFAULT_TAX_RATE_KEY, connection))
 
     def update_tax_rate(self, requested: object) -> TaxRateSettingResponse:
         """Configure/change the rate, or clear it when `requested` is `None`.
@@ -201,20 +209,3 @@ def _stored_percent(setting: AppSetting | None) -> str | None:
         return text
 
 
-def _parse_storage_timestamp(stored: str | None) -> datetime | None:
-    if not stored:
-        return None
-    text = stored.strip().replace("T", " ").removesuffix("Z")
-    try:
-        return datetime.strptime(text, STORAGE_TIMESTAMP_FORMAT)
-    except ValueError:
-        try:
-            return datetime.fromisoformat(text).replace(tzinfo=None, microsecond=0)
-        except ValueError:
-            return None
-
-
-def _api_timestamp(stored: str | None) -> str | None:
-    """Normalize the stored SQLite UTC text into the ISO-8601 UTC API form."""
-    parsed = _parse_storage_timestamp(stored)
-    return parsed.strftime(API_TIMESTAMP_FORMAT) if parsed else None

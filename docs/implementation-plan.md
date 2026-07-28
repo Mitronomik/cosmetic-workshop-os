@@ -57,7 +57,7 @@
 
 ### Current implementation state
 
-**No runtime implementation is currently active in this documentation PR.** After PR #150 merges, `C2-I` becomes the **only authorized runtime slice**. `C2-II` and `C2-III` remain `PLANNED — BLOCKED`. `C2-I` must not start from the unmerged PR #150 branch, and no implementation PR number is assigned to any C2 slice. `C2-I` is **not implemented**.
+`C2-I` merged as PR #151. `C2-II` is the **only currently active runtime slice** and is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. `C2-III` remains `PLANNED — BLOCKED` until `C2-II` is reviewed, exact-head verified, and merged, and no implementation PR number is assigned to it.
 
 `CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 and C4 remain inactive. Product release readiness is not claimed.
 
@@ -160,7 +160,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | User/remote install checklist | Есть частичные документы, финальный процесс не проверен | Обязательно |
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
-| Себестоимость, налог и маржа (расчёты и снапшоты) | **ОТКРЫТО.** Себестоимость доступна частично; налог, маржа и процент маржи остаются `null`/недоступны, снапшот-колонок `ProductionBatch` нет, отчёты снапшоты не читают. Наличие настройки из C1 этого обязательства **не закрывает** | Обязательно — контракт принят как `CR-008`; `C2-I` авторизован только после merge PR #150, `C2-II` и `C2-III` заблокированы |
+| Себестоимость, налог и маржа (расчёты и снапшоты) | **ЧАСТИЧНО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151). Снапшоты `ProductionBatch` реализованы в `C2-II` на ветке PR и ещё не влиты; отчёты снапшоты пока не читают | Обязательно — контракт принят как `CR-008`; `C2-I` влит, `C2-II` реализован на ветке PR, `C2-III` заблокирован |
 | AuditLog workspace | Логи пишутся, пользовательского read-only экрана нет | Обязательно либо нужен явный scope amendment |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
@@ -1084,11 +1084,13 @@ Authorization states:
 
 | Slice | Status |
 |---|---|
-| `C2-I` — backend financial readiness estimate | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
-| `C2-II` — transactional production financial snapshots | `PLANNED — BLOCKED` on merged and verified `C2-I` |
+| `C2-I` — backend financial readiness estimate | **MERGED AND VERIFIED** — PR #151 |
+| `C2-II` — transactional production financial snapshots | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
 | `C2-III` — presentation and snapshot-backed reports | `PLANNED — BLOCKED` on merged and verified `C2-II` |
 
-`C2-I` is implemented on branch `codex/c2-i-backend-financial-readiness-estimate` from merged `origin/main` `4c03142ef7acdc31fcb15730484e8e52dde95b69` and is not merged. No implementation PR number is assigned to `C2-II` or `C2-III`, and they stay blocked until `C2-I` is merged and exact-head verified.
+`C2-I` merged as PR #151: reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, merged `2026-07-28T04:22:13Z`, exact-head readiness smoke `PASS — 113 checks / 0 failures`.
+
+`C2-II` is implemented on branch `codex/c2-ii-transactional-production-financial-snapshots`, started from merged `origin/main` `7b3dde8278f59658bfa3a81c09e643ea10319551`, and is **not merged**. No implementation PR number is assigned to `C2-III`, and it stays blocked until `C2-II` is merged and exact-head verified.
 
 ### C2 — accepted product contract (`CR-008`)
 
@@ -1315,9 +1317,19 @@ A passive browser regression may prove that the Order route still loads. `C2-I` 
 
 ### C2-II — Transactional production financial snapshots
 
-Статус: `PLANNED — BLOCKED ON MERGED AND VERIFIED C2-I`
+Статус: `IMPLEMENTED ON PR BRANCH — NOT MERGED`
 
-Not authorized by the `CR-008` decision PR. Do not implement it. Its exact future contract is recorded here.
+Authorized once `C2-I` merged as PR #151 and its exact head was verified. Implemented on branch `codex/c2-ii-transactional-production-financial-snapshots` from merged `origin/main` `7b3dde8278f59658bfa3a81c09e643ea10319551`. The contract below is the accepted one and was implemented as written; the durable decision stays `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
+
+Implemented shape:
+
+- migration `0019_production_batch_tax_rate_snapshots` adds only the two nullable `TEXT` columns, additively, with no default and no backfill;
+- `TaxRateSettingsService.get_tax_rate(connection=None)` is the bounded transaction-aware read; `backend/app/services/tax_rate_context.py` is the one shared reducer used by readiness and confirmation;
+- `backend/app/domain/production_tax_context.py` validates the required-but-nullable request context; `backend/app/domain/tax_rate_timestamps.py` is the single storage/API timestamp boundary;
+- the stale comparison runs inside the existing `BEGIN IMMEDIATE` transaction, before the first production write, and raises `409 tax_rate_context_stale`;
+- the financial values reuse the merged `C2-I` pure domain calculation — no formula is duplicated in the confirmation service;
+- the two snapshots are exposed in the confirmation response and `ProductionBatch` detail only; the list response and every report read model are unchanged;
+- the frontend carries the readiness pair unchanged through `frontend/src/order-production-context.ts`, adds no financial arithmetic and no financial presentation, and `frontend/src/main.ts` stays at exactly `6399` lines.
 
 #### Goal
 
@@ -1476,7 +1488,7 @@ Additionally, the invalid-rate lifecycle and the timestamp contract must be cove
 20. the database snapshot timestamp uses SQLite UTC text `YYYY-MM-DD HH:MM:SS`;
 21. the confirmation and detail API responses normalize the snapshot timestamp to canonical UTC `Z` format.
 
-These are future `C2-II` requirements only. They are **not** implemented or executed in PR #150.
+These `C2-II` requirements are implemented and executed on the `C2-II` PR branch.
 
 ### C2-III — Human-readable financial presentation and snapshot-backed reports
 
