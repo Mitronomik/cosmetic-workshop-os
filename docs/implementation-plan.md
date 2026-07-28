@@ -57,7 +57,7 @@
 
 ### Current implementation state
 
-`C2-I` merged as PR #151. `C2-II` is the **only currently active runtime slice** and is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. `C2-III` remains `PLANNED — BLOCKED` until `C2-II` is reviewed, exact-head verified, and merged, and no implementation PR number is assigned to it.
+`C2-I` merged as PR #151 and `C2-II` merged as PR #152; both are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **No runtime slice is currently active.** `C2-III` has been subdivided into exactly two runtime slices: `C2-III-A — Order and ProductionBatch financial presentation` is `AUTHORIZED AFTER THE SUBDIVISION DOCUMENTATION PR MERGES — NOT IMPLEMENTED`, and `C2-III-B — snapshot-backed reports and report documents` is `PLANNED — BLOCKED` on merged and verified `C2-III-A`. No implementation PR number is assigned to either.
 
 `CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 and C4 remain inactive. Product release readiness is not claimed.
 
@@ -160,7 +160,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | User/remote install checklist | Есть частичные документы, финальный процесс не проверен | Обязательно |
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
-| Себестоимость, налог и маржа (расчёты и снапшоты) | **ЧАСТИЧНО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151). Снапшоты `ProductionBatch` реализованы в `C2-II` на ветке PR и ещё не влиты; отчёты снапшоты пока не читают | Обязательно — контракт принят как `CR-008`; `C2-I` влит, `C2-II` реализован на ветке PR, `C2-III` заблокирован |
+| Себестоимость, налог и маржа (расчёты и снапшоты) | **ЧАСТИЧНО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152). Финансовое представление в UI отсутствует, и отчёты снапшоты пока не читают | Обязательно — контракт принят как `CR-008`; `C2-I` и `C2-II` влиты; `C2-III-A` (представление) авторизован после merge документационного PR, `C2-III-B` (отчёты) заблокирован |
 | AuditLog workspace | Логи пишутся, пользовательского read-only экрана нет | Обязательно либо нужен явный scope amendment |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
@@ -1066,7 +1066,7 @@ Focused `/settings` browser smoke against the exact published implementation hea
 
 ## C2 — себестоимость, налог и маржа
 
-Статус: `CONTRACT ACCEPTED (CR-008) — DIVIDED INTO C2-I / C2-II / C2-III`
+Статус: `CONTRACT ACCEPTED (CR-008) — DIVIDED INTO C2-I / C2-II / C2-III-A / C2-III-B`
 
 The C1 gate is satisfied: `C1-I` is merged and exact-head verified, so C2 is no longer blocked on C1. The C2 product contract was decided as `CR-008`; the ADR is `docs/decisions/0012-c2-financial-calculation-snapshots.md`. It refines and completes the C2 semantics `CR-007` had partially fixed (readiness semantics, stale-setting conflict, snapshot fields, rounding order) and contradicts none of them.
 
@@ -1084,13 +1084,22 @@ Authorization states:
 
 | Slice | Status |
 |---|---|
-| `C2-I` — backend financial readiness estimate | **MERGED AND VERIFIED** — PR #151 |
-| `C2-II` — transactional production financial snapshots | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
-| `C2-III` — presentation and snapshot-backed reports | `PLANNED — BLOCKED` on merged and verified `C2-II` |
+| `C2-I` — backend financial readiness estimate | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #151 |
+| `C2-II` — transactional production financial snapshots | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #152 |
+| `C2-III-A` — Order and `ProductionBatch` financial presentation | `AUTHORIZED AFTER THE SUBDIVISION DOCUMENTATION PR MERGES — NOT IMPLEMENTED` |
+| `C2-III-B` — snapshot-backed reports and report documents | `PLANNED — BLOCKED` on merged and verified `C2-III-A` |
 
 `C2-I` merged as PR #151: reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, merged `2026-07-28T04:22:13Z`, exact-head readiness smoke `PASS — 113 checks / 0 failures`.
 
-`C2-II` is implemented on branch `codex/c2-ii-transactional-production-financial-snapshots`, started from merged `origin/main` `7b3dde8278f59658bfa3a81c09e643ea10319551`, and is **not merged**. No implementation PR number is assigned to `C2-III`, and it stays blocked until `C2-II` is merged and exact-head verified.
+`C2-II` merged as PR #152: reviewed head `0cdda1b06b9783975f085207527f7d36a2ef7f22`, merge commit `c3a3a7b8db06fe85290216113b784123ed9b6b30`, merged `2026-07-28T09:00:50Z`. Full closure evidence: § *C2-II — merged and exact-head verified* below.
+
+`C2-III` was subdivided into exactly two runtime slices, as required by ADR 0012. No implementation PR number is assigned to `C2-III-A` or `C2-III-B`.
+
+```text
+C2 is not complete after C2-III-A.
+```
+
+C2 becomes complete only after `C2-III-A` is merged and exact-head verified, `C2-III-B` is separately authorized, `C2-III-B` is merged and exact-head verified, and the active documentation and state are closed consistently. C3 and C4 remain inactive.
 
 ### C2 — accepted product contract (`CR-008`)
 
@@ -1204,7 +1213,9 @@ Do not rename existing codes. Do not introduce aliases such as `tax_rate_unconfi
 
 ### C2-I — Backend financial readiness estimate
 
-Статус: `IMPLEMENTED ON PR BRANCH — NOT MERGED`
+Статус: `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #151
+
+> **HISTORICAL PRE-MERGE RECORD — SUPERSEDED.** The paragraph immediately below described `C2-I` while it was still on an unmerged PR branch. It is preserved as history. The current status is the one above and in the authorization table in this section.
 
 The only runtime slice authorized by the `CR-008` decision PR (merged as PR #150). It is implemented on branch `codex/c2-i-backend-financial-readiness-estimate`, started from merged `origin/main` `4c03142ef7acdc31fcb15730484e8e52dde95b69`, and is **not merged**. `C2-II` stays blocked until `C2-I` is merged and exact-head verified.
 
@@ -1317,7 +1328,33 @@ A passive browser regression may prove that the Order route still loads. `C2-I` 
 
 ### C2-II — Transactional production financial snapshots
 
-Статус: `IMPLEMENTED ON PR BRANCH — NOT MERGED`
+Статус: `DONE — MERGED AND EXACT-HEAD VERIFIED`
+
+#### C2-II — merged and exact-head verified
+
+`VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE — NOT RE-EXECUTED IN THIS DOCUMENTATION PR`
+
+| Item | Verified value |
+|---|---|
+| PR | #152 — `C2-II — Persist transactional production financial snapshots` |
+| State | `MERGED`, base `main` |
+| Final reviewed head | `0cdda1b06b9783975f085207527f7d36a2ef7f22` |
+| Merge commit | `c3a3a7b8db06fe85290216113b784123ed9b6b30` |
+| Merged at | `2026-07-28T09:00:50Z` |
+| Exact smoke-tested head | `0cdda1b06b9783975f085207527f7d36a2ef7f22` |
+| Accepted backend result | complete backend suite `883 passed / 0 failed / 0 skipped`; all `737` original merged-baseline node IDs still collected, zero renames |
+| Accepted frontend result | all 15 focused frontend suites green, `0 failed` |
+| Production build | `npm run build` — `PASS` |
+| Exact-head migration smoke | `PASS — 41 checks / 0 failures` |
+| Exact-head API smoke | `PASS — 57 checks / 0 failures` |
+| Exact-head browser smoke | `PASS — all Orders-route checks / 0 failures` |
+| `frontend/src/main.ts` final line count | `6399` |
+| Migration `0019` delivered | yes — `0019_production_batch_tax_rate_snapshots` |
+| Commit added after the accepted smoke | none — the head was verified unchanged and the tree clean afterwards |
+
+The final merged head carries **zero test renames**: an earlier revision of the PR renamed two tests, both original node IDs were restored before merge, and the accepted result is `737 / 737` backend node IDs collected.
+
+> **HISTORICAL PRE-MERGE RECORD — SUPERSEDED.** The paragraph immediately below described `C2-II` while it was still on an unmerged PR branch. It is preserved as history.
 
 Authorized once `C2-I` merged as PR #151 and its exact head was verified. Implemented on branch `codex/c2-ii-transactional-production-financial-snapshots` from merged `origin/main` `7b3dde8278f59658bfa3a81c09e643ea10319551`. The contract below is the accepted one and was implemented as written; the durable decision stays `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
@@ -1488,29 +1525,86 @@ Additionally, the invalid-rate lifecycle and the timestamp contract must be cove
 20. the database snapshot timestamp uses SQLite UTC text `YYYY-MM-DD HH:MM:SS`;
 21. the confirmation and detail API responses normalize the snapshot timestamp to canonical UTC `Z` format.
 
-These `C2-II` requirements are implemented and executed on the `C2-II` PR branch.
+These `C2-II` requirements were implemented and executed on the `C2-II` PR branch, which is now merged as PR #152.
 
-### C2-III — Human-readable financial presentation and snapshot-backed reports
+### C2-III — subdivided into two runtime slices
 
-Статус: `PLANNED — BLOCKED ON MERGED AND VERIFIED C2-II`
+Статус: `SUBDIVIDED — C2-III-A AUTHORIZED, C2-III-B BLOCKED`
 
-Not authorized by the `CR-008` decision PR. Do not implement it.
-
-`C2-III` is a **planning umbrella, not authorization for one large implementation PR.** Before it is authorized, repository evidence must determine whether it can remain one bounded vertical slice. If it includes more than one independently reviewable user-facing vertical slice, divide it before implementation — for example into readiness and `ProductionBatch` financial presentation, and separately snapshot-backed reports. Do not implement readiness UI, batch UI, and report backend/frontend as one catch-all PR merely because they share the word “financial”. No future implementation PR number is assigned.
+The ADR 0012 subdivision rule required `C2-III` to be divided before implementation if it was not one bounded, independently reviewable vertical slice. It is not. `C2-III` is therefore divided into **exactly two** runtime slices — `C2-III-A` and `C2-III-B`, no more and no fewer. No document authorizes all of `C2-III` in one PR. No future implementation PR number is assigned to either slice.
 
 #### Goal
 
-Expose backend-calculated readiness estimates and immutable production snapshots in existing user-facing screens and reports.
+Expose backend-calculated readiness estimates and immutable production snapshots in existing user-facing screens (`C2-III-A`), and then make reports and report documents snapshot-backed (`C2-III-B`).
 
-#### Reports
+### C2-III-A — Order and ProductionBatch financial presentation
 
-Reports must read persisted `ProductionBatch` snapshots **only** and must never recalculate historical tax or margin from the current setting. For historical rows without snapshots: show unavailable or `null`, never fabricate `0.00`, and never apply the current tax rate retroactively. Do not add advanced analytics, a tax declaration, accounting reports, tax-regime reporting, or annual/quarterly filing calculations. Update only existing report read models that already contain cost, revenue, tax, margin, or margin percent.
+Статус: `AUTHORIZED AFTER THE SUBDIVISION DOCUMENTATION PR MERGES — NOT IMPLEMENTED`
 
-#### Frontend
+Do not start it from the unmerged subdivision documentation branch, and do not assign it a PR number in advance.
+
+One user workflow:
+
+```text
+check Order readiness
+→ understand the financial estimate
+→ confirm production
+→ see the persisted actual financial result
+```
+
+#### Scope — Order readiness presentation
+
+Display the backend-returned readiness values: `sale_price`, `estimated_cost`, `tax_rate_percent`, `tax_rate_effective_at`, `estimated_tax`, `estimated_margin`, `estimated_margin_percent`, and `financial_estimate_status`.
+
+Human-readable status labels: `available` → `Доступно`; `partial` → `Частично`; `unavailable` → `Недоступно`.
+
+Display the accepted backend financial warnings through the **existing** readiness warning mechanism.
+
+The frontend must not calculate tax, calculate margin, calculate margin percent, reconstruct missing values, reinterpret warning codes, read the current Settings tax rate as a substitute for readiness, or recalculate historical values.
+
+#### Scope — ProductionBatch detail presentation
+
+Display the persisted values from the `ProductionBatch` detail DTO: sale price, total cost, the tax-rate percentage snapshot, the tax-rate effective-timestamp snapshot, tax, margin, and margin percent. These are immutable production snapshots; the frontend renders the DTO and performs no arithmetic.
+
+#### Scope — ProductionBatch list presentation
+
+Add only a compact operational financial summary using the existing batch-list financial fields where available: sale price, total cost, tax, margin, margin percent. Do not add the tax-rate snapshot fields to the list — the rate snapshots remain **detail-only**. Do not create a second financial list endpoint.
+
+#### Presentation semantics
+
+The UI must distinguish a real `"0.00"` from unavailable; a negative margin from a zero margin; a negative margin percent from zero; a missing historical snapshot from a configured zero tax; and `partial` readiness from `unavailable` readiness.
+
+Use normal Russian user-facing text. Do not expose raw JSON, internal DTO terminology, stack traces, database representations, or technical timestamp formats without human-readable presentation.
+
+#### C2-III-A constraints
+
+No report backend change; no report DTO change; no `/reports` UI change; no report-document change; no migration; no financial formula change; no `ProductionBatch` persistence change; no historical backfill; no accounting or tax-regime functionality. The frontend remains display-only. `frontend/src/main.ts` final size must be at most `6399` lines, and `main.ts` must contain no financial arithmetic, no DTO validation, no large HTML template, and no financial lifecycle state machine.
+
+Prefer focused frontend modules — `production-financial-contract.ts`, `production-financial-presentation.ts`, `production-financial-feedback.ts`, `production-financial-runtime.ts`, or the current narrower order and production modules when they are a better home. No catch-all `finance.ts`, `utils.ts`, `helpers.ts`, `manager.ts`, or `common.ts`.
+
+### C2-III-B — Snapshot-backed reports and report documents
+
+Статус: `PLANNED — BLOCKED`
+
+Blocked until `C2-III-A` is implemented, reviewed, exact-head smoke verified, and merged. **This slice is not authorized here.** No PR number is assigned.
+
+#### Planned boundary
+
+The finance report reads persisted `ProductionBatch` snapshots; report tax comes only from persisted `ProductionBatch.tax`; report margin comes only from persisted `ProductionBatch.margin`; historical values are never recalculated using the current tax setting; old batches with null snapshots remain incomplete or unavailable; null is never fabricated as `"0.00"`; a configured zero tax remains a real known value; the `/reports` backend DTO and the frontend presentation are updated together; the overview finance summary is made snapshot-backed where directly affected; the document `Сводка мастерской` stays synchronized with the report DTO it consumes; and Orders readiness and `ProductionBatch` UI are **not** changed in this slice.
+
+Reports must never add advanced analytics, a tax declaration, accounting reports, tax-regime reporting, or annual/quarterly filing calculations. Only existing report read models that already contain cost, revenue, tax, margin, or margin percent are updated.
+
+#### No new aggregate margin-percent formula
+
+Do not define a new aggregate margin-percent formula. The only accepted aggregate basis already in this repository is the documented `known_margin_percent` rule in `docs/reports.md`, which uses the same complete paired sale-price/cost basis as `known_margin` rather than the global known-revenue total.
+
+Before `C2-III-B` is authorized, the implementation-planning task must inspect the current report queries; the paired revenue/cost behavior; the incomplete-data counters and warnings; the finance and overview report schemas; the frontend `/reports`; report-document generation; and the existing tests and smoke boundaries.
+
+In particular, do not silently choose any of these without a later explicit contract: an arithmetic average of batch percentages; a weighted average of batch percentages; aggregate margin divided by aggregate revenue; or recalculation from current settings.
+
+#### Frontend ownership boundary — both slices
 
 Render backend DTO values; render `Недоступно` for null historical values; distinguish a configured zero from a missing value; render a negative margin honestly; render readiness financial warnings; render stale-tax-context recovery guidance. Perform no `Decimal` arithmetic, no tax calculation, no margin calculation, and no historical recalculation.
-
-Preferred focused module responsibilities: `production-financial-contract.ts`, `production-financial-presentation.ts`, `production-financial-feedback.ts`, `production-financial-runtime.ts` — or the current narrower order, production, or report modules when they are a better home. Do not create one catch-all finance module.
 
 ### God-file limit for every future C2 slice
 

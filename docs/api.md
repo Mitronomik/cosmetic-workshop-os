@@ -41,7 +41,7 @@ Response summary:
 - `blocking_issues` and `warnings` with stable `code`, severity, human-readable `message`, optional `field`, `entity_type`, and `entity_id`;
 - ingredient requirement lines with required quantity, available quantity, missing quantity, FEFO-selected lots, and line warnings;
 - packaging availability lines when the order has selected packaging;
-- optional `estimated_cost` when existing unit costs support it, plus the financial estimate described under **Financial estimate extension — `C2-I`** below. **The explicit tax-rate setting exists and is editable** (`default_tax_rate`, merged `C1-I` / PR #149), and `estimated_tax` / `estimated_margin` are active since merged `C2-I` (PR #151). Production tax snapshots are added by `C2-II`, which is `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
+- optional `estimated_cost` when existing unit costs support it, plus the financial estimate described under **Financial estimate extension — `C2-I`** below. **The explicit tax-rate setting exists and is editable** (`default_tax_rate`, merged `C1-I` / PR #149), and `estimated_tax` / `estimated_margin` are active since merged `C2-I` (PR #151). Production tax snapshots are added by `C2-II`, merged as PR #152.
 
 Read-only boundary:
 
@@ -68,8 +68,9 @@ Current limitations: the Orders frontend presents this read-only check, but the 
 |---|---|
 | C1 tax-rate setting | **IMPLEMENTED** and merged (PR #149) |
 | C2-I readiness tax / margin / margin-percent calculation | **IMPLEMENTED** and merged (PR #151) |
-| C2-II `ProductionBatch` rate snapshots and transactional persistence | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
-| C2-III financial presentation and snapshot-backed reports | `PLANNED — BLOCKED` |
+| C2-II `ProductionBatch` rate snapshots and transactional persistence | **IMPLEMENTED** and merged (PR #152) |
+| C2-III-A Order and `ProductionBatch` financial presentation | `AUTHORIZED — NOT IMPLEMENTED` |
+| C2-III-B snapshot-backed reports and report documents | `PLANNED — BLOCKED` on merged and verified `C2-III-A` |
 
 ### Financial estimate extension — `C2-I`
 
@@ -227,7 +228,7 @@ Error mapping:
 
 ### Financial snapshot extension — `C2-II`
 
-Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED**. Decided as `CR-008`; contract `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
+Status: **IMPLEMENTED** and merged as PR #152. Decided as `CR-008`; contract `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
 **Required-but-nullable request context.** The request always carries both keys, declared without default values:
 
@@ -1139,7 +1140,7 @@ Contract rules:
 
 **Clear is row deletion.** `PUT` with `tax_rate_percent: null` deletes the `default_tax_rate` `AppSetting` row and nothing else. It never touches the legacy `tax.default_rate` placeholder row, which is a different key and is never read, reinterpreted, migrated, or rewritten. The deletion and its `AuditLog` insert share one transaction, and a failed audit insert rolls the deletion back. Clearing when the row is already absent is a no-op: no delete, no timestamp change, no `AuditLog`, and no message claiming a change. No nullable-column migration, sentinel value, empty-string storage, new settings table, or parallel settings store is authorized — unconfigured is the absence of the row.
 
-The endpoints themselves do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. `CR-008` decided the C2 contract and divided it into `C2-I` (**merged**, PR #151), `C2-II` (`IMPLEMENTED ON PR BRANCH — NOT MERGED`), and `C2-III` (`PLANNED — BLOCKED`). The `C2-I` readiness estimate reads the setting through the existing C1 service and writes nothing; `C2-II` reads it again inside the production transaction through the same service and persists immutable snapshots. The `GET`/`PUT` endpoints themselves are unchanged by both. See the `C2-I` financial estimate extension under production readiness and the `C2-II` financial snapshot extension under production confirmation.
+The endpoints themselves do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. `CR-008` decided the C2 contract and divided it into `C2-I` (**merged**, PR #151), `C2-II` (**merged**, PR #152), and `C2-III`, which is now subdivided into `C2-III-A` (`AUTHORIZED — NOT IMPLEMENTED`) and `C2-III-B` (`PLANNED — BLOCKED`). The `C2-I` readiness estimate reads the setting through the existing C1 service and writes nothing; `C2-II` reads it again inside the production transaction through the same service and persists immutable snapshots. The `GET`/`PUT` endpoints themselves are unchanged by both. See the `C2-I` financial estimate extension under production readiness and the `C2-II` financial snapshot extension under production confirmation.
 
 ## Orders write validation contract
 

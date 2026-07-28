@@ -57,14 +57,17 @@ The current short-horizon implementation sequence, audit-driven hardening slices
 Updated `2026-07-27`. This block records only the completion-window status; unrelated historical roadmap entries below are untouched.
 
 - **C1 — calculation-sensitive Settings: `COMPLETED`.** The product contract was decided as `CR-007` (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`), and its single authorized slice `C1-I — Implement backend-owned tax-rate setting` is **merged and `DONE`** — PR #149, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged `2026-07-27T19:44:53Z`, exact-head `/settings` smoke `PASS — 146 checks / 0 failures`. C1 no longer awaits smoke and is not reopened.
-- **C2 — себестоимость, налог и маржа: contract decided as `CR-008`, divided into bounded slices.** Contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`; full slice specifications: `docs/implementation-plan.md` § 11.
-  - `C2-I` — backend financial readiness estimate: `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED`. The only runtime slice this decision authorizes.
-  - `C2-II` — transactional production financial snapshots: `PLANNED — BLOCKED` on merged and verified `C2-I`.
-  - `C2-III` — presentation and snapshot-backed reports: `PLANNED — BLOCKED` on merged and verified `C2-II`, and a **planning umbrella** that must be subdivided before implementation if it is not one bounded vertical slice.
+- **C2 — себестоимость, налог и маржа: contract decided as `CR-008`, divided into bounded slices. `NOT COMPLETE`.** Contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`; full slice specifications: `docs/implementation-plan.md` § 11.
+  - `C2-I` — backend financial readiness estimate: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #151, final reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, merged `2026-07-28T04:22:13Z`.
+  - `C2-II` — transactional production financial snapshots: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #152, final reviewed head `0cdda1b06b9783975f085207527f7d36a2ef7f22`, merge commit `c3a3a7b8db06fe85290216113b784123ed9b6b30`, merged `2026-07-28T09:00:50Z`.
+  - `C2-III-A` — Order and `ProductionBatch` financial presentation: `AUTHORIZED AFTER THE SUBDIVISION DOCUMENTATION PR MERGES — NOT IMPLEMENTED`.
+  - `C2-III-B` — snapshot-backed reports and report documents: `PLANNED — BLOCKED` on merged and verified `C2-III-A`.
 - **C3 — AuditLog workspace: `INACTIVE`.** Not authorized here.
 - **C4 — Restore и recovery: `INACTIVE`.** Still `NEEDS PRODUCT DECISION`.
 
-No future implementation PR number is assigned to any C2 slice. Product release readiness is **not** claimed.
+`C2-III` was a planning umbrella; it has been subdivided into exactly the two runtime slices above. **C2 is not complete after `C2-III-A`** — it becomes complete only after `C2-III-A` is merged and exact-head verified, `C2-III-B` is separately authorized, `C2-III-B` is merged and exact-head verified, and the active documentation and state are closed consistently.
+
+No future implementation PR number is assigned to any remaining C2 slice. Product release readiness is **not** claimed.
 
 ## 2. Главный продуктовый принцип
 

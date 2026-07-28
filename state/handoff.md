@@ -1265,6 +1265,8 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-II handoff — implemented on an unmerged PR branch (2026-07-28)
 
+> **HISTORICAL PRE-MERGE RECORD — SUPERSEDED.** This section described `C2-II` while it was still on an unmerged PR branch. `C2-II` merged as PR #152 and is now `DONE — MERGED AND EXACT-HEAD VERIFIED`; see § *C2-II closure and C2-III subdivision handoff (2026-07-28)* at the end of this file. Its final sentence about two intentionally renamed tests describes an earlier revision of the branch: both original node IDs were restored before merge, and the accepted merged result is `737 / 737` backend node IDs collected with zero renames.
+
 `C2-I` is now **merged and exact-head verified** (PR #151, reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, exact-head readiness smoke `PASS — 113 checks / 0 failures`). The earlier `C2-I` handoff section above is preserved as history.
 
 `C2-II — Transactional production financial snapshots` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`** on branch `codex/c2-ii-transactional-production-financial-snapshots`, started from merged `origin/main` `7b3dde8278f59658bfa3a81c09e643ea10319551`. It is **not** `DONE` and must not be recorded as `DONE` until it is merged and exact-head verified.
@@ -1287,5 +1289,54 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 3. `C2-III` remains a **planning umbrella**. Before it is authorized, repository evidence must determine whether it is one bounded, independently reviewable vertical slice; if it is not, subdivide it — for example readiness and `ProductionBatch` financial presentation, and separately snapshot-backed reports. Do not merge readiness UI, batch UI, and report backend plus frontend into one catch-all PR.
 4. Reports still read no snapshots. Making them do so is `C2-III` work and must keep the snapshot-only rule: never recalculate history with the current rate, and show old rows as unavailable rather than `0.00`.
 5. Leave `CR-004` and `CR-006` inactive, and leave C3 and C4 inactive.
+
+Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
+
+## C2-II closure and C2-III subdivision handoff (2026-07-28)
+
+`C2-II — Persist transactional production financial snapshots` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`**. The `C2-II` handoff section above is preserved as history.
+
+### Verified merged evidence
+
+`VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE — NOT RE-EXECUTED IN THIS DOCUMENTATION PR`
+
+| Item | Verified value |
+|---|---|
+| PR | #152 — `C2-II — Persist transactional production financial snapshots` |
+| State | `MERGED`, base `main` |
+| Final reviewed head | `0cdda1b06b9783975f085207527f7d36a2ef7f22` |
+| Merge commit | `c3a3a7b8db06fe85290216113b784123ed9b6b30` |
+| Merged at | `2026-07-28T09:00:50Z` |
+| Exact smoke-tested head | `0cdda1b06b9783975f085207527f7d36a2ef7f22` |
+| Accepted backend result | `883 passed / 0 failed / 0 skipped`; all `737` original merged-baseline node IDs still collected, zero renames |
+| Accepted frontend result | all 15 focused frontend suites green, `0 failed` |
+| Production build | `npm run build` — `PASS` |
+| Exact-head migration smoke | `PASS — 41 checks / 0 failures` |
+| Exact-head API smoke | `PASS — 57 checks / 0 failures` |
+| Exact-head browser smoke | `PASS — all Orders-route checks / 0 failures` |
+| `frontend/src/main.ts` final line count | `6399` |
+| Migration `0019` delivered | yes — `0019_production_batch_tax_rate_snapshots` |
+| Commit added after the accepted smoke | none |
+
+`origin/main` equals the PR #152 merge commit.
+
+### What a reviewer should know about the current state
+
+- Merged `main` carries the `C2-I` readiness estimate **and** the `C2-II` transactional snapshots, including migration `0019`, the required-but-nullable confirmation context, and `409 tax_rate_context_stale`.
+- There is still **no financial presentation in the UI** and **no report change**. Reports read no snapshots.
+- The durable contract remains `docs/decisions/0012-c2-financial-calculation-snapshots.md`. It was not rewritten or reinterpreted; only the slice lifecycle statuses and the executed `C2-III` subdivision were recorded.
+
+### C2-III is subdivided into exactly two runtime slices
+
+ADR 0012 already required subdivision if `C2-III` was not one bounded, independently reviewable vertical slice. It is not, so the umbrella is replaced by `C2-III-A` and `C2-III-B` — no more and no fewer.
+
+### Next steps
+
+1. Review and merge the `C2-II` closure and `C2-III` subdivision documentation PR. Do **not** merge it automatically and do not enable auto-merge.
+2. **Only after it merges**, `C2-III-A — Order and ProductionBatch financial presentation` becomes startable from the new `origin/main`. Do not start it from the unmerged documentation branch, and do not assign it a PR number in advance. It is the **only** authorized slice.
+3. `C2-III-A` covers Orders readiness presentation, `ProductionBatch` detail presentation, and a compact `ProductionBatch` list financial summary — one user workflow: check Order readiness → understand the financial estimate → confirm production → see the persisted actual financial result. The rate snapshots stay detail-only and are not added to the list, and no second financial list endpoint is created. It excludes reports, report DTOs, `/reports` UI, and report documents. The frontend stays display-only, performs no arithmetic, does not reinterpret warning codes, and never substitutes the current Settings tax rate for readiness. `frontend/src/main.ts` must stay at most `6399` lines, with no financial arithmetic, DTO validation, large HTML template, or financial lifecycle state machine inside it. Full scope: `docs/implementation-plan.md` § 11.
+4. `C2-III-B — Snapshot-backed reports and report documents` remains `PLANNED — BLOCKED` until `C2-III-A` is implemented, reviewed, exact-head smoke verified, and merged. Do not authorize or start it now, and do not assign it a PR number. When it is authorized, reports must read persisted snapshots only, never recalculate history with the current rate, keep old rows unavailable rather than `"0.00"`, keep configured zero tax a real value, and update the `/reports` DTO and frontend together with the `Сводка мастерской` document it feeds. It must not change Orders readiness or `ProductionBatch` UI.
+5. **Do not invent an aggregate report percentage formula.** The only accepted aggregate basis is the existing documented `known_margin_percent` paired basis in `docs/reports.md`. An arithmetic average of batch percentages, a weighted average of batch percentages, aggregate margin divided by aggregate revenue, and recalculation from current settings must not be chosen silently without an explicit later contract. Before authorizing `C2-III-B`, inspect the current report queries, paired revenue/cost behavior, incomplete-data counters and warnings, the finance and overview report schemas, the frontend `/reports`, report-document generation, and the existing tests and smoke boundaries.
+6. `C2 is not complete after C2-III-A.` Leave `CR-004` and `CR-006` inactive, do not reopen ADR 0011, `CR-007`, or `CR-008`, and leave C3 and C4 inactive.
 
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
