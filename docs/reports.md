@@ -41,7 +41,7 @@ The finance report is an operational snapshot, not accounting or tax filing.
 
 `CR-007` decided the workshop tax-rate contract (`docs/settings.md`) and its implementation `C1-I` is **merged and `DONE`** (PR #149, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`). `CR-008` then decided the C2 calculation and snapshot contract (`docs/decisions/0012-c2-financial-calculation-snapshots.md`).
 
-Neither changes reports now. On merged `main` the two `ProductionBatch` rate snapshot columns exist and production confirmation persists tax, margin, and margin percent (`C2-I` / PR #151 and `C2-II` / PR #152), but reports still read no snapshots and still contain **no tax calculation**. Report changes belong to `C2-III-B`, which is `PLANNED — BLOCKED`.
+Neither changes reports now. On merged `main` the two `ProductionBatch` rate snapshot columns exist, production confirmation persists tax, margin, and margin percent (`C2-I` / PR #151 and `C2-II` / PR #152), and the Order and `ProductionBatch` financial presentation is merged (`C2-III-A` / PR #154) — but reports still read no snapshots and still contain **no tax calculation**. Report changes belong to `C2-III-B`, which is `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`.
 
 The durable **report snapshot-only rule**, binding now that `C2-II` persists snapshots and once `C2-III-B` reads them:
 
@@ -55,15 +55,26 @@ The durable **report snapshot-only rule**, binding now that `C2-II` persists sna
 - only existing report read models that already contain cost, revenue, tax, margin, or margin percent are updated;
 - no advanced analytics, tax declaration, accounting report, tax-regime reporting, or annual/quarterly filing calculation is added.
 
-### C2-III-B — snapshot-backed reports and report documents: blocked
+### C2-III-B — snapshot-backed reports and report documents: authorized, not implemented
 
-Status: **PLANNED — BLOCKED** on merged and verified `C2-III-A`.
+Status: **AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED.**
 
-`C2-III` was a planning umbrella and has been subdivided into exactly two runtime slices. `C2-III-A — Order and ProductionBatch financial presentation` covers Orders readiness and `ProductionBatch` UI and **excludes reports entirely**. `C2-III-B` is the report slice, it is **not authorized yet**, and no future implementation PR number is assigned to it.
+`C2-III` was a planning umbrella and has been subdivided into exactly two runtime slices. `C2-III-A — Order and ProductionBatch financial presentation` covered Orders readiness and `ProductionBatch` UI, **excluded reports entirely**, and is **merged and `DONE`** (PR #154, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`). `C2-III-B` is the report slice and the only remaining C2 runtime slice. It is **not implemented**, and no future implementation PR number is assigned to it.
 
-Planned `C2-III-B` boundary: the finance report reads persisted `ProductionBatch` snapshots; report tax comes only from persisted `ProductionBatch.tax` and report margin only from persisted `ProductionBatch.margin`; historical values are never recalculated using the current tax setting; old batches with null snapshots remain incomplete or unavailable; null is never fabricated as `"0.00"`; a configured zero tax remains a real known value; the `/reports` backend DTO and the frontend presentation are updated together; the overview finance summary becomes snapshot-backed where directly affected; the document `Сводка мастерской` stays synchronized with the report DTO it consumes; and Orders readiness and `ProductionBatch` UI are **not** changed in this slice.
+Authorized `C2-III-B` boundary — one bounded backend-plus-frontend report vertical:
 
-**No new aggregate margin-percent formula is defined.** The accepted aggregate basis remains the `known_margin_percent` rule stated above — the same complete paired sale-price/cost basis as `known_margin`, not the global known-revenue total. An arithmetic average of batch percentages, a weighted average of batch percentages, aggregate margin divided by aggregate revenue, and recalculation from current settings must not be chosen silently without an explicit later contract. Before `C2-III-B` is authorized, the implementation-planning task must inspect the current report queries, the paired revenue/cost behavior, the incomplete-data counters and warnings, the finance and overview report schemas, the frontend `/reports`, report-document generation, and the existing tests and smoke boundaries.
+```text
+persisted ProductionBatch financial snapshots
+→ backend report aggregation
+→ report DTOs
+→ /reports presentation
+→ overview report consumers
+→ generated «Сводка мастерской»
+```
+
+The affected financial reports read persisted `ProductionBatch` financial snapshots; report tax comes only from persisted `ProductionBatch.tax` and report margin only from persisted `ProductionBatch.margin`; historical rate changes never modify existing report results; the current Settings tax rate is never applied retroactively; report calculations remain backend-owned; report endpoints remain read-only; and report reads create no audit records and no business mutations. Old batches with null snapshots remain incomplete or unavailable; `null` is never fabricated as `0`, `"0.00"`, `0 ₽`, or `0%`; a configured zero tax remains a real known value; a negative margin and a negative margin percentage remain valid signed information; and batches with incomplete financial snapshots contribute to explicit incomplete-data counters or warnings rather than silently appearing complete. The `/reports` backend DTO and the frontend presentation are updated together, the frontend stays display-only and calculates no report tax, margin, margin percentage, incomplete-data coverage, or historical value; the overview finance summary becomes snapshot-backed where directly affected; the document `Сводка мастерской` stays synchronized with the report DTO it consumes, newly generated documents may reflect the snapshot-backed result, previously generated documents remain immutable, and document generation remains an explicit user action. Orders readiness, Order production confirmation, the Order lifecycle, `ProductionBatch` persistence, `ProductionBatch` list and detail presentation, the `C2-III-A` presentation modules, tax-rate Settings behavior, migrations, historical `ProductionBatch` rows, and stock or production transactions are **not** changed in this slice.
+
+**No new aggregate margin-percent formula is defined.** The accepted aggregate basis remains the `known_margin_percent` rule stated above — the same complete paired sale-price/cost basis as `known_margin`, not the global known-revenue total. That contract is preserved unchanged by this authorization. An arithmetic average of batch percentages, a weighted average of batch percentages, aggregate margin divided by aggregate revenue, and recalculation from current settings must not be chosen silently without an explicit later contract. The `C2-III-B` implementation task must inspect the current report queries, the paired revenue/cost behavior, the incomplete-data counters and warnings, the finance and overview report schemas, the frontend `/reports`, report-document generation, and the existing tests and smoke boundaries **before** modifying the implementation. If runtime evidence reveals a contradiction between the documented paired basis and the code required for snapshot-backed aggregation, that task must **stop and report the exact conflict** instead of inventing a formula.
 
 ## Incomplete data
 
