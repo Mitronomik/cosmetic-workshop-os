@@ -78,6 +78,14 @@ const formatters = { escapeHtml };
 /** Renderings a null value must never collapse into. */
 const ZERO_RENDERINGS = ['0', '0.00', '0 ₽', '0.00 ₽', '0%', '0 %', '0.00 %'];
 
+/** The one statement about each incomplete total, each about that total only. */
+const TAX_NOTE = 'Часть партий не содержит сохранённых данных о налоге. Они не включены в сумму налога.';
+const MARGIN_NOTE = 'Часть партий не содержит сохранённых данных о марже. Они не включены в сумму маржи и расчёт её процента.';
+
+function occurrences(markup, text) {
+  return markup.split(text).length - 1;
+}
+
 function warning(code, message, field) {
   return { code, message, field };
 }
@@ -221,24 +229,71 @@ test('coverage uses the backend counters even when tax and margin cover differen
   assert.equal(lines[1].textContent.trim(), 'Маржа зафиксирована: 3 из 25 партий');
 });
 
-test('incomplete coverage is explained in plain language when the backend warns about it', () => {
-  for (const code of ['tax_unavailable', 'partial_tax_basis', 'margin_unavailable', 'partial_margin_basis']) {
-    const view = financeView({ warnings: [warning(code, 'Текст предупреждения.', 'known_tax')] });
-    const note = view.querySelector('[data-finance-incomplete-note="true"]');
+function noteTexts(view) {
+  return view.querySelectorAll('[data-finance-incomplete-note="true"]').map((node) => [node.getAttribute('data-finance-incomplete-note-line'), node.textContent.trim()]);
+}
 
-    assert.notEqual(note, null, `${code} should explain incomplete coverage`);
-    assert.equal(note.textContent.includes('Часть старых партий не содержит финансовых снимков.'), true);
-    assert.equal(note.textContent.includes('Они не включены в налог и маржу.'), true);
+test('incomplete tax coverage alone is explained without mentioning the margin', () => {
+  for (const code of ['tax_unavailable', 'partial_tax_basis']) {
+    const view = financeView({ warnings: [warning(code, 'Текст предупреждения.', 'known_tax')] });
+
+    assert.deepEqual(noteTexts(view), [['tax', TAX_NOTE]], `${code} should explain only the tax total`);
   }
 });
 
-test('the incomplete-coverage note is absent when the backend reports full coverage', () => {
-  assert.equal(renderView(renderFinanceReportSection(completeFinanceReport(), formatters)).querySelector('[data-finance-incomplete-note="true"]'), null);
+test('incomplete margin coverage alone is explained without mentioning the tax', () => {
+  for (const code of ['margin_unavailable', 'partial_margin_basis']) {
+    const view = financeView({ warnings: [warning(code, 'Текст предупреждения.', 'known_margin')] });
+
+    assert.deepEqual(noteTexts(view), [['margin', MARGIN_NOTE]], `${code} should explain only the margin total`);
+  }
 });
 
-test('the incomplete-coverage note is not inferred from a null value alone', () => {
+test('both totals incomplete produce two separate statements, one per total', () => {
+  const view = financeView({ warnings: [warning('partial_tax_basis', 'Налог.', 'known_tax'), warning('partial_margin_basis', 'Маржа.', 'known_margin')] });
+
+  assert.deepEqual(noteTexts(view), [['tax', TAX_NOTE], ['margin', MARGIN_NOTE]]);
+});
+
+test('no coverage statement claims the tax and margin gaps are the same batches', () => {
+  const everyCoverageCase = [
+    [warning('partial_tax_basis', 'Налог.', 'known_tax')],
+    [warning('partial_margin_basis', 'Маржа.', 'known_margin')],
+    [warning('tax_unavailable', 'Налог.', 'known_tax'), warning('margin_unavailable', 'Маржа.', 'known_margin')],
+  ];
+
+  for (const warnings of everyCoverageCase) {
+    for (const markup of [renderFinanceReportSection(financeReport({ warnings }), formatters), renderOverviewFinanceSummary(financeReport({ warnings }), formatters)]) {
+      // The superseded single note coupled the two row sets and called every
+      // affected batch old; the backend states neither.
+      assert.equal(markup.includes('налог и маржу'), false);
+      assert.equal(markup.includes('финансовых снимков'), false);
+      assert.equal(/\bстарых\b/.test(markup), false);
+    }
+  }
+});
+
+test('a note about one total is absent when only the other total is incomplete', () => {
+  const taxOnly = financeView({ warnings: [warning('partial_tax_basis', 'Налог.', 'known_tax')] });
+  const marginOnly = financeView({ warnings: [warning('partial_margin_basis', 'Маржа.', 'known_margin')] });
+
+  assert.equal(taxOnly.querySelector('[data-finance-incomplete-note-line="margin"]'), null);
+  assert.equal(marginOnly.querySelector('[data-finance-incomplete-note-line="tax"]'), null);
+});
+
+test('the incomplete-coverage notes are absent when the backend reports full coverage', () => {
+  assert.deepEqual(noteTexts(renderView(renderFinanceReportSection(completeFinanceReport(), formatters))), []);
+});
+
+test('the incomplete-coverage notes are not inferred from null values alone', () => {
   const view = financeView({ known_tax: null, known_margin: null, known_margin_percent: null, warnings: [] });
-  assert.equal(view.querySelector('[data-finance-incomplete-note="true"]'), null);
+  assert.deepEqual(noteTexts(view), []);
+});
+
+test('the Overview tab states coverage with the same wording as the Finance tab', () => {
+  const warnings = [warning('partial_tax_basis', 'Налог.', 'known_tax'), warning('margin_unavailable', 'Маржа.', 'known_margin')];
+
+  assert.deepEqual(noteTexts(overviewView({ warnings })), noteTexts(financeView({ warnings })));
 });
 
 // --------------------------------------------------------------------------
@@ -336,18 +391,33 @@ test('backend warning messages are not repeated inside the finance blocks', () =
     renderOverviewFinanceSummary(financeReport({ warnings }), formatters),
   ]) {
     assert.equal(markup.includes(message), false);
-    assert.equal((markup.match(/Часть старых партий не содержит финансовых снимков\./g) || []).length, 1);
+    assert.equal(occurrences(markup, TAX_NOTE), 1);
   }
 });
 
-test('several coverage warnings still produce exactly one explanation', () => {
+test('several warnings about one total still produce exactly one statement about it', () => {
+  // The backend states `tax_unavailable` and `partial_tax_basis` exclusively,
+  // but a defensive response carrying both must not be explained twice.
+  const warnings = [
+    warning('tax_unavailable', 'Нет сохранённых данных о налоге.', 'known_tax'),
+    warning('partial_tax_basis', 'Налог показан только по части партий.', 'known_tax'),
+    warning('missing_sale_price', 'Не у всех партий указана цена продажи.', 'known_revenue'),
+  ];
+  const markup = renderFinanceReportSection(financeReport({ warnings }), formatters);
+
+  assert.equal(occurrences(markup, TAX_NOTE), 1);
+  assert.equal(occurrences(markup, MARGIN_NOTE), 0);
+});
+
+test('warnings about both totals produce exactly one statement each', () => {
   const warnings = [
     warning('partial_tax_basis', 'Налог показан только по части партий.', 'known_tax'),
     warning('partial_margin_basis', 'Маржа показана только по части партий.', 'known_margin'),
   ];
   const markup = renderFinanceReportSection(financeReport({ warnings }), formatters);
 
-  assert.equal((markup.match(/Часть старых партий не содержит финансовых снимков\./g) || []).length, 1);
+  assert.equal(occurrences(markup, TAX_NOTE), 1);
+  assert.equal(occurrences(markup, MARGIN_NOTE), 1);
 });
 
 test('an unrelated backend warning does not trigger the coverage explanation', () => {
@@ -390,6 +460,63 @@ test('a non-string monetary value is rejected and never coerced', () => {
 
 test('an explicit null monetary value is accepted as a backend statement', () => {
   assert.equal(financeReportDtoIsValid(financeReport({ known_tax: null, known_margin: null, known_margin_percent: null })), true);
+});
+
+// --------------------------------------------------------------------------
+// Canonical decimal strings
+// --------------------------------------------------------------------------
+
+/** Every field the backend states as a decimal string or an explicit null. */
+const MONETARY_KEYS = ['known_revenue', 'known_production_cost', 'known_tax', 'known_margin', 'known_margin_percent'];
+
+test('a canonical two-decimal string is accepted on every monetary field', () => {
+  for (const value of ['0.00', '-0.00', '-0.01', '0.01', '1.00', '-72.00', '35.00', '1000000.00', '9999999999999.99']) {
+    for (const key of MONETARY_KEYS) {
+      assert.equal(financeReportDtoIsValid(financeReport({ [key]: value })), true, `${key} must accept ${JSON.stringify(value)}`);
+    }
+  }
+});
+
+test('a non-canonical decimal string is rejected rather than repaired', () => {
+  const rejected = [
+    '', ' ', '  1.00', '1.00 ', 'abc', 'NaN', 'Infinity', '-Infinity',
+    '+1.00', '01.00', '-01.00', '00.00', '1', '1.', '1.0', '1.000', '.00', '-.01',
+    '1e3', '1E3', '1.0e2', '6,00', '1 000.00', '1,000.00', '--1.00', '-', '-.',
+    '1.00%', '1.00 ₽', '<script>', '0x10', '\n1.00', '1.00\n',
+  ];
+
+  for (const value of rejected) {
+    for (const key of MONETARY_KEYS) {
+      assert.equal(financeReportDtoIsValid(financeReport({ [key]: value })), false, `${key} must reject ${JSON.stringify(value)}`);
+    }
+  }
+});
+
+test('a malformed decimal is rejected on the nested overview finance summary too', () => {
+  const malformed = financeReport({ known_margin: '1.0' });
+
+  assert.equal(overviewFinanceSummaryIsValid({ finance_summary: malformed }), false);
+  assert.equal(reportsFinanceContractIsValid(financeReport(), { finance_summary: malformed }), false);
+  assert.equal(reportsFinanceContractIsValid(malformed, { finance_summary: financeReport() }), false);
+});
+
+test('a malformed decimal is never normalized into an accepted value', () => {
+  // The guard reports the response as unusable; it does not hand back a trimmed
+  // or padded copy, so the Reports read path keeps its retained snapshot.
+  const payload = financeReport({ known_tax: ' 600.0 ' });
+
+  assert.equal(financeReportDtoIsValid(payload), false);
+  assert.equal(payload.known_tax, ' 600.0 ');
+});
+
+test('the contract module recognizes a decimal by shape, never by conversion', () => {
+  const source = readFileSync(new URL('../src/report-financial-contract.ts', import.meta.url), 'utf8');
+  const code = source.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  for (const forbidden of [/parseFloat/, /parseInt/, /\bNumber\(/, /\bMath\./, /\btoFixed\b/, /\btrim\(/, /\bisNaN\b/]) {
+    assert.equal(forbidden.test(code), false, `unexpected numeric conversion ${forbidden}`);
+  }
+  assert.equal(code.includes('/^-?(?:0|[1-9]\\d*)\\.\\d{2}$/'), true);
 });
 
 test('a malformed counter is rejected', () => {

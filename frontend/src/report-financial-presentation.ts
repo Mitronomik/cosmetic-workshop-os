@@ -19,8 +19,10 @@
  * The Overview tab and the Finance tab both render through the helpers here, so
  * the two can never drift into two different presentations of one DTO. The
  * backend warning list itself is rendered once by the existing Reports warning
- * panel; this module adds no copy of it, only the plain-language explanation of
- * what incomplete coverage means for the totals above it.
+ * panel; this module adds no copy of it, only a plain-language explanation of
+ * what incomplete coverage means for the totals above it — stated separately
+ * for tax and for margin, because the batches missing one are not the batches
+ * missing the other.
  */
 
 import type { FinanceReportResponse, ReportWarning } from './report-financial-contract.js';
@@ -54,8 +56,17 @@ const LABELS = {
   withSalePrice: 'С ценой продажи',
 } as const;
 
-/** The backend codes that mean tax or margin coverage is incomplete. */
-const INCOMPLETE_COVERAGE_CODES = ['tax_unavailable', 'partial_tax_basis', 'margin_unavailable', 'partial_margin_basis'] as const;
+/**
+ * The backend codes that mean a total covers only some batches, kept apart by
+ * which total they are about.
+ *
+ * Tax coverage and margin coverage are separate facts: a batch can have saved a
+ * tax and no margin, or a margin and no tax. Nothing here merges the two code
+ * sets, because doing so would state that one set of batches is missing from
+ * both totals when the backend only said one total was incomplete.
+ */
+const INCOMPLETE_TAX_CODES = ['tax_unavailable', 'partial_tax_basis'] as const;
+const INCOMPLETE_MARGIN_CODES = ['margin_unavailable', 'partial_margin_basis'] as const;
 
 /**
  * Whether a backend value carries a minus sign.
@@ -128,17 +139,37 @@ function coverageLines(finance: FinanceReportResponse): string {
   return `<ul class="finance-coverage" data-finance-coverage="true"><li data-finance-coverage-line="tax">Налог зафиксирован: ${countValue(finance.tax_snapshot_record_count)} из ${total} партий</li><li data-finance-coverage-line="margin">Маржа зафиксирована: ${countValue(finance.margin_snapshot_record_count)} из ${total} партий</li></ul>`;
 }
 
+/** One plain-language note about a single total, stated at most once. */
+function coverageNote(total: string, text: string): string {
+  return `<p class="page-message" data-finance-incomplete-note="true" data-finance-incomplete-note-line="${total}">${text}</p>`;
+}
+
 /**
  * The plain-language explanation of incomplete coverage.
  *
- * Shown only when the backend said coverage is incomplete. It explains what the
- * totals above leave out; it does not restate the backend warning messages,
- * which the existing Reports warning panel already shows exactly once.
+ * Shown only when the backend said a total is incomplete, and said separately
+ * for each total it said it about. A missing tax snapshot and a missing margin
+ * snapshot are different batches, so the tax note never claims the batches it
+ * describes are absent from the margin, and the margin note never claims they
+ * are absent from the tax. When the backend reports both, both notes appear —
+ * two statements about two subsets, rather than one statement that would read
+ * as a single set of batches missing from everything.
+ *
+ * The notes come from the backend warning codes alone. A `null` total is not
+ * evidence of anything on its own, and each note is emitted at most once no
+ * matter how many coverage codes the backend sent about the same total.
+ *
+ * These explain what the totals above leave out; they do not restate the
+ * backend warning messages, which the existing Reports warning panel already
+ * shows exactly once. Neither note calls the affected batches old: the backend
+ * states how many batches saved each value, not when they were produced.
  */
-function incompleteCoverageNote(warnings: ReportWarning[]): string {
+function incompleteCoverageNotes(warnings: ReportWarning[]): string {
   const codes = new Set(warnings.map((warning) => warning.code));
-  if (!INCOMPLETE_COVERAGE_CODES.some((code) => codes.has(code))) return '';
-  return '<p class="page-message" data-finance-incomplete-note="true">Часть старых партий не содержит финансовых снимков. Они не включены в налог и маржу.</p>';
+  const taxIncomplete = INCOMPLETE_TAX_CODES.some((code) => codes.has(code));
+  const marginIncomplete = INCOMPLETE_MARGIN_CODES.some((code) => codes.has(code));
+  return (taxIncomplete ? coverageNote('tax', 'Часть партий не содержит сохранённых данных о налоге. Они не включены в сумму налога.') : '')
+    + (marginIncomplete ? coverageNote('margin', 'Часть партий не содержит сохранённых данных о марже. Они не включены в сумму маржи и расчёт её процента.') : '');
 }
 
 /**
@@ -167,7 +198,7 @@ export function renderFinanceReportSection(finance: FinanceReportResponse, f: Fi
   return `<div data-finance-report="true"><p class="page-message">Это операционная сводка мастерской, а не бухгалтерский отчёт. Налог и маржа показаны такими, какими они были сохранены при изготовлении партий, и не пересчитываются по текущей ставке.</p>${metricGrid(
     metric(LABELS.producedOrders, countValue(finance.produced_order_count), 'produced-order-count')
     + metric(LABELS.withSalePrice, countValue(finance.produced_orders_with_sale_price), 'produced-orders-with-sale-price'),
-  )}${headlineMetrics(finance, f)}${coverageLines(finance)}${incompleteCoverageNote(finance.warnings)}${sourceDataCompletenessSection(finance)}</div>`;
+  )}${headlineMetrics(finance, f)}${coverageLines(finance)}${incompleteCoverageNotes(finance.warnings)}${sourceDataCompletenessSection(finance)}</div>`;
 }
 
 /**
@@ -202,5 +233,5 @@ export function reportWarningFieldLabel(field: string | null): string | null {
  * as the Finance tab — a shorter view of one DTO, never a second calculation.
  */
 export function renderOverviewFinanceSummary(finance: FinanceReportResponse, f: FinanceReportFormatters): string {
-  return `<div class="readiness-block" data-overview-finance-summary="true"><h3>Финансы</h3>${headlineMetrics(finance, f)}${coverageLines(finance)}${incompleteCoverageNote(finance.warnings)}</div>`;
+  return `<div class="readiness-block" data-overview-finance-summary="true"><h3>Финансы</h3>${headlineMetrics(finance, f)}${coverageLines(finance)}${incompleteCoverageNotes(finance.warnings)}</div>`;
 }

@@ -91,16 +91,34 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * The one shape a backend money or percentage value may take.
+ *
+ * An anchored, non-backtracking check on the characters themselves — an
+ * optional minus, no leading zero unless the whole part *is* zero, a decimal
+ * point, and exactly two fractional digits. The value is never converted to a
+ * number, so a decimal string keeps the precision the backend sent it with and
+ * a shape the presentation layer cannot misread.
+ *
+ * `"0.00"`, `"-0.01"` and `"1000000.00"` pass. `""`, `"1"`, `"1.0"`,
+ * `"1.000"`, `"+1.00"`, `"01.00"`, `"1e3"`, `"6,00"`, `"NaN"` and `"Infinity"`
+ * do not.
+ */
+const CANONICAL_DECIMAL = /^-?(?:0|[1-9]\d*)\.\d{2}$/;
+
+/**
  * Whether a monetary field is present and shaped as the contract states.
  *
  * The key must exist: an absent key is an outdated response, not a statement
- * that the value is unavailable. Only a string or an explicit `null` passes,
- * and neither is normalized, reformatted or repaired.
+ * that the value is unavailable. Only an explicit `null` or a canonical decimal
+ * string passes. A value that is nearly right — untrimmed, unpadded, comma-
+ * separated, or in exponent form — is rejected rather than trimmed, padded,
+ * rounded or otherwise repaired here.
  */
 function monetaryValueIsValid(payload: Record<string, unknown>, key: string): boolean {
   if (!(key in payload)) return false;
   const value = payload[key];
-  return value === null || typeof value === 'string';
+  if (value === null) return true;
+  return typeof value === 'string' && CANONICAL_DECIMAL.test(value);
 }
 
 /** Whether a counter is present as a non-negative whole number. */

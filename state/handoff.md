@@ -1498,7 +1498,7 @@ C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
 | Frontend modules | `frontend/src/report-financial-contract.ts`, `frontend/src/report-financial-presentation.ts` |
 | `frontend/src/main.ts` | `6398` before → `6398` after |
 | Backend suite | `942 passed / 0 failed / 0 skipped` (baseline `883`, all `883` baseline node IDs still collected) |
-| Frontend suites | all 17 `test:*` scripts pass, `0 failed`, including the new `test:report-financial-presentation` (`40 pass`) |
+| Frontend suites | all 17 `test:*` scripts pass, `0 failed`, including the new `test:report-financial-presentation` (`54 pass`; the earlier `40 pass` in this row was stale when written and is superseded) |
 | Build | `npm run build` `PASS` |
 | Exact-head smoke | API and browser smoke are recorded in the PR body as this PR's evidence |
 
@@ -1511,6 +1511,12 @@ C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
 - `OverviewReportResponse.finance_summary` is the same `FinanceReportResponse`, and `/reports` renders both tabs through one presentation module. The frontend performs no financial arithmetic and validates the finance DTO strictly, failing the read into the existing retained-snapshot path rather than rendering a malformed response.
 - The Reports warning panel no longer prints raw DTO field names. It shows `Показатель: <человекочитаемое название>` via a label map owned by the report presentation module, and shows nothing for an unrecognized field.
 - A newly generated `Сводка мастерской` shows the persisted tax and margin, both coverage counts, and wording that says the values were saved at production time and are not recalculated from the current rate. The old `Налог не рассчитывается в этом документе` line was false once tax is shown and is replaced. Previously generated documents and sidecars remain byte-identical.
+
+### Review corrections (PR #157, after head `8f50e741469b7f5097c1c38dfcdfa52287d9d3d1`)
+
+- **Monetary DTO validation is now canonical.** Every finance monetary and percentage field accepts only an explicit `null` or a canonical signed two-decimal string (`^-?(?:0|[1-9]\d*)\.\d{2}$`), checked by character shape with no numeric conversion and no trimming, padding, rounding or repair. A malformed decimal fails the finance read into the existing retained-snapshot path.
+- **Tax and margin coverage are explained separately.** The single note that claimed the affected batches were absent from both totals — and called them old — is replaced by one backend-warning-driven statement per total, each appearing at most once, neither mentioning the other total. Overview and Finance share the helper, so both surfaces state it identically. `Сводка мастерской` was reviewed and left unchanged: its wording is already qualified and prints each coverage count separately, so it never carried the coupling.
+- **No backend formula, row set, DTO field name or warning condition changed**, and `frontend/src/main.ts` stays at `6398` lines with no validation or coverage copy added to it.
 
 ### Next steps
 
