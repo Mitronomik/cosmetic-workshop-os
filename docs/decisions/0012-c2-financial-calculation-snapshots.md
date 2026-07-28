@@ -35,7 +35,11 @@ C2 becomes complete only after `C2-III-A` is merged and exact-head verified, `C2
 
 ## Context
 
-`C1` gave the workshop one backend-owned tax-rate setting and nothing else. The merged `C1-I` slice added `GET`/`PUT /api/settings/tax-rate`, the canonical percentage contract, explicit Clear as row deletion, and an atomic audit — but it deliberately calculated nothing. The current state on merged `main`, verified read-only at `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`:
+`C1` gave the workshop one backend-owned tax-rate setting and nothing else. The merged `C1-I` slice added `GET`/`PUT /api/settings/tax-rate`, the canonical percentage contract, explicit Clear as row deletion, and an atomic audit — but it deliberately calculated nothing.
+
+> **HISTORICAL DECISION INPUT — SUPERSEDED, NOT CURRENT REPOSITORY STATE.** The bullets below record the repository state as verified read-only at `ff7afe6b0778ab2b348229a4df34acf3e3fc0001` when this ADR was accepted on 2026-07-27. They are preserved for decision traceability. `C2-I` (PR #151) and `C2-II` (PR #152) have since merged, so on current `main` readiness calculates tax, margin, and margin percent, and `ProductionBatch` carries both rate-snapshot columns plus persisted `tax`, `margin`, and `margin_percent`. The current slice statuses are in § *Status* above.
+
+The state at decision time:
 
 - `backend/app/services/production_readiness.py::_estimate_money` produces `estimated_cost` when both ingredient and packaging costs are known, and always returns `estimated_tax = None` and `estimated_margin = None`. It emits `cost_data_missing`, `sale_price_missing`, or `tax_rate_missing` as **non-blocking warnings** and never reads the tax setting;
 - `backend/app/schemas/production_readiness.py::ProductionReadinessResponse` already declares `estimated_cost`, `estimated_tax`, and `estimated_margin`, so the response fields exist but are inert;
