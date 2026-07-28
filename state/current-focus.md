@@ -167,8 +167,10 @@ Delivered on merged `main`, matching ADR 0012 and `docs/implementation-plan.md` 
 C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
 PR #157
 branch codex/c2-iii-b-snapshot-backed-reports
-reviewed head ac68204ee70978749c423dfa69944689ff56a09b
+final runtime head ac68204ee70978749c423dfa69944689ff56a09b
 ```
+
+`ac68204` is the last commit that changed runtime code; every commit after it on this branch is documentation-only, so the runtime under review is byte-identical to that head. The current branch head advances with each documentation commit and is authoritative in PR #157 — a commit cannot record its own SHA, so the exact final published and smoke-tested head is stated there rather than here.
 
 **Merged `main` still contains the pre-`C2-III-B` Reports runtime.** It has the `C2-I` readiness estimate, the `C2-II` transactional snapshots and the `C2-III-A` financial presentation — migration `0019_production_batch_tax_rate_snapshots`, the required-but-nullable confirmation context, `409 tax_rate_context_stale`, the Order readiness financial block, the shared `Фактическая экономика партии` block and the compact `ProductionBatch` list financial summary — but **no report change**: reports on `main` read no snapshots, and they will not until PR #157 merges.
 
