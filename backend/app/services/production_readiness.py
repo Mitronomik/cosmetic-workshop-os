@@ -6,11 +6,20 @@ from decimal import Decimal
 
 from app.db.config import DatabaseConfig
 from app.domain.decimal_utils import quantize_money, quantize_volume, quantize_weight
+from app.domain.errors import DomainValidationError
+from app.domain.production_financials import (
+    FinancialWarningCode,
+    ProductionFinancialInputs,
+    TaxRateContext,
+    estimate_production_financials,
+)
+from app.domain.tax_rate import parse_tax_rate_percent
 from app.domain.units import UnitCode
 from app.models.order import OrderStatus
 from app.repositories.ingredients import IngredientRepository
 from app.repositories.orders import OrderNotFoundError, OrderRepository
 from app.repositories.packaging_items import PackagingItemNotFoundError, PackagingItemRepository
+from app.repositories.settings import SettingsNotInitializedError
 from app.schemas.production_readiness import (
     ProductionReadinessIngredientLine,
     ProductionReadinessIssue,
@@ -20,8 +29,17 @@ from app.schemas.production_readiness import (
 )
 from app.services.inventory import DEFAULT_EXPIRATION_WINDOW_DAYS, InventoryService
 from app.services.recipe_calculations import RecipeCalculationService
+from app.services.tax_rate_settings import TaxRateSettingsService
 from app.repositories.client_recipes import ClientRecipeRepository
 from app.repositories.recipes import RecipeRepository
+
+FINANCIAL_WARNINGS: dict[FinancialWarningCode, tuple[str, str | None]] = {
+    FinancialWarningCode.TAX_RATE_MISSING: ("Налоговая ставка пока не настроена, поэтому налог и маржа не рассчитаны.", "tax_rate"),
+    FinancialWarningCode.SALE_PRICE_MISSING: ("В заказе нет цены продажи, поэтому налог и маржа не рассчитаны.", "sale_price"),
+    FinancialWarningCode.COST_DATA_MISSING: ("Не хватает цен партий или тары для полной оценки себестоимости.", None),
+    FinancialWarningCode.MARGIN_PERCENT_UNAVAILABLE_ZERO_SALE_PRICE: ("Цена продажи равна нулю, поэтому маржинальность в процентах не рассчитана.", "sale_price"),
+    FinancialWarningCode.TAX_RATE_INVALID: ("Сохранённая налоговая ставка повреждена, поэтому налог и маржа не рассчитаны. Укажите ставку заново в настройках.", "tax_rate"),
+}
 
 
 class ProductionReadinessLifecycleError(ValueError):
@@ -38,6 +56,7 @@ class ProductionReadinessService:
         self.client_recipes = ClientRecipeRepository(config)
         self.ingredients_repo = IngredientRepository(config)
         self.packaging_repo = PackagingItemRepository(config)
+        self.tax_rate_settings = TaxRateSettingsService(config)
 
     def check_order(self, order_id: int) -> ProductionReadinessResponse:
         order = self.orders.get_by_id(order_id)
@@ -54,7 +73,7 @@ class ProductionReadinessService:
         recipe_lines = self._recipe_lines(order, blocking, warnings)
         ingredient_lines, ingredient_cost = self._check_ingredients(recipe_lines, blocking, warnings)
         packaging_lines, packaging_cost = self._check_packaging(order, blocking, warnings)
-        estimated_cost, estimated_tax, estimated_margin = self._estimate_money(order.sale_price, ingredient_cost, packaging_cost, warnings, order.id)
+        financials = self._estimate_financials(order, ingredient_cost, packaging_cost, warnings)
 
         can_produce = not blocking and all(line.can_fulfill for line in ingredient_lines) and all(line.can_fulfill for line in packaging_lines)
         status = "blocked" if blocking else "warning" if warnings else "ready"
@@ -66,9 +85,14 @@ class ProductionReadinessService:
             warnings=warnings,
             ingredients=ingredient_lines,
             packaging=packaging_lines,
-            estimated_cost=estimated_cost,
-            estimated_tax=estimated_tax,
-            estimated_margin=estimated_margin,
+            sale_price=financials.sale_price,
+            estimated_cost=financials.total_cost,
+            tax_rate_percent=financials.tax_rate_percent,
+            tax_rate_effective_at=financials.tax_rate_effective_at,
+            estimated_tax=financials.tax_amount,
+            estimated_margin=financials.margin,
+            estimated_margin_percent=financials.margin_percent,
+            financial_estimate_status=financials.status,
             generated_at=datetime.now(UTC).isoformat(),
         )
 
@@ -212,20 +236,52 @@ class ProductionReadinessService:
         cost = None if item.unit_cost is None else item.unit_cost * order.packaging_quantity
         return [ProductionReadinessPackagingLine(packaging_item_id=item.id, name=item.name, required_quantity=str(order.packaging_quantity), available_quantity=str(available), missing_quantity=str(missing) if missing > 0 else None, can_fulfill=can)], cost
 
-    def _estimate_money(self, sale_price, ingredient_cost, packaging_cost, warnings, order_id):
-        if ingredient_cost is None or packaging_cost is None:
-            warnings.append(_issue("cost_data_missing", "warning", "Не хватает цен партий или тары для полной оценки себестоимости.", None, "order", order_id))
-            return None, None, None
-        total = quantize_money(ingredient_cost + packaging_cost, field="estimated_cost")
-        if sale_price is None:
-            warnings.append(_issue("sale_price_missing", "warning", "В заказе нет цены продажи, поэтому налог и маржа не рассчитаны.", "sale_price", "order", order_id))
-        else:
-            warnings.append(_issue("tax_rate_missing", "warning", "Налоговая ставка пока не настроена, поэтому налог и маржа не рассчитаны.", "tax_rate", "order", order_id))
-        return str(total), None, None
+    def _estimate_financials(self, order, ingredient_cost, packaging_cost, warnings):
+        """Run the pure financial calculation and map its warnings.
+
+        The service supplies backend-owned values and owns no formula; the
+        arithmetic lives in `app.domain.production_financials`.
+        """
+        total_cost = None if ingredient_cost is None or packaging_cost is None else quantize_money(ingredient_cost + packaging_cost, field="estimated_cost")
+        estimate = estimate_production_financials(
+            ProductionFinancialInputs(sale_price=order.sale_price, total_cost=total_cost, tax_rate=self._tax_rate_context())
+        )
+        warnings.extend(_financial_issue(code, order.id) for code in estimate.warning_codes)
+        return estimate
+
+    def _tax_rate_context(self) -> TaxRateContext:
+        """Read the current rate through the C1 service and re-validate it.
+
+        The C1 Settings repair surface deliberately still returns the stored
+        text for an externally corrupted row so the user can replace it, so
+        `is_configured` alone is not proof that the value is financially
+        authoritative. Anything that does not re-parse as the canonical C1
+        percentage — or that carries no effective timestamp — becomes the C2
+        no-valid-rate context instead of a calculated or fabricated value.
+        """
+        try:
+            state = self.tax_rate_settings.get_tax_rate()
+        except SettingsNotInitializedError:
+            return TaxRateContext.missing()
+        if state.tax_rate_percent is None:
+            return TaxRateContext.missing()
+        try:
+            percent = parse_tax_rate_percent(state.tax_rate_percent)
+        except DomainValidationError:
+            return TaxRateContext.invalid_value()
+        if state.effective_at is None:
+            return TaxRateContext.invalid_value()
+        return TaxRateContext.configured(percent, state.effective_at)
 
 
 def _issue(code, severity, message, field=None, entity_type=None, entity_id=None):
     return ProductionReadinessIssue(code=code, severity=severity, message=message, field=field, entity_type=entity_type, entity_id=entity_id)
+
+
+def _financial_issue(code: FinancialWarningCode, order_id: int) -> ProductionReadinessIssue:
+    """Carry a financial warning through the existing non-blocking structure."""
+    message, field = FINANCIAL_WARNINGS[code]
+    return _issue(code.value, "warning", message, field, "order", order_id)
 
 
 __all__ = ["ProductionReadinessService", "ProductionReadinessLifecycleError", "OrderNotFoundError"]

@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 
+from app.domain.production_financials import FinancialEstimateStatus
 from app.domain.production_readiness import ProductionReadinessSeverity, ProductionReadinessStatus
 
 
@@ -51,7 +52,12 @@ class ProductionReadinessResponse(BaseModel):
     warnings: list[ProductionReadinessIssue]
     ingredients: list[ProductionReadinessIngredientLine]
     packaging: list[ProductionReadinessPackagingLine]
+    sale_price: str | None
     estimated_cost: str | None
+    tax_rate_percent: str | None
+    tax_rate_effective_at: str | None
     estimated_tax: str | None
     estimated_margin: str | None
+    estimated_margin_percent: str | None
+    financial_estimate_status: FinancialEstimateStatus
     generated_at: str

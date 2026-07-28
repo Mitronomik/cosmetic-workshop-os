@@ -311,6 +311,17 @@ The exact C2 API shape may be refined by the future C2 decision, but these seman
 
 `CR-008` also completed the defensive lifecycle this C1 contract left open. A missing `default_tax_rate` row and a persisted value that is invalid under the C1 validation rules above together form **`no valid configured tax-rate context`**: they stay distinguishable through the readiness warnings `tax_rate_missing` and `tax_rate_invalid`, but both return `tax_rate_percent = null` and `tax_rate_effective_at = null`, both leave tax and margin unavailable, both map to the single `null/null` confirmation context, and **neither blocks physical production**. The raw invalid value is never returned as an authoritative rate, never coerced or treated as `0.00`, and never persisted onto a `ProductionBatch`; production confirmation never repairs, clears, rewrites, or audits it, so the invalid row stays exactly as it is in `app_settings` for the user to fix through `/settings`.
 
+Stated exactly, so the financial boundary and the repair surface are not confused:
+
+```text
+A raw invalid value is never exposed as an authoritative financial value
+through C2 readiness or confirmation and is never persisted to a
+ProductionBatch snapshot. The existing Settings repair surface may still read
+the stored value so the user can replace or clear it.
+```
+
+That is why `C2-I` re-validates the percentage returned by `TaxRateSettingsService.get_tax_rate()` through the C1 domain parser instead of trusting `is_configured` alone. This wording narrows an over-broad reading of "never exposed"; it authorizes no change to `GET`/`PUT /api/settings/tax-rate`, whose behavior is unchanged.
+
 Timestamps keep the C1 storage convention: `app_settings.updated_at` and the future `tax_rate_effective_at_snapshot` stay `YYYY-MM-DD HH:MM:SS` UTC SQLite text, while `effective_at`, the readiness rate context, and the confirmation context all use `YYYY-MM-DDTHH:MM:SSZ`.
 
 Full contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
@@ -543,7 +554,7 @@ Verified read-only against `origin/main` at `09d11fc32db6ae57f99d522c4aa71e223e4
 - **`app_settings.updated_at` is not ISO-8601 in storage.** The column defaults to SQLite `CURRENT_TIMESTAMP`, which persists `YYYY-MM-DD HH:MM:SS` in UTC without a `T` separator or offset, and it stays that way. The service normalizes that stored value and the API exposes `effective_at` as ISO-8601 UTC. Do not claim the database stores ISO-8601, and do not change the column type, its default, or any migration for this slice.
 - **`upsert_setting` refreshes `updated_at` only in its `ON CONFLICT DO UPDATE` branch**, so any write bumps the timestamp. The no-op contract in section 11 therefore requires a read-compare-then-write in the service: an unchanged canonical value must not reach the repository at all.
 - **No settings mutation is audited today.** `WorkshopProfileSettingsService.update_profile` writes no `AuditLog`. The tax setting will be the first audited settings mutation. This decision does **not** authorize retroactively adding audit to the workshop profile; that would be a separate slice.
-- **Readiness already behaves as this contract requires.** `backend/app/services/production_readiness.py::_estimate_money` returns `estimated_tax = None` and `estimated_margin = None`, and emits the `tax_rate_missing` warning `Налоговая ставка пока не настроена, поэтому налог и маржа не рассчитаны.` when a sale price exists. `frontend/src/order-readiness-presentation.ts` renders those through `moneyOrMissing` and states that the interface does not substitute a tax rate itself. C1 does not change this; C2 will.
+- **Readiness already behaves as this contract requires.** On merged `main`, `backend/app/services/production_readiness.py::_estimate_money` returns `estimated_tax = None` and `estimated_margin = None`, and emits the `tax_rate_missing` warning `Налоговая ставка пока не настроена, поэтому налог и маржа не рассчитаны.` when a sale price exists. `frontend/src/order-readiness-presentation.ts` renders those through `moneyOrMissing` and states that the interface does not substitute a tax rate itself. C1 does not change this. *(`C2-I`, `IMPLEMENTED ON PR BRANCH — NOT MERGED`, replaces `_estimate_money` with `_estimate_financials` plus the pure `backend/app/domain/production_financials.py`, and activates the estimate. The `tax_rate_missing` code and message are preserved unchanged, and the frontend presentation is untouched until `C2-III`.)*
 - **Production confirmation already snapshots the sale price only.** `backend/app/services/production_confirmation.py` creates the batch with `sale_price=locked_order.sale_price` and explicit `tax=None, margin=None, margin_percent=None`.
 - **The snapshot columns are decimal-string friendly.** In `backend/app/migrations/versions/0013_production_batches.py`, `sale_price`, `tax`, `margin`, and `margin_percent` are nullable `TEXT`, so the future C2 snapshot columns can follow the same nullable `TEXT` decimal-string pattern.
 - **Reports do not invent tax.** `docs/reports.md` already states that tax is not invented or recalculated by reports, and `backend/app/services/reports.py` contains no tax calculation.

@@ -19,6 +19,7 @@ import {
   orderReadinessResultIsCurrent,
   orderRequestOwnerMatches,
   ownerFromOrderRequest,
+  productionReadinessDtoIsValid,
   extractProductionApiFailure, productionConfirmationFailurePresentation, productionReadinessFailureMessage, productionResponseBelongsToOrder, finishProductionOwnerState, productionFailureForOrder, restoreOrderOperationGenerationForOwnedNonMutatingFailure,
 } from '../dist-tests/order-mutation-lifecycle/order-mutation-lifecycle.js';
 import { mutationDisabled, mutationReadonly, restoreMutationGuards } from '../dist-tests/order-mutation-lifecycle/mutation-lifecycle.js';
@@ -671,4 +672,38 @@ test('production reconciliation operation blocks same-order writes/readiness whi
   assert.equal(orderBoundOperationActive([{ owner: state.owner, loadingOrderId: state.loadingOrderId }], 1), false);
   assert.equal(canStartOrderReadinessRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, null, null, 1, []), true);
   assert.equal(canStartOrderWriteRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, 1, []), true);
+});
+
+test('existing readiness DTO guard tolerates the additive C2-I financial fields without accepting malformed existing ones', () => {
+  const base = {
+    order_id: 1,
+    can_produce: true,
+    status: 'warning',
+    blocking_issues: [],
+    warnings: [{ code: 'tax_rate_invalid', severity: 'warning', message: 'Ставка повреждена.', field: 'tax_rate', entity_type: 'order', entity_id: 1 }],
+    ingredients: [],
+    packaging: [],
+    estimated_cost: '110.00',
+    estimated_tax: '12.00',
+    estimated_margin: '78.00',
+    generated_at: '2026-07-28T00:00:00Z',
+  };
+  // The backend now also sends these five; the existing guard must keep accepting the DTO.
+  const withFinancials = {
+    ...base,
+    sale_price: '200.00',
+    tax_rate_percent: '6.00',
+    tax_rate_effective_at: '2026-07-27T19:44:53Z',
+    estimated_margin_percent: '39.00',
+    financial_estimate_status: 'available',
+  };
+  assert.equal(productionReadinessDtoIsValid(base, 1), true);
+  assert.equal(productionReadinessDtoIsValid(withFinancials, 1), true);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, sale_price: null, tax_rate_percent: null, tax_rate_effective_at: null, estimated_margin_percent: null, financial_estimate_status: 'unavailable' }, 1), true);
+  // Additive fields must not have loosened any existing check.
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, estimated_tax: 12 }, 1), false);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, estimated_margin: {} }, 1), false);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, generated_at: null }, 1), false);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, status: 'available' }, 1), false);
+  assert.equal(productionReadinessDtoIsValid(withFinancials, 2), false);
 });
