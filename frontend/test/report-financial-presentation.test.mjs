@@ -10,6 +10,7 @@ import {
   FINANCE_VALUE_UNAVAILABLE,
   renderFinanceReportSection,
   renderOverviewFinanceSummary,
+  reportWarningFieldLabel,
 } from '../dist-tests/report-financial-presentation/report-financial-presentation.js';
 
 // --------------------------------------------------------------------------
@@ -481,4 +482,28 @@ test('the application shell renders each finance surface through the focused mod
   // The shell no longer owns a finance metric grid of its own.
   assert.equal(shell.includes("['Известная маржа'"), false);
   assert.equal(shell.includes("['Маржа, %'"), false);
+});
+
+// --------------------------------------------------------------------------
+// Warning field labels
+// --------------------------------------------------------------------------
+
+test('a warning field is shown by its user-facing name, never its DTO name', () => {
+  assert.equal(reportWarningFieldLabel('known_tax'), 'Зафиксированный налог');
+  assert.equal(reportWarningFieldLabel('known_margin'), 'Зафиксированная маржа');
+  assert.equal(reportWarningFieldLabel('known_margin_percent'), 'Маржа по партиям с зафиксированными финансовыми данными');
+  assert.equal(reportWarningFieldLabel('known_revenue'), 'Известная выручка');
+  assert.equal(reportWarningFieldLabel('known_production_cost'), 'Известная себестоимость');
+});
+
+test('an unknown or absent warning field shows nothing rather than a raw name', () => {
+  assert.equal(reportWarningFieldLabel(null), null);
+  assert.equal(reportWarningFieldLabel('some_internal_column'), null);
+});
+
+test('the shell renders warning fields through the label helper only', () => {
+  const shell = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+
+  assert.equal(shell.includes('reportWarningFieldLabel(w.field)'), true);
+  assert.equal(shell.includes('Поле: ${escapeHtml(w.field)}'), false);
 });

@@ -171,6 +171,31 @@ export function renderFinanceReportSection(finance: FinanceReportResponse, f: Fi
 }
 
 /**
+ * The user-facing name of the report value a backend warning is about.
+ *
+ * A backend warning carries the DTO field it affects, which is a developer
+ * name. Showing `known_tax` to a workshop owner explains nothing, so each field
+ * the report warnings can reference is given the same wording the metric above
+ * it uses, and an unrecognized field is shown as nothing at all rather than
+ * leaking a raw name.
+ */
+const WARNING_FIELD_LABELS: Record<string, string> = {
+  known_revenue: LABELS.knownRevenue,
+  known_production_cost: LABELS.knownProductionCost,
+  known_tax: LABELS.knownTax,
+  known_margin: LABELS.knownMargin,
+  known_margin_percent: LABELS.knownMarginPercent,
+  total_known_cost: 'Известная себестоимость партий',
+  produced_quantity_totals: 'Объёмы производства',
+  orders_missing_recipe: 'Заказы без рецептуры',
+};
+
+/** The label for a warning's field, or `null` when there is nothing to show. */
+export function reportWarningFieldLabel(field: string | null): string | null {
+  return field === null ? null : WARNING_FIELD_LABELS[field] ?? null;
+}
+
+/**
  * The Overview tab finance summary.
  *
  * The same values, the same labels and the same unavailable/zero/negative rules

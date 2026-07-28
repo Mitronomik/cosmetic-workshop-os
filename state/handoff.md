@@ -1509,6 +1509,7 @@ C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
 - `complete_finance_record_count` and `incomplete_margin_count` keep their legacy paired sale-price/cost meanings and are presented under `Полнота исходных данных` with truthful labels — never as snapshot coverage.
 - The three additive warnings `tax_unavailable`, `partial_tax_basis` and `margin_percent_unavailable_zero_basis` are implemented; `margin_unavailable` and `partial_margin_basis` are restated against persisted margin snapshots without being renamed.
 - `OverviewReportResponse.finance_summary` is the same `FinanceReportResponse`, and `/reports` renders both tabs through one presentation module. The frontend performs no financial arithmetic and validates the finance DTO strictly, failing the read into the existing retained-snapshot path rather than rendering a malformed response.
+- The Reports warning panel no longer prints raw DTO field names. It shows `Показатель: <человекочитаемое название>` via a label map owned by the report presentation module, and shows nothing for an unrecognized field.
 - A newly generated `Сводка мастерской` shows the persisted tax and margin, both coverage counts, and wording that says the values were saved at production time and are not recalculated from the current rate. The old `Налог не рассчитывается в этом документе` line was false once tax is shown and is replaced. Previously generated documents and sidecars remain byte-identical.
 
 ### Next steps
