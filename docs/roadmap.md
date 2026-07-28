@@ -61,7 +61,7 @@ Updated `2026-07-28`. This block records only the completion-window status; unre
   - `C2-I` — backend financial readiness estimate: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #151, final reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, merged `2026-07-28T04:22:13Z`.
   - `C2-II` — transactional production financial snapshots: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #152, final reviewed head `0cdda1b06b9783975f085207527f7d36a2ef7f22`, merge commit `c3a3a7b8db06fe85290216113b784123ed9b6b30`, merged `2026-07-28T09:00:50Z`.
   - `C2-III-A` — Order and `ProductionBatch` financial presentation: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #154, final reviewed head `ef1103811a8f062f9129bfb465a98e0cfa388935`, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`.
-  - `C2-III-B` — snapshot-backed reports and report documents: `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`. The only remaining C2 runtime slice. Reports are **not** snapshot-backed yet.
+  - `C2-III-B` — snapshot-backed reports and report documents: `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`. The only remaining C2 runtime slice. Reports are **not** snapshot-backed yet. The report aggregation contract — row sets, `known_tax`, the `known_margin_percent` denominator, counter compatibility and warnings — is settled in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*.
 - **C3 — AuditLog workspace: `INACTIVE`.** Not authorized here.
 - **C4 — Restore и recovery: `INACTIVE`.** Still `NEEDS PRODUCT DECISION`.
 

@@ -57,7 +57,7 @@
 
 ### Current implementation state
 
-`C2-I` merged as PR #151, `C2-II` merged as PR #152 and `C2-III-A` merged as PR #154; all three are `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III-B — snapshot-backed reports and report documents` is `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED` and is the only remaining C2 runtime slice. No implementation PR number is assigned to `C2-III-B`.
+`C2-I` merged as PR #151, `C2-II` merged as PR #152 and `C2-III-A` merged as PR #154; all three are `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III-B — snapshot-backed reports and report documents` is `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED` and is the only remaining C2 runtime slice. No implementation PR number is assigned to `C2-III-B`.
 
 `CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 and C4 remain inactive. Product release readiness is not claimed.
 
@@ -1087,7 +1087,7 @@ Authorization states:
 | `C2-I` — backend financial readiness estimate | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #151 |
 | `C2-II` — transactional production financial snapshots | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #152 |
 | `C2-III-A` — Order and `ProductionBatch` financial presentation | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #154 |
-| `C2-III-B` — snapshot-backed reports and report documents | `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED` |
+| `C2-III-B` — snapshot-backed reports and report documents | `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED` |
 
 `C2-I` merged as PR #151: reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, merged `2026-07-28T04:22:13Z`, exact-head readiness smoke `PASS — 113 checks / 0 failures`.
 
@@ -1531,7 +1531,7 @@ These `C2-II` requirements were implemented and executed on the `C2-II` PR branc
 
 ### C2-III — subdivided into two runtime slices
 
-Статус: `SUBDIVIDED — C2-III-A DONE AND MERGED, C2-III-B AUTHORIZED AFTER THIS PR MERGES`
+Статус: `SUBDIVIDED — C2-III-A DONE AND MERGED, C2-III-B AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED`
 
 The ADR 0012 subdivision rule required `C2-III` to be divided before implementation if it was not one bounded, independently reviewable vertical slice. It is not. `C2-III` is therefore divided into **exactly two** runtime slices — `C2-III-A` and `C2-III-B`, no more and no fewer. No document authorizes all of `C2-III` in one PR. No future implementation PR number is assigned to either slice.
 
@@ -1588,7 +1588,7 @@ Prefer focused frontend modules — `production-financial-contract.ts`, `product
 
 ### C2-III-B — Snapshot-backed reports and report documents
 
-Статус: `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`
+Статус: `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`
 
 `C2-III-A` is merged and exact-head verified, so `C2-III-B` is unblocked and is authorized as the **only** remaining C2 runtime slice. It must not be started from the unmerged documentation branch that authorizes it, and **no PR number is assigned**.
 
@@ -1617,13 +1617,24 @@ persisted ProductionBatch financial snapshots
 
 Reports must never add advanced analytics, a tax declaration, accounting reports, tax-regime reporting, or annual/quarterly filing calculations. Only existing report read models that already contain cost, revenue, tax, margin, or margin percent are updated.
 
-#### No new aggregate margin-percent formula
+#### Accepted aggregate margin-percent formula
 
-Do not define a new aggregate margin-percent formula. The only accepted aggregate basis already in this repository is the documented `known_margin_percent` rule in `docs/reports.md`, which uses the same complete paired sale-price/cost basis as `known_margin` rather than the global known-revenue total. That contract is preserved unchanged by this authorization.
+> **HISTORICAL — RESOLVED.** This section previously read *"Do not define a new aggregate margin-percent formula"* and instructed the implementation task to **stop and report the exact conflict** if runtime evidence contradicted the documented paired basis. That instruction was followed: a read-only Phase 0 audit found the contradiction and stopped without creating a branch, an edit, a commit or a PR. The formula below is the accepted resolution.
 
-The `C2-III-B` implementation task must inspect the current report queries; the paired revenue/cost behavior; the incomplete-data counters and warnings; the finance and overview report schemas; the frontend `/reports`; report-document generation; and the existing tests and smoke boundaries **before** modifying the implementation.
+The paired sale-price/cost row set (`P`) and the persisted-margin row set (`M`) are **not** the same set once reports read snapshots, because a pre-`C2-II` row can carry a known sale price and a known total cost with `tax` and `margin` both `null`. The accepted basis is `M`:
 
-In particular, do not silently choose any of these without a later explicit contract: an arithmetic average of batch percentages; a weighted average of batch percentages; aggregate margin divided by aggregate revenue; or recalculation from current settings. If runtime evidence reveals a contradiction between the documented paired basis and the code required for snapshot-backed aggregation, that implementation task must **stop and report the exact conflict** instead of inventing a formula.
+```text
+known_margin = Σ ProductionBatch.margin over M
+
+margin_basis_revenue = Σ ProductionBatch.sale_price over M
+
+known_margin_percent =
+    ROUND_PERCENT(known_margin ÷ margin_basis_revenue × 100)
+```
+
+`known_margin_percent` is `null` when `M` is empty or `margin_basis_revenue` is zero. The denominator uses sale prices from exactly the rows contributing to the numerator — this is the accepted meaning of "the same basis as `known_margin`".
+
+Still prohibited: an arithmetic average of batch percentages; a weighted average of batch percentages; a sum or average of persisted `margin_percent`; dividing snapshot-backed `known_margin` by the global `known_revenue` total when that total contains rows outside `M`; and recalculation from current settings. The full contract — row sets, `known_tax`, zero-sale behaviour, counter compatibility, the exact additive DTO field names, and the warning semantics — is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*.
 
 #### Frontend ownership boundary — both slices
 
