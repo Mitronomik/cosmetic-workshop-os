@@ -1052,14 +1052,41 @@ Returns a basic operational financial snapshot, not accounting:
 - produced orders with sale price;
 - known revenue;
 - known production cost;
-- known margin calculated only from rows where sale price and production cost are both known;
-- known margin percent calculated from the same paired revenue basis;
+- known margin, currently derived only from rows where sale price and production cost are both known;
+- known margin percent, currently calculated from the same paired revenue basis;
 - complete finance record count;
 - incomplete margin count;
 - missing sale price count;
 - missing cost count.
 
 The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate. `known_revenue` and `known_production_cost` are independent known totals, but `known_margin` never combines revenue from one incomplete batch with cost from another incomplete batch. Warnings include `margin_unavailable` when no paired sale+cost row exists and `partial_margin_basis` when margin is based on a subset of complete rows.
+
+#### Accepted `C2-III-B` snapshot-backed finance contract — not implemented
+
+The field list above is the **current merged** response. `C2-III-B` replaces the derived margin with persisted `ProductionBatch` snapshots. That slice is `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`; none of the fields below exist in the API yet. The full contract is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*.
+
+When implemented, `known_margin` becomes the sum of persisted `ProductionBatch.margin` over exactly the rows whose margin snapshot is non-null (`M`), and:
+
+```text
+known_margin_percent =
+    ROUND_PERCENT(
+        Σ margin over M ÷ Σ sale_price over M × 100
+    )
+```
+
+The denominator uses sale prices from exactly the rows contributing to the numerator — never the global `known_revenue` total, and never an average of persisted row `margin_percent` values. It is `null` when `M` is empty or that denominator is zero.
+
+Authorized additive `FinanceReportResponse` fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `known_tax` | `str \| null` | sum of every non-null persisted `ProductionBatch.tax`; `null` when no row has a tax snapshot |
+| `tax_snapshot_record_count` | `int` | rows where persisted `tax` is non-null |
+| `missing_tax_snapshot_count` | `int` | rows where persisted `tax` is null |
+| `margin_snapshot_record_count` | `int` | rows where persisted `margin` is non-null |
+| `missing_margin_snapshot_count` | `int` | rows where persisted `margin` is null |
+
+Each pair sums to `produced_order_count`. The existing `complete_finance_record_count` and `incomplete_margin_count` keep their current paired sale-price/cost meanings for backward compatibility and are **not** snapshot-coverage counters. Additive warning codes: `tax_unavailable`, `partial_tax_basis`, and `margin_percent_unavailable_zero_basis`. `OverviewReportResponse.finance_summary` uses the same `FinanceReportResponse` with no overview-only fields or calculations. Reports never read the current Settings tax rate and never recalculate a historical row.
 
 ## Workshop profile settings API
 

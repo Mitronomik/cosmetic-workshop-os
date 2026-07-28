@@ -1,6 +1,6 @@
-# Current focus — `C2-III-A` merged and closed; `C2-III-B` authorized after this documentation PR merges
+# Current focus — `C2-III-B` report aggregation contract clarified; runtime still not implemented
 
-Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` authorized as the last remaining C2 runtime slice and not implemented**
+Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` authorized as the last remaining C2 runtime slice, its report aggregation contract clarified after a blocking Phase 0 audit, and still not implemented**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -13,7 +13,7 @@ Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and
 - `C2-I — Backend financial readiness estimate`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #151)
 - `C2-II — Transactional production financial snapshots`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #152)
 - `C2-III-A — Order and ProductionBatch financial presentation`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #154)
-- `C2-III-B — Snapshot-backed reports and report documents`: **AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED**
+- `C2-III-B — Snapshot-backed reports and report documents`: **AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED**
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
 - **No runtime implementation slice is open.** `C2-III-A` merged as PR #154 at merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, which is the `origin/main` this documentation branch started from. `C2-III-B` is the **only** remaining authorized C2 runtime slice, it is **not implemented**, and no PR number is assigned to it.
@@ -167,7 +167,7 @@ Delivered on merged `main`, matching ADR 0012 and `docs/implementation-plan.md` 
 
 ```text
 C2-III-B — Snapshot-backed reports and report documents:
-AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED
+AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED
 ```
 
 It must not be started from this unmerged documentation branch, and no PR number is assigned to it.
@@ -189,7 +189,9 @@ persisted ProductionBatch financial snapshots
 
 **Missing, zero and negative values.** An explicit stored `"0.00"` stays a real known zero; `null` stays unavailable or incomplete; a negative margin and a negative margin percentage stay valid signed information; and a missing historical snapshot stays different from configured zero tax. A null snapshot must never be included as a fabricated `0`, `0.00`, `0 ₽`, or `0%`. Old batches with incomplete financial snapshots must contribute to explicit incomplete-data counters or warnings rather than silently appearing complete.
 
-**Existing aggregate basis preserved.** No new aggregate margin-percent formula is defined here. The existing accepted `known_margin_percent` contract in `docs/reports.md` stands unchanged: it uses the same complete paired basis as `known_margin` and does **not** use the global known-revenue total. An arithmetic average of row percentages, a weighted average of row percentages, aggregate margin divided by all known revenue, and recalculation using the current tax setting must not be selected silently. The later runtime task must inspect the current report queries, schemas and tests before modifying the implementation, and if runtime evidence reveals a contradiction between the documented paired basis and the code required for snapshot-backed aggregation, that task must **stop and report the exact conflict** instead of inventing a formula.
+**Aggregate basis — conflict found and resolved.** This paragraph previously said no new aggregate margin-percent formula was defined and required the runtime task to **stop and report the exact conflict** if the documented paired basis contradicted snapshot-backed aggregation. That happened. The read-only Phase 0 audit stopped with `C2-III-B — BLOCKED BY REPORT AGGREGATION CONTRACT CONFLICT` and created no branch, edit, commit or PR: the paired sale-price/cost set `P` and the persisted-margin set `M` are the same set only while margin is derived, and diverge as soon as reports read snapshots, because pre-`C2-II` rows carry a known sale price and total cost with `tax` and `margin` both `null`.
+
+The accepted resolution is now recorded in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract* and in ADR 0012 § *Accepted clarification — snapshot report aggregation contract*: `known_margin` is the sum of persisted `ProductionBatch.margin` over `M`; `known_margin_percent` is `ROUND_PERCENT(Σ margin over M ÷ Σ sale_price over M × 100)`, `null` when `M` is empty or that denominator is zero; `known_tax` is the sum of persisted `ProductionBatch.tax`. The global `known_revenue` is never the denominator, and persisted row `margin_percent` is never summed or averaged. `complete_finance_record_count` and `incomplete_margin_count` keep their paired sale-price/cost meanings and are not snapshot-coverage counters; the additive fields are `known_tax`, `tax_snapshot_record_count`, `missing_tax_snapshot_count`, `margin_snapshot_record_count`, `missing_margin_snapshot_count`; the additive warnings are `tax_unavailable`, `partial_tax_basis`, `margin_percent_unavailable_zero_basis`.
 
 **Report DTO and UI boundary.** Synchronized changes are authorized in the affected finance report backend model, the affected overview finance summary, the corresponding API schemas, frontend `/reports`, backend-provided report warnings, and document generation for `Сводка мастерской` where it consumes the affected report DTO. The frontend displays backend report DTOs and backend warnings; it must not calculate report tax, report margin, report margin percentage, incomplete-data coverage, or historical financial values.
 

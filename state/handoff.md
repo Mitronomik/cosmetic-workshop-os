@@ -1414,9 +1414,67 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 2. **Only after it merges**, `C2-III-B — Snapshot-backed reports and report documents` becomes startable from the new `origin/main`. Do not start it from this unmerged documentation branch, and do not assign it a PR number in advance. It is the **only** remaining authorized C2 runtime slice.
 3. `C2-III-B` covers one bounded backend-plus-frontend report vertical: persisted `ProductionBatch` financial snapshots → backend report aggregation → report DTOs → `/reports` presentation → overview report consumers → generated `Сводка мастерской`. Report tax comes only from persisted `ProductionBatch.tax` and report margin only from persisted `ProductionBatch.margin`; historical tax and margin are never recalculated from the current Settings rate; report calculations stay backend-owned; report endpoints stay read-only and create no audit records or business mutations; and the frontend stays display-only and calculates no report tax, margin, margin percentage, incomplete-data coverage, or historical value. Full scope: `docs/implementation-plan.md` § 11 and `docs/reports.md`.
 4. Keep `null`, zero and negative distinct: explicit stored `"0.00"` is a real known zero, `null` is unavailable or incomplete, negative margin and negative margin percentage are valid signed information, and a missing historical snapshot is different from configured zero tax. A null snapshot is never rendered or aggregated as a fabricated `0`, `0.00`, `0 ₽`, or `0%`, and batches with incomplete snapshots must feed explicit incomplete-data counters or warnings rather than silently appearing complete.
-5. **Do not invent an aggregate report percentage formula.** The only accepted aggregate basis is the existing documented `known_margin_percent` paired basis in `docs/reports.md` — the same complete paired sale-price/cost basis as `known_margin`, not the global known-revenue total. An arithmetic average of row percentages, a weighted average of row percentages, aggregate margin divided by all known revenue, and recalculation using the current tax setting must not be chosen silently. Inspect the current report queries, schemas and tests first, and if the documented paired basis contradicts the code required for snapshot-backed aggregation, **stop and report the exact conflict** instead of inventing a formula.
+5. **Do not invent an aggregate report percentage formula.** *(SUPERSEDED — the conflict this anticipated was found and resolved; see § C2-III-B report aggregation contract clarification handoff (2026-07-28) at the end of this file.)* The only accepted aggregate basis is the existing documented `known_margin_percent` paired basis in `docs/reports.md` — the same complete paired sale-price/cost basis as `known_margin`, not the global known-revenue total. An arithmetic average of row percentages, a weighted average of row percentages, aggregate margin divided by all known revenue, and recalculation using the current tax setting must not be chosen silently. Inspect the current report queries, schemas and tests first, and if the documented paired basis contradicts the code required for snapshot-backed aggregation, **stop and report the exact conflict** instead of inventing a formula.
 6. `Сводка мастерской` is in scope only as a consumer of the affected report DTO. Newly generated documents may reflect the snapshot-backed result; previously generated documents remain immutable and are never rewritten, regenerated, or silently replaced; document generation remains an explicit user action.
 7. Do not change Orders readiness, Order production confirmation, the Order lifecycle, `ProductionBatch` persistence, `ProductionBatch` list or detail presentation, the `C2-III-A` presentation modules, tax-rate Settings behavior, migrations, historical `ProductionBatch` rows, or stock and production transactions.
 8. `C2 is not complete in this documentation PR.` C2 becomes complete only after `C2-III-B` is implemented, its focused and complete tests pass, its exact-head API and browser smoke pass, it is reviewed and merged, and the final active C2 documentation and state are closed consistently. Leave `CR-004` and `CR-006` inactive, do not reopen ADR 0011, `CR-007`, or `CR-008`, and leave C3 and C4 inactive.
+
+Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
+
+## C2-III-B report aggregation contract clarification handoff (2026-07-28)
+
+This is a **documentation-only** handoff. No backend or frontend production code, test, schema, migration, dependency, lockfile, package script, smoke runner or generated report document was changed.
+
+### Why this PR exists
+
+The `C2-III-B` runtime implementation was attempted. Its mandatory read-only Phase 0 contract audit returned `STOPPED — CONTRACT CONFLICT` and recorded:
+
+```text
+C2-III-B — BLOCKED BY REPORT AGGREGATION CONTRACT CONFLICT
+```
+
+That attempt was a **read-only diagnostic, not an implementation PR**. It created **no branch, no edit, no commit and no pull request** — precisely the behaviour every active document required. This PR resolves the blocker so the runtime slice can proceed.
+
+The conflict: the merged implementation derives `known_margin` from paired `sale_price` and `total_cost`, while the authorized contract requires reports to read persisted `ProductionBatch.tax` and `ProductionBatch.margin` only. The paired row set `P` and the persisted-margin row set `M` coincide only while margin is derived. Under snapshot-backed aggregation they diverge, because a row can carry a known sale price and a known total cost with `tax` and `margin` both `null` — the ADR 0012 matrix row *present / present / missing*, and every pre-`C2-II` row, since there is no backfill. "The same basis as `known_margin`" therefore named two different denominators, and the legacy counters could not stay truthful without being silently repurposed.
+
+### Accepted contract
+
+```text
+R = all ProductionBatch rows
+P = rows where both sale_price and total_cost are non-null
+T = rows where persisted tax is non-null
+M = rows where persisted margin is non-null
+```
+
+- `known_tax` = Σ non-null persisted `ProductionBatch.tax`; `null` when no tax snapshot exists; `"0.00"` when snapshots exist and sum to zero. Null never contributes zero.
+- `known_margin` = Σ persisted `ProductionBatch.margin` over exactly `M`. Signs preserved; `"0.00"` is a real zero; nothing is derived, repaired or backfilled.
+- `known_margin_percent` = `ROUND_PERCENT(Σ margin over M ÷ Σ sale_price over M × 100)`, `null` when `M` is empty or that denominator is zero.
+
+The denominator uses sale prices from exactly the rows contributing to the numerator. The global `known_revenue` is never the denominator, and persisted row `margin_percent` is never summed or averaged. `P` and `M` are never treated as the same set.
+
+A zero-sale row with non-null margin is in `M`: it contributes its margin, contributes zero to the denominator, and does not by itself make the percentage available.
+
+`complete_finance_record_count` and `incomplete_margin_count` keep their existing paired sale-price/cost meanings for backward compatibility, are documented as legacy paired-input coverage, and are **not** snapshot-coverage counters. Additive DTO fields: `known_tax`, `tax_snapshot_record_count`, `missing_tax_snapshot_count`, `margin_snapshot_record_count`, `missing_margin_snapshot_count`, with each counter pair summing to `produced_order_count`. Additive warnings: `tax_unavailable`, `partial_tax_basis`, `margin_percent_unavailable_zero_basis`. `margin_unavailable` and `partial_margin_basis` are preserved but restated against margin snapshots.
+
+Full contract: `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*; ADR 0012 § *Accepted clarification — snapshot report aggregation contract*.
+
+### What the next task must do
+
+1. Review and merge this documentation PR. Do **not** merge it automatically and do not enable auto-merge.
+2. **Only after it merges**, start `C2-III-B — Snapshot-backed reports and report documents` from the new `origin/main`. Do not start it from this unmerged documentation branch, and do not assign it a PR number in advance. It remains the **only** remaining authorized C2 runtime slice.
+3. Implement against the accepted contract above. The formula, the denominator basis, the zero-sale rule, the counter identities, the exact additive field names and the warning conditions are all settled — they must be implemented as written, not re-derived.
+4. Reports read persisted snapshots only. Never read the current Settings tax rate, never recalculate a historical row, never convert `null` to zero, keep configured zero distinct from missing, and keep negative values signed.
+5. The frontend stays display-only and calculates no report tax, margin, margin percentage, snapshot coverage, counter or historical value.
+6. `Сводка мастерской` is in scope only as a consumer of the affected report DTO. Previously generated documents remain immutable; document generation remains explicit.
+7. Do not change Orders readiness, Order production confirmation, the Order lifecycle, `ProductionBatch` persistence, `ProductionBatch` list or detail presentation, the `C2-III-A` presentation modules, tax-rate Settings behavior, migrations, historical `ProductionBatch` rows, or stock and production transactions.
+8. `C2 is not complete.` It becomes complete only after `C2-III-B` is implemented, its focused and complete tests pass, its exact-head API and browser smoke pass, it is reviewed and merged, and the final active C2 documentation and state are closed consistently. Leave `CR-004` and `CR-006` inactive, do not reopen ADR 0011, `CR-007` or `CR-008`, and leave C3 and C4 inactive.
+
+### What a reviewer should know
+
+- `origin/main` at this branch's start was `8eed36c1f749628865d743ff88eace3ffa2c56a5`, the verified PR #155 merge commit; it had not advanced.
+- Reports are still **not** snapshot-backed. `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` are unchanged in this PR and still read no `ProductionBatch` financial snapshots.
+- ADR 0012 was amended only as an explicit accepted clarification appended to its existing `C2-III-B` section. Its accepted product decision is unchanged. No new ADR and no new Change Request was created.
+- Superseded paragraphs are labelled `HISTORICAL — RESOLVED` rather than deleted; dated records that were true when written are preserved.
+- **Not executed, because this PR is documentation-only:** backend tests, frontend tests, `npm run build`, API smoke, browser smoke, migration smoke, packaging smoke and release smoke.
 
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
