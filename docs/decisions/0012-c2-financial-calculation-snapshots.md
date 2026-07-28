@@ -297,7 +297,7 @@ Constraints: no report backend change; no report DTO change; no `/reports` UI ch
 
 #### `C2-III-B` — snapshot-backed reports and report documents
 
-Status: `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`. `C2-III-A` is merged and exact-head verified, so this slice is unblocked. It is the **only** remaining C2 runtime slice, it must not be started from the unmerged documentation branch that authorizes it, and **no PR number is assigned**.
+Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED` — PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`. It is the **only** remaining C2 runtime slice and is **not** `DONE`. Merged `main` keeps the pre-`C2-III-B` Reports runtime until PR #157 merges. The authorized boundary and the accepted contract below are unchanged by the implementation. *(This line previously read `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED` with no PR number assigned; that was true when written and is superseded.)*
 
 Authorized boundary — one bounded backend-plus-frontend report vertical:
 

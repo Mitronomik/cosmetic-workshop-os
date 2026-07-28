@@ -159,20 +159,22 @@ Delivered on merged `main`, matching ADR 0012 and `docs/implementation-plan.md` 
 - **`frontend/src/main.ts` `6399` before → `6398` after.** The file did not grow; the two per-line batch cost-snapshot tables moved into the focused presentation module.
 - **Physical readiness untouched.** `can_produce`, the physical readiness status, the stale-result ownership and the production guard behave exactly as before, and backend financial warnings are still shown once through the existing readiness warning section.
 
-## What is authorized next
+## What is in progress now
 
-**Merged `main` contains the `C2-I` readiness estimate, the `C2-II` transactional snapshots and the `C2-III-A` financial presentation**, including migration `0019_production_batch_tax_rate_snapshots`, the required-but-nullable confirmation context, `409 tax_rate_context_stale`, the Order readiness financial block, the shared `Фактическая экономика партии` block, and the compact `ProductionBatch` list financial summary. There is still **no report change**: reports read no snapshots.
-
-`C2-III-B` is the **only** remaining C2 runtime slice. It was authorized by the merged documentation PR #156 and is now implemented on its own unmerged runtime PR branch.
+`C2-III-B` is the **only** remaining C2 runtime slice. It was authorized by the merged documentation PR #156 and is now **implemented on its own runtime PR branch**, under review and unmerged.
 
 ```text
-C2-III-B — Snapshot-backed reports and report documents:
-AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED
+C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
+PR #157
+branch codex/c2-iii-b-snapshot-backed-reports
+reviewed head ac68204ee70978749c423dfa69944689ff56a09b
 ```
 
-It must not be started from this unmerged documentation branch, and no PR number is assigned to it.
+**Merged `main` still contains the pre-`C2-III-B` Reports runtime.** It has the `C2-I` readiness estimate, the `C2-II` transactional snapshots and the `C2-III-A` financial presentation — migration `0019_production_batch_tax_rate_snapshots`, the required-but-nullable confirmation context, `409 tax_rate_context_stale`, the Order readiness financial block, the shared `Фактическая экономика партии` block and the compact `ProductionBatch` list financial summary — but **no report change**: reports on `main` read no snapshots, and they will not until PR #157 merges.
 
-### Authorized `C2-III-B` boundary
+Snapshot-backed Reports, the additive DTO fields, the `/reports` presentation and the updated «Сводка мастерской» exist **only on the PR #157 branch**. `C2-III-B` is not `DONE` and C2 remains **incomplete** until it is reviewed, exact-head verified and merged, and its active lifecycle is closed.
+
+### Authorized and implemented `C2-III-B` boundary
 
 One bounded backend-plus-frontend report vertical:
 
@@ -202,7 +204,8 @@ The accepted resolution is now recorded in `docs/reports.md` § *Accepted `C2-II
 ### C2 completion boundary
 
 ```text
-C2 is not complete in this documentation PR.
+C2 remains incomplete until C2-III-B is reviewed,
+exact-head verified and merged, and its active lifecycle is closed.
 ```
 
 C2 remains incomplete until `C2-III-B` is reviewed, exact-head verified and merged, and its active lifecycle is closed. C2 is **not** complete merely because `C2-III-B` is now implemented on a branch. C3 and C4 remain inactive, and product release readiness is not claimed.

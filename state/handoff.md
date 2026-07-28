@@ -1294,7 +1294,7 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-II closure and C2-III subdivision handoff (2026-07-28)
 
-> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III` LIFECYCLE.** The `C2-II` closure evidence below stands. Its § *Next steps*, and its statement that there is no financial presentation in the UI, were true when written, before PR #154 merged. `C2-III-A` is now `DONE — MERGED AND EXACT-HEAD VERIFIED` and `C2-III-B` is `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`; see § *C2-III-A closure and C2-III-B authorization handoff (2026-07-28)* at the end of this file for the current state.
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III` LIFECYCLE.** The `C2-II` closure evidence below stands. Its § *Next steps*, and its statement that there is no financial presentation in the UI, were true when written, before PR #154 merged. `C2-III-A` is now `DONE — MERGED AND EXACT-HEAD VERIFIED` and `C2-III-B` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` (PR #157); its statement that reports read no snapshots remains true of merged `main` only. See § *C2-III-B snapshot-backed reports implementation handoff (2026-07-28)* at the end of this file for the current state.
 
 `C2-II — Persist transactional production financial snapshots` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`**. The `C2-II` handoff section above is preserved as history.
 
@@ -1370,6 +1370,8 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-III-A closure and C2-III-B authorization handoff (2026-07-28)
 
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III-B` LIFECYCLE.** The `C2-III-A` closure evidence below stands and is not reopened. Its § *What a reviewer should know about the current state* and § *What the next task must do* describe `C2-III-B` as unstarted, unassigned and startable only from a future `main`; that was true when written and is now **superseded**. `C2-III-B` is implemented on PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, and is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. Its statement that reports are not snapshot-backed remains true **of merged `main` only**, which keeps the old Reports runtime until PR #157 merges. See § *C2-III-B snapshot-backed reports implementation handoff (2026-07-28)* at the end of this file.
+
 `C2-III-A — Order and ProductionBatch financial presentation` is:
 
 ```text
@@ -1405,7 +1407,7 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 ### What a reviewer should know about the current state
 
 - Merged `main` carries the `C2-I` readiness estimate, the `C2-II` transactional snapshots and migration `0019`, and the `C2-III-A` financial presentation in the Orders and `ProductionBatch` UI.
-- **Reports are still not snapshot-backed.** `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` are unchanged and read no `ProductionBatch` financial snapshots.
+- **Reports are still not snapshot-backed on merged `main`.** There, `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` read no `ProductionBatch` financial snapshots. *(Superseded for the branch: PR #157 implements them; merged `main` keeps this behaviour until that PR merges.)*
 - The durable contracts remain `docs/decisions/0012-c2-financial-calculation-snapshots.md` and `docs/reports.md`. Neither was rewritten or reinterpreted; only the slice lifecycle and the `C2-III-B` authorization were recorded.
 
 ### What the next task must do

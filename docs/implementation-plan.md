@@ -57,7 +57,7 @@
 
 ### Current implementation state
 
-`C2-I` merged as PR #151, `C2-II` merged as PR #152 and `C2-III-A` merged as PR #154; all three are `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III-B — snapshot-backed reports and report documents` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` and is the only remaining C2 runtime slice. It is implemented on its runtime branch, with focused and complete tests and exact-head smoke as its PR evidence; it is not merged, so C2 is not complete.
+`C2-I` merged as PR #151, `C2-II` merged as PR #152 and `C2-III-A` merged as PR #154; all three are `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III-B — snapshot-backed reports and report documents` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` (PR #157) and is the only remaining C2 runtime slice. It is implemented on its runtime branch, with focused and complete tests and exact-head smoke as its PR evidence; it is not merged, so C2 is not complete.
 
 `CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 and C4 remain inactive. Product release readiness is not claimed.
 
@@ -1095,7 +1095,7 @@ Authorization states:
 
 `C2-III-A` merged as PR #154: reviewed head `ef1103811a8f062f9129bfb465a98e0cfa388935`, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`, exact-head API smoke `PASS — 67 checks / 0 failures` and exact-head browser smoke `PASS — 28 checks / 0 failures`. Full closure evidence: `state/current-focus.md` § *C2-III-A — merged and exact-head verified*.
 
-`C2-III` was subdivided into exactly two runtime slices, as required by ADR 0012. `C2-III-B` is the only remaining C2 runtime slice; it is implemented on its runtime PR branch and is not merged.
+`C2-III` was subdivided into exactly two runtime slices, as required by ADR 0012. `C2-III-B` is the only remaining C2 runtime slice; it is implemented on **PR #157**, branch `codex/c2-iii-b-snapshot-backed-reports`, and is not merged. Merged `main` keeps the pre-`C2-III-B` Reports runtime until PR #157 merges.
 
 ```text
 C2 is not complete in this documentation PR.

@@ -41,7 +41,7 @@ The finance report is an operational snapshot, not accounting or tax filing.
 - Tax is not invented or recalculated by reports, and the current Settings tax rate is never read.
 - Missing sale prices, costs and snapshots are surfaced as warnings.
 
-### Tax snapshots — decided, not implemented
+### Tax snapshots — implemented on PR branch, not merged
 
 `CR-007` decided the workshop tax-rate contract (`docs/settings.md`) and its implementation `C1-I` is **merged and `DONE`** (PR #149, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`). `CR-008` then decided the C2 calculation and snapshot contract (`docs/decisions/0012-c2-financial-calculation-snapshots.md`).
 
@@ -65,7 +65,7 @@ Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED.**
 
 The runtime implementation lives on the `C2-III-B` branch: the pure aggregation in `backend/app/domain/report_financials.py`, the additive `FinanceReportResponse` fields, the `/reports` Overview and Finance presentation in `frontend/src/report-financial-contract.ts` and `frontend/src/report-financial-presentation.ts`, and the newly generated «Сводка мастерской» finance section. The authorized boundary below is unchanged and is what that branch implements.
 
-`C2-III` was a planning umbrella and has been subdivided into exactly two runtime slices. `C2-III-A — Order and ProductionBatch financial presentation` covered Orders readiness and `ProductionBatch` UI, **excluded reports entirely**, and is **merged and `DONE`** (PR #154, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`). `C2-III-B` is the report slice and the only remaining C2 runtime slice. It is **not implemented**, and no future implementation PR number is assigned to it.
+`C2-III` was a planning umbrella and has been subdivided into exactly two runtime slices. `C2-III-A — Order and ProductionBatch financial presentation` covered Orders readiness and `ProductionBatch` UI, **excluded reports entirely**, and is **merged and `DONE`** (PR #154, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`). `C2-III-B` is the report slice and the only remaining C2 runtime slice. It is **implemented on its PR branch and not merged**: PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`. Merged `main` keeps the pre-`C2-III-B` Reports runtime until PR #157 merges.
 
 Authorized `C2-III-B` boundary — one bounded backend-plus-frontend report vertical:
 
@@ -86,11 +86,13 @@ The affected financial reports read persisted `ProductionBatch` financial snapsh
 
 ### The Phase 0 conflict this resolves
 
+> **HISTORICAL — the conflict record as written during Phase 0.** It is resolved in runtime on the PR #157 branch and still describes merged `main`, which keeps the pre-`C2-III-B` Reports runtime until PR #157 merges. The accepted answer it points to is the contract in the rest of this section, which is unchanged.
+
 ```text
 C2-III-B — BLOCKED BY REPORT AGGREGATION CONTRACT CONFLICT
 ```
 
-The current implementation derives margin from paired `sale_price` and `total_cost`, while the authorized `C2-III-B` contract requires reports to read persisted `ProductionBatch.tax` and `ProductionBatch.margin` snapshots **only**. Under the old implementation the paired sale/cost row set and the persisted-margin row set were the same set, so "the same basis as `known_margin`" was unambiguous. Under snapshot-backed aggregation they are **not** the same set: a batch may carry a known sale price and a known total cost while its `tax` and `margin` snapshots are `null` — which is the normal state of every pre-`C2-II` row, because there was no backfill. The paired phrase and the "same basis as `known_margin`" phrase therefore pointed at two different denominators, and the incomplete-data counters could no longer stay truthful under either reading. This section defines the single accepted answer.
+The pre-`C2-III-B` implementation derives margin from paired `sale_price` and `total_cost`, while the authorized `C2-III-B` contract requires reports to read persisted `ProductionBatch.tax` and `ProductionBatch.margin` snapshots **only**. Under the old implementation the paired sale/cost row set and the persisted-margin row set were the same set, so "the same basis as `known_margin`" was unambiguous. Under snapshot-backed aggregation they are **not** the same set: a batch may carry a known sale price and a known total cost while its `tax` and `margin` snapshots are `null` — which is the normal state of every pre-`C2-II` row, because there was no backfill. The paired phrase and the "same basis as `known_margin`" phrase therefore pointed at two different denominators, and the incomplete-data counters could no longer stay truthful under either reading. This section defines the single accepted answer.
 
 ### 1. Authoritative row sets
 
