@@ -5,7 +5,9 @@ Status: evolving implementation contract. Existing implemented areas have backen
 
 ## Settings status
 
-`GET /api/settings/status` returns the read-only Settings status foundation. It reports local-first app information, local data separation, safe workflow capabilities, and a Settings Decision Matrix. The endpoint is deterministic and read-only: it does not create files, mutate business data, persist settings, run migrations, trigger backup/export/import/demo/report-document actions, or regenerate alerts/purchases. PR96 marks only workshop profile fields as `editable_now`; calculation-sensitive settings remain closed.
+`GET /api/settings/status` returns the read-only Settings status foundation. It reports local-first app information, local data separation, safe workflow capabilities, and a Settings Decision Matrix. The endpoint is deterministic and read-only: it does not create files, mutate business data, persist settings, run migrations, trigger backup/export/import/demo/report-document actions, or regenerate alerts/purchases.
+
+**Current editable set on merged `main`.** The Workshop profile fields — `workshop_name`, `master_name`, `workshop_contact_text`, `workshop_note` — are `editable_now`, and so is `default_tax_rate`. `default_tax_rate` is the **only calculation-sensitive setting that is currently editable**; it became editable with the merged `C1-I` slice (PR #149) and it never recalculates historical data. Every other calculation-sensitive setting — currency display, target margin, default low-stock threshold, expiry warning days, default measurement units — remains `requires_backend_rules` and stays closed until it has its own separately accepted backend rules. *(Historical note: `PR96` originally made only the Workshop profile editable; that was the state before `C1-I` merged and is no longer the current contract.)*
 
 Standard error shape includes `code`, `message`, `user_message`, and `details`. Planned sections: health, settings, onboarding, clients, recipes, inventory, orders, production, alerts, purchases, imports, exports, backups, reports, audit logs.
 
@@ -39,7 +41,7 @@ Response summary:
 - `blocking_issues` and `warnings` with stable `code`, severity, human-readable `message`, optional `field`, `entity_type`, and `entity_id`;
 - ingredient requirement lines with required quantity, available quantity, missing quantity, FEFO-selected lots, and line warnings;
 - packaging availability lines when the order has selected packaging;
-- optional `estimated_cost` when existing unit costs support it; `estimated_tax` and `estimated_margin` stay `null` until explicit tax settings/snapshots exist.
+- optional `estimated_cost` when existing unit costs support it; `estimated_tax` and `estimated_margin` are still `null` on merged `main`. **The explicit tax-rate setting already exists and is editable** (`default_tax_rate`, merged `C1-I` / PR #149) — readiness simply does not read it yet. `estimated_tax` and `estimated_margin` stay `null` until `C2-I` is implemented; production tax snapshots stay absent until `C2-II` is implemented.
 
 Read-only boundary:
 
@@ -59,6 +61,14 @@ HTTP boundaries:
 A blocked readiness DTO is not a request failure. Conversely, a transport or HTTP failure is not a valid blocked-readiness result and must be presented separately by clients.
 
 Current limitations: the Orders frontend presents this read-only check, but the readiness operation itself does not confirm production, reserve stock, write off ingredients or packaging, create a `ProductionBatch`, generate or mutate alerts or purchase suggestions, or change the Order lifecycle status.
+
+**Financial limitation, stated precisely.** The default tax-rate setting **exists and is editable** on merged `main` (`GET`/`PUT /api/settings/tax-rate`, key `default_tax_rate`, merged `C1-I` / PR #149). Production readiness nevertheless still returns `estimated_tax = null` and `estimated_margin = null`, because readiness does not read the setting yet. The three lifecycle states are distinct:
+
+| Layer | Status |
+|---|---|
+| C1 tax-rate setting | **IMPLEMENTED** and merged (PR #149) |
+| C2-I readiness tax / margin / margin-percent calculation | `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED` |
+| C2-II `ProductionBatch` rate snapshots | `PLANNED — BLOCKED` |
 
 ### Financial estimate extension — `C2-I`
 
@@ -127,6 +137,19 @@ Readiness warning codes. The existing codes are **preserved and never renamed**,
 
 All five are **non-blocking warnings** carried by the existing `ProductionReadinessIssue` structure. They never change `can_produce`, which stays governed by recipe/formula readiness, stock, lots, packaging, order lifecycle, and the existing physical safety rules. An invalid persisted rate must not produce an unhandled `500`.
 
+#### No valid configured tax-rate context
+
+Two distinct backend states share one authoritative financial outcome:
+
+| Backend state | Readiness warning | `tax_rate_percent` | `tax_rate_effective_at` | `financial_estimate_status` | Tax / margin / margin % |
+|---|---|---|---|---|---|
+| no `default_tax_rate` row | `tax_rate_missing` | `null` | `null` | `unavailable` | `null` |
+| row exists but the persisted value is invalid | `tax_rate_invalid` | `null` | `null` | `unavailable` | `null` |
+
+Together these are **`no valid configured tax-rate context`**. The two states stay distinguishable through the warning code, and the invalid case must **not** also emit `tax_rate_missing`. Physical production remains non-blocked in both.
+
+The raw invalid persisted value must never be returned as the authoritative rate, and must never be normalized, coerced, rounded, treated as zero, copied into a readiness DTO, copied into a confirmation request, or copied into a `ProductionBatch` snapshot.
+
 `C2-I` performs no persistence write, creates no `AuditLog`, changes no Order, `ProductionBatch`, stock movement, packaging movement, or report, and adds no migration.
 
 ## Production confirmation
@@ -149,7 +172,7 @@ Safety rules:
 - Blocking readiness issues return `409`; the operation does not create a production batch and does not write off stock.
 - Cancelled, archived/inactive, delivered, already produced orders, and orders that already have a production batch return `409`.
 - The operation is transactional: production batch snapshot rows, ingredient write-off movements, packaging write-off movements, order status update, and audit log are committed together or rolled back together.
-- The endpoint does not use a hidden default tax rate. `tax`, `margin`, and `margin_percent` remain `null` until explicit tax snapshot infrastructure exists.
+- The endpoint does not use a hidden default tax rate. The `default_tax_rate` setting exists and is editable on merged `main`, but confirmation does not read it: `tax`, `margin`, and `margin_percent` remain `null` until `C2-II` adds the snapshot infrastructure.
 
 Successful response contains the historical production snapshot:
 
@@ -199,7 +222,29 @@ Status: **PLANNED — BLOCKED** on merged and verified `C2-I`. Decided as `CR-00
 }
 ```
 
-Only two value pairs are valid: a canonical decimal string with an ISO-8601 UTC timestamp, or explicit `null` with explicit `null` when readiness observed a genuinely unconfigured setting. The frontend passes the pair from the latest confirmed readiness response without calculating, normalizing, altering, or inventing any part of it.
+Only two value pairs are valid:
+
+1. **Valid configured context** — a canonical two-decimal percentage string plus a canonical UTC timestamp:
+
+```json
+{
+  "expected_tax_rate_percent": "6.00",
+  "expected_tax_rate_effective_at": "2026-07-27T19:44:53Z"
+}
+```
+
+2. **No-valid-rate context** — explicit `null` and explicit `null`:
+
+```json
+{
+  "expected_tax_rate_percent": null,
+  "expected_tax_rate_effective_at": null
+}
+```
+
+`null/null` means **"the latest readiness result observed no valid configured tax rate"**. That covers **both** a missing setting row **and** an invalid persisted setting. It does **not** mean only that the row is absent.
+
+The frontend passes the pair from the latest confirmed readiness response without calculating, normalizing, altering, or inventing any part of it.
 
 **Omitting a key is not equivalent to explicit `null/null`.** Omission means an invalid or outdated client contract.
 
@@ -210,11 +255,49 @@ Validation, rejected with HTTP `422` **before any production transaction writes*
 | either key is omitted | `tax_rate_context_required` |
 | exactly one of the two values is `null` | `invalid_tax_rate_context` |
 | the percentage is malformed, non-canonical, out of range, or not a string | `invalid_tax_rate_context` |
-| the timestamp is malformed or not accepted ISO-8601 UTC | `invalid_tax_rate_context` |
+| the timestamp is malformed or not the canonical `YYYY-MM-DDTHH:MM:SSZ` form | `invalid_tax_rate_context` |
 
-**Stale conflict.** When the expected context differs from the current backend-owned tax context read inside the transaction — configured → changed, configured → cleared, or unconfigured → configured — confirmation returns HTTP `409` with the stable code `tax_rate_context_stale` and a safe Russian message equivalent to `Налоговая ставка изменилась. Обновите готовность и подтвердите производство ещё раз.` The client must refresh readiness and confirm again, and must not retry automatically.
+**Stale conflict.** Inside the transaction the backend reduces the current tax setting to one of two comparable canonical contexts — a **valid context** (canonical percentage + canonical API timestamp) or a **no-valid-rate context** (`null` + `null`, covering both missing and invalid) — and compares it with the expected context:
+
+| Expected context | Current backend context | Result |
+|---|---|---|
+| same valid pair | same valid pair | continue |
+| valid pair | different valid pair | `409 tax_rate_context_stale` |
+| valid pair | missing | `409 tax_rate_context_stale` |
+| valid pair | invalid | `409 tax_rate_context_stale` |
+| `null/null` | valid pair | `409 tax_rate_context_stale` |
+| `null/null` | missing | continue |
+| `null/null` | invalid | continue |
+
+So: valid → changed valid, valid → missing, valid → invalid, and missing-or-invalid → valid are all stale conflicts, while **missing → invalid and invalid → missing are not**. Missing and invalid deliberately share one confirmation context because they produce exactly the same financial result: no rate snapshot, no tax, no margin, no margin percent. No third request field and no generic financial-context token is introduced by this decision.
+
+The `409` carries a safe Russian message equivalent to `Налоговая ставка изменилась. Обновите готовность и подтвердите производство ещё раз.` The client must refresh readiness and confirm again, and must not retry automatically.
 
 A `422` validation rejection and a `409` stale conflict both write **nothing**: no `ProductionBatch`, no financial snapshot, no stock movement, no packaging movement, no Order mutation, and no production audit.
+
+**Accepted no-valid-rate confirmation.** When the current backend state is missing or invalid and the expected context is `null/null`, physical production continues and the batch persists `tax_rate_percent_snapshot = null`, `tax_rate_effective_at_snapshot = null`, `tax = null`, `margin = null`, `margin_percent = null`. The actual authoritative production cost and every other physical snapshot are written normally. An invalid raw setting value stays untouched in `app_settings`: confirmation must not repair, clear, rewrite, or audit a setting mutation, must not persist the invalid value into `ProductionBatch`, and must not treat it as `0.00`. The normal existing production audit still belongs to the transactional production flow.
+
+**An absent or invalid tax-rate setting may make financial values unavailable, but it must not by itself block physical production.**
+
+#### Timestamp contract
+
+**Database persistence** — the existing `AppSetting.updated_at` convention, and the same convention for the future `tax_rate_effective_at_snapshot` column:
+
+```text
+YYYY-MM-DD HH:MM:SS
+```
+
+UTC, second precision, SQLite text, no `T`, no `Z`, no timezone offset.
+
+**API and confirmation-context representation** — `effective_at`, readiness `tax_rate_effective_at`, `expected_tax_rate_effective_at`, and the exposed snapshot:
+
+```text
+YYYY-MM-DDTHH:MM:SSZ
+```
+
+UTC, second precision, literal `T`, literal `Z`. Not accepted and not documented: local-time values, arbitrary offsets such as `+03:00`, fractional seconds, a space instead of `T`, a missing `Z`, or user-generated timestamps. `expected_tax_rate_effective_at` must be either `null` or the **exact** canonical timestamp previously returned by readiness. A malformed or non-canonical request timestamp is rejected with HTTP `422` and `invalid_tax_rate_context`.
+
+The API must never expose the raw SQLite storage representation: the confirmation response and the `ProductionBatch` detail response normalize `tax_rate_effective_at_snapshot` to the canonical `YYYY-MM-DDTHH:MM:SSZ` form. No backfill is authorized.
 
 **Response exposure boundary.** `C2-II` adds `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot` to the production confirmation response and to the `ProductionBatch` **detail** response, so the persisted snapshot is verifiable in that slice. It does **not** add them to the `ProductionBatch` list response, to report read models, or to report UI — those surfaces remain `C2-III` scope. The existing `sale_price`, `total_cost`, `tax`, `margin`, and `margin_percent` fields are reused; no duplicate alias is created.
 

@@ -51,6 +51,7 @@ The durable **report snapshot-only rule**, binding once `C2-II` persists snapsho
 - a production batch without tax snapshots shows unavailable / `Недоступно` and is **never** shown as a fabricated `0.00`;
 - the current rate is never applied retroactively to a historical row;
 - an explicitly configured `0%` rate is a real value and is **not** the same as an unconfigured rate — configured zero and missing must remain visually and semantically distinct;
+- a batch produced while there was **no valid configured tax-rate context** — a missing setting row **or** an invalid persisted value — carries null rate snapshots and null tax, margin, and margin percent, and reports show those as unavailable; a raw invalid setting value is never stored on a batch and therefore never appears in a report;
 - only existing report read models that already contain cost, revenue, tax, margin, or margin percent are updated;
 - no advanced analytics, tax declaration, accounting report, tax-regime reporting, or annual/quarterly filing calculation is added.
 

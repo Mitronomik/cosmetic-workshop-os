@@ -1190,6 +1190,40 @@ Readiness reuses `estimated_cost`, `estimated_tax`, and `estimated_margin` and a
 
 Durable contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`. Slice contracts: `docs/implementation-plan.md` § 11.
 
+### Second commit — `Resolve C2 documentation contradictions`
+
+The first commit established the C2 contract. Review found five remaining active contradictions and one incomplete lifecycle, closed by a second commit on the same branch — no amend, no rebase, no force-push, no new PR.
+
+1. **ADR 0011 corrected directly.** `docs/decisions/0011-tax-rate-setting.md` joined the allowlist as the fifteenth file and now records `C1-I` as `DONE — MERGED AND EXACT-HEAD VERIFIED` with PR #149's head, merge commit, merge time, and smoke result. The accepted `CR-007` product meaning is unchanged and not reopened. ADR 0012's superseding note became a short lifecycle relationship note.
+2. **API Settings status** now says the Workshop profile **and** `default_tax_rate` are editable, that `default_tax_rate` is the only editable calculation-sensitive setting, and that the rest stay closed. The PR96 wording survives only as an explicit historical note.
+3. **API readiness limitation** no longer claims the explicit tax setting is absent; the setting exists and readiness simply does not read it yet.
+4. **Implementation-plan current baseline** is now `ff7afe6b0778ab2b348229a4df34acf3e3fc0001` (PR #149 merge commit). The PR #141 baseline `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa` survives only under an explicit `HISTORICAL RECORD` heading.
+5. **Implementation-plan active state and MVP obligations** now say `C2-I` becomes the only authorized runtime slice after PR #150 merges, and split the old ambiguous tax row into a **closed** tax-rate-setting obligation and an **open** cost/tax/margin C2 obligation.
+
+### Invalid persisted tax-rate lifecycle — completed contract
+
+The gap the first commit left: readiness treated an invalid persisted rate as unavailable and non-blocking, but confirmation allowed `null/null` only for a genuinely missing setting — so an invalid rate would have made the confirmation context impossible to build and would have indirectly blocked physical production.
+
+**`no valid configured tax-rate context`** now means either a missing `default_tax_rate` row or a persisted value that is invalid under the C1 rules.
+
+- The two states stay distinguishable by warning: `tax_rate_missing` versus `tax_rate_invalid`, and the invalid case never also emits `tax_rate_missing`.
+- Both return `tax_rate_percent = null` and `tax_rate_effective_at = null`, both give `financial_estimate_status = unavailable` with null tax, margin, and margin percent, both avoid an unhandled HTTP 500, and **neither blocks physical production**.
+- Both map to the single `null/null` confirmation context. Omitting a key is still `422 tax_rate_context_required`; a partial-null, malformed, non-canonical, or out-of-range context is still `422 invalid_tax_rate_context`.
+- Stale matrix: valid → changed valid, valid → missing, valid → invalid, missing → valid, and invalid → valid are all `409 tax_rate_context_stale`. **Missing ↔ invalid is not**, because both produce the same financial result.
+- An accepted no-valid-rate confirmation persists null rate snapshots and null tax, margin, and margin percent while completing physical production transactionally. It never repairs, clears, rewrites, or audits the invalid setting, and never persists the raw invalid value.
+- Invariant, now stated in ADR 0012, the API, the domain model, the implementation plan, the architecture, and `AGENTS.md`: an absent or invalid tax-rate setting may make financial values unavailable, but it must not by itself block physical production.
+
+### Exact timestamp contract
+
+| Surface | Format |
+|---|---|
+| database persistence (`AppSetting.updated_at`, future `tax_rate_effective_at_snapshot`) | `YYYY-MM-DD HH:MM:SS` — UTC, second precision, SQLite text, no `T`, no `Z`, no offset |
+| API and confirmation context | `YYYY-MM-DDTHH:MM:SSZ` — UTC, second precision, literal `T` and `Z` |
+
+Local time, arbitrary offsets, fractional seconds, a space instead of `T`, and a missing `Z` are rejected with `422 invalid_tax_rate_context`. `expected_tax_rate_effective_at` must be `null` or the exact canonical timestamp readiness returned. The API normalizes the stored snapshot and never exposes the raw SQLite form. No backfill.
+
+21 additional future `C2-II` test requirements covering this lifecycle and these formats are recorded in `docs/implementation-plan.md` § 11. They are `NOT IMPLEMENTED` and were `NOT EXECUTED` here.
+
 ### Next operator instructions
 
 1. Review and merge this documentation PR. Do **not** merge it automatically and do not enable auto-merge.

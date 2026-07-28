@@ -20,7 +20,7 @@ Authorization state of each slice:
 
 Nothing in this ADR is implemented on `main`. No migration exists, no snapshot column exists, no tax or margin is calculated, and reports contain no snapshot logic.
 
-**Superseding note for ADR 0011.** The status line of `docs/decisions/0011-tax-rate-setting.md` was written before PR #149 merged and still describes `C1-I` as implemented on its PR branch with the exact-head `/settings` smoke outstanding. That sentence is a **historical pre-merge record**. The current state is authoritative here: `C1-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #149, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged `2026-07-27T19:44:53Z`, exact-head `/settings` smoke `PASS — 146 checks / 0 failures`). The `CR-007` product decision recorded in ADR 0011 is unchanged and is not reopened.
+**Relationship to ADR 0011.** ADR 0011 remains the authoritative C1 tax-setting decision and now records `C1-I` as merged and verified — PR #149, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged `2026-07-27T19:44:53Z`, exact-head `/settings` smoke `PASS — 146 checks / 0 failures`. ADR 0012 does not reopen `CR-007`; it defines the C2 calculation, confirmation-context, and snapshot contract.
 
 **Naming refinement over ADR 0011.** While `CR-007` was being decided, the stale-setting conflict was described illustratively as "a structured conflict such as `financial_settings_changed`". `CR-008` fixes the exact stable code as `tax_rate_context_stale` with HTTP `409`. This is a naming decision inside the boundary `CR-007` explicitly assigned to C2; no `CR-007` semantics change.
 
@@ -152,6 +152,39 @@ A defensive local-first data-corruption case, not a normal API flow. `C1-I` vali
 - do not convert the readiness request into an unhandled HTTP `500`;
 - do not block physical production because of it.
 
+### No valid configured tax-rate context
+
+**`no valid configured tax-rate context`** is either of two backend states:
+
+1. no `default_tax_rate` row exists; or
+2. the persisted `default_tax_rate` value exists but is invalid and cannot be safely interpreted as the canonical C1 percentage.
+
+The two states stay **distinguishable through readiness warnings** but produce **the same authoritative financial context**:
+
+| Backend state | Readiness warning | `tax_rate_percent` | `tax_rate_effective_at` | Status | Tax / margin / margin % | Physical production |
+|---|---|---|---|---|---|---|
+| row absent | `tax_rate_missing` | `null` | `null` | `unavailable` | `null` | not blocked |
+| value invalid | `tax_rate_invalid` | `null` | `null` | `unavailable` | `null` | not blocked |
+
+The invalid case must **not** also emit `tax_rate_missing`, and must not produce an unhandled HTTP `500`.
+
+The raw invalid persisted value must never be returned as the authoritative rate, and must never be normalized, coerced, rounded, treated as zero, copied into a readiness DTO, copied into a confirmation request, or copied into a `ProductionBatch` snapshot.
+
+This is the reason the confirmation context in `C2-II` uses a single `null/null` pair for both states: readiness cannot express an invalid rate as an authoritative value, so requiring a distinct confirmation context for it would make the request impossible to construct and would indirectly block physical production — which the physical-production invariant forbids.
+
+### Exact timestamp contract
+
+| Surface | Canonical format |
+|---|---|
+| database persistence — `AppSetting.updated_at`, future `tax_rate_effective_at_snapshot` | `YYYY-MM-DD HH:MM:SS` |
+| API and confirmation context — `effective_at`, readiness `tax_rate_effective_at`, `expected_tax_rate_effective_at`, exposed snapshot | `YYYY-MM-DDTHH:MM:SSZ` |
+
+Storage is UTC, second precision, SQLite text, with no `T`, no `Z`, and no offset, following the existing C1 storage convention. The API form is UTC, second precision, with a literal `T` and a literal `Z` — for example `2026-07-27T19:44:53Z`.
+
+Not accepted and not documented anywhere in C2: local-time values, arbitrary offsets such as `+03:00`, fractional seconds, a space instead of `T`, a missing `Z`, or user-generated timestamps. `expected_tax_rate_effective_at` must be either `null` or the **exact** canonical timestamp previously returned by readiness; anything else is HTTP `422` with `invalid_tax_rate_context`.
+
+The API must never expose the raw SQLite storage representation. The confirmation response and the `ProductionBatch` detail response normalize `tax_rate_effective_at_snapshot` to the canonical `Z` form. No backfill is authorized.
+
 ### Preserved warning-code semantics
 
 Financial warnings are **non-blocking** and use the existing readiness warning mechanism and the existing `ProductionReadinessIssue` response structure. No parallel warning system is created.
@@ -184,6 +217,15 @@ Existing codes are not renamed. Aliases such as `tax_rate_unconfigured`, `sale_p
 ### Physical-production non-blocking rule
 
 `can_produce` remains governed exclusively by recipe and formula readiness, stock, lots, packaging, order lifecycle, and the existing physical-production safety rules. No financial condition — missing rate, missing sale price, missing cost, zero sale price, invalid persisted rate, or negative margin — may become a physical production blocker.
+
+Stated as an invariant that binds readiness **and** confirmation:
+
+```text
+An absent or invalid tax-rate setting may make financial values unavailable,
+but it must not by itself block physical production.
+```
+
+This invariant is why `C2-II` maps both a missing and an invalid setting to the single `null/null` confirmation context. Requiring a distinct confirmation context for an invalid rate would make the request impossible to construct — readiness never exposes an invalid value as an authoritative rate — and would therefore block physical production indirectly.
 
 ### Existing readiness API mapping
 
@@ -218,12 +260,14 @@ The future production-confirmation request must **always** contain both keys:
 
 They are **required but nullable**, and the request schema declares them **without default values**. Exactly two value pairs are allowed:
 
-1. configured context — a canonical decimal string plus an ISO-8601 UTC timestamp;
-2. unconfigured context — explicit `null` and explicit `null`.
+1. **valid configured context** — a canonical two-decimal percentage string plus the canonical `YYYY-MM-DDTHH:MM:SSZ` timestamp;
+2. **no-valid-rate context** — explicit `null` and explicit `null`.
+
+`null/null` means **"the latest readiness result observed no valid configured tax rate"**. That covers **both** a missing setting row **and** an invalid persisted setting; it does not mean only that the row is absent.
 
 The frontend passes the pair from the latest confirmed readiness response. It must not calculate the percentage, normalize it independently, alter it, invent a timestamp, or reuse an older readiness result after it has become stale.
 
-Omitted keys are **not** equivalent to explicit `null/null`. Omission means an invalid or outdated client contract; explicit `null/null` means readiness observed a genuinely unconfigured setting.
+Omitted keys are **not** equivalent to explicit `null/null`. Omission means an invalid or outdated client contract; explicit `null/null` means readiness observed no valid configured tax rate.
 
 ### Confirmation validation rules (`C2-II`)
 
@@ -234,7 +278,7 @@ Reject with HTTP `422`, **before any production transaction writes**:
 | either key is omitted | `tax_rate_context_required` |
 | exactly one of the two values is `null` | `invalid_tax_rate_context` |
 | the percentage is malformed, non-canonical, out of range, or not a string | `invalid_tax_rate_context` |
-| the timestamp is malformed or not accepted ISO-8601 UTC | `invalid_tax_rate_context` |
+| the timestamp is malformed or not the canonical `YYYY-MM-DDTHH:MM:SSZ` form | `invalid_tax_rate_context` |
 
 A rejected context produces no `ProductionBatch`, no stock movement, no packaging movement, no Order mutation, no financial snapshot, and no production audit.
 
@@ -256,14 +300,33 @@ If the repository implementation proves this exact extension unsafe or incompati
 
 ### Stale tax-context rule (`C2-II`)
 
-Inside the transaction, compare `expected_tax_rate_percent` and `expected_tax_rate_effective_at` with the current backend-owned tax context. When they differ:
+Inside the transaction, reduce the current backend state to one of exactly two comparable canonical contexts:
+
+- **valid context** — canonical percentage + canonical API timestamp;
+- **no-valid-rate context** — `null` + `null`, produced by a missing row **and** by an invalid persisted value alike.
+
+Then compare with the expected context:
+
+| Expected context | Current backend context | Result |
+|---|---|---|
+| same valid pair | same valid pair | continue |
+| valid pair | different valid pair | `409 tax_rate_context_stale` |
+| valid pair | missing | `409 tax_rate_context_stale` |
+| valid pair | invalid | `409 tax_rate_context_stale` |
+| `null/null` | valid pair | `409 tax_rate_context_stale` |
+| `null/null` | missing | continue |
+| `null/null` | invalid | continue |
+
+Transitions: valid → changed valid, valid → missing, valid → invalid, missing → valid, and invalid → valid are all stale conflicts. **Missing → invalid and invalid → missing are not**, because both states produce exactly the same financial result — no rate snapshot, no tax, no margin, no margin percent — so there is nothing for the user to re-review.
+
+On a stale conflict:
 
 - return HTTP `409` with the stable error code `tax_rate_context_stale`;
 - return a safe Russian message equivalent to `Налоговая ставка изменилась. Обновите готовность и подтвердите производство ещё раз.`;
 - create no `ProductionBatch`, write no movements, change no Order, write no financial snapshot, write no production audit;
 - do not retry automatically.
 
-Explicit `null/null` is a valid expected context only while the setting remains unconfigured. All transitions are detected: configured → changed, configured → cleared, and cleared or unconfigured → configured.
+No third request field and no generic financial-context token is introduced by this decision. A future decision may introduce a richer state token only if product evidence shows it is necessary.
 
 The stale check protects the **editable tax setting only**. `C2-II` still recomputes the current authoritative sale price, the current authoritative physical readiness, and the actual production cost inside the backend transaction. A generic opaque token, a second global versioning system, or a frontend-generated context hash requires a new accepted decision.
 
@@ -275,11 +338,15 @@ The existing `ProductionBatch` fields `sale_price`, `total_cost`, `tax`, `margin
 
 Missing financial inputs at confirmation time persist honestly:
 
-- missing rate → both rate snapshots `null`, `tax`, `margin`, and `margin_percent` all `null`;
-- missing sale price → the rate snapshots preserve the actual configured or unconfigured context, and `tax`, `margin`, and `margin_percent` are `null`;
-- unavailable total cost → the rate snapshots preserve the actual current context, `tax` may be persisted when the sale price and rate exist, and `margin` and `margin_percent` are `null`;
+- **no valid configured tax-rate context** — a missing row **or** an invalid persisted value → both rate snapshots `null`, and `tax`, `margin`, and `margin_percent` all `null`;
+- missing sale price → the rate snapshots preserve the actual current context, and `tax`, `margin`, and `margin_percent` are `null`;
+- unavailable total cost → the rate snapshots preserve the actual current context, `tax` may be persisted when the sale price and a valid rate exist, and `margin` and `margin_percent` are `null`;
 - configured `0.00` → `tax_rate_percent_snapshot = "0.00"`, a non-null effective timestamp, and `tax = "0.00"`;
 - an invalid persisted rate must not be used to calculate or persist tax or margin, and must never be silently converted to zero.
+
+When the current backend state is missing or invalid and the expected context is `null/null`, physical production continues: the actual authoritative production cost and every other physical production snapshot are written normally, alongside the five `null` financial values.
+
+An invalid raw setting value stays untouched in `app_settings`. Production confirmation must not repair the setting, clear the setting, rewrite the setting, audit a setting mutation, persist the invalid value into `ProductionBatch`, or treat the invalid value as `0.00`. The normal existing production audit still belongs to the transactional production flow.
 
 ### C2-II API exposure boundary
 

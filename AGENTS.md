@@ -531,7 +531,8 @@ Warnings and blocking:
 
 - Financial warnings are **non-blocking** and use the existing production-readiness warning mechanism and the existing `ProductionReadinessIssue` structure. Do not create a parallel warning system.
 - The existing codes `tax_rate_missing`, `sale_price_missing`, and `cost_data_missing` are preserved and never renamed. `CR-008` adds only `margin_percent_unavailable_zero_sale_price` and `tax_rate_invalid`. Do not introduce aliases and do not emit two warnings for one semantic condition.
-- `can_produce` is governed only by recipe/formula readiness, stock, lots, packaging, order lifecycle, and existing physical safety rules. A financial gap never blocks physical production.
+- A missing setting row and an invalid persisted value together form **`no valid configured tax-rate context`**. They stay distinguishable by warning code — `tax_rate_missing` versus `tax_rate_invalid`, and the invalid case must not also emit `tax_rate_missing` — but both return `tax_rate_percent = null` and `tax_rate_effective_at = null`, leave tax, margin, and margin percent unavailable, and must not produce an unhandled HTTP `500`. The raw invalid value is never returned as the authoritative rate and never reaches a readiness DTO, a confirmation request, or a `ProductionBatch` snapshot.
+- `can_produce` is governed only by recipe/formula readiness, stock, lots, packaging, order lifecycle, and existing physical safety rules. A financial gap never blocks physical production. **An absent or invalid tax-rate setting may make financial values unavailable, but it must not by itself block physical production.**
 
 History and ownership:
 
@@ -542,7 +543,8 @@ History and ownership:
 Slice boundaries (`CR-008`):
 
 - C2 is split into `C2-I` (backend readiness estimate), `C2-II` (transactional snapshots), and `C2-III` (presentation and snapshot-backed reports).
-- The required-but-nullable confirmation tax context — `expected_tax_rate_percent` and `expected_tax_rate_effective_at`, where omission is **not** the same as explicit `null/null` — belongs to `C2-II`.
+- The required-but-nullable confirmation tax context — `expected_tax_rate_percent` and `expected_tax_rate_effective_at`, where omission is **not** the same as explicit `null/null` — belongs to `C2-II`. `null/null` means readiness observed **no valid configured tax rate**, covering both a missing row and an invalid persisted value. `409 tax_rate_context_stale` fires on valid → changed valid, valid → missing, valid → invalid, missing → valid, and invalid → valid, but **not** on missing ↔ invalid.
+- Timestamp formats in C2: storage is `YYYY-MM-DD HH:MM:SS` UTC SQLite text (no `T`, no `Z`, no offset); the API and confirmation context use `YYYY-MM-DDTHH:MM:SSZ` (no fractional seconds, no arbitrary offsets). A non-canonical request timestamp is rejected with `422 invalid_tax_rate_context`, and the API never exposes the raw stored form.
 - Throughout C2, `frontend/src/main.ts` may not grow beyond `6399` lines, and the frontend performs no financial arithmetic.
 
 ### 6.7 Production confirmation
