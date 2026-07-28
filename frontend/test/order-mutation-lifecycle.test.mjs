@@ -168,7 +168,7 @@ test('readiness and production request loading ownership is generation-safe', ()
 
 test('production confirmation guard requires current positive readiness and unlocked active order', () => {
   const active = { id: 1, is_active: true, status: 'new', updated_at: '2026-07-19T10:00:00Z' };
-  const ready = { order_id: 1, can_produce: true, status: 'ready' };
+  const ready = { order_id: 1, can_produce: true, status: 'ready', tax_rate_percent: '6.00', tax_rate_effective_at: '2026-07-27T19:44:53Z' };
   assert.equal(canOpenOrderProductionConfirmation(false, active, undefined), false);
   assert.equal(canOpenOrderProductionConfirmation(false, active, { order_id: 1, can_produce: false, status: 'blocked' }), false);
   assert.equal(canOpenOrderProductionConfirmation(false, active, { ...ready, order_id: 2 }), false);
@@ -178,6 +178,11 @@ test('production confirmation guard requires current positive readiness and unlo
   assert.equal(canOpenOrderProductionConfirmation(false, { ...active, is_active: false }, ready), false);
   assert.equal(canOpenOrderProductionConfirmation(true, active, ready), false);
   assert.equal(orderProductionIsClosed({ ...active, status: 'delivered' }), true);
+  // C2-II: an explicit no-rate readiness result may still be confirmed, but a
+  // result that cannot supply the pair at all may not.
+  assert.equal(canOpenOrderProductionConfirmation(false, active, { ...ready, tax_rate_percent: null, tax_rate_effective_at: null }), true);
+  assert.equal(canOpenOrderProductionConfirmation(false, active, { order_id: 1, can_produce: true, status: 'ready' }), false);
+  assert.equal(canOpenOrderProductionConfirmation(false, active, { ...ready, tax_rate_effective_at: null }), false);
 });
 
 test('rapid repeated readiness action starts exactly one POST and owns one honest loading state', () => {
@@ -674,7 +679,12 @@ test('production reconciliation operation blocks same-order writes/readiness whi
   assert.equal(canStartOrderWriteRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, 1, []), true);
 });
 
-test('existing readiness DTO guard tolerates the additive C2-I financial fields without accepting malformed existing ones', () => {
+test('readiness DTO guard now requires the C2-I tax context and still rejects malformed existing fields', () => {
+  // Supersedes the C2-I additive-tolerance assertion. `C2-I` could tolerate a
+  // readiness DTO without the context because nothing consumed it. `C2-II`
+  // sends that exact pair back on confirmation, so a DTO that omits it is an
+  // outdated or untrusted response — not a valid no-rate result — and the guard
+  // must reject it rather than fabricate `null/null`.
   const base = {
     order_id: 1,
     can_produce: true,
@@ -688,7 +698,6 @@ test('existing readiness DTO guard tolerates the additive C2-I financial fields 
     estimated_margin: '78.00',
     generated_at: '2026-07-28T00:00:00Z',
   };
-  // The backend now also sends these five; the existing guard must keep accepting the DTO.
   const withFinancials = {
     ...base,
     sale_price: '200.00',
@@ -697,10 +706,17 @@ test('existing readiness DTO guard tolerates the additive C2-I financial fields 
     estimated_margin_percent: '39.00',
     financial_estimate_status: 'available',
   };
-  assert.equal(productionReadinessDtoIsValid(base, 1), true);
+  assert.equal(productionReadinessDtoIsValid(base, 1), false);
   assert.equal(productionReadinessDtoIsValid(withFinancials, 1), true);
   assert.equal(productionReadinessDtoIsValid({ ...withFinancials, sale_price: null, tax_rate_percent: null, tax_rate_effective_at: null, estimated_margin_percent: null, financial_estimate_status: 'unavailable' }, 1), true);
-  // Additive fields must not have loosened any existing check.
+  // A half-populated or non-canonical pair is never repaired into a usable one.
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, tax_rate_effective_at: null }, 1), false);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, tax_rate_percent: null }, 1), false);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, tax_rate_percent: '6' }, 1), false);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, tax_rate_percent: 6 }, 1), false);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, tax_rate_effective_at: '2026-07-27 19:44:53' }, 1), false);
+  assert.equal(productionReadinessDtoIsValid({ ...withFinancials, tax_rate_effective_at: '2026-07-27T19:44:53+03:00' }, 1), false);
+  // The context requirement must not have loosened any existing check.
   assert.equal(productionReadinessDtoIsValid({ ...withFinancials, estimated_tax: 12 }, 1), false);
   assert.equal(productionReadinessDtoIsValid({ ...withFinancials, estimated_margin: {} }, 1), false);
   assert.equal(productionReadinessDtoIsValid({ ...withFinancials, generated_at: null }, 1), false);

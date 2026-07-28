@@ -1,9 +1,12 @@
+import sqlite3
 from decimal import Decimal
 
 from app.db.config import DatabaseConfig
 from app.db.transactions import transaction
 from app.domain.decimal_utils import quantize_money
 from app.domain.packaging_stock_movements import PackagingStockMovementDraft, PackagingStockMovementType
+from app.domain.production_financials import ProductionFinancialInputs, TaxRateContext, estimate_production_financials
+from app.domain.production_tax_context import ExpectedTaxRateContext
 from app.domain.stock_movements import StockMovementDraft, StockMovementType
 from app.domain.units import UnitCode
 from app.models.order import OrderStatus
@@ -14,6 +17,10 @@ from app.repositories.packaging_stock_movements import PackagingStockMovementRep
 from app.repositories.production_batches import ProductionBatchAlreadyExistsError, ProductionBatchRepository
 from app.repositories.stock_movements import StockMovementRepository
 from app.services.production_readiness import ProductionReadinessLifecycleError, ProductionReadinessService
+from app.services.tax_rate_context import read_tax_rate_context
+from app.services.tax_rate_settings import TaxRateSettingsService
+
+TAX_RATE_CONTEXT_STALE_MESSAGE = "Налоговая ставка изменилась. Обновите готовность и подтвердите производство ещё раз."
 
 
 class ProductionConfirmationRequiredError(ValueError):
@@ -35,6 +42,21 @@ class ProductionConfirmationStaleStateError(ProductionConfirmationLifecycleError
     pass
 
 
+class ProductionConfirmationTaxRateContextStaleError(ValueError):
+    """The tax rate changed between the readiness check and the confirmation.
+
+    Deliberately not a `ProductionConfirmationLifecycleError`: this is its own
+    stable `409 tax_rate_context_stale` outcome, so the client can treat it as a
+    known no-write conflict and refresh readiness instead of reconciling an
+    uncertain production.
+    """
+
+    code = "tax_rate_context_stale"
+
+    def __init__(self, message: str = TAX_RATE_CONTEXT_STALE_MESSAGE) -> None:
+        super().__init__(message)
+
+
 class ProductionConfirmationService:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config
@@ -44,8 +66,24 @@ class ProductionConfirmationService:
         self.stock_movements = StockMovementRepository(config)
         self.packaging_movements = PackagingStockMovementRepository(config)
         self.audit = AuditLogRepository(config)
+        self.tax_rate_settings = TaxRateSettingsService(config)
 
-    def produce_order(self, order_id: int, confirm: bool, notes: str | None = None) -> ProductionBatchDetail:
+    def produce_order(
+        self,
+        order_id: int,
+        confirm: bool,
+        notes: str | None = None,
+        *,
+        expected_tax_rate: ExpectedTaxRateContext,
+    ) -> ProductionBatchDetail:
+        """Produce one order atomically, snapshotting its financial context.
+
+        `expected_tax_rate` is already validated: the request boundary parses it
+        before anything here runs, so a malformed context can never reach a
+        write. It carries the pair the client's latest readiness result
+        returned, and is required — there is no default, because silently
+        assuming `null/null` would hide an outdated client.
+        """
         if confirm is not True:
             raise ProductionConfirmationRequiredError("Для изготовления нужно явно передать confirm=true.")
         order = self.orders.get_by_id(order_id)
@@ -63,6 +101,7 @@ class ProductionConfirmationService:
                 raise ProductionConfirmationStaleStateError("Готовность заказа изменилась перед изготовлением. Запустите проверку готовности ещё раз.")
             if self.batches.exists_for_order(order_id, connection=connection):
                 raise ProductionConfirmationLifecycleError("Заказ уже изготовлен: производственная партия уже существует.")
+            tax_rate = self._current_tax_rate_context(connection, expected_tax_rate)
             readiness = self.readiness.check_order(order_id)
             if not readiness.can_produce or readiness.blocking_issues:
                 messages = "; ".join(issue.message for issue in readiness.blocking_issues) or "Заказ пока нельзя изготовить. Сначала устраните блокирующие замечания проверки."
@@ -98,7 +137,8 @@ class ProductionConfirmationService:
             component_cost_snapshot = quantize_money(component_cost, field="component_cost") if component_cost_known else None
             packaging_cost_snapshot = quantize_money(packaging_cost, field="packaging_cost") if packaging_cost_known else None
             total_cost = quantize_money(component_cost + packaging_cost + other_cost, field="total_cost") if component_cost_known and packaging_cost_known else None
-            batch = self.batches.create_batch(connection=connection, order_id=locked_order.id, recipe_version_id=locked_order.recipe_version_id, client_recipe_id=locked_order.client_recipe_id, final_batch_value=locked_order.target_batch_size_value, final_batch_unit=locked_order.target_batch_size_unit, component_cost=component_cost_snapshot, packaging_cost=packaging_cost_snapshot, other_cost=other_cost, total_cost=total_cost, sale_price=locked_order.sale_price, tax=None, margin=None, margin_percent=None, notes=(notes or "").strip())
+            financials = estimate_production_financials(ProductionFinancialInputs(sale_price=locked_order.sale_price, total_cost=total_cost, tax_rate=tax_rate))
+            batch = self.batches.create_batch(connection=connection, order_id=locked_order.id, recipe_version_id=locked_order.recipe_version_id, client_recipe_id=locked_order.client_recipe_id, final_batch_value=locked_order.target_batch_size_value, final_batch_unit=locked_order.target_batch_size_unit, component_cost=component_cost_snapshot, packaging_cost=packaging_cost_snapshot, other_cost=other_cost, total_cost=total_cost, sale_price=locked_order.sale_price, tax=_money(financials.tax_amount), margin=_money(financials.margin), margin_percent=_money(financials.margin_percent), tax_rate_percent_snapshot=financials.tax_rate_percent, tax_rate_effective_at_snapshot=financials.tax_rate_effective_at, notes=(notes or "").strip())
             for line, selected, lot, unit_cost, line_cost in ingredient_rows:
                 qty = Decimal(selected.selected_quantity)
                 unit = UnitCode(selected.unit)
@@ -112,6 +152,23 @@ class ProductionConfirmationService:
             self.orders.mark_produced(locked_order.id, connection=connection)
             self.audit.create_log(action="production_confirmed", entity_type="production_batch", entity_id=str(batch.id), summary=f"Order #{locked_order.id} produced as batch #{batch.id}", metadata={"order_id": locked_order.id, "production_batch_id": batch.id, "status": "produced", "ingredient_rows": len(ingredient_rows), "packaging_rows": len(packaging_rows)}, connection=connection)
             return self.batches.get_detail(batch.id, connection=connection)
+
+    def _current_tax_rate_context(self, connection: sqlite3.Connection, expected: ExpectedTaxRateContext) -> TaxRateContext:
+        """Read the current rate on this transaction and reject a stale context.
+
+        The read runs on the production transaction's own connection, so no
+        second connection is opened while the write lock is held, and it neither
+        writes nor audits. Missing and invalid both reduce to `null/null`, so
+        moving between those two states is not a conflict; every transition into
+        or out of a valid rate is.
+
+        Raising here happens before the first production write, so a conflict
+        leaves no batch, no movement, no order change, and no audit behind.
+        """
+        current = read_tax_rate_context(self.tax_rate_settings, connection)
+        if current.comparable_pair != expected.pair:
+            raise ProductionConfirmationTaxRateContextStaleError()
+        return current
 
     def _validate_lifecycle(self, order) -> None:
         if not order.is_active or order.status in {OrderStatus.ARCHIVED, OrderStatus.CANCELLED, OrderStatus.PRODUCED, OrderStatus.DELIVERED}:
@@ -131,4 +188,14 @@ class ProductionConfirmationService:
         )
 
 
-__all__ = ["ProductionConfirmationService", "ProductionConfirmationRequiredError", "ProductionConfirmationLifecycleError", "ProductionConfirmationStaleStateError", "ProductionConfirmationReadinessError", "ProductionReadinessLifecycleError", "OrderNotFoundError", "ProductionBatchAlreadyExistsError"]
+def _money(value: str | None) -> Decimal | None:
+    """Carry a calculated decimal string into the repository without re-rounding.
+
+    The domain already rounded each amount exactly once; this only restores the
+    `Decimal` the repository signature expects, so `null` stays `null` and a
+    negative margin stays negative.
+    """
+    return None if value is None else Decimal(value)
+
+
+__all__ = ["ProductionConfirmationService", "ProductionConfirmationRequiredError", "ProductionConfirmationLifecycleError", "ProductionConfirmationStaleStateError", "ProductionConfirmationTaxRateContextStaleError", "ProductionConfirmationReadinessError", "ProductionReadinessLifecycleError", "OrderNotFoundError", "ProductionBatchAlreadyExistsError", "TAX_RATE_CONTEXT_STALE_MESSAGE"]

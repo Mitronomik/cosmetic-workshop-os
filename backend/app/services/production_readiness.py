@@ -6,20 +6,16 @@ from decimal import Decimal
 
 from app.db.config import DatabaseConfig
 from app.domain.decimal_utils import quantize_money, quantize_volume, quantize_weight
-from app.domain.errors import DomainValidationError
 from app.domain.production_financials import (
     FinancialWarningCode,
     ProductionFinancialInputs,
-    TaxRateContext,
     estimate_production_financials,
 )
-from app.domain.tax_rate import parse_tax_rate_percent
 from app.domain.units import UnitCode
 from app.models.order import OrderStatus
 from app.repositories.ingredients import IngredientRepository
 from app.repositories.orders import OrderNotFoundError, OrderRepository
 from app.repositories.packaging_items import PackagingItemNotFoundError, PackagingItemRepository
-from app.repositories.settings import SettingsNotInitializedError
 from app.schemas.production_readiness import (
     ProductionReadinessIngredientLine,
     ProductionReadinessIssue,
@@ -29,6 +25,7 @@ from app.schemas.production_readiness import (
 )
 from app.services.inventory import DEFAULT_EXPIRATION_WINDOW_DAYS, InventoryService
 from app.services.recipe_calculations import RecipeCalculationService
+from app.services.tax_rate_context import read_tax_rate_context
 from app.services.tax_rate_settings import TaxRateSettingsService
 from app.repositories.client_recipes import ClientRecipeRepository
 from app.repositories.recipes import RecipeRepository
@@ -244,34 +241,14 @@ class ProductionReadinessService:
         """
         total_cost = None if ingredient_cost is None or packaging_cost is None else quantize_money(ingredient_cost + packaging_cost, field="estimated_cost")
         estimate = estimate_production_financials(
-            ProductionFinancialInputs(sale_price=order.sale_price, total_cost=total_cost, tax_rate=self._tax_rate_context())
+            ProductionFinancialInputs(
+                sale_price=order.sale_price,
+                total_cost=total_cost,
+                tax_rate=read_tax_rate_context(self.tax_rate_settings),
+            )
         )
         warnings.extend(_financial_issue(code, order.id) for code in estimate.warning_codes)
         return estimate
-
-    def _tax_rate_context(self) -> TaxRateContext:
-        """Read the current rate through the C1 service and re-validate it.
-
-        The C1 Settings repair surface deliberately still returns the stored
-        text for an externally corrupted row so the user can replace it, so
-        `is_configured` alone is not proof that the value is financially
-        authoritative. Anything that does not re-parse as the canonical C1
-        percentage — or that carries no effective timestamp — becomes the C2
-        no-valid-rate context instead of a calculated or fabricated value.
-        """
-        try:
-            state = self.tax_rate_settings.get_tax_rate()
-        except SettingsNotInitializedError:
-            return TaxRateContext.missing()
-        if state.tax_rate_percent is None:
-            return TaxRateContext.missing()
-        try:
-            percent = parse_tax_rate_percent(state.tax_rate_percent)
-        except DomainValidationError:
-            return TaxRateContext.invalid_value()
-        if state.effective_at is None:
-            return TaxRateContext.invalid_value()
-        return TaxRateContext.configured(percent, state.effective_at)
 
 
 def _issue(code, severity, message, field=None, entity_type=None, entity_id=None):

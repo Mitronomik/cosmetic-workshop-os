@@ -1,4 +1,18 @@
 import { clearFieldValidation, type FormValidationState } from './form-validation.js';
+import {
+  batchTaxRateSnapshotsAreValid,
+  isTaxRateContextStaleFailure,
+  readinessTaxRateContextIsValid,
+  TAX_RATE_CONTEXT_STALE_MESSAGE,
+  TAX_RATE_CONTEXT_STALE_NEXT_ACTION,
+} from './order-production-context.js';
+
+// The context module owns the tax-context rules; this module is the order
+// production lifecycle entry point the app already imports from, so the two
+// request-construction helpers are re-exported here rather than adding a second
+// import source at the call site.
+export { productionConfirmRequestBody, taxRateContextFromReadiness } from './order-production-context.js';
+export type { ProductionConfirmRequestBody, ReadinessTaxRateContext } from './order-production-context.js';
 
 export type OrderFormMode = 'create' | 'edit';
 export type OrderSourceType = 'recipe_version' | 'client_recipe';
@@ -75,6 +89,10 @@ export type OrderProductionGuardReadiness = {
   order_id: number;
   can_produce: boolean;
   status: 'ready' | 'blocked' | 'warning';
+  // C2-II: confirmation now requires the readiness tax context, so the guard
+  // reads it from the same result rather than trusting a separate source.
+  tax_rate_percent?: string | null;
+  tax_rate_effective_at?: string | null;
 } | null | undefined;
 
 export type OrderFormErrorOrigin = 'recipe_source' | 'recipe_version_id' | 'client_recipe_id';
@@ -547,6 +565,8 @@ export function productionReadinessDtoIsValid(value: unknown, expectedOrderId: n
     && stringOrNull(payload.estimated_cost)
     && stringOrNull(payload.estimated_tax)
     && stringOrNull(payload.estimated_margin)
+    // C2-II requires the context pair, so a DTO without it is not trusted.
+    && readinessTaxRateContextIsValid(payload)
     && typeof payload.generated_at === 'string',
   );
 }
@@ -608,6 +628,7 @@ export function productionBatchDtoIsValid(value: unknown, expectedOrderId: numbe
     || !stringOrNull(payload.tax)
     || !stringOrNull(payload.margin)
     || !stringOrNull(payload.margin_percent)
+    || !batchTaxRateSnapshotsAreValid(payload)
     || typeof payload.produced_at !== 'string'
     || typeof payload.notes !== 'string'
     || typeof payload.created_at !== 'string'
@@ -634,6 +655,14 @@ export function orderProductionIsClosed(order: OrderProductionGuardOrder): boole
   return !order?.is_active || ['cancelled', 'archived', 'delivered', 'produced'].includes(order.status);
 }
 
+/**
+ * Whether production may be confirmed from this readiness result.
+ *
+ * `C2-II` adds the tax-context requirement here rather than at the request, so
+ * a readiness result that cannot supply the exact pair blocks confirmation in
+ * the UI too. A DTO missing the fields is not treated as a valid no-rate
+ * result, and no `null/null` pair is ever fabricated for it.
+ */
 export function canOpenOrderProductionConfirmation(
   mutationActive: boolean,
   order: OrderProductionGuardOrder,
@@ -644,7 +673,8 @@ export function canOpenOrderProductionConfirmation(
     && typeof order?.id === 'number'
     && readiness?.order_id === order?.id
     && readiness?.can_produce === true
-    && readiness?.status !== 'blocked';
+    && readiness?.status !== 'blocked'
+    && readinessTaxRateContextIsValid(readiness);
 }
 
 export function orderReadinessRequestActive(
@@ -808,6 +838,12 @@ export function productionConfirmationFailurePresentation(failure: ProductionApi
   const safe = safeProductionErrorText(failure.message);
   const next = safeProductionErrorText(failure.nextAction) || 'Обновите заказ и запустите проверку готовности заново.';
   if (failure.status === 409) {
+    // C2-II: a known no-write conflict. Nothing was produced, so this must not
+    // become an uncertain-outcome reconciliation obligation — it only
+    // invalidates the readiness the user confirmed from and asks for a new one.
+    if (isTaxRateContextStaleFailure(failure)) {
+      return { kind: 'business_conflict', message: TAX_RATE_CONTEXT_STALE_MESSAGE, nextAction: safeProductionErrorText(failure.nextAction) || TAX_RATE_CONTEXT_STALE_NEXT_ACTION, invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: false };
+    }
     if (code === 'readiness_changed' || code === 'readiness_blocked') {
       return { kind: 'business_conflict', message: safe || 'Состояние заказа или склада изменилось. Изготовление не выполнено: запустите проверку готовности ещё раз.', nextAction: next, invalidateReadiness: true, closeConfirmation: true, requireRefreshBeforeRetry: false };
     }

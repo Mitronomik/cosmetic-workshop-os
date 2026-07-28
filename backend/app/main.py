@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.alerts import router as alerts_router
 from app.api.backups import router as backups_router
@@ -30,10 +33,44 @@ from app.api.reports import router as reports_router
 from app.api.settings import router as settings_router
 from app.api.stock_movements import router as stock_movements_router
 from app.api.tax_rate_settings import router as tax_rate_settings_router
+from app.domain.production_tax_context import (
+    EXPECTED_EFFECTIVE_AT_FIELD,
+    EXPECTED_PERCENT_FIELD,
+    missing_tax_rate_context_error,
+)
 
 APP_NAME = "cosmetic-workshop-os"
 PRODUCT_NAME = "Мастерская косметолога"
 APP_VERSION = "0.1.0"
+
+TAX_RATE_CONTEXT_BODY_FIELDS = frozenset({EXPECTED_PERCENT_FIELD, EXPECTED_EFFECTIVE_AT_FIELD})
+
+
+def _omits_tax_rate_context(exc: RequestValidationError) -> bool:
+    """Whether this request left out a required production tax-context key."""
+    return any(
+        error.get("type") == "missing"
+        and tuple(error.get("loc", ()))[:1] == ("body",)
+        and tuple(error.get("loc", ()))[-1] in TAX_RATE_CONTEXT_BODY_FIELDS
+        for error in exc.errors()
+    )
+
+
+async def _validation_error_response(request: Request, exc: RequestValidationError):
+    """Give an omitted confirmation tax context the stable structured code.
+
+    An outdated client that omits `expected_tax_rate_percent` or
+    `expected_tax_rate_effective_at` must learn that from the repository's own
+    error contract rather than from raw Pydantic internals. Every other
+    validation error keeps FastAPI's existing response byte for byte.
+    """
+    if not _omits_tax_rate_context(exc):
+        return await request_validation_exception_handler(request, exc)
+    issue = missing_tax_rate_context_error().issue
+    return JSONResponse(
+        status_code=422,
+        content={"detail": {"code": str(issue.code), "message": issue.message, "field": issue.field, "next_action": issue.next_action}},
+    )
 
 
 def create_app() -> FastAPI:
@@ -49,6 +86,7 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "PATCH"],
         allow_headers=["*"],
     )
+    app.add_exception_handler(RequestValidationError, _validation_error_response)
     app.include_router(alerts_router, prefix="/api")
     app.include_router(backups_router, prefix="/api")
     app.include_router(exports_router, prefix="/api")

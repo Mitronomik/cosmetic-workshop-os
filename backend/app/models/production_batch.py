@@ -53,6 +53,13 @@ class ProductionBatch:
     produced_at: str
     notes: str
     created_at: str
+    # The immutable C2-II tax-rate context this batch was produced under. Both
+    # are None together: for a batch produced before C2-II, and for one produced
+    # while no valid tax rate was configured. The timestamp is already the
+    # canonical YYYY-MM-DDTHH:MM:SSZ API form — the repository normalizes it on
+    # read, so the raw SQLite text never leaves the data layer.
+    tax_rate_percent_snapshot: str | None = None
+    tax_rate_effective_at_snapshot: str | None = None
 
 
 @dataclass(frozen=True)

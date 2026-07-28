@@ -2,8 +2,20 @@ from pydantic import BaseModel, Field
 
 
 class ProductionConfirmRequest(BaseModel):
+    """The C2-II production confirmation request.
+
+    Both tax-context keys are **required but nullable**, and are declared with
+    no default: omitting one is an outdated client contract, while explicit
+    `null/null` is the meaningful statement that the client's latest readiness
+    result observed no valid configured tax rate. They are typed as `object`
+    so an off-contract value reaches the domain parser and is rejected with the
+    stable `invalid_tax_rate_context` code, instead of a raw Pydantic error.
+    """
+
     confirm: bool = Field(default=False)
     notes: str | None = None
+    expected_tax_rate_percent: object
+    expected_tax_rate_effective_at: object
 
 
 class ProductionBatchIngredientResponse(BaseModel):
@@ -79,6 +91,11 @@ class ProductionBatchDetailResponse(BaseModel):
     tax: str | None
     margin: str | None
     margin_percent: str | None
+    # C2-II exposes the two rate snapshots here and in the confirmation response
+    # only. They are deliberately absent from `ProductionBatchListItemResponse`
+    # and from every report read model until C2-III.
+    tax_rate_percent_snapshot: str | None
+    tax_rate_effective_at_snapshot: str | None
     produced_at: str
     notes: str
     created_at: str

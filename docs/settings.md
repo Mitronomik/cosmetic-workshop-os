@@ -118,15 +118,23 @@ This section is the durable contract for the single global workshop tax-rate set
 
 The merged slice implements sections 1–4 and 7–12 of this contract: the `GET`/`PUT` endpoints, Decimal-string validation, the canonical two-decimal representation, the backend-generated `effective_at`, explicit Clear as row deletion, the atomic `AuditLog`, the no-op contract, and the `/settings` UI. `default_tax_rate` is `editable_now` in the Settings Decision Matrix.
 
-Sections 5, 6, and the tax/margin calculations in section 8 remain **C2 and unimplemented on `main`**: production readiness still returns `estimated_tax = null` and `estimated_margin = null`, and `ProductionBatch` still has no tax snapshot columns.
+Sections 5, 6, and the tax/margin calculations in section 8 are **C2**. Readiness estimates them on merged `main` (`C2-I`, PR #151); the `ProductionBatch` snapshot columns arrive with `C2-II`.
 
 **C2 consumes this setting; it never changes it.** `CR-008` (ADR `docs/decisions/0012-c2-financial-calculation-snapshots.md`) decided the C2 calculation and snapshot contract and divided C2 into three bounded slices:
 
-- `C2-I` — backend financial readiness estimate: `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED`;
-- `C2-II` — transactional production financial snapshots, including `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot`: `PLANNED — BLOCKED`;
+- `C2-I` — backend financial readiness estimate: **IMPLEMENTED** and merged (PR #151);
+- `C2-II` — transactional production financial snapshots, including `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot`: `IMPLEMENTED ON PR BRANCH — NOT MERGED`;
 - `C2-III` — presentation and snapshot-backed reports: `PLANNED — BLOCKED`.
 
-The current setting is **only ever an input to future calculations**. It never recalculates history: changing or clearing it leaves every completed `ProductionBatch`, report value, prior audit record, and generated document exactly as it was. `C2-II` will snapshot the active rate **and** its effective timestamp onto the `ProductionBatch` at confirmation time, in nullable columns that are never backfilled, and reports will read those snapshots only.
+The current setting is **only ever an input to calculations**. It never recalculates history: changing or clearing it leaves every completed `ProductionBatch`, report value, prior audit record, and generated document exactly as it was. `C2-II` snapshots the active rate **and** its effective timestamp onto the `ProductionBatch` at confirmation time, in nullable columns that are never backfilled, and reports will read those snapshots only.
+
+**Transaction-aware read boundary (`C2-II`).** The C1 service gained exactly one bounded read-only extension:
+
+```python
+TaxRateSettingsService.get_tax_rate(connection: sqlite3.Connection | None = None)
+```
+
+The no-argument call is unchanged and still opens its own short-lived session. When a caller supplies a connection, the service reads `default_tax_rate` through the existing `SettingsRepository` **on that exact connection**, so production confirmation observes the setting inside its own `BEGIN IMMEDIATE` transaction without opening a second connection while the write lock is held. The read performs no write, creates no `AuditLog`, and preserves the C1 validation and canonicalization boundaries. Reducing a setting response to the authoritative C2 context lives in one shared reducer, `backend/app/services/tax_rate_context.py`, used by both readiness and confirmation — there is no second tax-setting service, no raw `AppSetting` parsing inside the confirmation service, and no generic transaction service locator.
 
 Full slice contracts: `docs/implementation-plan.md` § 11. C2 contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
@@ -320,9 +328,9 @@ ProductionBatch snapshot. The existing Settings repair surface may still read
 the stored value so the user can replace or clear it.
 ```
 
-That is why `C2-I` re-validates the percentage returned by `TaxRateSettingsService.get_tax_rate()` through the C1 domain parser instead of trusting `is_configured` alone. This wording narrows an over-broad reading of "never exposed"; it authorizes no change to `GET`/`PUT /api/settings/tax-rate`, whose behavior is unchanged.
+That is why the shared reducer re-validates the percentage returned by `TaxRateSettingsService.get_tax_rate()` through the C1 domain parser instead of trusting `is_configured` alone, for both readiness (`C2-I`) and confirmation (`C2-II`). This wording narrows an over-broad reading of "never exposed"; it authorizes no change to `GET`/`PUT /api/settings/tax-rate`, whose behavior is unchanged.
 
-Timestamps keep the C1 storage convention: `app_settings.updated_at` and the future `tax_rate_effective_at_snapshot` stay `YYYY-MM-DD HH:MM:SS` UTC SQLite text, while `effective_at`, the readiness rate context, and the confirmation context all use `YYYY-MM-DDTHH:MM:SSZ`.
+Timestamps keep the C1 storage convention: `app_settings.updated_at` and `tax_rate_effective_at_snapshot` stay `YYYY-MM-DD HH:MM:SS` UTC SQLite text, while `effective_at`, the readiness rate context, the confirmation context, and the exposed snapshot all use `YYYY-MM-DDTHH:MM:SSZ`. `C2-II` routes every conversion between the two through one boundary, `backend/app/domain/tax_rate_timestamps.py`.
 
 Full contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 

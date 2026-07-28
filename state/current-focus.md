@@ -1,6 +1,6 @@
-# Current focus — C1-I merged and DONE; `CR-008` merged; `C2-I` implemented on an open PR branch
+# Current focus — `C2-I` merged and verified; `C2-II` implemented on an open PR branch
 
-Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and merged (PR #150); `C2-I` implemented on an unmerged PR branch**
+Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` implemented on an unmerged PR branch**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -10,12 +10,12 @@ Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and
 - `CR-007 — C1 workshop tax-rate setting contract`: **ACCEPTED AND IMPLEMENTED**
 - `C1-I — Implement backend-owned tax-rate setting`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #149)
 - `CR-008 — C2 financial estimates and immutable production snapshots`: **ACCEPTED AND MERGED** (PR #150, merge commit `4c03142ef7acdc31fcb15730484e8e52dde95b69`)
-- `C2-I — Backend financial readiness estimate`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
-- `C2-II — Transactional production financial snapshots`: **PLANNED — BLOCKED** on merged and exact-head-verified `C2-I`
-- `C2-III — Financial presentation and snapshot-backed reports`: **PLANNED — BLOCKED**
+- `C2-I — Backend financial readiness estimate`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #151)
+- `C2-II — Transactional production financial snapshots`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
+- `C2-III — Financial presentation and snapshot-backed reports`: **PLANNED — BLOCKED** on merged and exact-head-verified `C2-II`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **One runtime implementation slice is active and unmerged.** `C2-I` is implemented on branch `codex/c2-i-backend-financial-readiness-estimate`, started from merged `origin/main` `4c03142ef7acdc31fcb15730484e8e52dde95b69`. It is not merged, so `C2-II` stays blocked and no PR number is assigned to it.
+- **One runtime implementation slice is active and unmerged.** `C2-II` is implemented on branch `codex/c2-ii-transactional-production-financial-snapshots`, started from merged `origin/main` `7b3dde8278f59658bfa3a81c09e643ea10319551`. It is not merged, so `C2-III` stays blocked and no PR number is assigned to it.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
@@ -62,28 +62,43 @@ Delivered on merged `main`: `GET /api/settings/tax-rate` and `PUT /api/settings/
 - **Reports** read persisted snapshots only, never recalculate history with the current rate, and show old rows as unavailable rather than `0.00`.
 - **Frontend** performs no financial arithmetic, and `frontend/src/main.ts` stays at **at most 6399 lines** throughout C2.
 
-## C2-I — implemented on an unmerged PR branch (2026-07-28)
+## C2-I — merged and exact-head verified (2026-07-28)
 
-`C2-I` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`**. Branch `codex/c2-i-backend-financial-readiness-estimate`, started from merged `origin/main` `4c03142ef7acdc31fcb15730484e8e52dde95b69`. It is **not** `DONE`: nothing is merged and no merge-commit evidence exists.
+`C2-I` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`** (VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE). PR #151, final reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, merged `2026-07-28T04:22:13Z`, exact-head readiness API smoke `PASS — 113 checks / 0 failures`, complete backend suite `737 passed / 0 failed / 0 skipped`. Both the final head and the merge commit are ancestors of `origin/main`.
 
-Delivered on that branch, matching ADR 0012 without reinterpreting it:
+Delivered on merged `main`, matching ADR 0012 without reinterpreting it:
 
 - **One pure domain module**, `backend/app/domain/production_financials.py` — `TaxRateContext`, `ProductionFinancialInputs`, the immutable `ProductionFinancialEstimate`, `FinancialEstimateStatus`, and `FinancialWarningCode`. It opens no connection, reads no repository, imports neither FastAPI nor Pydantic, builds no `ProductionReadinessIssue`, and writes nothing.
-- **Service integration** through `ProductionReadinessService._estimate_financials` and `_tax_rate_context`, replacing the previous `_estimate_money`. The rate is read only through the existing no-argument C1 `TaxRateSettingsService.get_tax_rate()`; the transaction-aware `connection=` extension remains `C2-II` work and was not added.
+- **Service integration** through `ProductionReadinessService._estimate_financials`, replacing the previous `_estimate_money`. As merged, the rate was read only through the existing no-argument C1 `TaxRateSettingsService.get_tax_rate()`, and the transaction-aware `connection=` extension was deliberately left to `C2-II`.
 - **The five additive response fields** — `sale_price`, `tax_rate_percent`, `tax_rate_effective_at`, `estimated_margin_percent`, `financial_estimate_status` — plus activation of the reused `estimated_tax` and `estimated_margin`. `estimated_total_cost` is absent and no field was renamed, removed, or duplicated.
 - **The two new warning codes** only, carried by the existing `ProductionReadinessIssue` structure. All financial warnings stay non-blocking and `can_produce` is untouched.
 - **Invalid-rate re-validation.** Because the C1 Settings repair surface may still return the stored text for an externally corrupted row, `is_configured` alone is not trusted: the returned percentage is re-parsed through the existing C1 `parse_tax_rate_percent`, and anything that fails — or a row with no effective timestamp — becomes the no-valid-rate context with `tax_rate_invalid`, never a raw value, never a fabricated `0.00`, and never an unhandled HTTP `500`.
 - **Read-only.** No migration, no schema change, no persistence write, no `AuditLog`, no `ProductionBatch` change, no report change. `frontend/src/main.ts` is unchanged at exactly `6399` lines and no frontend production source was touched.
 
+## C2-II — implemented on an unmerged PR branch (2026-07-28)
+
+`C2-II` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`**. Branch `codex/c2-ii-transactional-production-financial-snapshots`, started from merged `origin/main` `7b3dde8278f59658bfa3a81c09e643ea10319551`. It is **not** `DONE`: nothing is merged and no merge-commit evidence exists.
+
+Delivered on that branch, matching ADR 0012 without reinterpreting or expanding it:
+
+- **One additive migration**, `0019_production_batch_tax_rate_snapshots`, adding only the two nullable `TEXT` columns `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot` to `production_batches` — no default, no backfill, no table rebuild, no new table, and no duplicate monetary column. Existing rows keep every value and read `NULL` for both.
+- **The bounded transaction-aware read.** `TaxRateSettingsService.get_tax_rate(connection=None)` — the no-argument behavior is unchanged, and a supplied connection reads `default_tax_rate` through the existing `SettingsRepository` on that exact connection, writing nothing and auditing nothing. No second tax-setting service, no raw `AppSetting` parsing in the confirmation service, and no generic transaction service locator.
+- **One shared reducer**, `backend/app/services/tax_rate_context.py`, used by both readiness and confirmation. Missing and invalid both reduce to the comparable `null/null` context; the missing-versus-invalid distinction survives only where readiness warning generation needs it. `TaxRateContext` now rejects impossible state combinations outright.
+- **The required-but-nullable request context**, validated in `backend/app/domain/production_tax_context.py` before anything is written. Omission is `422 tax_rate_context_required`; a partial-null, non-string, malformed, non-canonical, or out-of-range value is `422 invalid_tax_rate_context`. Both are returned in the repository's normal structured error contract, never as raw Pydantic internals.
+- **The stale-context comparison**, run inside the existing `BEGIN IMMEDIATE` transaction before the first production write, raising `409 tax_rate_context_stale` with safe Russian guidance. Every row of the accepted matrix behaves exactly as decided, including the deliberate non-conflicts missing → invalid and invalid → missing.
+- **Immutable financial snapshots** written in the same transaction as the batch, the ingredient and packaging snapshots and write-offs, the Order transition, and the `production_confirmed` audit. The arithmetic reuses the merged `C2-I` pure domain calculation; no formula is duplicated in `ProductionConfirmationService`.
+- **One timestamp boundary**, `backend/app/domain/tax_rate_timestamps.py`, converting between the `YYYY-MM-DD HH:MM:SS` storage form and the `YYYY-MM-DDTHH:MM:SSZ` API form. The raw stored text never reaches a response.
+- **A narrow API exposure boundary.** The two snapshots appear in the confirmation response and the `ProductionBatch` detail response only. The `ProductionBatch` list response, every report read model, every report API response, and the report UI are unchanged.
+- **Minimal frontend integration.** `frontend/src/order-production-context.ts` owns the readiness context and request construction; the readiness DTO guard now requires the context pair and never fabricates `null/null`; a stale `409` is classified as a known no-write conflict that invalidates the cached readiness, closes the confirmation, and demands a fresh check without any automatic retry. No financial arithmetic and no financial presentation were added, and `frontend/src/main.ts` is unchanged at exactly `6399` lines.
+
 ## What is authorized next
 
-**No C2 runtime implementation exists on merged `main`.** No migration, no snapshot column, no tax or margin calculation, and no report change is on `main`; the `C2-I` work above lives only on the unmerged PR branch.
+**Merged `main` contains the `C2-I` readiness estimate only.** No migration, no snapshot column, no production tax or margin, and no report change is on `main`; the `C2-II` work above lives only on the unmerged PR branch.
 
-- **`C2-I`** is implemented and awaiting review and merge. Its scope, non-goals, backend requirements, the frontend `6399`-line invariant, the required test cases, and the exact-head readiness API smoke are in `docs/implementation-plan.md` § 11.
-- **`C2-II` stays `PLANNED — BLOCKED`** on merged and exact-head-verified `C2-I`. Do not start it from the unmerged `C2-I` branch.
-- **`C2-III` stays `PLANNED — BLOCKED`** on merged and verified `C2-II`, and is a **planning umbrella** that must be subdivided before implementation if it is not one bounded, independently reviewable vertical slice.
+- **`C2-II`** is implemented and awaiting review and merge. Its scope, non-goals, backend requirements, the frontend `6399`-line invariant, the required test cases, and the exact-head migration/API/browser smoke are in `docs/implementation-plan.md` § 11.
+- **`C2-III` stays `PLANNED — BLOCKED`** on merged and exact-head-verified `C2-II`. Do not start it from the unmerged `C2-II` branch. It is a **planning umbrella** that must be subdivided before implementation if it is not one bounded, independently reviewable vertical slice.
 
-No implementation PR number is assigned to `C2-II` or `C2-III`.
+No implementation PR number is assigned to `C2-III`.
 
 ## R4 merge closure
 
@@ -133,7 +148,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 is **complete**: `CR-007` is accepted and `C1-I` is merged and `DONE`. C2 has an **accepted product contract** (`CR-008`) and **no implementation**; only `C2-I` becomes authorized after the documentation PR merges, and `C2-II` and `C2-III` remain blocked. C3 and C4 remain **inactive** unless separately authorized.
+- C1 is **complete**: `CR-007` is accepted and `C1-I` is merged and `DONE`. C2 has an **accepted product contract** (`CR-008`); `C2-I` is merged (PR #151), `C2-II` is implemented on an unmerged PR branch, and `C2-III` remains blocked. C3 and C4 remain **inactive** unless separately authorized.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**

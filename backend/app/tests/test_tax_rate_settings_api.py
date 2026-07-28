@@ -74,7 +74,9 @@ def seed_production_batch(client) -> dict[str, object]:
     assert movement.status_code == 201
     readiness = client.post("/api/orders/1/check-production-readiness")
     assert readiness.json()["can_produce"] is True
-    produced = client.post("/api/orders/1/produce", json={"confirm": True})
+    # No rate is configured at this point, so the honest C2-II confirmation
+    # context is the explicit no-valid-rate pair.
+    produced = client.post("/api/orders/1/produce", json={"confirm": True, "expected_tax_rate_percent": None, "expected_tax_rate_effective_at": None})
     assert produced.status_code == 200
     return produced.json()
 
@@ -324,12 +326,13 @@ def test_configured_rate_does_not_populate_existing_batch_financials(client):
 
 
 def test_readiness_tax_estimate_remains_c2_work(client):
-    """`C2-I` activated the readiness estimate; the snapshot half is still `C2-II`.
+    """Configuring a rate never reaches back into an already-produced batch.
 
-    This assertion previously proved that readiness ignored the C1 setting. That
-    half of the boundary moved when `C2-I` landed, so it now proves the other
-    half: readiness reads the setting and estimates, while production
-    confirmation still persists no tax, margin, or margin percent.
+    This assertion first proved that readiness ignored the C1 setting, then that
+    `C2-I` estimated without persisting. Under `C2-II` it proves historical
+    immutability: the batch was produced under the no-valid-rate context, so its
+    financial snapshots stay `null` even though readiness now estimates with the
+    rate configured afterwards.
     """
     seed_production_batch(client)
     client.put(TAX_RATE_URL, json={"tax_rate_percent": "6"})
@@ -358,8 +361,18 @@ def test_no_new_table_or_migration_is_introduced(client):
     assert not {"tax_rate_history", "tax_periods", "tax_rate_versions"} & tables
 
 
-def test_production_batches_table_has_no_tax_snapshot_columns_yet(client):
-    columns = {row["name"] for row in rows(client, "PRAGMA table_info(production_batches)")}
+def test_production_batches_table_has_exactly_the_two_tax_snapshot_columns(client):
+    """Supersedes the C1-era assertion that no snapshot column existed yet.
 
-    assert "tax_rate_percent_snapshot" not in columns
-    assert "tax_rate_effective_at_snapshot" not in columns
+    `C2-II` authorizes exactly two nullable columns, so the guard flips from
+    "neither exists" to "both exist, nullable, and nothing else was added".
+    """
+    columns = {row["name"]: row for row in rows(client, "PRAGMA table_info(production_batches)")}
+
+    assert "tax_rate_percent_snapshot" in columns
+    assert "tax_rate_effective_at_snapshot" in columns
+    for name in ("tax_rate_percent_snapshot", "tax_rate_effective_at_snapshot"):
+        assert columns[name]["type"] == "TEXT"
+        assert columns[name]["notnull"] == 0
+        assert columns[name]["dflt_value"] is None
+    assert not {"sale_price_snapshot", "total_cost_snapshot", "tax_amount_snapshot", "margin_amount_snapshot", "taxable_amount_snapshot"} & set(columns)

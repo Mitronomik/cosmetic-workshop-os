@@ -3,6 +3,7 @@ import sqlite3
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.connection import session
+from app.domain.tax_rate_timestamps import api_timestamp, storage_timestamp
 from app.domain.units import UnitCode
 from app.models.production_batch import ProductionBatch, ProductionBatchDetail, ProductionBatchIngredient, ProductionBatchListItem, ProductionBatchPackaging
 
@@ -19,14 +20,22 @@ class ProductionBatchRepository:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
         self.config = config or get_database_config()
 
-    def create_batch(self, *, connection: sqlite3.Connection, order_id: int, recipe_version_id: int | None, client_recipe_id: int | None, final_batch_value: Decimal, final_batch_unit: UnitCode, component_cost: Decimal | None, packaging_cost: Decimal | None, other_cost: Decimal, total_cost: Decimal | None, sale_price: Decimal | None, tax: Decimal | None, margin: Decimal | None, margin_percent: Decimal | None, notes: str) -> ProductionBatch:
+    def create_batch(self, *, connection: sqlite3.Connection, order_id: int, recipe_version_id: int | None, client_recipe_id: int | None, final_batch_value: Decimal, final_batch_unit: UnitCode, component_cost: Decimal | None, packaging_cost: Decimal | None, other_cost: Decimal, total_cost: Decimal | None, sale_price: Decimal | None, tax: Decimal | None, margin: Decimal | None, margin_percent: Decimal | None, tax_rate_percent_snapshot: str | None, tax_rate_effective_at_snapshot: str | None, notes: str) -> ProductionBatch:
+        """Insert one production batch, including its C2-II rate snapshots.
+
+        Both snapshot values are explicit required arguments: the caller decides
+        what tax context the batch was produced under, and nothing here reads a
+        setting or falls back to an implicit current value. The effective
+        timestamp arrives in the canonical API form and is stored in the SQLite
+        form through the one shared conversion boundary.
+        """
         try:
             cur = connection.execute(
                 """
-                INSERT INTO production_batches (order_id, recipe_version_id, client_recipe_id, final_batch_value, final_batch_unit, component_cost, packaging_cost, other_cost, total_cost, sale_price, tax, margin, margin_percent, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO production_batches (order_id, recipe_version_id, client_recipe_id, final_batch_value, final_batch_unit, component_cost, packaging_cost, other_cost, total_cost, sale_price, tax, margin, margin_percent, tax_rate_percent_snapshot, tax_rate_effective_at_snapshot, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (order_id, recipe_version_id, client_recipe_id, str(final_batch_value), final_batch_unit.value, _d(component_cost), _d(packaging_cost), _d(other_cost), _d(total_cost), _d(sale_price), _d(tax), _d(margin), _d(margin_percent), notes or ""),
+                (order_id, recipe_version_id, client_recipe_id, str(final_batch_value), final_batch_unit.value, _d(component_cost), _d(packaging_cost), _d(other_cost), _d(total_cost), _d(sale_price), _d(tax), _d(margin), _d(margin_percent), tax_rate_percent_snapshot, storage_timestamp(tax_rate_effective_at_snapshot), notes or ""),
             )
         except sqlite3.IntegrityError as exc:
             raise ProductionBatchAlreadyExistsError("Для этого заказа уже есть производственная партия.") from exc
@@ -106,8 +115,17 @@ class ProductionBatchRepository:
 def _d(v): return None if v is None else str(v)
 def _dec(v): return None if v is None else Decimal(v)
 
+def _column(r, name):
+    """Read one column, treating a pre-C2-II row shape as an absent value.
+
+    A row selected before the 0019 migration has run simply has no snapshot
+    keys, and must map to `None` rather than raising.
+    """
+    return r[name] if name in r.keys() else None
+
+
 def _batch(r):
-    return ProductionBatch(r["id"], r["order_id"], r["recipe_version_id"], r["client_recipe_id"], Decimal(r["final_batch_value"]), UnitCode(r["final_batch_unit"]), _dec(r["component_cost"]), _dec(r["packaging_cost"]), Decimal(r["other_cost"]), _dec(r["total_cost"]), _dec(r["sale_price"]), _dec(r["tax"]), _dec(r["margin"]), _dec(r["margin_percent"]), r["produced_at"], r["notes"], r["created_at"])
+    return ProductionBatch(r["id"], r["order_id"], r["recipe_version_id"], r["client_recipe_id"], Decimal(r["final_batch_value"]), UnitCode(r["final_batch_unit"]), _dec(r["component_cost"]), _dec(r["packaging_cost"]), Decimal(r["other_cost"]), _dec(r["total_cost"]), _dec(r["sale_price"]), _dec(r["tax"]), _dec(r["margin"]), _dec(r["margin_percent"]), r["produced_at"], r["notes"], r["created_at"], _column(r, "tax_rate_percent_snapshot"), api_timestamp(_column(r, "tax_rate_effective_at_snapshot")))
 
 def _ingredient(r):
     return ProductionBatchIngredient(r["id"], r["production_batch_id"], r["ingredient_id"], r["ingredient_lot_id"], r["ingredient_name_snapshot"], r["lot_code_snapshot"], Decimal(r["required_quantity"]), Decimal(r["consumed_quantity"]), UnitCode(r["unit"]), _dec(r["unit_cost_snapshot"]), _dec(r["total_cost_snapshot"]), r["expiration_date_snapshot"], r["created_at"])
