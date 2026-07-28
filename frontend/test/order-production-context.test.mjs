@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   batchTaxRateSnapshotsAreValid,
+  isCanonicalTaxRatePercent,
+  isCanonicalTaxRateTimestamp,
   isTaxRateContextStaleFailure,
   productionConfirmRequestBody,
   readinessTaxRateContextIsValid,
@@ -77,6 +79,74 @@ function staleFailure() {
 }
 
 const activeOrder = { id: 7, is_active: true, status: 'ready_to_produce', updated_at: '2026-07-24T10:00:00Z' };
+
+// --------------------------------------------------------------------------
+// Canonical boundary validator
+// --------------------------------------------------------------------------
+
+const ACCEPTED_PERCENTS = ['0.00', '6.00', '99.99', '100.00', '0.01', '50.50'];
+const REJECTED_PERCENTS = [
+  '06.00', '100.01', '999.99', '-1.00', '6.0', '6.005', '6', '6,00', '6e0',
+  '', ' 6.00 ', '+6.00', '.00', '6.', '0100.00', 'abc', '1000.00',
+];
+const ACCEPTED_TIMESTAMPS = ['2026-07-27T19:44:53Z', '2024-02-29T00:00:00Z', '2026-01-01T00:00:00Z', '2026-12-31T23:59:59Z'];
+const REJECTED_TIMESTAMPS = [
+  '2026-02-30T00:00:00Z', '2026-13-01T00:00:00Z', '2026-00-01T00:00:00Z', '2026-07-00T00:00:00Z',
+  '2026-07-32T00:00:00Z', '2026-07-27T24:00:00Z', '2026-07-27T19:60:00Z', '2026-07-27T19:44:60Z',
+  '2025-02-29T00:00:00Z', '2026-07-27T19:44:53+03:00', '2026-07-27T19:44:53-05:00',
+  '2026-07-27T19:44:53.000Z', '2026-07-27T19:44:53', '2026-07-27 19:44:53', '2026-07-27T19:44:53z',
+  '2026-07-27', '', 'не время',
+];
+
+test('the canonical percentage validator accepts only exact in-range backend values', () => {
+  for (const value of ACCEPTED_PERCENTS) {
+    assert.equal(isCanonicalTaxRatePercent(value), true, `should accept ${value}`);
+  }
+  for (const value of REJECTED_PERCENTS) {
+    assert.equal(isCanonicalTaxRatePercent(value), false, `should reject ${JSON.stringify(value)}`);
+  }
+  for (const value of [6, 6.0, true, null, undefined, {}, ['6.00']]) {
+    assert.equal(isCanonicalTaxRatePercent(value), false, `should reject non-string ${JSON.stringify(value)}`);
+  }
+});
+
+test('the canonical timestamp validator rejects impossible calendar and clock values', () => {
+  for (const value of ACCEPTED_TIMESTAMPS) {
+    assert.equal(isCanonicalTaxRateTimestamp(value), true, `should accept ${value}`);
+  }
+  for (const value of REJECTED_TIMESTAMPS) {
+    assert.equal(isCanonicalTaxRateTimestamp(value), false, `should reject ${JSON.stringify(value)}`);
+  }
+  for (const value of [20260727, true, null, undefined, {}, ['2026-07-27T19:44:53Z']]) {
+    assert.equal(isCanonicalTaxRateTimestamp(value), false, `should reject non-string ${JSON.stringify(value)}`);
+  }
+});
+
+test('readiness context and batch snapshots share the same canonical validator', () => {
+  for (const value of REJECTED_PERCENTS.slice(0, 8)) {
+    assert.equal(readinessTaxRateContextIsValid(readiness(7, { tax_rate_percent: value })), false, `readiness ${value}`);
+    assert.equal(batchTaxRateSnapshotsAreValid(batch(7, { tax_rate_percent_snapshot: value })), false, `batch ${value}`);
+  }
+  for (const value of REJECTED_TIMESTAMPS.slice(0, 12)) {
+    assert.equal(readinessTaxRateContextIsValid(readiness(7, { tax_rate_effective_at: value })), false, `readiness ${value}`);
+    assert.equal(batchTaxRateSnapshotsAreValid(batch(7, { tax_rate_effective_at_snapshot: value })), false, `batch ${value}`);
+  }
+  assert.equal(readinessTaxRateContextIsValid(readiness(7, { tax_rate_percent: '100.00' })), true);
+  assert.equal(batchTaxRateSnapshotsAreValid(batch(7, { tax_rate_percent_snapshot: '100.00' })), true);
+  assert.equal(readinessTaxRateContextIsValid(readiness(7, { tax_rate_percent: '99.99' })), true);
+  assert.equal(batchTaxRateSnapshotsAreValid(batch(7, { tax_rate_percent_snapshot: '0.00' })), true);
+});
+
+test('the boundary validator adds no financial arithmetic', () => {
+  const source = readFileSync(new URL('../src/order-production-context.ts', import.meta.url), 'utf8');
+  const code = source.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  assert.equal(/parseFloat|parseInt|toFixed/.test(code), false, 'no float parsing or formatting');
+  // `Number(...)` is used only for integer digit-group range checks, never on a
+  // money value and never on the fractional part of a rate.
+  const numberCalls = code.match(/Number\([^)]*\)/g) || [];
+  assert.deepEqual([...new Set(numberCalls)].sort(), ['Number(whole)']);
+});
 
 // --------------------------------------------------------------------------
 // Readiness context ownership
@@ -316,9 +386,13 @@ test('the context module performs no financial arithmetic and adds no financial 
   const source = readFileSync(new URL('../src/order-production-context.ts', import.meta.url), 'utf8');
   const code = source.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-  for (const forbidden of [/\bNumber\s*\(/, /parseFloat/, /parseInt/, /\btoFixed\b/, /[^/*]\s[-+*/]\s*(tax|margin|rate)/i]) {
+  for (const forbidden of [/parseFloat/, /parseInt/, /\btoFixed\b/, /[^/*]\s[-+*/]\s*(tax|margin|rate)/i]) {
     assert.equal(forbidden.test(code), false, `unexpected arithmetic: ${forbidden}`);
   }
+  // `Number(...)` is permitted only for the integer digit-group range check in
+  // the boundary validator — never on a money value, a fractional part, or a
+  // rate being applied. Pinned exactly so a real calculation cannot slip in.
+  assert.deepEqual([...new Set(code.match(/Number\([^)]*\)/g) || [])].sort(), ['Number(whole)']);
   for (const forbidden of ['innerHTML', '<div', '<section', '<p>', 'Недоступно', 'Маржа', 'Налог:']) {
     assert.equal(code.includes(forbidden), false, `unexpected presentation: ${forbidden}`);
   }

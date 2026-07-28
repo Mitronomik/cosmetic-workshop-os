@@ -27,24 +27,40 @@ API_TIMESTAMP_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
 
 API_TIMESTAMP_PATTERN: Final = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
+# The only persisted forms that may be read back. The first is the documented
+# storage convention; the other two are the exact legacy shapes some existing
+# local rows carry. Every one of them is unambiguously UTC at second precision.
+STORAGE_TIMESTAMP_FORMATS: Final = (
+    STORAGE_TIMESTAMP_FORMAT,
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M:%SZ",
+)
+
 
 def parse_storage_timestamp(stored: str | None) -> datetime | None:
-    """Read a persisted UTC timestamp, tolerating the historical `T`/`Z` forms.
+    """Read a persisted UTC timestamp, accepting only exact supported forms.
 
-    Rows written before the storage convention settled, or copied in by hand,
-    may carry a `T` separator or a trailing `Z`. Reading stays lenient so an
-    existing local database is never rejected; writing stays strict.
+    Deliberately unforgiving. This value becomes an immutable production
+    snapshot, so anything whose meaning is not certain must be rejected rather
+    than coerced: an arbitrary offset such as `+03:00` would otherwise have its
+    zone silently dropped and be reinterpreted as UTC, and fractional seconds,
+    impossible calendar dates, missing seconds, and arbitrary text would be
+    quietly reshaped into a value the user never stored.
+
+    Returning `None` is the safe outcome — the caller reduces it to the
+    no-valid-rate context instead of inventing an instant.
     """
-    if not stored:
+    if not isinstance(stored, str):
         return None
-    text = stored.strip().replace("T", " ").removesuffix("Z")
-    try:
-        return datetime.strptime(text, STORAGE_TIMESTAMP_FORMAT)
-    except ValueError:
+    text = stored.strip()
+    if not text:
+        return None
+    for candidate in STORAGE_TIMESTAMP_FORMATS:
         try:
-            return datetime.fromisoformat(text).replace(tzinfo=None, microsecond=0)
+            return datetime.strptime(text, candidate)
         except ValueError:
-            return None
+            continue
+    return None
 
 
 def api_timestamp(stored: str | None) -> str | None:
@@ -79,10 +95,17 @@ def is_canonical_api_timestamp(value: object) -> bool:
     return parse_api_timestamp(value) is not None
 
 
+def is_readable_storage_timestamp(value: object) -> bool:
+    """Whether a persisted value can be read back as a certain UTC instant."""
+    return parse_storage_timestamp(value if isinstance(value, str) else None) is not None
+
+
 __all__ = [
     "API_TIMESTAMP_FORMAT",
     "API_TIMESTAMP_PATTERN",
     "STORAGE_TIMESTAMP_FORMAT",
+    "STORAGE_TIMESTAMP_FORMATS",
+    "is_readable_storage_timestamp",
     "api_timestamp",
     "is_canonical_api_timestamp",
     "parse_api_timestamp",

@@ -361,11 +361,16 @@ def test_no_new_table_or_migration_is_introduced(client):
     assert not {"tax_rate_history", "tax_periods", "tax_rate_versions"} & tables
 
 
-def test_production_batches_table_has_exactly_the_two_tax_snapshot_columns(client):
-    """Supersedes the C1-era assertion that no snapshot column existed yet.
+def test_production_batches_table_has_no_tax_snapshot_columns_yet(client):
+    """Historical node ID deliberately preserved; the contract it guards changed.
 
-    `C2-II` authorizes exactly two nullable columns, so the guard flips from
-    "neither exists" to "both exist, nullable, and nothing else was added".
+    The name dates from C1, when the assertion was that neither snapshot column
+    existed. `C2-II` authorizes exactly two nullable columns, so the assertions
+    now check the opposite — both exist, nullable, with nothing else added.
+
+    The node ID is kept unchanged on purpose so every previously collected
+    backend test node is still collected, rather than renaming the test and
+    losing it from the collected set. Only the body moved forward.
     """
     columns = {row["name"]: row for row in rows(client, "PRAGMA table_info(production_batches)")}
 

@@ -168,13 +168,17 @@ def test_user_mode_startup_backs_up_before_applying_0019(monkeypatch, tmp_path):
 
 
 def test_a_failed_0019_destroys_neither_the_user_database_nor_the_backup(monkeypatch, tmp_path):
-    """A mid-migration failure must leave the user's data and backup intact.
+    """Failure point: **after both** `ALTER TABLE` statements, before recording.
 
-    Python's `sqlite3` runs DDL outside the implicit transaction, so an
-    `ALTER TABLE ADD COLUMN` that has already executed survives the rollback
-    while the `schema_migrations` insert — ordinary DML — does not. That is why
-    `0019` is written idempotently: the failed run leaves a harmless extra
-    nullable column, no row loses a value, the backup is still there, and the
+    This is the "complete DDL executed but migration ID unrecorded" state, not a
+    partial one — the interruption happens once `upgrade()` has fully returned.
+    The genuinely partial one-column state is covered separately by
+    `test_recovery_from_a_real_one_column_partial_ddl_interruption`.
+
+    Python's `sqlite3` runs DDL outside the implicit transaction, so the columns
+    survive the rollback while the `schema_migrations` insert — ordinary DML —
+    does not. That is why `0019` is idempotent: the failed run leaves the two
+    nullable columns, no row loses a value, the backup is still there, and the
     next startup completes the migration exactly once.
     """
     user_data_dir = tmp_path / "user-data"
@@ -215,6 +219,121 @@ def test_a_failed_0019_destroys_neither_the_user_database_nor_the_backup(monkeyp
     assert snapshot(database_path) == before
     assert applied(database_path).count(MIGRATION_ID) == 1
     assert len(sorted((user_data_dir / "backups").iterdir())) == 2
+
+
+class InterruptBetweenAlterStatements:
+    """Let the first `ADD COLUMN` through, then fail on the second.
+
+    Wrapping the connection rather than rewriting the migration means the real
+    `upgrade()` runs, so the interrupted schema is the one a genuine crash
+    between the two statements would leave behind.
+    """
+
+    def __init__(self, connection):
+        self._connection = connection
+        self.add_column_statements = []
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+    def execute(self, sql, *args):
+        if "ADD COLUMN" in sql:
+            self.add_column_statements.append(sql)
+            if len(self.add_column_statements) > 1:
+                raise RuntimeError("forced failure between the two ALTER TABLE statements")
+        return self._connection.execute(sql, *args)
+
+
+class RecordingConnection:
+    """Record the `ADD COLUMN` statements a migration actually issues."""
+
+    def __init__(self, connection):
+        self._connection = connection
+        self.add_column_statements = []
+
+    def __getattr__(self, name):
+        return getattr(self._connection, name)
+
+    def execute(self, sql, *args):
+        if "ADD COLUMN" in sql:
+            self.add_column_statements.append(sql)
+        return self._connection.execute(sql, *args)
+
+
+def test_recovery_from_a_real_one_column_partial_ddl_interruption(monkeypatch, tmp_path):
+    """Failure point: **between** the two `ALTER TABLE` statements.
+
+    The genuinely partial state: the first snapshot column exists, the second
+    does not, and the migration is unrecorded. Recovery must add only the
+    missing column — re-issuing the first would raise `duplicate column name`
+    and leave the user stuck on every subsequent start.
+    """
+    user_data_dir = tmp_path / "user-data"
+    database_path = user_data_dir / "data" / "cosmetic_workshop.sqlite"
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
+    monkeypatch.delenv(DATABASE_PATH_ENV, raising=False)
+    before = build_pre_c2_ii_database(database_path)
+
+    import app.migrations.versions as versions_package
+
+    migration = __import__(f"{versions_package.__name__}.{MIGRATION_ID}", fromlist=["upgrade"])
+    original_upgrade = migration.upgrade
+    interrupted = {}
+
+    def interrupted_upgrade(connection):
+        wrapper = InterruptBetweenAlterStatements(connection)
+        interrupted["wrapper"] = wrapper
+        return original_upgrade(wrapper)
+
+    monkeypatch.setattr(migration, "upgrade", interrupted_upgrade)
+
+    with pytest.raises(RuntimeError, match="between the two ALTER TABLE statements"):
+        initialize_startup("user")
+
+    # --- The interrupted state is exactly one column in, unrecorded.
+    live_columns = set(columns(database_path))
+    assert "tax_rate_percent_snapshot" in live_columns
+    assert "tax_rate_effective_at_snapshot" not in live_columns
+    assert MIGRATION_ID not in applied(database_path)
+    assert pending_migration_ids(DatabaseConfig(path=database_path)) == [MIGRATION_ID]
+    assert snapshot(database_path) == before
+    # The pre-migration backup predates the DDL and holds neither column.
+    backups = sorted((user_data_dir / "backups").iterdir())
+    assert len(backups) == 1
+    assert not set(SNAPSHOT_COLUMNS) & set(columns(backups[0]))
+    assert snapshot(backups[0]) == before
+
+    # --- Recovery: only the missing column is added.
+    recorded = {}
+
+    def recording_upgrade(connection):
+        wrapper = RecordingConnection(connection)
+        recorded["wrapper"] = wrapper
+        return original_upgrade(wrapper)
+
+    monkeypatch.setattr(migration, "upgrade", recording_upgrade)
+    recovered = initialize_startup("user")
+
+    issued = recorded["wrapper"].add_column_statements
+    assert len(issued) == 1, issued
+    assert "tax_rate_effective_at_snapshot" in issued[0]
+    assert "tax_rate_percent_snapshot" not in issued[0]
+
+    assert recovered.applied_migrations == [MIGRATION_ID]
+    assert recovered.backup is not None and recovered.backup.reason == "before_migration"
+    assert set(SNAPSHOT_COLUMNS) <= set(columns(database_path))
+    assert applied(database_path).count(MIGRATION_ID) == 1
+    assert snapshot(database_path) == before
+    with sqlite3.connect(database_path) as connection:
+        assert connection.execute(f"SELECT {', '.join(SNAPSHOT_COLUMNS)} FROM production_batches WHERE id = 1").fetchone() == (None, None)
+    assert len(sorted((user_data_dir / "backups").iterdir())) == 2
+
+    # --- A further startup applies nothing and creates no new migration backup.
+    settled = initialize_startup("user")
+    assert settled.applied_migrations == []
+    assert settled.backup is None
+    assert len(sorted((user_data_dir / "backups").iterdir())) == 2
+    assert snapshot(database_path) == before
 
 
 def test_a_brand_new_user_database_creates_no_pointless_pre_migration_backup(monkeypatch, tmp_path):

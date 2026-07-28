@@ -17,6 +17,7 @@ import sqlite3
 from app.domain.errors import DomainValidationError
 from app.domain.production_financials import TaxRateContext
 from app.domain.tax_rate import parse_tax_rate_percent
+from app.domain.tax_rate_timestamps import is_canonical_api_timestamp
 from app.repositories.settings import SettingsNotInitializedError
 from app.schemas.tax_rate_settings import TaxRateSettingResponse
 from app.services.tax_rate_settings import TaxRateSettingsService
@@ -48,6 +49,14 @@ def reduce_tax_rate_context(state: TaxRateSettingResponse) -> TaxRateContext:
     percentage — or that carries no effective timestamp — becomes the
     no-valid-rate context instead of a calculated or fabricated value.
 
+    A configured context requires a **canonical** effective timestamp, not
+    merely a non-null one. The C1 service derives ``effective_at`` from the
+    persisted ``updated_at``, so an externally corrupted timestamp — an
+    arbitrary offset, fractional seconds, an impossible date — leaves it either
+    absent or off-contract. Persisting such a value as an immutable production
+    snapshot would record an instant the user never stored, so it becomes the
+    no-valid-rate context instead.
+
     Missing and invalid stay distinguishable here, because readiness warning
     generation needs the difference; every other caller compares only
     ``TaxRateContext.comparable_pair``, where both reduce to ``null/null``.
@@ -58,7 +67,7 @@ def reduce_tax_rate_context(state: TaxRateSettingResponse) -> TaxRateContext:
         percent = parse_tax_rate_percent(state.tax_rate_percent)
     except DomainValidationError:
         return TaxRateContext.invalid_value()
-    if state.effective_at is None:
+    if not is_canonical_api_timestamp(state.effective_at):
         return TaxRateContext.invalid_value()
     return TaxRateContext.configured(percent, state.effective_at)
 

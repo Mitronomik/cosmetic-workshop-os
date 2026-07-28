@@ -679,12 +679,17 @@ test('production reconciliation operation blocks same-order writes/readiness whi
   assert.equal(canStartOrderWriteRequest(false, { id: 1, is_active: true, status: 'new', updated_at: 'u1' }, 1, []), true);
 });
 
-test('readiness DTO guard now requires the C2-I tax context and still rejects malformed existing fields', () => {
-  // Supersedes the C2-I additive-tolerance assertion. `C2-I` could tolerate a
-  // readiness DTO without the context because nothing consumed it. `C2-II`
-  // sends that exact pair back on confirmation, so a DTO that omits it is an
-  // outdated or untrusted response — not a valid no-rate result — and the guard
-  // must reject it rather than fabricate `null/null`.
+test('existing readiness DTO guard tolerates the additive C2-I financial fields without accepting malformed existing ones', () => {
+  // Historical test name deliberately preserved; the contract it guards changed.
+  //
+  // The name dates from `C2-I`, which could tolerate a readiness DTO without
+  // the tax context because nothing consumed it. `C2-II` sends that exact pair
+  // back on confirmation, so a DTO that omits it is an outdated or untrusted
+  // response — not a valid no-rate result — and the guard must reject it rather
+  // than fabricate `null/null`.
+  //
+  // The name is kept unchanged so the previously reported frontend test name is
+  // still present in the suite output. Only the assertions moved forward.
   const base = {
     order_id: 1,
     can_produce: true,
