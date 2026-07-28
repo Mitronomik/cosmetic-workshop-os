@@ -1164,7 +1164,7 @@ produced_at
 notes
 ```
 
-> **Будущие снапшот-поля ставки — `CR-008`, `PLANNED — BLOCKED`.** `C2-II` добавит ровно два nullable поля — `tax_rate_percent_snapshot` и `tax_rate_effective_at_snapshot`. Их **нет** на текущем `main`. Существующие `sale_price`, `total_cost`, `tax`, `margin` и `margin_percent` переиспользуются; дублирующие денежные снапшот-поля (`sale_price_snapshot`, `total_cost_snapshot`, `tax_amount_snapshot`, `margin_amount_snapshot`) **не** авторизованы. Backfill не выполняется, старые строки остаются `null`. Контракт: `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
+> **Снапшот-поля ставки — `CR-008`, `C2-II` влит (PR #152).** `C2-II` добавил ровно два nullable поля — `tax_rate_percent_snapshot` и `tax_rate_effective_at_snapshot` — миграцией `0019_production_batch_tax_rate_snapshots`. Они **есть** на текущем `main`. Существующие `sale_price`, `total_cost`, `tax`, `margin` и `margin_percent` переиспользуются; дублирующие денежные снапшот-поля (`sale_price_snapshot`, `total_cost_snapshot`, `tax_amount_snapshot`, `margin_amount_snapshot`) **не** авторизованы. Backfill не выполняется, старые строки остаются `null`. Контракт: `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
 ## Дополнительные таблицы
 
@@ -1868,7 +1868,7 @@ margin_percent = ROUND_PERCENT(margin / sale_price * 100)
 - `C2-I` — backend-оценка в существующем ответе готовности: переиспользуются существующие поля `estimated_cost`, `estimated_tax`, `estimated_margin`, добавляются `sale_price`, `tax_rate_percent`, `tax_rate_effective_at`, `estimated_margin_percent` и `financial_estimate_status`; поле `estimated_total_cost` **не** вводится;
 - `C2-II` — неизменяемые финансовые снапшоты внутри транзакции подтверждения производства, включая обязательные-но-nullable ключи контекста ставки `expected_tax_rate_percent` и `expected_tax_rate_effective_at` и конфликт `tax_rate_context_stale`. Пара `null/null` означает «readiness не увидел действующей налоговой ставки» и покрывает **и** отсутствующую строку, **и** некорректное сохранённое значение; пропуск ключа — это не то же самое, что явный `null/null`, и отклоняется как `422 tax_rate_context_required`. Конфликт `409 tax_rate_context_stale` возникает при переходах valid → изменённый valid, valid → missing, valid → invalid, missing → valid и invalid → valid, но **не** при missing ↔ invalid, поскольку оба состояния дают одинаковый финансовый результат;
 - форматы времени в C2: хранение — `YYYY-MM-DD HH:MM:SS` (UTC, SQLite text, без `T`, `Z` и смещения); API и контекст подтверждения — `YYYY-MM-DDTHH:MM:SSZ` (UTC, без дробных секунд и произвольных смещений); неканоничная метка времени в запросе отклоняется как `422 invalid_tax_rate_context`, а API никогда не отдаёт сырое хранимое представление;
-- `C2-III` — представление и отчёты по снапшотам; это **зонтик планирования**, который при необходимости делится перед реализацией;
+- `C2-III` — бывший **зонтик планирования**, разделённый ровно на два runtime-среза: `C2-III-A` — финансовое представление заказа и `ProductionBatch` (авторизован, не реализован; отчёты не затрагивает) и `C2-III-B` — отчёты и документы отчётов по снапшотам (`PLANNED — BLOCKED` до влитого и проверенного `C2-III-A`; UI заказов и `ProductionBatch` не затрагивает);
 - в течение всего C2 `frontend/src/main.ts` не превышает `6399` строк, а фронтенд не выполняет финансовых вычислений.
 
 ---

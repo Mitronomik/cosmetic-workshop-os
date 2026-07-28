@@ -1239,7 +1239,7 @@ ProductionBatch → StockMovement[]
 
 Decided in `CR-007` (the setting) and `CR-008` (the calculation and the snapshots). Durable contracts: `docs/settings.md` and `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
-**Current state.** On merged `main`, production readiness estimates `estimated_tax`, `estimated_margin`, and `estimated_margin_percent` (`C2-I`, PR #151). `C2-II` — the transactional snapshots, the two rate-snapshot columns below, migration `0019_production_batch_tax_rate_snapshots`, the required confirmation context, and `409 tax_rate_context_stale` — is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. `C2-III` remains `PLANNED — BLOCKED` until `C2-II` is reviewed, exact-head verified, and merged.
+**Current state.** On merged `main`, production readiness estimates `estimated_tax`, `estimated_margin`, and `estimated_margin_percent` (`C2-I`, PR #151). `C2-II` — the transactional snapshots, the two rate-snapshot columns below, migration `0019_production_batch_tax_rate_snapshots`, the required confirmation context, and `409 tax_rate_context_stale` — is merged as PR #152 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III` is subdivided into `C2-III-A` (Order and `ProductionBatch` financial presentation, `AUTHORIZED — NOT IMPLEMENTED`) and `C2-III-B` (snapshot-backed reports and report documents, `PLANNED — BLOCKED` on merged and verified `C2-III-A`).
 
 #### Calculation formulas (`CR-008`)
 
@@ -1305,7 +1305,7 @@ Rules:
 - the MVP taxable base is exactly the order sale price, so no separate `taxable_amount_snapshot` is required;
 - the existing financial fields are **reused**; duplicate monetary snapshot fields such as `sale_price_snapshot`, `total_cost_snapshot`, `tax_amount_snapshot`, or `margin_amount_snapshot` are **not** authorized;
 - the two columns are nullable for backward compatibility and are **never backfilled** with the current rate;
-- rows produced before the snapshot fields existed stay unknown and map to `null`; they are displayed as `Недоступно` once `C2-III` adds the presentation, never as a fabricated `0.00`;
+- rows produced before the snapshot fields existed stay unknown and map to `null`; they are displayed as `Недоступно` once `C2-III-A` adds the presentation, never as a fabricated `0.00`;
 - changing the current tax setting never changes an existing ProductionBatch row, an existing report snapshot, a prior audit record, or a previously generated document;
 - reports and exports read the stored snapshots and must not recalculate historical tax with the current setting;
 - an order created before a rate change but produced after it uses the rate active at production confirmation;
