@@ -70,7 +70,7 @@ const formatters = {
 function issue(overrides = {}) { return { code: 'issue', severity: 'warning', message: 'Проверьте заказ', field: null, entity_type: 'order', entity_id: 1, ...overrides }; }
 function ingredient(overrides = {}) { return { ingredient_id: 10, ingredient_name: 'Гидролат', required_quantity: '50', required_unit: 'g', available_quantity: '100', missing_quantity: null, can_fulfill: true, selected_lots: [{ lot_id: 20, lot_code: 'LOT-20', selected_quantity: '50', unit: 'g', expires_at: '2026-12-01', is_expired: false, expires_soon: false }], warnings: [], ...overrides }; }
 function packaging(overrides = {}) { return { packaging_item_id: 30, name: 'Банка', required_quantity: '1', available_quantity: '2', missing_quantity: null, can_fulfill: true, ...overrides }; }
-function readiness(overrides = {}) { return { order_id: 1, can_produce: true, status: 'ready', blocking_issues: [], warnings: [], ingredients: [ingredient()], packaging: [packaging()], estimated_cost: '120.00', estimated_tax: null, estimated_margin: null, generated_at: '2026-07-19T10:00:00Z', ...overrides }; }
+function readiness(overrides = {}) { return { order_id: 1, can_produce: true, status: 'ready', blocking_issues: [], warnings: [], ingredients: [ingredient()], packaging: [packaging()], sale_price: '300.00', estimated_cost: '120.00', tax_rate_percent: '6.00', tax_rate_effective_at: '2026-07-19T09:00:00Z', estimated_tax: '18.00', estimated_margin: '162.00', estimated_margin_percent: '54.00', financial_estimate_status: 'available', generated_at: '2026-07-19T10:00:00Z', ...overrides }; }
 function readinessPanel(overrides = {}) { return renderView(renderOrderReadinessPanel({ orderId: 1, closed: false, busy: false, error: '', result: readiness(), current: true, ...overrides }, formatters)); }
 function productionGate(overrides = {}) { return renderView(renderOrderProductionGate({ orderId: 1, readiness: readiness(), hasCachedReadiness: true, confirming: false, loading: false, blockedByOperation: false, persistentWriteActive: false, notes: '', error: '', recoveryAction: '', uncertain: false, reconciliationLoading: false, ...overrides }, escapeHtml)); }
 function lifecycleActions(overrides = {}) { return renderView(renderOrderLifecycleActions({ orderId: 1, isActive: true, status: 'new', sameOrderOperationActive: false, persistentOwner: null, ...overrides })); }
@@ -329,4 +329,68 @@ test('production reconciliation pending disables recovery action with busy seman
   assert.equal(button.hasAttribute('disabled'), true);
   assert.equal(button.getAttribute('aria-busy'), 'true');
   assert.match(view.textContent, /Исход неизвестен/);
+});
+
+// --------------------------------------------------------------------------
+// C2-III-A financial estimate inside the readiness result
+// --------------------------------------------------------------------------
+
+test('the readiness result carries the backend financial estimate inside the existing card', () => {
+  const view = readinessPanel();
+  const card = view.querySelector('[data-order-readiness-result="current"]');
+  const financials = card.querySelector('[data-readiness-financials="true"]');
+
+  assert.equal(financials !== null, true);
+  assert.equal(view.querySelectorAll('[data-readiness-financials="true"]').length, 1);
+  assert.equal(financials.querySelector('[data-financial-estimate-status="available"]').textContent, 'Оценка: Доступно');
+  assert.deepEqual(
+    financials.querySelectorAll('[data-financial-metric]').map((node) => node.querySelector('strong').textContent),
+    ['Цена продажи', 'Ориентировочная себестоимость', 'Ставка налога', 'Налог', 'Маржа', 'Маржа, %'],
+  );
+  assert.match(financials.textContent, /Ставка действует с: DATETIME:2026-07-19T09:00:00Z/);
+});
+
+test('the financial estimate never changes the physical readiness verdict or the production gate', () => {
+  for (const status of ['available', 'partial', 'unavailable']) {
+    const result = readiness({ financial_estimate_status: status, sale_price: null, estimated_tax: null, estimated_margin: null, estimated_margin_percent: null });
+    const view = readinessPanel({ result });
+
+    assert.equal(view.querySelector('h2').textContent, 'Можно изготовить', status);
+    assert.equal(view.querySelector('.success').textContent, 'Склад выглядит достаточным', status);
+    assert.equal(productionGate({ readiness: result }).querySelectorAll('button[data-action="open-production-confirmation"]').length, 1, status);
+  }
+
+  const blocked = readinessPanel({ result: readiness({ can_produce: false, status: 'blocked', financial_estimate_status: 'available' }) });
+  assert.equal(blocked.querySelector('h2').textContent, 'Пока нельзя изготовить');
+});
+
+test('a backend financial warning is rendered once by the existing warning section only', () => {
+  const message = 'Налоговая ставка не настроена: налог и маржа не рассчитаны.';
+  const view = readinessPanel({
+    result: readiness({
+      status: 'warning',
+      warnings: [issue({ code: 'tax_rate_missing', message, entity_type: 'order', entity_id: 1 })],
+      tax_rate_percent: null,
+      tax_rate_effective_at: null,
+      estimated_tax: null,
+      estimated_margin: null,
+      estimated_margin_percent: null,
+      financial_estimate_status: 'partial',
+    }),
+  });
+
+  const occurrences = view.querySelectorAll('li').filter((node) => node.textContent.includes(message));
+  assert.equal(occurrences.length, 1);
+  assert.equal(view.querySelector('[data-readiness-financials="true"]').textContent.includes(message), false);
+  assert.equal(view.querySelector('[data-financial-estimate-status="partial"]') !== null, true);
+});
+
+test('a stale readiness result keeps its financial values visible but stays reference-only', () => {
+  const stale = readinessPanel({ current: false });
+  const card = stale.querySelector('[data-order-readiness-result="stale"]');
+
+  assert.equal(card.querySelector('[data-readiness-financials="true"]') !== null, true);
+  assert.equal(card.querySelector('h2').textContent, 'Результат нужно обновить');
+  assert.equal(stale.querySelector('.warning').textContent, 'Не разрешает изготовление');
+  assert.equal(stale.querySelector('button[data-action="open-production-confirmation"]'), null);
 });

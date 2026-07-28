@@ -6,6 +6,7 @@ import {
   TAX_RATE_CONTEXT_STALE_MESSAGE,
   TAX_RATE_CONTEXT_STALE_NEXT_ACTION,
 } from './order-production-context.js';
+import { readinessFinancialsAreValid } from './production-financial-contract.js';
 
 // The context module owns the tax-context rules; this module is the order
 // production lifecycle entry point the app already imports from, so the two
@@ -562,11 +563,9 @@ export function productionReadinessDtoIsValid(value: unknown, expectedOrderId: n
     && payload.ingredients.every(readinessIngredientLineIsValid)
     && Array.isArray(payload.packaging)
     && payload.packaging.every(readinessPackagingLineIsValid)
-    && stringOrNull(payload.estimated_cost)
-    && stringOrNull(payload.estimated_tax)
-    && stringOrNull(payload.estimated_margin)
-    // C2-II requires the context pair, so a DTO without it is not trusted.
-    && readinessTaxRateContextIsValid(payload)
+    // C2-II requires the context pair and C2-III-A requires every additive
+    // financial field, so a DTO missing either is not a trusted current result.
+    && readinessFinancialsAreValid(payload)
     && typeof payload.generated_at === 'string',
   );
 }

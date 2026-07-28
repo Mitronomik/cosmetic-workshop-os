@@ -32,9 +32,12 @@ function readiness(orderId = 7, overrides = {}) {
     warnings: [],
     ingredients: [],
     packaging: [],
+    sale_price: '200.00',
     estimated_cost: '110.00',
     estimated_tax: '12.00',
     estimated_margin: '78.00',
+    estimated_margin_percent: '39.00',
+    financial_estimate_status: 'available',
     ...CONFIGURED,
     generated_at: '2026-07-24T10:00:00Z',
     ...overrides,
@@ -362,12 +365,40 @@ test('the batch detail DTO accepts null snapshots and rejects malformed ones', (
   assert.equal(productionBatchDtoIsValid(batch(7, { tax_rate_effective_at_snapshot: '2026-07-27 19:44:53' }), 7), false);
 });
 
-test('a pre-C2-II batch DTO without the snapshot keys is still accepted', () => {
-  const historical = batch(7);
-  delete historical.tax_rate_percent_snapshot;
-  delete historical.tax_rate_effective_at_snapshot;
+// C2-III-A tightened this: a missing key is an outdated response, not a backend
+// statement that no rate was snapshotted. Old database rows stay compatible
+// because the backend always returns both keys, with explicit null values.
+test('a batch DTO missing a snapshot key is untrusted, while explicit null/null is accepted', () => {
+  for (const missing of ['tax_rate_percent_snapshot', 'tax_rate_effective_at_snapshot']) {
+    const outdated = batch(7);
+    delete outdated[missing];
+    assert.equal(batchTaxRateSnapshotsAreValid(outdated), false, `missing ${missing}`);
+    assert.equal(productionBatchDtoIsValid(outdated, 7), false, `missing ${missing}`);
+  }
 
+  const bothMissing = batch(7);
+  delete bothMissing.tax_rate_percent_snapshot;
+  delete bothMissing.tax_rate_effective_at_snapshot;
+  assert.equal(productionBatchDtoIsValid(bothMissing, 7), false);
+
+  const historical = batch(7, { tax_rate_percent_snapshot: null, tax_rate_effective_at_snapshot: null });
+  assert.equal(batchTaxRateSnapshotsAreValid(historical), true);
   assert.equal(productionBatchDtoIsValid(historical, 7), true);
+});
+
+test('a readiness DTO missing an additive financial key is not a trusted current result', () => {
+  for (const key of ['sale_price', 'estimated_cost', 'estimated_tax', 'estimated_margin', 'estimated_margin_percent', 'financial_estimate_status']) {
+    const outdated = readiness(7);
+    delete outdated[key];
+    assert.equal(productionReadinessDtoIsValid(outdated, 7), false, `missing ${key}`);
+  }
+
+  for (const status of ['available', 'partial', 'unavailable']) {
+    assert.equal(productionReadinessDtoIsValid(readiness(7, { financial_estimate_status: status }), 7), true, status);
+  }
+  for (const status of ['AVAILABLE', 'ready', '', null, 0, true]) {
+    assert.equal(productionReadinessDtoIsValid(readiness(7, { financial_estimate_status: status }), 7), false, JSON.stringify(status));
+  }
 });
 
 test('the stale-failure classifier matches only the exact code and status', () => {

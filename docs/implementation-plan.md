@@ -57,7 +57,7 @@
 
 ### Current implementation state
 
-`C2-I` merged as PR #151 and `C2-II` merged as PR #152; both are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **No runtime slice is currently active.** `C2-III` has been subdivided into exactly two runtime slices: `C2-III-A — Order and ProductionBatch financial presentation` is `AUTHORIZED AFTER THE SUBDIVISION DOCUMENTATION PR MERGES — NOT IMPLEMENTED`, and `C2-III-B — snapshot-backed reports and report documents` is `PLANNED — BLOCKED` on merged and verified `C2-III-A`. No implementation PR number is assigned to either.
+`C2-I` merged as PR #151 and `C2-II` merged as PR #152; both are `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III` has been subdivided into exactly two runtime slices: `C2-III-A — Order and ProductionBatch financial presentation` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` on branch `codex/c2-iii-a-production-financial-presentation`, started from `origin/main` `1eb0d5420eaabbd8f61a66dba523f058a38826a6`, and `C2-III-B — snapshot-backed reports and report documents` is `PLANNED — BLOCKED` on merged and verified `C2-III-A`. No implementation PR number is assigned to `C2-III-B`.
 
 `CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 and C4 remain inactive. Product release readiness is not claimed.
 
@@ -160,7 +160,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | User/remote install checklist | Есть частичные документы, финальный процесс не проверен | Обязательно |
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
-| Себестоимость, налог и маржа (расчёты и снапшоты) | **ЧАСТИЧНО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152). Финансовое представление в UI отсутствует, и отчёты снапшоты пока не читают | Обязательно — контракт принят как `CR-008`; `C2-I` и `C2-II` влиты; `C2-III-A` (представление) авторизован после merge документационного PR, `C2-III-B` (отчёты) заблокирован |
+| Себестоимость, налог и маржа (расчёты и снапшоты) | **ЧАСТИЧНО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152). Финансовое представление в UI реализовано на невлитой ветке `C2-III-A`, и отчёты снапшоты пока не читают | Обязательно — контракт принят как `CR-008`; `C2-I` и `C2-II` влиты; `C2-III-A` (представление) реализован на PR-ветке и не влит, `C2-III-B` (отчёты) заблокирован |
 | AuditLog workspace | Логи пишутся, пользовательского read-only экрана нет | Обязательно либо нужен явный scope amendment |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
@@ -1086,14 +1086,14 @@ Authorization states:
 |---|---|
 | `C2-I` — backend financial readiness estimate | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #151 |
 | `C2-II` — transactional production financial snapshots | `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #152 |
-| `C2-III-A` — Order and `ProductionBatch` financial presentation | `AUTHORIZED AFTER THE SUBDIVISION DOCUMENTATION PR MERGES — NOT IMPLEMENTED` |
+| `C2-III-A` — Order and `ProductionBatch` financial presentation | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
 | `C2-III-B` — snapshot-backed reports and report documents | `PLANNED — BLOCKED` on merged and verified `C2-III-A` |
 
 `C2-I` merged as PR #151: reviewed head `6f72bffc9a0d17839e3a74c69366fe17df8a318b`, merge commit `7b3dde8278f59658bfa3a81c09e643ea10319551`, merged `2026-07-28T04:22:13Z`, exact-head readiness smoke `PASS — 113 checks / 0 failures`.
 
 `C2-II` merged as PR #152: reviewed head `0cdda1b06b9783975f085207527f7d36a2ef7f22`, merge commit `c3a3a7b8db06fe85290216113b784123ed9b6b30`, merged `2026-07-28T09:00:50Z`. Full closure evidence: § *C2-II — merged and exact-head verified* below.
 
-`C2-III` was subdivided into exactly two runtime slices, as required by ADR 0012. No implementation PR number is assigned to `C2-III-A` or `C2-III-B`.
+`C2-III` was subdivided into exactly two runtime slices, as required by ADR 0012. `C2-III-A` is implemented on an unmerged PR branch; no implementation PR number is assigned to `C2-III-B`.
 
 ```text
 C2 is not complete after C2-III-A.
@@ -1529,7 +1529,7 @@ These `C2-II` requirements were implemented and executed on the `C2-II` PR branc
 
 ### C2-III — subdivided into two runtime slices
 
-Статус: `SUBDIVIDED — C2-III-A AUTHORIZED, C2-III-B BLOCKED`
+Статус: `SUBDIVIDED — C2-III-A IMPLEMENTED ON PR BRANCH, C2-III-B BLOCKED`
 
 The ADR 0012 subdivision rule required `C2-III` to be divided before implementation if it was not one bounded, independently reviewable vertical slice. It is not. `C2-III` is therefore divided into **exactly two** runtime slices — `C2-III-A` and `C2-III-B`, no more and no fewer. No document authorizes all of `C2-III` in one PR. No future implementation PR number is assigned to either slice.
 
@@ -1539,9 +1539,11 @@ Expose backend-calculated readiness estimates and immutable production snapshots
 
 ### C2-III-A — Order and ProductionBatch financial presentation
 
-Статус: `AUTHORIZED AFTER THE SUBDIVISION DOCUMENTATION PR MERGES — NOT IMPLEMENTED`
+Статус: `IMPLEMENTED ON PR BRANCH — NOT MERGED`
 
-Do not start it from the unmerged subdivision documentation branch, and do not assign it a PR number in advance.
+Implemented on branch `codex/c2-iii-a-production-financial-presentation`, started from `origin/main` `1eb0d5420eaabbd8f61a66dba523f058a38826a6` (the PR #153 merge commit). It is **not** `DONE` and must not be recorded as `DONE` until it is merged and exact-head verified.
+
+Delivered exactly within the scope below: two focused frontend modules (`frontend/src/production-financial-contract.ts` and `frontend/src/production-financial-presentation.ts`); the readiness financial block with the three accepted status labels; one shared `Фактическая экономика партии` block used by both the production-success card and the historical batch detail; a compact five-field list summary with the rate snapshots still detail-only; DTO validation that requires the complete readiness financial contract and both `ProductionBatch` rate-snapshot keys; and `frontend/src/main.ts` reduced from `6399` to `6398` lines. No backend production source, formula, persistence, migration, endpoint, report, or report document changed, and no backend test was modified.
 
 One user workflow:
 
