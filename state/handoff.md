@@ -1233,3 +1233,32 @@ Local time, arbitrary offsets, fractional seconds, a space instead of `T`, and a
 5. Leave `CR-004` and `CR-006` inactive, and leave C3 and C4 inactive.
 
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open.
+
+## C2-I handoff — implemented on an unmerged PR branch (2026-07-28)
+
+`C2-I — Backend financial readiness estimate` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`** on branch `codex/c2-i-backend-financial-readiness-estimate`, started from merged `origin/main` `4c03142ef7acdc31fcb15730484e8e52dde95b69`. It is **not** `DONE` and must not be recorded as `DONE` until it is merged and exact-head verified.
+
+### What exists now
+
+- `backend/app/domain/production_financials.py` — the pure calculation. Inputs are backend-owned `sale_price`, `total_cost`, and a `TaxRateContext`; outputs are canonical two-decimal strings or `null`, the bounded `FinancialEstimateStatus`, and the ordered `warning_codes`. No connection, no repository, no FastAPI, no Pydantic, no `ProductionReadinessIssue`, no write.
+- `ProductionReadinessService._estimate_financials` / `_tax_rate_context` — the only integration points. The former `_estimate_money` is gone; its behavior is preserved and extended.
+- `ProductionReadinessResponse` — reuses `estimated_cost`, `estimated_tax`, `estimated_margin` and adds exactly `sale_price`, `tax_rate_percent`, `tax_rate_effective_at`, `estimated_margin_percent`, `financial_estimate_status`. `estimated_total_cost` does not exist.
+- Tests: `backend/app/tests/test_production_financials.py` (new, pure domain) and extended `backend/app/tests/test_production_readiness.py`. One frontend test-only addition proves the existing readiness DTO guard tolerates the additive fields.
+
+### Boundaries a follow-up must not cross by accident
+
+- The rate is read through the **no-argument** `TaxRateSettingsService.get_tax_rate()`. Adding `connection=` is `C2-II` work and was deliberately left out.
+- Readiness re-validates the returned percentage through the C1 domain parser because the Settings repair surface may still return raw stored text for an externally corrupted row. Do not "simplify" this into trusting `is_configured`, and do not turn the correction into a Settings refactor.
+- Only `default_tax_rate` is read. The legacy `tax.default_rate` placeholder is never read or interpreted.
+- Every financial warning is non-blocking. Do not let any financial condition reach `can_produce`, the blocking issues, or the physical readiness status.
+- `frontend/src/main.ts` must stay at exactly `6399` lines. `C2-I` adds no financial UI and no frontend arithmetic; presentation is `C2-III`.
+
+### Next steps
+
+1. Review and merge the `C2-I` PR. Do **not** merge it automatically and do not enable auto-merge.
+2. **Only after it merges and is exact-head verified**, `C2-II — Transactional production financial snapshots` becomes startable from the new `origin/main`. Do not start it from this unmerged branch, and do not assign it a PR number in advance.
+3. `C2-II` scope stays as decided: one nullable migration adding only `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot`, the transaction-aware tax-setting read, the required-but-nullable confirmation context, the `409 tax_rate_context_stale` conflict, snapshot persistence inside the existing production transaction, and exposure in the confirmation and `ProductionBatch` detail responses only.
+4. `C2-III` remains `PLANNED — BLOCKED` and must be subdivided before implementation if it is not one bounded vertical slice.
+5. Leave `CR-004` and `CR-006` inactive, and leave C3 and C4 inactive.
+
+Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.

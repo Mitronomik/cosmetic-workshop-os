@@ -324,13 +324,26 @@ def test_configured_rate_does_not_populate_existing_batch_financials(client):
 
 
 def test_readiness_tax_estimate_remains_c2_work(client):
+    """`C2-I` activated the readiness estimate; the snapshot half is still `C2-II`.
+
+    This assertion previously proved that readiness ignored the C1 setting. That
+    half of the boundary moved when `C2-I` landed, so it now proves the other
+    half: readiness reads the setting and estimates, while production
+    confirmation still persists no tax, margin, or margin percent.
+    """
     seed_production_batch(client)
     client.put(TAX_RATE_URL, json={"tax_rate_percent": "6"})
 
     readiness = client.post("/api/orders/2/check-production-readiness").json()
 
-    assert readiness["estimated_tax"] is None
-    assert readiness["estimated_margin"] is None
+    assert readiness["tax_rate_percent"] == "6.00"
+    assert readiness["sale_price"] == "1400.00"
+    assert readiness["estimated_tax"] == "84.00"
+    assert readiness["estimated_margin"] == "1192.35"
+    assert readiness["financial_estimate_status"] == "available"
+    assert business_snapshot(client)["batches"][0]["tax"] is None
+    assert business_snapshot(client)["batches"][0]["margin"] is None
+    assert business_snapshot(client)["batches"][0]["margin_percent"] is None
 
 
 def test_no_new_table_or_migration_is_introduced(client):

@@ -1084,11 +1084,11 @@ Authorization states:
 
 | Slice | Status |
 |---|---|
-| `C2-I` — backend financial readiness estimate | `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED` |
+| `C2-I` — backend financial readiness estimate | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
 | `C2-II` — transactional production financial snapshots | `PLANNED — BLOCKED` on merged and verified `C2-I` |
 | `C2-III` — presentation and snapshot-backed reports | `PLANNED — BLOCKED` on merged and verified `C2-II` |
 
-No future implementation PR number is assigned to any C2 slice. Do not start `C2-I` from the unmerged `CR-008` decision branch.
+`C2-I` is implemented on branch `codex/c2-i-backend-financial-readiness-estimate` from merged `origin/main` `4c03142ef7acdc31fcb15730484e8e52dde95b69` and is not merged. No implementation PR number is assigned to `C2-II` or `C2-III`, and they stay blocked until `C2-I` is merged and exact-head verified.
 
 ### C2 — accepted product contract (`CR-008`)
 
@@ -1202,9 +1202,13 @@ Do not rename existing codes. Do not introduce aliases such as `tax_rate_unconfi
 
 ### C2-I — Backend financial readiness estimate
 
-Статус: `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`
+Статус: `IMPLEMENTED ON PR BRANCH — NOT MERGED`
 
-The only runtime slice authorized by the `CR-008` decision PR. Do not start it from the unmerged decision branch. No implementation PR number is assigned.
+The only runtime slice authorized by the `CR-008` decision PR (merged as PR #150). It is implemented on branch `codex/c2-i-backend-financial-readiness-estimate`, started from merged `origin/main` `4c03142ef7acdc31fcb15730484e8e52dde95b69`, and is **not merged**. `C2-II` stays blocked until `C2-I` is merged and exact-head verified.
+
+Delivered on that branch: the pure calculation module `backend/app/domain/production_financials.py` (`TaxRateContext`, `ProductionFinancialInputs`, immutable `ProductionFinancialEstimate`, `FinancialEstimateStatus`, `FinancialWarningCode`); its integration through `ProductionReadinessService._estimate_financials` and `_tax_rate_context`, replacing the previous `_estimate_money`; the five additive response fields on `ProductionReadinessResponse`; and the two new non-blocking warning codes. The domain module opens no connection, reads no repository, and imports neither FastAPI nor Pydantic.
+
+**Invalid-rate re-validation.** The C1 Settings repair surface may still return the stored text for an externally corrupted row, so `is_configured` alone is not treated as authoritative. `_tax_rate_context` re-parses the returned percentage through the existing C1 `parse_tax_rate_percent` and converts anything that fails — or any row with no effective timestamp — into the no-valid-rate context with `tax_rate_invalid`. The raw text is never returned, never calculated with, never treated as `0.00`, and never turned into an HTTP `500`. `GET`/`PUT /api/settings/tax-rate` behavior is unchanged.
 
 #### Goal
 
