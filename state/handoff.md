@@ -1294,7 +1294,7 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-II closure and C2-III subdivision handoff (2026-07-28)
 
-> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III` LIFECYCLE.** The `C2-II` closure evidence below stands. Its § *Next steps*, and its statement that there is no financial presentation in the UI, were true when written, before PR #154 merged. `C2-III-A` is now `DONE — MERGED AND EXACT-HEAD VERIFIED` and `C2-III-B` is `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`; see § *C2-III-A closure and C2-III-B authorization handoff (2026-07-28)* at the end of this file for the current state.
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III` LIFECYCLE.** The `C2-II` closure evidence below stands. Its § *Next steps*, and its statement that there is no financial presentation in the UI, were true when written, before PR #154 merged. `C2-III-A` is now `DONE — MERGED AND EXACT-HEAD VERIFIED` and `C2-III-B` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` (PR #157); its statement that reports read no snapshots remains true of merged `main` only. See § *C2-III-B snapshot-backed reports implementation handoff (2026-07-28)* at the end of this file for the current state.
 
 `C2-II — Persist transactional production financial snapshots` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`**. The `C2-II` handoff section above is preserved as history.
 
@@ -1370,6 +1370,8 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-III-A closure and C2-III-B authorization handoff (2026-07-28)
 
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III-B` LIFECYCLE.** The `C2-III-A` closure evidence below stands and is not reopened. Its § *What a reviewer should know about the current state* and § *What the next task must do* describe `C2-III-B` as unstarted, unassigned and startable only from a future `main`; that was true when written and is now **superseded**. `C2-III-B` is implemented on PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, and is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. Its statement that reports are not snapshot-backed remains true **of merged `main` only**, which keeps the old Reports runtime until PR #157 merges. See § *C2-III-B snapshot-backed reports implementation handoff (2026-07-28)* at the end of this file.
+
 `C2-III-A — Order and ProductionBatch financial presentation` is:
 
 ```text
@@ -1405,7 +1407,7 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 ### What a reviewer should know about the current state
 
 - Merged `main` carries the `C2-I` readiness estimate, the `C2-II` transactional snapshots and migration `0019`, and the `C2-III-A` financial presentation in the Orders and `ProductionBatch` UI.
-- **Reports are still not snapshot-backed.** `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` are unchanged and read no `ProductionBatch` financial snapshots.
+- **Reports are still not snapshot-backed on merged `main`.** There, `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` read no `ProductionBatch` financial snapshots. *(Superseded for the branch: PR #157 implements them; merged `main` keeps this behaviour until that PR merges.)*
 - The durable contracts remain `docs/decisions/0012-c2-financial-calculation-snapshots.md` and `docs/reports.md`. Neither was rewritten or reinterpreted; only the slice lifecycle and the `C2-III-B` authorization were recorded.
 
 ### What the next task must do
@@ -1478,3 +1480,57 @@ Full contract: `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation co
 - **Not executed, because this PR is documentation-only:** backend tests, frontend tests, `npm run build`, API smoke, browser smoke, migration smoke, packaging smoke and release smoke.
 
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
+
+---
+
+## C2-III-B snapshot-backed reports implementation handoff (2026-07-28)
+
+`C2-III-B — Snapshot-backed reports and report documents` is:
+
+```text
+C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
+```
+
+| Item | Value |
+|---|---|
+| Branch | `codex/c2-iii-b-snapshot-backed-reports` |
+| Started from | clean `origin/main` `7369e7f133f0ce02aea5f2021cbb0e14104b7b34` (PR #156 merge commit) |
+| PR #156 verification | `MERGED`, head `75ae6d22dbe6ee556c6571596a1b7dd5fe8b517d`, merged `2026-07-28T16:56:28Z` — every expected value matched |
+| Backend aggregation | `backend/app/domain/report_financials.py` (pure; no connection, no FastAPI, no Pydantic, no Settings read) |
+| Frontend modules | `frontend/src/report-financial-contract.ts`, `frontend/src/report-financial-presentation.ts` |
+| `frontend/src/main.ts` | `6398` before → `6398` after |
+| Backend suite | `942 passed / 0 failed / 0 skipped` (baseline `883`, all `883` baseline node IDs still collected) |
+| Frontend suites | all 17 `test:*` scripts pass, `0 failed`, including the new `test:report-financial-presentation` (`54 pass`; the earlier `40 pass` in this row was stale when written and is superseded) |
+| Build | `npm run build` `PASS` |
+| Exact-head smoke | API and browser smoke are recorded in the PR body as this PR's evidence |
+
+### What changed
+
+- The contract conflict recorded by the Phase 0 audit is **resolved in runtime**. Reports read the persisted `ProductionBatch` snapshots only: `known_tax` is the sum of non-null persisted `tax`, `known_margin` is the sum of persisted `margin` over `M`, and `known_margin_percent` divides that margin total by the sale prices of exactly the rows in `M`.
+- The exact authorized additive DTO fields are implemented: `known_tax`, `tax_snapshot_record_count`, `missing_tax_snapshot_count`, `margin_snapshot_record_count`, `missing_margin_snapshot_count`. Each counter pair sums to `produced_order_count`.
+- `complete_finance_record_count` and `incomplete_margin_count` keep their legacy paired sale-price/cost meanings and are presented under `Полнота исходных данных` with truthful labels — never as snapshot coverage.
+- The three additive warnings `tax_unavailable`, `partial_tax_basis` and `margin_percent_unavailable_zero_basis` are implemented; `margin_unavailable` and `partial_margin_basis` are restated against persisted margin snapshots without being renamed.
+- `OverviewReportResponse.finance_summary` is the same `FinanceReportResponse`, and `/reports` renders both tabs through one presentation module. The frontend performs no financial arithmetic and validates the finance DTO strictly, failing the read into the existing retained-snapshot path rather than rendering a malformed response.
+- The Reports warning panel no longer prints raw DTO field names. It shows `Показатель: <человекочитаемое название>` via a label map owned by the report presentation module, and shows nothing for an unrecognized field.
+- A newly generated `Сводка мастерской` shows the persisted tax and margin, both coverage counts, and wording that says the values were saved at production time and are not recalculated from the current rate. The old `Налог не рассчитывается в этом документе` line was false once tax is shown and is replaced. Previously generated documents and sidecars remain byte-identical.
+
+### Review corrections (PR #157, after head `8f50e741469b7f5097c1c38dfcdfa52287d9d3d1`)
+
+- **Monetary DTO validation is now canonical.** Every finance monetary and percentage field accepts only an explicit `null` or a canonical signed two-decimal string (`^-?(?:0|[1-9]\d*)\.\d{2}$`), checked by character shape with no numeric conversion and no trimming, padding, rounding or repair. A malformed decimal fails the finance read into the existing retained-snapshot path.
+- **Tax and margin coverage are explained separately.** The single note that claimed the affected batches were absent from both totals — and called them old — is replaced by one backend-warning-driven statement per total, each appearing at most once, neither mentioning the other total. Overview and Finance share the helper, so both surfaces state it identically. `Сводка мастерской` was reviewed and left unchanged: its wording is already qualified and prints each coverage count separately, so it never carried the coupling.
+- **No backend formula, row set, DTO field name or warning condition changed**, and `frontend/src/main.ts` stays at `6398` lines with no validation or coverage copy added to it.
+
+### Next steps
+
+1. Review and merge this runtime PR. Do not merge it here and do not enable auto-merge.
+2. **Only after it merges**, close the `C2-III-B` lifecycle in the active documentation and state, and only then may C2 be assessed as complete.
+3. `C2 is not complete.` C2 remains incomplete until `C2-III-B` is reviewed, exact-head verified and merged, and its active lifecycle is closed.
+4. Leave `CR-004` and `CR-006` inactive, do not reopen ADR 0011, `CR-007`, `CR-008` or the accepted report contract, and leave C3 and C4 inactive.
+5. Product release readiness is not claimed.
+
+### Boundaries honoured
+
+- No migration, no historical backfill, no report persistence table, no new endpoint.
+- No change to Orders readiness, production confirmation, `ProductionBatch` persistence, `ProductionBatch` list or detail UI, the `C2-III-A` presentation modules, tax-rate Settings behaviour, or stock and production transactions.
+- Report reads remain read-only: no audit record, no file, no business mutation.
+- No accounting, tax filing, VAT, tax regimes, date filters, charts, forecasting, analytics, tax-rate averages, DOCX, automatic document regeneration, `C3`, `C4`, Restore, packaging or release work. No dependency and no lockfile changed.

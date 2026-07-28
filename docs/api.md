@@ -70,7 +70,7 @@ Current limitations: the Orders frontend presents this read-only check, but the 
 | C2-I readiness tax / margin / margin-percent calculation | **IMPLEMENTED** and merged (PR #151) |
 | C2-II `ProductionBatch` rate snapshots and transactional persistence | **IMPLEMENTED** and merged (PR #152) |
 | C2-III-A Order and `ProductionBatch` financial presentation | **IMPLEMENTED** and merged (PR #154) |
-| C2-III-B snapshot-backed reports and report documents | `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; report responses are unchanged |
+| C2-III-B snapshot-backed reports and report documents | `IMPLEMENTED ON PR BRANCH — NOT MERGED`; on merged `main` report responses are still unchanged |
 
 ### Financial estimate extension — `C2-I`
 
@@ -1052,20 +1052,23 @@ Returns a basic operational financial snapshot, not accounting:
 - produced orders with sale price;
 - known revenue;
 - known production cost;
-- known margin, currently derived only from rows where sale price and production cost are both known;
-- known margin percent, currently calculated from the same paired revenue basis;
+- known tax;
+- known margin;
+- known margin percent;
 - complete finance record count;
 - incomplete margin count;
 - missing sale price count;
-- missing cost count.
+- missing cost count;
+- tax snapshot record count and missing tax snapshot count;
+- margin snapshot record count and missing margin snapshot count.
 
-The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate. `known_revenue` and `known_production_cost` are independent known totals, but `known_margin` never combines revenue from one incomplete batch with cost from another incomplete batch. Warnings include `margin_unavailable` when no paired sale+cost row exists and `partial_margin_basis` when margin is based on a subset of complete rows.
+The report uses Decimal-safe string values. It does not invent tax or apply a hidden tax rate, and it never reads the current Settings tax rate. `known_revenue` and `known_production_cost` are independent known totals over every non-null persisted value; `known_tax` and `known_margin` are sums of the persisted `ProductionBatch` snapshots and are never reconstructed from sale price and cost.
 
-#### Accepted `C2-III-B` snapshot-backed finance contract — not implemented
+#### `C2-III-B` snapshot-backed finance contract
 
-The field list above is the **current merged** response. `C2-III-B` replaces the derived margin with persisted `ProductionBatch` snapshots. That slice is `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED`; none of the fields below exist in the API yet. The full contract is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*.
+Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`. On merged `main` the response is still the pre-`C2-III-B` shape, with margin derived from paired sale price and cost and without the additive fields below. The full contract is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*, and the aggregation lives in `backend/app/domain/report_financials.py`.
 
-When implemented, `known_margin` becomes the sum of persisted `ProductionBatch.margin` over exactly the rows whose margin snapshot is non-null (`M`), and:
+`known_margin` is the sum of persisted `ProductionBatch.margin` over exactly the rows whose margin snapshot is non-null (`M`), and:
 
 ```text
 known_margin_percent =
@@ -1167,7 +1170,7 @@ Contract rules:
 
 **Clear is row deletion.** `PUT` with `tax_rate_percent: null` deletes the `default_tax_rate` `AppSetting` row and nothing else. It never touches the legacy `tax.default_rate` placeholder row, which is a different key and is never read, reinterpreted, migrated, or rewritten. The deletion and its `AuditLog` insert share one transaction, and a failed audit insert rolls the deletion back. Clearing when the row is already absent is a no-op: no delete, no timestamp change, no `AuditLog`, and no message claiming a change. No nullable-column migration, sentinel value, empty-string storage, new settings table, or parallel settings store is authorized — unconfigured is the absence of the row.
 
-The endpoints themselves do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. `CR-008` decided the C2 contract and divided it into `C2-I` (**merged**, PR #151), `C2-II` (**merged**, PR #152), and `C2-III`, which is now subdivided into `C2-III-A` (**merged**, PR #154) and `C2-III-B` (`AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`). The `C2-I` readiness estimate reads the setting through the existing C1 service and writes nothing; `C2-II` reads it again inside the production transaction through the same service and persists immutable snapshots. The `GET`/`PUT` endpoints themselves are unchanged by both. See the `C2-I` financial estimate extension under production readiness and the `C2-II` financial snapshot extension under production confirmation.
+The endpoints themselves do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. `CR-008` decided the C2 contract and divided it into `C2-I` (**merged**, PR #151), `C2-II` (**merged**, PR #152), and `C2-III`, which is now subdivided into `C2-III-A` (**merged**, PR #154) and `C2-III-B` (`IMPLEMENTED ON PR BRANCH — NOT MERGED`, PR #157; merged `main` keeps the pre-`C2-III-B` Reports runtime until it merges). The `C2-I` readiness estimate reads the setting through the existing C1 service and writes nothing; `C2-II` reads it again inside the production transaction through the same service and persists immutable snapshots. The `GET`/`PUT` endpoints themselves are unchanged by both. See the `C2-I` financial estimate extension under production readiness and the `C2-II` financial snapshot extension under production confirmation.
 
 ## Orders write validation contract
 

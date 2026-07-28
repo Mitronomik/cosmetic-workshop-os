@@ -14,6 +14,7 @@
     "test:order-production-feedback": "rm -rf dist-tests/order-production-feedback && tsc -p tsconfig.test.order-production-feedback.json && node --test test/order-production-feedback.test.mjs",
     "test:order-production-context": "rm -rf dist-tests/order-production-context && tsc -p tsconfig.test.order-production-context.json && node --test test/order-production-context.test.mjs",
     "test:production-financial-presentation": "rm -rf dist-tests/production-financial-presentation && tsc -p tsconfig.test.production-financial-presentation.json && node --test test/production-financial-presentation.test.mjs",
+    "test:report-financial-presentation": "rm -rf dist-tests/report-financial-presentation && tsc -p tsconfig.test.report-financial-presentation.json && node --test test/report-financial-presentation.test.mjs",
     "test:dashboard-onboarding-feedback": "rm -rf dist-tests/dashboard-onboarding-feedback && tsc -p tsconfig.test.dashboard-onboarding-feedback.json && node --test test/dashboard-onboarding-feedback.test.mjs",
     "test:help-passive-regression": "rm -rf dist-tests/help-passive-regression && tsc -p tsconfig.test.help-passive-regression.json && node --test test/help-passive-regression.test.mjs",
     "test:alerts-feedback": "rm -rf dist-tests/alerts-feedback && tsc -p tsconfig.test.alerts-feedback.json && node --test test/alerts-feedback.test.mjs",

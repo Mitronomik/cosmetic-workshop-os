@@ -15,7 +15,7 @@ from app.schemas.report_documents import (
     ReportDocumentStatusResponse,
     ReportOverviewDocumentCreateRequest,
 )
-from app.schemas.reports import OverviewReportResponse, ReportWarning
+from app.schemas.reports import FinanceReportResponse, OverviewReportResponse, ReportWarning
 from app.schemas.settings import WorkshopProfile
 from app.services.reports import ReportsService
 from app.services.settings import WorkshopProfileSettingsService
@@ -345,15 +345,7 @@ def _workshop_overview_document_lines(
         f"- Алерты низкого остатка: {inventory.open_low_stock_alerts}",
         "",
         "## Базовые финансы",
-        f"- Известная выручка: {_value(finance.known_revenue)}",
-        f"- Известная себестоимость: {_value(finance.known_production_cost)}",
-        f"- Известная маржа: {_value(finance.known_margin)}",
-        f"- Маржа, %: {_value(finance.known_margin_percent)}",
-        f"- Полных финансовых записей: {finance.complete_finance_record_count}",
-        f"- Неполных записей для расчета маржи: {finance.incomplete_margin_count}",
-        f"- Без цены продажи: {finance.missing_sale_price_count}",
-        f"- Без себестоимости: {finance.missing_cost_count}",
-        "- Налог не рассчитывается в этом документе и не придумывается системой.",
+        *_finance_lines(finance),
         "",
         "## Предупреждения и неполные данные",
         *_warnings_lines(report.warnings),
@@ -368,6 +360,43 @@ def _workshop_overview_document_lines(
         "",
     ]
     return lines
+
+
+def _finance_lines(finance: FinanceReportResponse) -> list[str]:
+    """The finance section of «Сводка мастерской».
+
+    Every number here is displayed exactly as the backend finance report DTO
+    returned it. The document calculates nothing: it does not recalculate tax,
+    does not derive margin, and never prints the *current* tax setting as a
+    stand-in for what a historical batch actually recorded.
+
+    Tax and margin cover only the batches that saved those values when they were
+    produced, so the two coverage lines state which subset each total is about —
+    they can legitimately differ from each other and from the paired-input
+    counters below them.
+    """
+    return [
+        f"- Известная выручка: {_value(finance.known_revenue)}",
+        f"- Известная себестоимость: {_value(finance.known_production_cost)}",
+        f"- Зафиксированный налог: {_value(finance.known_tax)}",
+        f"- Зафиксированная маржа: {_value(finance.known_margin)}",
+        f"- Маржа по партиям с зафиксированными финансовыми данными, %: {_value(finance.known_margin_percent)}",
+        f"- Налог зафиксирован: {finance.tax_snapshot_record_count} из {finance.produced_order_count} партий",
+        f"- Маржа зафиксирована: {finance.margin_snapshot_record_count} из {finance.produced_order_count} партий",
+        "",
+        "### Полнота исходных данных",
+        f"- Партий с ценой и себестоимостью: {finance.complete_finance_record_count}",
+        f"- Партий с неполной парой цены и себестоимости: {finance.incomplete_margin_count}",
+        f"- Без цены продажи: {finance.missing_sale_price_count}",
+        f"- Без себестоимости: {finance.missing_cost_count}",
+        "",
+        "### Как читать эти цифры",
+        "- Документ показывает налог и маржу, сохранённые при изготовлении партий.",
+        "- Налог и маржа не пересчитываются по текущей налоговой ставке.",
+        "- Текущая настройка ставки не применяется к прошлым партиям задним числом.",
+        "- У старых партий с неполными данными налог и маржа могут быть недоступны.",
+        "- Итоги могут охватывать разные наборы партий, поэтому их количество указано отдельно.",
+    ]
 
 def _plain_document_text(value: str) -> str:
     return " ".join(str(value or "").split())

@@ -17,7 +17,8 @@ from app.services.report_documents import (
 from app.schemas.report_documents import ReportOverviewDocumentCreateRequest
 from app.schemas.settings import WorkshopProfileUpdateRequest
 from app.services.settings import WorkshopProfileSettingsService
-from app.tests.test_reports import BUSINESS_TABLES, counts, seed_orders_and_production
+from app.services.tax_rate_settings import TaxRateSettingsService
+from app.tests.test_reports import BUSINESS_TABLES, counts, seed_orders_and_production, seed_snapshot_batches
 
 
 def config(tmp_path):
@@ -77,7 +78,12 @@ def test_create_overview_markdown_document_on_empty_db(tmp_path):
     ):
         assert section in text
     assert "не бухгалтерский или налоговый отчет" in text
-    assert "Налог не рассчитывается" in text
+    # The old wording claimed the document contains no tax at all. It now shows
+    # the tax that was saved when each batch was produced, and says only that it
+    # is not recalculated from the current rate.
+    assert "Налог не рассчитывается" not in text
+    assert "Документ показывает налог и маржу, сохранённые при изготовлении партий." in text
+    assert "Налог и маржа не пересчитываются по текущей налоговой ставке." in text
     assert "Система не придумывает налоговые ставки" in text
 
     sidecar = json.loads(json_path.read_text(encoding="utf-8"))
@@ -193,12 +199,135 @@ def test_generated_markdown_includes_report_warnings_and_finance_limits(tmp_path
     text = (svc.documents_dir / response.document.filename).read_text(encoding="utf-8")
     assert "Не у всех произведённых заказов указана цена продажи." in text
     assert "Не для всех производственных партий известна себестоимость." in text
-    assert "Маржа рассчитана только" in text
+    # These rows are pre-`C2-II` shaped: sale price and cost are known, but no
+    # tax or margin snapshot was ever saved. The document must say so rather
+    # than derive a margin from the paired price and cost.
+    assert "Для произведённых партий нет сохранённых данных о марже." in text
+    assert "Для произведённых партий нет сохранённых данных о налоге." in text
     assert "Известная выручка: 1200.10" in text
     assert "Известная себестоимость: 150.10" in text
-    assert "Известная маржа: 1050.00" in text
-    assert "Полных финансовых записей: 1" in text
-    assert "Неполных записей для расчета маржи: 1" in text
+    assert "Зафиксированная маржа: не рассчитано" in text
+    assert "Зафиксированный налог: не рассчитано" in text
+    assert "Налог зафиксирован: 0 из 2 партий" in text
+    assert "Маржа зафиксирована: 0 из 2 партий" in text
+    assert "Партий с ценой и себестоимостью: 1" in text
+    assert "Партий с неполной парой цены и себестоимости: 1" in text
+
+
+def snapshot_document_text(tmp_path, rows):
+    """Generate one Markdown «Сводка мастерской» over the given batch snapshots."""
+    c, svc = service(tmp_path)
+    seed_snapshot_batches(c, rows)
+    response = svc.create_overview_document(ReportOverviewDocumentCreateRequest())
+    return c, svc, (svc.documents_dir / response.document.filename).read_text(encoding="utf-8")
+
+
+def test_generated_markdown_shows_persisted_tax_margin_and_same_basis_percentage(tmp_path):
+    _c, _svc, text = snapshot_document_text(tmp_path, [
+        ("1000.00", "640.00", "60.00", "300.00", "30.00"),
+        ("9000.00", "5000.00", None, None, None),
+    ])
+    assert "Известная выручка: 10000.00" in text
+    assert "Зафиксированный налог: 60.00" in text
+    assert "Зафиксированная маржа: 300.00" in text
+    # Same-basis: 300 ÷ 1000. The global-revenue denominator would print 3.00.
+    assert "Маржа по партиям с зафиксированными финансовыми данными, %: 30.00" in text
+    assert "Налог зафиксирован: 1 из 2 партий" in text
+    assert "Маржа зафиксирована: 1 из 2 партий" in text
+
+
+def test_generated_markdown_keeps_zero_negative_and_unavailable_apart(tmp_path):
+    _c, _svc, zero = snapshot_document_text(tmp_path / "zero", [("100.00", "40.00", "0.00", "0.00", "0.00")])
+    assert "Зафиксированный налог: 0.00" in zero
+    assert "Зафиксированная маржа: 0.00" in zero
+
+    _c, _svc, negative = snapshot_document_text(tmp_path / "negative", [("100.00", "160.00", "6.00", "-66.00", "-66.00")])
+    assert "Зафиксированная маржа: -66.00" in negative
+
+    _c, _svc, missing = snapshot_document_text(tmp_path / "missing", [("100.00", "40.00", None, None, None)])
+    assert "Зафиксированный налог: не рассчитано" in missing
+    assert "Зафиксированная маржа: не рассчитано" in missing
+
+
+def test_generated_markdown_explains_snapshot_limits_and_shows_each_warning_once(tmp_path):
+    _c, _svc, text = snapshot_document_text(tmp_path, [
+        ("100.00", "40.00", "6.00", "54.00", "54.00"),
+        ("200.00", "80.00", None, None, None),
+        (None, None, None, None, None),
+    ])
+    assert "Документ показывает налог и маржу, сохранённые при изготовлении партий." in text
+    assert "Налог и маржа не пересчитываются по текущей налоговой ставке." in text
+    assert "Текущая настройка ставки не применяется к прошлым партиям задним числом." in text
+    for message in (
+        "Налог показан только по партиям, где он был зафиксирован при изготовлении.",
+        "Маржа показана только по партиям, где она была зафиксирована при изготовлении.",
+    ):
+        assert text.count(message) == 1
+
+
+def test_generated_markdown_labels_paired_counters_truthfully(tmp_path):
+    """The legacy counters may appear, but never as snapshot coverage."""
+    _c, _svc, text = snapshot_document_text(tmp_path, [("100.00", "40.00", None, None, None)])
+    assert "Партий с ценой и себестоимостью: 1" in text
+    assert "Партий с неполной парой цены и себестоимости: 0" in text
+    assert "Полных финансовых записей" not in text
+    assert "Неполных записей для расчета маржи" not in text
+
+
+def test_pdf_source_content_carries_the_same_snapshot_finance_lines(tmp_path, monkeypatch):
+    """PDF and Markdown are rendered from one line list, so they cannot drift."""
+    c, svc = service(tmp_path)
+    seed_snapshot_batches(c, [("1000.00", "640.00", "60.00", "300.00", "30.00"), ("9000.00", "5000.00", None, None, None)])
+    captured_lines: list[str] = []
+    monkeypatch.setattr(report_documents_module, "_is_pdf_generation_available", lambda: True)
+
+    def fake_write_pdf_exclusive(path: Path, lines: list[str], *, created_at: datetime) -> None:
+        captured_lines.extend(lines)
+        with path.open("xb") as file:
+            file.write(b"%PDF-1.4\n% fake test pdf\n%%EOF\n")
+
+    monkeypatch.setattr(report_documents_module, "_write_pdf_exclusive", fake_write_pdf_exclusive)
+    svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))
+
+    assert "- Зафиксированный налог: 60.00" in captured_lines
+    assert "- Зафиксированная маржа: 300.00" in captured_lines
+    assert "- Маржа по партиям с зафиксированными финансовыми данными, %: 30.00" in captured_lines
+    assert "- Налог зафиксирован: 1 из 2 партий" in captured_lines
+    assert "- Маржа зафиксирована: 1 из 2 партий" in captured_lines
+    assert "- Документ показывает налог и маржу, сохранённые при изготовлении партий." in captured_lines
+
+
+def test_pdf_availability_contract_is_unchanged(tmp_path):
+    """PDF stays advertised exactly as the environment supports it."""
+    _c, svc = service(tmp_path)
+    available = report_documents_module._is_pdf_generation_available()
+    assert ("pdf" in svc.status().available_formats) is available
+    if not available:
+        with pytest.raises(UnsupportedReportDocumentFormatError, match="PDF сейчас недоступен"):
+            svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))
+
+
+def test_changing_the_tax_rate_never_rewrites_an_existing_document_or_its_sidecar(tmp_path):
+    c, svc = service(tmp_path)
+    seed_snapshot_batches(c, [("1000.00", "400.00", "60.00", "540.00", "54.00")])
+    first = svc.create_overview_document(ReportOverviewDocumentCreateRequest()).document
+    first_path = svc.documents_dir / first.filename
+    first_sidecar = svc.documents_dir / first.metadata_filename
+    first_bytes = first_path.read_bytes()
+    first_sidecar_bytes = first_sidecar.read_bytes()
+
+    TaxRateSettingsService(c).update_tax_rate("20")
+    before = counts(c)
+    second = svc.create_overview_document(ReportOverviewDocumentCreateRequest()).document
+
+    assert first_path.read_bytes() == first_bytes
+    assert first_sidecar.read_bytes() == first_sidecar_bytes
+    assert second.filename != first.filename
+    # The new document still shows the persisted 60.00, not the new 20% rate.
+    second_text = (svc.documents_dir / second.filename).read_text(encoding="utf-8")
+    assert "Зафиксированный налог: 60.00" in second_text
+    assert "20" not in second_text.split("## Базовые финансы")[1].split("###")[0]
+    assert counts(c) == before
 
 
 def test_create_overview_pdf_document_on_empty_db(tmp_path, monkeypatch):

@@ -55,17 +55,32 @@ class ProductionReportResponse(BaseModel):
 
 
 class FinanceReportResponse(BaseModel):
+    """The snapshot-backed finance report (`C2-III-B`).
+
+    ``known_tax`` and ``known_margin`` are sums of the persisted
+    ``ProductionBatch`` snapshots, never a recalculation from the current tax
+    setting. ``complete_finance_record_count`` and ``incomplete_margin_count``
+    keep their pre-existing paired sale-price/cost meanings for backward
+    compatibility; the four snapshot counters below are the authoritative
+    tax and margin coverage, and each pair sums to ``produced_order_count``.
+    """
+
     generated_at: str
     produced_order_count: int
     produced_orders_with_sale_price: int
     known_revenue: str | None
     known_production_cost: str | None
+    known_tax: str | None
     known_margin: str | None
     known_margin_percent: str | None
     complete_finance_record_count: int
     incomplete_margin_count: int
     missing_sale_price_count: int
     missing_cost_count: int
+    tax_snapshot_record_count: int
+    missing_tax_snapshot_count: int
+    margin_snapshot_record_count: int
+    missing_margin_snapshot_count: int
     warnings: list[ReportWarning]
 
 

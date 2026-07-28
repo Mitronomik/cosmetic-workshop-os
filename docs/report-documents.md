@@ -98,6 +98,16 @@ Markdown and PDF documents are Russian and user-readable. They include:
 
 If report data is missing, the document renders values as `не рассчитано` or `нет данных` instead of inventing values. Tax is not invented or calculated by the document renderer. Profile values are rendered as plain document text, not as HTML, links, scripts, images, logos, or editable templates.
 
+### Snapshot-backed finance section (`C2-III-B`)
+
+Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
+
+A newly generated «Сводка мастерской» displays the finance values of `OverviewReportResponse.finance_summary` exactly as the backend returned them: known revenue, known production cost, the persisted tax total, the persisted margin total, the same-basis margin percentage, the tax and margin snapshot coverage counts, and the legacy paired sale-price/cost counters under a separate `Полнота исходных данных` heading with labels that say what they actually count. The renderer performs no financial calculation of its own.
+
+The document states, in the user's own language, that tax and margin are the values saved when each batch was produced, that they are not recalculated from the current tax rate, that the current setting is not applied to past batches retroactively, that old incomplete batches may show unavailable values, and that the totals may cover different subsets of batches.
+
+The earlier wording «Налог не рассчитывается в этом документе» became false once the document began showing persisted tax, and is replaced by wording that says the tax shown is the saved one and is not recalculated. Previously generated documents and sidecars are never rewritten: only newly generated documents reflect the snapshot-backed report, and generation stays an explicit user action.
+
 ## PDF generation
 
 PDF generation is local and explicit. The backend embeds a local TTF font into a simple PDF so Russian text remains readable. `GET /api/report-documents/status` advertises `pdf` only when the backend finds a local `.ttf` font that the current renderer can parse and that contains Cyrillic glyphs. TTC font collections (`.ttc`) are not supported in PR92. If no compatible TTF font is available, status omits `pdf` and PDF creation is rejected safely.
