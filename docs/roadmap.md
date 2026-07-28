@@ -52,6 +52,20 @@ The current short-horizon implementation sequence, audit-driven hardening slices
 
 - [Implementation plan](implementation-plan.md)
 
+### Roadmap completion window — current C1–C4 status
+
+Updated `2026-07-27`. This block records only the completion-window status; unrelated historical roadmap entries below are untouched.
+
+- **C1 — calculation-sensitive Settings: `COMPLETED`.** The product contract was decided as `CR-007` (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`), and its single authorized slice `C1-I — Implement backend-owned tax-rate setting` is **merged and `DONE`** — PR #149, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged `2026-07-27T19:44:53Z`, exact-head `/settings` smoke `PASS — 146 checks / 0 failures`. C1 no longer awaits smoke and is not reopened.
+- **C2 — себестоимость, налог и маржа: contract decided as `CR-008`, divided into bounded slices.** Contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`; full slice specifications: `docs/implementation-plan.md` § 11.
+  - `C2-I` — backend financial readiness estimate: `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED`. The only runtime slice this decision authorizes.
+  - `C2-II` — transactional production financial snapshots: `PLANNED — BLOCKED` on merged and verified `C2-I`.
+  - `C2-III` — presentation and snapshot-backed reports: `PLANNED — BLOCKED` on merged and verified `C2-II`, and a **planning umbrella** that must be subdivided before implementation if it is not one bounded vertical slice.
+- **C3 — AuditLog workspace: `INACTIVE`.** Not authorized here.
+- **C4 — Restore и recovery: `INACTIVE`.** Still `NEEDS PRODUCT DECISION`.
+
+No future implementation PR number is assigned to any C2 slice. Product release readiness is **not** claimed.
+
 ## 2. Главный продуктовый принцип
 
 Пользователь получает не GitHub-репозиторий, не техническую админку и не таблицу рецептов.
@@ -477,7 +491,7 @@ app_version
 schema_version
 ```
 
-> **Примечание по налоговой ставке — CR-007.** Прежняя строка `tax_rate default 0.06` **отменена** решением `CR-007` и больше не является действующим указанием. Она читалась как коэффициент; принятая настройка — это **процент**, поэтому `6.00` означает `6%`, а `0.06` означало бы `0.06%`. Авторитетное имя настройки — `default_tax_rate`. Значения по умолчанию нет: неконфигурированное состояние — это `null`, и оно **не равно нулю**. Реализация `C1-I` ещё **не выполнена**. Действующий контракт: `docs/settings.md`.
+> **Примечание по налоговой ставке — CR-007.** Прежняя строка `tax_rate default 0.06` **отменена** решением `CR-007` и больше не является действующим указанием. Она читалась как коэффициент; принятая настройка — это **процент**, поэтому `6.00` означает `6%`, а `0.06` означало бы `0.06%`. Авторитетное имя настройки — `default_tax_rate`. Значения по умолчанию нет: неконфигурированное состояние — это `null`, и оно **не равно нулю**. Реализация `C1-I` **выполнена и влита** (PR #149, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, `2026-07-27`), настройка доступна через `GET`/`PUT /api/settings/tax-rate`. Действующий контракт: `docs/settings.md`.
 
 ### AuditLog MVP fields
 

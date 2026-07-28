@@ -110,11 +110,25 @@ Saved Workshop profile fields are display metadata for newly generated report do
 
 # C1 — налоговая ставка для расчётов (`default_tax_rate`)
 
-Status: **ACCEPTED PRODUCT CONTRACT — IMPLEMENTED ON THE `C1-I` PR BRANCH, NOT MERGED. EXACT-HEAD `/settings` SMOKE REQUIRED BEFORE MERGE.**
+Status: **ACCEPTED PRODUCT CONTRACT — IMPLEMENTED, MERGED, AND EXACT-HEAD VERIFIED (`C1-I`, PR #149).**
 
 This section is the durable contract for the single global workshop tax-rate setting. It was decided as `CR-007` and is the first calculation-sensitive setting to receive a full backend contract.
 
-The authorized slice `C1-I — Backend-owned tax-rate setting` implements sections 1–4 and 7–12 of this contract on its PR branch: the `GET`/`PUT` endpoints, Decimal-string validation, the canonical two-decimal representation, the backend-generated `effective_at`, explicit Clear as row deletion, the atomic `AuditLog`, the no-op contract, and the `/settings` UI. `default_tax_rate` is `editable_now` in the Settings Decision Matrix. Sections 5, 6, and the tax/margin calculations in section 8 remain **C2 and unimplemented**: production readiness still returns `estimated_tax = null`, and `ProductionBatch` still has no tax snapshot columns. Full slice contract: `docs/implementation-plan.md`.
+**`C1-I` is `DONE`** (VERIFIED FROM MERGED PR EVIDENCE): PR #149 `C1-I — Implement backend-owned tax-rate setting` is `MERGED`, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged at `2026-07-27T19:44:53Z`. Accepted evidence: backend `671 collected / 671 passed / 0 failed / 0 skipped`; focused tax-setting frontend suite `52 passed / 0 failed / 0 skipped`; all 13 focused frontend suites `568 passed / 0 failed / 0 skipped`; frontend production build `PASS`; exact-head `/settings` smoke `PASS — 146 checks / 0 failures` against head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`. No migration was added. `frontend/src/main.ts` went from `6406` to `6399` lines. **The setting is implemented; nothing in it still awaits smoke.**
+
+The merged slice implements sections 1–4 and 7–12 of this contract: the `GET`/`PUT` endpoints, Decimal-string validation, the canonical two-decimal representation, the backend-generated `effective_at`, explicit Clear as row deletion, the atomic `AuditLog`, the no-op contract, and the `/settings` UI. `default_tax_rate` is `editable_now` in the Settings Decision Matrix.
+
+Sections 5, 6, and the tax/margin calculations in section 8 remain **C2 and unimplemented on `main`**: production readiness still returns `estimated_tax = null` and `estimated_margin = null`, and `ProductionBatch` still has no tax snapshot columns.
+
+**C2 consumes this setting; it never changes it.** `CR-008` (ADR `docs/decisions/0012-c2-financial-calculation-snapshots.md`) decided the C2 calculation and snapshot contract and divided C2 into three bounded slices:
+
+- `C2-I` — backend financial readiness estimate: `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED`;
+- `C2-II` — transactional production financial snapshots, including `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot`: `PLANNED — BLOCKED`;
+- `C2-III` — presentation and snapshot-backed reports: `PLANNED — BLOCKED`.
+
+The current setting is **only ever an input to future calculations**. It never recalculates history: changing or clearing it leaves every completed `ProductionBatch`, report value, prior audit record, and generated document exactly as it was. `C2-II` will snapshot the active rate **and** its effective timestamp onto the `ProductionBatch` at confirmation time, in nullable columns that are never backfilled, and reports will read those snapshots only.
+
+Full slice contracts: `docs/implementation-plan.md` § 11. C2 contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
 ## 1. Product meaning
 
@@ -288,10 +302,18 @@ When the tax setting changes after a readiness result was shown but before produ
 - confirmation must not silently persist a different financial result;
 - the backend must re-read the setting during confirmation;
 - the backend must detect the stale financial-setting version/effective timestamp;
-- confirmation must require a new readiness check through a structured conflict such as `financial_settings_changed`;
+- confirmation must require a new readiness check through a structured conflict;
 - no stock movement, batch, order-status change, or partial write may occur on that conflict.
 
 The exact C2 API shape may be refined by the future C2 decision, but these semantics are mandatory.
+
+**Refined by `CR-008`.** The C2 decision fixed the exact contract these semantics were waiting for, without changing them. The stale-setting conflict is HTTP `409` with the stable code **`tax_rate_context_stale`** — this supersedes the illustrative name `financial_settings_changed` used while `CR-007` was being decided. Readiness identifies the rate context through the additive fields `tax_rate_percent`, `tax_rate_effective_at`, and `financial_estimate_status`, reusing the existing `estimated_cost`, `estimated_tax`, and `estimated_margin` fields. Confirmation carries the required-but-nullable keys `expected_tax_rate_percent` and `expected_tax_rate_effective_at`, and reads the current setting inside the production transaction through a bounded `connection`-aware extension of the `C1` service.
+
+`CR-008` also completed the defensive lifecycle this C1 contract left open. A missing `default_tax_rate` row and a persisted value that is invalid under the C1 validation rules above together form **`no valid configured tax-rate context`**: they stay distinguishable through the readiness warnings `tax_rate_missing` and `tax_rate_invalid`, but both return `tax_rate_percent = null` and `tax_rate_effective_at = null`, both leave tax and margin unavailable, both map to the single `null/null` confirmation context, and **neither blocks physical production**. The raw invalid value is never returned as an authoritative rate, never coerced or treated as `0.00`, and never persisted onto a `ProductionBatch`; production confirmation never repairs, clears, rewrites, or audits it, so the invalid row stays exactly as it is in `app_settings` for the user to fix through `/settings`.
+
+Timestamps keep the C1 storage convention: `app_settings.updated_at` and the future `tax_rate_effective_at_snapshot` stay `YYYY-MM-DD HH:MM:SS` UTC SQLite text, while `effective_at`, the readiness rate context, and the confirmation context all use `YYYY-MM-DDTHH:MM:SSZ`.
+
+Full contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
 ## 6. Production snapshot semantics
 
@@ -507,9 +529,9 @@ Do not add multiple tax modes, regimes, deductions, or accounting terminology.
 
 **C1 does not own:** tax calculation in readiness; tax calculation in production confirmation; `ProductionBatch` snapshot fields; margin calculation; margin-percent calculation; report calculations; historical migration or backfill.
 
-**C2 — calculations and snapshots — remains blocked until the C1 implementation is merged and verified.** C2 will own: the readiness tax estimate; stale-setting detection between readiness and confirmation; `ProductionBatch` tax snapshots; the nullable snapshot migration; the tax amount; margin and margin percent; reports using snapshots; old-record unavailable behavior; backward-compatibility tests.
+**C2 — calculations and snapshots.** That gate is now satisfied: the C1 implementation is merged and exact-head verified, so C2 is no longer blocked on C1. C2 owns: the readiness tax estimate; stale-setting detection between readiness and confirmation; `ProductionBatch` tax snapshots; the nullable snapshot migration; the tax amount; margin and margin percent; reports using snapshots; old-record unavailable behavior; backward-compatibility tests.
 
-C2 must not be implemented inside the C1 implementation PR. A separate C2 product/implementation contract may refine the cost and margin formulas but must not contradict this accepted C1 tax decision.
+C2 was not implemented inside the C1 implementation PR. Its product contract is `CR-008` / `docs/decisions/0012-c2-financial-calculation-snapshots.md`, which refines the cost and margin formulas without contradicting this accepted C1 tax decision. C2 is now gated on its own slice sequence instead: only `C2-I` is authorized once the `CR-008` decision PR merges, and `C2-II` and `C2-III` stay `PLANNED — BLOCKED` behind it.
 
 ## 14. Current repository facts this contract must respect
 

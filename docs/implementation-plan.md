@@ -47,19 +47,35 @@
 
 ## 3. Текущая базовая точка
 
+### Current baseline
+
+- **Current baseline `origin/main`: `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`** (VERIFIED FROM REPOSITORY / GITHUB). This is the **PR #149 merge commit** — the `C1-I` merged baseline — and it is the verified current `origin/main` at the start of PR #150.
+- PR #149 — `C1-I — Implement backend-owned tax-rate setting`, state `MERGED`: final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`; merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`; merged `2026-07-27T19:44:53Z`.
+- Merged `main` backend baseline: `671 collected, 671 passed, 0 failed, 0 skipped`, with all 562 previously merged node IDs still collected (VERIFIED FROM MERGED PR EVIDENCE).
+- Accepted `C1-I` frontend evidence: focused tax-setting suite `52 passed, 0 failed, 0 skipped`; all 13 focused frontend suites `568 passed, 0 failed, 0 skipped`; production build `PASS`; exact-head `/settings` smoke `PASS — 146 checks / 0 failures` (VERIFIED FROM MERGED PR EVIDENCE).
+- `frontend/src/main.ts` on merged `main`: `6399` lines.
+
+### Current implementation state
+
+**No runtime implementation is currently active in this documentation PR.** After PR #150 merges, `C2-I` becomes the **only authorized runtime slice**. `C2-II` and `C2-III` remain `PLANNED — BLOCKED`. `C2-I` must not start from the unmerged PR #150 branch, and no implementation PR number is assigned to any C2 slice. `C2-I` is **not implemented**.
+
+`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 and C4 remain inactive. Product release readiness is not claimed.
+
+### HISTORICAL RECORD — Block B closure baseline
+
+Retained for traceability. These values described the repository at Block B closure on 2026-07-26 and are **not** the current baseline; the current baseline is `ff7afe6b0778ab2b348229a4df34acf3e3fc0001` above.
+
 **Block B is complete.** B4.1 was the last runtime slice of Block B and is merged.
 
-- Current baseline `origin/main`: `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa` — the PR #141 merge commit, merged `2026-07-26` (VERIFIED FROM REPOSITORY / GITHUB).
+- Block B closure baseline `origin/main`: `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa` — the PR #141 merge commit, merged `2026-07-26` (VERIFIED FROM REPOSITORY / GITHUB).
 - PR #141 — `B4.1 — Dashboard safe GET timeout and recovery`: final reviewed head `d0cde127355b146f101ddf3769d76d0226c71ec0`; merge commit `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa` (VERIFIED FROM REPOSITORY / GITHUB).
 - Accepted Dashboard/Onboarding focused suite for the final reviewed head: `42/42` (SUPPLIED TASK BASELINE).
 - Accepted frontend production build: `PASS` (SUPPLIED TASK BASELINE).
 - Accepted PR #141 backend branch-only failure delta: `0` (SUPPLIED TASK BASELINE).
-- Accepted browser, keyboard, responsive, network, and exact-head smoke: `PASS` — SUPPLIED TASK BASELINE — product-owner-verified exact-head smoke of PR #141 on 2026-07-26; not re-run in this documentation task.
-- Complete backend baseline: `496 collected, 492 passed, 4 failed, 0 skipped` — re-executed from `backend/` in the Block B closure task with zero drift (EXECUTED IN THIS TASK).
+- Accepted browser, keyboard, responsive, network, and exact-head smoke: `PASS` — SUPPLIED TASK BASELINE — product-owner-verified exact-head smoke of PR #141 on 2026-07-26.
+- Complete backend baseline at that point: `496 collected, 492 passed, 4 failed, 0 skipped` — re-executed from `backend/` in the Block B closure task with zero drift.
 
-The four backend baseline failures are not regressions from PR #141 and are now handled by an explicit gate rather than being carried as loose findings.
-
-The **Pre-release hardening — backend baseline correction gate** window (section 10a) is now **DONE**: `R3`, `R2`, and `R4` are all merged, and the merged `main` backend baseline is green at `562 collected, 562 passed, 0 failed, 0 skipped`. **No runtime implementation slice is active and none is selected here**; the next gate must be separately selected and authorized. No future PR number is assigned. `CR-006` is a new `needs evidence` row and is not activated. Product release readiness is not claimed.
+The four backend baseline failures were not regressions from PR #141 and were handled by an explicit gate rather than carried as loose findings. The **Pre-release hardening — backend baseline correction gate** window (section 10a) is **DONE**: `R3`, `R2`, and `R4` are all merged, and the backend baseline at that point was green at `562 collected, 562 passed, 0 failed, 0 skipped`. The `C1` window then completed on top of it, taking the baseline to `671 / 671 / 0 / 0`.
 
 ## 4. Неизменяемые продуктовые правила
 
@@ -143,8 +159,8 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | Безопасная установка обновления | Backup-before-migration реализован частично, но нет packaged update flow и полного smoke | Обязательно |
 | User/remote install checklist | Есть частичные документы, финальный процесс не проверен | Обязательно |
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
-| Налоговая настройка | Calculation-sensitive Settings пока закрыты | Обязательно по product spec |
-| Себестоимость, налог и маржа | Себестоимость доступна частично; налог и маржа остаются `null`/недоступны | Обязательно |
+| Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
+| Себестоимость, налог и маржа (расчёты и снапшоты) | **ОТКРЫТО.** Себестоимость доступна частично; налог, маржа и процент маржи остаются `null`/недоступны, снапшот-колонок `ProductionBatch` нет, отчёты снапшоты не читают. Наличие настройки из C1 этого обязательства **не закрывает** | Обязательно — контракт принят как `CR-008`; `C2-I` авторизован только после merge PR #150, `C2-II` и `C2-III` заблокированы |
 | AuditLog workspace | Логи пишутся, пользовательского read-only экрана нет | Обязательно либо нужен явный scope amendment |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
@@ -502,7 +518,7 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 - `R4 — Canonical backup/export filename reason normalization`: **DONE**; PR #146 merged 2026-07-27 at merge commit `127191feb182ccf68a4d7b9f2be28f6aa5b42453` from final reviewed head `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb`
 - Backend baseline correction gate: **DONE** — all four accepted gate failures are closed on `main`
 - Merged `main` backend baseline: **GREEN** — `562 collected, 562 passed, 0 failed, 0 skipped`
-- **No active runtime implementation slice.** The next slice must be separately selected and authorized. No future PR number is assigned.
+- **No active runtime implementation slice at the time this window closed.** *(Superseded: the `C1` window then ran and completed — `CR-007` merged as PR #148 and `C1-I` merged as PR #149. The current implementation state is section 3: no runtime implementation is active in PR #150, and `C2-I` becomes the only authorized runtime slice after PR #150 merges.)* No future PR number is assigned.
 - `CR-006 — Investigate export create-response fallback confirmation semantics`: **`needs evidence`**, non-blocking, **not activated** — see the `CR-006` subsection below
 
 ## R3 closure record
@@ -867,7 +883,9 @@ Do not classify the behavior as unsafe and do not prescribe a correction design 
 
 ## Remaining release obligations
 
-Clearing these four failures does **not** make the product release-ready. The following stay outside the active slice and are not activated here: final macOS `.app`/`.dmg` and user-ready launch; packaged update flow and update smoke; verified user/remote installation process; Restore product decision and implementation; C1 tax setting; C2 cost, tax, and margin completion; C3 user-facing read-only AuditLog workspace; full release-candidate smoke; continued documentation accuracy. See section 7 and sections 11–13.
+Clearing these four failures does **not** make the product release-ready. The following stayed outside the backend baseline correction gate and were not activated by it: final macOS `.app`/`.dmg` and user-ready launch; packaged update flow and update smoke; verified user/remote installation process; Restore product decision and implementation; C1 tax setting; C2 cost, tax, and margin completion; C3 user-facing read-only AuditLog workspace; full release-candidate smoke; continued documentation accuracy. See section 7 and sections 11–13.
+
+> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 remains incomplete; its contract is decided as `CR-008` and only `C2-I` is authorized. Every other obligation in the list above is still open, and product release readiness is still not claimed. Current state: § 11.
 
 ---
 
@@ -875,7 +893,36 @@ Clearing these four failures does **not** make the product release-ready. The fo
 
 ## C1 — calculation-sensitive Settings
 
-Статус: `PRODUCT DECISION ACCEPTED — C1-I IMPLEMENTED ON ITS PR BRANCH; EXACT-HEAD /settings SMOKE REQUIRED BEFORE MERGE; NOT MERGED, NOT DONE`
+Статус: `DONE — PRODUCT DECISION ACCEPTED AND C1-I MERGED AND EXACT-HEAD VERIFIED`
+
+### C1-I merge closure
+
+`VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE.` None of the runtime results below was executed in the documentation task that recorded this closure.
+
+| Item | Value |
+|---|---|
+| Decision PR #148 final reviewed head | `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83` |
+| Decision PR #148 merge commit | `80b83de3e838cf676669a1b627770300590c99c0` |
+| Implementation PR #149 title | `C1-I — Implement backend-owned tax-rate setting` |
+| Implementation PR #149 state | `MERGED` |
+| Implementation PR #149 final reviewed head | `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9` |
+| Implementation PR #149 merge commit | `ff7afe6b0778ab2b348229a4df34acf3e3fc0001` |
+| Implementation PR #149 merged at | `2026-07-27T19:44:53Z` |
+
+Accepted evidence:
+
+| Check | Accepted result |
+|---|---|
+| Backend complete suite | `671 collected / 671 passed / 0 failed / 0 skipped` |
+| Original merged baseline node IDs still collected | all `562` |
+| Focused tax-setting frontend suite | `52 passed / 0 failed / 0 skipped` |
+| All 13 focused frontend suites | `568 passed / 0 failed / 0 skipped` |
+| Frontend production build | `PASS` |
+| Exact-head `/settings` browser smoke | `PASS — 146 checks / 0 failures` |
+| Exact smoke-tested head | `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9` |
+| `frontend/src/main.ts` | `6406` → `6399` lines |
+
+`C1-I` added **no migration** and implemented **only** the tax-rate setting, not any C2 calculation. `C1-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED`; it no longer awaits smoke, review, or merge, and it is not reopened. The pre-merge `C1-I` record further down this section is preserved as an explicitly **historical, superseded** account of the slice as it stood before merge.
 
 Минимум:
 
@@ -924,7 +971,9 @@ Clearing these four failures does **not** make the product release-ready. The fo
 
 ### C1-I — Backend-owned tax-rate setting
 
-Статус: `IMPLEMENTED — EXACT-HEAD /settings SMOKE REQUIRED BEFORE MERGE`
+Статус: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #149, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`)
+
+> **HISTORICAL PRE-MERGE RECORD — SUPERSEDED.** Everything from here to the end of this `C1-I` subsection was written while the slice was still on its PR branch, and its `IMPLEMENTED — EXACT-HEAD /settings SMOKE REQUIRED BEFORE MERGE` framing was true at the time. It is preserved for traceability and is **not** a current-state claim. The current state is the `C1-I merge closure` table at the top of § 11: the smoke passed (`146 checks / 0 failures`), the PR merged, and `C1-I` is `DONE`.
 
 Exactly one bounded follow-up slice, started from merged `origin/main` `80b83de3e838cf676669a1b627770300590c99c0` after the `CR-007` decision PR #148 merged.
 
@@ -941,7 +990,7 @@ Exactly one bounded follow-up slice, started from merged `origin/main` `80b83de3
 
 **Not delivered, by design:** every C2 item — readiness tax, confirmation tax, `ProductionBatch` snapshot columns, the snapshot migration, tax amount, margin, margin percent, and report calculation — plus any migration, historical backfill, or recalculation.
 
-`C1-I` is **not `DONE`**: it is implemented on its PR branch and becomes `DONE` only after the exact-head `/settings` smoke passes and the PR is reviewed and merged. C2 remains blocked until then.
+*(Historical, superseded:)* `C1-I` is **not `DONE`**: it is implemented on its PR branch and becomes `DONE` only after the exact-head `/settings` smoke passes and the PR is reviewed and merged. C2 remains blocked until then. — **That condition has since been satisfied. See the `C1-I merge closure` table above.**
 
 #### Scope
 
@@ -1017,7 +1066,11 @@ Focused `/settings` browser smoke against the exact published implementation hea
 
 ## C2 — себестоимость, налог и маржа
 
-Статус: `BLOCKED` C1 — контракт C2 частично зафиксирован решением `CR-007` (readiness-семантика, stale-setting conflict, snapshot-поля, порядок округления); он не может противоречить принятому решению C1
+Статус: `CONTRACT ACCEPTED (CR-008) — DIVIDED INTO C2-I / C2-II / C2-III`
+
+The C1 gate is satisfied: `C1-I` is merged and exact-head verified, so C2 is no longer blocked on C1. The C2 product contract was decided as `CR-008`; the ADR is `docs/decisions/0012-c2-financial-calculation-snapshots.md`. It refines and completes the C2 semantics `CR-007` had partially fixed (readiness semantics, stale-setting conflict, snapshot fields, rounding order) and contradicts none of them.
+
+Baseline requirements, unchanged:
 
 - backend domain services;
 - readiness estimates с limitations;
@@ -1026,6 +1079,434 @@ Focused `/settings` browser smoke against the exact published implementation hea
 - старые production records не пересчитываются текущими ценами/настройками;
 - missing data остаётся `Недоступно`, без выдуманных значений;
 - Decimal, migration и backward-compatibility tests обязательны.
+
+Authorization states:
+
+| Slice | Status |
+|---|---|
+| `C2-I` — backend financial readiness estimate | `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED` |
+| `C2-II` — transactional production financial snapshots | `PLANNED — BLOCKED` on merged and verified `C2-I` |
+| `C2-III` — presentation and snapshot-backed reports | `PLANNED — BLOCKED` on merged and verified `C2-II` |
+
+No future implementation PR number is assigned to any C2 slice. Do not start `C2-I` from the unmerged `CR-008` decision branch.
+
+### C2 — accepted product contract (`CR-008`)
+
+**Product boundary.** C2 is an internal operational estimate for the workshop. It is **not** tax filing, a tax declaration, VAT accounting, automatic tax-regime selection, УСН / ОСНО / НПД / ПСН / АУСН / ЕСХН calculation, insurance-contribution accounting, minimum-tax calculation, annual or quarterly tax accounting, marketplace tax accounting, invoicing, bookkeeping, or legal or tax advice. The current setting and calculation are **not** renamed to a tax reserve by this decision.
+
+```text
+The simplified tax model is accepted for the current MVP and may be replaced by
+a separately decided future tax-regime model. Existing historical snapshots
+must remain immutable after such a replacement.
+```
+
+**Authoritative inputs, all backend-owned:** the authoritative Order sale price; the existing backend readiness cost estimate; the actual authoritative total cost produced by the transactional confirmation flow; the current `default_tax_rate` state from the backend tax-rate service; and the current backend-owned `effective_at`. The legacy `tax.default_rate` key is never read. The frontend supplies no authoritative monetary value and calculates no total cost, tax, margin, or margin percent; its only financial input responsibility is passing back the latest backend-returned tax-rate context unchanged during confirmation.
+
+**Formulas.** `Decimal` only, never binary float at any intermediate step:
+
+```text
+tax_amount     = ROUND_MONEY(sale_price × tax_rate_percent / 100)
+margin         = ROUND_MONEY(sale_price - total_cost - tax_amount)
+margin_percent = ROUND_PERCENT(margin / sale_price × 100)
+```
+
+`tax_rate_percent` is a percentage — `6.00` means `6%` — and is always divided by `100`. Money quantum `0.01`, percentage quantum `0.01`, both `ROUND_HALF_UP`, rounding only the final amount of each formula. Tax is deducted from gross revenue, never added on top. A configured `0.00` produces tax `0.00`; a missing rate or a missing sale price produces `null`, never a fabricated zero. Margin may be positive, zero, or negative, and a negative margin — or a negative margin percent — is never clamped. Margin percent is computed only when margin is available and the sale price is greater than zero.
+
+**Availability matrix.**
+
+| Sale price | Total cost | Tax rate | Tax | Margin | Margin % | `financial_estimate_status` |
+|---|---|---|---|---|---|---|
+| present, `> 0` | present | configured | available | available | available | `available` |
+| present, `= 0` | present | configured | `0.00` | available | unavailable | `partial` |
+| present | missing | configured | available | unavailable | unavailable | `partial` |
+| present | present | missing | unavailable | unavailable | unavailable | `unavailable` |
+| missing | any | any | unavailable | unavailable | unavailable | `unavailable` |
+| any | any | invalid persisted value | unavailable | unavailable | unavailable | `unavailable` |
+
+Physical production is **never** blocked by any row of this matrix.
+
+**Invalid persisted tax-rate value** is a defensive local-first corruption case, not a normal API flow: do not calculate with it, do not coerce it, do not treat it as zero, do not expose the raw value as an authoritative rate, treat the estimate as unavailable, return the non-blocking `tax_rate_invalid` warning, do not turn the readiness request into an unhandled HTTP `500`, and do not block physical production.
+
+### No valid configured tax-rate context
+
+**`no valid configured tax-rate context`** means either of two backend states:
+
+1. no `default_tax_rate` row exists; or
+2. the persisted `default_tax_rate` value exists but is invalid and cannot be safely interpreted as the canonical C1 percentage.
+
+The two states stay **distinguishable through readiness warnings** — `tax_rate_missing` for the absent row, `tax_rate_invalid` for the invalid value — but they produce **the same authoritative financial context**:
+
+```text
+tax_rate_percent      = null
+tax_rate_effective_at = null
+```
+
+| Backend state | Warning | Rate context | Status | Tax / margin / margin % | Physical production |
+|---|---|---|---|---|---|
+| row absent | `tax_rate_missing` | `null` / `null` | `unavailable` | `null` | not blocked |
+| value invalid | `tax_rate_invalid` | `null` / `null` | `unavailable` | `null` | not blocked |
+
+The invalid case must **not** also emit `tax_rate_missing`, and must not produce an unhandled HTTP `500`.
+
+The raw invalid persisted value must never be returned as the authoritative rate, and must never be normalized, coerced, rounded, treated as zero, copied into a readiness DTO, copied into a confirmation request, or copied into a `ProductionBatch` snapshot.
+
+**Physical-production invariant.** An absent or invalid tax-rate setting may make financial values unavailable, but it must not by itself block physical production.
+
+### Exact timestamp contract
+
+| Surface | Format | Rules |
+|---|---|---|
+| database persistence (`AppSetting.updated_at`, future `tax_rate_effective_at_snapshot`) | `YYYY-MM-DD HH:MM:SS` | UTC, second precision, SQLite text, no `T`, no `Z`, no offset |
+| API and confirmation context (`effective_at`, readiness `tax_rate_effective_at`, `expected_tax_rate_effective_at`, exposed snapshot) | `YYYY-MM-DDTHH:MM:SSZ` | UTC, second precision, literal `T`, literal `Z` |
+
+Example: `2026-07-27T19:44:53Z`.
+
+Not accepted and not documented: local-time values, arbitrary offsets such as `+03:00`, fractional seconds, a space instead of `T`, a missing `Z`, or user-generated timestamps. `expected_tax_rate_effective_at` must be either `null` or the **exact** canonical timestamp previously returned by readiness; anything else is HTTP `422` with `invalid_tax_rate_context`. The API must never expose the raw SQLite storage representation — the confirmation and `ProductionBatch` detail responses normalize the stored snapshot to the canonical `Z` form.
+
+### Exact existing readiness API mapping
+
+`C2-I` extends the **existing** `POST /api/orders/{order_id}/check-production-readiness`. No parallel financial-readiness endpoint. No existing field removed or renamed.
+
+Existing and **reused**: `estimated_cost`, `estimated_tax`, `estimated_margin` — the latter two activated, not duplicated.
+
+Additive: `sale_price`, `tax_rate_percent`, `tax_rate_effective_at`, `estimated_margin_percent`, `financial_estimate_status`.
+
+```text
+sale_price
+estimated_cost
+tax_rate_percent
+tax_rate_effective_at
+estimated_tax
+estimated_margin
+estimated_margin_percent
+financial_estimate_status
+```
+
+All monetary and percentage values are decimal strings or `null`; `tax_rate_effective_at` is an ISO-8601 UTC string or `null`. **`estimated_total_cost` is not authorized**, and no duplicate alias for any existing field is authorized. The extension must be backward-compatible with the current frontend.
+
+`financial_estimate_status`: `available` (tax, margin, and margin percent all available), `partial` (at least tax or margin available but not the complete set), `unavailable` (tax unavailable and every dependent value therefore unavailable). Configured rate + sale price `> 0` + total cost → `available`; configured rate + sale price `= 0` + total cost → `partial`; configured rate + sale price + missing total cost → `partial`; missing or invalid rate → `unavailable`; missing sale price → `unavailable`.
+
+### Preserved warning-code contract
+
+Financial warnings are **non-blocking**, use the existing readiness warning mechanism, and preserve the exact existing `ProductionReadinessIssue` response structure. No parallel warning system.
+
+| Code | Status | Meaning |
+|---|---|---|
+| `tax_rate_missing` | existing, preserved | no configured `default_tax_rate` |
+| `sale_price_missing` | existing, preserved | the authoritative Order sale price is unavailable |
+| `cost_data_missing` | existing, preserved | the readiness cost calculation cannot produce a complete total cost |
+| `margin_percent_unavailable_zero_sale_price` | new | tax and margin may be available, but the denominator is zero |
+| `tax_rate_invalid` | new | defensive handling of an invalid persisted canonical tax-rate value |
+
+Do not rename existing codes. Do not introduce aliases such as `tax_rate_unconfigured`, `sale_price_unavailable`, or `total_cost_unavailable`. Do not emit two warnings for one semantic condition. Do not convert a financial warning into a physical blocker: `can_produce` stays governed by recipe and formula readiness, stock, lots, packaging, order lifecycle, and the existing physical-production safety rules.
+
+### C2-I — Backend financial readiness estimate
+
+Статус: `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`
+
+The only runtime slice authorized by the `CR-008` decision PR. Do not start it from the unmerged decision branch. No implementation PR number is assigned.
+
+#### Goal
+
+Activate the accepted backend-owned tax, margin, and margin-percent estimate inside the existing production readiness flow.
+
+#### Scope
+
+`C2-I` may implement only: one focused backend financial calculation domain service; integration with the existing production readiness service; activation of the existing readiness financial fields; the additive readiness response fields; the stable financial warning codes through the existing warning mechanism; focused backend tests; readiness API integration tests; an exact-head readiness API smoke; and minimal directly affected documentation and state updates.
+
+#### Backend requirements
+
+`C2-I` must reuse the C1 tax-rate service and repository boundary; never read `tax.default_rate`; use `default_tax_rate` only; use `Decimal` only; reuse the existing money and percentage quantization rules; keep calculation logic out of API routers and out of the frontend; perform no persistence write; create no `AuditLog`; change no Order, `ProductionBatch`, stock movement, packaging movement, or report; add no migration; preserve all existing readiness blockers and warnings; preserve physical-production eligibility when only financial inputs are unavailable; and handle invalid persisted tax-rate data safely and non-blockingly.
+
+Preferred focused module:
+
+```text
+backend/app/domain/production_financials.py
+```
+
+A different precise name is allowed only when it better matches established repository naming. Do **not** place the calculation in `backend/app/api/production_readiness.py`, `backend/app/main.py`, a generic `utils.py`, a generic `helpers.py`, or an all-purpose finance manager.
+
+The focused service should accept already-authoritative values and return a typed immutable result equivalent to:
+
+```text
+sale_price
+total_cost
+tax_rate_percent
+tax_rate_effective_at
+tax_amount
+margin
+margin_percent
+status
+warnings
+```
+
+It must not read repositories directly unless the current repository pattern requires a narrowly documented adapter.
+
+#### Non-goals
+
+No `ProductionBatch` snapshot columns; no migration; no production-confirmation tax; no production-confirmation margin; no stale tax-setting confirmation rejection; no report calculation change; no report UI; no readiness UI redesign; no frontend financial arithmetic; no Russian tax regimes; no accounting; no historical backfill; no `C2-II`; no `C2-III`; no `C3`; no `C4`; no Restore; no packaging; no release smoke.
+
+#### Frontend boundary
+
+No frontend production change is expected in `C2-I`. The readiness response extension must be backward-compatible with the current frontend.
+
+Do not modify `frontend/src/main.ts`. Required invariant:
+
+```text
+frontend/src/main.ts = 6399 lines
+```
+
+Focused frontend **test-only** changes are allowed only when needed to prove that the existing DTO guard safely ignores additive fields. Do not display the new financial estimates in the UI in `C2-I`, do not calculate them in the frontend, and do not add temporary hidden UI.
+
+#### Tests
+
+Focused coverage is required for at least:
+
+1. configured `6.00%` rate;
+2. configured `0.00%` rate;
+3. missing rate;
+4. invalid persisted rate;
+5. missing sale price;
+6. missing total cost;
+7. zero sale price;
+8. positive margin;
+9. zero margin;
+10. negative margin;
+11. negative margin percent;
+12. tax final rounding with `ROUND_HALF_UP`;
+13. margin final rounding;
+14. margin-percent final rounding;
+15. no intermediate binary float use;
+16. exact two-decimal strings;
+17. financial warnings are non-blocking;
+18. physical `can_produce` unchanged by financial absence;
+19. existing readiness blocker behavior unchanged;
+20. existing warning response structure unchanged;
+21. existing warning codes preserved;
+22. no persistence write;
+23. no `AuditLog`;
+24. no `ProductionBatch` change;
+25. no Order change;
+26. no `StockMovement` change;
+27. no packaging movement change;
+28. no report change;
+29. legacy `tax.default_rate` ignored;
+30. canonical `default_tax_rate` used;
+31. API response remains backward-compatible;
+32. no `estimated_total_cost` duplicate added;
+33. existing readiness frontend DTO handling remains safe;
+34. the complete backend suite remains green.
+
+No existing test may be deleted, renamed, skipped, `xfail`-ed, or weakened.
+
+#### Smoke
+
+After publication of the future `C2-I` runtime PR, require an exact-head focused **readiness API** smoke using isolated data. Verify through the API: configured `6.00%`; configured `0.00%`; missing rate; invalid persisted rate defensive behavior; missing sale price; missing total cost; negative margin; the zero-price margin-percent-unavailable case; the exact existing warning codes; the exact new warning codes; the exact financial status values; physical readiness unchanged; no database mutation; no audit rows; no production batch; no stock movement; no packaging movement; no report data change.
+
+A passive browser regression may prove that the Order route still loads. `C2-I` must not claim a new financial UI. Full release smoke is not part of `C2-I`.
+
+#### Acceptance criteria
+
+`C2-I` is complete only when the decided formulas, availability matrix, status values, and warning codes are implemented exactly as written; the existing readiness fields are reused and no `estimated_total_cost` or alias is added; the response stays backward-compatible; no persistence, audit, order, batch, movement, report, or migration change occurs; `frontend/src/main.ts` is still `6399` lines; the complete backend suite is green with no weakened test; the exact-head readiness API smoke passes; and the directly affected documentation and state files record the delivered behavior.
+
+### C2-II — Transactional production financial snapshots
+
+Статус: `PLANNED — BLOCKED ON MERGED AND VERIFIED C2-I`
+
+Not authorized by the `CR-008` decision PR. Do not implement it. Its exact future contract is recorded here.
+
+#### Goal
+
+Persist immutable financial snapshots during transactional production confirmation.
+
+#### Migration
+
+One nullable migration adding **only** `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot` to `ProductionBatch`. Decimal-string persistence consistent with the existing nullable financial fields; timestamp representation consistent with the accepted API and storage boundary; **no backfill**; old rows remain `null`; no separate taxable-amount snapshot, because the existing `ProductionBatch.sale_price` is the taxable-base snapshot. A backup must be created before applying the migration, migration failure must not destroy user data, and rollback and backup behavior must follow the repository migration contract.
+
+#### Existing fields
+
+Reuse the existing `ProductionBatch` fields `sale_price`, `total_cost`, `tax`, `margin`, and `margin_percent`. Do **not** add duplicate fields such as `sale_price_snapshot`, `total_cost_snapshot`, `tax_amount_snapshot`, or `margin_amount_snapshot`.
+
+#### Transaction-aware tax-setting read boundary
+
+`C2-II` must read the current canonical tax setting **inside the same production transaction**. The current no-argument C1 read behavior must remain valid. One bounded read-only extension is authorized, equivalent to:
+
+```python
+TaxRateSettingsService.get_tax_rate(
+    connection: sqlite3.Connection | None = None,
+)
+```
+
+When a connection is supplied: read `default_tax_rate` through the existing `SettingsRepository`; use the supplied production-transaction connection; perform no write; create no `AuditLog`; preserve the public behavior of the current no-argument call; preserve the C1 validation and canonicalization boundaries.
+
+Do not read the setting through a second independent connection while the production transaction is active; do not parse raw `AppSetting` values inside the production-confirmation service; do not bypass the C1 service/domain validation; do not create a second tax-setting service; do not introduce a generic transaction service locator. If the repository implementation proves this exact extension unsafe or incompatible, stop and request a contract correction before implementing `C2-II`.
+
+#### Required-but-nullable confirmation context
+
+The future production confirmation request must **always** contain `expected_tax_rate_percent` and `expected_tax_rate_effective_at`. Both keys are **required but nullable**, and the request schema declares them **without default values**.
+
+Allowed value pairs:
+
+1. **valid configured context** — a canonical two-decimal percentage string plus the canonical `YYYY-MM-DDTHH:MM:SSZ` timestamp, for example `"6.00"` and `"2026-07-27T19:44:53Z"`;
+2. **no-valid-rate context** — explicit `null` and explicit `null`.
+
+`null/null` means **"the latest readiness result observed no valid configured tax rate"**, which covers **both** a missing setting row **and** an invalid persisted setting. It must not be described as meaning only that the row is absent.
+
+The frontend passes the pair from the latest confirmed readiness response and must not calculate the percentage, normalize it independently, alter it, invent a timestamp, or reuse an older readiness result after it has become stale.
+
+Reject with HTTP `422` **before any production transaction writes**:
+
+| Condition | Stable code |
+|---|---|
+| either key is omitted | `tax_rate_context_required` |
+| exactly one of the two values is `null` | `invalid_tax_rate_context` |
+| the percentage is malformed, non-canonical, out of range, or not a string | `invalid_tax_rate_context` |
+| the timestamp is malformed or not the canonical `YYYY-MM-DDTHH:MM:SSZ` form | `invalid_tax_rate_context` |
+
+A rejected context produces no `ProductionBatch`, no stock movement, no packaging movement, no Order mutation, no financial snapshot, and no production audit.
+
+**Do not silently treat omitted keys as `null/null`.** The distinction is required: omitted context means an invalid or outdated client contract; explicit `null/null` means readiness observed no valid configured tax rate.
+
+#### Transactional confirmation
+
+Inside the same production transaction:
+
+1. re-read the authoritative Order;
+2. re-run the existing physical production readiness checks;
+3. read the current canonical tax setting through the transaction-aware C1 service boundary;
+4. compare the required expected tax context from the latest readiness response with the current backend-owned tax context;
+5. recompute the authoritative sale price from the locked Order;
+6. compute the actual production total cost through the existing confirmation flow;
+7. calculate tax, margin, and margin percent through the shared backend financial domain service;
+8. persist the `ProductionBatch` and all financial snapshots;
+9. persist component movements;
+10. persist packaging movements;
+11. update the Order through the existing confirmation contract;
+12. write the existing production audit or event records;
+13. commit only when every required write succeeds.
+
+Any failure must roll back the `ProductionBatch` creation, the rate snapshots, tax, margin, margin percent, component movements, packaging movements, the Order mutation, and the related production audit or event writes. A partially confirmed production must never exist.
+
+#### Stale tax context
+
+Inside the transaction, reduce the current backend state to one of exactly two comparable canonical contexts:
+
+- **valid context** — canonical percentage + canonical API timestamp;
+- **no-valid-rate context** — `null` + `null`, produced by both a missing row and an invalid persisted value.
+
+Then compare with the expected context:
+
+| Expected context | Current backend context | Result |
+|---|---|---|
+| same valid pair | same valid pair | continue |
+| valid pair | different valid pair | `409 tax_rate_context_stale` |
+| valid pair | missing | `409 tax_rate_context_stale` |
+| valid pair | invalid | `409 tax_rate_context_stale` |
+| `null/null` | valid pair | `409 tax_rate_context_stale` |
+| `null/null` | missing | continue |
+| `null/null` | invalid | continue |
+
+Transitions: valid → changed valid is a stale conflict; valid → missing is a stale conflict; valid → invalid is a stale conflict; missing → valid is a stale conflict; invalid → valid is a stale conflict; **missing → invalid is not**; **invalid → missing is not**.
+
+Missing and invalid intentionally share one confirmation context, because both produce exactly the same financial result: no rate snapshot, no tax, no margin, no margin percent. Do **not** add a third request field or a generic financial-context token in this decision; a future decision may introduce a richer state token only if product evidence shows it is necessary.
+
+On a stale conflict: return HTTP `409` with the stable code `tax_rate_context_stale` and a safe Russian message equivalent to `Налоговая ставка изменилась. Обновите готовность и подтвердите производство ещё раз.`; create no `ProductionBatch`; write no movements; change no Order; write no financial snapshot; write no production audit; and do not retry automatically.
+
+The stale check protects the **editable tax setting only**. `C2-II` must still recompute the current authoritative sale price, the current authoritative physical readiness, and the actual production cost inside the backend transaction. Do not introduce a generic opaque token, a second global versioning system, or a frontend-generated context hash without a new accepted decision.
+
+#### Missing financial inputs during confirmation
+
+Financial absence does not block physical production.
+
+- **no valid configured tax-rate context** — a missing row **or** an invalid persisted value → `tax_rate_percent_snapshot = null`, `tax_rate_effective_at_snapshot = null`, `tax = null`, `margin = null`, `margin_percent = null`;
+- missing sale price → the rate snapshots preserve the actual current rate context; `tax`, `margin`, and `margin_percent` are `null`;
+- unavailable total cost → the rate snapshots preserve the actual current context; tax may be persisted when the sale price and a valid rate exist; `margin` and `margin_percent` are `null`;
+- configured `0.00` rate → `tax_rate_percent_snapshot = "0.00"`, a non-null effective timestamp, and `tax = "0.00"`;
+- an invalid persisted tax rate must not be used to calculate or persist tax or margin, and must not be silently converted to zero.
+
+When the current backend state is missing or invalid and the expected context is `null/null`, physical production continues: the actual authoritative production cost and every other physical production snapshot are written normally, alongside the five `null` financial values above.
+
+An invalid raw setting value stays untouched in `app_settings`. Production confirmation must **not** repair the setting, clear the setting, rewrite the setting, audit a setting mutation, persist the invalid value into `ProductionBatch`, or treat the invalid value as `0.00`. The normal existing production audit still belongs to the transactional production flow.
+
+#### API exposure boundary
+
+`C2-II` must expose `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot` in the production confirmation response and the `ProductionBatch` **detail** response, so the persisted snapshot is verifiable immediately in this slice. It must **not** yet add them to the `ProductionBatch` list presentation, report read models, or user-facing report UI — those surfaces remain `C2-III` scope. Do not create duplicate API aliases; use the existing production confirmation and `ProductionBatch` detail contracts.
+
+#### Frontend boundary
+
+`C2-II` may make the minimum frontend change required to retain the latest authoritative readiness tax context, always send both required-but-nullable context keys, present `tax_rate_context_stale`, and require the user to refresh readiness before confirming again.
+
+The frontend must not calculate tax or margin, must reuse the existing order-production lifecycle, must not create a second confirmation lifecycle, must not automatically retry a stale conflict, and must not send context from a stale, superseded, or unrelated Order readiness result.
+
+```text
+FINAL_MAIN_TS_LINES <= 6399
+```
+
+New logic must be extracted into focused order and production modules. No new production module above 300 lines.
+
+#### Tests
+
+The future `C2-II` slice must cover at least: required configured tax context accepted; omitted percent rejected with `422`; omitted effective timestamp rejected with `422`; a one-null pair rejected with `422`; a malformed percentage rejected; a non-canonical percentage rejected; a malformed timestamp rejected; configured → changed stale conflict; configured → cleared stale conflict; unconfigured → configured stale conflict; unchanged configured context accepted; unchanged no-valid-rate context accepted; stale conflict writes nothing; validation failure writes nothing; the transaction-aware service uses the supplied connection; no second independent setting read connection; the actual locked Order sale price used; the actual confirmation total cost used; configured `0.00` persisted correctly; missing sale price persists null dependent values; missing total cost permits tax but not margin; negative margin persisted unchanged; rollback covers snapshots and every production write; the confirmation response exposes the rate snapshots; `ProductionBatch` detail exposes the rate snapshots; the `ProductionBatch` list is not expanded in `C2-II`; no report change; no historical backfill; and the complete backend and focused frontend suites remain green.
+
+Additionally, the invalid-rate lifecycle and the timestamp contract must be covered by at least these 21 cases:
+
+1. required `null/null` accepted when the setting is **missing**;
+2. required `null/null` accepted when the setting is **invalid**;
+3. invalid readiness returns `tax_rate_invalid`, a null rate context, unavailable financial values, and **no HTTP 500**;
+4. invalid readiness does **not** also emit `tax_rate_missing`;
+5. a valid expected context against a current **invalid** state returns `409 tax_rate_context_stale`;
+6. `null/null` against a current **valid** state returns `409 tax_rate_context_stale`;
+7. missing → invalid does **not** create a stale conflict;
+8. invalid → missing does **not** create a stale conflict;
+9. invalid → valid **does** create a stale conflict;
+10. valid → invalid **does** create a stale conflict;
+11. an accepted invalid-state confirmation persists null rate snapshots;
+12. an accepted invalid-state confirmation persists null tax, margin, and margin percent;
+13. an accepted invalid-state confirmation still completes physical production transactionally;
+14. the raw invalid value is **never** copied to `ProductionBatch`;
+15. confirmation does **not** repair, clear, rewrite, or audit a setting mutation;
+16. a canonical `YYYY-MM-DDTHH:MM:SSZ` request timestamp is accepted;
+17. an offset timestamp such as `+03:00` is rejected;
+18. a fractional-second timestamp is rejected;
+19. a timestamp without `Z` is rejected;
+20. the database snapshot timestamp uses SQLite UTC text `YYYY-MM-DD HH:MM:SS`;
+21. the confirmation and detail API responses normalize the snapshot timestamp to canonical UTC `Z` format.
+
+These are future `C2-II` requirements only. They are **not** implemented or executed in PR #150.
+
+### C2-III — Human-readable financial presentation and snapshot-backed reports
+
+Статус: `PLANNED — BLOCKED ON MERGED AND VERIFIED C2-II`
+
+Not authorized by the `CR-008` decision PR. Do not implement it.
+
+`C2-III` is a **planning umbrella, not authorization for one large implementation PR.** Before it is authorized, repository evidence must determine whether it can remain one bounded vertical slice. If it includes more than one independently reviewable user-facing vertical slice, divide it before implementation — for example into readiness and `ProductionBatch` financial presentation, and separately snapshot-backed reports. Do not implement readiness UI, batch UI, and report backend/frontend as one catch-all PR merely because they share the word “financial”. No future implementation PR number is assigned.
+
+#### Goal
+
+Expose backend-calculated readiness estimates and immutable production snapshots in existing user-facing screens and reports.
+
+#### Reports
+
+Reports must read persisted `ProductionBatch` snapshots **only** and must never recalculate historical tax or margin from the current setting. For historical rows without snapshots: show unavailable or `null`, never fabricate `0.00`, and never apply the current tax rate retroactively. Do not add advanced analytics, a tax declaration, accounting reports, tax-regime reporting, or annual/quarterly filing calculations. Update only existing report read models that already contain cost, revenue, tax, margin, or margin percent.
+
+#### Frontend
+
+Render backend DTO values; render `Недоступно` for null historical values; distinguish a configured zero from a missing value; render a negative margin honestly; render readiness financial warnings; render stale-tax-context recovery guidance. Perform no `Decimal` arithmetic, no tax calculation, no margin calculation, and no historical recalculation.
+
+Preferred focused module responsibilities: `production-financial-contract.ts`, `production-financial-presentation.ts`, `production-financial-feedback.ts`, `production-financial-runtime.ts` — or the current narrower order, production, or report modules when they are a better home. Do not create one catch-all finance module.
+
+### God-file limit for every future C2 slice
+
+- `frontend/src/main.ts` baseline: `6399` lines; final: at most `6399` lines;
+- no calculation logic in `main.ts`;
+- no large financial HTML template in `main.ts`;
+- no DTO guards in `main.ts`;
+- no lifecycle or stale-context state machine in `main.ts`;
+- no minification or artificial line joining;
+- each new production module normally at most 300 lines;
+- each new function normally at most 60 lines;
+- no generic `utils`, `helpers`, `manager`, or `common` dumping ground.
 
 ## C3 — AuditLog workspace
 

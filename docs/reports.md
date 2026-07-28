@@ -39,13 +39,27 @@ The finance report is an operational snapshot, not accounting or tax filing.
 
 ### Tax snapshots — decided, not implemented
 
-`CR-007` decided the workshop tax-rate contract (`docs/settings.md`). It does not change reports now: no tax setting exists yet, and reports still contain no tax calculation. It does bind future report behavior once C2 introduces production tax snapshots:
+`CR-007` decided the workshop tax-rate contract (`docs/settings.md`) and its implementation `C1-I` is **merged and `DONE`** (PR #149, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`). `CR-008` then decided the C2 calculation and snapshot contract (`docs/decisions/0012-c2-financial-calculation-snapshots.md`).
 
-- reports read the immutable `ProductionBatch` tax snapshots;
-- reports never recalculate historical tax using the currently configured rate;
-- changing the tax setting never changes an existing report value;
-- a production batch without tax snapshots stays `Недоступно` and is never shown as `0.00`;
-- an explicitly configured `0%` rate is a real value and is not the same as an unconfigured rate.
+Neither changes reports now. On merged `main`, no `ProductionBatch` rate snapshot column exists, no tax or margin is calculated anywhere, and reports still contain **no tax calculation**. Report changes belong to `C2-III`, which is `PLANNED — BLOCKED`.
+
+The durable **report snapshot-only rule**, binding once `C2-II` persists snapshots and `C2-III` reads them:
+
+- reports read the immutable `ProductionBatch` financial snapshots **only**;
+- reports never recalculate historical tax or margin using the currently configured rate;
+- changing or clearing the tax setting never changes an existing report value;
+- a production batch without tax snapshots shows unavailable / `Недоступно` and is **never** shown as a fabricated `0.00`;
+- the current rate is never applied retroactively to a historical row;
+- an explicitly configured `0%` rate is a real value and is **not** the same as an unconfigured rate — configured zero and missing must remain visually and semantically distinct;
+- a batch produced while there was **no valid configured tax-rate context** — a missing setting row **or** an invalid persisted value — carries null rate snapshots and null tax, margin, and margin percent, and reports show those as unavailable; a raw invalid setting value is never stored on a batch and therefore never appears in a report;
+- only existing report read models that already contain cost, revenue, tax, margin, or margin percent are updated;
+- no advanced analytics, tax declaration, accounting report, tax-regime reporting, or annual/quarterly filing calculation is added.
+
+### C2-III — blocked, and possibly to be subdivided
+
+Status: **PLANNED — BLOCKED** on merged and verified `C2-II`.
+
+`C2-III` is a **planning umbrella, not authorization for one large implementation PR**. Before it is authorized, repository evidence must determine whether it can remain one bounded, independently reviewable vertical slice. If it cannot, it must be divided before implementation — for example into readiness and `ProductionBatch` financial presentation, and separately snapshot-backed reports. Readiness UI, batch UI, and report backend plus frontend must not be combined into one catch-all PR merely because they share the word "financial". No future implementation PR number is assigned.
 
 ## Incomplete data
 

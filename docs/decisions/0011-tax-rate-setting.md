@@ -1,7 +1,22 @@
 # ADR - Workshop tax-rate setting (C1)
 
 ## Status
-Accepted — 2026-07-27. Recorded as `CR-007`. Implemented by the `C1-I` slice on its PR branch; not merged, and the exact-head `/settings` smoke is required before merge.
+
+Accepted — 2026-07-27. Recorded as `CR-007`. Implemented by `C1-I` and merged as PR #149.
+
+`C1-I` status: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** (VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE).
+
+| Item | Value |
+|---|---|
+| Implementation PR | #149 — `C1-I — Implement backend-owned tax-rate setting` |
+| Final reviewed head | `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9` |
+| Merge commit | `ff7afe6b0778ab2b348229a4df34acf3e3fc0001` |
+| Merged at | `2026-07-27T19:44:53Z` |
+| Exact-head `/settings` smoke | `PASS — 146 checks / 0 failures` |
+
+Nothing in `C1-I` still awaits smoke, review, or merge. The accepted `CR-007` product decision below is unchanged and is not reopened.
+
+The C2 calculation, confirmation-context, and snapshot contract is a separate decision, `CR-008` / `docs/decisions/0012-c2-financial-calculation-snapshots.md`. It does not reopen `CR-007`.
 
 ### Implementation note — monotonic effective timestamp
 
@@ -29,7 +44,7 @@ One global setting, `default_tax_rate`, user-facing `Налоговая став
 - **Immutable history.** Changing the rate never modifies completed batches, report snapshots, prior audit records, or generated documents. Future C2 snapshots the rate and its effective timestamp onto `ProductionBatch` in nullable columns that are never backfilled.
 - **Missing is not zero.** A missing rate is `null`, produces a non-blocking warning, leaves tax and dependent margin unavailable, and does not block physical production. A configured `0.00` is a real value. No missing financial value is ever displayed as a fabricated zero.
 - **Atomic audit.** Every real mutation writes `tax_rate_setting_changed` / `app_setting` / `default_tax_rate` in the same transaction as the setting write; reads, validation failures, and no-ops are not audited.
-- **C1/C2 boundary.** C1 owns the setting, its validation, its API, its UI, and its audit. Readiness estimates, confirmation calculation, snapshot fields, margin, and report calculation are C2 and stay blocked until C1 is merged and verified.
+- **C1/C2 boundary.** C1 owns the setting, its validation, its API, its UI, and its audit. Readiness estimates, confirmation calculation, snapshot fields, margin, and report calculation are C2 and stay blocked until C1 is merged and verified. *(That gate is satisfied: `C1-I` is merged and exact-head verified. C2 is no longer blocked on C1 and is gated by its own slice sequence under `CR-008` — only `C2-I` is authorized after the `CR-008` decision PR merges, with `C2-II` and `C2-III` blocked behind it. The ownership boundary itself is unchanged.)*
 
 The full durable contract is `docs/settings.md` § “C1 — налоговая ставка для расчётов”. The API shape is `docs/api.md`, the snapshot semantics `docs/domain-model.md` § 6.14, the report boundary `docs/reports.md`, and the authorized implementation slice `C1-I` is specified in `docs/implementation-plan.md` § 11.
 

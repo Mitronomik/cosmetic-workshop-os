@@ -1235,30 +1235,113 @@ ProductionBatch → StockMovement[]
 - Production requires explicit user confirmation.
 - Production cannot complete if blocking readiness issues exist, unless explicit override policy is later added.
 
-### Tax snapshot semantics — decided, not implemented
+### Financial calculation and tax snapshot semantics — decided, not implemented
 
-Decided in `CR-007`. Durable contract: `docs/settings.md`. Current state: production confirmation snapshots `sale_price` and writes `tax`, `margin`, and `margin_percent` as `NULL`; the two snapshot fields below do not exist yet. Implementation belongs to **C2**, not to the authorized C1 Settings slice.
+Decided in `CR-007` (the setting) and `CR-008` (the calculation and the snapshots). Durable contracts: `docs/settings.md` and `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
+
+**Current state on merged `main`** (VERIFIED FROM REPOSITORY): production confirmation snapshots the authoritative locked-order `sale_price` and the real component, packaging, other, and total cost, and writes `tax`, `margin`, and `margin_percent` as `NULL`; production readiness returns `estimated_cost` when cost inputs are available and leaves `estimated_tax` and `estimated_margin` unavailable; the two rate-snapshot fields below **do not exist**. Implementation belongs to **C2** — `C2-I` is `AUTHORIZED AFTER THE CR-008 DECISION PR MERGES — NOT IMPLEMENTED`, and `C2-II` and `C2-III` are `PLANNED — BLOCKED`.
+
+#### Calculation formulas (`CR-008`)
+
+```text
+tax_amount     = ROUND_MONEY(sale_price × tax_rate_percent / 100)
+margin         = ROUND_MONEY(sale_price - total_cost - tax_amount)
+margin_percent = ROUND_PERCENT(margin / sale_price × 100)
+```
+
+- `Decimal` only, never binary float at any intermediate step;
+- the rate is a percentage, not a coefficient — `6.00` means `6%` — and is always divided by `100`;
+- money quantum `0.01` and percentage quantum `0.01`, both `ROUND_HALF_UP`, rounding only the final amount of each formula;
+- tax is deducted from gross revenue and never added on top of the sale price;
+- margin may be positive, zero, or negative, and a negative margin — or a negative margin percent — is never clamped;
+- margin percent is calculated only when margin is available and the sale price is greater than zero.
+
+#### Availability matrix (`CR-008`)
+
+| Sale price | Total cost | Tax rate | Tax | Margin | Margin % | Status |
+|---|---|---|---|---|---|---|
+| present, `> 0` | present | configured | available | available | available | `available` |
+| present, `= 0` | present | configured | `0.00` | available | unavailable | `partial` |
+| present | missing | configured | available | unavailable | unavailable | `partial` |
+| present | present | missing | unavailable | unavailable | unavailable | `unavailable` |
+| missing | any | any | unavailable | unavailable | unavailable | `unavailable` |
+| any | any | invalid persisted value | unavailable | unavailable | unavailable | `unavailable` |
+
+A configured `0.00` is configured, not missing. No missing input ever becomes zero. Physical production is never blocked by any row of this matrix.
+
+#### No valid configured tax-rate context
+
+**`no valid configured tax-rate context`** covers two backend states: no `default_tax_rate` row exists, or the persisted value exists but is invalid and cannot be safely interpreted as the canonical C1 percentage.
+
+| Backend state | Readiness warning | `tax_rate_percent` | `tax_rate_effective_at` | Status | Tax / margin / margin % | Physical production |
+|---|---|---|---|---|---|---|
+| row absent | `tax_rate_missing` | `null` | `null` | `unavailable` | `null` | not blocked |
+| value invalid | `tax_rate_invalid` | `null` | `null` | `unavailable` | `null` | not blocked |
+
+The two states stay distinguishable through the warning code, but produce the same authoritative financial context. The invalid case must **not** also emit `tax_rate_missing`, and must not produce an unhandled HTTP `500`. The raw invalid value is never returned as the authoritative rate and is never normalized, coerced, rounded, treated as zero, copied into a readiness DTO, copied into a confirmation request, or copied into a `ProductionBatch` snapshot.
+
+**Invariant.** An absent or invalid tax-rate setting may make financial values unavailable, but it must not by itself block physical production.
+
+#### Existing readiness field mapping (`C2-I`)
+
+The existing `POST /api/orders/{order_id}/check-production-readiness` response is extended additively. `estimated_cost`, `estimated_tax`, and `estimated_margin` already exist and are **reused** — `estimated_tax` and `estimated_margin` are activated, not duplicated. `C2-I` adds only `sale_price`, `tax_rate_percent`, `tax_rate_effective_at`, `estimated_margin_percent`, and `financial_estimate_status`. `estimated_total_cost` is not authorized, and no alias of an existing field is authorized.
+
+Financial warnings reuse the existing `ProductionReadinessIssue` structure and stay non-blocking. `tax_rate_missing`, `sale_price_missing`, and `cost_data_missing` are preserved unchanged; `CR-008` adds only `margin_percent_unavailable_zero_sale_price` and `tax_rate_invalid`.
+
+#### ProductionBatch snapshot fields
 
 | Field | Status | Meaning |
 |---|---|---|
 | `sale_price` | exists | taxable-base snapshot |
-| `tax_rate_percent_snapshot` | future, nullable | exact configured percentage used at confirmation |
-| `tax_rate_effective_at_snapshot` | future, nullable | exact backend effective timestamp/version used |
+| `total_cost` | exists | actual production total-cost snapshot |
+| `tax_rate_percent_snapshot` | future, nullable (`C2-II`) | exact configured percentage used at confirmation |
+| `tax_rate_effective_at_snapshot` | future, nullable (`C2-II`) | exact backend effective timestamp used |
 | `tax` | exists | final rounded tax-amount snapshot |
+| `margin` | exists | final rounded margin snapshot |
+| `margin_percent` | exists | final rounded margin-percent snapshot |
 
 Rules:
 
 - the MVP taxable base is exactly the order sale price, so no separate `taxable_amount_snapshot` is required;
-- `tax_amount = ROUND_MONEY(sale_price_snapshot × tax_rate_percent_snapshot ÷ 100)` with `Decimal`, money quantum `0.01`, and `ROUND_HALF_UP`, rounding only the final amount;
-- the rate is a percentage, not a coefficient — `6.00` means `6%`;
-- the future columns are nullable for backward compatibility and are **never backfilled** with the current rate;
+- the existing financial fields are **reused**; duplicate monetary snapshot fields such as `sale_price_snapshot`, `total_cost_snapshot`, `tax_amount_snapshot`, or `margin_amount_snapshot` are **not** authorized;
+- the two future columns are nullable for backward compatibility and are **never backfilled** with the current rate;
 - rows produced before the snapshot fields exist stay unknown and are displayed as `Недоступно`, never as a fabricated `0.00`;
 - changing the current tax setting never changes an existing ProductionBatch row, an existing report snapshot, a prior audit record, or a previously generated document;
 - reports and exports read the stored snapshots and must not recalculate historical tax with the current setting;
 - an order created before a rate change but produced after it uses the rate active at production confirmation;
-- confirmation must re-read the setting and reject a stale readiness result through a structured conflict such as `financial_settings_changed`, with no stock movement, batch, order-status change, or partial write on that conflict;
 - future margin must use the persisted rounded tax snapshot, not a freshly recalculated current-rate value;
-- adding the columns requires a migration under the normal backup-before-migration safety flow.
+- adding the columns requires one nullable migration under the normal backup-before-migration safety flow.
+
+#### Required confirmation tax context (`C2-II`)
+
+The future production-confirmation request always carries both `expected_tax_rate_percent` and `expected_tax_rate_effective_at`. They are **required but nullable** and are declared without default values. Only two pairs are valid:
+
+1. a canonical two-decimal percentage string with a canonical `YYYY-MM-DDTHH:MM:SSZ` timestamp;
+2. explicit `null` with explicit `null`, meaning **the latest readiness result observed no valid configured tax rate** — which covers both a missing setting row and an invalid persisted setting, not only an absent row.
+
+**Omitting a key is not equivalent to explicit `null/null`** — omission means an invalid or outdated client contract and is rejected with HTTP `422` and the stable code `tax_rate_context_required`, while a partial-null, malformed, non-canonical, or out-of-range context, or a non-canonical timestamp, is rejected with `invalid_tax_rate_context`.
+
+`C2-II` re-reads the current canonical setting **inside the same production transaction**, through a bounded read-only `connection`-aware extension of the `C1` tax-rate service, never through a second independent connection and never by parsing raw `AppSetting` values in the confirmation service. It reduces the current state to a **valid context** (canonical percentage + canonical API timestamp) or a **no-valid-rate context** (`null` + `null`, from a missing row or an invalid value) and compares:
+
+| Expected context | Current backend context | Result |
+|---|---|---|
+| same valid pair | same valid pair | continue |
+| valid pair | different valid pair | `409 tax_rate_context_stale` |
+| valid pair | missing | `409 tax_rate_context_stale` |
+| valid pair | invalid | `409 tax_rate_context_stale` |
+| `null/null` | valid pair | `409 tax_rate_context_stale` |
+| `null/null` | missing | continue |
+| `null/null` | invalid | continue |
+
+**Missing → invalid and invalid → missing are deliberately not stale conflicts**, because both produce the same financial result: no rate snapshot, no tax, no margin, no margin percent. A stale conflict writes nothing at all. The code `tax_rate_context_stale` supersedes the earlier illustrative name `financial_settings_changed` used while `CR-007` was being decided.
+
+An accepted no-valid-rate confirmation persists `tax_rate_percent_snapshot = null`, `tax_rate_effective_at_snapshot = null`, `tax = null`, `margin = null`, `margin_percent = null`, while every physical production snapshot is written normally. Confirmation never repairs, clears, rewrites, or audits the invalid setting, and never persists the raw invalid value.
+
+**Timestamp formats.** Database persistence — `AppSetting.updated_at` and the future `tax_rate_effective_at_snapshot` — uses `YYYY-MM-DD HH:MM:SS` UTC SQLite text with no `T`, no `Z`, and no offset. The API and confirmation-context representation is `YYYY-MM-DDTHH:MM:SSZ`. Local-time values, arbitrary offsets, fractional seconds, a space instead of `T`, and a missing `Z` are rejected with `422 invalid_tax_rate_context`. The API normalizes the stored snapshot and never exposes the raw SQLite form.
+
+#### Transactional snapshot immutability
+
+All financial snapshots are written **once**, inside the same transaction as the `ProductionBatch`, the component movements, the packaging movements, the Order update, and the production audit records. Any failure rolls back every one of them, and a partially confirmed production must never exist. Once committed, a snapshot is never recalculated — not by a later rate change, not by reports, and not by a future replacement of the simplified tax model.
 
 ### Audit
 
@@ -2092,14 +2175,16 @@ do not hide warning during production
 component_cost = sum(consumed_quantity * lot_unit_cost)
 packaging_cost = sum(packaging_quantity * packaging_unit_cost)
 total_cost = component_cost + packaging_cost + other_cost
-tax = sale_price * tax_rate_percent / 100
-margin = sale_price - total_cost - tax
-margin_percent = margin / sale_price * 100
+tax = ROUND_MONEY(sale_price * tax_rate_percent / 100)
+margin = ROUND_MONEY(sale_price - total_cost - tax)
+margin_percent = ROUND_PERCENT(margin / sale_price * 100)
 ```
 
-All money calculations use Decimal.
+All money calculations use Decimal, never binary float at any intermediate step.
 
-`tax_rate_percent` is a **percentage** in the range `0.00`–`100.00`, not a coefficient: `6.00` means `6%`. Only the final tax amount is rounded, at money quantum `0.01` with `ROUND_HALF_UP`. A missing rate makes tax — and any tax-dependent margin — **unavailable, never zero**. See `CR-007` and `docs/settings.md`.
+`tax_rate_percent` is a **percentage** in the range `0.00`–`100.00`, not a coefficient: `6.00` means `6%`, and the percentage is always divided by `100`. Only the final amount of each formula is rounded — money at quantum `0.01`, percentage at quantum `0.01`, both `ROUND_HALF_UP`. Tax is deducted from gross revenue, never added on top.
+
+A missing rate makes tax — and any tax-dependent margin — **unavailable, never zero**; a configured `0.00` is a real value producing tax `0.00`. Margin is unavailable when the sale price, the total cost, or the tax amount is unavailable, and margin percent is calculated only when margin is available and the sale price is greater than zero. A negative margin or margin percent is valid and is never clamped. See `CR-007`, `CR-008`, `docs/settings.md`, and `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
 ---
 
