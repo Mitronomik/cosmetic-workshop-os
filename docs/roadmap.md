@@ -62,7 +62,7 @@ Updated `2026-07-29`. This block records only the completion-window status; unre
   - `C2-II` — transactional production financial snapshots: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #152, final reviewed head `0cdda1b06b9783975f085207527f7d36a2ef7f22`, merge commit `c3a3a7b8db06fe85290216113b784123ed9b6b30`, merged `2026-07-28T09:00:50Z`.
   - `C2-III-A` — Order and `ProductionBatch` financial presentation: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #154, final reviewed head `ef1103811a8f062f9129bfb465a98e0cfa388935`, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`.
   - `C2-III-B` — snapshot-backed reports and report documents: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, final reviewed head `305d5421e79b8cb833df9588e705e9418781e021`, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`, exact-head API smoke `PASS — 53 checks / 0 failures`, exact-head browser smoke `PASS — FULL AUTOMATED SMOKE PASSED`, complete backend suite `942 passed / 0 failed / 0 skipped`. Snapshot-backed Reports, the additive DTO fields, the `/reports` presentation and the updated «Сводка мастерской» are **on merged `main`**. The report aggregation contract — row sets, `known_tax`, the `known_margin_percent` denominator, counter compatibility and warnings — is settled in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract* and was unchanged by the implementation.
-- **C3 — AuditLog workspace: one bounded slice authorized.** `C3-I — Read-only AuditLog workspace` is **`AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`**. It is the **only** authorized C3 runtime slice: one read-only endpoint `GET /api/audit-logs` and one screen `/settings/audit-log` titled `Журнал действий`. The durable product, API, privacy and presentation contract is **`docs/audit-log.md`**, which supersedes the `GET /api/audit-logs/{id}` proposal in § PR27 below for the MVP. No branch and no PR number exist for it.
+- **C3 — AuditLog workspace: one bounded slice authorized.** `C3-I — Read-only AuditLog workspace` is **`AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`**. It is the **only** authorized C3 runtime slice: one read-only endpoint `GET /api/audit-logs` and one screen `/settings/audit-log` titled `Журнал действий`. The API exposes `actor_type` / `actor_label` — **not** `source`, because `system` and `user` are actors rather than process origins — and a backend-owned safe Russian `display_summary` rather than the raw persisted summary. The durable product, API, privacy and presentation contract is **`docs/audit-log.md`**, which supersedes the `GET /api/audit-logs/{id}` proposal in § PR27 below for the MVP. No branch and no PR number exist for it.
 - **C4 — Restore и recovery: `INACTIVE`.** Still `NEEDS PRODUCT DECISION`.
 
 `C2-III` was a planning umbrella; it was subdivided into exactly the two runtime slices above, and both are merged. **C2 is COMPLETED**: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed here.
@@ -520,7 +520,7 @@ GET /api/audit-logs
 
 > **HISTORICAL — не реализовано.** PR2 создал таблицу `audit_logs` и запись в неё, но **не** добавил `GET /api/audit-logs`. На влитом `main` read-эндпоинта для журнала действий не существует; `AuditLogRepository` умеет только `create_log`. Единственный авторизованный read-эндпоинт — тот, что определён в `C3-I`; контракт: `docs/audit-log.md`.
 >
-> **Поле `source` — durable-имя.** В базе колонка называется `actor_type`; `source` — доменное и API-имя, которое `C3-I` получает отображением при чтении, без миграции и без backfill. Фактически записываются только два значения: `system` и `user`.
+> **Поле `source` в списке выше не реализовано.** В базе есть только колонка `actor_type`, и текущий write-словарь — это `system` и `user`, то есть **инициаторы, а не источники**. `C3-I` отдаёт `actor_type` / `actor_label` и **не** вводит поле `source`; настоящее измерение source/process отложено до отдельно принятого решения на стороне записи. Переименования колонки, миграции и backfill нет.
 
 ### Tests
 
@@ -2606,7 +2606,7 @@ Extend settings endpoints as needed.
 
 ## PR27 — AuditLog viewer
 
-> **PARTIALLY SUPERSEDED by the accepted `C3-I` contract.** The goal, route, filter axes and non-goals below stand and were carried into `C3-I`. Two things changed. First, **`GET /api/audit-logs/{id}` is explicitly superseded for the MVP**: the user goal is satisfied by a filtered readable list, raw metadata and technical detail increase privacy and complexity risk, a detail endpoint is not needed to understand the important action, and it may be reconsidered only through a separate future product decision. Second, the durable field name is `source` while the persisted column stays `actor_type`, mapped at read time with no migration. The authoritative contract — safe read model, ordering, pagination, filter semantics, privacy rules and presentation states — is **`docs/audit-log.md`**.
+> **PARTIALLY SUPERSEDED by the accepted `C3-I` contract.** The goal, route and non-goals below stand and were carried into `C3-I`. Three things changed. First, **`GET /api/audit-logs/{id}` is explicitly superseded for the MVP**: the user goal is satisfied by a filtered readable list, raw metadata and technical detail increase privacy and complexity risk, a detail endpoint is not needed to understand the important action, and it may be reconsidered only through a separate future product decision. Second, the `source` filter axis below is replaced by **`actor_type`**: the values that exist are `system` and `user`, which are **actors, not process sources**, and a true `source` field is deferred until write call sites persist that dimension through a separately authorized decision. Third, the API returns a backend-owned safe Russian **`display_summary`** instead of the raw persisted summary. The authoritative contract — safe read model, ordering, pagination, filter semantics, validation responses, privacy rules and presentation states — is **`docs/audit-log.md`**.
 
 ### Goal
 
@@ -2629,7 +2629,7 @@ Filters:
 - date;
 - action;
 - entity_type;
-- source.
+- ~~source~~ → **`actor_type`** (see the marker above).
 
 ### Frontend
 

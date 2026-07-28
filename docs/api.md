@@ -1102,7 +1102,7 @@ The **only** authorized AuditLog endpoint. Read-only, and the only new endpoint 
 
 **Superseded.** The `docs/roadmap.md` § PR27 proposal `GET /api/audit-logs/{id}` is **explicitly superseded for the MVP**: the user goal is satisfied by a filtered readable list, raw metadata and technical detail increase privacy and complexity risk, a detail endpoint is not needed to understand the important action, and it may be reconsidered only through a separate future product decision.
 
-Query parameters:
+#### Query parameters
 
 | Parameter | Rule |
 |---|---|
@@ -1110,13 +1110,13 @@ Query parameters:
 | `created_before` | ISO-8601 UTC, **exclusive**; `created_before <= created_from` is rejected |
 | `action` | stable action code |
 | `entity_type` | stable entity code |
-| `source` | stable source code |
-| `limit` | default `50`, minimum `1`, maximum `200` |
-| `offset` | default `0`, minimum `0` |
+| `actor_type` | stable actor code |
+| `limit` | omitted → `50`; valid range integer `1..200` |
+| `offset` | omitted → `0`; valid range integer `>= 0` |
 
-Filters combine with logical **AND**. Empty filters return the latest events. A malformed timestamp returns the **existing structured Russian validation response** — HTTP `422` with the existing `DomainIssue` shape (`code`, `message`, `field`, `value`, `next_action`) — not a new error contract. Filtering performs no writes.
+There is **no `source` filter**. Filters combine with logical **AND**. Empty filters return the latest events. Filtering performs no writes.
 
-Response:
+#### Response
 
 ```text
 items
@@ -1126,9 +1126,9 @@ offset
 filter_options
 ```
 
-`total` counts the rows matching the filters before `limit`/`offset`; `limit` and `offset` echo the effective applied values; `filter_options` lists the distinct `action`, `entity_type` and `source` values that actually exist in `audit_logs`, each with a safe Russian label.
+`total` counts the rows matching the filters before `limit`/`offset`; `limit` and `offset` echo the effective applied values, which differ from the request only when a parameter was omitted and its default applied. `filter_options` lists the distinct `action`, `entity_type` and `actor_type` values that **actually exist as rows** in `audit_logs`, each with a safe Russian label.
 
-Each item contains **only**:
+Each item contains exactly:
 
 ```text
 id
@@ -1137,22 +1137,72 @@ action
 action_label
 entity_type
 entity_label
-summary
-source
-source_label
+display_summary
+actor_type
+actor_label
 ```
 
 - `id` is an internal row identity and is not displayed as a business value;
 - `created_at` is ISO-8601 UTC; the SQLite `YYYY-MM-DD HH:MM:SS` storage form is never exposed;
-- `action`, `entity_type` and `source` are stable codes; `entity_type` may be `null`;
-- `action_label`, `entity_label` and `source_label` are Russian user-facing labels, with the safe fallbacks `Другое действие`, `Другая сущность` and `Другой источник` for unknown codes;
-- `summary` is the persisted safe summary as plain text.
+- `action`, `entity_type` and `actor_type` are stable codes; `entity_type` may be `null`;
+- `action_label`, `entity_label` and `actor_label` are Russian user-facing labels, with the safe fallbacks `Другое действие`, `Другая сущность` and `Другой инициатор` for unknown codes;
+- `display_summary` is a **backend-owned safe Russian presentation value** resolved from `action`, never the raw persisted summary.
 
-**Never returned:** raw `metadata_json`, `entity_id`, raw table names, stack traces, SQL, filesystem paths, raw payloads, secrets, or any reconstruction of sensitive client notes, allergies, addresses, wishes or feedback text. The read model is built from `audit_logs` alone and joins no business table.
+#### `actor_type`, not `source`
 
-**Persistence mapping.** The database column is `actor_type`; the durable domain and API name is `source`. `C3-I` maps one to the other at read time. The column is not renamed, no migration or backfill is authorized, and no existing write call site changes merely to rename this field.
+The API field keeps the persisted column name `actor_type`, and **no `source` field is exposed**. The values `system` and `user` describe the **actor that initiated the action**, not a process origin. Presenting them as a `source` would silently change the field's meaning, so `C3-I` does not.
 
-**Read-only guarantees.** Reading the journal writes no AuditLog record, mutates no business table, creates no file, changes no setting, triggers no regeneration, and performs no cleanup or normalization of historical rows. AuditLog stays append-only.
+The historical process vocabulary — `manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore` — is **aspirational**: no write call site persists that dimension, so a true `source` field cannot be implemented truthfully. It is **deferred** to a separately authorized product decision and write-side slice. The column is not renamed, no migration or backfill is authorized, and no existing write call site changes.
+
+Labels: `system → Система`, `user → Пользователь`, anything else → `Другой инициатор`.
+
+#### `display_summary`
+
+The raw persisted `audit_logs.summary` is **never returned**, in any field and as no fallback. It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text.
+
+A focused backend presenter — `AuditLogDisplayPresenter`, or an equivalently focused module consistent with the repository structure — resolves `display_summary` from the known `action`. It never includes an internal ID, never includes metadata, performs no business-table join, rewrites no historical row, and never exposes wish text, client notes, allergies, addresses or feedback bodies. A known safe business name may be retained only through an explicit action-specific rule; `client_wish.*` and `client_recipe.*` are excluded from that allowlist. Unknown actions, and recognized actions whose persisted summary does not match its expected shape, fall back to the resolved `action_label`.
+
+```text
+Ingredient lot created for ingredient #12  →  Создана партия компонента
+Order #4 produced as batch #7              →  Производство заказа подтверждено
+Client wish created: Убрать компонент X    →  Пожелание клиента добавлено
+```
+
+#### Validation responses
+
+The existing router convention raises `HTTPException(status_code=422, detail=issue.__dict__)`, so the `DomainIssue` object is the **value of `detail`**, not the whole body. The exact wire response is:
+
+```json
+{
+  "detail": {
+    "code": "invalid_date",
+    "message": "Russian user-readable message",
+    "field": "created_from",
+    "value": "the rejected value",
+    "next_action": "Russian user-readable next action"
+  }
+}
+```
+
+| Condition | `code` |
+|---|---|
+| malformed or invalid `created_from` / `created_before` | `invalid_date` |
+| `created_before <= created_from` — identifying the date range, never a silent empty result | `invalid_date` |
+| non-integer, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
+| negative `limit` / `offset` | `negative_quantity` |
+| `limit` outside `1..200` | `pagination_out_of_range` |
+
+The first four codes already exist in `DomainIssueCode`. `pagination_out_of_range` is the one new enum member authorized by `C3-I`, because no existing member carries out-of-range pagination semantics; it is an enum addition, not a schema change or migration.
+
+**An explicitly supplied invalid pagination value is rejected, never silently clamped, coerced, rounded or ignored.** `limit=0`, `limit=500`, `limit=-1`, `limit=abc`, `limit=true`, `limit=1.5` and `offset=-1` are all errors.
+
+#### Never returned
+
+The raw persisted summary, raw `metadata_json`, `entity_id`, internal entity IDs reached by any route, raw table names, stack traces, SQL, filesystem paths, raw payloads, secrets, and any reconstruction of sensitive client notes, allergies, addresses, wishes or feedback text. The read model is built from `audit_logs` alone and joins no business table.
+
+#### Read-only guarantees
+
+Reading the journal writes no AuditLog record, mutates no business table, creates no file, changes no setting, triggers no regeneration, and performs no cleanup or normalization of historical rows. AuditLog stays append-only — the presenter changes only what is shown, never what is stored.
 
 Ordering is `created_at DESC, id DESC`. Unbounded history is never returned.
 

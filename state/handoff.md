@@ -1583,20 +1583,22 @@ Merged `main` reports now read persisted `ProductionBatch` financial snapshots. 
 Durable contract: **`docs/audit-log.md`**. It is authoritative; `docs/api.md`, `docs/domain-model.md`, `docs/roadmap.md` § PR27 and `docs/implementation-plan.md` § C3 defer to it.
 
 - **Purpose.** `Журнал действий` — a plain-language history of important workshop actions, so the user can understand what happened without opening SQLite, JSON, logs, GitHub or a terminal. Not a technical admin console, database browser, SIEM, analytics, rollback, event editor or debugging console.
-- **Persistence mapping.** The column stays `actor_type`; the durable domain and API name is `source`; the mapping is read-time only. No column rename, no migration, no backfill, no write-call-site change for the rename.
+- **Actor field — `actor_type`, not `source`.** The API keeps the persisted column name and exposes `actor_type` / `actor_label`. **No `source` field is exposed or authorized.** `system` and `user` are **actor identities, not process origins**, so mapping them onto `source` would silently change the field's meaning. Labels: `system → Система`, `user → Пользователь`, anything else → `Другой инициатор`. The historical process vocabulary (`manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore`) is aspirational — no call site persists that dimension — so a true `source` is **deferred** to a separately authorized decision and write-side slice. No column rename, no migration, no backfill, no write-call-site change.
 - **API.** Exactly one new endpoint, `GET /api/audit-logs`. `GET /api/audit-logs/{id}` is **explicitly superseded for the MVP**. No create, update, delete, rollback or export endpoint.
-- **Safe read model.** `items`, `total`, `limit`, `offset`, `filter_options`; item fields `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `summary`, `source`, `source_label`. Raw `metadata_json`, `entity_id`, table names, stack traces, SQL, paths, payloads and secrets are never returned, and sensitive client text is never reconstructed. Unknown codes fall back to `Другое действие`, `Другая сущность`, `Другой источник`.
-- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` `50` / `1` / `200`; `offset` `0` / `0`. No unbounded history.
-- **Filters.** `created_from` inclusive, `created_before` exclusive, plus `action`, `entity_type`, `source`, `limit`, `offset`, combined with AND, ISO-8601 UTC, existing structured Russian validation response for malformed input, `created_before <= created_from` rejected, options derived from persisted values, no writes.
-- **Read-only.** No audit record, no business mutation, no file, no setting change, no regeneration, no normalization of historical rows. Append-only preserved.
-- **Frontend.** `/settings/audit-log`, title `Журнал действий`, full state set including filtered-empty and refresh-failure-retaining-previous-list, keyboard accessible, narrow viewport safe. No raw codes, JSON, `metadata_json`, table names, internal IDs, stack traces, SQL, developer paths or GitHub/PR terminology. Focused modules only; `frontend/src/main.ts` must not grow net from its current `6398` lines.
+- **Safe read model.** `items`, `total`, `limit`, `offset`, `filter_options`; item fields exactly `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `display_summary`, `actor_type`, `actor_label`. The raw persisted summary, raw `metadata_json`, `entity_id`, table names, stack traces, SQL, paths, payloads and secrets are never returned, and sensitive client text is never reconstructed. Unknown codes fall back to `Другое действие`, `Другая сущность`, `Другой инициатор`.
+- **`display_summary`.** The raw `audit_logs.summary` is **never returned**, as a value or as a fallback. A focused backend presenter (`AuditLogDisplayPresenter` or equivalent) resolves a safe Russian value from the known `action` — no internal IDs, no metadata, no business-table join, no historical rewrite, no sensitive text. A safe business name is retained only under an explicit action-specific allowlist that excludes `client_wish.*` and `client_recipe.*`; unknown actions and unrecognized summary shapes fall back to `action_label`.
+- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, valid integer `1..200`; `offset` default `0`, valid integer `>= 0`. Out-of-range, negative, non-integer, boolean or malformed values are **rejected with a structured `422`, never silently clamped**. No unbounded history.
+- **Filters.** `created_from` inclusive, `created_before` exclusive, plus `action`, `entity_type`, `actor_type`, `limit`, `offset` — **no `source` filter** — combined with AND, ISO-8601 UTC, structured `422` with the existing `invalid_date` code for malformed input, `created_before <= created_from` rejected while naming the date range, options derived from values that actually exist as rows in `audit_logs`, no writes.
+- **Validation wire shape.** `HTTPException(status_code=422, detail=issue.__dict__)` means the `DomainIssue` is the **value of `detail`**: the body is `{"detail": {"code", "message", "field", "value", "next_action"}}`. Codes are `invalid_date`, `non_integer_quantity`, `negative_quantity`, plus the one new authorized enum member `pagination_out_of_range`.
+- **Read-only.** No audit record, no business mutation, no file, no setting change, no regeneration, no normalization of historical rows. Append-only preserved — the presenter changes only what is shown.
+- **Frontend.** `/settings/audit-log`, title `Журнал действий`, full state set including filtered-empty and refresh-failure-retaining-previous-list, keyboard accessible, narrow viewport safe. Filters are date, action, entity and actor. No raw codes, no raw persisted summary, no JSON, `metadata_json`, table names, internal IDs, stack traces, SQL, developer paths or GitHub/PR terminology. Focused modules only; `frontend/src/main.ts` must not grow net from its current `6398` lines.
 
 ### Findings the implementer must not rediscover
 
-- **Actual vocabulary.** 50 `action` codes, 19 `entity_type` values, and only two `actor_type` values — `system` (default) and `user` (only `tax_rate_setting_changed`). The documented sources `manual` / `import` / `production` / `migration` / `backup` / `restore` are **not persisted**. Required Russian labels for all of them are tabulated in `docs/audit-log.md` § 10.
+- **Current write vocabulary.** 50 `action` codes, 19 `entity_type` values, and two `actor_type` values — `system` (default) and `user` (only `tax_rate_setting_changed`). These were read from merged-`main` production call sites, **not** by querying a database containing a row for every code, so a real database may hold fewer of them and an older one may hold values no current call site produces. `filter_options` is therefore derived from rows that actually exist, and the unknown-code fallbacks are mandatory. Required Russian labels are tabulated in `docs/audit-log.md` § 11.
 - **`ImportDraft` is PascalCase** while every other `entity_type` is snake_case. Match it as persisted; do not normalize, alias or rewrite it.
-- **Most persisted summaries are English** (`Client created: …`, `Order #4 produced as batch #7`); only the `onboarding.*`, `demo_data.*` and `tax_rate_setting_changed` summaries are Russian. Readability comes from `action_label` and `entity_label`; the summary is supplementary. Rewriting history is forbidden, and changing what future writes put in a summary is a separate slice.
-- **One flagged residual privacy risk:** `client_wish.*` summaries embed the user-authored wish title. `C3-I` returns the persisted summary verbatim and never joins to `client_wishes`, so nothing new is exposed — but narrowing future wish summaries is an open follow-up product decision, not something `C3-I` may decide.
+- **Most persisted summaries are English** (`Client created: …`, `Order #4 produced as batch #7`); only the `onboarding.*`, `demo_data.*` and `tax_rate_setting_changed` summaries are Russian, and several embed internal record IDs. That is why the raw summary is never returned and `display_summary` is resolved from `action` instead. Rewriting history is forbidden; changing what future writes put in a summary is a separate slice.
+- **`client_wish.*` summaries embed the user-authored wish title**, so those actions are excluded from the name-retention allowlist and always render generically as `Пожелание клиента добавлено` and the analogous forms. `client_recipe.*` is excluded on the same reasoning, because an individual-formula title can describe a client's personal condition.
 - **Coverage gap:** backups, exports, report-document generation and workshop-profile updates write **no** audit record on merged `main`. `Журнал действий` will not show them. Do not add those write call sites in `C3-I`.
 - **Route architecture:** every existing frontend route is a single path segment resolved through a flat exact-match table in `frontend/src/main.ts`. `/settings/audit-log` is the first nested route, so route resolution, the navigation entry under `Данные и настройки`, and the nested-path static fallback all need handling.
 
@@ -1611,3 +1613,91 @@ Durable contract: **`docs/audit-log.md`**. It is authoritative; `docs/api.md`, `
 ### Verification performed here
 
 Level 0 documentation checks only: `git status --short --untracked-files=all`, `git diff --check`, `git diff --stat`, `git diff --name-only`, and the three-dot `origin/main...HEAD` variants, plus the semantic consistency audit across active documentation and state. Every changed file ends in `.md`. **Backend tests, frontend tests, the build, API smoke, browser smoke, migration smoke, packaging smoke and release smoke were not run.** No runtime command is claimed as executed.
+
+## C3-I contract correction handoff (2026-07-29, PR #158)
+
+Review of PR #158 at head `25d48f3848b9277ab31f768fcbbbf35505342a1e` accepted the **C2 lifecycle closure** and the **bounded C3 direction**, and rejected the C3 contract for two semantic contradictions and one API ambiguity. All three are corrected in the same PR; no new branch and no new PR were created. `C2 — COMPLETED` and `C2-III-B — DONE — MERGED AND EXACT-HEAD VERIFIED` are untouched.
+
+### What changed in the contract
+
+| Before | After |
+|---|---|
+| `source`, `source_label`, `source` filter | `actor_type`, `actor_label`, `actor_type` filter |
+| unknown source → `Другой источник` | unknown actor → `Другой инициатор` |
+| `actor_type → source` described as a harmless read-time rename | rename rejected; `system` / `user` are **actors, not process origins**; a true `source` is **deferred** until write call sites persist that dimension |
+| item field `summary`, returned verbatim from `audit_logs.summary` | item field `display_summary`, produced by a backend presenter; the raw persisted summary is **never returned** |
+| "the existing structured Russian validation response" | the exact body `{"detail": {"code", "message", "field", "value", "next_action"}}` |
+| pagination bounds stated without rejection semantics | explicit reject-not-clamp rules and error codes |
+| "actual persisted values" | "current write vocabulary — values producible by merged-`main` production call sites" |
+
+### Corrected item shape
+
+```text
+id
+created_at
+action
+action_label
+entity_type
+entity_label
+display_summary
+actor_type
+actor_label
+```
+
+### Corrected filters
+
+```text
+created_from
+created_before
+action
+entity_type
+actor_type
+limit
+offset
+```
+
+There is no `source` filter.
+
+### Actor labels
+
+```text
+system → Система
+user   → Пользователь
+other  → Другой инициатор
+```
+
+### `display_summary` rules the implementer must follow
+
+Resolved from the known `action`; Russian and user-readable; the raw persisted summary is never an API or frontend fallback; no internal IDs; no raw metadata; no business-table join; no historical row rewritten; no wish text, client notes, allergies, addresses or feedback bodies; a known safe business name only through the explicit action-specific allowlist in `docs/audit-log.md` § 6.4, which **excludes `client_wish.*` and `client_recipe.*`**; unknown actions and unrecognized summary shapes fall back to the resolved `action_label`.
+
+```text
+Ingredient lot created for ingredient #12  →  Создана партия компонента
+Order #4 produced as batch #7              →  Производство заказа подтверждено
+Client wish created: Убрать компонент X    →  Пожелание клиента добавлено
+```
+
+### Validation
+
+```json
+{
+  "detail": {
+    "code": "invalid_date",
+    "message": "Russian user-readable message",
+    "field": "created_from",
+    "value": "the rejected value",
+    "next_action": "Russian user-readable next action"
+  }
+}
+```
+
+Codes: `invalid_date` for malformed dates and for `created_before <= created_from` (identifying the date range, never a silent empty result); `non_integer_quantity` for non-integer, boolean or malformed `limit`/`offset`; `negative_quantity` for negative values; `pagination_out_of_range` for a `limit` outside `1..200`. The last is the **one** new `DomainIssueCode` member authorized by `C3-I` — an enum addition, not a schema change or migration.
+
+Pagination: omitted `limit` → `50`, valid integer `1..200`; omitted `offset` → `0`, valid integer `>= 0`. An explicitly supplied invalid value is **rejected, never silently clamped, coerced, rounded or ignored**.
+
+### Still true from the previous handoff
+
+The lifecycle table, the PR #157 evidence, the current write vocabulary (50 actions, 19 entity types, two actor types), the `ImportDraft` PascalCase note, the audit coverage gap for backups/exports/report documents/workshop profile, and the nested-route note for `/settings/audit-log` all stand unchanged.
+
+### Verification
+
+Level 0 documentation checks only, plus the semantic consistency audit. **Backend tests, frontend tests, the build and every smoke were not run** for this correction. No runtime code, test, schema, migration, dependency, lockfile, package script, generated file or user data changed. PR #158 stays open and unmerged with auto-merge disabled.

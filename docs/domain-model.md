@@ -1742,9 +1742,13 @@ onboarding
 restore
 ```
 
-> **Persistence versus API name.** The database column created by `0001_infrastructure` and written by `AuditLogRepository.create_log` is **`actor_type`**. The durable domain and API name is **`source`**; the `C3-I` read model maps one to the other at read time. The column is not renamed, and no migration or backfill is authorized. Existing write call sites are not changed merely to rename this field.
+> **This `source` vocabulary is aspirational and is NOT implemented.** No write call site persists a source/process dimension — there is no column, no parameter and no value carrying it. The only field that exists is **`actor_type`**, created by `0001_infrastructure` and written by `AuditLogRepository.create_log`, and the only values in the current write vocabulary are **`system`** (the `create_log` default, used by every call site except one) and **`user`** (written only for `tax_rate_setting_changed`).
 >
-> **Actual persisted values.** The vocabulary above is aspirational. Only **`system`** and **`user`** are actually written on merged `main`: `system` is the `create_log` default used by every call site except one, and `user` is written only for `tax_rate_setting_changed`. `manual`, `import`, `production`, `migration`, `backup` and `restore` are not persisted anywhere. `C3-I` presents what exists and routes anything else through the safe unknown-code label. Full inventory: `docs/audit-log.md` § 10.
+> **`system` and `user` are actors, not sources.** They describe who or what initiated the action, not the process it came from. `C3-I` therefore exposes **`actor_type` / `actor_label`** and **does not** expose a `source` field, because mapping one onto the other would silently change the meaning of the field.
+>
+> A true process `source` requires write call sites to start persisting that dimension. That is a write-side change and is **deferred** to a separately authorized product decision and implementation slice. Until then `manual`, `import`, `production`, `migration`, `backup` and `restore` must not be presented as implementable.
+>
+> The column is not renamed, no migration or backfill is authorized, and no existing write call site changes. Values outside the known vocabulary resolve to `Другой инициатор`. Full inventory: `docs/audit-log.md` § 11.
 
 ### Business rules
 
@@ -1754,6 +1758,7 @@ restore
 - Metadata can contain technical details, but no secrets.
 - Important business actions must create AuditLog.
 - `metadata_json` is **never** returned by the read API. It is dominated by internal foreign-key IDs, enum codes and counters — exactly the class of value a non-technical user must not see — so the `C3-I` read model excludes it in full rather than field by field.
+- The **raw persisted `summary` is never returned either.** It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text. The read API returns `display_summary`, a backend-owned safe Russian value resolved from `action` by a focused presenter, with the raw summary never used as a value or a fallback. Historical rows are not rewritten — only what is shown changes.
 - The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
 
 ### Examples
