@@ -1586,10 +1586,10 @@ Durable contract: **`docs/audit-log.md`**. It is authoritative; `docs/api.md`, `
 - **Actor field — `actor_type`, not `source`.** The API keeps the persisted column name and exposes `actor_type` / `actor_label`. **No `source` field is exposed or authorized.** `system` and `user` are **actor identities, not process origins**, so mapping them onto `source` would silently change the field's meaning. Labels: `system → Система`, `user → Пользователь`, anything else → `Другой инициатор`. The historical process vocabulary (`manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore`) is aspirational — no call site persists that dimension — so a true `source` is **deferred** to a separately authorized decision and write-side slice. No column rename, no migration, no backfill, no write-call-site change.
 - **API.** Exactly one new endpoint, `GET /api/audit-logs`. `GET /api/audit-logs/{id}` is **explicitly superseded for the MVP**. No create, update, delete, rollback or export endpoint.
 - **Safe read model.** `items`, `total`, `limit`, `offset`, `filter_options`; item fields exactly `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `display_summary`, `actor_type`, `actor_label`. The raw persisted summary, raw `metadata_json`, `entity_id`, table names, stack traces, SQL, paths, payloads and secrets are never returned, and sensitive client text is never reconstructed. Unknown codes fall back to `Другое действие`, `Другая сущность`, `Другой инициатор`.
-- **`display_summary`.** The raw `audit_logs.summary` is **never returned**, as a value or as a fallback. A focused backend presenter (`AuditLogDisplayPresenter` or equivalent) resolves a safe Russian value from the known `action` — no internal IDs, no metadata, no business-table join, no historical rewrite, no sensitive text. A safe business name is retained only under an explicit action-specific allowlist that excludes `client_wish.*` and `client_recipe.*`; unknown actions and unrecognized summary shapes fall back to `action_label`.
-- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, valid integer `1..200`; `offset` default `0`, valid integer `>= 0`. Out-of-range, negative, non-integer, boolean or malformed values are **rejected with a structured `422`, never silently clamped**. No unbounded history.
-- **Filters.** `created_from` inclusive, `created_before` exclusive, plus `action`, `entity_type`, `actor_type`, `limit`, `offset` — **no `source` filter** — combined with AND, ISO-8601 UTC, structured `422` with the existing `invalid_date` code for malformed input, `created_before <= created_from` rejected while naming the date range, options derived from values that actually exist as rows in `audit_logs`, no writes.
-- **Validation wire shape.** `HTTPException(status_code=422, detail=issue.__dict__)` means the `DomainIssue` is the **value of `detail`**: the body is `{"detail": {"code", "message", "field", "value", "next_action"}}`. Codes are `invalid_date`, `non_integer_quantity`, `negative_quantity`, plus the one new authorized enum member `pagination_out_of_range`.
+- **`display_summary`.** The raw `audit_logs.summary` is **never returned verbatim and is never an unrestricted fallback**. A focused backend presenter (`AuditLogDisplayPresenter` or equivalent) resolves a safe Russian value from the known `action` — no internal IDs, no metadata, no business-table join, no historical rewrite, no sensitive text. A suffix may contribute only through the seven-condition rule and the exact 21-row allowlist of `docs/audit-log.md` § 6.4; unknown actions and unrecognized summary shapes fall back to `action_label`.
+- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, accepted integer `1..200`; `offset` default `0`, accepted integer `>= 0`. Ordered precedence — missing → default; wrong type/fractional/boolean/malformed → `non_integer_quantity`; negative → `negative_quantity`; non-negative `limit` of `0` or `> 200` → `pagination_out_of_range` — so every invalid input has exactly one code. Invalid values are **rejected, never silently clamped**. No unbounded history.
+- **Filters.** `created_from` inclusive, `created_before` exclusive, plus `action`, `entity_type`, `actor_type`, `limit`, `offset` — **no `source` filter** — combined with AND, ISO-8601 UTC, structured `422` with the existing `invalid_date` code for malformed input, options derived from values that actually exist as rows in `audit_logs`, no writes.
+- **Validation wire shape.** `HTTPException(status_code=422, detail=issue.__dict__)` means the `DomainIssue` is the **value of `detail`**: the body is `{"detail": {"code", "message", "field", "value", "next_action"}}`. Codes are `invalid_date`, `non_integer_quantity`, `negative_quantity`, plus the one new authorized enum member `PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`. The date-range conflict returns `field: created_before`.
 - **Read-only.** No audit record, no business mutation, no file, no setting change, no regeneration, no normalization of historical rows. Append-only preserved — the presenter changes only what is shown.
 - **Frontend.** `/settings/audit-log`, title `Журнал действий`, full state set including filtered-empty and refresh-failure-retaining-previous-list, keyboard accessible, narrow viewport safe. Filters are date, action, entity and actor. No raw codes, no raw persisted summary, no JSON, `metadata_json`, table names, internal IDs, stack traces, SQL, developer paths or GitHub/PR terminology. Focused modules only; `frontend/src/main.ts` must not grow net from its current `6398` lines.
 
@@ -1690,9 +1690,11 @@ Client wish created: Убрать компонент X    →  Пожелани�
 }
 ```
 
-Codes: `invalid_date` for malformed dates and for `created_before <= created_from` (identifying the date range, never a silent empty result); `non_integer_quantity` for non-integer, boolean or malformed `limit`/`offset`; `negative_quantity` for negative values; `pagination_out_of_range` for a `limit` outside `1..200`. The last is the **one** new `DomainIssueCode` member authorized by `C3-I` — an enum addition, not a schema change or migration.
+Codes: `invalid_date` for malformed dates and for `created_before <= created_from`, never a silent empty result; `non_integer_quantity` for non-integer, fractional, boolean or malformed `limit`/`offset`; `negative_quantity` for negative values; `pagination_out_of_range` for a **non-negative** `limit` outside `1..200`. The last is the **one** new `DomainIssueCode` member authorized by `C3-I` — an enum addition, not a schema change or migration.
 
-Pagination: omitted `limit` → `50`, valid integer `1..200`; omitted `offset` → `0`, valid integer `>= 0`. An explicitly supplied invalid value is **rejected, never silently clamped, coerced, rounded or ignored**.
+Pagination: omitted `limit` → `50`, accepted integer `1..200`; omitted `offset` → `0`, accepted integer `>= 0`. An explicitly supplied invalid value is **rejected, never silently clamped, coerced, rounded or ignored**.
+
+> **Refined by the second review — see § *C3-I contract ambiguity resolution handoff (2026-07-29, PR #158, second review)* at the end of this file.** The codes above are now governed by an ordered precedence in which the first match wins, so `limit=-1` is only `negative_quantity` and `limit=0` is only `pagination_out_of_range`. The date-range conflict returns `field: created_before`, never a synthetic `date_range`.
 
 ### Still true from the previous handoff
 
@@ -1701,3 +1703,108 @@ The lifecycle table, the PR #157 evidence, the current write vocabulary (50 acti
 ### Verification
 
 Level 0 documentation checks only, plus the semantic consistency audit. **Backend tests, frontend tests, the build and every smoke were not run** for this correction. No runtime code, test, schema, migration, dependency, lockfile, package script, generated file or user data changed. PR #158 stays open and unmerged with auto-merge disabled.
+
+## C3-I contract ambiguity resolution handoff (2026-07-29, PR #158, second review)
+
+The second review at head `773af68ab6bc2c27a767872d98744d128b608261` accepted `actor_type` / `actor_label`, the absent process-source field and filter, the backend-owned `display_summary`, the exclusion of raw metadata and internal IDs, the `{"detail": DomainIssue}` envelope, the `pagination_out_of_range` enum member, the C2 closure, the C3-I authorization and C4 staying inactive. **None of those is reopened.** Two ambiguities are fixed here.
+
+### Corrected raw-summary rule
+
+```text
+The raw persisted summary is never returned verbatim and is never used
+as an unrestricted API or frontend fallback.
+
+A suffix extracted from the persisted summary may contribute to
+display_summary only when all of the following are true:
+
+1. the action is explicitly allowlisted;
+2. the persisted summary starts with the exact prefix assigned to that action;
+3. the remaining suffix is non-empty;
+4. the action is authorized to retain that category of business name;
+5. the suffix is rendered only as plain text;
+6. the suffix contains no internal identifier supplied by the presenter;
+7. no database lookup or metadata lookup is performed.
+
+Otherwise display_summary falls back to the generic action-specific phrase.
+```
+
+Still prohibited: the complete persisted summary; its English technical prefix; unrestricted fallback use; summaries containing internal IDs; wish text; individual-recipe titles; metadata; business-table joins; rewriting historical rows.
+
+### The exact allowlist — 21 actions, verified from production call sites
+
+| `action` | Exact prefix | Suffix | Fallback | Template |
+|---|---|---|---|---|
+| `client.created` | `Client created: ` | client full name | `Клиент создан` | `Клиент создан: <имя>` |
+| `client.updated` | `Client updated: ` | client full name | `Клиент изменён` | `Клиент изменён: <имя>` |
+| `client.deactivated` | `Client deactivated: ` | client full name | `Клиент архивирован` | `Клиент архивирован: <имя>` |
+| `ingredient.created` | `Ingredient created: ` | ingredient name | `Компонент создан` | `Компонент создан: <название>` |
+| `ingredient.updated` | `Ingredient updated: ` | ingredient name | `Компонент изменён` | `Компонент изменён: <название>` |
+| `ingredient.deactivated` | `Ingredient deactivated: ` | ingredient name | `Компонент архивирован` | `Компонент архивирован: <название>` |
+| `packaging_item.created` | `Packaging item created: ` | packaging name | `Тара создана` | `Тара создана: <название>` |
+| `packaging_item.updated` | `Packaging item updated: ` | packaging name | `Тара изменена` | `Тара изменена: <название>` |
+| `packaging_item.deactivated` | `Packaging item deactivated: ` | packaging name | `Тара архивирована` | `Тара архивирована: <название>` |
+| `recipe_template.created` | `Recipe template created: ` | recipe name | `Рецепт создан` | `Рецепт создан: <название>` |
+| `recipe_template.deactivated` | `Recipe template deactivated: ` | recipe name | `Рецепт архивирован` | `Рецепт архивирован: <название>` |
+| `order.created` | `Order created: ` | order product name | `Заказ создан` | `Заказ создан: <продукт>` |
+| `order.updated` | `Order updated: ` | order product name | `Заказ изменён` | `Заказ изменён: <продукт>` |
+| `order.cancelled` | `Order cancelled: ` | order product name | `Заказ отменён` | `Заказ отменён: <продукт>` |
+| `order.archived` | `Order archived: ` | order product name | `Заказ архивирован` | `Заказ архивирован: <продукт>` |
+| `catalog_category.created` | `Catalog category created: ` | reference name | `Категория справочника создана` | `… создана: <название>` |
+| `catalog_category.updated` | `Catalog category updated: ` | reference name | `Категория справочника изменена` | `… изменена: <название>` |
+| `catalog_category.archived` | `Catalog category archived: ` | reference name | `Категория справочника архивирована` | `… архивирована: <название>` |
+| `catalog_tag.created` | `Catalog tag created: ` | reference name | `Тег справочника создан` | `… создан: <название>` |
+| `catalog_tag.updated` | `Catalog tag updated: ` | reference name | `Тег справочника изменён` | `… изменён: <название>` |
+| `catalog_tag.archived` | `Catalog tag archived: ` | reference name | `Тег справочника архивирован` | `… архивирован: <название>` |
+
+Full table with write-call-site locations: `docs/audit-log.md` § 6.4.3.
+
+**Excluded and never eligible:** `client_wish.*` (user-authored wish title); `client_recipe.*` (individual-formula title); every ID-bearing action — `ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created`, `production_confirmed`, `recipe_version.created`; and every catalog-assignment action, whose summary is the fixed string `Catalog category assigned` or `Catalog tags updated`. **The allowlist is the exact 21-row table, not a prefix glob** — `ingredient.catalog_tags.updated` matches `ingredient.*` but is not allowlisted.
+
+**Fallback behaviour:** prefix mismatch, empty suffix, non-allowlisted action, unknown action, or any of the seven conditions failing → the generic action-specific phrase from `docs/audit-log.md` § 6.6, which for an unknown action is the resolved `action_label`.
+
+### Pagination validation order
+
+```text
+1. Missing value        limit → default 50; offset → default 0
+2. Wrong type or representation
+   non-integer, fractional, boolean, malformed string  → non_integer_quantity
+3. Negative integer     limit < 0, offset < 0          → negative_quantity
+4. Non-negative limit outside accepted range
+   limit == 0, limit > 200                             → pagination_out_of_range
+5. Accepted             limit: integer 1..200; offset: integer >= 0
+```
+
+First match wins, so `limit=-1` is only `negative_quantity` and `limit=0` is only `pagination_out_of_range`.
+
+```text
+limit=true  → non_integer_quantity
+limit=1.5   → non_integer_quantity
+limit=abc   → non_integer_quantity
+limit=-1    → negative_quantity
+offset=-1   → negative_quantity
+limit=0     → pagination_out_of_range
+limit=201   → pagination_out_of_range
+limit=200   → accepted
+offset=0    → accepted
+```
+
+Nothing is silently clamped, coerced, rounded or ignored.
+
+### Date-range conflict
+
+```text
+HTTP status: 422
+code: invalid_date
+field: created_before
+value: the supplied created_before value
+```
+
+Russian `message`: the end of the period must be later than its beginning. Russian `next_action`: select an end date later than the start date. No synthetic `date_range` field.
+
+### Enum decision preserved
+
+`PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"` stays the single new `DomainIssueCode` authorized by `C3-I`. It must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`. Bounded enum addition, not a schema migration.
+
+### Verification
+
+Level 0 documentation checks only, plus the semantic consistency audit. **Backend tests, frontend tests, the build and every smoke were not run.** No runtime code, test, schema, migration, dependency, lockfile, package script, generated file or user data changed. PR #158 stays open and unmerged with auto-merge disabled.

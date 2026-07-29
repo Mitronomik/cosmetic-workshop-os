@@ -199,7 +199,7 @@ Rules:
 
 ### 5.3. Never returned
 
-- the raw persisted `audit_logs.summary` — in any form, whole or partial, as a value or as a fallback;
+- the raw persisted `audit_logs.summary` **verbatim**, its English technical prefix, or any use of it as an unrestricted API or frontend fallback. A suffix may contribute to `display_summary` only through the bounded allowlist rule of § 6.4;
 - raw `metadata_json` — never returned in any form, whole or partial, parsed or stringified;
 - `entity_id` — the persisted internal record identity is not part of the read model;
 - internal entity IDs reached through any other route, including inside `display_summary` text;
@@ -245,41 +245,93 @@ or an equivalently focused module name consistent with the repository structure 
 
 - presentation is resolved from the known `action`;
 - output is Russian and user-readable;
-- the raw persisted summary is **never** used as an API or frontend fallback;
+- **the raw persisted summary is never returned verbatim and is never used as an unrestricted API or frontend fallback**;
 - internal IDs are never included;
 - raw metadata is never included;
 - no business-table join is performed;
 - no historical row is rewritten — the persisted rows are untouched and stay append-only;
 - sensitive wish text, client notes, allergies, addresses, feedback bodies and similar content are never included;
-- known safe business names may be retained **only** through an explicit action-specific safe rule (§ 6.4);
+- a suffix extracted from the persisted summary may contribute to `display_summary` **only** under the bounded rule of § 6.4;
 - `client_wish.*` must use a generic Russian summary and must **not** expose the persisted wish title;
 - technical-ID summaries use generic Russian text without the ID;
 - unknown actions, and recognized actions whose persisted summary does not match its expected shape, use a safe generic Russian `display_summary` — normally the resolved `action_label`;
 - the frontend never receives the raw persisted summary.
 
-### 6.4. The name-retention allowlist
+### 6.4. Bounded suffix extraction — the exact allowlist
 
-For a small set of actions the persisted summary has a stable, known shape of the form `<fixed English prefix><business name>`, and the trailing value is an ordinary business identity — a catalogue item name, a client name, an order product name — not a sensitive note. Only for these actions may the presenter recognize the exact known prefix and retain the remainder as a plain-text name:
+#### 6.4.1. The rule
 
-| Action group | Retained value | Resulting `display_summary` |
-|---|---|---|
-| `client.created` / `client.updated` / `client.deactivated` | client full name | `Клиент создан: <имя>` / `Клиент изменён: <имя>` / `Клиент архивирован: <имя>` |
-| `ingredient.created` / `ingredient.updated` / `ingredient.deactivated` | ingredient name | `Компонент создан: <название>` / `Компонент изменён: <название>` / `Компонент архивирован: <название>` |
-| `packaging_item.created` / `packaging_item.updated` / `packaging_item.deactivated` | packaging item name | `Тара создана: <название>` / `Тара изменена: <название>` / `Тара архивирована: <название>` |
-| `recipe_template.created` / `recipe_template.deactivated` | recipe name | `Рецепт создан: <название>` / `Рецепт архивирован: <название>` |
-| `order.created` / `order.updated` / `order.cancelled` / `order.archived` | order product name | `Заказ создан: <продукт>` / `Заказ изменён: <продукт>` / `Заказ отменён: <продукт>` / `Заказ архивирован: <продукт>` |
-| `catalog_category.*` / `catalog_tag.*` | reference-data name | `Категория справочника создана: <название>` and the analogous forms |
+```text
+The raw persisted summary is never returned verbatim and is never used
+as an unrestricted API or frontend fallback.
 
-Binding constraints on the allowlist:
+A suffix extracted from the persisted summary may contribute to
+display_summary only when all of the following are true:
 
-- the match is against the **exact** known prefix; any other shape falls back to the generic `action_label`;
-- the retained remainder is rendered as plain text and is never parsed, interpreted or used for a lookup;
-- **no action whose persisted summary embeds an internal ID may be added to this allowlist**;
-- `client_recipe.*` is deliberately **excluded**: an individual-formula title can describe a client's personal condition, so it is treated as sensitive and always rendered generically;
-- `client_wish.*` is **excluded** and is never eligible;
-- extending the allowlist requires a separate explicit decision in this document.
+1. the action is explicitly allowlisted;
+2. the persisted summary starts with the exact prefix assigned to that action;
+3. the remaining suffix is non-empty;
+4. the action is authorized to retain that category of business name;
+5. the suffix is rendered only as plain text;
+6. the suffix contains no internal identifier supplied by the presenter;
+7. no database lookup or metadata lookup is performed.
 
-Every action outside the allowlist renders generically from `action`, with no value carried over from the persisted summary.
+Otherwise display_summary falls back to the generic action-specific phrase.
+```
+
+If any one of the seven conditions fails, the presenter uses the generic fallback. There is no partial credit and no repair attempt.
+
+#### 6.4.2. Still prohibited
+
+- returning the complete persisted summary;
+- returning its English technical prefix;
+- using it as an unrestricted fallback;
+- returning summaries containing internal IDs;
+- returning wish text;
+- returning individual-recipe titles;
+- returning metadata;
+- joining business tables;
+- rewriting historical rows.
+
+#### 6.4.3. The exact prefix table
+
+Inventoried from the merged-`main` production write call sites named in the last column. Every prefix below ends with a space after the colon; the retained suffix is everything after it. This table is exhaustive — an action absent from it can never retain a suffix.
+
+| `action` | Exact persisted prefix | Retained suffix category | Generic fallback | `display_summary` template | Write call site |
+|---|---|---|---|---|---|
+| `client.created` | `Client created: ` | client full name | `Клиент создан` | `Клиент создан: <имя>` | `services/clients.py:18` |
+| `client.updated` | `Client updated: ` | client full name | `Клиент изменён` | `Клиент изменён: <имя>` | `services/clients.py:30` |
+| `client.deactivated` | `Client deactivated: ` | client full name | `Клиент архивирован` | `Клиент архивирован: <имя>` | `services/clients.py:36` |
+| `ingredient.created` | `Ingredient created: ` | ingredient name | `Компонент создан` | `Компонент создан: <название>` | `services/ingredients.py:18` |
+| `ingredient.updated` | `Ingredient updated: ` | ingredient name | `Компонент изменён` | `Компонент изменён: <название>` | `services/ingredients.py:37` |
+| `ingredient.deactivated` | `Ingredient deactivated: ` | ingredient name | `Компонент архивирован` | `Компонент архивирован: <название>` | `services/ingredients.py:50` |
+| `packaging_item.created` | `Packaging item created: ` | packaging item name | `Тара создана` | `Тара создана: <название>` | `services/packaging_items.py:18` |
+| `packaging_item.updated` | `Packaging item updated: ` | packaging item name | `Тара изменена` | `Тара изменена: <название>` | `services/packaging_items.py:37` |
+| `packaging_item.deactivated` | `Packaging item deactivated: ` | packaging item name | `Тара архивирована` | `Тара архивирована: <название>` | `services/packaging_items.py:50` |
+| `recipe_template.created` | `Recipe template created: ` | recipe name | `Рецепт создан` | `Рецепт создан: <название>` | `services/recipes.py:25` |
+| `recipe_template.deactivated` | `Recipe template deactivated: ` | recipe name | `Рецепт архивирован` | `Рецепт архивирован: <название>` | `services/recipes.py:37` |
+| `order.created` | `Order created: ` | order product name | `Заказ создан` | `Заказ создан: <продукт>` | `services/orders.py:33` |
+| `order.updated` | `Order updated: ` | order product name | `Заказ изменён` | `Заказ изменён: <продукт>` | `services/orders.py:53` |
+| `order.cancelled` | `Order cancelled: ` | order product name | `Заказ отменён` | `Заказ отменён: <продукт>` | `services/orders.py:63` |
+| `order.archived` | `Order archived: ` | order product name | `Заказ архивирован` | `Заказ архивирован: <продукт>` | `services/orders.py:72` |
+| `catalog_category.created` | `Catalog category created: ` | reference-data name | `Категория справочника создана` | `Категория справочника создана: <название>` | `services/catalog.py:52` |
+| `catalog_category.updated` | `Catalog category updated: ` | reference-data name | `Категория справочника изменена` | `Категория справочника изменена: <название>` | `services/catalog.py:76` |
+| `catalog_category.archived` | `Catalog category archived: ` | reference-data name | `Категория справочника архивирована` | `Категория справочника архивирована: <название>` | `services/catalog.py:89` |
+| `catalog_tag.created` | `Catalog tag created: ` | reference-data name | `Тег справочника создан` | `Тег справочника создан: <название>` | `services/catalog.py:102` |
+| `catalog_tag.updated` | `Catalog tag updated: ` | reference-data name | `Тег справочника изменён` | `Тег справочника изменён: <название>` | `services/catalog.py:125` |
+| `catalog_tag.archived` | `Catalog tag archived: ` | reference-data name | `Тег справочника архивирован` | `Тег справочника архивирован: <название>` | `services/catalog.py:138` |
+
+Twenty-one actions, and no others.
+
+#### 6.4.4. Explicitly excluded
+
+- **`client_wish.*`** — the persisted suffix is a user-authored wish title. Never eligible.
+- **`client_recipe.*`** — an individual-formula title can describe a client's personal condition, so it is treated as sensitive.
+- **Any action whose persisted summary embeds an internal ID:** `ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created`, `production_confirmed`, `recipe_version.created`.
+- **Any action without a stable exact prefix**, which includes every catalog-assignment action — `ingredient.catalog_category.assigned`, `ingredient.catalog_tags.updated`, `packaging_item.catalog_category.assigned`, `packaging_item.catalog_tags.updated`, `recipe_template.catalog_category.assigned`, `recipe_template.catalog_tags.updated`. Their persisted summaries are the fixed strings `Catalog category assigned` and `Catalog tags updated`, with no name to retain. Note that these actions share a dotted namespace with allowlisted groups; the allowlist is the exact 21-row table of § 6.4.3, **not** a prefix glob such as `ingredient.*`.
+- Everything else in § 6.6.
+
+Extending the allowlist requires a separate explicit decision in this document.
 
 ### 6.5. Required examples
 
@@ -374,20 +426,63 @@ created_at DESC, id DESC
 
 ### 7.2. Pagination
 
+Accepted values:
+
 ```text
 limit default: 50
-limit valid range: integer 1..200
+limit accepted range: integer 1..200
 offset default: 0
-offset valid range: integer >= 0
+offset accepted range: integer >= 0
 ```
 
-Validation rules:
+#### 7.2.1. Validation order
 
-- an omitted `limit` applies the default `50`;
-- an omitted `offset` applies the default `0`;
-- a `limit` below `1`, above `200`, negative, non-integer, boolean, or otherwise malformed is rejected with a structured HTTP `422`;
-- an `offset` that is negative, non-integer, boolean, or otherwise malformed is rejected with a structured HTTP `422`;
-- **an explicitly supplied invalid value is never silently clamped, coerced, rounded or ignored.** `limit=0`, `limit=500`, `limit=-1`, `limit=abc`, `limit=true`, `limit=1.5` and `offset=-1` are all errors, not requests for the nearest legal value.
+The checks run in this exact order, and the **first** one that matches decides the code. This makes every invalid input map to exactly one code.
+
+```text
+1. Missing value
+   limit  → default 50
+   offset → default 0
+
+2. Wrong type or representation
+   non-integer
+   fractional
+   boolean
+   malformed string
+   → non_integer_quantity
+
+3. Negative integer
+   limit < 0
+   offset < 0
+   → negative_quantity
+
+4. Non-negative limit outside its accepted range
+   limit == 0
+   limit > 200
+   → pagination_out_of_range
+
+5. Accepted values
+   limit: integer 1..200
+   offset: integer >= 0
+```
+
+Because step 3 precedes step 4, a negative `limit` is **only** `negative_quantity` and never `pagination_out_of_range`. Because step 4 is reached only by a non-negative integer, `limit == 0` and `limit > 200` are **only** `pagination_out_of_range`.
+
+#### 7.2.2. Binding examples
+
+```text
+limit=true  → non_integer_quantity
+limit=1.5   → non_integer_quantity
+limit=abc   → non_integer_quantity
+limit=-1    → negative_quantity
+offset=-1   → negative_quantity
+limit=0     → pagination_out_of_range
+limit=201   → pagination_out_of_range
+limit=200   → accepted
+offset=0    → accepted
+```
+
+**An explicitly supplied invalid value is never silently clamped, coerced, rounded or ignored.** It is rejected with the structured `422` of § 8, never treated as a request for the nearest legal value.
 
 Do not return an unbounded history. There is no "show everything" mode and no unlimited export path.
 
@@ -410,8 +505,8 @@ There is **no `source` filter** (§ 3). No other filter is authorized either —
 - `created_from` is **inclusive**;
 - `created_before` is **exclusive**;
 - both timestamps use **ISO-8601 UTC** (`YYYY-MM-DDTHH:MM:SSZ`) and are converted to the storage form for comparison;
-- a malformed or otherwise invalid timestamp is rejected with a structured HTTP `422` carrying the existing `invalid_date` code;
-- `created_before <= created_from` is rejected with a structured HTTP `422` that identifies the **date range**, rather than silently returning an empty result;
+- a malformed or otherwise invalid timestamp is rejected with a structured HTTP `422` carrying the existing `invalid_date` code, with `field` naming the offending parameter (`created_from` or `created_before`);
+- `created_before <= created_from` is rejected with the structured HTTP `422` defined in § 8.2, rather than silently returning an empty result;
 - empty filters return the latest events;
 - filters combine with logical **AND**;
 - filter options come from **values that actually exist in the current `audit_logs` table**, and are returned with safe Russian labels;
@@ -464,15 +559,56 @@ Rules:
 |---|---|
 | malformed or invalid `created_from` / `created_before` | `invalid_date` |
 | `created_before <= created_from` | `invalid_date` |
-| non-integer, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
+| non-integer, fractional, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
 | negative `limit` / `offset` | `negative_quantity` |
-| `limit` outside `1..200` | `pagination_out_of_range` |
+| non-negative `limit` outside `1..200` — that is, `0` or `> 200` | `pagination_out_of_range` |
+
+The pagination rows follow the ordered precedence of § 7.2.1, so every invalid pagination input has exactly one code: `limit=-1` is `negative_quantity` only, and `limit=0` is `pagination_out_of_range` only.
 
 `invalid_date`, `non_integer_quantity` and `negative_quantity` already exist in `DomainIssueCode` and are reused unchanged.
 
-`pagination_out_of_range` is the **one** new `DomainIssueCode` member authorized by `C3-I`. It is authorized because no existing member carries out-of-range pagination semantics, and reusing `percentage_out_of_range` would misstate the error to the user. Adding an enum member is not a schema change, not a migration and not a change to any existing code's meaning. No other new code is authorized.
+`pagination_out_of_range` is the **one** new `DomainIssueCode` member authorized by `C3-I`:
 
----
+```text
+PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"
+```
+
+It is authorized because no existing member carries out-of-range pagination semantics. It must **not** be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`, each of which would misstate the error to the user. This is an explicit bounded enum addition — not a schema change and not a migration. No other new code is authorized.
+
+### 8.2. The date-range conflict response
+
+For:
+
+```text
+created_before <= created_from
+```
+
+the exact structured error is:
+
+```text
+HTTP status: 422
+code: invalid_date
+field: created_before
+value: the supplied created_before value
+```
+
+- the Russian `message` must explain that the end of the period must be later than its beginning;
+- the Russian `next_action` must tell the user to select an end date later than the start date;
+- **do not use an undefined synthetic field such as `date_range`.** `field` is always a real query parameter the user can act on, and for this conflict it is `created_before`.
+
+An equivalent shape, with the Russian text owned by the implementation:
+
+```json
+{
+  "detail": {
+    "code": "invalid_date",
+    "message": "Конец периода должен быть позже его начала.",
+    "field": "created_before",
+    "value": "2026-07-01T00:00:00Z",
+    "next_action": "Выберите дату окончания позже даты начала."
+  }
+}
+```
 
 ## 9. Read-only behavior
 
@@ -706,7 +842,7 @@ Classification:
 | Embeds an internal record ID | `ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created`, `production_confirmed`, `recipe_version.created` | generic Russian text, ID dropped |
 | Embeds user-authored wish text | `client_wish.created`, `client_wish.status_changed`, `client_wish.archived` | generic Russian text, title never exposed |
 | Embeds an individual-formula title | `client_recipe.*` | generic Russian text, title never exposed |
-| Embeds an ordinary business name | `client.*`, `ingredient.*`, `packaging_item.*`, `recipe_template.created` / `.deactivated`, `order.*`, `catalog_*` | name may be retained under the § 6.4 allowlist |
+| Embeds an ordinary business name after a stable exact prefix | exactly the 21 actions enumerated in § 6.4.3 | the suffix may be retained under the bounded § 6.4.1 rule; anything else falls back to the generic phrase |
 | Fixed string, no user value | `client_feedback.created`, `import_draft_applied`, `demo_data.*`, `onboarding.*`, `tax_rate_setting_changed`, catalog-assignment actions | generic Russian text |
 
 Client **notes, allergies, addresses, preferences, special conditions and feedback bodies are never written into a summary** by any call site, so no such value can reach the workspace even before § 6 applies.
@@ -775,6 +911,6 @@ Not authorized:
 
 ## 14. C3-I acceptance boundary
 
-`C3-I` is complete only when: `GET /api/audit-logs` returns exactly the § 5.2 item shape, with `actor_type` / `actor_label` and no `source` field; `display_summary` is produced by the § 6 presenter and the raw persisted summary never leaves the backend; no internal ID, wish title, individual-formula title, metadata value or table name appears in any response; ordering, pagination and filters behave exactly as § 7 defines, with invalid pagination rejected rather than clamped; every structured rejection uses the exact `{"detail": {...}}` envelope of § 8; the `actor_type` column is neither renamed nor migrated and no write call site changes; `/settings/audit-log` renders every state in § 10.2 and none of the forbidden content in § 10.3; the C3 logic lives in focused modules and `frontend/src/main.ts` has not grown; the complete backend suite and every frontend test script are green; and an exact-head focused smoke against the published head confirms the read-only behavior of § 9 with isolated data.
+`C3-I` is complete only when: `GET /api/audit-logs` returns exactly the § 5.2 item shape, with `actor_type` / `actor_label` and no `source` field; `display_summary` is produced by the § 6 presenter, the persisted summary is never returned verbatim and never serves as an unrestricted fallback, and a suffix leaves the backend only through the seven conditions and the exact 21-row table of § 6.4; no internal ID, English technical prefix, wish title, individual-formula title, metadata value or table name appears in any response; every invalid pagination input maps to exactly one code under the ordered precedence of § 7.2.1, and the date-range conflict returns `field: created_before`; ordering, pagination and filters behave exactly as § 7 defines, with invalid pagination rejected rather than clamped; every structured rejection uses the exact `{"detail": {...}}` envelope of § 8; the `actor_type` column is neither renamed nor migrated and no write call site changes; `/settings/audit-log` renders every state in § 10.2 and none of the forbidden content in § 10.3; the C3 logic lives in focused modules and `frontend/src/main.ts` has not grown; the complete backend suite and every frontend test script are green; and an exact-head focused smoke against the published head confirms the read-only behavior of § 9 with isolated data.
 
 Documentation-only work does not satisfy any part of this boundary.

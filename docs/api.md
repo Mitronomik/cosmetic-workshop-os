@@ -1158,15 +1158,19 @@ Labels: `system → Система`, `user → Пользователь`, anythi
 
 #### `display_summary`
 
-The raw persisted `audit_logs.summary` is **never returned**, in any field and as no fallback. It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text.
+The raw persisted `audit_logs.summary` is **never returned verbatim and is never used as an unrestricted API or frontend fallback**. It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text.
 
-A focused backend presenter — `AuditLogDisplayPresenter`, or an equivalently focused module consistent with the repository structure — resolves `display_summary` from the known `action`. It never includes an internal ID, never includes metadata, performs no business-table join, rewrites no historical row, and never exposes wish text, client notes, allergies, addresses or feedback bodies. A known safe business name may be retained only through an explicit action-specific rule; `client_wish.*` and `client_recipe.*` are excluded from that allowlist. Unknown actions, and recognized actions whose persisted summary does not match its expected shape, fall back to the resolved `action_label`.
+A focused backend presenter — `AuditLogDisplayPresenter`, or an equivalently focused module consistent with the repository structure — resolves `display_summary` from the known `action`. It never includes an internal ID, never includes metadata, performs no business-table join, rewrites no historical row, and never exposes wish text, client notes, allergies, addresses or feedback bodies.
 
 ```text
 Ingredient lot created for ingredient #12  →  Создана партия компонента
 Order #4 produced as batch #7              →  Производство заказа подтверждено
 Client wish created: Убрать компонент X    →  Пожелание клиента добавлено
 ```
+
+**Bounded suffix extraction.** A suffix taken from the persisted summary may contribute to `display_summary` only when **all seven** conditions hold: the action is explicitly allowlisted; the persisted summary starts with the exact prefix assigned to that action; the remaining suffix is non-empty; the action is authorized to retain that category of business name; the suffix is rendered only as plain text; the suffix contains no internal identifier supplied by the presenter; and no database or metadata lookup is performed. Otherwise `display_summary` falls back to the generic action-specific phrase.
+
+The allowlist is the exact 21-row table in `docs/audit-log.md` § 6.4.3 — `client.created` / `.updated` / `.deactivated`, `ingredient.created` / `.updated` / `.deactivated`, `packaging_item.created` / `.updated` / `.deactivated`, `recipe_template.created` / `.deactivated`, `order.created` / `.updated` / `.cancelled` / `.archived`, `catalog_category.created` / `.updated` / `.archived`, and `catalog_tag.created` / `.updated` / `.archived` — each with its exact English prefix, for example `Client created: ` → `Клиент создан: <имя>` with the fallback `Клиент создан`. It is **not** a prefix glob: `client_wish.*`, `client_recipe.*`, every ID-bearing action (`ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created`, `production_confirmed`, `recipe_version.created`) and every catalog-assignment action are excluded. Returning the complete persisted summary, returning its English technical prefix, or using it as an unrestricted fallback all remain prohibited.
 
 #### Validation responses
 
@@ -1187,14 +1191,36 @@ The existing router convention raises `HTTPException(status_code=422, detail=iss
 | Condition | `code` |
 |---|---|
 | malformed or invalid `created_from` / `created_before` | `invalid_date` |
-| `created_before <= created_from` — identifying the date range, never a silent empty result | `invalid_date` |
-| non-integer, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
+| `created_before <= created_from` | `invalid_date` |
+| non-integer, fractional, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
 | negative `limit` / `offset` | `negative_quantity` |
-| `limit` outside `1..200` | `pagination_out_of_range` |
+| non-negative `limit` outside `1..200` — that is, `0` or `> 200` | `pagination_out_of_range` |
 
-The first four codes already exist in `DomainIssueCode`. `pagination_out_of_range` is the one new enum member authorized by `C3-I`, because no existing member carries out-of-range pagination semantics; it is an enum addition, not a schema change or migration.
+`invalid_date`, `non_integer_quantity` and `negative_quantity` already exist in `DomainIssueCode`. `pagination_out_of_range` (`PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`) is the one new enum member authorized by `C3-I`, because no existing member carries out-of-range pagination semantics; it must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`. It is a bounded enum addition, not a schema change or migration.
 
-**An explicitly supplied invalid pagination value is rejected, never silently clamped, coerced, rounded or ignored.** `limit=0`, `limit=500`, `limit=-1`, `limit=abc`, `limit=true`, `limit=1.5` and `offset=-1` are all errors.
+**Ordered validation precedence.** The checks run in this exact order and the first match decides the code, so every invalid input maps to exactly one code:
+
+```text
+1. Missing value        limit → default 50; offset → default 0
+2. Wrong type/repr      non-integer, fractional, boolean, malformed string → non_integer_quantity
+3. Negative integer     limit < 0, offset < 0                              → negative_quantity
+4. Non-negative limit outside range   limit == 0, limit > 200              → pagination_out_of_range
+5. Accepted             limit: integer 1..200; offset: integer >= 0
+```
+
+Because step 3 precedes step 4, a negative `limit` is **only** `negative_quantity`; because step 4 is reached only by a non-negative integer, `limit == 0` and `limit > 200` are **only** `pagination_out_of_range`.
+
+```text
+limit=true  → non_integer_quantity      limit=-1  → negative_quantity
+limit=1.5   → non_integer_quantity      offset=-1 → negative_quantity
+limit=abc   → non_integer_quantity      limit=0   → pagination_out_of_range
+limit=200   → accepted                  limit=201 → pagination_out_of_range
+offset=0    → accepted
+```
+
+**An explicitly supplied invalid pagination value is rejected, never silently clamped, coerced, rounded or ignored.**
+
+**Date-range conflict.** For `created_before <= created_from` the exact structured error is HTTP `422`, `code: invalid_date`, **`field: created_before`**, `value:` the supplied `created_before` value. The Russian `message` explains that the end of the period must be later than its beginning, and the Russian `next_action` tells the user to select an end date later than the start date. Do not use an undefined synthetic field such as `date_range`.
 
 #### Never returned
 
