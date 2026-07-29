@@ -10,20 +10,38 @@ This document is the durable contract for the C3 AuditLog workspace. It is the a
 
 ```text
 C3-I — Read-only AuditLog workspace
-AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-`C3-I` is the **only** authorized C3 runtime slice. No other C3 slice exists, is planned, or is authorized. Nothing in this document is implemented on `main`; there is no branch, no PR number, and no runtime code for it. Do not start `C3-I` from this unmerged documentation branch.
+`C3-I` is the **only** authorized C3 runtime slice. No other C3 slice exists, is planned, or is authorized. The implementation lives on the branch `codex/c3-i-read-only-audit-log-workspace` and is **not merged**; it is not `DONE`, not `COMPLETED` and not `MERGED` until it is reviewed and merged.
 
-Surrounding lifecycle at the time this contract was accepted:
+Surrounding lifecycle:
 
 ```text
 C1 — COMPLETED
 C2 — COMPLETED
-C3-I — AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED
+C3-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C4 — INACTIVE — NEEDS PRODUCT DECISION
 Product release readiness — NOT CLAIMED
 ```
+
+### 1.1. Implementation modules
+
+| Layer | Module |
+|---|---|
+| Pure presenter | `backend/app/domain/audit_log_presentation.py` |
+| Pure query validation | `backend/app/domain/audit_log_query.py` |
+| Repository reads | `backend/app/repositories/audit.py` (`list_logs`, `distinct_filter_values`) |
+| Service | `backend/app/services/audit_logs.py` |
+| Response schemas | `backend/app/schemas/audit_logs.py` |
+| Route | `backend/app/api/audit_logs.py` |
+| Frontend DTO contract | `frontend/src/audit-log-contract.ts` |
+| Frontend presentation | `frontend/src/audit-log-presentation.ts` |
+| Frontend request lifecycle | `frontend/src/audit-log-workspace.ts` |
+| Frontend DOM wiring | `frontend/src/audit-log-bindings.ts` |
+| Route table | `frontend/src/app-navigation-routes.ts` |
+
+`AuditLogRepository.create_log` is unchanged — the diff of that method is empty and no production write call site was touched. **No migration exists**; the only schema-adjacent change is the code-level enum member `DomainIssueCode.PAGINATION_OUT_OF_RANGE`.
 
 ---
 
@@ -518,6 +536,44 @@ There is **no `source` filter** (§ 3). No other filter is authorized either —
 
 A value present in the database but absent from the known vocabulary — possible in an older local database — is returned with the corresponding unknown-code label from § 5.4. It is never dropped and never shown as a raw code.
 
+#### 7.5.1. The exact nested DTO
+
+This contract required filter options paired with Russian labels but did not define the nested keys. The implemented shape — the **one** implementation-level clarification `C3-I` adds — is:
+
+```json
+{
+  "filter_options": {
+    "actions": [
+      { "value": "client.created", "label": "Клиент создан" }
+    ],
+    "entity_types": [
+      { "value": "client", "label": "Клиент" }
+    ],
+    "actor_types": [
+      { "value": "system", "label": "Система" }
+    ]
+  }
+}
+```
+
+Rules:
+
+- each option contains **exactly** `value` and `label`, and nothing else;
+- values are the distinct values actually persisted in `audit_logs`; a fresh database therefore does **not** list all 50 known actions;
+- options are derived from the whole current `audit_logs` table, not from the current filtered page, so they do **not** change merely because the result filters changed;
+- labels come from the same backend resolver the list items use, so an unknown persisted code stays present under its safe fallback label;
+- options are ordered deterministically by raw persisted value ascending;
+- the raw code is never displayed as visible frontend text — it is the `<option value>` and the request parameter only;
+- **`null` is omitted from `filter_options.entity_types`.** `null` is not an authorized query code and could not be selected without inventing a new filter sentinel, and no new query parameter or sentinel is authorized. Rows with `entity_type IS NULL` stay fully readable as items carrying `entity_label: "Другая сущность"` (§ 5.2, § 5.4).
+
+#### 7.5.2. Blank query values
+
+A blank or whitespace-only `action`, `entity_type`, `actor_type`, `created_from` or `created_before` is the "no filter selected" state of an empty `<option>` and is treated as **absent**, not as a request for rows whose code is the empty string — no persisted code is empty. This applies to filters only. A blank `limit` or `offset` is a malformed pagination value and is rejected under step 2 of § 7.2.1, never defaulted, because § 7.2.2 forbids reinterpreting an explicitly supplied invalid pagination value.
+
+#### 7.5.3. Evaluation order across parameters
+
+When one request carries several problems, the reported one is deterministic: the date parameters are validated first (`created_from`, then `created_before`, then the range conflict), then `limit`, then `offset`. Within `limit` and `offset` the ordered precedence of § 7.2.1 applies unchanged.
+
 ---
 
 ## 8. Validation wire contract
@@ -914,3 +970,47 @@ Not authorized:
 `C3-I` is complete only when: `GET /api/audit-logs` returns exactly the § 5.2 item shape, with `actor_type` / `actor_label` and no `source` field; `display_summary` is produced by the § 6 presenter, the persisted summary is never returned verbatim and never serves as an unrestricted fallback, and a suffix leaves the backend only through the seven conditions and the exact 21-row table of § 6.4; no internal ID, English technical prefix, wish title, individual-formula title, metadata value or table name appears in any response; every invalid pagination input maps to exactly one code under the ordered precedence of § 7.2.1, and the date-range conflict returns `field: created_before`; ordering, pagination and filters behave exactly as § 7 defines, with invalid pagination rejected rather than clamped; every structured rejection uses the exact `{"detail": {...}}` envelope of § 8; the `actor_type` column is neither renamed nor migrated and no write call site changes; `/settings/audit-log` renders every state in § 10.2 and none of the forbidden content in § 10.3; the C3 logic lives in focused modules and `frontend/src/main.ts` has not grown; the complete backend suite and every frontend test script are green; and an exact-head focused smoke against the published head confirms the read-only behavior of § 9 with isolated data.
 
 Documentation-only work does not satisfy any part of this boundary.
+
+---
+
+## 15. Delivered on the `C3-I` PR branch — not merged
+
+```text
+C3-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+```
+
+### 15.1. Verification results
+
+| Check | Result |
+|---|---|
+| Complete backend suite | `1337 passed / 0 failed / 0 skipped` |
+| Merged baseline node IDs still collected | all `942`, zero renames |
+| New `C3-I` backend tests | `395` (`test_audit_log_presentation.py`, `test_audit_logs.py`, `test_audit_logs_api.py`) |
+| Focused frontend suite `test:audit-log-workspace` | `45 passed / 0 failed / 0 skipped` |
+| Frontend test scripts | `18` (was `17`) — all pass, `0 failed` |
+| Frontend production build | `npm run build` — `PASS` |
+| `git diff --check` | clean |
+| `frontend/src/main.ts` | `6398` before → `6381` after |
+| Migration added | none |
+| Dependency or lockfile change | none |
+
+Test commands:
+
+```bash
+cd backend && python3 -m pytest
+cd frontend && npm run test:audit-log-workspace
+cd frontend && npm run build
+```
+
+The exact-head API and browser smoke results are recorded in the pull request body, against the exact published head.
+
+### 15.2. Known coverage gaps and limitations
+
+These are properties of the slice as accepted, not defects:
+
+- **AuditLog coverage gap (§ 11.6).** Backup, export, report-document and workshop-profile actions are still not audited on `main`, so `Журнал действий` does not show them. `C3-I` is read-only and must not add those write call sites; closing the gap needs a separately authorized write slice.
+- **A true process `source` is deferred (§ 3.3).** Only `actor_type` exists. The `manual` / `import` / `production` / `migration` / `backup` / `onboarding` / `restore` vocabulary remains aspirational and unimplementable without a write-side decision.
+- **No detail endpoint (§ 4.2).** `GET /api/audit-logs/{id}` stays superseded; there is no metadata viewer and no raw JSON viewer.
+- **No write-side expansion.** No AuditLog edit, delete, rollback, restore, export, retention or compaction.
+- **Historical rows are shown, never repaired.** A malformed persisted summary degrades to the generic Russian phrase; it is not fixed, re-summarized or deleted.
+- **Product release readiness is not claimed.** Restore, packaging, installation verification, the update flow and the full release-candidate smoke all remain open, and C4 remains `INACTIVE — NEEDS PRODUCT DECISION`.

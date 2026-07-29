@@ -18,6 +18,10 @@ import { alertListResponseDtoIsValid, clientsListDtoIsValid, productionBatchList
 import { renderBatchCostTables, renderBatchFinancialSnapshot, renderBatchListFinancialCells, renderBatchListFinancialHeadings, type BatchFinancialSnapshot, type BatchListFinancials } from './production-financial-presentation.js';
 import { reportsFinanceContractIsValid, type FinanceReportResponse, type ReportWarning } from './report-financial-contract.js';
 import { renderFinanceReportSection, renderOverviewFinanceSummary, reportWarningFieldLabel } from './report-financial-presentation.js';
+import { sectionForLocation } from './app-navigation-routes.js';
+import { auditLogPresentation, auditLogWorkspaceMarkup } from './audit-log-presentation.js';
+import { AuditLogWorkspaceRuntime } from './audit-log-workspace.js';
+import { bindAuditLogWorkspaceControls } from './audit-log-bindings.js';
 import { ALERT_REGENERATION_REFRESH_WARNING_ANNOUNCEMENT, AlertsFeedbackLifecycle, alertsPresentation, bindAlertsActionControls, filterDisplayedAlerts, selectAlertFocusTarget, transitionAlertsRouteOwnership, type AlertFilters } from './alerts-feedback.js';
 import { PurchaseSuggestionsFeedbackLifecycle, purchaseSuggestionsPresentation, DEFAULT_PURCHASE_FILTERS, type PurchaseSuggestionFilters as LifecyclePurchaseSuggestionFilters } from './purchase-suggestions-feedback.js';
 import { createPurchaseSuggestionsRuntime } from './purchase-suggestions-runtime.js';
@@ -489,7 +493,7 @@ type ReportOverviewDocumentCreateRequest = { format?: 'markdown' | 'pdf'; reason
 type ReportDocumentCreateResponse = { document: ReportDocumentMetadata; message: string };
 type ReportDocumentsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; warning: string; message: string; documentStatus: ReportDocumentStatusResponse | null; documents: ReportDocumentMetadata[]; lastCreatedDocument: ReportDocumentMetadata | null; reason: string };
 
-type NavigationSection = 'Главная' | 'Алерты' | 'Демо-данные' | 'Резервные копии' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Производство' | 'Экспорт' | 'Документы отчетов' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Помощь';
+type NavigationSection = 'Главная' | 'Алерты' | 'Демо-данные' | 'Резервные копии' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Производство' | 'Экспорт' | 'Документы отчетов' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Журнал действий' | 'Помощь';
 type NavigationStatus = 'ready' | 'empty' | 'planned';
 type NavigationItem = { label: string; section: NavigationSection; path: string; status: NavigationStatus };
 type NavigationGroup = { title: string; items: NavigationItem[] };
@@ -525,6 +529,7 @@ const navigationGroups: NavigationGroup[] = [
     { label: 'Демо-данные', section: 'Демо-данные', path: '/demo-data', status: 'ready' },
     { label: 'Отчёты', section: 'Отчеты', path: '/reports', status: 'ready' },
     { label: 'Настройки', section: 'Настройки', path: '/settings', status: 'ready' },
+    { label: 'Журнал действий', section: 'Журнал действий', path: '/settings/audit-log', status: 'ready' },
     { label: 'Помощь', section: 'Помощь', path: '/help', status: 'ready' },
   ] },
 ];
@@ -772,35 +777,10 @@ let settingsUiState: SettingsUiState = { status: 'idle', data: null, error: '' }
 const emptyWorkshopProfile = (): WorkshopProfile => ({ workshop_name: '', master_name: '', workshop_contact_text: '', workshop_note: '' });
 let workshopProfileUiState: WorkshopProfileUiState = { status: 'idle', actionStatus: 'idle', profile: null, draft: emptyWorkshopProfile(), error: '', message: '' };
 const settingsTaxRuntime = new SettingsTaxRateRuntime({ read: getTaxRateSetting, save: updateTaxRateSetting, ownsRoute: () => activeSection === 'Настройки', render: () => render(), announce: (message, kind) => (kind === 'assertive' ? announceAssertive(message) : announcePolite(message)), fieldErrorFromFailure: taxRateFieldErrorFromFailure });
+const auditLogRuntime = new AuditLogWorkspaceRuntime({ read: (url) => apiGet<unknown>(url), ownsRoute: () => activeSection === 'Журнал действий', render: () => { if (activeSection === 'Журнал действий') render(); }, announce: (message, kind) => (kind === 'assertive' ? announceAssertive(message) : announcePolite(message)) });
 
 function sectionFromLocation(): NavigationSection {
-  const routes: Record<string, NavigationSection> = {
-    '/alerts': 'Алерты',
-    '/backups': 'Резервные копии',
-    '/exports': 'Экспорт',
-    '/report-documents': 'Документы отчетов',
-    '/imports': 'Импорт',
-    '/demo-data': 'Демо-данные',
-    '/inventory': 'Склад',
-    '/ingredients': 'Компоненты',
-    '/ingredient-lots': 'Партии',
-    '/stock-movements': 'Движения сырья',
-    '/recipes': 'Рецепты',
-    '/clients': 'Клиенты',
-    '/client-recipes': 'Индивидуальные рецепты',
-    '/orders': 'Заказы',
-    '/production': 'Производство',
-    '/packaging-items': 'Тара',
-    '/purchase-suggestions': 'Закупки',
-    '/reports': 'Отчеты',
-    '/settings': 'Настройки',
-    '/help': 'Помощь',
-  };
-  const placeholderRoutes: Record<string, NavigationSection> = {
-    '#purchases': 'Закупки',
-    '#help': 'Помощь',
-  };
-  return routes[window.location.pathname] ?? placeholderRoutes[window.location.hash] ?? 'Главная';
+  return sectionForLocation(window.location.pathname, window.location.hash) as NavigationSection;
 }
 
 function pathForSection(section: NavigationSection): string {
@@ -831,6 +811,7 @@ function loadSectionData(section: NavigationSection) {
   if (section === 'Тара') loadPackagingItems();
   if (section === 'Отчеты') loadReports();
   if (section === 'Настройки') { loadSettingsStatus(); loadWorkshopProfile(); settingsTaxRuntime.enter(); settingsTaxRuntime.load('initial'); } else settingsTaxRuntime.leave();
+  if (section === 'Журнал действий') { auditLogRuntime.enter(); auditLogRuntime.load(); } else auditLogRuntime.leave();
 }
 
 function renderActivePage(section: NavigationSection) {
@@ -854,6 +835,7 @@ function renderActivePage(section: NavigationSection) {
   if (section === 'Закупки') return purchaseSuggestionsPage();
   if (section === 'Отчеты') return reportsPage();
   if (section === 'Настройки') return settingsPage();
+  if (section === 'Журнал действий') return auditLogWorkspaceMarkup(auditLogPresentation(auditLogRuntime.state), feedbackMessage);
   if (section === 'Помощь') return helpPage();
   return plannedSectionPlaceholder(section);
 }
@@ -929,6 +911,7 @@ function bindEvents(root: HTMLElement) {
     reloadPackaging: () => { if (!packagingPageMutationActive()) loadPackagingItems(true); },
     submitPackaging: (event) => submitPackagingItemForm(event as SubmitEvent),
   });
+  bindAuditLogWorkspaceControls(root, { refresh: () => auditLogRuntime.refresh(), retry: () => auditLogRuntime.retry(), applyFilters: () => auditLogRuntime.applyFilters(), clearFilters: () => auditLogRuntime.clearFilters(), loadMore: () => auditLogRuntime.loadMore(), setFilter: (name, value) => auditLogRuntime.setFilter(name, value) });
   root.querySelector<HTMLImageElement>('.brand-mark img')?.addEventListener('error', (event) => { (event.currentTarget as HTMLImageElement).hidden = true; });
   root.querySelectorAll<HTMLButtonElement>('.nav-group-toggle').forEach((button) => {
     button.addEventListener('click', () => {

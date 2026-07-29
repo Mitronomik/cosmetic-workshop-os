@@ -1,5 +1,44 @@
 # Handoff
 
+## C3-I — read-only AuditLog workspace — implemented on its PR branch, not merged
+
+`C3-I — Read-only AuditLog workspace` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`**.
+
+- Branch: `codex/c3-i-read-only-audit-log-workspace`
+- Started from clean `origin/main`: `fa433d03acbf68e16b14ba6245885ab9eaf15c35` (PR #158 merge commit; PR #158 final reviewed head `4a37f6700e147fb83b64be29db4793e3579a7eff`)
+- Durable contract: `docs/audit-log.md` — authoritative and not reinterpreted
+
+The one implementation-level clarification added is the exact nested `filter_options` DTO (`{"value", "label"}` per option) and the omission of `null` from selectable entity types, recorded in `docs/audit-log.md` § 7.5.1 and `docs/api.md`. No other field, filter, endpoint, write behavior or product capability was added.
+
+### What exists now
+
+Backend: one read-only endpoint `GET /api/audit-logs`; the pure presenter and query validator under `backend/app/domain/`; read methods on the existing `AuditLogRepository`; `backend/app/services/audit_logs.py`; `backend/app/schemas/audit_logs.py`; `backend/app/api/audit_logs.py`. Frontend: `/settings/audit-log` titled `Журнал действий` under `Данные и настройки`, built from `audit-log-contract.ts`, `audit-log-presentation.ts`, `audit-log-workspace.ts`, `audit-log-bindings.ts` and the extracted `app-navigation-routes.ts`.
+
+`AuditLogRepository.create_log` is unchanged (empty diff) and no production write call site was touched. There is **no migration**; the only enum addition is `DomainIssueCode.PAGINATION_OUT_OF_RANGE`.
+
+### Verification
+
+Backend `1337 passed / 0 failed / 0 skipped`, all `942` merged-baseline node IDs still collected. Focused frontend suite `test:audit-log-workspace` `45 passed`. All `18` frontend `test:*` scripts pass. `npm run build` passes. `git diff --check` clean. `frontend/src/main.ts` `6398` → `6381`. Exact-head API and browser smoke results are recorded in the pull request body against the exact published head.
+
+### Immediate next step
+
+Review and merge the `C3-I` pull request. Do not merge it from this task, do not enable auto-merge, and do not fold any other slice into it.
+
+After merge, a future product PR may fold the `C3-I` lifecycle closure into its normal state update. Until then the lifecycle stays:
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+### Do not do next through this PR
+
+Closing the `docs/audit-log.md` § 11.6 write-coverage gap (backup, export, report-document, workshop-profile auditing); a true process `source` field; a detail endpoint; a metadata or raw-JSON viewer; AuditLog export, search, analytics, retention or compaction; C4; Restore; packaging; the update flow; release-candidate smoke. Each needs its own authorization.
+
+---
 ## Frontend focused-test infrastructure repair handoff
 
 Slice A5 is DONE. PR #131 merged at `62d372644d00fab38ccb1d652ab44556d8241b6a` (`Merge pull request #131 from Mitronomik/codex/implement-a5-local-artifact-presentation`).

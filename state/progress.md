@@ -13,6 +13,21 @@ The B1/B2 diagnostic audit found no demo-fixture or backend Dashboard read-model
 - After this repair, start B3.1 — Shared feedback for Dashboard, Onboarding and Help.
 - No B1 or B2 implementation PR is active, and no future PR number is assigned.
 
+
+## C3-I — Read-only AuditLog workspace — IMPLEMENTED ON PR BRANCH — NOT MERGED (2026-07-29)
+
+Branch `codex/c3-i-read-only-audit-log-workspace`, from clean `origin/main` `fa433d03acbf68e16b14ba6245885ab9eaf15c35`. Durable contract: `docs/audit-log.md`. **Not merged, not `DONE`, not release-ready.**
+
+- Backend read path: `GET /api/audit-logs` only, through `backend/app/api/audit_logs.py`, `backend/app/services/audit_logs.py`, read methods on `backend/app/repositories/audit.py`, the pure `backend/app/domain/audit_log_presentation.py` and `backend/app/domain/audit_log_query.py`, and `backend/app/schemas/audit_logs.py`.
+- Backend-owned safe labels and `display_summary`: 50 action labels, 19 entity labels, 2 actor labels, three unknown-code fallbacks, and the exact 21-action suffix allowlist with its exact persisted prefixes.
+- `DomainIssueCode.PAGINATION_OUT_OF_RANGE` added — the only new enum member and the only schema-adjacent change. **No migration.**
+- Frontend `/settings/audit-log` («Журнал действий») under `Данные и настройки`, with filters, `Очистить фильтры`, `Обновить`, `Показать ещё`, and every required loading, empty, filtered-empty, failure, stale-response, duplicate-request, narrow-layout and accessibility state.
+- Focused frontend modules `audit-log-contract.ts`, `audit-log-presentation.ts`, `audit-log-workspace.ts`, `audit-log-bindings.ts`, plus the extracted route table `app-navigation-routes.ts`; `frontend/src/main.ts` went `6398` → `6381`.
+- New focused frontend script `test:audit-log-workspace` with its own TypeScript project, bringing the `test:*` script count from `17` to `18`.
+- Results: backend `1337 passed / 0 failed / 0 skipped` with all `942` merged-baseline node IDs still collected; focused frontend suite `45 passed`; all `18` frontend test scripts pass; production build `PASS`; `git diff --check` clean.
+- Read-only throughout: no AuditLog write-call-site change, no business mutation, no file creation, no setting change, and historical rows byte-identical before and after reads.
+- Known gap retained, not closed: backup, export, report-document and workshop-profile actions are still unaudited (`docs/audit-log.md` § 11.6). A true process `source` stays deferred.
+
 ## Done
 - Architecture draft
 - Final roadmap draft

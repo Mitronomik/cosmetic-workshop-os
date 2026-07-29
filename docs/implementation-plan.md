@@ -59,7 +59,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 has exactly one authorized runtime slice — `C3-I — Read-only AuditLog workspace`, `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`, durable contract `docs/audit-log.md` — and C4 remains inactive. Product release readiness is not claimed.
+`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 has exactly one authorized runtime slice — `C3-I — Read-only AuditLog workspace`, `IMPLEMENTED ON PR BRANCH — NOT MERGED`, durable contract `docs/audit-log.md` — and C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -161,7 +161,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
 | Себестоимость, налог и маржа (расчёты и снапшоты) | **ЗАКРЫТО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154); отчёты и «Сводка мастерской» читают персистентные снапшоты (`C2-III-B`, PR #157). C2 завершён | Выполнено — контракт принят как `CR-008`; все четыре нарезки влиты и проверены по точному head |
-| AuditLog workspace | Логи пишутся, пользовательского read-only экрана нет. Авторизована одна нарезка `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий»); контракт: `docs/audit-log.md`. Не реализована | Обязательно — реализовать `C3-I` после влития документационного PR, который её авторизует |
+| AuditLog workspace | Одна нарезка `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий»); контракт: `docs/audit-log.md`. Реализована на ветке PR, **не влита** | Обязательно — ревью и merge PR `C3-I`; расширение покрытия записи (backup/export/report-document/workshop-profile) требует отдельной авторизованной нарезки |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
 
@@ -1666,10 +1666,18 @@ Render backend DTO values; render `Недоступно` for null historical val
 
 ```text
 C3-I — Read-only AuditLog workspace
-AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-`C3-I` — **единственная** авторизованная C3-нарезка. Ветки нет, номер PR не назначен, runtime-кода нет. Не начинать её с невлитой документационной ветки.
+`C3-I` — **единственная** авторизованная C3-нарезка. Реализация находится на ветке `codex/c3-i-read-only-audit-log-workspace` и **не влита**: это не `DONE`, не `COMPLETED` и не `MERGED` до ревью и merge.
+
+**Реализованные модули.** Backend: `backend/app/domain/audit_log_presentation.py`, `backend/app/domain/audit_log_query.py`, `backend/app/repositories/audit.py` (только чтение — `list_logs`, `distinct_filter_values`), `backend/app/services/audit_logs.py`, `backend/app/schemas/audit_logs.py`, `backend/app/api/audit_logs.py`. Frontend: `frontend/src/audit-log-contract.ts`, `frontend/src/audit-log-presentation.ts`, `frontend/src/audit-log-workspace.ts`, `frontend/src/audit-log-bindings.ts`, `frontend/src/app-navigation-routes.ts`.
+
+**Миграции нет.** Единственное изменение перечисления — `DomainIssueCode.PAGINATION_OUT_OF_RANGE`. `AuditLogRepository.create_log` не изменён, ни один production write call site не тронут.
+
+**Результаты проверок.** Полный backend-набор `1337 passed / 0 failed / 0 skipped`, все `942` узла merged-базовой линии по-прежнему собираются; фокусный фронтенд-набор `test:audit-log-workspace` — `45 passed`; все `18` скриптов `test:*` зелёные; production-сборка `PASS`; `frontend/src/main.ts` `6398` → `6381`. Точный уточняющий контракт вложенного DTO `filter_options` — `docs/audit-log.md` § 7.5.1 и `docs/api.md`.
+
+**Известные ограничения.** Пробел покрытия § 11.6 (backup, export, report-document, workshop-profile не аудируются) сохраняется и закрывается только отдельной авторизованной нарезкой на стороне записи; настоящий процессный `source` отложен; detail-эндпоинта нет; расширения записи нет; готовность продукта к релизу не заявляется.
 
 Полный продуктовый, API-, privacy- и presentation-контракт: **`docs/audit-log.md`**. Он авторитетен; список ниже — это границы нарезки, а не замена контракта.
 

@@ -661,3 +661,24 @@ td small { color: #7b6259; display: block; font-size: 13px; line-height: 1.35; m
 .technical-details summary:focus-visible { outline: 3px solid rgba(154, 95, 73, .75); }
 .technical-details p { margin: 10px 0 0; }
 .settings-technical-details { background: #fff8f1; border: 1px solid #ecd4c7; border-radius: 16px; padding: 12px 14px; }
+
+/* C3-I — Журнал действий (read-only AuditLog workspace) */
+.audit-log-layout { display: grid; gap: 22px; max-width: 1280px; min-width: 0; width: 100%; }
+.audit-log-layout .card { max-width: none; }
+.audit-log-filters fieldset { border: 1px solid #ead6ca; border-radius: 20px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin: 0; min-width: 0; padding: 18px; }
+.audit-log-filters legend { color: #7b5a4e; font-size: 13px; font-weight: 900; letter-spacing: .06em; padding: 0 8px; text-transform: uppercase; }
+.audit-log-field { display: grid; gap: 7px; min-width: 0; }
+.audit-log-field label { color: #5d4039; font-size: 14px; font-weight: 900; }
+.audit-log-field input, .audit-log-field select { background: #fffaf6; border: 1px solid #d9bbaa; border-radius: 14px; color: #3b2925; font: inherit; font-weight: 500; max-width: 100%; padding: 11px 12px; width: 100%; }
+.audit-log-field input:focus-visible, .audit-log-field select:focus-visible { outline: 3px solid rgba(211, 154, 122, .55); outline-offset: 2px; }
+.audit-log-field input:disabled, .audit-log-field select:disabled { background: #f3ece7; color: #7b6259; cursor: not-allowed; opacity: .82; }
+.audit-log-field input[aria-invalid="true"] { border-color: #d98274; box-shadow: 0 0 0 3px rgba(217, 130, 116, .18); }
+.audit-log-list { display: grid; gap: 14px; list-style: none; margin: 0; min-width: 0; padding: 0; }
+.audit-log-row { background: #fffaf6; border: 1px solid #edddd3; border-radius: 18px; display: grid; gap: 8px; min-width: 0; padding: 14px 16px; }
+.audit-log-row p { margin: 0; min-width: 0; }
+.audit-log-row__when { color: #7b6259; font-size: 14px; font-weight: 900; }
+.audit-log-row__summary { color: #3b2925; font-size: 17px; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word; }
+.audit-log-row__meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.audit-log-row__meta .pill { background: #efe8e3; color: #6f5a52; white-space: normal; }
+.audit-log-row__meta .pill.info { background: #eef2fb; color: #3f5488; }
+@media (max-width: 620px) { .audit-log-filters fieldset { grid-template-columns: 1fr; padding: 14px; } .audit-log-row { padding: 12px 13px; } .audit-log-row__summary { font-size: 16px; } }
