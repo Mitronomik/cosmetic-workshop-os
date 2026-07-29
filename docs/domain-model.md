@@ -1239,7 +1239,7 @@ ProductionBatch → StockMovement[]
 
 Decided in `CR-007` (the setting) and `CR-008` (the calculation and the snapshots). Durable contracts: `docs/settings.md` and `docs/decisions/0012-c2-financial-calculation-snapshots.md`.
 
-**Current state.** On merged `main`, production readiness estimates `estimated_tax`, `estimated_margin`, and `estimated_margin_percent` (`C2-I`, PR #151). `C2-II` — the transactional snapshots, the two rate-snapshot columns below, migration `0019_production_batch_tax_rate_snapshots`, the required confirmation context, and `409 tax_rate_context_stale` — is merged as PR #152 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III` is subdivided into `C2-III-A` (Order and `ProductionBatch` financial presentation, merged as PR #154 and `DONE — MERGED AND EXACT-HEAD VERIFIED`) and `C2-III-B` (snapshot-backed reports and report documents, `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`). Reports are not snapshot-backed yet.
+**Current state.** On merged `main`, production readiness estimates `estimated_tax`, `estimated_margin`, and `estimated_margin_percent` (`C2-I`, PR #151). `C2-II` — the transactional snapshots, the two rate-snapshot columns below, migration `0019_production_batch_tax_rate_snapshots`, the required confirmation context, and `409 tax_rate_context_stale` — is merged as PR #152 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C2-III` was subdivided into `C2-III-A` (Order and `ProductionBatch` financial presentation, merged as PR #154) and `C2-III-B` (snapshot-backed reports and report documents, merged as PR #157, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`); both are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **Reports are snapshot-backed and C2 is `COMPLETED`.**
 
 #### Calculation formulas (`CR-008`)
 
@@ -1742,6 +1742,14 @@ onboarding
 restore
 ```
 
+> **This `source` vocabulary is aspirational and is NOT implemented.** No write call site persists a source/process dimension — there is no column, no parameter and no value carrying it. The only field that exists is **`actor_type`**, created by `0001_infrastructure` and written by `AuditLogRepository.create_log`, and the only values in the current write vocabulary are **`system`** (the `create_log` default, used by every call site except one) and **`user`** (written only for `tax_rate_setting_changed`).
+>
+> **`system` and `user` are actors, not sources.** They describe who or what initiated the action, not the process it came from. `C3-I` therefore exposes **`actor_type` / `actor_label`** and **does not** expose a `source` field, because mapping one onto the other would silently change the meaning of the field.
+>
+> A true process `source` requires write call sites to start persisting that dimension. That is a write-side change and is **deferred** to a separately authorized product decision and implementation slice. Until then `manual`, `import`, `production`, `migration`, `backup` and `restore` must not be presented as implementable.
+>
+> The column is not renamed, no migration or backfill is authorized, and no existing write call site changes. Values outside the known vocabulary resolve to `Другой инициатор`. Full inventory: `docs/audit-log.md` § 11.
+
 ### Business rules
 
 - AuditLog should be append-only.
@@ -1749,6 +1757,9 @@ restore
 - Store safe summaries.
 - Metadata can contain technical details, but no secrets.
 - Important business actions must create AuditLog.
+- `metadata_json` is **never** returned by the read API. It is dominated by internal foreign-key IDs, enum codes and counters — exactly the class of value a non-technical user must not see — so the `C3-I` read model excludes it in full rather than field by field.
+- The **raw persisted `summary` is never returned either.** It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text. The read API returns `display_summary`, a backend-owned safe Russian value resolved from `action` by a focused presenter, with the raw summary never used as a value or a fallback. Historical rows are not rewritten — only what is shown changes.
+- The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
 
 ### Examples
 

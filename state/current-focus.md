@@ -1,6 +1,6 @@
-# Current focus — `C2-III-B` implemented on its PR branch; not merged
+# Current focus — C2 is COMPLETED; the bounded C3-I AuditLog workspace is authorized
 
-Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` implemented on its runtime PR branch as the last remaining C2 runtime slice, after its report aggregation contract was clarified following a blocking Phase 0 audit, and not merged**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` merged (PR #157), exact-head verified and closed; one bounded C3 runtime slice, `C3-I — Read-only AuditLog workspace`, authorized after the closure documentation PR merges and not implemented**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -13,10 +13,12 @@ Active phase: **Roadmap completion window — C1 complete; `CR-008` accepted and
 - `C2-I — Backend financial readiness estimate`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #151)
 - `C2-II — Transactional production financial snapshots`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #152)
 - `C2-III-A — Order and ProductionBatch financial presentation`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #154)
-- `C2-III-B — Snapshot-backed reports and report documents`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
+- `C2-III-B — Snapshot-backed reports and report documents`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #157)
+- `C2 — COMPLETED`
+- `C3-I — Read-only AuditLog workspace`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **One runtime implementation slice is open and unmerged.** `C2-III-B` is implemented on branch `codex/c2-iii-b-snapshot-backed-reports`, started from clean `origin/main` `7369e7f133f0ce02aea5f2021cbb0e14104b7b34` (PR #156 merge commit). It is the **only** remaining C2 runtime slice. Its contract conflict is resolved, runtime now reads persisted `ProductionBatch` snapshots, the exact additive DTO fields are implemented, and its tests and exact-head smoke are PR evidence. Review of PR #157 raised two frontend findings — non-strict monetary-string validation, and one coverage note that wrongly implied the missing-tax and missing-margin batches were the same set — plus a stale focused-suite count; all three are fixed on the same branch, no backend formula changed, and both exact-head smokes were re-run against the new head. It is **not merged** and is **not** `DONE`.
+- **No runtime implementation slice is open.** Every C2 slice is merged and closed. The only authorized next runtime slice is `C3-I`, and it is authorized only after the documentation PR that records this state merges.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
@@ -159,24 +161,82 @@ Delivered on merged `main`, matching ADR 0012 and `docs/implementation-plan.md` 
 - **`frontend/src/main.ts` `6399` before → `6398` after.** The file did not grow; the two per-line batch cost-snapshot tables moved into the focused presentation module.
 - **Physical readiness untouched.** `can_produce`, the physical readiness status, the stale-result ownership and the production guard behave exactly as before, and backend financial warnings are still shown once through the existing readiness warning section.
 
-## What is in progress now
+## C2-III-B — merged and exact-head verified (2026-07-28)
 
-`C2-III-B` is the **only** remaining C2 runtime slice. It was authorized by the merged documentation PR #156 and is now **implemented on its own runtime PR branch**, under review and unmerged.
+`C2-III-B — Snapshot-backed reports and report documents` is:
 
 ```text
-C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
-PR #157
-branch codex/c2-iii-b-snapshot-backed-reports
-final runtime head ac68204ee70978749c423dfa69944689ff56a09b
+C2-III-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
-`ac68204` is the last commit that changed runtime code; every commit after it on this branch is documentation-only, so the runtime under review is byte-identical to that head. The current branch head advances with each documentation commit and is authoritative in PR #157 — a commit cannot record its own SHA, so the exact final published and smoke-tested head is stated there rather than here.
+`VERIFIED FROM MERGED PR #157 EVIDENCE — NOT RE-EXECUTED IN THIS DOCUMENTATION PR`
 
-**Merged `main` still contains the pre-`C2-III-B` Reports runtime.** It has the `C2-I` readiness estimate, the `C2-II` transactional snapshots and the `C2-III-A` financial presentation — migration `0019_production_batch_tax_rate_snapshots`, the required-but-nullable confirmation context, `409 tax_rate_context_stale`, the Order readiness financial block, the shared `Фактическая экономика партии` block and the compact `ProductionBatch` list financial summary — but **no report change**: reports on `main` read no snapshots, and they will not until PR #157 merges.
+| Item | Verified value |
+|---|---|
+| PR | #157 — `C2-III-B — Implement snapshot-backed reports and report documents` |
+| State | `MERGED`, base `main` |
+| Head branch | `codex/c2-iii-b-snapshot-backed-reports` |
+| Final reviewed head | `305d5421e79b8cb833df9588e705e9418781e021` |
+| Merge commit | `87410910aad472343c057f0bcbfcc3797f8b8e09` |
+| Merged at | `2026-07-28T22:21:18Z` |
+| Exact-head API smoke | `PASS — 53 checks / 0 failures` |
+| Exact-head browser smoke | `PASS — FULL AUTOMATED SMOKE PASSED` |
+| Complete backend suite | `942 passed / 0 failed / 0 skipped` |
+| Focused report frontend suite | `54 pass / 0 fail` |
+| All 17 frontend test scripts | `PASS` |
+| Production build | `PASS` |
+| `frontend/src/main.ts` | `6398` lines |
 
-Snapshot-backed Reports, the additive DTO fields, the `/reports` presentation and the updated «Сводка мастерской» exist **only on the PR #157 branch**. `C2-III-B` is not `DONE` and C2 remains **incomplete** until it is reviewed, exact-head verified and merged, and its active lifecycle is closed.
+All of the above is **merged PR #157 evidence**. None of it was re-executed in this documentation-only pull request.
 
-### Authorized and implemented `C2-III-B` boundary
+`origin/main` equals the PR #157 merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, and no commit exists on `main` after it.
+
+Delivered on merged `main`: reports read persisted `ProductionBatch` financial snapshots only, through the pure aggregation in `backend/app/domain/report_financials.py`; the additive `FinanceReportResponse` fields `known_tax`, `tax_snapshot_record_count`, `missing_tax_snapshot_count`, `margin_snapshot_record_count`, `missing_margin_snapshot_count`; the three additive warnings `tax_unavailable`, `partial_tax_basis`, `margin_percent_unavailable_zero_basis`; the `/reports` Overview and Finance presentation in `frontend/src/report-financial-contract.ts` and `frontend/src/report-financial-presentation.ts`; and the snapshot-backed finance section of a newly generated «Сводка мастерской». Previously generated documents remain byte-identical.
+
+**Reports on merged `main` are snapshot-backed.** The former paired-input margin derivation is gone from `main`.
+
+## C2 — COMPLETED
+
+```text
+C2 — COMPLETED
+C2-III-B — DONE — MERGED AND EXACT-HEAD VERIFIED
+```
+
+Every C2 slice is merged, exact-head verified and closed: `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). The `C2-III` planning umbrella was subdivided into exactly `C2-III-A` and `C2-III-B`, and both are done. C2 is **not reopened**.
+
+C2 being complete does **not** make the product release-ready. Restore, packaging, installation verification, the update flow and the full release-candidate smoke all remain open, and **product release readiness is not claimed**.
+
+## What is authorized next — C3-I
+
+```text
+C3-I — Read-only AuditLog workspace
+AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+```
+
+`C3-I` is the **only** authorized C3 runtime slice. It is not implemented, no branch exists for it, and no PR number is assigned. Do not start it from this unmerged documentation branch.
+
+The durable product, API, privacy and presentation contract is **`docs/audit-log.md`**. It is authoritative; the summary below does not replace it.
+
+- **Purpose.** A plain-language history of important workshop actions — `Журнал действий` — so the user can understand what happened without opening SQLite, JSON, logs, GitHub or a terminal. Not a technical admin console, database browser, SIEM, analytics, rollback, event editor or debugging console.
+- **Actor field — `actor_type`, not `source`.** The API keeps the persisted column name: `actor_type` and `actor_label`. **No `source` field is exposed or authorized.** The values that exist, `system` and `user`, describe the **actor that initiated the action**, not a process origin, so mapping them onto `source` would silently change the field's meaning. Labels: `system → Система`, `user → Пользователь`, anything else → `Другой инициатор`. The historical process vocabulary (`manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore`) is **aspirational** — no write call site persists that dimension — so a true `source` is **deferred** to a separately authorized decision and write-side slice. No column rename, no migration, no backfill, no write-call-site change.
+- **API.** Exactly one new endpoint, `GET /api/audit-logs`. The old roadmap proposal `GET /api/audit-logs/{id}` is **explicitly superseded for the MVP**. No create, update, delete, rollback or export endpoint.
+- **Safe read model.** The response carries `items`, `total`, `limit`, `offset`, `filter_options`; each item carries exactly `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `display_summary`, `actor_type`, `actor_label`. The raw persisted summary and raw `metadata_json` are never returned, and neither are `entity_id`, table names, stack traces, SQL, filesystem paths or raw payloads.
+- **`display_summary`.** The raw `audit_logs.summary` is **never returned verbatim and is never used as an unrestricted API or frontend fallback** — it is write-time technical text, mostly English, sometimes carrying internal record IDs, and `client_wish.*` values carry user-authored wish text. A focused backend presenter (`AuditLogDisplayPresenter` or an equivalently focused module) resolves a safe Russian `display_summary` from the known `action`: no internal IDs, no metadata, no business-table join, no historical rewrite, no sensitive text.
+- **Bounded suffix extraction.** A suffix from the persisted summary may contribute to `display_summary` only when **all seven** conditions hold: the action is explicitly allowlisted; the summary starts with the exact prefix assigned to that action; the suffix is non-empty; the action may retain that category of business name; the suffix is plain text only; the suffix carries no presenter-supplied internal identifier; and no database or metadata lookup happens. Otherwise the generic action-specific phrase applies. The allowlist is the exact 21-row table in `docs/audit-log.md` § 6.4.3 — not a prefix glob — and excludes `client_wish.*`, `client_recipe.*`, every ID-bearing action and every catalog-assignment action. Returning the complete summary, its English prefix, or using it as an unrestricted fallback stays prohibited.
+- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, accepted integer range `1..200`; `offset` default `0`, accepted integer `>= 0`. Validation runs in a fixed order and the first match decides the code: missing → default; wrong type, fractional or boolean → `non_integer_quantity`; negative integer → `negative_quantity`; non-negative `limit` of `0` or `> 200` → `pagination_out_of_range`. So `limit=-1` is only `negative_quantity` and `limit=0` is only `pagination_out_of_range`. Invalid values are **rejected, never silently clamped**. No unbounded history.
+- **Filters.** `created_from` (inclusive), `created_before` (exclusive), `action`, `entity_type`, `actor_type`, `limit`, `offset` — **no `source` filter** — combined with logical AND, with ISO-8601 UTC timestamps, structured `422` with the existing `invalid_date` code for malformed input, filter options derived from values that actually exist as rows in `audit_logs`, and no writes.
+- **Validation wire shape.** The routers raise `HTTPException(status_code=422, detail=issue.__dict__)`, so the `DomainIssue` is the **value of `detail`**, and the body is `{"detail": {"code", "message", "field", "value", "next_action"}}`. Codes: `invalid_date`, `non_integer_quantity`, `negative_quantity`, and one new authorized enum member `PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`, which must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`.
+- **Date-range conflict.** `created_before <= created_from` returns HTTP `422`, `code: invalid_date`, **`field: created_before`**, `value` the supplied `created_before`, a Russian `message` saying the end of the period must be later than its beginning, and a Russian `next_action` telling the user to pick a later end date. No synthetic `date_range` field.
+- **Read-only.** Reads write no AuditLog record, mutate no business table, create no file, change no setting, trigger no regeneration, and perform no cleanup or normalization of historical rows. AuditLog remains append-only — the presenter changes only what is shown.
+- **Frontend.** Canonical route `/settings/audit-log`, title `Журнал действий`, with the full state set — loading, empty, filtered-empty, refresh failure retaining the previously accepted list, initial-load failure, narrow viewport and keyboard accessibility. Filters are date, action, entity and actor. No raw codes, no raw persisted summary, no JSON, no `metadata_json`, no table names, no internal entity IDs, no stack traces, no SQL, no developer paths and no GitHub or PR terminology. Focused modules only; `frontend/src/main.ts` must not grow net.
+
+### C3-I non-goals
+
+AuditLog edit; AuditLog delete; rollback or undo; restore from AuditLog; detail endpoint; metadata viewer; raw JSON viewer; returning the raw persisted summary through any field or fallback; a `source` field, a `source_label` field or a source filter; persisting a new source/process dimension; CSV/XLSX/PDF audit export; charts; analytics; search over sensitive text; roles or permissions; multi-user actors; remote audit shipping; cloud sync; retention policies; log compaction; schema migration; backfill; changes to existing write semantics; C4; Restore; packaging; update flow; release-candidate smoke.
+
+### Historical `C2-III-B` authorization boundary
+
+> **HISTORICAL — the authorization text as written before PR #157 merged.** It is preserved because it is the boundary the merged slice was held to. `C2-III-B` is now `DONE — MERGED AND EXACT-HEAD VERIFIED`; the paragraphs below must not be read as describing open work.
 
 One bounded backend-plus-frontend report vertical:
 
@@ -203,14 +263,9 @@ The accepted resolution is now recorded in `docs/reports.md` § *Accepted `C2-II
 
 **Explicit exclusions.** `C2-III-B` must not change Orders readiness; Order production confirmation; the Order lifecycle; `ProductionBatch` persistence; `ProductionBatch` list presentation; `ProductionBatch` detail presentation; the `C2-III-A` financial presentation modules; tax-rate Settings behavior; migrations; historical `ProductionBatch` rows; or stock and production transactions.
 
-### C2 completion boundary
+### C2 completion boundary — satisfied
 
-```text
-C2 remains incomplete until C2-III-B is reviewed,
-exact-head verified and merged, and its active lifecycle is closed.
-```
-
-C2 remains incomplete until `C2-III-B` is reviewed, exact-head verified and merged, and its active lifecycle is closed. C2 is **not** complete merely because `C2-III-B` is now implemented on a branch. C3 and C4 remain inactive, and product release readiness is not claimed.
+> **HISTORICAL — SATISFIED.** This boundary read: *"C2 remains incomplete until `C2-III-B` is reviewed, exact-head verified and merged, and its active lifecycle is closed."* All three conditions are met — PR #157 was reviewed, exact-head verified and merged at `87410910aad472343c057f0bcbfcc3797f8b8e09`, and this document closes its active lifecycle. **C2 is COMPLETED.** C4 remains inactive, and product release readiness is not claimed.
 
 ## R4 merge closure
 
@@ -260,7 +315,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 is **complete**: `CR-007` is accepted and `C1-I` is merged and `DONE`. C2 has an **accepted product contract** (`CR-008`) and is **not complete**: `C2-I` is merged (PR #151), `C2-II` is merged (PR #152) and `C2-III-A` is merged (PR #154), while `C2-III-B` is implemented on its runtime PR branch and is **not merged**. C3 and C4 remain **inactive** unless separately authorized.
+- C1 is **complete**: `CR-007` is accepted and `C1-I` is merged and `DONE`. C2 is **complete**: `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157) are all merged and exact-head verified. C3 has exactly one authorized runtime slice, `C3-I — Read-only AuditLog workspace`, which is **authorized after this documentation PR merges and is not implemented**; the durable contract is `docs/audit-log.md`. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**

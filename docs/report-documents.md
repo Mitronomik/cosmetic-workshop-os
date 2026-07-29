@@ -100,7 +100,7 @@ If report data is missing, the document renders values as `не рассчита
 
 ### Snapshot-backed finance section (`C2-III-B`)
 
-Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
+Status: **IMPLEMENTED** and merged as PR #157.
 
 A newly generated «Сводка мастерской» displays the finance values of `OverviewReportResponse.finance_summary` exactly as the backend returned them: known revenue, known production cost, the persisted tax total, the persisted margin total, the same-basis margin percentage, the tax and margin snapshot coverage counts, and the legacy paired sale-price/cost counters under a separate `Полнота исходных данных` heading with labels that say what they actually count. The renderer performs no financial calculation of its own.
 

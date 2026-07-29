@@ -17,17 +17,21 @@ Authorization state of each slice (current, updated 2026-07-28):
 | `C2-I` — backend financial readiness estimate | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #151) |
 | `C2-II` — transactional production financial snapshots | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #152) |
 | `C2-III-A` — Order and `ProductionBatch` financial presentation | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #154) |
-| `C2-III-B` — snapshot-backed reports and report documents | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
+| `C2-III-B` — snapshot-backed reports and report documents | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157) |
+
+**C2 is `COMPLETED`.** Every slice above is merged and exact-head verified.
 
 `C2-III` is no longer a single slice. It was subdivided into exactly two runtime slices, as § *C2-III umbrella and future subdivision rule* below already required; see § *C2-III subdivision (executed 2026-07-28)*.
 
-**Superseded status statement.** The original table above read `C2-I` `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`, `C2-II` `PLANNED — BLOCKED`, `C2-III` `PLANNED — BLOCKED`, and this ADR then stated that nothing in it was implemented on `main`, that no migration existed, that no snapshot column existed, and that no tax or margin was calculated. That was true when this ADR was accepted on 2026-07-27 and is now **historical**. On merged `main` the readiness estimate (`C2-I`), the transactional snapshots plus migration `0019_production_batch_tax_rate_snapshots` (`C2-II`), and the Order and `ProductionBatch` financial presentation (`C2-III-A`, PR #154, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`) are all delivered. Reports contain no snapshot logic on merged `main` — that is `C2-III-B`, now implemented on its runtime PR branch and not merged.
+**Superseded status statement.** The original table above read `C2-I` `AUTHORIZED AFTER THIS PR MERGES — NOT IMPLEMENTED`, `C2-II` `PLANNED — BLOCKED`, `C2-III` `PLANNED — BLOCKED`, and this ADR then stated that nothing in it was implemented on `main`, that no migration existed, that no snapshot column existed, and that no tax or margin was calculated. That was true when this ADR was accepted on 2026-07-27 and is now **historical**. On merged `main` the readiness estimate (`C2-I`), the transactional snapshots plus migration `0019_production_batch_tax_rate_snapshots` (`C2-II`), and the Order and `ProductionBatch` financial presentation (`C2-III-A`, PR #154, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`) are all delivered. The claim that reports contain no snapshot logic on merged `main` is also historical: `C2-III-B` merged as PR #157 (merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`), and reports on `main` now read the persisted snapshots.
+
+> **HISTORICAL — SATISFIED.** This ADR originally stated `C2 is not complete in this documentation PR.` and that C2 would become complete only after `C2-III-B` was reviewed and merged and the final active C2 documentation and state were closed consistently. All of that has happened.
 
 ```text
-C2 is not complete in this documentation PR.
+C2 — COMPLETED
 ```
 
-C2 becomes complete only after `C2-III-B` is reviewed and merged and the final active C2 documentation and state are closed consistently. Implementing it on a PR branch does not make C2 complete. `C3` and `C4` remain inactive.
+`C3` has exactly one authorized runtime slice — `C3-I — Read-only AuditLog workspace`, `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`, durable contract `docs/audit-log.md`. `C4` remains inactive. Product release readiness is not claimed.
 
 **Relationship to ADR 0011.** ADR 0011 remains the authoritative C1 tax-setting decision and now records `C1-I` as merged and verified — PR #149, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged `2026-07-27T19:44:53Z`, exact-head `/settings` smoke `PASS — 146 checks / 0 failures`. ADR 0012 does not reopen `CR-007`; it defines the C2 calculation, confirmation-context, and snapshot contract.
 
@@ -297,7 +301,7 @@ Constraints: no report backend change; no report DTO change; no `/reports` UI ch
 
 #### `C2-III-B` — snapshot-backed reports and report documents
 
-Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED` — PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`. It is the **only** remaining C2 runtime slice and is **not** `DONE`. Merged `main` keeps the pre-`C2-III-B` Reports runtime until PR #157 merges. The authorized boundary and the accepted contract below are unchanged by the implementation. *(This line previously read `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED` with no PR number assigned; that was true when written and is superseded.)*
+Status: `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, final reviewed head `305d5421e79b8cb833df9588e705e9418781e021`, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`. It was the last remaining C2 runtime slice; merged `main` carries the snapshot-backed Reports runtime. The authorized boundary and the accepted contract below are unchanged by the implementation. *(This line previously read `AUTHORIZED AFTER THIS PR MERGES — CONTRACT CLARIFIED — NOT IMPLEMENTED` with no PR number assigned, and later `IMPLEMENTED ON PR BRANCH — NOT MERGED`; both were true when written and are superseded.)*
 
 Authorized boundary — one bounded backend-plus-frontend report vertical:
 
@@ -347,7 +351,7 @@ The existing prohibition on *aggregate margin divided by aggregate revenue* is h
 
 A zero-sale row with a non-null margin belongs to `M`, contributes its margin, contributes zero to the denominator, and does not by itself make the percentage available. `complete_finance_record_count` and `incomplete_margin_count` keep their existing paired sale-price/cost meanings for backward compatibility and are explicitly **not** snapshot-coverage counters. The authorized additive DTO fields are `known_tax`, `tax_snapshot_record_count`, `missing_tax_snapshot_count`, `margin_snapshot_record_count`, and `missing_margin_snapshot_count`; the authorized additive warning codes are `tax_unavailable`, `partial_tax_basis`, and `margin_percent_unavailable_zero_basis`.
 
-The complete contract — including the exact counter identities, warning conditions and report-document implications — is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*. That contract is unchanged by the runtime work; `C2-III-B` is now `IMPLEMENTED ON PR BRANCH — NOT MERGED`, with the aggregation in `backend/app/domain/report_financials.py`.
+The complete contract — including the exact counter identities, warning conditions and report-document implications — is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*. That contract is unchanged by the runtime work; `C2-III-B` is now `DONE — MERGED AND EXACT-HEAD VERIFIED`, with the aggregation in `backend/app/domain/report_financials.py` on merged `main`.
 
 ### Required-but-nullable confirmation context (`C2-II`)
 

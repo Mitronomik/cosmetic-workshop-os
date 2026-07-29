@@ -1327,6 +1327,14 @@ backup
 onboarding
 ```
 
+> **Этот перечень источников — aspirational и НЕ реализован.** Ни один write call site не сохраняет измерение source/process: нет ни колонки, ни параметра, ни значения. Реально существует только колонка **`actor_type`**, и текущий write-словарь — это **`system`** и **`user`**.
+>
+> **`system` и `user` — это инициаторы, а не источники.** Они описывают, кто или что запустило действие, а не процесс происхождения. Поэтому `C3-I` отдаёт **`actor_type` / `actor_label`** и **не** отдаёт поле `source`: отображение одного в другое молча изменило бы смысл поля.
+>
+> Настоящее поле `source` требует, чтобы write call sites начали сохранять это измерение. Это изменение на стороне записи, и оно **отложено** до отдельно принятого продуктового решения и отдельного среза. До тех пор `manual`, `import`, `production`, `migration`, `backup` и `restore` нельзя подавать как реализуемые.
+>
+> **Сырой сохранённый `summary` тоже не отдаётся.** API возвращает `display_summary` — безопасное русское значение, которое backend-презентер выводит из `action`. Исторические строки не переписываются. Полный контракт: `docs/audit-log.md`.
+
 ---
 
 # 6.19. OnboardingState
@@ -1868,7 +1876,7 @@ margin_percent = ROUND_PERCENT(margin / sale_price * 100)
 - `C2-I` — backend-оценка в существующем ответе готовности: переиспользуются существующие поля `estimated_cost`, `estimated_tax`, `estimated_margin`, добавляются `sale_price`, `tax_rate_percent`, `tax_rate_effective_at`, `estimated_margin_percent` и `financial_estimate_status`; поле `estimated_total_cost` **не** вводится;
 - `C2-II` — неизменяемые финансовые снапшоты внутри транзакции подтверждения производства, включая обязательные-но-nullable ключи контекста ставки `expected_tax_rate_percent` и `expected_tax_rate_effective_at` и конфликт `tax_rate_context_stale`. Пара `null/null` означает «readiness не увидел действующей налоговой ставки» и покрывает **и** отсутствующую строку, **и** некорректное сохранённое значение; пропуск ключа — это не то же самое, что явный `null/null`, и отклоняется как `422 tax_rate_context_required`. Конфликт `409 tax_rate_context_stale` возникает при переходах valid → изменённый valid, valid → missing, valid → invalid, missing → valid и invalid → valid, но **не** при missing ↔ invalid, поскольку оба состояния дают одинаковый финансовый результат;
 - форматы времени в C2: хранение — `YYYY-MM-DD HH:MM:SS` (UTC, SQLite text, без `T`, `Z` и смещения); API и контекст подтверждения — `YYYY-MM-DDTHH:MM:SSZ` (UTC, без дробных секунд и произвольных смещений); неканоничная метка времени в запросе отклоняется как `422 invalid_tax_rate_context`, а API никогда не отдаёт сырое хранимое представление;
-- `C2-III` — бывший **зонтик планирования**, разделённый ровно на два runtime-среза: `C2-III-A` — финансовое представление заказа и `ProductionBatch` (влит как PR #154, `DONE — MERGED AND EXACT-HEAD VERIFIED`; отчёты не затронул) и `C2-III-B` — отчёты и документы отчётов по снапшотам (`AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; отчёты пока не читают снапшоты; UI заказов и `ProductionBatch` не затрагивает);
+- `C2-III` — бывший **зонтик планирования**, разделённый ровно на два runtime-среза: `C2-III-A` — финансовое представление заказа и `ProductionBatch` (влит как PR #154, `DONE — MERGED AND EXACT-HEAD VERIFIED`; отчёты не затронул) и `C2-III-B` — отчёты и документы отчётов по снапшотам (влит как PR #157, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, `DONE — MERGED AND EXACT-HEAD VERIFIED`; отчёты читают персистентные снапшоты; UI заказов и `ProductionBatch` не затронул). **C2 завершён (`COMPLETED`).**
 - в течение всего C2 `frontend/src/main.ts` не превышает `6399` строк, а фронтенд не выполняет финансовых вычислений.
 
 ---

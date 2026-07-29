@@ -9,7 +9,7 @@ Status: evolving implementation contract. Existing implemented areas have backen
 
 **Current editable set on merged `main`.** The Workshop profile fields — `workshop_name`, `master_name`, `workshop_contact_text`, `workshop_note` — are `editable_now`, and so is `default_tax_rate`. `default_tax_rate` is the **only calculation-sensitive setting that is currently editable**; it became editable with the merged `C1-I` slice (PR #149) and it never recalculates historical data. Every other calculation-sensitive setting — currency display, target margin, default low-stock threshold, expiry warning days, default measurement units — remains `requires_backend_rules` and stays closed until it has its own separately accepted backend rules. *(Historical note: `PR96` originally made only the Workshop profile editable; that was the state before `C1-I` merged and is no longer the current contract.)*
 
-Standard error shape includes `code`, `message`, `user_message`, and `details`. Planned sections: health, settings, onboarding, clients, recipes, inventory, orders, production, alerts, purchases, imports, exports, backups, reports, audit logs.
+Standard error shape includes `code`, `message`, `user_message`, and `details`. Planned sections: health, settings, onboarding, clients, recipes, inventory, orders, production, alerts, purchases, imports, exports, backups, reports, audit logs. The audit-log read endpoint is authorized as `C3-I` and is **not implemented** — see § *AuditLog API (`C3-I`)* and `docs/audit-log.md`.
 
 ## Orders backend foundation (PR60)
 
@@ -70,7 +70,8 @@ Current limitations: the Orders frontend presents this read-only check, but the 
 | C2-I readiness tax / margin / margin-percent calculation | **IMPLEMENTED** and merged (PR #151) |
 | C2-II `ProductionBatch` rate snapshots and transactional persistence | **IMPLEMENTED** and merged (PR #152) |
 | C2-III-A Order and `ProductionBatch` financial presentation | **IMPLEMENTED** and merged (PR #154) |
-| C2-III-B snapshot-backed reports and report documents | `IMPLEMENTED ON PR BRANCH — NOT MERGED`; on merged `main` report responses are still unchanged |
+| C2-III-B snapshot-backed reports and report documents | **IMPLEMENTED** and merged (PR #157) |
+| C3-I read-only AuditLog workspace (`GET /api/audit-logs`) | `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; the endpoint does not exist on merged `main` |
 
 ### Financial estimate extension — `C2-I`
 
@@ -1066,7 +1067,7 @@ The report uses Decimal-safe string values. It does not invent tax or apply a hi
 
 #### `C2-III-B` snapshot-backed finance contract
 
-Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`. On merged `main` the response is still the pre-`C2-III-B` shape, with margin derived from paired sale price and cost and without the additive fields below. The full contract is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*, and the aggregation lives in `backend/app/domain/report_financials.py`.
+Status: **IMPLEMENTED** and merged as PR #157. On merged `main` the response carries the additive fields below and margin comes from persisted snapshots; the pre-`C2-III-B` shape, with margin derived from paired sale price and cost, is historical. The full contract is in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract*, and the aggregation lives in `backend/app/domain/report_financials.py`.
 
 `known_margin` is the sum of persisted `ProductionBatch.margin` over exactly the rows whose margin snapshot is non-null (`M`), and:
 
@@ -1090,6 +1091,146 @@ Authorized additive `FinanceReportResponse` fields:
 | `missing_margin_snapshot_count` | `int` | rows where persisted `margin` is null |
 
 Each pair sums to `produced_order_count`. The existing `complete_finance_record_count` and `incomplete_margin_count` keep their current paired sale-price/cost meanings for backward compatibility and are **not** snapshot-coverage counters. Additive warning codes: `tax_unavailable`, `partial_tax_basis`, and `margin_percent_unavailable_zero_basis`. `OverviewReportResponse.finance_summary` uses the same `FinanceReportResponse` with no overview-only fields or calculations. Reports never read the current Settings tax rate and never recalculate a historical row.
+
+## AuditLog API (`C3-I`)
+
+Status: `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`. **This endpoint does not exist on merged `main`.** The durable product, API, privacy and presentation contract is `docs/audit-log.md`; this section is the API-shaped summary of it and defers to that file on any disagreement.
+
+### `GET /api/audit-logs`
+
+The **only** authorized AuditLog endpoint. Read-only, and the only new endpoint in `C3-I`. No create, update, delete, rollback or export endpoint is authorized.
+
+**Superseded.** The `docs/roadmap.md` § PR27 proposal `GET /api/audit-logs/{id}` is **explicitly superseded for the MVP**: the user goal is satisfied by a filtered readable list, raw metadata and technical detail increase privacy and complexity risk, a detail endpoint is not needed to understand the important action, and it may be reconsidered only through a separate future product decision.
+
+#### Query parameters
+
+| Parameter | Rule |
+|---|---|
+| `created_from` | ISO-8601 UTC, **inclusive** |
+| `created_before` | ISO-8601 UTC, **exclusive**; `created_before <= created_from` is rejected |
+| `action` | stable action code |
+| `entity_type` | stable entity code |
+| `actor_type` | stable actor code |
+| `limit` | omitted → `50`; valid range integer `1..200` |
+| `offset` | omitted → `0`; valid range integer `>= 0` |
+
+There is **no `source` filter**. Filters combine with logical **AND**. Empty filters return the latest events. Filtering performs no writes.
+
+#### Response
+
+```text
+items
+total
+limit
+offset
+filter_options
+```
+
+`total` counts the rows matching the filters before `limit`/`offset`; `limit` and `offset` echo the effective applied values, which differ from the request only when a parameter was omitted and its default applied. `filter_options` lists the distinct `action`, `entity_type` and `actor_type` values that **actually exist as rows** in `audit_logs`, each with a safe Russian label.
+
+Each item contains exactly:
+
+```text
+id
+created_at
+action
+action_label
+entity_type
+entity_label
+display_summary
+actor_type
+actor_label
+```
+
+- `id` is an internal row identity and is not displayed as a business value;
+- `created_at` is ISO-8601 UTC; the SQLite `YYYY-MM-DD HH:MM:SS` storage form is never exposed;
+- `action`, `entity_type` and `actor_type` are stable codes; `entity_type` may be `null`;
+- `action_label`, `entity_label` and `actor_label` are Russian user-facing labels, with the safe fallbacks `Другое действие`, `Другая сущность` and `Другой инициатор` for unknown codes;
+- `display_summary` is a **backend-owned safe Russian presentation value** resolved from `action`, never the raw persisted summary.
+
+#### `actor_type`, not `source`
+
+The API field keeps the persisted column name `actor_type`, and **no `source` field is exposed**. The values `system` and `user` describe the **actor that initiated the action**, not a process origin. Presenting them as a `source` would silently change the field's meaning, so `C3-I` does not.
+
+The historical process vocabulary — `manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore` — is **aspirational**: no write call site persists that dimension, so a true `source` field cannot be implemented truthfully. It is **deferred** to a separately authorized product decision and write-side slice. The column is not renamed, no migration or backfill is authorized, and no existing write call site changes.
+
+Labels: `system → Система`, `user → Пользователь`, anything else → `Другой инициатор`.
+
+#### `display_summary`
+
+The raw persisted `audit_logs.summary` is **never returned verbatim and is never used as an unrestricted API or frontend fallback**. It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text.
+
+A focused backend presenter — `AuditLogDisplayPresenter`, or an equivalently focused module consistent with the repository structure — resolves `display_summary` from the known `action`. It never includes an internal ID, never includes metadata, performs no business-table join, rewrites no historical row, and never exposes wish text, client notes, allergies, addresses or feedback bodies.
+
+```text
+Ingredient lot created for ingredient #12  →  Создана партия компонента
+Order #4 produced as batch #7              →  Производство заказа подтверждено
+Client wish created: Убрать компонент X    →  Пожелание клиента добавлено
+```
+
+**Bounded suffix extraction.** A suffix taken from the persisted summary may contribute to `display_summary` only when **all seven** conditions hold: the action is explicitly allowlisted; the persisted summary starts with the exact prefix assigned to that action; the remaining suffix is non-empty; the action is authorized to retain that category of business name; the suffix is rendered only as plain text; the suffix contains no internal identifier supplied by the presenter; and no database or metadata lookup is performed. Otherwise `display_summary` falls back to the generic action-specific phrase.
+
+The allowlist is the exact 21-row table in `docs/audit-log.md` § 6.4.3 — `client.created` / `.updated` / `.deactivated`, `ingredient.created` / `.updated` / `.deactivated`, `packaging_item.created` / `.updated` / `.deactivated`, `recipe_template.created` / `.deactivated`, `order.created` / `.updated` / `.cancelled` / `.archived`, `catalog_category.created` / `.updated` / `.archived`, and `catalog_tag.created` / `.updated` / `.archived` — each with its exact English prefix, for example `Client created: ` → `Клиент создан: <имя>` with the fallback `Клиент создан`. It is **not** a prefix glob: `client_wish.*`, `client_recipe.*`, every ID-bearing action (`ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created`, `production_confirmed`, `recipe_version.created`) and every catalog-assignment action are excluded. Returning the complete persisted summary, returning its English technical prefix, or using it as an unrestricted fallback all remain prohibited.
+
+#### Validation responses
+
+The existing router convention raises `HTTPException(status_code=422, detail=issue.__dict__)`, so the `DomainIssue` object is the **value of `detail`**, not the whole body. The exact wire response is:
+
+```json
+{
+  "detail": {
+    "code": "invalid_date",
+    "message": "Russian user-readable message",
+    "field": "created_from",
+    "value": "the rejected value",
+    "next_action": "Russian user-readable next action"
+  }
+}
+```
+
+| Condition | `code` |
+|---|---|
+| malformed or invalid `created_from` / `created_before` | `invalid_date` |
+| `created_before <= created_from` | `invalid_date` |
+| non-integer, fractional, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
+| negative `limit` / `offset` | `negative_quantity` |
+| non-negative `limit` outside `1..200` — that is, `0` or `> 200` | `pagination_out_of_range` |
+
+`invalid_date`, `non_integer_quantity` and `negative_quantity` already exist in `DomainIssueCode`. `pagination_out_of_range` (`PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`) is the one new enum member authorized by `C3-I`, because no existing member carries out-of-range pagination semantics; it must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`. It is a bounded enum addition, not a schema change or migration.
+
+**Ordered validation precedence.** The checks run in this exact order and the first match decides the code, so every invalid input maps to exactly one code:
+
+```text
+1. Missing value        limit → default 50; offset → default 0
+2. Wrong type/repr      non-integer, fractional, boolean, malformed string → non_integer_quantity
+3. Negative integer     limit < 0, offset < 0                              → negative_quantity
+4. Non-negative limit outside range   limit == 0, limit > 200              → pagination_out_of_range
+5. Accepted             limit: integer 1..200; offset: integer >= 0
+```
+
+Because step 3 precedes step 4, a negative `limit` is **only** `negative_quantity`; because step 4 is reached only by a non-negative integer, `limit == 0` and `limit > 200` are **only** `pagination_out_of_range`.
+
+```text
+limit=true  → non_integer_quantity      limit=-1  → negative_quantity
+limit=1.5   → non_integer_quantity      offset=-1 → negative_quantity
+limit=abc   → non_integer_quantity      limit=0   → pagination_out_of_range
+limit=200   → accepted                  limit=201 → pagination_out_of_range
+offset=0    → accepted
+```
+
+**An explicitly supplied invalid pagination value is rejected, never silently clamped, coerced, rounded or ignored.**
+
+**Date-range conflict.** For `created_before <= created_from` the exact structured error is HTTP `422`, `code: invalid_date`, **`field: created_before`**, `value:` the supplied `created_before` value. The Russian `message` explains that the end of the period must be later than its beginning, and the Russian `next_action` tells the user to select an end date later than the start date. Do not use an undefined synthetic field such as `date_range`.
+
+#### Never returned
+
+The raw persisted summary, raw `metadata_json`, `entity_id`, internal entity IDs reached by any route, raw table names, stack traces, SQL, filesystem paths, raw payloads, secrets, and any reconstruction of sensitive client notes, allergies, addresses, wishes or feedback text. The read model is built from `audit_logs` alone and joins no business table.
+
+#### Read-only guarantees
+
+Reading the journal writes no AuditLog record, mutates no business table, creates no file, changes no setting, triggers no regeneration, and performs no cleanup or normalization of historical rows. AuditLog stays append-only — the presenter changes only what is shown, never what is stored.
+
+Ordering is `created_at DESC, id DESC`. Unbounded history is never returned.
 
 ## Workshop profile settings API
 
@@ -1170,7 +1311,7 @@ Contract rules:
 
 **Clear is row deletion.** `PUT` with `tax_rate_percent: null` deletes the `default_tax_rate` `AppSetting` row and nothing else. It never touches the legacy `tax.default_rate` placeholder row, which is a different key and is never read, reinterpreted, migrated, or rewritten. The deletion and its `AuditLog` insert share one transaction, and a failed audit insert rolls the deletion back. Clearing when the row is already absent is a no-op: no delete, no timestamp change, no `AuditLog`, and no message claiming a change. No nullable-column migration, sentinel value, empty-string storage, new settings table, or parallel settings store is authorized — unconfigured is the absence of the row.
 
-The endpoints themselves do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. `CR-008` decided the C2 contract and divided it into `C2-I` (**merged**, PR #151), `C2-II` (**merged**, PR #152), and `C2-III`, which is now subdivided into `C2-III-A` (**merged**, PR #154) and `C2-III-B` (`IMPLEMENTED ON PR BRANCH — NOT MERGED`, PR #157; merged `main` keeps the pre-`C2-III-B` Reports runtime until it merges). The `C2-I` readiness estimate reads the setting through the existing C1 service and writes nothing; `C2-II` reads it again inside the production transaction through the same service and persists immutable snapshots. The `GET`/`PUT` endpoints themselves are unchanged by both. See the `C2-I` financial estimate extension under production readiness and the `C2-II` financial snapshot extension under production confirmation.
+The endpoints themselves do not calculate tax, do not calculate margin, do not touch orders, production batches, stock, reports, or documents, and never mutate historical records. `CR-008` decided the C2 contract and divided it into `C2-I` (**merged**, PR #151), `C2-II` (**merged**, PR #152), and `C2-III`, which was subdivided into `C2-III-A` (**merged**, PR #154) and `C2-III-B` (**merged**, PR #157). C2 is **COMPLETED**. The `C2-I` readiness estimate reads the setting through the existing C1 service and writes nothing; `C2-II` reads it again inside the production transaction through the same service and persists immutable snapshots. The `GET`/`PUT` endpoints themselves are unchanged by both. See the `C2-I` financial estimate extension under production readiness and the `C2-II` financial snapshot extension under production confirmation.
 
 ## Orders write validation contract
 

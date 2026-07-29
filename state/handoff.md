@@ -1294,7 +1294,7 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-II closure and C2-III subdivision handoff (2026-07-28)
 
-> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III` LIFECYCLE.** The `C2-II` closure evidence below stands. Its § *Next steps*, and its statement that there is no financial presentation in the UI, were true when written, before PR #154 merged. `C2-III-A` is now `DONE — MERGED AND EXACT-HEAD VERIFIED` and `C2-III-B` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` (PR #157); its statement that reports read no snapshots remains true of merged `main` only. See § *C2-III-B snapshot-backed reports implementation handoff (2026-07-28)* at the end of this file for the current state.
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III` LIFECYCLE.** The `C2-II` closure evidence below stands. Its § *Next steps*, and its statement that there is no financial presentation in the UI, were true when written, before PR #154 merged. `C2-III-A` merged as PR #154 and `C2-III-B` merged as PR #157; both are `DONE — MERGED AND EXACT-HEAD VERIFIED`, **C2 is `COMPLETED`**, and its statement that reports read no snapshots no longer describes merged `main`. See § *C2 closure and C3-I AuditLog authorization handoff (2026-07-29)* at the end of this file for the current state.
 
 `C2-II — Persist transactional production financial snapshots` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`**. The `C2-II` handoff section above is preserved as history.
 
@@ -1370,7 +1370,7 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-III-A closure and C2-III-B authorization handoff (2026-07-28)
 
-> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III-B` LIFECYCLE.** The `C2-III-A` closure evidence below stands and is not reopened. Its § *What a reviewer should know about the current state* and § *What the next task must do* describe `C2-III-B` as unstarted, unassigned and startable only from a future `main`; that was true when written and is now **superseded**. `C2-III-B` is implemented on PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, and is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. Its statement that reports are not snapshot-backed remains true **of merged `main` only**, which keeps the old Reports runtime until PR #157 merges. See § *C2-III-B snapshot-backed reports implementation handoff (2026-07-28)* at the end of this file.
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III-B` LIFECYCLE.** The `C2-III-A` closure evidence below stands and is not reopened. Its § *What a reviewer should know about the current state* and § *What the next task must do* describe `C2-III-B` as unstarted, unassigned and startable only from a future `main`; that was true when written and is now **superseded**. `C2-III-B` merged as PR #157 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`, so **C2 is `COMPLETED`** and its statement that reports are not snapshot-backed no longer describes merged `main`. See § *C2 closure and C3-I AuditLog authorization handoff (2026-07-29)* at the end of this file.
 
 `C2-III-A — Order and ProductionBatch financial presentation` is:
 
@@ -1407,7 +1407,7 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 ### What a reviewer should know about the current state
 
 - Merged `main` carries the `C2-I` readiness estimate, the `C2-II` transactional snapshots and migration `0019`, and the `C2-III-A` financial presentation in the Orders and `ProductionBatch` UI.
-- **Reports are still not snapshot-backed on merged `main`.** There, `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` read no `ProductionBatch` financial snapshots. *(Superseded for the branch: PR #157 implements them; merged `main` keeps this behaviour until that PR merges.)*
+- **Reports are still not snapshot-backed on merged `main`.** There, `/reports`, the report DTOs, the overview finance summary and `Сводка мастерской` read no `ProductionBatch` financial snapshots. *(Superseded: PR #157 merged, so reports on `main` now read the persisted snapshots.)*
 - The durable contracts remain `docs/decisions/0012-c2-financial-calculation-snapshots.md` and `docs/reports.md`. Neither was rewritten or reinterpreted; only the slice lifecycle and the `C2-III-B` authorization were recorded.
 
 ### What the next task must do
@@ -1424,6 +1424,8 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 Other obligations are unchanged: the Restore decision, macOS packaging, installation verification, the packaged update flow, and the full release-candidate smoke all remain open. Product release readiness is not claimed.
 
 ## C2-III-B report aggregation contract clarification handoff (2026-07-28)
+
+> **PARTIALLY SUPERSEDED — HISTORICAL FOR THE `C2-III-B` LIFECYCLE.** The accepted aggregation contract recorded below stands and is unchanged. Its § *Next steps*, and every statement that `C2-III-B` is unimplemented, unmerged or has no PR number, were true when written and are **superseded**: `C2-III-B` merged as PR #157 (merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`), and **C2 is `COMPLETED`**. See § *C2 closure and C3-I AuditLog authorization handoff (2026-07-29)* at the end of this file.
 
 This is a **documentation-only** handoff. No backend or frontend production code, test, schema, migration, dependency, lockfile, package script, smoke runner or generated report document was changed.
 
@@ -1485,6 +1487,8 @@ Other obligations are unchanged: the Restore decision, macOS packaging, installa
 
 ## C2-III-B snapshot-backed reports implementation handoff (2026-07-28)
 
+> **SUPERSEDED — the slice is now merged.** What was built, and the review corrections, stand. Its status line `IMPLEMENTED ON PR BRANCH — NOT MERGED`, its § *Next steps* asking for review and merge, and its statement that C2 is not complete were true when written and are superseded: PR #157 merged at `87410910aad472343c057f0bcbfcc3797f8b8e09` on `2026-07-28T22:21:18Z`, and **C2 is `COMPLETED`**. See § *C2 closure and C3-I AuditLog authorization handoff (2026-07-29)* at the end of this file.
+
 `C2-III-B — Snapshot-backed reports and report documents` is:
 
 ```text
@@ -1534,3 +1538,273 @@ C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
 - No change to Orders readiness, production confirmation, `ProductionBatch` persistence, `ProductionBatch` list or detail UI, the `C2-III-A` presentation modules, tax-rate Settings behaviour, or stock and production transactions.
 - Report reads remain read-only: no audit record, no file, no business mutation.
 - No accounting, tax filing, VAT, tax regimes, date filters, charts, forecasting, analytics, tax-rate averages, DOCX, automatic document regeneration, `C3`, `C4`, Restore, packaging or release work. No dependency and no lockfile changed.
+
+## C2 closure and C3-I AuditLog authorization handoff (2026-07-29)
+
+### Verified lifecycle
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C2-III-B — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-I — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+`VERIFIED FROM MERGED PR #157 EVIDENCE — NOT RE-EXECUTED IN THIS DOCUMENTATION PR`
+
+| Item | Verified value |
+|---|---|
+| PR | #157 — `C2-III-B — Implement snapshot-backed reports and report documents` |
+| State | `MERGED`, base `main`, not a draft |
+| Head branch | `codex/c2-iii-b-snapshot-backed-reports` |
+| Final reviewed head | `305d5421e79b8cb833df9588e705e9418781e021` |
+| Merge commit | `87410910aad472343c057f0bcbfcc3797f8b8e09` |
+| Merged at | `2026-07-28T22:21:18Z` |
+| `origin/main` at branch start | `87410910aad472343c057f0bcbfcc3797f8b8e09` — equal to the merge commit, with no commit after it |
+| Open pull requests at branch start | none |
+| Exact-head API smoke | `PASS — 53 checks / 0 failures` |
+| Exact-head browser smoke | `PASS — FULL AUTOMATED SMOKE PASSED` |
+| Complete backend suite | `942 passed / 0 failed / 0 skipped` |
+| Focused report frontend suite | `54 pass / 0 fail` |
+| All 17 frontend test scripts | `PASS` |
+| Production build | `PASS` |
+| `frontend/src/main.ts` | `6398` lines |
+
+### What this pull request did
+
+Exactly two things: it closed the merged C2 lifecycle, and it defined and authorized one bounded C3 runtime slice. It is documentation-only — every changed file ends in `.md`, and no runtime code, test, schema, migration, dependency, lockfile, package script, generated artifact, smoke runner or user data changed.
+
+Merged `main` reports now read persisted `ProductionBatch` financial snapshots. The former paired sale-price/cost margin derivation is gone from `main`, and every active document that still claimed otherwise was corrected.
+
+### The accepted `C3-I` contract
+
+Durable contract: **`docs/audit-log.md`**. It is authoritative; `docs/api.md`, `docs/domain-model.md`, `docs/roadmap.md` § PR27 and `docs/implementation-plan.md` § C3 defer to it.
+
+- **Purpose.** `Журнал действий` — a plain-language history of important workshop actions, so the user can understand what happened without opening SQLite, JSON, logs, GitHub or a terminal. Not a technical admin console, database browser, SIEM, analytics, rollback, event editor or debugging console.
+- **Actor field — `actor_type`, not `source`.** The API keeps the persisted column name and exposes `actor_type` / `actor_label`. **No `source` field is exposed or authorized.** `system` and `user` are **actor identities, not process origins**, so mapping them onto `source` would silently change the field's meaning. Labels: `system → Система`, `user → Пользователь`, anything else → `Другой инициатор`. The historical process vocabulary (`manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore`) is aspirational — no call site persists that dimension — so a true `source` is **deferred** to a separately authorized decision and write-side slice. No column rename, no migration, no backfill, no write-call-site change.
+- **API.** Exactly one new endpoint, `GET /api/audit-logs`. `GET /api/audit-logs/{id}` is **explicitly superseded for the MVP**. No create, update, delete, rollback or export endpoint.
+- **Safe read model.** `items`, `total`, `limit`, `offset`, `filter_options`; item fields exactly `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `display_summary`, `actor_type`, `actor_label`. The raw persisted summary, raw `metadata_json`, `entity_id`, table names, stack traces, SQL, paths, payloads and secrets are never returned, and sensitive client text is never reconstructed. Unknown codes fall back to `Другое действие`, `Другая сущность`, `Другой инициатор`.
+- **`display_summary`.** The raw `audit_logs.summary` is **never returned verbatim and is never an unrestricted fallback**. A focused backend presenter (`AuditLogDisplayPresenter` or equivalent) resolves a safe Russian value from the known `action` — no internal IDs, no metadata, no business-table join, no historical rewrite, no sensitive text. A suffix may contribute only through the seven-condition rule and the exact 21-row allowlist of `docs/audit-log.md` § 6.4; unknown actions and unrecognized summary shapes fall back to `action_label`.
+- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, accepted integer `1..200`; `offset` default `0`, accepted integer `>= 0`. Ordered precedence — missing → default; wrong type/fractional/boolean/malformed → `non_integer_quantity`; negative → `negative_quantity`; non-negative `limit` of `0` or `> 200` → `pagination_out_of_range` — so every invalid input has exactly one code. Invalid values are **rejected, never silently clamped**. No unbounded history.
+- **Filters.** `created_from` inclusive, `created_before` exclusive, plus `action`, `entity_type`, `actor_type`, `limit`, `offset` — **no `source` filter** — combined with AND, ISO-8601 UTC, structured `422` with the existing `invalid_date` code for malformed input, options derived from values that actually exist as rows in `audit_logs`, no writes.
+- **Validation wire shape.** `HTTPException(status_code=422, detail=issue.__dict__)` means the `DomainIssue` is the **value of `detail`**: the body is `{"detail": {"code", "message", "field", "value", "next_action"}}`. Codes are `invalid_date`, `non_integer_quantity`, `negative_quantity`, plus the one new authorized enum member `PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`. The date-range conflict returns `field: created_before`.
+- **Read-only.** No audit record, no business mutation, no file, no setting change, no regeneration, no normalization of historical rows. Append-only preserved — the presenter changes only what is shown.
+- **Frontend.** `/settings/audit-log`, title `Журнал действий`, full state set including filtered-empty and refresh-failure-retaining-previous-list, keyboard accessible, narrow viewport safe. Filters are date, action, entity and actor. No raw codes, no raw persisted summary, no JSON, `metadata_json`, table names, internal IDs, stack traces, SQL, developer paths or GitHub/PR terminology. Focused modules only; `frontend/src/main.ts` must not grow net from its current `6398` lines.
+
+### Findings the implementer must not rediscover
+
+- **Current write vocabulary.** 50 `action` codes, 19 `entity_type` values, and two `actor_type` values — `system` (default) and `user` (only `tax_rate_setting_changed`). These were read from merged-`main` production call sites, **not** by querying a database containing a row for every code, so a real database may hold fewer of them and an older one may hold values no current call site produces. `filter_options` is therefore derived from rows that actually exist, and the unknown-code fallbacks are mandatory. Required Russian labels are tabulated in `docs/audit-log.md` § 11.
+- **`ImportDraft` is PascalCase** while every other `entity_type` is snake_case. Match it as persisted; do not normalize, alias or rewrite it.
+- **Most persisted summaries are English** (`Client created: …`, `Order #4 produced as batch #7`); only the `onboarding.*`, `demo_data.*` and `tax_rate_setting_changed` summaries are Russian, and several embed internal record IDs. That is why the raw summary is never returned and `display_summary` is resolved from `action` instead. Rewriting history is forbidden; changing what future writes put in a summary is a separate slice.
+- **`client_wish.*` summaries embed the user-authored wish title**, so those actions are excluded from the name-retention allowlist and always render generically as `Пожелание клиента добавлено` and the analogous forms. `client_recipe.*` is excluded on the same reasoning, because an individual-formula title can describe a client's personal condition.
+- **Coverage gap:** backups, exports, report-document generation and workshop-profile updates write **no** audit record on merged `main`. `Журнал действий` will not show them. Do not add those write call sites in `C3-I`.
+- **Route architecture:** every existing frontend route is a single path segment resolved through a flat exact-match table in `frontend/src/main.ts`. `/settings/audit-log` is the first nested route, so route resolution, the navigation entry under `Данные и настройки`, and the nested-path static fallback all need handling.
+
+### Next steps
+
+1. Merge this documentation pull request. Do not merge it here and do not enable auto-merge.
+2. **Only after it merges**, implement `C3-I` as one bounded backend-plus-frontend read-only slice on a new branch from clean `origin/main`. Do not start it from this unmerged branch and do not assign a PR number before GitHub creates it.
+3. Keep `C3-I` inside `docs/audit-log.md`. No second C3 slice is authorized.
+4. Leave `CR-004` and `CR-006` inactive; do not reopen ADR 0011, ADR 0012, `CR-007`, `CR-008` or the accepted report contract.
+5. **C4, Restore, packaging, the update flow and release-candidate work remain inactive.** Product release readiness is not claimed.
+
+### Verification performed here
+
+Level 0 documentation checks only: `git status --short --untracked-files=all`, `git diff --check`, `git diff --stat`, `git diff --name-only`, and the three-dot `origin/main...HEAD` variants, plus the semantic consistency audit across active documentation and state. Every changed file ends in `.md`. **Backend tests, frontend tests, the build, API smoke, browser smoke, migration smoke, packaging smoke and release smoke were not run.** No runtime command is claimed as executed.
+
+## C3-I contract correction handoff (2026-07-29, PR #158)
+
+Review of PR #158 at head `25d48f3848b9277ab31f768fcbbbf35505342a1e` accepted the **C2 lifecycle closure** and the **bounded C3 direction**, and rejected the C3 contract for two semantic contradictions and one API ambiguity. All three are corrected in the same PR; no new branch and no new PR were created. `C2 — COMPLETED` and `C2-III-B — DONE — MERGED AND EXACT-HEAD VERIFIED` are untouched.
+
+### What changed in the contract
+
+| Before | After |
+|---|---|
+| `source`, `source_label`, `source` filter | `actor_type`, `actor_label`, `actor_type` filter |
+| unknown source → `Другой источник` | unknown actor → `Другой инициатор` |
+| `actor_type → source` described as a harmless read-time rename | rename rejected; `system` / `user` are **actors, not process origins**; a true `source` is **deferred** until write call sites persist that dimension |
+| item field `summary`, returned verbatim from `audit_logs.summary` | item field `display_summary`, produced by a backend presenter; the raw persisted summary is **never returned** |
+| "the existing structured Russian validation response" | the exact body `{"detail": {"code", "message", "field", "value", "next_action"}}` |
+| pagination bounds stated without rejection semantics | explicit reject-not-clamp rules and error codes |
+| "actual persisted values" | "current write vocabulary — values producible by merged-`main` production call sites" |
+
+### Corrected item shape
+
+```text
+id
+created_at
+action
+action_label
+entity_type
+entity_label
+display_summary
+actor_type
+actor_label
+```
+
+### Corrected filters
+
+```text
+created_from
+created_before
+action
+entity_type
+actor_type
+limit
+offset
+```
+
+There is no `source` filter.
+
+### Actor labels
+
+```text
+system → Система
+user   → Пользователь
+other  → Другой инициатор
+```
+
+### `display_summary` rules the implementer must follow
+
+Resolved from the known `action`; Russian and user-readable; the raw persisted summary is never an API or frontend fallback; no internal IDs; no raw metadata; no business-table join; no historical row rewritten; no wish text, client notes, allergies, addresses or feedback bodies; a known safe business name only through the explicit action-specific allowlist in `docs/audit-log.md` § 6.4, which **excludes `client_wish.*` and `client_recipe.*`**; unknown actions and unrecognized summary shapes fall back to the resolved `action_label`.
+
+```text
+Ingredient lot created for ingredient #12  →  Создана партия компонента
+Order #4 produced as batch #7              →  Производство заказа подтверждено
+Client wish created: Убрать компонент X    →  Пожелание клиента добавлено
+```
+
+### Validation
+
+```json
+{
+  "detail": {
+    "code": "invalid_date",
+    "message": "Russian user-readable message",
+    "field": "created_from",
+    "value": "the rejected value",
+    "next_action": "Russian user-readable next action"
+  }
+}
+```
+
+Codes: `invalid_date` for malformed dates and for `created_before <= created_from`, never a silent empty result; `non_integer_quantity` for non-integer, fractional, boolean or malformed `limit`/`offset`; `negative_quantity` for negative values; `pagination_out_of_range` for a **non-negative** `limit` outside `1..200`. The last is the **one** new `DomainIssueCode` member authorized by `C3-I` — an enum addition, not a schema change or migration.
+
+Pagination: omitted `limit` → `50`, accepted integer `1..200`; omitted `offset` → `0`, accepted integer `>= 0`. An explicitly supplied invalid value is **rejected, never silently clamped, coerced, rounded or ignored**.
+
+> **Refined by the second review — see § *C3-I contract ambiguity resolution handoff (2026-07-29, PR #158, second review)* at the end of this file.** The codes above are now governed by an ordered precedence in which the first match wins, so `limit=-1` is only `negative_quantity` and `limit=0` is only `pagination_out_of_range`. The date-range conflict returns `field: created_before`, never a synthetic `date_range`.
+
+### Still true from the previous handoff
+
+The lifecycle table, the PR #157 evidence, the current write vocabulary (50 actions, 19 entity types, two actor types), the `ImportDraft` PascalCase note, the audit coverage gap for backups/exports/report documents/workshop profile, and the nested-route note for `/settings/audit-log` all stand unchanged.
+
+### Verification
+
+Level 0 documentation checks only, plus the semantic consistency audit. **Backend tests, frontend tests, the build and every smoke were not run** for this correction. No runtime code, test, schema, migration, dependency, lockfile, package script, generated file or user data changed. PR #158 stays open and unmerged with auto-merge disabled.
+
+## C3-I contract ambiguity resolution handoff (2026-07-29, PR #158, second review)
+
+The second review at head `773af68ab6bc2c27a767872d98744d128b608261` accepted `actor_type` / `actor_label`, the absent process-source field and filter, the backend-owned `display_summary`, the exclusion of raw metadata and internal IDs, the `{"detail": DomainIssue}` envelope, the `pagination_out_of_range` enum member, the C2 closure, the C3-I authorization and C4 staying inactive. **None of those is reopened.** Two ambiguities are fixed here.
+
+### Corrected raw-summary rule
+
+```text
+The raw persisted summary is never returned verbatim and is never used
+as an unrestricted API or frontend fallback.
+
+A suffix extracted from the persisted summary may contribute to
+display_summary only when all of the following are true:
+
+1. the action is explicitly allowlisted;
+2. the persisted summary starts with the exact prefix assigned to that action;
+3. the remaining suffix is non-empty;
+4. the action is authorized to retain that category of business name;
+5. the suffix is rendered only as plain text;
+6. the suffix contains no internal identifier supplied by the presenter;
+7. no database lookup or metadata lookup is performed.
+
+Otherwise display_summary falls back to the generic action-specific phrase.
+```
+
+Still prohibited: the complete persisted summary; its English technical prefix; unrestricted fallback use; summaries containing internal IDs; wish text; individual-recipe titles; metadata; business-table joins; rewriting historical rows.
+
+### The exact allowlist — 21 actions, verified from production call sites
+
+| `action` | Exact prefix | Suffix | Fallback | Template |
+|---|---|---|---|---|
+| `client.created` | `Client created: ` | client full name | `Клиент создан` | `Клиент создан: <имя>` |
+| `client.updated` | `Client updated: ` | client full name | `Клиент изменён` | `Клиент изменён: <имя>` |
+| `client.deactivated` | `Client deactivated: ` | client full name | `Клиент архивирован` | `Клиент архивирован: <имя>` |
+| `ingredient.created` | `Ingredient created: ` | ingredient name | `Компонент создан` | `Компонент создан: <название>` |
+| `ingredient.updated` | `Ingredient updated: ` | ingredient name | `Компонент изменён` | `Компонент изменён: <название>` |
+| `ingredient.deactivated` | `Ingredient deactivated: ` | ingredient name | `Компонент архивирован` | `Компонент архивирован: <название>` |
+| `packaging_item.created` | `Packaging item created: ` | packaging name | `Тара создана` | `Тара создана: <название>` |
+| `packaging_item.updated` | `Packaging item updated: ` | packaging name | `Тара изменена` | `Тара изменена: <название>` |
+| `packaging_item.deactivated` | `Packaging item deactivated: ` | packaging name | `Тара архивирована` | `Тара архивирована: <название>` |
+| `recipe_template.created` | `Recipe template created: ` | recipe name | `Рецепт создан` | `Рецепт создан: <название>` |
+| `recipe_template.deactivated` | `Recipe template deactivated: ` | recipe name | `Рецепт архивирован` | `Рецепт архивирован: <название>` |
+| `order.created` | `Order created: ` | order product name | `Заказ создан` | `Заказ создан: <продукт>` |
+| `order.updated` | `Order updated: ` | order product name | `Заказ изменён` | `Заказ изменён: <продукт>` |
+| `order.cancelled` | `Order cancelled: ` | order product name | `Заказ отменён` | `Заказ отменён: <продукт>` |
+| `order.archived` | `Order archived: ` | order product name | `Заказ архивирован` | `Заказ архивирован: <продукт>` |
+| `catalog_category.created` | `Catalog category created: ` | reference name | `Категория справочника создана` | `… создана: <название>` |
+| `catalog_category.updated` | `Catalog category updated: ` | reference name | `Категория справочника изменена` | `… изменена: <название>` |
+| `catalog_category.archived` | `Catalog category archived: ` | reference name | `Категория справочника архивирована` | `… архивирована: <название>` |
+| `catalog_tag.created` | `Catalog tag created: ` | reference name | `Тег справочника создан` | `… создан: <название>` |
+| `catalog_tag.updated` | `Catalog tag updated: ` | reference name | `Тег справочника изменён` | `… изменён: <название>` |
+| `catalog_tag.archived` | `Catalog tag archived: ` | reference name | `Тег справочника архивирован` | `… архивирован: <название>` |
+
+Full table with write-call-site locations: `docs/audit-log.md` § 6.4.3.
+
+**Excluded and never eligible:** `client_wish.*` (user-authored wish title); `client_recipe.*` (individual-formula title); every ID-bearing action — `ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created`, `production_confirmed`, `recipe_version.created`; and every catalog-assignment action, whose summary is the fixed string `Catalog category assigned` or `Catalog tags updated`. **The allowlist is the exact 21-row table, not a prefix glob** — `ingredient.catalog_tags.updated` matches `ingredient.*` but is not allowlisted.
+
+**Fallback behaviour:** prefix mismatch, empty suffix, non-allowlisted action, unknown action, or any of the seven conditions failing → the generic action-specific phrase from `docs/audit-log.md` § 6.6, which for an unknown action is the resolved `action_label`.
+
+### Pagination validation order
+
+```text
+1. Missing value        limit → default 50; offset → default 0
+2. Wrong type or representation
+   non-integer, fractional, boolean, malformed string  → non_integer_quantity
+3. Negative integer     limit < 0, offset < 0          → negative_quantity
+4. Non-negative limit outside accepted range
+   limit == 0, limit > 200                             → pagination_out_of_range
+5. Accepted             limit: integer 1..200; offset: integer >= 0
+```
+
+First match wins, so `limit=-1` is only `negative_quantity` and `limit=0` is only `pagination_out_of_range`.
+
+```text
+limit=true  → non_integer_quantity
+limit=1.5   → non_integer_quantity
+limit=abc   → non_integer_quantity
+limit=-1    → negative_quantity
+offset=-1   → negative_quantity
+limit=0     → pagination_out_of_range
+limit=201   → pagination_out_of_range
+limit=200   → accepted
+offset=0    → accepted
+```
+
+Nothing is silently clamped, coerced, rounded or ignored.
+
+### Date-range conflict
+
+```text
+HTTP status: 422
+code: invalid_date
+field: created_before
+value: the supplied created_before value
+```
+
+Russian `message`: the end of the period must be later than its beginning. Russian `next_action`: select an end date later than the start date. No synthetic `date_range` field.
+
+### Enum decision preserved
+
+`PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"` stays the single new `DomainIssueCode` authorized by `C3-I`. It must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`. Bounded enum addition, not a schema migration.
+
+### Verification
+
+Level 0 documentation checks only, plus the semantic consistency audit. **Backend tests, frontend tests, the build and every smoke were not run.** No runtime code, test, schema, migration, dependency, lockfile, package script, generated file or user data changed. PR #158 stays open and unmerged with auto-merge disabled.
