@@ -5,21 +5,28 @@ import {
   FORBIDDEN_ITEM_KEYS,
   appendAuditLogPage,
   auditLogAllRowsLoaded,
+  auditLogFiltersEqual,
   auditLogItemDtoIsValid,
   auditLogListDtoIsValid,
-  auditLogRequestUrl,
+  auditLogRequestPlan,
   auditLogValidationIssue,
-  canonicalUtcFromLocalInput,
 } from '../dist-tests/audit-log-workspace/audit-log-contract.js';
 import {
+  AMBIGUOUS_LOCAL_TIME_MESSAGE,
+  INVALID_LOCAL_TIME_MESSAGE,
+  NONEXISTENT_LOCAL_TIME_MESSAGE,
+  convertLocalInputToUtc,
+} from '../dist-tests/audit-log-workspace/audit-log-local-time.js';
+import {
   AUDIT_LOG_ALL_LOADED,
-  AUDIT_LOG_CLEAR_FILTERS_LABEL,
   AUDIT_LOG_EMPTY_TITLE,
   AUDIT_LOG_FILTERED_EMPTY_TITLE,
+  AUDIT_LOG_FILTERS_PENDING,
   AUDIT_LOG_INITIAL_FAILURE,
   AUDIT_LOG_LOAD_MORE_FAILURE,
   AUDIT_LOG_LOAD_MORE_LABEL,
   AUDIT_LOG_REFRESH_FAILURE,
+  AUDIT_LOG_FILTER_FAILURE,
   AUDIT_LOG_TITLE,
   auditLogPresentation,
   auditLogWorkspaceMarkup,
@@ -27,20 +34,45 @@ import {
 } from '../dist-tests/audit-log-workspace/audit-log-presentation.js';
 import { AuditLogWorkspaceRuntime } from '../dist-tests/audit-log-workspace/audit-log-workspace.js';
 import { bindAuditLogWorkspaceControls } from '../dist-tests/audit-log-workspace/audit-log-bindings.js';
+import { renderAuditLogWithFocus, syncAuditLogFilterState } from '../dist-tests/audit-log-workspace/audit-log-dom.js';
 import { sectionForLocation } from '../dist-tests/audit-log-workspace/app-navigation-routes.js';
 
 // --------------------------------------------------------------------------
 // Minimal read-only view over rendered markup
+//
+// Extended into a small mutable fake DOM so the targeted-update and focus
+// modules can be exercised against the *real* rendered markup rather than a
+// hand-built fixture that could drift from it.
 // --------------------------------------------------------------------------
 
 const voidTags = new Set(['br', 'hr', 'img', 'input', 'link', 'meta']);
 
+/** The single fake document the focus module reads `activeElement` from. */
+const fakeDocument = { activeElement: null };
+
 class ViewNode {
-  constructor(tag = '', attrs = {}, text = '') { this.tag = tag; this.attrs = attrs; this.children = []; this.text = text; }
-  append(node) { this.children.push(node); }
+  constructor(tag = '', attrs = {}, text = '') {
+    this.tag = tag;
+    this.attrs = attrs;
+    this.children = [];
+    this.text = text;
+    this.parent = null;
+  }
+  get tagName() { return this.tag.toUpperCase(); }
+  get disabled() { return Object.hasOwn(this.attrs, 'disabled'); }
+  set disabled(value) { if (value) this.attrs.disabled = ''; else delete this.attrs.disabled; }
+  append(node) { node.parent = this; this.children.push(node); }
   get textContent() { return this.tag === '#text' ? this.text : this.children.map((child) => child.textContent).join(''); }
+  set textContent(value) { this.children = [new ViewNode('#text', {}, value)]; }
   getAttribute(name) { return this.attrs[name] ?? null; }
+  setAttribute(name, value) { this.attrs[name] = String(value); }
+  removeAttribute(name) { delete this.attrs[name]; }
   hasAttribute(name) { return Object.hasOwn(this.attrs, name); }
+  contains(node) { for (let cursor = node; cursor; cursor = cursor.parent) if (cursor === this) return true; return false; }
+  focus() { fakeDocument.activeElement = this; }
+  get selectionStart() { return this.tag === 'input' ? (this._selectionStart ?? 0) : undefined; }
+  get selectionEnd() { return this.tag === 'input' ? (this._selectionEnd ?? 0) : undefined; }
+  setSelectionRange(start, end) { this._selectionStart = start; this._selectionEnd = end; }
   querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
   querySelectorAll(selector) {
     const found = [];
@@ -87,6 +119,25 @@ function renderView(markup) {
 
 const renderFeedback = (tone, message) => `<div data-feedback-tone="${tone}"><p>${message}</p></div>`;
 
+/**
+ * Run `fn` with a pinned host time zone.
+ *
+ * DST behavior is a property of the zone, so an assertion about a spring gap is
+ * meaningless unless the zone is stated. Pinning it here — rather than relying
+ * on how the suite was invoked — makes these tests deterministic under both the
+ * default run and the mandatory `TZ=Europe/Amsterdam` run, with no skips.
+ */
+function withTimeZone(timeZone, fn) {
+  const previous = process.env.TZ;
+  process.env.TZ = timeZone;
+  try {
+    return fn();
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+}
+
 // --------------------------------------------------------------------------
 // Fixtures
 // --------------------------------------------------------------------------
@@ -132,20 +183,20 @@ function page(items, total = items.length, options = FILTER_OPTIONS) {
 }
 
 function harness() {
-  const state = { active: true, renders: 0, polite: [], assertive: [], urls: [], reads: [] };
+  const state = { active: true, renders: 0, syncs: [], polite: [], assertive: [], urls: [], reads: [] };
   const runtime = new AuditLogWorkspaceRuntime({
     read: (url) => { state.urls.push(url); const d = deferred(); state.reads.push(d); return d.promise; },
     ownsRoute: () => state.active,
     render: () => { state.renders += 1; },
     announce: (message, kind) => state[kind === 'assertive' ? 'assertive' : 'polite'].push(message),
+    syncFilters: (sync) => state.syncs.push(sync),
   });
-  runtime.enter();
   return { state, runtime };
 }
 
 async function loaded(payload = page([item()])) {
   const { state, runtime } = harness();
-  runtime.load();
+  runtime.enter();
   state.reads.at(-1).resolve(payload);
   await flush();
   return { state, runtime };
@@ -157,6 +208,10 @@ function view(runtime) {
 
 function markupView(runtime) {
   return renderView(auditLogWorkspaceMarkup(view(runtime), renderFeedback));
+}
+
+function queryOf(url) {
+  return new URLSearchParams(url.split('?')[1] ?? '');
 }
 
 // --------------------------------------------------------------------------
@@ -211,8 +266,9 @@ test('malformed filter options are rejected', () => {
 // --------------------------------------------------------------------------
 
 test('the request uses only the authorized parameter names', () => {
-  const url = auditLogRequestUrl({ ...EMPTY_AUDIT_LOG_FILTERS, action: 'client.created', entityType: 'client', actorType: 'user' }, { limit: 50, offset: 0 });
-  const parameters = new URLSearchParams(url.split('?')[1]);
+  const plan = auditLogRequestPlan({ ...EMPTY_AUDIT_LOG_FILTERS, action: 'client.created', entityType: 'client', actorType: 'user' }, { limit: 50, offset: 0 });
+  assert.equal(plan.ok, true);
+  const parameters = queryOf(plan.url);
   assert.deepEqual([...parameters.keys()].sort(), ['action', 'actor_type', 'entity_type', 'limit', 'offset']);
   assert.equal(parameters.get('action'), 'client.created');
   assert.equal(parameters.get('entity_type'), 'client');
@@ -220,29 +276,121 @@ test('the request uses only the authorized parameter names', () => {
 });
 
 test('no source filter and no free-text search parameter is ever sent', () => {
-  const url = auditLogRequestUrl({ ...EMPTY_AUDIT_LOG_FILTERS, action: 'client.created' }, { limit: 50, offset: 0 });
+  const plan = auditLogRequestPlan({ ...EMPTY_AUDIT_LOG_FILTERS, action: 'client.created' }, { limit: 50, offset: 0 });
   for (const forbidden of ['source', 'source_label', 'search', 'q', 'entity_id', 'metadata']) {
-    assert.equal(url.includes(forbidden), false, forbidden);
+    assert.equal(plan.url.includes(forbidden), false, forbidden);
   }
 });
 
 test('blank filters are omitted rather than sent empty', () => {
-  const url = auditLogRequestUrl(EMPTY_AUDIT_LOG_FILTERS, { limit: 50, offset: 0 });
-  assert.equal(url, '/api/audit-logs?limit=50&offset=0');
+  const plan = auditLogRequestPlan(EMPTY_AUDIT_LOG_FILTERS, { limit: 50, offset: 0 });
+  assert.deepEqual(plan, { ok: true, url: '/api/audit-logs?limit=50&offset=0' });
 });
 
-test('a local date is converted to the canonical backend UTC instant', () => {
-  const converted = canonicalUtcFromLocalInput('2026-07-01T10:30');
-  assert.match(converted, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
-  const expected = new Date(2026, 6, 1, 10, 30, 0, 0).toISOString().replace(/\.\d{3}Z$/, 'Z');
-  assert.equal(converted, expected);
+test('filters are compared field by field, not by identity', () => {
+  const left = { ...EMPTY_AUDIT_LOG_FILTERS, action: 'client.created' };
+  assert.equal(auditLogFiltersEqual(left, { ...left }), true);
+  assert.equal(auditLogFiltersEqual(left, { ...left, action: 'other' }), false);
+  assert.equal(auditLogFiltersEqual(EMPTY_AUDIT_LOG_FILTERS, { ...EMPTY_AUDIT_LOG_FILTERS }), true);
 });
 
-test('an incomplete or impossible local date produces no parameter', () => {
-  for (const value of ['', '2026-07', '2026-07-01', '01.07.2026 10:30', '2026-02-30T10:00']) {
-    assert.equal(canonicalUtcFromLocalInput(value), null, value);
+// --------------------------------------------------------------------------
+// Local time conversion and DST safety
+// --------------------------------------------------------------------------
+
+test('a blank date is a valid "no filter" conversion', () => {
+  assert.deepEqual(convertLocalInputToUtc(''), { ok: true, value: '' });
+  assert.deepEqual(convertLocalInputToUtc('   '), { ok: true, value: '' });
+});
+
+test('an impossible or incomplete local date is rejected, never normalized', () => {
+  for (const value of ['2026-02-30T10:00', '2026-13-01T10:00', '2026-07', '2026-07-01', '01.07.2026 10:30', 'nonsense']) {
+    const result = convertLocalInputToUtc(value);
+    assert.equal(result.ok, false, value);
+    assert.equal(result.reason, 'invalid', value);
+    assert.equal(result.message, INVALID_LOCAL_TIME_MESSAGE);
   }
-  assert.equal(auditLogRequestUrl({ ...EMPTY_AUDIT_LOG_FILTERS, createdFrom: '2026-07' }, { limit: 50, offset: 0 }).includes('created_from'), false);
+});
+
+test('Europe/Amsterdam spring gap: 02:30 does not exist and is rejected', () => {
+  withTimeZone('Europe/Amsterdam', () => {
+    assert.deepEqual(convertLocalInputToUtc('2026-03-29T01:30'), { ok: true, value: '2026-03-29T00:30:00Z' });
+
+    const gap = convertLocalInputToUtc('2026-03-29T02:30');
+    assert.equal(gap.ok, false);
+    assert.equal(gap.reason, 'nonexistent-local-time');
+    assert.equal(gap.message, NONEXISTENT_LOCAL_TIME_MESSAGE);
+
+    assert.deepEqual(convertLocalInputToUtc('2026-03-29T03:30'), { ok: true, value: '2026-03-29T01:30:00Z' });
+  });
+});
+
+test('Europe/Amsterdam autumn overlap: 02:30 happens twice and is rejected', () => {
+  withTimeZone('Europe/Amsterdam', () => {
+    assert.deepEqual(convertLocalInputToUtc('2026-10-25T01:30'), { ok: true, value: '2026-10-24T23:30:00Z' });
+
+    const overlap = convertLocalInputToUtc('2026-10-25T02:30');
+    assert.equal(overlap.ok, false);
+    assert.equal(overlap.reason, 'ambiguous-local-time');
+    assert.equal(overlap.message, AMBIGUOUS_LOCAL_TIME_MESSAGE);
+
+    assert.deepEqual(convertLocalInputToUtc('2026-10-25T03:30'), { ok: true, value: '2026-10-25T02:30:00Z' });
+  });
+});
+
+test('an explicit seconds component is preserved through conversion', () => {
+  withTimeZone('Europe/Amsterdam', () => {
+    assert.deepEqual(convertLocalInputToUtc('2026-07-01T10:30:45'), { ok: true, value: '2026-07-01T08:30:45Z' });
+  });
+  withTimeZone('UTC', () => {
+    assert.deepEqual(convertLocalInputToUtc('2026-07-01T10:30:45'), { ok: true, value: '2026-07-01T10:30:45Z' });
+  });
+});
+
+test('a zone without a transition accepts every hour around the same dates', () => {
+  withTimeZone('UTC', () => {
+    for (const value of ['2026-03-29T02:30', '2026-10-25T02:30']) {
+      assert.equal(convertLocalInputToUtc(value).ok, true, value);
+    }
+  });
+});
+
+test('a failed conversion refuses the request instead of dropping the filter', () => {
+  withTimeZone('Europe/Amsterdam', () => {
+    const plan = auditLogRequestPlan({ ...EMPTY_AUDIT_LOG_FILTERS, createdFrom: '2026-03-29T02:30' }, { limit: 50, offset: 0 });
+    assert.equal(plan.ok, false);
+    assert.equal(plan.fieldErrors.createdFrom, NONEXISTENT_LOCAL_TIME_MESSAGE);
+    assert.equal(plan.fieldErrors.createdBefore, '');
+  });
+});
+
+test('each date control reports its own conversion failure', () => {
+  withTimeZone('Europe/Amsterdam', () => {
+    const plan = auditLogRequestPlan(
+      { ...EMPTY_AUDIT_LOG_FILTERS, createdFrom: '2026-10-25T02:30', createdBefore: '2026-03-29T02:30' },
+      { limit: 50, offset: 0 },
+    );
+    assert.equal(plan.ok, false);
+    assert.equal(plan.fieldErrors.createdFrom, AMBIGUOUS_LOCAL_TIME_MESSAGE);
+    assert.equal(plan.fieldErrors.createdBefore, NONEXISTENT_LOCAL_TIME_MESSAGE);
+  });
+});
+
+test('a locally impossible date starts no request and keeps the accepted list', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  const requestsBefore = state.reads.length;
+  withTimeZone('Europe/Amsterdam', () => {
+    runtime.setFilter('createdBefore', '2026-03-29T02:30');
+    const started = runtime.applyFilters();
+    assert.deepEqual(started, { accepted: false, reason: 'invalid-local-time' });
+  });
+  assert.equal(state.reads.length, requestsBefore, 'no network request may be issued');
+  const presentation = view(runtime);
+  assert.equal(presentation.fieldErrors.createdBefore, NONEXISTENT_LOCAL_TIME_MESSAGE);
+  assert.equal(presentation.rows.length, 1);
+  assert.deepEqual(runtime.state.appliedFilters, EMPTY_AUDIT_LOG_FILTERS);
+  assert.equal(runtime.state.draftFilters.createdBefore, '2026-03-29T02:30', 'the draft value is kept so the user can correct it');
+  assert.equal(state.assertive.at(-1), NONEXISTENT_LOCAL_TIME_MESSAGE);
 });
 
 // --------------------------------------------------------------------------
@@ -276,16 +424,278 @@ test('the nested audit-log route resolves directly and is distinct from /setting
 });
 
 // --------------------------------------------------------------------------
-// Read lifecycle
+// Route entry and re-entry
 // --------------------------------------------------------------------------
 
-test('the initial read requests the first page and shows a loading state', () => {
+test('first entry issues the initial request and shows the loading state', () => {
   const { state, runtime } = harness();
-  runtime.load();
+  const started = runtime.enter();
+  assert.equal(started.accepted, true);
+  assert.equal(started.kind, 'initial');
   assert.equal(state.urls.at(-1), '/api/audit-logs?limit=50&offset=0');
   assert.equal(view(runtime).listState, 'loading');
-  assert.equal(view(runtime).busy, true);
 });
+
+test('re-entry with accepted data automatically refreshes instead of doing nothing', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.leave();
+  const started = runtime.enter();
+  assert.equal(started.accepted, true);
+  assert.equal(started.kind, 'refresh', 're-entry must refresh, not sit on stale data');
+  assert.equal(state.urls.at(-1), '/api/audit-logs?limit=50&offset=0');
+  // Rows stay visible while the refresh is in flight.
+  assert.equal(view(runtime).rows.length, 1);
+  assert.equal(view(runtime).listState, 'rows');
+});
+
+test('a successful re-entry refresh replaces the accepted rows', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.leave();
+  runtime.enter();
+  state.reads.at(-1).resolve(page([item({ id: 2, display_summary: 'Заказ создан: Дневной крем' }), item({ id: 1 })], 2));
+  await flush();
+  assert.deepEqual(view(runtime).rows.map((row) => row.id), [2, 1]);
+  assert.equal(view(runtime).rows[0].displaySummary, 'Заказ создан: Дневной крем');
+});
+
+test('a failed re-entry refresh keeps the previous rows and shows the refresh warning', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.leave();
+  runtime.enter();
+  state.reads.at(-1).reject(new Error('offline'));
+  await flush();
+  const presentation = view(runtime);
+  assert.equal(presentation.listState, 'rows', 'never the initial-failure screen');
+  assert.equal(presentation.rows.length, 1);
+  assert.equal(presentation.refreshError, AUDIT_LOG_REFRESH_FAILURE);
+  assert.equal(presentation.initialError, '');
+});
+
+test('re-entry after an initial failure with no data starts a new initial request', async () => {
+  const { state, runtime } = harness();
+  runtime.enter();
+  state.reads.at(-1).reject(new Error('offline'));
+  await flush();
+  assert.equal(view(runtime).listState, 'error');
+  runtime.leave();
+  const started = runtime.enter();
+  assert.equal(started.kind, 'initial');
+  state.reads.at(-1).resolve(page([item()], 1));
+  await flush();
+  assert.equal(view(runtime).listState, 'rows');
+});
+
+test('leaving during a request prevents its response from settling anything', async () => {
+  const { state, runtime } = harness();
+  runtime.enter();
+  runtime.leave();
+  state.reads.at(-1).resolve(page([item()], 1));
+  await flush();
+  assert.equal(runtime.state.items.length, 0);
+  assert.equal(runtime.state.loaded, false);
+});
+
+test('after leaving and re-entering, only the new response is authoritative', async () => {
+  const { state, runtime } = harness();
+  runtime.enter();
+  const abandoned = state.reads.at(-1);
+  runtime.leave();
+  runtime.enter();
+  const current = state.reads.at(-1);
+
+  current.resolve(page([item({ id: 5 })], 1));
+  await flush();
+  abandoned.resolve(page([item({ id: 99 })], 1));
+  await flush();
+
+  assert.deepEqual(view(runtime).rows.map((row) => row.id), [5]);
+});
+
+test('a duplicate route entry during an active request creates no second request', () => {
+  const { state, runtime } = harness();
+  assert.equal(runtime.enter().accepted, true);
+  assert.deepEqual(runtime.enter(), { accepted: false, reason: 'busy' });
+  assert.deepEqual(runtime.enter(), { accepted: false, reason: 'busy' });
+  assert.equal(state.reads.length, 1);
+});
+
+test('leaving preserves rows, draft filters and applied filters for the next visit', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([item({ id: 3 })], 1));
+  await flush();
+  runtime.setFilter('actorType', 'user');
+
+  runtime.leave();
+  assert.equal(runtime.state.items.length, 1);
+  assert.equal(runtime.state.appliedFilters.action, 'client.created');
+  assert.equal(runtime.state.draftFilters.actorType, 'user');
+});
+
+// --------------------------------------------------------------------------
+// Draft versus applied filters
+// --------------------------------------------------------------------------
+
+test('editing a control changes only the draft: no request, no rows, no applied change', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  const requestsBefore = state.reads.length;
+  const rendersBefore = state.renders;
+
+  runtime.setFilter('action', 'client_wish.created');
+
+  assert.equal(state.reads.length, requestsBefore, 'editing must start no request');
+  assert.equal(state.renders, rendersBefore, 'editing must not trigger a full render');
+  assert.equal(runtime.state.draftFilters.action, 'client_wish.created');
+  assert.deepEqual(runtime.state.appliedFilters, EMPTY_AUDIT_LOG_FILTERS);
+  assert.equal(view(runtime).rows.length, 1);
+  assert.equal(runtime.filtersDirty(), true);
+});
+
+test('a draft edit reports its consequences through a targeted sync, not a render', async () => {
+  const { state, runtime } = await loaded(page([item()], 5));
+  state.syncs.length = 0;
+  runtime.setFilter('action', 'client.created');
+  assert.equal(state.syncs.length, 1);
+  assert.deepEqual(state.syncs[0], {
+    filtersDirty: true,
+    fieldErrors: { createdFrom: '', createdBefore: '' },
+    canLoadMore: false,
+  });
+});
+
+test('manual refresh uses the applied filters, never an unapplied draft', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([item({ id: 2 })], 1));
+  await flush();
+
+  runtime.setFilter('action', 'client_wish.created');
+  runtime.refresh();
+
+  assert.equal(queryOf(state.urls.at(-1)).get('action'), 'client.created');
+  assert.equal(runtime.state.draftFilters.action, 'client_wish.created', 'the control keeps showing the pending choice');
+});
+
+test('re-entry refresh uses the applied filters, never an unapplied draft', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('actorType', 'user');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([item({ id: 2 })], 1));
+  await flush();
+
+  runtime.setFilter('actorType', 'system');
+  runtime.leave();
+  runtime.enter();
+
+  assert.equal(queryOf(state.urls.at(-1)).get('actor_type'), 'user');
+});
+
+test('load more uses the applied filters and the accepted row count as offset', async () => {
+  const { state, runtime } = await loaded(page([item(), item({ id: 2 })], 9));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([item({ id: 3 }), item({ id: 4 })], 9));
+  await flush();
+
+  runtime.loadMore();
+  const query = queryOf(state.urls.at(-1));
+  assert.equal(query.get('action'), 'client.created');
+  assert.equal(query.get('offset'), '2');
+});
+
+test('explicit apply uses the draft filters and adopts them only after success', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('entityType', 'client');
+  const started = runtime.applyFilters();
+  assert.equal(started.accepted, true);
+  assert.equal(queryOf(state.urls.at(-1)).get('entity_type'), 'client');
+  assert.deepEqual(runtime.state.appliedFilters, EMPTY_AUDIT_LOG_FILTERS, 'not adopted while in flight');
+
+  state.reads.at(-1).resolve(page([item({ id: 7 })], 1));
+  await flush();
+  assert.equal(runtime.state.appliedFilters.entityType, 'client');
+  assert.equal(runtime.state.draftFilters.entityType, 'client');
+  assert.equal(runtime.filtersDirty(), false);
+  assert.equal(view(runtime).filtersDirty, false);
+});
+
+test('a failed apply keeps the previous applied filters, rows and draft controls', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([item({ id: 2 })], 1));
+  await flush();
+
+  runtime.setFilter('action', 'client_wish.created');
+  runtime.applyFilters();
+  state.reads.at(-1).reject(new Error('offline'));
+  await flush();
+
+  assert.equal(runtime.state.appliedFilters.action, 'client.created', 'previous applied filters survive');
+  assert.equal(runtime.state.draftFilters.action, 'client_wish.created', 'the draft survives for correction');
+  assert.deepEqual(view(runtime).rows.map((row) => row.id), [2]);
+  assert.equal(view(runtime).refreshError, AUDIT_LOG_FILTER_FAILURE);
+  assert.equal(runtime.filtersDirty(), true);
+
+  // A later refresh still refreshes the previously applied result.
+  runtime.refresh();
+  assert.equal(queryOf(state.urls.at(-1)).get('action'), 'client.created');
+});
+
+test('load more is refused while the controls differ from the applied filters', async () => {
+  const { state, runtime } = await loaded(page([item()], 9));
+  assert.equal(view(runtime).canLoadMore, true);
+  const requestsBefore = state.reads.length;
+
+  runtime.setFilter('action', 'client.created');
+
+  assert.deepEqual(runtime.loadMore(), { accepted: false, reason: 'filters-pending' });
+  assert.equal(state.reads.length, requestsBefore);
+  assert.equal(view(runtime).canLoadMore, false);
+  assert.equal(view(runtime).filtersDirty, true);
+});
+
+test('clearing filters requests the unfiltered history and resets both sides on success', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.setFilter('createdFrom', '2026-07-01T10:00');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([item({ id: 2 })], 1));
+  await flush();
+
+  runtime.clearFilters();
+  assert.equal(state.urls.at(-1), '/api/audit-logs?limit=50&offset=0');
+  state.reads.at(-1).resolve(page([item({ id: 3 })], 1));
+  await flush();
+
+  assert.deepEqual(runtime.state.draftFilters, EMPTY_AUDIT_LOG_FILTERS);
+  assert.deepEqual(runtime.state.appliedFilters, EMPTY_AUDIT_LOG_FILTERS);
+  assert.equal(runtime.filtersDirty(), false);
+});
+
+test('a failed clear empties the controls but keeps the previous applied result', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([item({ id: 2 })], 1));
+  await flush();
+
+  runtime.clearFilters();
+  state.reads.at(-1).reject(new Error('offline'));
+  await flush();
+
+  assert.deepEqual(runtime.state.draftFilters, EMPTY_AUDIT_LOG_FILTERS, 'the controls stay cleared');
+  assert.equal(runtime.state.appliedFilters.action, 'client.created', 'the previous conditions still produced the rows');
+  assert.equal(runtime.filtersDirty(), true);
+  assert.deepEqual(view(runtime).rows.map((row) => row.id), [2]);
+  assert.equal(view(runtime).refreshError, AUDIT_LOG_FILTER_FAILURE);
+});
+
+// --------------------------------------------------------------------------
+// Read lifecycle
+// --------------------------------------------------------------------------
 
 test('a successful initial read renders the rows the backend sent', async () => {
   const { runtime } = await loaded(page([item(), item({ id: 2, display_summary: 'Компонент создан: Масло ши' })], 2));
@@ -310,7 +720,7 @@ test('an empty database and a filtered-empty result are different states', async
 
 test('an initial failure shows the retry path and no rows', async () => {
   const { state, runtime } = harness();
-  runtime.load();
+  runtime.enter();
   state.reads.at(-1).reject(new Error('offline'));
   await flush();
   const presentation = view(runtime);
@@ -321,7 +731,7 @@ test('an initial failure shows the retry path and no rows', async () => {
 
 test('retry after an initial failure succeeds', async () => {
   const { state, runtime } = harness();
-  runtime.load();
+  runtime.enter();
   state.reads.at(-1).reject(new Error('offline'));
   await flush();
   assert.equal(runtime.retry().accepted, true);
@@ -415,7 +825,7 @@ test('a duplicate refresh is blocked while one is in flight', async () => {
 });
 
 // --------------------------------------------------------------------------
-// Filters and stale responses
+// Stale responses
 // --------------------------------------------------------------------------
 
 test('changing a filter resets the offset and starts a new authoritative request', async () => {
@@ -448,6 +858,7 @@ test('a stale filter response cannot overwrite a newer result', async () => {
   await flush();
 
   assert.deepEqual(view(runtime).rows.map((row) => row.id), [5]);
+  assert.equal(runtime.state.appliedFilters.action, 'client_wish.created');
 });
 
 test('a stale failure cannot clear a newer accepted list', async () => {
@@ -463,20 +874,10 @@ test('a stale failure cannot clear a newer accepted list', async () => {
   assert.equal(view(runtime).refreshError, '');
 });
 
-test('clearing filters resets every control and reloads', async () => {
-  const { state, runtime } = await loaded();
-  runtime.setFilter('action', 'client.created');
-  runtime.setFilter('createdFrom', '2026-07-01T10:00');
-  assert.equal(view(runtime).filtersActive, true);
-  runtime.clearFilters();
-  assert.deepEqual(runtime.state.filters, EMPTY_AUDIT_LOG_FILTERS);
-  assert.equal(state.urls.at(-1), '/api/audit-logs?limit=50&offset=0');
-});
-
 test('a structured date-range rejection is attached to the end-date control', async () => {
   const { state, runtime } = await loaded(page([item()], 1));
   runtime.setFilter('createdFrom', '2026-07-05T00:00');
-  runtime.setFilter('createdBefore', '2026-07-01T00:00');
+  runtime.setFilter('createdBefore', '2026-07-09T00:00');
   runtime.applyFilters();
   state.reads.at(-1).reject({
     status: 422,
@@ -493,7 +894,7 @@ test('a structured date-range rejection is attached to the end-date control', as
 
 test('a pagination rejection is reported without touching a date control', async () => {
   const { state, runtime } = harness();
-  runtime.load();
+  runtime.enter();
   state.reads.at(-1).reject({ status: 422, payload: { detail: { code: 'pagination_out_of_range', message: 'Количество записей вне допустимого диапазона.', field: 'limit', value: '0', next_action: 'Укажите количество записей от 1 до 200.' } } });
   await flush();
   assert.equal(view(runtime).fieldErrors.createdBefore, '');
@@ -519,6 +920,55 @@ test('the workspace renders the stable page and list contracts', async () => {
   }
 });
 
+test('every required focus key is present in the rendered workspace', async () => {
+  const { runtime } = await loaded(page([item()], 5));
+  const root = markupView(runtime);
+  const required = [
+    'audit-log-workspace',
+    'audit-log-refresh',
+    'audit-log-filter-created-from',
+    'audit-log-filter-created-before',
+    'audit-log-filter-action',
+    'audit-log-filter-entity-type',
+    'audit-log-filter-actor-type',
+    'audit-log-apply-filters',
+    'audit-log-clear-filters',
+    'audit-log-load-more',
+  ];
+  for (const key of required) assert.ok(root.querySelector(`[data-focus-key="${key}"]`), key);
+  // Focus keys are addressing, never user-visible text.
+  for (const key of required) assert.equal(root.textContent.includes(key), false, key);
+});
+
+test('the retry focus key exists on the initial-failure screen', async () => {
+  const { state, runtime } = harness();
+  runtime.enter();
+  state.reads.at(-1).reject(new Error('offline'));
+  await flush();
+  assert.ok(markupView(runtime).querySelector('[data-focus-key="audit-log-retry"]'));
+});
+
+test('the pending-filter hint is always present and revealed only when dirty', async () => {
+  const { runtime } = await loaded(page([item()], 5));
+  const clean = markupView(runtime).querySelector('[data-state="audit-log-filters-pending"]');
+  assert.ok(clean, 'the hint must exist so a draft edit can reveal it without a render');
+  assert.equal(clean.hasAttribute('hidden'), true);
+
+  runtime.setFilter('action', 'client.created');
+  const dirty = markupView(runtime).querySelector('[data-state="audit-log-filters-pending"]');
+  assert.equal(dirty.hasAttribute('hidden'), false);
+  assert.equal(dirty.textContent, AUDIT_LOG_FILTERS_PENDING);
+  assert.equal(dirty.textContent.toLowerCase().includes('draft'), false);
+  assert.equal(dirty.textContent.toLowerCase().includes('applied'), false);
+});
+
+test('load more is disabled in the markup while filters are dirty', async () => {
+  const { runtime } = await loaded(page([item()], 9));
+  assert.equal(markupView(runtime).querySelector('[data-action="load-more-audit-log"]').hasAttribute('disabled'), false);
+  runtime.setFilter('action', 'client.created');
+  assert.equal(markupView(runtime).querySelector('[data-action="load-more-audit-log"]').hasAttribute('disabled'), true);
+});
+
 test('the workspace renders the backend labels and summary verbatim', async () => {
   const { runtime } = await loaded(page([item()], 1));
   const root = markupView(runtime);
@@ -538,7 +988,6 @@ test('no raw code, raw summary, metadata or internal id is ever visible', async 
   for (const forbidden of ['ingredient_lot.created', 'ingredient_lot', 'client.created', 'Ingredient lot created', 'metadata_json', 'entity_id', 'audit_logs', '#12', 'SELECT', 'source_label']) {
     assert.equal(visible.includes(forbidden), false, forbidden);
   }
-  // The row id survives only as DOM identity, never as visible text.
   assert.equal(root.querySelector('[data-audit-log-row]').getAttribute('data-audit-log-id'), '42');
   assert.equal(visible.includes('42'), false);
 });
@@ -567,7 +1016,7 @@ test('each list state renders its own stable marker', async () => {
   assert.ok(filteredRoot.querySelector('[data-action="clear-audit-log-filters"]'));
 
   const failed = harness();
-  failed.runtime.load();
+  failed.runtime.enter();
   failed.state.reads.at(-1).reject(new Error('offline'));
   await flush();
   const failedRoot = markupView(failed.runtime);
@@ -589,7 +1038,7 @@ test('the load-more control is bounded by the backend total', async () => {
 });
 
 test('accessible names, labels and busy state are present', async () => {
-  const { state, runtime } = await loaded(page([item()], 1));
+  const { runtime } = await loaded(page([item()], 1));
   runtime.refresh();
   const root = markupView(runtime);
   assert.equal(root.querySelector('[data-form="audit-log-filters"]').getAttribute('aria-busy'), 'true');
@@ -606,7 +1055,6 @@ test('accessible names, labels and busy state are present', async () => {
   for (const button of root.querySelectorAll('button')) {
     assert.ok(button.textContent.trim(), 'every button needs an accessible name');
   }
-  state.active = true;
 });
 
 test('an invalid date control is marked and described by its own error', async () => {
@@ -628,8 +1076,8 @@ test('long summaries and labels are rendered as escaped plain text', () => {
   const markup = auditLogWorkspaceMarkup(
     auditLogPresentation({
       status: 'ready', activeKind: null, items: [item({ display_summary: 'Клиент создан: <script>alert("x")</script>' })],
-      total: 1, filterOptions: FILTER_OPTIONS, filters: { ...EMPTY_AUDIT_LOG_FILTERS }, appliedFilters: { ...EMPTY_AUDIT_LOG_FILTERS },
-      loaded: true, initialError: '', refreshError: '', loadMoreError: '', fieldErrors: { createdFrom: '', createdBefore: '' },
+      total: 1, filterOptions: FILTER_OPTIONS, draftFilters: { ...EMPTY_AUDIT_LOG_FILTERS }, appliedFilters: { ...EMPTY_AUDIT_LOG_FILTERS },
+      loaded: true, onRoute: true, initialError: '', refreshError: '', loadMoreError: '', fieldErrors: { createdFrom: '', createdBefore: '' },
     }),
     renderFeedback,
   );
@@ -640,6 +1088,158 @@ test('long summaries and labels are rendered as escaped plain text', () => {
 test('an unreadable timestamp degrades to a dash rather than raw text', () => {
   assert.equal(formatAuditLogTimestamp('not-a-date'), '—');
   assert.notEqual(formatAuditLogTimestamp('2026-07-01T10:00:00Z'), '2026-07-01T10:00:00Z');
+});
+
+// --------------------------------------------------------------------------
+// Targeted DOM updates and focus preservation
+// --------------------------------------------------------------------------
+
+/** A live fake document holding the current rendered workspace. */
+function workspaceDom(runtime) {
+  const container = new ViewNode('body');
+  const mount = () => {
+    container.children = [];
+    const rendered = renderView(auditLogWorkspaceMarkup(view(runtime), renderFeedback));
+    for (const child of rendered.children) container.append(child);
+  };
+  mount();
+  return { container, mount };
+}
+
+test('a draft edit updates the hint, load more and field error in place', async () => {
+  const { runtime } = await loaded(page([item()], 9));
+  const { container } = workspaceDom(runtime);
+  const hintBefore = container.querySelector('[data-state="audit-log-filters-pending"]');
+  const loadMore = container.querySelector('[data-action="load-more-audit-log"]');
+
+  runtime.setFilter('action', 'client.created');
+  syncAuditLogFilterState(container, runtime.filterSync());
+
+  assert.equal(hintBefore.hasAttribute('hidden'), false, 'the same node is revealed, not replaced');
+  assert.equal(loadMore.disabled, true);
+  assert.equal(container.querySelector('[data-state="audit-log-filters-pending"]'), hintBefore);
+});
+
+test('editing a date clears only that field error and leaves the other alone', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('createdFrom', '2026-07-05T00:00');
+  runtime.setFilter('createdBefore', '2026-07-09T00:00');
+  runtime.applyFilters();
+  state.reads.at(-1).reject({ status: 422, payload: { detail: { code: 'invalid_date', message: 'Конец периода должен быть позже его начала.', field: 'created_before', value: 'x', next_action: 'Выберите дату позже.' } } });
+  await flush();
+
+  const { container } = workspaceDom(runtime);
+  const endError = container.querySelector('[data-audit-log-field-error="created-before"]');
+  const startError = container.querySelector('[data-audit-log-field-error="created-from"]');
+  assert.equal(endError.hasAttribute('hidden'), false);
+
+  runtime.setFilter('createdBefore', '2026-07-20T00:00');
+  syncAuditLogFilterState(container, runtime.filterSync());
+
+  assert.equal(endError.hasAttribute('hidden'), true, 'the corrected field clears');
+  assert.equal(endError.textContent, '');
+  assert.equal(container.querySelector('[data-audit-log-filter="created-before"]').getAttribute('aria-invalid'), 'false');
+  assert.equal(startError.hasAttribute('hidden'), true);
+});
+
+test('each filter control keeps keyboard focus when its value changes', async () => {
+  const { state, runtime } = await loaded(page([item()], 9));
+  const { container } = workspaceDom(runtime);
+
+  for (const [filter, key, value] of [
+    ['action', 'action', 'client.created'],
+    ['entity-type', 'entityType', 'client'],
+    ['actor-type', 'actorType', 'user'],
+    ['created-from', 'createdFrom', '2026-07-01T10:00'],
+    ['created-before', 'createdBefore', '2026-07-09T10:00'],
+  ]) {
+    const control = container.querySelector(`[data-audit-log-filter="${filter}"]`);
+    control.focus();
+    const rendersBefore = state.renders;
+
+    runtime.setFilter(key, value);
+    syncAuditLogFilterState(container, runtime.filterSync());
+
+    assert.equal(state.renders, rendersBefore, `${filter}: a draft edit must not trigger a full render`);
+    assert.equal(fakeDocument.activeElement, control, `${filter}: focus must stay on the edited control`);
+  }
+});
+
+test('a required render restores focus to the equivalent control', async () => {
+  const { runtime } = await loaded(page([item()], 9));
+  const { container, mount } = workspaceDom(runtime);
+  const before = container.querySelector('[data-audit-log-filter="action"]');
+  before.focus();
+
+  globalThis.document = fakeDocument;
+  try {
+    renderAuditLogWithFocus(container, mount);
+  } finally {
+    delete globalThis.document;
+  }
+
+  const after = container.querySelector('[data-audit-log-filter="action"]');
+  assert.notEqual(after, before, 'the render really did replace the node');
+  assert.equal(fakeDocument.activeElement, after, 'focus followed the focus key onto the new node');
+});
+
+test('a render falls back to the workspace container when the control is gone', async () => {
+  const { runtime } = await loaded(page([item()], 9));
+  const { container, mount } = workspaceDom(runtime);
+  container.querySelector('[data-action="load-more-audit-log"]').focus();
+
+  globalThis.document = fakeDocument;
+  try {
+    // Every row is loaded now, so the load-more control disappears entirely.
+    runtime.state.total = 1;
+    renderAuditLogWithFocus(container, mount);
+  } finally {
+    delete globalThis.document;
+  }
+
+  assert.equal(container.querySelector('[data-action="load-more-audit-log"]'), null);
+  assert.equal(fakeDocument.activeElement.getAttribute('data-focus-key'), 'audit-log-workspace');
+});
+
+test('a render never steals focus from outside the workspace', async () => {
+  const { runtime } = await loaded(page([item()], 9));
+  const { container, mount } = workspaceDom(runtime);
+  const elsewhere = new ViewNode('button', { 'data-focus-key': 'somewhere-else' });
+  elsewhere.focus();
+
+  globalThis.document = fakeDocument;
+  try {
+    renderAuditLogWithFocus(container, mount);
+  } finally {
+    delete globalThis.document;
+  }
+
+  assert.equal(fakeDocument.activeElement, elsewhere);
+});
+
+test('after leaving the route no focus is restored into absent workspace markup', async () => {
+  const { runtime } = await loaded(page([item()], 9));
+  const { container } = workspaceDom(runtime);
+  container.querySelector('[data-audit-log-filter="action"]').focus();
+  const focusedBefore = fakeDocument.activeElement;
+
+  runtime.leave();
+  globalThis.document = fakeDocument;
+  try {
+    // The route is gone: the render swaps the workspace out for another page.
+    renderAuditLogWithFocus(container, () => { container.children = [new ViewNode('div', { 'data-page': 'settings' })]; });
+  } finally {
+    delete globalThis.document;
+  }
+
+  assert.equal(fakeDocument.activeElement, focusedBefore, 'focus was left alone, not pushed into missing markup');
+  assert.equal(container.querySelector('[data-page="audit-log"]'), null);
+});
+
+test('a sync against markup that is no longer the workspace is a safe no-op', () => {
+  const container = new ViewNode('body');
+  container.append(new ViewNode('div', { 'data-page': 'settings' }));
+  assert.doesNotThrow(() => syncAuditLogFilterState(container, { filtersDirty: true, fieldErrors: { createdFrom: '', createdBefore: '' }, canLoadMore: false }));
 });
 
 // --------------------------------------------------------------------------

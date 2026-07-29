@@ -450,7 +450,7 @@ Accepted values:
 limit default: 50
 limit accepted range: integer 1..200
 offset default: 0
-offset accepted range: integer >= 0
+offset accepted range: integer 0..9223372036854775807
 ```
 
 #### 7.2.1. Validation order
@@ -474,14 +474,15 @@ The checks run in this exact order, and the **first** one that matches decides t
    offset < 0
    → negative_quantity
 
-4. Non-negative limit outside its accepted range
+4. Non-negative value outside its accepted range
    limit == 0
    limit > 200
+   offset > 9223372036854775807
    → pagination_out_of_range
 
 5. Accepted values
    limit: integer 1..200
-   offset: integer >= 0
+   offset: integer 0..9223372036854775807
 ```
 
 Because step 3 precedes step 4, a negative `limit` is **only** `negative_quantity` and never `pagination_out_of_range`. Because step 4 is reached only by a non-negative integer, `limit == 0` and `limit > 200` are **only** `pagination_out_of_range`.
@@ -503,6 +504,34 @@ offset=0    → accepted
 **An explicitly supplied invalid value is never silently clamped, coerced, rounded or ignored.** It is rejected with the structured `422` of § 8, never treated as a request for the nearest legal value.
 
 Do not return an unbounded history. There is no "show everything" mode and no unlimited export path.
+
+#### 7.2.3. The offset upper bound
+
+```python
+MAX_SQLITE_OFFSET = 9_223_372_036_854_775_807
+```
+
+The maximum signed 64-bit integer, which is the largest value SQLite can bind as `OFFSET`. A syntactically valid but larger offset would otherwise pass validation and then fail at bind time, so it is rejected as `pagination_out_of_range` — reusing the existing code, because no new `DomainIssueCode` member is authorized. This is a bounded robustness limit, **not** a schema change, **not** a migration, and **not** a new user capability.
+
+`offset=9223372036854775807` is accepted; `offset=9223372036854775808` is `pagination_out_of_range`.
+
+**Bounds are compared on the text, before conversion.** Validation verifies the exact decimal shape, strips leading zeroes, decides the sign, and compares digit length and lexicographic order against the field maximum; the value is converted to an integer only once it is known to fit. An arbitrarily long digit string is therefore classified as a range error rather than converted first — converting and only then range-checking is exactly what would turn a hostile query parameter into an unhandled error or an oversized bind. The rejected value is echoed back as a bounded excerpt, never as the whole supplied input.
+
+Additional pinned edge semantics:
+
+```text
+limit=-0     → pagination_out_of_range   (zero, so the range check decides)
+limit=0001   → accepted as 1
+limit=000201 → pagination_out_of_range
+offset=-0    → accepted as 0
+offset=0000  → accepted as 0
+limit  = 5000 positive digits → pagination_out_of_range
+limit  = 5000 negative digits → negative_quantity
+offset = 5000 positive digits → pagination_out_of_range
+offset = 5000 negative digits → negative_quantity
+```
+
+None of these returns HTTP `500`, and no oversized offset ever reaches SQLite.
 
 ### 7.3. Authorized filters
 
@@ -618,6 +647,7 @@ Rules:
 | non-integer, fractional, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
 | negative `limit` / `offset` | `negative_quantity` |
 | non-negative `limit` outside `1..200` — that is, `0` or `> 200` | `pagination_out_of_range` |
+| `offset` greater than `9223372036854775807` (`MAX_SQLITE_OFFSET`) | `pagination_out_of_range` |
 
 The pagination rows follow the ordered precedence of § 7.2.1, so every invalid pagination input has exactly one code: `limit=-1` is `negative_quantity` only, and `limit=0` is `pagination_out_of_range` only.
 
@@ -736,12 +766,107 @@ Implementation note: the existing router in `frontend/src/main.ts` resolves `win
 - developer paths;
 - GitHub or PR terminology.
 
-### 10.4. Module ownership
+### 10.4. Route lifecycle, draft filters and focus
+
+#### 10.4.1. Automatic refresh on route re-entry
+
+The runtime — not `main.ts` — owns what arriving at the route means. `enter()` decides by itself between three outcomes:
+
+| Situation | Outcome |
+|---|---|
+| no accepted data yet | initial load, showing the loading state |
+| accepted data already held | **automatic refresh** of the applied filters, rows staying visible |
+| an equivalent request already in flight | no-op, so a duplicate entry never issues a second request |
+
+Re-entry refresh exists because the journal is a history of what the user just did elsewhere: opening `Журнал действий`, creating an order, and returning must show the new event without pressing `Обновить`. The refresh keeps the currently accepted rows on screen, does not reset the controls, does not apply unconfirmed drafts, and replaces the list only after a valid successful response. A failed re-entry refresh retains the previous rows and shows the ordinary Russian refresh warning — never the initial-failure screen. Re-entry after an initial failure with no data starts a fresh initial load.
+
+`leave()` detaches ownership from any request still in flight: the response may still arrive but can no longer settle anything, while rows, draft filters and applied filters are all preserved for the next visit. A callback from a previous visit can never settle the current one.
+
+#### 10.4.2. Draft filters versus applied filters
+
+Two separate values, with unambiguous meanings:
+
+- **`draftFilters`** — what the controls currently show. Editing a control changes only this: no request, no change to the accepted rows, no change to `appliedFilters`, and **no full page render**.
+- **`appliedFilters`** — the exact filters that produced the currently accepted list. They change only after a *successful* apply or clear.
+
+The binding request matrix:
+
+| Request kind | Filters used | Offset |
+|---|---|---:|
+| first initial load | draft filters | `0` |
+| explicit apply filters | draft filters | `0` |
+| clear filters | empty draft filters | `0` |
+| manual refresh | applied filters | `0` |
+| automatic re-entry refresh | applied filters | `0` |
+| load more | applied filters | accepted item count |
+| retry initial failure | draft filters | `0` |
+
+So pressing `Обновить` after changing a control but before applying it refreshes what the user is actually looking at, rather than silently applying a filter they never confirmed.
+
+On a successful apply the rows are replaced, `appliedFilters` becomes the exact request snapshot, the draft controls keep the same values, offset returns to `0`, and previous field and filter errors clear. On a failure the previous rows and the previous `appliedFilters` both survive, the user's drafts survive so they can correct and retry, and a later `Обновить` still refreshes the previously applied result.
+
+#### 10.4.3. Dirty filter state
+
+`filtersDirty` is a pure field-by-field comparison of `draftFilters` against `appliedFilters`. While the filters are dirty:
+
+- `Обновить` refreshes the applied list and never applies the draft;
+- `Показать ещё` is **disabled**, because appending rows produced by the old filters while different filters are visible would present one list as the answer to two questions;
+- a short neutral Russian hint appears:
+
+```text
+Фильтры изменены. Нажмите «Применить фильтры».
+```
+
+The hint uses no technical vocabulary — the words "draft" and "applied" are contract terms, not user-facing text. After a successful apply or clear, `filtersDirty` is false again.
+
+`Очистить фильтры` stays an explicit immediate action: it empties the controls and requests the unfiltered history at offset `0`. On success both sides are empty and the dirty state clears. On failure the controls stay empty, the previous rows and previous applied filters remain, the dirty state stays true, and the warning explains that previously applied conditions are still shown.
+
+#### 10.4.4. Keyboard focus preservation
+
+The application shell renders by replacing `root.innerHTML`, which destroys and recreates every control. Two rules keep that from costing a keyboard user their place:
+
+- **A draft filter edit performs no render at all.** The native control already shows its new value, so only the pending hint, the load-more control and a stale error on the edited field are updated in place, through `frontend/src/audit-log-dom.ts`. Focus stays exactly where the user put it.
+- **Renders that must happen are wrapped in a focus boundary.** Before the render the focused element is captured — but only when it is inside the AuditLog workspace, so a render never steals focus from elsewhere — identified by a stable `data-focus-key`, with the selection range for text-like inputs. After the render, focus returns to the equivalent element; if it no longer exists, focus lands on the workspace container rather than at an accidental document position. When the route itself is gone, no focus is moved at all.
+
+Stable focus keys: `audit-log-workspace`, `audit-log-refresh`, `audit-log-filter-created-from`, `audit-log-filter-created-before`, `audit-log-filter-action`, `audit-log-filter-entity-type`, `audit-log-filter-actor-type`, `audit-log-apply-filters`, `audit-log-clear-filters`, `audit-log-load-more`, `audit-log-retry`. They are addressing only and are never shown to the user.
+
+Visible `:focus-visible`, `aria-describedby` association, `aria-invalid` on an invalid date and `role="alert"` on the relevant error all remain.
+
+#### 10.4.5. Local date validation and DST
+
+The date controls collect a **local wall-clock** value, and the backend accepts only `YYYY-MM-DDTHH:MM:SSZ`. Converting carelessly is unsafe twice a year, and both failures are silent, so `frontend/src/audit-log-local-time.ts` rejects them instead:
+
+| Local input | Outcome |
+|---|---|
+| blank | valid — means "no filter" |
+| syntactically invalid or an impossible calendar date | rejected as `invalid` |
+| a wall-clock time that does not exist (spring gap) | rejected as `nonexistent-local-time` |
+| a wall-clock time that happens twice (autumn overlap) | rejected as `ambiguous-local-time` |
+| otherwise | converted to the canonical UTC instant |
+
+Detection verifies **all six** local components — year, month, day, hour, minute, second — after constructing the candidate date, because checking only the date is exactly what lets a spring gap through: the platform normalizes the *hour* while leaving the day intact. Ambiguity is found by counting, within a bounded window around the candidate, how many UTC instants map back to the same wall-clock components: zero means nonexistent, one means valid, more than one means ambiguous. The helper is pure, directly testable, and adds no date library and no dependency.
+
+Under `Europe/Amsterdam` this is binding:
+
+```text
+2026-03-29T01:30 → accepted
+2026-03-29T02:30 → rejected, nonexistent
+2026-03-29T03:30 → accepted
+
+2026-10-25T01:30 → accepted
+2026-10-25T02:30 → rejected, ambiguous
+2026-10-25T03:30 → accepted
+```
+
+When conversion fails: no network request starts, the error attaches to the exact date control, the accepted rows and previous `appliedFilters` are retained, the user's draft value is kept so it can be corrected, the Russian message is announced, and focus stays on or returns to the affected control. A non-blank date that cannot be converted is **never** silently omitted from the request — omitting it would quietly broaden the filter — and no value is ever silently shifted to a different instant. Backend canonical timestamp validation is unchanged and still protects direct API callers.
+
+### 10.5. Module ownership
 
 Use focused frontend modules, following the pattern already established by `settings-tax-*`, `report-financial-contract.ts` and `report-financial-presentation.ts`.
 
 - Do **not** put C3 business, privacy, filter or presentation logic only in `frontend/src/main.ts`.
-- `frontend/src/main.ts` must **not grow net** because of this slice; extract route-specific logic instead. The current line count is `6398`.
+- The focused modules are `audit-log-contract.ts` (DTO and request planning), `audit-log-local-time.ts` (pure local→UTC conversion), `audit-log-workspace.ts` (route lifecycle and request ownership), `audit-log-presentation.ts` (Russian view model and markup), `audit-log-bindings.ts` (event routing), `audit-log-dom.ts` (targeted updates and the focus boundary) and `app-navigation-routes.ts` (route table).
+- `frontend/src/main.ts` must **not grow net** because of this slice; extract route-specific logic instead. The correction head has `6380` lines, down from the `6398`-line merged baseline.
 - No generic `utils`, `helpers`, `manager` or `common` dumping ground.
 - The frontend renders `display_summary`, `action_label`, `entity_label` and `actor_label` as received. It performs no filtering of its own, no label fallback that reveals a raw code, and no reconstruction of any value the backend withheld.
 
@@ -983,14 +1108,15 @@ C3-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
 
 | Check | Result |
 |---|---|
-| Complete backend suite | `1337 passed / 0 failed / 0 skipped` |
+| Complete backend suite | `1364 passed / 0 failed / 0 skipped` |
 | Merged baseline node IDs still collected | all `942`, zero renames |
-| New `C3-I` backend tests | `395` (`test_audit_log_presentation.py`, `test_audit_logs.py`, `test_audit_logs_api.py`) |
-| Focused frontend suite `test:audit-log-workspace` | `45 passed / 0 failed / 0 skipped` |
+| Focused `C3-I` backend tests | `422 passed` (`test_audit_log_presentation.py`, `test_audit_logs.py`, `test_audit_logs_api.py`) |
+| Focused frontend suite `test:audit-log-workspace` | `82 passed / 0 failed / 0 skipped` |
+| `TZ=Europe/Amsterdam` focused frontend suite | `82 passed / 0 failed / 0 skipped` |
 | Frontend test scripts | `18` (was `17`) — all pass, `0 failed` |
 | Frontend production build | `npm run build` — `PASS` |
 | `git diff --check` | clean |
-| `frontend/src/main.ts` | `6398` before → `6381` after |
+| `frontend/src/main.ts` | `6398` before → `6380` after |
 | Migration added | none |
 | Dependency or lockfile change | none |
 
@@ -999,10 +1125,14 @@ Test commands:
 ```bash
 cd backend && python3 -m pytest
 cd frontend && npm run test:audit-log-workspace
+cd frontend && TZ=Europe/Amsterdam npm run test:audit-log-workspace
 cd frontend && npm run build
 ```
 
-The exact-head API and browser smoke results are recorded in the pull request body, against the exact published head.
+The exact-head API and browser smoke results are recorded in the pull request
+body against the exact published correction head. Evidence for the previous
+published head `749c51992c43af65f8297acb0979aded86fdb607` applies only to
+that head and is superseded for merge-readiness by the correction-head smoke.
 
 ### 15.2. Known coverage gaps and limitations
 

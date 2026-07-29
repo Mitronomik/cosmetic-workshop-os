@@ -18,6 +18,8 @@
  * than displaying data the backend was supposed to withhold.
  */
 
+import { convertLocalInputToUtc } from './audit-log-local-time.js';
+
 /** One selectable filter value with the Russian label the backend resolved. */
 export type AuditLogFilterOption = { value: string; label: string };
 
@@ -69,6 +71,12 @@ export type AuditLogValidationIssue = {
 export const AUDIT_LOG_ENDPOINT = '/api/audit-logs';
 export const AUDIT_LOG_PAGE_SIZE = 50;
 
+/** The two date controls, and the filter keys they map to. */
+export const AUDIT_LOG_DATE_FILTERS = [
+  { filter: 'createdFrom', parameter: 'created_from' },
+  { filter: 'createdBefore', parameter: 'created_before' },
+] as const;
+
 const TOP_LEVEL_KEYS = ['items', 'total', 'limit', 'offset', 'filter_options'] as const;
 const ITEM_KEYS = [
   'id',
@@ -91,9 +99,6 @@ export const FORBIDDEN_ITEM_KEYS = ['summary', 'metadata_json', 'entity_id', 'so
 
 /** The canonical API instant: `YYYY-MM-DDTHH:MM:SSZ`, UTC, second precision. */
 const CANONICAL_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
-
-/** What an `<input type="datetime-local">` produces, seconds optional. */
-const LOCAL_INPUT_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 export const EMPTY_AUDIT_LOG_FILTER_OPTIONS: AuditLogFilterOptions = { actions: [], entity_types: [], actor_types: [] };
 
@@ -166,52 +171,55 @@ export function auditLogListDtoIsValid(value: unknown): value is AuditLogListRes
   return filterOptionsAreValid(payload.filter_options);
 }
 
-function pad(value: number): string {
-  return String(value).padStart(2, '0');
+/** Whether two filter selections are the same, compared field by field. */
+export function auditLogFiltersEqual(left: AuditLogFilters, right: AuditLogFilters): boolean {
+  return (Object.keys(EMPTY_AUDIT_LOG_FILTERS) as (keyof AuditLogFilters)[]).every((key) => left[key] === right[key]);
 }
 
 /**
- * Convert a local `datetime-local` value into the canonical backend UTC instant.
+ * A request that can be sent, or the date-control errors that stop it.
  *
- * The user picks a wall-clock time in their own zone; the backend accepts only
- * `YYYY-MM-DDTHH:MM:SSZ`. Doing the conversion here is what keeps an ambiguous
- * locale-formatted string off the wire. An impossible calendar date is rejected
- * rather than allowed to roll over into a different day.
+ * There is deliberately no third outcome where a non-blank date is dropped and
+ * the request proceeds: silently omitting a filter the user set would broaden
+ * the query behind their back, which is as wrong as sending the wrong instant.
  */
-export function canonicalUtcFromLocalInput(value: string): string | null {
-  const match = LOCAL_INPUT_TIMESTAMP.exec(value.trim());
-  if (!match) return null;
-  const [, year, month, day, hours, minutes, seconds] = match;
-  const local = new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes), Number(seconds ?? '0'), 0);
-  if (Number.isNaN(local.getTime())) return null;
-  if (local.getFullYear() !== Number(year) || local.getMonth() !== Number(month) - 1 || local.getDate() !== Number(day)) return null;
-  return `${local.getUTCFullYear()}-${pad(local.getUTCMonth() + 1)}-${pad(local.getUTCDate())}T${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}:${pad(local.getUTCSeconds())}Z`;
-}
+export type AuditLogRequestPlan =
+  | { ok: true; url: string }
+  | { ok: false; fieldErrors: AuditLogDateFieldErrors };
+
+export type AuditLogDateFieldErrors = { createdFrom: string; createdBefore: string };
+
+export const NO_AUDIT_LOG_FIELD_ERRORS: AuditLogDateFieldErrors = { createdFrom: '', createdBefore: '' };
 
 /**
- * The query string for one page, using the exact authorized parameter names.
+ * Build the request for one page, or refuse with per-control Russian errors.
  *
- * A blank filter is omitted rather than sent empty. A date the browser has not
- * finished filling in is also omitted, so a half-typed value never becomes a
- * request the backend must reject.
+ * Both date controls are converted before anything is sent, so a nonexistent or
+ * ambiguous local time is reported against the exact control that carries it
+ * rather than surfacing later as a generic network failure.
  */
-export function auditLogQueryString(filters: AuditLogFilters, page: { limit: number; offset: number }): string {
+export function auditLogRequestPlan(filters: AuditLogFilters, page: { limit: number; offset: number }): AuditLogRequestPlan {
   const search = new URLSearchParams();
-  const createdFrom = canonicalUtcFromLocalInput(filters.createdFrom);
-  const createdBefore = canonicalUtcFromLocalInput(filters.createdBefore);
-  if (createdFrom) search.set('created_from', createdFrom);
-  if (createdBefore) search.set('created_before', createdBefore);
+  const fieldErrors: AuditLogDateFieldErrors = { ...NO_AUDIT_LOG_FIELD_ERRORS };
+  let rejected = false;
+
+  for (const { filter, parameter } of AUDIT_LOG_DATE_FILTERS) {
+    const conversion = convertLocalInputToUtc(filters[filter]);
+    if (!conversion.ok) {
+      fieldErrors[filter] = conversion.message;
+      rejected = true;
+      continue;
+    }
+    if (conversion.value) search.set(parameter, conversion.value);
+  }
+  if (rejected) return { ok: false, fieldErrors };
+
   if (filters.action) search.set('action', filters.action);
   if (filters.entityType) search.set('entity_type', filters.entityType);
   if (filters.actorType) search.set('actor_type', filters.actorType);
   search.set('limit', String(page.limit));
   search.set('offset', String(page.offset));
-  return search.toString();
-}
-
-/** The full request URL for one page. */
-export function auditLogRequestUrl(filters: AuditLogFilters, page: { limit: number; offset: number }): string {
-  return `${AUDIT_LOG_ENDPOINT}?${auditLogQueryString(filters, page)}`;
+  return { ok: true, url: `${AUDIT_LOG_ENDPOINT}?${search.toString()}` };
 }
 
 /**

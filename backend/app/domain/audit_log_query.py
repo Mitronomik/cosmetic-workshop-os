@@ -36,6 +36,13 @@ MIN_LIMIT: Final = 1
 MAX_LIMIT: Final = 200
 DEFAULT_OFFSET: Final = 0
 
+# The largest value SQLite can safely bind as `OFFSET`: the maximum signed
+# 64-bit integer. A syntactically valid but larger offset would pass a naive
+# range check and then fail at bind time, so it is rejected here as
+# `pagination_out_of_range` instead of becoming an HTTP 500. This is a bounded
+# robustness limit, not a new user capability and not a schema change.
+MAX_SQLITE_OFFSET: Final = 9_223_372_036_854_775_807
+
 # An exact optionally-signed decimal integer and nothing else. `true`, `1.5`,
 # `abc`, `+5`, `1e3`, an empty string and a padded ` 50 ` all fail, which is what
 # routes step 2 of the ordered precedence to `non_integer_quantity`.
@@ -102,37 +109,61 @@ def parse_audit_log_query(
     )
 
 
+LIMIT_NEXT_ACTION: Final = "Укажите целое число записей от 1 до 200."
+OFFSET_NEXT_ACTION: Final = "Укажите целое число, начиная с 0."
+
+
 def _parse_limit(value: object) -> int:
     """`limit` under the ordered precedence of `docs/audit-log.md` § 7.2.1."""
-    parsed = _parse_integer(value, LIMIT_FIELD, DEFAULT_LIMIT, "Укажите целое число записей от 1 до 200.")
+    parsed = _parse_bounded_integer(value, LIMIT_FIELD, MAX_LIMIT, LIMIT_NEXT_ACTION, _limit_out_of_range)
     if parsed is None:
         return DEFAULT_LIMIT
-    # Reached only by a non-negative integer, because the negative check already
-    # ran. That is what makes `limit=0` and `limit=201` exclusively
-    # `pagination_out_of_range` and `limit=-1` exclusively `negative_quantity`.
-    if parsed < MIN_LIMIT or parsed > MAX_LIMIT:
-        raise _issue(
-            DomainIssueCode.PAGINATION_OUT_OF_RANGE,
-            f"Количество записей “{_echo(value)}” вне допустимого диапазона. Допустимо от 1 до 200.",
-            LIMIT_FIELD,
-            value,
-            "Укажите количество записей от 1 до 200.",
-        )
+    # Reached only by a non-negative integer within `0..MAX_LIMIT`, because the
+    # negative check and the upper bound already ran. That is what makes
+    # `limit=0` and `limit=201` exclusively `pagination_out_of_range` and
+    # `limit=-1` exclusively `negative_quantity`.
+    if parsed < MIN_LIMIT:
+        raise _limit_out_of_range(value)
     return parsed
 
 
 def _parse_offset(value: object) -> int:
-    """`offset` — any non-negative integer; it has no upper bound of its own."""
-    parsed = _parse_integer(value, OFFSET_FIELD, DEFAULT_OFFSET, "Укажите целое число, начиная с 0.")
+    """`offset` — any non-negative integer SQLite can bind as `OFFSET`."""
+    parsed = _parse_bounded_integer(value, OFFSET_FIELD, MAX_SQLITE_OFFSET, OFFSET_NEXT_ACTION, _offset_out_of_range)
     return DEFAULT_OFFSET if parsed is None else parsed
 
 
-def _parse_integer(value: object, field: str, default: int, next_action: str) -> int | None:
-    """Steps 1 to 3 of the precedence, shared by `limit` and `offset`.
+def _limit_out_of_range(value: object) -> DomainValidationError:
+    return _issue(
+        DomainIssueCode.PAGINATION_OUT_OF_RANGE,
+        f"Количество записей “{_echo(value)}” вне допустимого диапазона. Допустимо от 1 до 200.",
+        LIMIT_FIELD,
+        value,
+        "Укажите количество записей от 1 до 200.",
+    )
+
+
+def _offset_out_of_range(value: object) -> DomainValidationError:
+    return _issue(
+        DomainIssueCode.PAGINATION_OUT_OF_RANGE,
+        f"Значение “{_echo(value)}” слишком велико. Начните просмотр с меньшей позиции.",
+        OFFSET_FIELD,
+        value,
+        OFFSET_NEXT_ACTION,
+    )
+
+
+def _parse_bounded_integer(value: object, field: str, maximum: int, next_action: str, out_of_range) -> int | None:
+    """Steps 1 to 4 of the precedence, shared by `limit` and `offset`.
+
+    Every comparison happens on the *text* until the value is known to fit
+    within `maximum`. That ordering is the point of this function: an arbitrarily
+    long digit string must be rejected as a range error, never converted first,
+    because converting it and only then range-checking is what turns a hostile
+    query parameter into an unhandled exception or an oversized SQLite bind.
 
     Returns `None` for an omitted value so the caller applies its own default,
-    and otherwise a non-negative integer. The range check of step 4 belongs to
-    the caller because only `limit` has one.
+    and otherwise a non-negative integer no greater than `maximum`.
     """
     if value is None:
         return None
@@ -141,8 +172,11 @@ def _parse_integer(value: object, field: str, default: int, next_action: str) ->
     text = value if isinstance(value, str) else str(value)
     if not _INTEGER_SHAPE.match(text):
         raise _non_integer(value, field, next_action)
-    parsed = int(text)
-    if parsed < 0:
+    negative = text.startswith("-")
+    digits = text.lstrip("-").lstrip("0") or "0"
+    # `-0` is zero, not a negative quantity, so it reaches the range check like
+    # any other zero: rejected for `limit`, accepted for `offset`.
+    if negative and digits != "0":
         raise _issue(
             DomainIssueCode.NEGATIVE_QUANTITY,
             f"Значение “{_echo(value)}” не может быть отрицательным.",
@@ -150,7 +184,20 @@ def _parse_integer(value: object, field: str, default: int, next_action: str) ->
             value,
             next_action,
         )
-    return parsed
+    if _exceeds(digits, maximum):
+        raise out_of_range(value)
+    return int(digits)
+
+
+def _exceeds(digits: str, maximum: int) -> bool:
+    """Whether a leading-zero-free digit string is greater than `maximum`.
+
+    Length first, then lexicographic order — valid precisely because `digits`
+    carries no leading zeros, and cheap enough that a five-thousand-digit input
+    costs a comparison rather than a conversion.
+    """
+    cap = str(maximum)
+    return len(digits) > len(cap) if len(digits) != len(cap) else digits > cap
 
 
 def _non_integer(value: object, field: str, next_action: str) -> DomainValidationError:
@@ -218,6 +265,7 @@ __all__ = [
     "DEFAULT_OFFSET",
     "LIMIT_FIELD",
     "MAX_LIMIT",
+    "MAX_SQLITE_OFFSET",
     "MIN_LIMIT",
     "OFFSET_FIELD",
     "parse_audit_log_query",

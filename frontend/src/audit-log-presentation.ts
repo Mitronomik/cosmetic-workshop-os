@@ -12,7 +12,7 @@
  */
 
 import type { AuditLogFilterOption, AuditLogFilters, AuditLogItemDto } from './audit-log-contract.js';
-import { auditLogAllRowsLoaded } from './audit-log-contract.js';
+import { auditLogAllRowsLoaded, auditLogFiltersEqual } from './audit-log-contract.js';
 import type { AuditLogState } from './audit-log-workspace.js';
 
 export const AUDIT_LOG_TITLE = 'Журнал действий';
@@ -38,6 +38,7 @@ export const AUDIT_LOG_LOAD_MORE_FAILURE = 'Не удалось загрузит
 export const AUDIT_LOG_INVALID_RESPONSE = 'Ответ журнала действий не соответствует ожидаемому формату.';
 
 export const AUDIT_LOG_ALL_LOADED = 'Показаны все записи по выбранным условиям.';
+export const AUDIT_LOG_FILTERS_PENDING = 'Фильтры изменены. Нажмите «Применить фильтры».';
 export const AUDIT_LOG_LOAD_MORE_LABEL = 'Показать ещё';
 export const AUDIT_LOG_REFRESH_LABEL = 'Обновить';
 export const AUDIT_LOG_CLEAR_FILTERS_LABEL = 'Очистить фильтры';
@@ -63,7 +64,10 @@ export type AuditLogRowView = {
 export type AuditLogPresentation = {
   listState: AuditLogListState;
   rows: AuditLogRowView[];
+  /** What the controls show — the draft selection, not necessarily the applied one. */
   filters: AuditLogFilters;
+  /** Whether the controls have moved away from what produced the visible rows. */
+  filtersDirty: boolean;
   fieldErrors: { createdFrom: string; createdBefore: string };
   actionOptions: AuditLogFilterOption[];
   entityOptions: AuditLogFilterOption[];
@@ -117,10 +121,12 @@ function statusText(state: AuditLogState): string {
 export function auditLogPresentation(state: AuditLogState): AuditLogPresentation {
   const busy = state.activeKind !== null;
   const allLoaded = auditLogAllRowsLoaded(state.items.length, state.total);
+  const filtersDirty = !auditLogFiltersEqual(state.draftFilters, state.appliedFilters);
   return {
     listState: listState(state),
     rows: state.items.map((item) => auditLogRowView(item)),
-    filters: state.filters,
+    filters: state.draftFilters,
+    filtersDirty,
     fieldErrors: state.fieldErrors,
     actionOptions: state.filterOptions.actions,
     entityOptions: state.filterOptions.entity_types,
@@ -134,9 +140,11 @@ export function auditLogPresentation(state: AuditLogState): AuditLogPresentation
     total: state.total,
     allLoaded,
     canRefresh: !busy,
-    canLoadMore: !busy && !allLoaded && state.items.length > 0,
+    // Appending a page produced by the applied filters while the controls show
+    // something else would present one list as the answer to two questions.
+    canLoadMore: !busy && !allLoaded && state.items.length > 0 && !filtersDirty,
     loadMoreBusy: state.activeKind === 'load-more',
-    filtersActive: auditLogFiltersActive(state.filters),
+    filtersActive: auditLogFiltersActive(state.draftFilters),
   };
 }
 
@@ -162,7 +170,7 @@ export type AuditLogFeedbackRenderer = (tone: 'neutral' | 'success' | 'warning' 
 
 export function auditLogWorkspaceMarkup(view: AuditLogPresentation, renderFeedback: AuditLogFeedbackRenderer): string {
   return [
-    `<div class="audit-log-layout" data-page="audit-log" tabindex="-1" data-focus-key="c3-audit-log-content">`,
+    `<div class="audit-log-layout" data-page="audit-log" tabindex="-1" data-focus-key="audit-log-workspace">`,
     headerMarkup(view),
     filtersMarkup(view),
     view.refreshError ? renderFeedback('warning', view.refreshError) : '',
@@ -184,7 +192,7 @@ function headerMarkup(view: AuditLogPresentation): string {
     `<p class="next-step">${escapeHtml(AUDIT_LOG_READ_ONLY_NOTE)}</p>`,
     counter,
     `</div>`,
-    `<button class="primary-action" type="button" data-action="refresh-audit-log" data-focus-key="c3-audit-log-refresh" ${view.canRefresh ? '' : 'disabled'}>${view.busy ? 'Обновляем…' : AUDIT_LOG_REFRESH_LABEL}</button>`,
+    `<button class="primary-action" type="button" data-action="refresh-audit-log" data-focus-key="audit-log-refresh" ${view.canRefresh ? '' : 'disabled'}>${view.busy ? 'Обновляем…' : AUDIT_LOG_REFRESH_LABEL}</button>`,
     `</div>`,
     `<p class="muted-text" role="status" data-audit-log-status>${escapeHtml(view.statusText)}</p>`,
     `</section>`,
@@ -203,22 +211,21 @@ function filtersMarkup(view: AuditLogPresentation): string {
     selectMarkup('audit-log-entity-type', 'Раздел данных', 'entity-type', view.filters.entityType, view.entityOptions, disabled),
     selectMarkup('audit-log-actor-type', 'Кто выполнил', 'actor-type', view.filters.actorType, view.actorOptions, disabled),
     `</fieldset>`,
+    `<p class="next-step" data-state="audit-log-filters-pending" role="status" ${view.filtersDirty ? '' : 'hidden'}>${escapeHtml(AUDIT_LOG_FILTERS_PENDING)}</p>`,
     `<div class="actions">`,
-    `<button class="primary-action" type="submit" data-action="apply-audit-log-filters" ${disabled}>${AUDIT_LOG_APPLY_FILTERS_LABEL}</button>`,
-    `<button class="secondary-action" type="button" data-action="clear-audit-log-filters" ${view.filtersActive && !view.busy ? '' : 'disabled'}>${AUDIT_LOG_CLEAR_FILTERS_LABEL}</button>`,
+    `<button class="primary-action" type="submit" data-action="apply-audit-log-filters" data-focus-key="audit-log-apply-filters" ${disabled}>${AUDIT_LOG_APPLY_FILTERS_LABEL}</button>`,
+    `<button class="secondary-action" type="button" data-action="clear-audit-log-filters" data-focus-key="audit-log-clear-filters" ${view.filtersActive && !view.busy ? '' : 'disabled'}>${AUDIT_LOG_CLEAR_FILTERS_LABEL}</button>`,
     `</div>`,
     `</form></section>`,
   ].join('');
 }
 
 function dateFieldMarkup(id: string, label: string, filter: string, value: string, error: string, errorId: string, disabled: string): string {
-  const errorMarkup = error
-    ? `<p class="field-error" id="${errorId}" data-audit-log-field-error="${filter}" role="alert">${escapeHtml(error)}</p>`
-    : `<p class="field-error" id="${errorId}" data-audit-log-field-error="${filter}" hidden></p>`;
+  const errorMarkup = `<p class="field-error" id="${errorId}" data-audit-log-field-error="${filter}" role="alert" ${error ? '' : 'hidden'}>${escapeHtml(error)}</p>`;
   return [
     `<div class="audit-log-field">`,
     `<label for="${id}">${escapeHtml(label)}</label>`,
-    `<input id="${id}" type="datetime-local" data-audit-log-filter="${filter}" value="${escapeHtml(value)}" aria-describedby="${errorId}" aria-invalid="${error ? 'true' : 'false'}" ${disabled} />`,
+    `<input id="${id}" type="datetime-local" data-audit-log-filter="${filter}" data-focus-key="audit-log-filter-${filter}" value="${escapeHtml(value)}" aria-describedby="${errorId}" aria-invalid="${error ? 'true' : 'false'}" ${disabled} />`,
     errorMarkup,
     `</div>`,
   ].join('');
@@ -238,7 +245,7 @@ function selectMarkup(id: string, label: string, filter: string, selected: strin
   return [
     `<div class="audit-log-field">`,
     `<label for="${id}">${escapeHtml(label)}</label>`,
-    `<select id="${id}" data-audit-log-filter="${filter}" ${disabled}>${choices}</select>`,
+    `<select id="${id}" data-audit-log-filter="${filter}" data-focus-key="audit-log-filter-${filter}" ${disabled}>${choices}</select>`,
     `</div>`,
   ].join('');
 }
@@ -248,7 +255,7 @@ function bodyMarkup(view: AuditLogPresentation, renderFeedback: AuditLogFeedback
     return [
       `<section class="card empty-card" data-state="audit-log-error">`,
       renderFeedback('error', view.initialError || AUDIT_LOG_INITIAL_FAILURE),
-      `<div class="actions"><button class="primary-action" type="button" data-action="retry-audit-log">${AUDIT_LOG_RETRY_LABEL}</button></div>`,
+      `<div class="actions"><button class="primary-action" type="button" data-action="retry-audit-log" data-focus-key="audit-log-retry">${AUDIT_LOG_RETRY_LABEL}</button></div>`,
       `</section>`,
     ].join('');
   }
@@ -295,7 +302,7 @@ function paginationMarkup(view: AuditLogPresentation): string {
   if (view.allLoaded) return `<p class="next-step" data-state="audit-log-all-loaded">${escapeHtml(AUDIT_LOG_ALL_LOADED)}</p>`;
   return [
     `<div class="actions">`,
-    `<button class="secondary-action" type="button" data-action="load-more-audit-log" ${view.canLoadMore ? '' : 'disabled'}>${view.loadMoreBusy ? 'Загружаем…' : AUDIT_LOG_LOAD_MORE_LABEL}</button>`,
+    `<button class="secondary-action" type="button" data-action="load-more-audit-log" data-focus-key="audit-log-load-more" ${view.canLoadMore ? '' : 'disabled'}>${view.loadMoreBusy ? 'Загружаем…' : AUDIT_LOG_LOAD_MORE_LABEL}</button>`,
     `</div>`,
   ].join('');
 }

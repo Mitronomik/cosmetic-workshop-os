@@ -280,6 +280,77 @@ def test_accepted_pagination_examples(client, query):
     assert client.get(f"{AUDIT_LOGS_URL}?{query}").status_code == 200
 
 
+EXTREME_DIGITS = "9" * 5000
+MAX_SQLITE_OFFSET_TEXT = "9223372036854775807"
+
+
+@pytest.mark.parametrize(
+    "query,code,field",
+    [
+        (f"limit={EXTREME_DIGITS}", "pagination_out_of_range", "limit"),
+        (f"limit=-{EXTREME_DIGITS}", "negative_quantity", "limit"),
+        (f"offset={EXTREME_DIGITS}", "pagination_out_of_range", "offset"),
+        (f"offset=-{EXTREME_DIGITS}", "negative_quantity", "offset"),
+        (f"offset={int(MAX_SQLITE_OFFSET_TEXT) + 1}", "pagination_out_of_range", "offset"),
+    ],
+)
+def test_extreme_pagination_is_a_structured_422_and_never_a_server_error(client, query, code, field):
+    """A hostile pagination value must not reach `int()` or the SQLite bind."""
+    response = client.get(f"{AUDIT_LOGS_URL}?{query}")
+    assert response.status_code == 422, response.text
+    assert response.status_code != 500
+    detail = response.json()["detail"]
+    assert detail["code"] == code
+    assert detail["field"] == field
+    assert len(detail["value"]) <= 40, "the whole hostile input must not be echoed"
+
+
+def test_the_largest_bindable_offset_is_accepted_without_a_sqlite_error(client):
+    response = client.get(f"{AUDIT_LOGS_URL}?offset={MAX_SQLITE_OFFSET_TEXT}")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"] == []
+    assert payload["offset"] == int(MAX_SQLITE_OFFSET_TEXT)
+    assert payload["total"] == 7
+
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("limit=0001", 200),
+        ("limit=000200", 200),
+        ("offset=0000", 200),
+        ("offset=-0", 200),
+        ("limit=-0", 422),
+        ("limit=000201", 422),
+    ],
+)
+def test_leading_zero_and_negative_zero_pagination_over_the_wire(client, query, expected):
+    assert client.get(f"{AUDIT_LOGS_URL}?{query}").status_code == expected
+
+
+def test_rejected_extreme_pagination_changes_no_data(client, tmp_path):
+    """A rejected read is still a read: it must leave everything untouched."""
+    audit_before = audit_snapshot(client)
+    database_before = database_snapshot(client)
+    settings_before = settings_snapshot(client)
+    files_before = sorted(path.name for path in tmp_path.iterdir())
+
+    for query in (
+        f"limit={EXTREME_DIGITS}",
+        f"offset={EXTREME_DIGITS}",
+        f"offset=-{EXTREME_DIGITS}",
+        f"offset={int(MAX_SQLITE_OFFSET_TEXT) + 1}",
+        "limit=-0",
+    ):
+        assert client.get(f"{AUDIT_LOGS_URL}?{query}").status_code == 422
+
+    assert audit_snapshot(client) == audit_before
+    assert database_snapshot(client) == database_before
+    assert settings_snapshot(client) == settings_before
+    assert sorted(path.name for path in tmp_path.iterdir()) == files_before
+
+
 def test_the_error_body_is_the_detail_envelope_and_not_pydantic_internals(client):
     payload = client.get(f"{AUDIT_LOGS_URL}?limit=0").json()
     assert set(payload) == {"detail"}

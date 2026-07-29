@@ -1114,7 +1114,7 @@ The **only** authorized AuditLog endpoint. Read-only, and the only new endpoint 
 | `entity_type` | stable entity code |
 | `actor_type` | stable actor code |
 | `limit` | omitted → `50`; valid range integer `1..200` |
-| `offset` | omitted → `0`; valid range integer `>= 0` |
+| `offset` | omitted → `0`; valid range integer `0..9223372036854775807` |
 
 There is **no `source` filter**. Filters combine with logical **AND**. Empty filters return the latest events. Filtering performs no writes.
 
@@ -1215,6 +1215,7 @@ The existing router convention raises `HTTPException(status_code=422, detail=iss
 | non-integer, fractional, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
 | negative `limit` / `offset` | `negative_quantity` |
 | non-negative `limit` outside `1..200` — that is, `0` or `> 200` | `pagination_out_of_range` |
+| `offset` greater than `9223372036854775807` | `pagination_out_of_range` |
 
 `invalid_date`, `non_integer_quantity` and `negative_quantity` already exist in `DomainIssueCode`. `pagination_out_of_range` (`PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`) is the one new enum member authorized by `C3-I`, because no existing member carries out-of-range pagination semantics; it must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`. It is a bounded enum addition, not a schema change or migration.
 
@@ -1224,8 +1225,9 @@ The existing router convention raises `HTTPException(status_code=422, detail=iss
 1. Missing value        limit → default 50; offset → default 0
 2. Wrong type/repr      non-integer, fractional, boolean, malformed string → non_integer_quantity
 3. Negative integer     limit < 0, offset < 0                              → negative_quantity
-4. Non-negative limit outside range   limit == 0, limit > 200              → pagination_out_of_range
-5. Accepted             limit: integer 1..200; offset: integer >= 0
+4. Non-negative value outside range
+   limit == 0, limit > 200, offset > 9223372036854775807                   → pagination_out_of_range
+5. Accepted             limit: integer 1..200; offset: integer 0..9223372036854775807
 ```
 
 Because step 3 precedes step 4, a negative `limit` is **only** `negative_quantity`; because step 4 is reached only by a non-negative integer, `limit == 0` and `limit > 200` are **only** `pagination_out_of_range`.
@@ -1235,10 +1237,22 @@ limit=true  → non_integer_quantity      limit=-1  → negative_quantity
 limit=1.5   → non_integer_quantity      offset=-1 → negative_quantity
 limit=abc   → non_integer_quantity      limit=0   → pagination_out_of_range
 limit=200   → accepted                  limit=201 → pagination_out_of_range
-offset=0    → accepted
+limit=-0    → pagination_out_of_range   limit=0001   → accepted as 1
+limit=000201 → pagination_out_of_range  offset=-0    → accepted as 0
+offset=0000 → accepted as 0
+offset=9223372036854775807 → accepted
+offset=9223372036854775808 → pagination_out_of_range
 ```
 
 **An explicitly supplied invalid pagination value is rejected, never silently clamped, coerced, rounded or ignored.**
+
+The upper bound is SQLite's largest bindable signed 64-bit `OFFSET`. Decimal
+shape, sign and range are checked on the raw text before integer conversion, so
+arbitrary 5000-digit positive values are `pagination_out_of_range`, arbitrary
+5000-digit negative values are `negative_quantity`, the rejected value is
+echoed only as a bounded excerpt, and no oversized value reaches Python `int()`
+or SQLite. These rejections keep the exact structured `422` envelope above and
+remain read-only.
 
 **Date-range conflict.** For `created_before <= created_from` the exact structured error is HTTP `422`, `code: invalid_date`, **`field: created_before`**, `value:` the supplied `created_before` value. The Russian `message` explains that the end of the period must be later than its beginning, and the Russian `next_action` tells the user to select an end date later than the start date. Do not use an undefined synthetic field such as `date_range`.
 

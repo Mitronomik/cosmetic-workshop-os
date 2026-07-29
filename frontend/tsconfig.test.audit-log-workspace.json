@@ -9,8 +9,10 @@
   "files": [
     "src/app-navigation-routes.ts",
     "src/audit-log-contract.ts",
+    "src/audit-log-local-time.ts",
     "src/audit-log-presentation.ts",
     "src/audit-log-workspace.ts",
-    "src/audit-log-bindings.ts"
+    "src/audit-log-bindings.ts",
+    "src/audit-log-dom.ts"
   ]
 }

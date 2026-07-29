@@ -1,6 +1,6 @@
 # Current focus — C2 is COMPLETED; the bounded C3-I AuditLog workspace is implemented on its PR branch and awaiting merge
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` merged (PR #157), exact-head verified and closed; one bounded C3 runtime slice, `C3-I — Read-only AuditLog workspace`, authorized after the closure documentation PR merges and not implemented**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` merged (PR #157), exact-head verified and closed; `C3-I — Read-only AuditLog workspace` implemented on its PR branch and not merged**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -230,14 +230,15 @@ The durable contract is `docs/audit-log.md` and was not reinterpreted. The singl
 
 | Check | Result |
 |---|---|
-| Complete backend suite | `1337 passed / 0 failed / 0 skipped` |
+| Complete backend suite | `1364 passed / 0 failed / 0 skipped` |
 | Merged baseline node IDs still collected | all `942`, zero renames |
-| New `C3-I` backend tests | `395` |
-| Focused frontend suite `test:audit-log-workspace` | `45 passed / 0 failed / 0 skipped` |
+| Focused `C3-I` backend tests | `422 passed` |
+| Focused frontend suite `test:audit-log-workspace` | `82 passed / 0 failed / 0 skipped` |
+| `TZ=Europe/Amsterdam` focused frontend suite | `82 passed / 0 failed / 0 skipped` |
 | Frontend `test:*` scripts | `18` (was `17`) — all pass |
 | Frontend production build | `PASS` |
 | `git diff --check` | clean |
-| `frontend/src/main.ts` | `6398` before → `6381` after |
+| `frontend/src/main.ts` | `6398` before → `6380` after |
 
 Exact-head API and browser smoke results are recorded in the pull request body against the exact published head.
 
@@ -265,7 +266,7 @@ The durable product, API, privacy and presentation contract is **`docs/audit-log
 - **Safe read model.** The response carries `items`, `total`, `limit`, `offset`, `filter_options`; each item carries exactly `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `display_summary`, `actor_type`, `actor_label`. The raw persisted summary and raw `metadata_json` are never returned, and neither are `entity_id`, table names, stack traces, SQL, filesystem paths or raw payloads.
 - **`display_summary`.** The raw `audit_logs.summary` is **never returned verbatim and is never used as an unrestricted API or frontend fallback** — it is write-time technical text, mostly English, sometimes carrying internal record IDs, and `client_wish.*` values carry user-authored wish text. A focused backend presenter (`AuditLogDisplayPresenter` or an equivalently focused module) resolves a safe Russian `display_summary` from the known `action`: no internal IDs, no metadata, no business-table join, no historical rewrite, no sensitive text.
 - **Bounded suffix extraction.** A suffix from the persisted summary may contribute to `display_summary` only when **all seven** conditions hold: the action is explicitly allowlisted; the summary starts with the exact prefix assigned to that action; the suffix is non-empty; the action may retain that category of business name; the suffix is plain text only; the suffix carries no presenter-supplied internal identifier; and no database or metadata lookup happens. Otherwise the generic action-specific phrase applies. The allowlist is the exact 21-row table in `docs/audit-log.md` § 6.4.3 — not a prefix glob — and excludes `client_wish.*`, `client_recipe.*`, every ID-bearing action and every catalog-assignment action. Returning the complete summary, its English prefix, or using it as an unrestricted fallback stays prohibited.
-- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, accepted integer range `1..200`; `offset` default `0`, accepted integer `>= 0`. Validation runs in a fixed order and the first match decides the code: missing → default; wrong type, fractional or boolean → `non_integer_quantity`; negative integer → `negative_quantity`; non-negative `limit` of `0` or `> 200` → `pagination_out_of_range`. So `limit=-1` is only `negative_quantity` and `limit=0` is only `pagination_out_of_range`. Invalid values are **rejected, never silently clamped**. No unbounded history.
+- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, accepted integer range `1..200`; `offset` default `0`, accepted integer range `0..9223372036854775807`. Validation runs in a fixed order and the first match decides the code: missing → default; wrong type, fractional or boolean → `non_integer_quantity`; negative integer → `negative_quantity`; non-negative `limit` outside `1..200` or `offset` above the SQLite maximum → `pagination_out_of_range`. Bounds are compared on raw decimal text before conversion, so arbitrary-length values cannot become a Python conversion failure or oversized SQLite bind. Invalid values are **rejected, never silently clamped**. No unbounded history.
 - **Filters.** `created_from` (inclusive), `created_before` (exclusive), `action`, `entity_type`, `actor_type`, `limit`, `offset` — **no `source` filter** — combined with logical AND, with ISO-8601 UTC timestamps, structured `422` with the existing `invalid_date` code for malformed input, filter options derived from values that actually exist as rows in `audit_logs`, and no writes.
 - **Validation wire shape.** The routers raise `HTTPException(status_code=422, detail=issue.__dict__)`, so the `DomainIssue` is the **value of `detail`**, and the body is `{"detail": {"code", "message", "field", "value", "next_action"}}`. Codes: `invalid_date`, `non_integer_quantity`, `negative_quantity`, and one new authorized enum member `PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`, which must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`.
 - **Date-range conflict.** `created_before <= created_from` returns HTTP `422`, `code: invalid_date`, **`field: created_before`**, `value` the supplied `created_before`, a Russian `message` saying the end of the period must be later than its beginning, and a Russian `next_action` telling the user to pick a later end date. No synthetic `date_range` field.

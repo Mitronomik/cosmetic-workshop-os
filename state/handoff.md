@@ -12,13 +12,20 @@ The one implementation-level clarification added is the exact nested `filter_opt
 
 ### What exists now
 
-Backend: one read-only endpoint `GET /api/audit-logs`; the pure presenter and query validator under `backend/app/domain/`; read methods on the existing `AuditLogRepository`; `backend/app/services/audit_logs.py`; `backend/app/schemas/audit_logs.py`; `backend/app/api/audit_logs.py`. Frontend: `/settings/audit-log` titled `Журнал действий` under `Данные и настройки`, built from `audit-log-contract.ts`, `audit-log-presentation.ts`, `audit-log-workspace.ts`, `audit-log-bindings.ts` and the extracted `app-navigation-routes.ts`.
+Backend: one read-only endpoint `GET /api/audit-logs`; the pure presenter and query validator under `backend/app/domain/`; read methods on the existing `AuditLogRepository`; `backend/app/services/audit_logs.py`; `backend/app/schemas/audit_logs.py`; `backend/app/api/audit_logs.py`. Frontend: `/settings/audit-log` titled `Журнал действий` under `Данные и настройки`, built from `audit-log-contract.ts`, `audit-log-local-time.ts`, `audit-log-presentation.ts`, `audit-log-workspace.ts`, `audit-log-bindings.ts`, `audit-log-dom.ts` and the extracted `app-navigation-routes.ts`.
 
 `AuditLogRepository.create_log` is unchanged (empty diff) and no production write call site was touched. There is **no migration**; the only enum addition is `DomainIssueCode.PAGINATION_OUT_OF_RANGE`.
 
 ### Verification
 
-Backend `1337 passed / 0 failed / 0 skipped`, all `942` merged-baseline node IDs still collected. Focused frontend suite `test:audit-log-workspace` `45 passed`. All `18` frontend `test:*` scripts pass. `npm run build` passes. `git diff --check` clean. `frontend/src/main.ts` `6398` → `6381`. Exact-head API and browser smoke results are recorded in the pull request body against the exact published head.
+Focused backend `422 passed`; complete backend `1364 passed / 0 failed / 0 skipped`; all `942` merged-baseline node IDs still collected with zero renames. Focused frontend suite `test:audit-log-workspace` `82 passed / 0 failed / 0 skipped` in both the normal and explicit `TZ=Europe/Amsterdam` runs. All `18` frontend `test:*` scripts pass. `npm run build` passes. `git diff --check` clean. `frontend/src/main.ts` `6398` → `6380`. Exact-head API and browser smoke results for the correction commit are recorded in the pull request body. The prior smoke at `749c51992c43af65f8297acb0979aded86fdb607` applies only to that previous head and is superseded for merge-readiness.
+
+Review corrections preserve accepted rows across route re-entry refresh failures,
+keep draft and applied filters separate until a successful apply or clear,
+preserve keyboard focus through targeted updates and necessary full renders,
+reject nonexistent and ambiguous local DST times without issuing a request, and
+bound arbitrary-length pagination input before Python integer conversion or
+SQLite binding. Rejected reads remain read-only.
 
 ### Immediate next step
 

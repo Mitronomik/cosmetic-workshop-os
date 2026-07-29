@@ -13,7 +13,7 @@ import sqlite3
 import pytest
 
 from app.db.config import DatabaseConfig
-from app.domain.audit_log_query import DEFAULT_LIMIT, DEFAULT_OFFSET, parse_audit_log_query
+from app.domain.audit_log_query import DEFAULT_LIMIT, DEFAULT_OFFSET, MAX_SQLITE_OFFSET, parse_audit_log_query
 from app.domain.errors import DomainIssueCode, DomainValidationError
 from app.repositories.audit import AuditLogRepository
 from app.services.audit_logs import AuditLogsService
@@ -105,6 +105,66 @@ def test_limits_inside_the_range_are_accepted(value):
 @pytest.mark.parametrize("value", ["0", "1", "5000"])
 def test_offset_has_no_upper_bound(value):
     assert parse_audit_log_query(offset=value).offset == int(value)
+
+
+def test_the_offset_maximum_is_the_largest_value_sqlite_can_bind():
+    assert MAX_SQLITE_OFFSET == 9_223_372_036_854_775_807
+    assert parse_audit_log_query(offset=str(MAX_SQLITE_OFFSET)).offset == MAX_SQLITE_OFFSET
+
+
+def test_an_offset_above_the_sqlite_maximum_is_rejected_rather_than_bound():
+    issue = raises(offset=str(MAX_SQLITE_OFFSET + 1)).issue
+    assert issue.code is DomainIssueCode.PAGINATION_OUT_OF_RANGE
+    assert issue.field == "offset"
+
+
+@pytest.mark.parametrize(
+    "field,value,expected",
+    [
+        ("limit", "9" * 5000, DomainIssueCode.PAGINATION_OUT_OF_RANGE),
+        ("limit", "-" + "9" * 5000, DomainIssueCode.NEGATIVE_QUANTITY),
+        ("offset", "9" * 5000, DomainIssueCode.PAGINATION_OUT_OF_RANGE),
+        ("offset", "-" + "9" * 5000, DomainIssueCode.NEGATIVE_QUANTITY),
+    ],
+)
+def test_arbitrarily_long_pagination_input_is_classified_without_converting_it(field, value, expected):
+    """A five-thousand-digit parameter is a range error, never an exception.
+
+    Converting first and range-checking second is what would turn a hostile query
+    string into an unhandled error, so the classification has to survive an input
+    far larger than any integer the database could hold.
+    """
+    issue = raises(**{field: value}).issue
+    assert issue.code is expected
+    assert issue.field == field
+
+
+@pytest.mark.parametrize("field", ["limit", "offset"])
+def test_a_rejected_extreme_value_is_echoed_back_bounded(field):
+    """The echoed value is a bounded excerpt, never the whole hostile payload."""
+    issue = raises(**{field: "9" * 5000}).issue
+    assert len(issue.value) <= 40
+    assert len(issue.message) < 400
+
+
+@pytest.mark.parametrize(
+    "field,value,expected",
+    [
+        ("limit", "0001", 1),
+        ("limit", "000200", 200),
+        ("offset", "0000", 0),
+        ("offset", "-0", 0),
+        ("offset", "0000000000000000000000012", 12),
+    ],
+)
+def test_leading_zeroes_and_negative_zero_normalize_without_changing_the_verdict(field, value, expected):
+    assert getattr(parse_audit_log_query(**{field: value}), field) == expected
+
+
+def test_negative_zero_limit_is_a_range_error_not_a_negative_quantity():
+    """`-0` is zero, so it fails the `1..200` range rather than the sign check."""
+    assert raises(limit="-0").issue.code is DomainIssueCode.PAGINATION_OUT_OF_RANGE
+    assert raises(limit="000201").issue.code is DomainIssueCode.PAGINATION_OUT_OF_RANGE
 
 
 def test_pagination_out_of_range_is_not_an_existing_reused_code():

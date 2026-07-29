@@ -22,6 +22,7 @@ import { sectionForLocation } from './app-navigation-routes.js';
 import { auditLogPresentation, auditLogWorkspaceMarkup } from './audit-log-presentation.js';
 import { AuditLogWorkspaceRuntime } from './audit-log-workspace.js';
 import { bindAuditLogWorkspaceControls } from './audit-log-bindings.js';
+import { renderAuditLogWithFocus, syncAuditLogFilterState } from './audit-log-dom.js';
 import { ALERT_REGENERATION_REFRESH_WARNING_ANNOUNCEMENT, AlertsFeedbackLifecycle, alertsPresentation, bindAlertsActionControls, filterDisplayedAlerts, selectAlertFocusTarget, transitionAlertsRouteOwnership, type AlertFilters } from './alerts-feedback.js';
 import { PurchaseSuggestionsFeedbackLifecycle, purchaseSuggestionsPresentation, DEFAULT_PURCHASE_FILTERS, type PurchaseSuggestionFilters as LifecyclePurchaseSuggestionFilters } from './purchase-suggestions-feedback.js';
 import { createPurchaseSuggestionsRuntime } from './purchase-suggestions-runtime.js';
@@ -777,11 +778,9 @@ let settingsUiState: SettingsUiState = { status: 'idle', data: null, error: '' }
 const emptyWorkshopProfile = (): WorkshopProfile => ({ workshop_name: '', master_name: '', workshop_contact_text: '', workshop_note: '' });
 let workshopProfileUiState: WorkshopProfileUiState = { status: 'idle', actionStatus: 'idle', profile: null, draft: emptyWorkshopProfile(), error: '', message: '' };
 const settingsTaxRuntime = new SettingsTaxRateRuntime({ read: getTaxRateSetting, save: updateTaxRateSetting, ownsRoute: () => activeSection === 'Настройки', render: () => render(), announce: (message, kind) => (kind === 'assertive' ? announceAssertive(message) : announcePolite(message)), fieldErrorFromFailure: taxRateFieldErrorFromFailure });
-const auditLogRuntime = new AuditLogWorkspaceRuntime({ read: (url) => apiGet<unknown>(url), ownsRoute: () => activeSection === 'Журнал действий', render: () => { if (activeSection === 'Журнал действий') render(); }, announce: (message, kind) => (kind === 'assertive' ? announceAssertive(message) : announcePolite(message)) });
+const auditLogRuntime = new AuditLogWorkspaceRuntime({ read: (url) => apiGet<unknown>(url), ownsRoute: () => activeSection === 'Журнал действий', render: () => { if (activeSection === 'Журнал действий') renderAuditLogWithFocus(document, render); }, announce: (message, kind) => (kind === 'assertive' ? announceAssertive(message) : announcePolite(message)), syncFilters: (sync) => syncAuditLogFilterState(document, sync) });
 
-function sectionFromLocation(): NavigationSection {
-  return sectionForLocation(window.location.pathname, window.location.hash) as NavigationSection;
-}
+function sectionFromLocation(): NavigationSection { return sectionForLocation(window.location.pathname, window.location.hash) as NavigationSection; }
 
 function pathForSection(section: NavigationSection): string {
   return navigationGroups.flatMap((group) => group.items).find((item) => item.section === section)?.path ?? '/';
@@ -811,7 +810,7 @@ function loadSectionData(section: NavigationSection) {
   if (section === 'Тара') loadPackagingItems();
   if (section === 'Отчеты') loadReports();
   if (section === 'Настройки') { loadSettingsStatus(); loadWorkshopProfile(); settingsTaxRuntime.enter(); settingsTaxRuntime.load('initial'); } else settingsTaxRuntime.leave();
-  if (section === 'Журнал действий') { auditLogRuntime.enter(); auditLogRuntime.load(); } else auditLogRuntime.leave();
+  if (section === 'Журнал действий') auditLogRuntime.enter(); else auditLogRuntime.leave();
 }
 
 function renderActivePage(section: NavigationSection) {
