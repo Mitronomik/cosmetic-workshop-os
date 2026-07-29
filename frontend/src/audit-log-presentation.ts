@@ -12,7 +12,7 @@
  */
 
 import type { AuditLogFilterOption, AuditLogFilters, AuditLogItemDto } from './audit-log-contract.js';
-import { auditLogAllRowsLoaded, auditLogFiltersEqual } from './audit-log-contract.js';
+import { auditLogAllRowsLoaded, auditLogFiltersActive, auditLogFiltersEqual } from './audit-log-contract.js';
 import type { AuditLogState } from './audit-log-workspace.js';
 
 export const AUDIT_LOG_TITLE = 'Журнал действий';
@@ -82,14 +82,9 @@ export type AuditLogPresentation = {
   allLoaded: boolean;
   canRefresh: boolean;
   canLoadMore: boolean;
+  canClearFilters: boolean;
   loadMoreBusy: boolean;
-  filtersActive: boolean;
 };
-
-/** Whether the user has narrowed the history at all. */
-export function auditLogFiltersActive(filters: AuditLogFilters): boolean {
-  return Object.values(filters).some((value) => value !== '');
-}
 
 /**
  * The user's local date and time for one backend UTC instant.
@@ -143,8 +138,10 @@ export function auditLogPresentation(state: AuditLogState): AuditLogPresentation
     // Appending a page produced by the applied filters while the controls show
     // something else would present one list as the answer to two questions.
     canLoadMore: !busy && !allLoaded && state.items.length > 0 && !filtersDirty,
+    canClearFilters:
+      !busy &&
+      (auditLogFiltersActive(state.draftFilters) || auditLogFiltersActive(state.appliedFilters)),
     loadMoreBusy: state.activeKind === 'load-more',
-    filtersActive: auditLogFiltersActive(state.draftFilters),
   };
 }
 
@@ -214,7 +211,7 @@ function filtersMarkup(view: AuditLogPresentation): string {
     `<p class="next-step" data-state="audit-log-filters-pending" role="status" ${view.filtersDirty ? '' : 'hidden'}>${escapeHtml(AUDIT_LOG_FILTERS_PENDING)}</p>`,
     `<div class="actions">`,
     `<button class="primary-action" type="submit" data-action="apply-audit-log-filters" data-focus-key="audit-log-apply-filters" ${disabled}>${AUDIT_LOG_APPLY_FILTERS_LABEL}</button>`,
-    `<button class="secondary-action" type="button" data-action="clear-audit-log-filters" data-focus-key="audit-log-clear-filters" ${view.filtersActive && !view.busy ? '' : 'disabled'}>${AUDIT_LOG_CLEAR_FILTERS_LABEL}</button>`,
+    `<button class="secondary-action" type="button" data-action="clear-audit-log-filters" data-focus-key="audit-log-clear-filters-bar" ${view.canClearFilters ? '' : 'disabled'}>${AUDIT_LOG_CLEAR_FILTERS_LABEL}</button>`,
     `</div>`,
     `</form></section>`,
   ].join('');
@@ -269,7 +266,7 @@ function bodyMarkup(view: AuditLogPresentation, renderFeedback: AuditLogFeedback
     return [
       `<section class="card empty-card" data-state="audit-log-filtered-empty">`,
       `<h2>${escapeHtml(AUDIT_LOG_FILTERED_EMPTY_TITLE)}</h2><p>${escapeHtml(AUDIT_LOG_FILTERED_EMPTY_TEXT)}</p>`,
-      `<div class="actions"><button class="secondary-action" type="button" data-action="clear-audit-log-filters">${AUDIT_LOG_CLEAR_FILTERS_LABEL}</button></div>`,
+      `<div class="actions"><button class="secondary-action" type="button" data-action="clear-audit-log-filters" data-focus-key="audit-log-clear-filters-empty" ${view.canClearFilters ? '' : 'disabled'}>${AUDIT_LOG_CLEAR_FILTERS_LABEL}</button></div>`,
       `</section>`,
     ].join('');
   }

@@ -5,6 +5,7 @@ import {
   FORBIDDEN_ITEM_KEYS,
   appendAuditLogPage,
   auditLogAllRowsLoaded,
+  auditLogFiltersActive,
   auditLogFiltersEqual,
   auditLogItemDtoIsValid,
   auditLogListDtoIsValid,
@@ -294,6 +295,17 @@ test('filters are compared field by field, not by identity', () => {
   assert.equal(auditLogFiltersEqual(EMPTY_AUDIT_LOG_FILTERS, { ...EMPTY_AUDIT_LOG_FILTERS }), true);
 });
 
+test('filter activity is detected field by field for every control', () => {
+  assert.equal(auditLogFiltersActive({ ...EMPTY_AUDIT_LOG_FILTERS }), false);
+  for (const field of ['createdFrom', 'createdBefore', 'action', 'entityType', 'actorType']) {
+    assert.equal(
+      auditLogFiltersActive({ ...EMPTY_AUDIT_LOG_FILTERS, [field]: 'active' }),
+      true,
+      field,
+    );
+  }
+});
+
 // --------------------------------------------------------------------------
 // Local time conversion and DST safety
 // --------------------------------------------------------------------------
@@ -561,6 +573,7 @@ test('a draft edit reports its consequences through a targeted sync, not a rende
     filtersDirty: true,
     fieldErrors: { createdFrom: '', createdBefore: '' },
     canLoadMore: false,
+    canClearFilters: true,
   });
 });
 
@@ -932,7 +945,7 @@ test('every required focus key is present in the rendered workspace', async () =
     'audit-log-filter-entity-type',
     'audit-log-filter-actor-type',
     'audit-log-apply-filters',
-    'audit-log-clear-filters',
+    'audit-log-clear-filters-bar',
     'audit-log-load-more',
   ];
   for (const key of required) assert.ok(root.querySelector(`[data-focus-key="${key}"]`), key);
@@ -1013,7 +1026,8 @@ test('each list state renders its own stable marker', async () => {
   const filteredRoot = markupView(filtered.runtime);
   assert.ok(filteredRoot.querySelector('[data-state="audit-log-filtered-empty"]'));
   assert.equal(filteredRoot.textContent.includes(AUDIT_LOG_FILTERED_EMPTY_TITLE), true);
-  assert.ok(filteredRoot.querySelector('[data-action="clear-audit-log-filters"]'));
+  assert.ok(filteredRoot.querySelector('[data-focus-key="audit-log-clear-filters-bar"]'));
+  assert.ok(filteredRoot.querySelector('[data-focus-key="audit-log-clear-filters-empty"]'));
 
   const failed = harness();
   failed.runtime.enter();
@@ -1120,6 +1134,115 @@ test('a draft edit updates the hint, load more and field error in place', async 
   assert.equal(container.querySelector('[data-state="audit-log-filters-pending"]'), hintBefore);
 });
 
+test('clear is disabled when both draft and applied filters are empty', async () => {
+  const { runtime } = await loaded(page([item()], 9));
+  assert.equal(view(runtime).canClearFilters, false);
+  assert.equal(runtime.filterSync().canClearFilters, false);
+  const clear = markupView(runtime).querySelector('[data-focus-key="audit-log-clear-filters-bar"]');
+  assert.equal(clear.disabled, true);
+});
+
+test('a draft filter enables clear in place without replacing nodes or focus', async () => {
+  const { state, runtime } = await loaded(page([item()], 9));
+  const { container } = workspaceDom(runtime);
+  const action = container.querySelector('[data-audit-log-filter="action"]');
+  const clear = container.querySelector('[data-focus-key="audit-log-clear-filters-bar"]');
+  action.focus();
+  const rendersBefore = state.renders;
+
+  runtime.setFilter('action', 'client.created');
+  syncAuditLogFilterState(container, runtime.filterSync());
+
+  assert.equal(state.renders, rendersBefore);
+  assert.equal(container.querySelector('[data-focus-key="audit-log-clear-filters-bar"]'), clear);
+  assert.equal(clear.disabled, false);
+  assert.equal(fakeDocument.activeElement, action);
+});
+
+test('returning the only draft filter to empty disables clear in place', async () => {
+  const { runtime } = await loaded(page([item()], 9));
+  const { container } = workspaceDom(runtime);
+  const clear = container.querySelector('[data-focus-key="audit-log-clear-filters-bar"]');
+
+  runtime.setFilter('action', 'client.created');
+  syncAuditLogFilterState(container, runtime.filterSync());
+  assert.equal(clear.disabled, false);
+
+  runtime.setFilter('action', '');
+  syncAuditLogFilterState(container, runtime.filterSync());
+  assert.equal(clear.disabled, true);
+});
+
+test('an applied filter keeps clear enabled when the draft returns to empty', async () => {
+  const { state, runtime } = await loaded(page([item()], 9));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([item({ id: 2 })], 1));
+  await flush();
+
+  const { container } = workspaceDom(runtime);
+  const clear = container.querySelector('[data-focus-key="audit-log-clear-filters-bar"]');
+  runtime.setFilter('action', '');
+  syncAuditLogFilterState(container, runtime.filterSync());
+
+  assert.equal(runtime.state.appliedFilters.action, 'client.created');
+  assert.equal(runtime.state.draftFilters.action, '');
+  assert.equal(clear.disabled, false);
+});
+
+test('a failed clear keeps both rendered clear actions enabled', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([]));
+  await flush();
+
+  runtime.clearFilters();
+  state.reads.at(-1).reject(new Error('offline'));
+  await flush();
+
+  const root = markupView(runtime);
+  const clearButtons = root.querySelectorAll('[data-action="clear-audit-log-filters"]');
+  assert.equal(clearButtons.length, 2);
+  assert.equal(clearButtons.every((button) => !button.disabled), true);
+  assert.equal(runtime.state.draftFilters.action, '');
+  assert.equal(runtime.state.appliedFilters.action, 'client.created');
+});
+
+test('every rendered clear action is disabled while an AuditLog request is active', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([]));
+  await flush();
+
+  runtime.clearFilters();
+  const clearButtons = markupView(runtime).querySelectorAll('[data-action="clear-audit-log-filters"]');
+  assert.equal(clearButtons.length, 2);
+  assert.equal(clearButtons.every((button) => button.disabled), true);
+  assert.equal(view(runtime).canClearFilters, false);
+});
+
+test('targeted clear synchronization updates every rendered clear action', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([]));
+  await flush();
+  const { container } = workspaceDom(runtime);
+  const clearButtons = container.querySelectorAll('[data-action="clear-audit-log-filters"]');
+  assert.equal(clearButtons.length, 2);
+  assert.equal(clearButtons.every((button) => !button.disabled), true);
+
+  runtime.state.activeKind = 'filter';
+  syncAuditLogFilterState(container, runtime.filterSync());
+  assert.equal(clearButtons.every((button) => button.disabled), true);
+
+  runtime.state.activeKind = null;
+  syncAuditLogFilterState(container, runtime.filterSync());
+  assert.equal(clearButtons.every((button) => !button.disabled), true);
+});
+
 test('editing a date clears only that field error and leaves the other alone', async () => {
   const { state, runtime } = await loaded(page([item()], 1));
   runtime.setFilter('createdFrom', '2026-07-05T00:00');
@@ -1201,6 +1324,61 @@ test('a render falls back to the workspace container when the control is gone', 
   assert.equal(fakeDocument.activeElement.getAttribute('data-focus-key'), 'audit-log-workspace');
 });
 
+test('filtered-empty clear uses a distinct key and falls back to the workspace after success', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([]));
+  await flush();
+  const { container, mount } = workspaceDom(runtime);
+  const bar = container.querySelector('[data-focus-key="audit-log-clear-filters-bar"]');
+  const empty = container.querySelector('[data-focus-key="audit-log-clear-filters-empty"]');
+  assert.ok(bar);
+  assert.ok(empty);
+  assert.notEqual(bar.getAttribute('data-focus-key'), empty.getAttribute('data-focus-key'));
+  empty.focus();
+
+  globalThis.document = fakeDocument;
+  try {
+    runtime.clearFilters();
+    renderAuditLogWithFocus(container, mount);
+    assert.notEqual(fakeDocument.activeElement, container);
+    assert.equal(fakeDocument.activeElement.getAttribute('data-focus-key'), 'audit-log-workspace');
+
+    state.reads.at(-1).resolve(page([item()], 1));
+    await flush();
+    renderAuditLogWithFocus(container, mount);
+  } finally {
+    delete globalThis.document;
+  }
+
+  assert.equal(container.querySelector('[data-focus-key="audit-log-clear-filters-empty"]'), null);
+  assert.equal(fakeDocument.activeElement.getAttribute('data-focus-key'), 'audit-log-workspace');
+});
+
+test('leaving during filtered-empty clear prevents focus restoration into AuditLog markup', async () => {
+  const { state, runtime } = await loaded(page([item()], 1));
+  runtime.setFilter('action', 'client.created');
+  runtime.applyFilters();
+  state.reads.at(-1).resolve(page([]));
+  await flush();
+  const { container } = workspaceDom(runtime);
+  container.querySelector('[data-focus-key="audit-log-clear-filters-empty"]').focus();
+  runtime.clearFilters();
+
+  const navigation = new ViewNode('button', { 'data-focus-key': 'settings-navigation' });
+  state.active = false;
+  runtime.leave();
+  container.children = [new ViewNode('div', { 'data-page': 'settings' }), navigation];
+  navigation.parent = container;
+  navigation.focus();
+  state.reads.at(-1).resolve(page([item()], 1));
+  await flush();
+
+  assert.equal(container.querySelector('[data-page="audit-log"]'), null);
+  assert.equal(fakeDocument.activeElement, navigation);
+});
+
 test('a render never steals focus from outside the workspace', async () => {
   const { runtime } = await loaded(page([item()], 9));
   const { container, mount } = workspaceDom(runtime);
@@ -1239,7 +1417,12 @@ test('after leaving the route no focus is restored into absent workspace markup'
 test('a sync against markup that is no longer the workspace is a safe no-op', () => {
   const container = new ViewNode('body');
   container.append(new ViewNode('div', { 'data-page': 'settings' }));
-  assert.doesNotThrow(() => syncAuditLogFilterState(container, { filtersDirty: true, fieldErrors: { createdFrom: '', createdBefore: '' }, canLoadMore: false }));
+  assert.doesNotThrow(() => syncAuditLogFilterState(container, {
+    filtersDirty: true,
+    fieldErrors: { createdFrom: '', createdBefore: '' },
+    canLoadMore: false,
+    canClearFilters: true,
+  }));
 });
 
 // --------------------------------------------------------------------------

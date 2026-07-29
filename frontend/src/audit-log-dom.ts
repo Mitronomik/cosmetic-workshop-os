@@ -54,6 +54,12 @@ export function syncAuditLogFilterState(root: ParentNode, sync: AuditLogFilterSy
   const loadMore = page.querySelector<HTMLButtonElement>('[data-action="load-more-audit-log"]');
   if (loadMore) loadMore.disabled = !sync.canLoadMore;
 
+  page
+    .querySelectorAll<HTMLButtonElement>('[data-action="clear-audit-log-filters"]')
+    .forEach((button) => {
+      button.disabled = !sync.canClearFilters;
+    });
+
   for (const { filter, field } of DATE_FILTER_ERRORS) {
     const message = sync.fieldErrors[field];
     const error = page.querySelector(`[data-audit-log-field-error="${filter}"]`);

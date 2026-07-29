@@ -176,6 +176,17 @@ export function auditLogFiltersEqual(left: AuditLogFilters, right: AuditLogFilte
   return (Object.keys(EMPTY_AUDIT_LOG_FILTERS) as (keyof AuditLogFilters)[]).every((key) => left[key] === right[key]);
 }
 
+/** Whether at least one filter control carries a non-empty value. */
+export function auditLogFiltersActive(filters: AuditLogFilters): boolean {
+  return (
+    filters.createdFrom !== '' ||
+    filters.createdBefore !== '' ||
+    filters.action !== '' ||
+    filters.entityType !== '' ||
+    filters.actorType !== ''
+  );
+}
+
 /**
  * A request that can be sent, or the date-control errors that stop it.
  *

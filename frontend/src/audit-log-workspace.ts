@@ -36,6 +36,7 @@ import {
   NO_AUDIT_LOG_FIELD_ERRORS,
   appendAuditLogPage,
   auditLogAllRowsLoaded,
+  auditLogFiltersActive,
   auditLogFiltersEqual,
   auditLogListDtoIsValid,
   auditLogRequestPlan,
@@ -90,6 +91,7 @@ export type AuditLogFilterSync = {
   filtersDirty: boolean;
   fieldErrors: AuditLogFieldErrors;
   canLoadMore: boolean;
+  canClearFilters: boolean;
 };
 
 export type AuditLogWorkspaceDependencies = {
@@ -215,14 +217,18 @@ export class AuditLogWorkspaceRuntime {
 
   filterSync(): AuditLogFilterSync {
     const dirty = this.filtersDirty();
+    const idle = this.state.activeKind === null;
     return {
       filtersDirty: dirty,
       fieldErrors: this.state.fieldErrors,
       canLoadMore:
         !dirty &&
-        this.state.activeKind === null &&
+        idle &&
         this.state.items.length > 0 &&
         !auditLogAllRowsLoaded(this.state.items.length, this.state.total),
+      canClearFilters:
+        idle &&
+        (auditLogFiltersActive(this.state.draftFilters) || auditLogFiltersActive(this.state.appliedFilters)),
     };
   }
 
