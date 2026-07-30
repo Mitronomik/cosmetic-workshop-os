@@ -891,11 +891,11 @@ Use focused frontend modules, following the pattern already established by `sett
 
 ---
 
-## 11. Actual AuditLog inventory on merged `main`
+## 11. Actual AuditLog inventory at the merged PR #160 baseline and on the current PR branch
 
 Inventoried from `backend/app/migrations/versions/0001_infrastructure.py`, `backend/app/repositories/audit.py` and every production `AuditLogRepository.create_log` call site.
 
-**Scope of this inventory.** These are the **current write vocabulary** — the values producible by merged-`main` production call sites. They were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. Read-only inventory: no call site was edited.
+**Scope of this inventory.** The merged PR #160 baseline has the pre-C3-II-A write vocabulary. The current PR branch adds exactly one production action, `workshop_profile.updated`, so the resulting PR-branch action vocabulary contains 51 actions; the entity vocabulary remains 19 and the suffix allowlist remains 21. These values were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. This inventory originated as the read-only C3-I inventory. C3-II-A adds exactly one new write call site for Workshop-profile changes and changes no other AuditLog write call site; write call sites for manual backup creation, JSON export creation and report-document generation remain absent and unauthorized.
 
 ### 11.1. `action` — 51 codes in the current write vocabulary
 
