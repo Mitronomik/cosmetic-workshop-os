@@ -238,7 +238,7 @@ Previously generated documents remain immutable and are never rewritten, regener
 
 ### 10. Lifecycle
 
-`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3-I is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159, while C3-II-A is implemented on its PR branch and not merged; C3 remains incomplete because `C3-II-B — File-backed artifact AuditLog semantics` is still `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. Contract: `docs/audit-log.md`. C4 remains inactive. Product release readiness is not claimed.
+`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3-I and C3-II-A are `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159 and PR #161. CR-009 is accepted and not implemented; only report-document slice B1 is authorized after this documentation PR merges, export B2 remains blocked by CR-006, and backup B3 remains blocked by CR-004. C3 remains incomplete. Contracts: `docs/audit-log.md` and ADR 0013. C4 remains inactive. Product release readiness is not claimed.
 
 ## Incomplete data
 
@@ -284,3 +284,59 @@ The frontend Reports UI is available at `/reports` and consumes these backend en
 ## Report document export foundation
 
 PR89/PR90 add an explicit document-export path for reports, and PR92 adds PDF generation foundation. The first document type is “Сводка мастерской” (`workshop_overview`) generated as Markdown or PDF from the existing overview report DTO. Creation is an explicit POST-only operation under `/api/report-documents`; opening `/reports` or using its contextual link to `/report-documents` does not create files. DOCX remains future work. See `docs/report-documents.md` for storage, safety, and metadata details.
+
+## CR-009 report-document AuditLog boundary
+
+`CR-009` is accepted and not implemented. A generated Markdown/PDF document
+and its metadata JSON remain one artifact unit. Existing compensation for a
+document-file or metadata-file creation failure remains valid. Once both files
+are complete, verified and agreeing, the artifact is authoritative and is
+never deleted merely because AuditLog finalization failed.
+
+```text
+C3-II-B1 — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+```
+
+B1 is the only authorized next runtime slice. It may add the next sequential
+`artifact_audit_operations` migration, the bounded ledger/finalizer, startup
+reconciliation after migrations, report-document pre-create reconciliation,
+`report_document.created`, additive create fields `audit_status` and
+`audit_message`, additive status field `pending_audit_count`, and frontend
+success-plus-warning presentation.
+
+Ordinary success remains HTTP `201` with `audit_status: recorded` and
+`audit_message: null`. Audit finalization failure also remains HTTP `201`, keeps
+the document available, returns `audit_status: pending` and a non-empty Russian
+warning, and must not trigger a duplicate create request. The exact B1 warning
+is:
+
+```text
+Документ создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку при следующем запуске или перед созданием следующего документа.
+```
+
+It names the only bounded retry triggers and does not imply immediate,
+periodic or background retry.
+
+`pending_audit_count` is exactly the count of ledger operations with
+`artifact_kind = report_document` and status `prepared` or `pending_audit`; it
+excludes `audited` and `abandoned`. `GET /api/report-documents/status` reads the
+count but performs no reconciliation. A definitely absent incomplete pair
+becomes `abandoned`; an ambiguous, unsafe or not-yet-finalized operation stays
+unresolved and counted. The frontend presents this only as a pending-Journal
+warning, not failed document creation.
+
+Before finalization or reconciliation, the primary document and metadata
+sidecar must pass the exact safe-name, configured-directory, regular-file,
+metadata parse/identity/type/format/extension/ID/size and safe-path checks in
+ADR 0013 and `docs/report-documents.md`. Content is not rerendered or compared
+with current report data. Existing files are never rewritten. A mismatched,
+malformed, unsafe or ambiguous pair is not audited or deleted.
+
+The event uses `entity_id = operation_id`, `actor_type = user`, persisted
+summary `Report document created`, and safe display summary
+`Документ отчёта создан`. Its metadata is limited to `operation_id`,
+`document_type`, `format` and boolean `reconciled_after_failure`. It stores no
+path, filename, reason, Workshop profile, report contents, entity counts,
+client information or arbitrary text. Existing report documents are never
+backfilled or modified. Full contract:
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`.

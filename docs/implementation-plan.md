@@ -49,7 +49,10 @@
 
 ### Current baseline
 
-- **Current baseline `origin/main`: `4ef02b8478c3eba06883f5b71290f91edb42a871`** (VERIFIED FROM REPOSITORY / GITHUB). This is the PR #160 merge commit.
+- **Current baseline `origin/main`: `3fec160f08aa7e775aa3e7ea650e570bf48955ad`** (VERIFIED FROM REPOSITORY / GITHUB). This is the PR #161 merge commit; there are no later commits on `origin/main`.
+- PR #161 — `C3-II-A — Implement atomic workshop-profile AuditLog coverage`, state `MERGED`: final reviewed and smoke-tested head `6c327630d0e4cca3c566253bf9f8224aaaa33172`; merge commit `3fec160f08aa7e775aa3e7ea650e570bf48955ad`; merged `2026-07-30T08:11:41Z`.
+- Exact-final-head evidence: `PASS — EXACT-HEAD C3-II-A FOCUSED SMOKE PASSED` on `6c327630d0e4cca3c566253bf9f8224aaaa33172`.
+- Focused backend `591 passed / 0 failed / 0 skipped`; complete backend `1376 collected / 1376 passed / 0 failed / 0 skipped`; all `1364` baseline node IDs preserved and `12` added; all `18` frontend `test:*` scripts passed; focused AuditLog frontend `92 passed`; `TZ=Europe/Amsterdam` AuditLog frontend `92 passed`; frontend build `PASS`. These backend/frontend suites ran on `354104cc326f1e1374324ef9128e5ef771a4a063`, not on the final documentation-only head. The production/test trees were byte-identical. The focused exact-head smoke is not release smoke.
 - PR #160 — lifecycle closure authorizing C3-II-A, state `MERGED`: final published head `cd43014a0233b153b8106e2d279a5a1b333b70d8`; merge commit `4ef02b8478c3eba06883f5b71290f91edb42a871`; merged `2026-07-30T05:02:55Z`.
 - PR #159 — `C3-I — Implement the read-only AuditLog workspace`, state `MERGED`: final reviewed and published head `bf7cde060a43190fdf22c612a16b0c137aa5531b`; merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`; merged `2026-07-30T03:20:23Z`.
 - Exact-final-head frontend evidence: focused AuditLog suite `92 passed / 0 failed / 0 skipped` in both the default run and `TZ=Europe/Amsterdam`; all frontend `test:*` scripts pass with `0 failed / 0 skipped`; production build `PASS`; `frontend/src/main.ts` is `6380` lines; exact-head browser smoke `PASS — EXACT-HEAD BROWSER SMOKE PASSED`, 60 scenarios.
@@ -59,7 +62,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. `C3-I` is merged and closed; C3 remains incomplete. `C3-II-A — Atomic workshop-profile AuditLog coverage` is implemented on its PR branch and not merged. `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains inactive. Product release readiness is not claimed.
+`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3-I and C3-II-A are merged and closed; C3 remains incomplete. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted and not implemented. Only `C3-II-B1 — Durable ledger and report-document AuditLog coverage` is authorized after this documentation PR merges. `C3-II-B2` remains blocked by CR-006, and `C3-II-B3` remains blocked by CR-004. C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -161,7 +164,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
 | Себестоимость, налог и маржа (расчёты и снапшоты) | **ЗАКРЫТО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154); отчёты и «Сводка мастерской» читают персистентные снапшоты (`C2-III-B`, PR #157). C2 завершён | Выполнено — контракт принят как `CR-008`; все четыре нарезки влиты и проверены по точному head |
-| AuditLog workspace | `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий») — **DONE — MERGED AND EXACT-HEAD VERIFIED**; `C3-II-A` — **IMPLEMENTED ON PR BRANCH — NOT MERGED**; контракт: `docs/audit-log.md` | C3 incomplete: file-backed `C3-II-B` still needs a product decision |
+| AuditLog workspace | C3-I and C3-II-A — **DONE — MERGED AND EXACT-HEAD VERIFIED**; `CR-009` — **ACCEPTED — NOT IMPLEMENTED**; contracts: `docs/audit-log.md`, ADR 0013 | C3 incomplete: only B1 authorized after this docs PR merges; B2 blocked by CR-006; B3 blocked by CR-004 |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
 
@@ -511,7 +514,7 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 
 Статус: `DONE`
 
-> **HISTORICAL — SUPERSEDED.** Every C1–C4 status inside this closed window was true while that window was open and is preserved only as history. Current lifecycle: C1 and C2 `COMPLETED`; C3-I `DONE — MERGED AND EXACT-HEAD VERIFIED`; C3-II-A authorized only after this documentation PR merges and not implemented; C3-II-B `NEEDS PRODUCT DECISION — NOT AUTHORIZED`; C3 incomplete; C4 inactive. See § C3 and `state/current-focus.md`. Product release readiness is still not claimed.
+> **HISTORICAL — SUPERSEDED.** Every C1–C4 status inside this closed window was true while that window was open and is preserved only as history. Current lifecycle: C1 and C2 `COMPLETED`; C3-I and C3-II-A `DONE — MERGED AND EXACT-HEAD VERIFIED`; CR-009 accepted and not implemented; B1 authorized after this documentation PR merges; B2 blocked by CR-006; B3 blocked by CR-004; C3 incomplete; C4 inactive. See § C3 and `state/current-focus.md`. Product release readiness is still not claimed.
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -887,7 +890,7 @@ Do not classify the behavior as unsafe and do not prescribe a correction design 
 
 Clearing these four failures does **not** make the product release-ready. The following stayed outside the backend baseline correction gate and were not activated by it: final macOS `.app`/`.dmg` and user-ready launch; packaged update flow and update smoke; verified user/remote installation process; Restore product decision and implementation; C1 tax setting; C2 cost, tax, and margin completion; C3 user-facing read-only AuditLog workspace; full release-candidate smoke; continued documentation accuracy. See section 7 and sections 11–13.
 
-> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3-I has also merged and closed as PR #159. C3-II-A is implemented on its PR branch and not merged; C3-II-B still needs a product decision and is not authorized. C3 remains incomplete, and product release readiness is still not claimed. Current state: § C3.
+> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3-I and C3-II-A have merged and closed as PR #159 and PR #161. CR-009 is accepted and not implemented; only C3-II-B1 is authorized after this documentation PR merges, while B2/B3 remain blocked by CR-006/CR-004. C3 remains incomplete, and product release readiness is still not claimed. Current state: § C3.
 
 ---
 
@@ -1103,7 +1106,7 @@ Authorization states:
 C2 — COMPLETED
 ```
 
-Every condition for C2 completion is met: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed. C3-I has since merged as PR #159; C3-II-A is implemented on its PR branch and not merged; C3 remains incomplete because C3-II-B is still `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains inactive.
+Every condition for C2 completion is met: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed. C3-I and C3-II-A have since merged as PR #159 and PR #161. C3 remains incomplete because CR-009 is accepted but not implemented: only B1 is authorized after this documentation PR merges, B2 remains blocked by CR-006, and B3 remains blocked by CR-004. C4 remains inactive.
 
 ### C2 — accepted product contract (`CR-008`)
 
@@ -1666,8 +1669,11 @@ Render backend DTO values; render `Недоступно` for null historical val
 
 ```text
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED
-C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-009 — ACCEPTED — NOT IMPLEMENTED
+C3-II-B1 — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
 ```
 
@@ -1675,7 +1681,7 @@ C3 — INCOMPLETE
 
 ### C3-II-A — Atomic workshop-profile AuditLog coverage
 
-This runtime slice is implemented on branch `codex/c3-ii-a-atomic-workshop-profile-audit` and covers `WorkshopProfileSettingsService.update_profile()` only. It is not `DONE`, `MERGED` or `COMPLETED` before review and merge.
+This runtime slice is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #161. It covers `WorkshopProfileSettingsService.update_profile()` only. The implementation contract below is preserved as the boundary the merged slice was held to.
 
 **Scope.** Reuse the existing endpoints and response shape. Validate/canonicalize first; open one transaction; read and compare the canonical `workshop_profile`; on a real change upsert through `SettingsRepository` and insert exactly one `workshop_profile.updated` row through `AuditLogRepository.create_log`, both on the same caller-owned connection; commit together. Audit failure rolls the profile update back; profile persistence failure commits no audit. A canonical no-op performs no upsert, preserves `updated_at`, writes no audit and returns the current profile with a normal Russian no-change message. No Clear or profile deletion.
 
@@ -1689,15 +1695,122 @@ This runtime slice is implemented on branch `codex/c3-ii-a-atomic-workshop-profi
 
 **Required exact-head smoke.** Isolated database, user-data directory, `HOME`, browser profile and dynamic ports. Update a real profile, verify one safe journal event and no profile value, submit the identical profile and verify no second event. Inject AuditLog failure and prove rollback, API failure, no committed audit, no false UI success, then one successful retry. Check desktop/narrow viewport, keyboard, console/page errors, failed requests and duplicate mutations. This is not release smoke.
 
-Full implementation contract: `docs/audit-log.md` § 16; Settings/API summaries: `docs/settings.md`, `docs/api.md`.
+Full implementation contract and honest evidence attribution: `docs/audit-log.md` § 16; Settings/API summaries: `docs/settings.md`, `docs/api.md`.
 
-### C3-II-B — File-backed artifact AuditLog semantics
+### CR-009 and C3-II-B — Durable file-backed artifact AuditLog semantics
 
-Manual backup creation, JSON export creation and report-document generation write filesystem artifacts outside SQLite. The truthful result after successful artifact creation followed by failed AuditLog persistence is unresolved. Do not choose deletion, partial success, total failure with artifact retained, missing-audit success, retry, outbox, sidecar, filename reconstruction or faux cross-resource atomicity implicitly.
+`CR-009` is **accepted and not implemented**. Durable contract:
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`; AuditLog summary:
+`docs/audit-log.md` § 17.
 
-A future product decision must define success/partial-success, user feedback, compensation safety, artifact authority, retry/reconciliation, duplicate protection, startup recovery and exact smoke. `C3-II-B` is not authorized. `CR-004` and `CR-006` remain separate and unchanged.
+A fully written and verified manual backup, JSON export or report document is the
+authoritative primary result. Audit finalization failure preserves it and
+returns HTTP `201` with `audit_status: pending` and a separate Russian warning;
+ordinary audited success returns `audit_status: recorded` and
+`audit_message: null`. File creation is preceded by one committed `prepared`
+row in the bounded `artifact_audit_operations` ledger. Audit insertion and
+ledger transition to `audited` commit in one SQLite transaction and are
+idempotent by stable unique `operation_id`.
 
-**Non-goals for the active window.** No backup/export/report-document audit, source persistence, detail endpoint, raw metadata viewer, AuditLog export/search/analytics/edit/rollback, Restore, C4, packaging, installation, update or release-candidate smoke.
+Reconciliation runs only after migrations during normal startup and before
+another scoped create. It inspects only the recorded safe relative filenames
+under the expected artifact directory, verifies the complete unit, and uses
+the same finalizer. It never runs from GET/list/status, scans arbitrary
+directories, backfills legacy files, or creates a background retry system.
+Paths, filenames, reasons, contents, Workshop profile, entity counts, client
+data and arbitrary text are prohibited from AuditLog. The automatic
+`before_migration` startup backup remains outside the ledger and before
+migrations.
+
+#### C3-II-B1 — Durable ledger and report-document AuditLog coverage
+
+Status:
+
+```text
+AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+```
+
+After this documentation PR merges, one fresh runtime branch may implement
+only:
+
+- the next sequential migration for `artifact_audit_operations`;
+- the bounded ledger repository/domain service and idempotent finalizer;
+- startup reconciliation after migrations;
+- pre-create reconciliation for report documents;
+- report-document creation integration only;
+- `report_document.created`;
+- additive create fields `audit_status` and `audit_message`;
+- additive status field `pending_audit_count`;
+- frontend artifact-success plus separate pending-Journal warning;
+- directly affected backend/frontend tests and focused exact-head smoke.
+
+The report Markdown/PDF file and metadata JSON remain one artifact unit.
+Existing partial-file compensation remains. No runtime PR number is assigned.
+
+The B1 implementation contract is intentionally complete:
+
+- the ledger uses the exact typed columns, status `CHECK`, nullable
+  `audit_logs.id` reference, backend-generated lowercase UUID operation ID,
+  safe-filename validation and active artifact-identity ownership specified by
+  ADR 0013;
+- report-document creation alone writes
+  `artifact_kind = report_document` /
+  `audit_action = report_document.created`; `json_export` and `manual_backup`
+  remain reserved and unimplemented;
+- inability to commit preparation returns the exact documented HTTP `500`
+  `artifact_audit_tracking_unavailable` detail and creates neither artifact
+  file, metadata, AuditLog nor prepared row;
+- `AuditLogRepository.create_log(...)` receives only the compatible `-> int`
+  return extension from `cursor.lastrowid`; existing parameters, optional
+  caller connection and caller behavior remain;
+- one caller-owned, write-serialized transaction finalizes AuditLog and ledger
+  together, returns the stored ID when already audited, inserts only from
+  `prepared`/`pending_audit`, and rolls both writes back on either failure;
+- the document pair passes the exact twelve-point verification contract in ADR
+  0013 and `docs/report-documents.md`; no content rerender, current-report
+  comparison, rewrite or unsafe guess is permitted;
+- startup reconciliation is bounded, runs after successful initialization and
+  migrations before the ordinary UI, and tolerates an individual pending-event
+  failure without masking an independent database/migration failure;
+- pre-create reconciliation runs once, never loops, and an older finalization
+  failure does not make that artifact a failure; the new create proceeds only
+  if its new prepared row can still be committed;
+- `pending_audit_count` counts only unresolved `report_document` rows in
+  `prepared`/`pending_audit`, excludes `audited`/`abandoned`, and is read
+  without reconciliation or false document-failure presentation;
+- the exact B1 warning names only the next startup and the next document create
+  as retry triggers; no immediate, periodic or background retry is implied.
+
+Required B1 tests include sequential repeated finalization,
+startup-plus-pre-create repetition and two concurrent attempts, each proving
+one AuditLog row; one concurrent caller must receive or resolve the already
+audited result. AuditLog insert failure must leave the operation unresolved,
+and ledger-update failure must roll back the inserted AuditLog row. No generic
+transaction framework is authorized.
+
+#### C3-II-B2 — JSON export AuditLog coverage
+
+```text
+BLOCKED BY CR-006 — NOT AUTHORIZED
+```
+
+Do not implement or resolve CR-006 here. Export may reuse the accepted ledger
+only after the existing fallback-reachability and confirmation-semantics
+evidence gate is resolved.
+
+#### C3-II-B3 — Manual backup AuditLog coverage
+
+```text
+BLOCKED BY CR-004 — NOT AUTHORIZED
+```
+
+Do not implement or resolve CR-004 here. Manual backup may reuse the accepted
+ledger only after SQLite backup consistency behavior is decided.
+
+**Non-goals for the active window.** No backup or export audit, generic
+outbox/event bus/job queue, source persistence, detail endpoint, raw metadata
+viewer, AuditLog export/search/analytics/edit/rollback, Restore, C4, packaging,
+installation, update or release-candidate smoke.
 
 ## C4 — Restore и recovery
 

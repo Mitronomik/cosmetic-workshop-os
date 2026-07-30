@@ -212,3 +212,37 @@ The list above records the scope of **PR75 specifically** and is historical. Cur
 ## Testing
 
 Automated tests use `tmp_path` and monkeypatch `COSMETIC_WORKSHOP_DB_PATH` and, where needed, `COSMETIC_WORKSHOP_USER_DATA_DIR`. Tests must not write to the real `~/Documents/Мастерская косметолога/` directory.
+
+## CR-009 JSON-export AuditLog boundary
+
+`CR-009` accepts the durable artifact-primary and reconciliation semantics for
+future JSON-export AuditLog coverage, but does not implement them here. A fully
+written and verified export remains available if AuditLog finalization fails;
+the future create response remains HTTP `201` with `audit_status: pending` and
+a separate Russian warning rather than a false total failure. That future
+artifact-specific warning must name only the next normal startup and the next
+JSON-export create as retry triggers; it must not imply an immediate, periodic
+or background retry.
+
+Runtime status:
+
+```text
+C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+```
+
+The accepted bounded ledger may be reused for JSON exports only after CR-006
+determines the create-response fallback reachability and accepted confirmation
+semantics. CR-009 does not resolve or reactivate CR-006.
+
+The future ledger `primary_filename` is an internal safe relative filename and
+may contain the canonical filename-derived reason segment already accepted by
+CR-005. The ledger has no separate reason column and stores no raw human
+reason, request reason or export-manifest reason separately. The filename is
+never copied into AuditLog or exposed by `GET /api/audit-logs`; CR-005 is not
+reopened.
+
+Existing export files and manifests are not backfilled, renamed, rewritten or
+audited historically. AuditLog must never store an export path, filename,
+reason, contents, database contents, entity counts, request/response payload or
+arbitrary user text. Full decision:
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`.

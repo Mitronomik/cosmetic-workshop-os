@@ -2,15 +2,32 @@
 
 ## Current phase
 
-`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED`. The broader C3 obligation is incomplete.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED — NOT IMPLEMENTED`. The broader C3 obligation is incomplete.
 
 ## Current next step
 
-- Review the C3-II-A runtime PR after its exact-head focused smoke.
-- `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`.
+- Merge this documentation PR only after review; do not enable auto-merge.
+- After it merges, authorize only `C3-II-B1 — Durable ledger and report-document AuditLog coverage`.
+- Keep C3-II-B2 blocked by CR-006 and C3-II-B3 blocked by CR-004.
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
 
-## 2026-07-30 — C3-II-A atomic Workshop-profile AuditLog coverage implemented on PR branch
+## 2026-07-30 — C3-II-A closed; CR-009 accepted; C3-II-B subdivided
+
+- **Verified merged closure:** PR #161 `C3-II-A — Implement atomic workshop-profile AuditLog coverage`, state `MERGED`, base `main`, final reviewed and smoke-tested head `6c327630d0e4cca3c566253bf9f8224aaaa33172`, merge commit `3fec160f08aa7e775aa3e7ea650e570bf48955ad`, merged `2026-07-30T08:11:41Z`. Both commits are ancestors of `origin/main`, which was exactly the merge commit with no later commits at branch start.
+- **Honest evidence attribution:** exact-final-head `6c327630d0e4cca3c566253bf9f8224aaaa33172` has `PASS — EXACT-HEAD C3-II-A FOCUSED SMOKE PASSED`. Focused backend `591 passed / 0 failed / 0 skipped`, complete backend `1376 collected / 1376 passed / 0 failed / 0 skipped`, all `1364` baseline node IDs preserved with `12` added, all `18` frontend `test:*` scripts, focused AuditLog frontend `92 passed`, `TZ=Europe/Amsterdam` focused AuditLog frontend `92 passed`, and frontend build `PASS` were executed on `354104cc326f1e1374324ef9128e5ef771a4a063`. The final documentation-only head was production/test byte-identical, but those suites were not rerun there and are not relabelled as exact-final-head runs. The exact-head focused smoke is not release smoke.
+- **CR-009 accepted:** one new accepted change-request row, no Target PR, with the durable decision in `docs/decisions/0013-file-backed-artifact-audit-semantics.md`. A verified artifact is authoritative; audit-finalization failure preserves it and returns HTTP `201` with `audit_status: pending` plus a separate Russian warning.
+- **Bounded ledger:** backend-generated canonical lowercase UUID `operation_id`; exact typed fields and status `CHECK`; statuses `prepared`, `pending_audit`, `audited`, `abandoned`; commit `prepared` before file creation; one active operation per artifact identity; insert exactly one AuditLog row and mark `audited` in one caller-owned write-serialized SQLite transaction; no generic outbox/event bus/job queue.
+- **Filename privacy correction:** internal safe relative filename fields are required for deterministic reconciliation. Report-document filenames contain no request reason; future B2/B3 primary filenames may contain the canonical filename-derived reason segment accepted by CR-005. There is no separate reason column or separately stored raw human/request/export-manifest reason. Filenames, paths and reasons remain strictly prohibited from AuditLog and `GET /api/audit-logs`; CR-005 is not reopened and existing artifacts are not renamed or rewritten.
+- **B1 result/status contract:** preparation failure is exact HTTP `500` `artifact_audit_tracking_unavailable` and creates no file, metadata, audit or prepared row. Pending HTTP `201` names only next startup and next document creation as retry triggers. `pending_audit_count` counts `report_document` operations in `prepared`/`pending_audit`, excludes `audited`/`abandoned`, and is read without reconciliation or false failure presentation.
+- **Finalizer and verification:** B1 compatibly returns `cursor.lastrowid` from `AuditLogRepository.create_log(...)`; finalization serializes writers, returns an existing audited ID, inserts only from unresolved states and commits audit plus ledger together or neither. The document pair must pass the exact twelve-point safe filename/path/file/metadata identity and size contract; malformed, unsafe or ambiguous pairs remain unresolved and are never audited, deleted or rewritten.
+- **Reconciliation:** run only after successful initialization and migrations before the ordinary UI, and once before the next report-document create; inspect only recorded safe filenames under the expected directory; no GET/list/status mutation, background thread, unbounded retry, directory scan or legacy backfill. One pending-event failure does not make startup or the older artifact fail and does not hide independent initialization/migration failure. `before_migration` startup backups remain outside CR-009 and before migrations.
+- **Subdivision:** C3-II-B1 alone is `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; C3-II-B2 is `BLOCKED BY CR-006 — NOT AUTHORIZED`; C3-II-B3 is `BLOCKED BY CR-004 — NOT AUTHORIZED`. C3 remains incomplete; C4 remains inactive; product release readiness is not claimed.
+- **Documentation-only scope:** no runtime, test, migration, schema, dependency, lockfile, generated-file or local-artifact change. Runtime tests, builds, API/browser smoke and migration execution were not run because this is a Level 0 documentation-only PR.
+
+## HISTORICAL — SUPERSEDED — 2026-07-30 C3-II-A implemented on PR branch
+
+> This section was true before PR #161 merged and CR-009 was accepted. It is
+> preserved as the implementation-branch record.
 
 - **Baseline:** branch `codex/c3-ii-a-atomic-workshop-profile-audit` from exact `origin/main` `4ef02b8478c3eba06883f5b71290f91edb42a871` (PR #160 merge commit); clean start; baseline backend collection `1364`.
 - **Runtime:** canonical Workshop-profile mutations now read, compare, upsert and append exactly one `workshop_profile.updated` row on one caller-owned SQLite connection and transaction. Failure of either persistence step rolls the whole mutation back.

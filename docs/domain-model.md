@@ -1760,9 +1760,9 @@ restore
 - `metadata_json` is **never** returned by the read API. It is dominated by internal foreign-key IDs, enum codes and counters — exactly the class of value a non-technical user must not see — so the `C3-I` read model excludes it in full rather than field by field.
 - The **raw persisted `summary` is never returned either.** It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text. The read API returns `display_summary`, a backend-owned safe Russian value resolved from `action` by a focused presenter, with the raw summary never used as a value or a fallback. Historical rows are not rewritten — only what is shown changes.
 - The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
-- `C3-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159, but C3 is incomplete.
-- `C3-II-A` is implemented on its PR branch and not merged: one real canonical `workshop_profile` change and exactly one safe `workshop_profile.updated` row share one caller-owned SQLite transaction; either both commit or neither commits; a canonical no-op preserves `updated_at` and writes neither.
-- `C3-II-B` for manual backup, JSON export and report-document audit semantics remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. These file-backed operations need an explicit product result for artifact-success/audit-failure before any write call site is added.
+- C3-I (PR #159) and C3-II-A (PR #161) are both `DONE — MERGED AND EXACT-HEAD VERIFIED`, but C3 is incomplete.
+- `CR-009` is accepted and not implemented. For a scoped file-backed create, a fully written and verified artifact is the authoritative result. Audit finalization failure preserves it and returns HTTP `201` with a separate pending-Journal warning; it never becomes false total failure or silent ordinary success.
+- Only `C3-II-B1` is authorized after the CR-009 documentation PR merges. `C3-II-B2` remains blocked by CR-006 and `C3-II-B3` by CR-004.
 
 ### Examples
 
@@ -1771,9 +1771,76 @@ client_created
 recipe_version_created
 order_status_changed
 production_confirmed
-backup_created
+backup.created (reserved by CR-009; not implemented)
 settings_updated
 ```
+
+### Bounded file-backed artifact audit ledger (`CR-009`)
+
+The future `artifact_audit_operations` table is a narrowly scoped internal
+ledger, not a generic outbox or job queue. It is owned only by user-created
+manual backups, JSON exports and report documents.
+
+Minimum conceptual fields:
+
+```text
+operation_id TEXT PRIMARY KEY
+artifact_kind TEXT NOT NULL
+primary_filename TEXT NOT NULL
+companion_filename TEXT
+status TEXT NOT NULL
+audit_action TEXT NOT NULL
+audit_log_id INTEGER
+created_at TEXT NOT NULL
+updated_at TEXT NOT NULL
+```
+
+Allowed statuses are exactly `prepared`, `pending_audit`, `audited` and
+`abandoned`, enforced by a `CHECK`. `audit_log_id` is nullable and references
+`audit_logs.id`. `operation_id` is an opaque backend-generated canonical
+lowercase UUID string, never user-supplied or exposed through the Journal read
+API. B1 creates only `artifact_kind = report_document` with
+`audit_action = report_document.created`; `json_export` and `manual_backup`
+remain reserved future kinds.
+
+`primary_filename` and nullable `companion_filename` are internal safe relative
+filenames required for deterministic reconciliation, never unrestricted
+paths. Both are validated on write and reconciliation read; empty names,
+absolute paths, directory separators, `..`, NUL and control characters are
+invalid. One active operation may own one exact
+`(artifact_kind, primary_filename)` identity, and a second active operation
+cannot reconcile or audit it; active means `prepared` or `pending_audit`.
+
+Report-document filenames contain no request reason. Future B2/B3
+`primary_filename` values may contain the canonical filename-derived reason
+segment accepted by CR-005. The ledger has no separate `reason` column and
+stores no raw human reason, request reason, export-manifest reason or other
+separate user-authored text. CR-005 filename behavior is unchanged. The ledger
+contains no artifact content, Workshop profile or client data. Filenames are
+never copied into AuditLog or exposed through `GET /api/audit-logs`.
+
+The operation is prepared and committed before the filesystem write. After
+artifact verification, exactly one AuditLog row and the transition to
+`audited` commit together on one caller-owned, write-serialized SQLite
+connection. The compatible B1 extension makes
+`AuditLogRepository.create_log(...)` return `cursor.lastrowid` while preserving
+its inputs and optional connection; existing callers may ignore it. The
+idempotent finalizer, stored `audit_log_id` and unique `operation_id` provide
+duplicate protection. Reconciliation runs only after successful initialization
+and migrations at normal startup and once before another scoped create.
+Existing files are not backfilled, renamed or rewritten.
+
+For report documents, `primary_filename` identifies the Markdown/PDF file and
+`companion_filename` identifies its metadata JSON; both must exist and agree
+under the exact verification contract in ADR 0013 and
+`docs/report-documents.md` before audit finalization. Unresolved
+`report_document` rows in `prepared` or `pending_audit` form
+`pending_audit_count`; `audited` and `abandoned` are excluded. The status GET
+only reads the count. The automatic `before_migration` backup remains outside
+this model.
+
+The full persistence, reconciliation, privacy and event vocabulary contract is
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
 
 ---
 
@@ -1946,18 +2013,23 @@ deleted
 
 - Backup must be stored in user data directory.
 - Before migration, backup is mandatory.
-- Backup action should be audited.
+- Manual backup audit is governed by CR-009, but runtime coverage remains
+  `C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED`.
+- The automatic `before_migration` backup is not a manual user action and is
+  outside CR-009; it remains before migrations and cannot depend on the future
+  ledger table.
 - User must be able to see where backup file is located.
 
 ### Audit
 
-Log:
+Reserved success event after C3-II-B3 becomes separately authorized:
 
 ```text
-backup_created
-backup_failed
-backup_verified
+backup.created
 ```
+
+`backup_failed` and `backup_verified` are not authorized by CR-009. B3 remains
+blocked by CR-004.
 
 ---
 

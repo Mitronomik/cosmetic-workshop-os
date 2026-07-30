@@ -64,14 +64,17 @@ Updated `2026-07-30`. This block records only the completion-window status; unre
   - `C2-III-B` — snapshot-backed reports and report documents: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, final reviewed head `305d5421e79b8cb833df9588e705e9418781e021`, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`, exact-head API smoke `PASS — 53 checks / 0 failures`, exact-head browser smoke `PASS — FULL AUTOMATED SMOKE PASSED`, complete backend suite `942 passed / 0 failed / 0 skipped`. Snapshot-backed Reports, the additive DTO fields, the `/reports` presentation and the updated «Сводка мастерской» are **on merged `main`**. The report aggregation contract — row sets, `known_tax`, the `known_margin_percent` denominator, counter compatibility and warnings — is settled in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract* and was unchanged by the implementation.
 - **C3 — AuditLog workspace: `INCOMPLETE`.**
   - `C3-I — Read-only AuditLog workspace`: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #159, final reviewed and published head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`.
-  - `C3-II-A — Atomic workshop-profile AuditLog coverage`: **`IMPLEMENTED ON PR BRANCH — NOT MERGED`**.
-  - `C3-II-B — File-backed artifact AuditLog semantics`: **`NEEDS PRODUCT DECISION — NOT AUTHORIZED`**. It covers only manual backup, JSON export and report-document audit semantics.
+  - `C3-II-A — Atomic workshop-profile AuditLog coverage`: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #161, final reviewed and smoke-tested head `6c327630d0e4cca3c566253bf9f8224aaaa33172`, merge commit `3fec160f08aa7e775aa3e7ea650e570bf48955ad`, merged `2026-07-30T08:11:41Z`.
+  - `CR-009 — Durable file-backed artifact AuditLog semantics`: **`ACCEPTED — NOT IMPLEMENTED`**. Contract: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
+  - `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **`AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`**.
+  - `C3-II-B2 — JSON export AuditLog coverage`: **`BLOCKED BY CR-006 — NOT AUTHORIZED`**.
+  - `C3-II-B3 — Manual backup AuditLog coverage`: **`BLOCKED BY CR-004 — NOT AUTHORIZED`**.
   - The merged read API still exposes `actor_type` / `actor_label` rather than `source`, and only backend-owned safe `display_summary`; raw summary and metadata remain prohibited. Durable contract: `docs/audit-log.md`.
 - **C4 — Restore и recovery: `INACTIVE`.** Still `NEEDS PRODUCT DECISION`.
 
 `C2-III` was a planning umbrella; it was subdivided into exactly the two runtime slices above, and both are merged. **C2 is COMPLETED**: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed here.
 
-No C2 implementation PR remains open. `C3-I` is closed; `C3-II-A` is implemented on its PR branch and not merged; the broader C3 obligation remains incomplete because `C3-II-B` is unresolved. C4 stays inactive. Product release readiness is **not** claimed.
+No C2 implementation PR remains open. C3-I and C3-II-A are closed. The broader C3 obligation remains incomplete: CR-009 is accepted but not implemented, only C3-II-B1 is authorized after this documentation PR merges, and B2/B3 remain blocked by CR-006/CR-004. C4 stays inactive. Product release readiness is **not** claimed.
 
 ## 2. Главный продуктовый принцип
 

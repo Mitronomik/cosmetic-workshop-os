@@ -123,6 +123,90 @@ These actions call `GET /api/report-documents/{document_id}/download` and never 
 
 The backend validates that the document ID is known from metadata, the metadata filename/format match the generated file, and the resolved file remains inside `exports/report-documents`. Unknown IDs, missing files, path traversal, and unsafe metadata are rejected with human-readable Russian errors.
 
+## CR-009 B1 durable AuditLog contract
+
+This is an accepted future contract for C3-II-B1 and is not implemented by the
+CR-009 documentation PR.
+
+Before writing either file, B1 must commit one prepared
+`artifact_audit_operations` row. If that preparation cannot be committed,
+`POST /api/report-documents/reports/overview` returns HTTP `500`:
+
+```json
+{
+  "detail": {
+    "code": "artifact_audit_tracking_unavailable",
+    "message": "Не удалось безопасно подготовить создание документа. Документ не создан.",
+    "next_action": "Повторите создание документа. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
+
+No document, metadata file, AuditLog row or prepared ledger row is committed.
+Existing request-validation errors remain unchanged.
+
+After both files are written, finalization or reconciliation may create
+`report_document.created` only after all of these checks pass:
+
+1. ledger `primary_filename` and `companion_filename` pass safe-name validation;
+2. both resolve inside the configured report-documents directory;
+3. both exist and are regular files;
+4. metadata JSON parses as the existing `ReportDocumentMetadata`;
+5. metadata `filename` equals ledger `primary_filename`;
+6. metadata `metadata_filename` equals ledger `companion_filename`;
+7. metadata `document_type` is exactly `workshop_overview`;
+8. metadata format is one of the currently supported generated formats;
+9. the primary extension matches metadata format;
+10. metadata ID agrees with the generated filename contract;
+11. metadata `size_bytes` equals the current primary-file byte size;
+12. the existing safe-path rules remain satisfied.
+
+The verifier does not rerender document content or compare it with current
+report data. It never rewrites an existing document or metadata file. A pair
+that is definitely absent because creation failed makes its operation
+`abandoned`. A mismatched, malformed, unsafe or ambiguous pair is not audited
+or deleted; its operation stays `prepared` or `pending_audit`, remains included
+in `pending_audit_count`, and surfaces a pending-Journal warning.
+
+On recorded success, HTTP remains `201 Created` and the response additively
+contains `audit_status: recorded` and `audit_message: null`. If the artifact is
+verified but AuditLog finalization fails, the artifact remains available and
+HTTP still remains `201`, with `audit_status: pending` and this exact warning:
+
+```text
+Документ создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку при следующем запуске или перед созданием следующего документа.
+```
+
+The frontend shows document success and the Journal warning separately, sends
+no duplicate create request, and exposes no raw path or AuditLog metadata.
+
+The future `pending_audit_count` returned by `GET
+/api/report-documents/status` is the count of rows where
+`artifact_kind = report_document` and `status` is `prepared` or
+`pending_audit`. It excludes `audited` and `abandoned`. The status endpoint
+only reads the count; it never reconciles. Normal startup reconciliation runs
+after successful database initialization and migrations and before the
+ordinary UI is served. A definitely absent incomplete artifact becomes
+`abandoned` and drops out of the count; an ambiguous, unsafe or
+not-yet-finalized operation remains unresolved and counted. The frontend
+presents the count only as a pending-Journal warning, not failed document
+creation.
+
+Startup reconciliation is bounded to unresolved report-document operations.
+Failure to finalize one event leaves it unresolved, preserves its files and
+allows startup to complete with the pending count/warning; it does not hide an
+independent migration or database-initialization failure. Pre-create
+reconciliation runs once before preparing the next document. Failure on an
+older valid document does not turn that document into failure and may allow the
+new create to proceed only if the new prepared row can still be committed. A
+new preparation failure uses the exact HTTP `500` response above. Neither
+trigger loops or retries without bound.
+
+Report-document ledger filenames contain no request reason. Future export and
+manual-backup filename semantics are outside B1 and remain governed by CR-005.
+No filename, path or reason is copied into AuditLog or exposed through `GET
+/api/audit-logs`.
+
 ## Future work
 
 DOCX generation, preview, Markdown/PDF editors, arbitrary file browsing, and polished document styling should be added as later scoped PRs without changing report calculations or moving rendering logic into the frontend.
