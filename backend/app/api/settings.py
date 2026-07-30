@@ -2,7 +2,13 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.repositories.settings import SettingsNotInitializedError
 from app.schemas.settings import AppSettingsResponse, AppSettingResponse, SettingsStatusResponse, WorkshopProfileResponse, WorkshopProfileUpdateRequest
-from app.services.settings import WorkshopProfileSettingsService, WorkshopProfileValidationError, get_settings_status, read_app_settings
+from app.services.settings import (
+    WorkshopProfilePersistenceError,
+    WorkshopProfileSettingsService,
+    WorkshopProfileValidationError,
+    get_settings_status,
+    read_app_settings,
+)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -40,3 +46,12 @@ def update_workshop_profile(request: WorkshopProfileUpdateRequest) -> WorkshopPr
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except SettingsNotInitializedError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Database is not initialized. Run explicit database initialization before updating settings.") from exc
+    except WorkshopProfilePersistenceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "workshop_profile_not_saved",
+                "message": "Не удалось сохранить профиль мастерской. Предыдущие данные сохранены без изменений.",
+                "next_action": "Повторите сохранение. Если ошибка повторяется, проверьте, что локальное приложение работает.",
+            },
+        ) from exc

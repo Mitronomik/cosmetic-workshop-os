@@ -1335,7 +1335,7 @@ onboarding
 >
 > **Сырой сохранённый `summary` тоже не отдаётся.** API возвращает `display_summary` — безопасное русское значение, которое backend-презентер выводит из `action`. Исторические строки не переписываются. Полный контракт: `docs/audit-log.md`.
 >
-> **Lifecycle boundary.** `C3-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159. C3 remains incomplete. Only `C3-II-A — Atomic workshop-profile AuditLog coverage` is authorized after the lifecycle documentation PR merges: the canonical profile upsert and one safe `workshop_profile.updated` row must share one caller-owned SQLite transaction, and a canonical no-op writes neither. `C3-II-B` for manual backup, JSON export and report-document artifacts remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`, because filesystem creation and SQLite audit persistence have no accepted cross-resource failure semantics.
+> **Lifecycle boundary.** `C3-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159. C3 remains incomplete. `C3-II-A — Atomic workshop-profile AuditLog coverage` is implemented on its PR branch and not merged: the canonical profile upsert and one safe `workshop_profile.updated` row share one caller-owned SQLite transaction, and a canonical no-op writes neither. `C3-II-B` for manual backup, JSON export and report-document artifacts remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`, because filesystem creation and SQLite audit persistence have no accepted cross-resource failure semantics.
 
 ---
 

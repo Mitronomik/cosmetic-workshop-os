@@ -238,7 +238,7 @@ Previously generated documents remain immutable and are never rewritten, regener
 
 ### 10. Lifecycle
 
-`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3-I is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159, but C3 is incomplete. Only `C3-II-A — Atomic workshop-profile AuditLog coverage` is authorized after the lifecycle documentation PR merges; `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. Contract: `docs/audit-log.md`. C4 remains inactive. Product release readiness is not claimed.
+`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3-I is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159, while C3-II-A is implemented on its PR branch and not merged; C3 remains incomplete because `C3-II-B — File-backed artifact AuditLog semantics` is still `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. Contract: `docs/audit-log.md`. C4 remains inactive. Product release readiness is not claimed.
 
 ## Incomplete data
 

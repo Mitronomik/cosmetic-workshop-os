@@ -1,6 +1,31 @@
 # Handoff
 
-## C3-I closure and C3-II-A authorization handoff (2026-07-30)
+## C3-II-A implementation handoff — PR branch, not merged (2026-07-30)
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED
+C3 — INCOMPLETE
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+Branch `codex/c3-ii-a-atomic-workshop-profile-audit` started clean from PR #160 merge commit `4ef02b8478c3eba06883f5b71290f91edb42a871`; baseline backend collection was `1364`.
+
+The implementation is limited to atomic Workshop-profile persistence and its safe Journal event. A real canonical mutation writes `app_settings.workshop_profile` and exactly one `workshop_profile.updated` AuditLog row on the same caller-owned SQLite connection and transaction. Audit or setting failure rolls both back. Canonical identical requests write nothing and preserve `updated_at`; missing/empty and configured-to-empty follow the exact contract in `docs/settings.md`.
+
+Event identity is `workshop_profile.updated` / `app_setting` / `workshop_profile` / `user`, with technical summary `Workshop profile updated`. Metadata contains exactly `setting_key`, sorted `changed_fields`, `changed_field_count`, `previous_configured`, and `new_configured`; it contains no profile value or arbitrary text. Journal presentation is backend-owned: `Профиль мастерской изменён`, `Настройка приложения`, `Профиль мастерской обновлён`. Action/entity/suffix vocabulary sizes are 51/19/21.
+
+No frontend production file, repository implementation, schema, migration, backup/export/report-document production service, source field, event bus or generic settings mutation framework changed. Existing response shape, validation, tax-setting atomicity and historical report documents remain compatible.
+
+Pre-publication checks passed: focused backend `591 passed`; complete backend `1376 collected / 1376 passed / 0 failed / 0 skipped`; all `1364` baseline node IDs remain collected with `12` additions. All `18` frontend `test:*` scripts passed, including Settings (`52 passed`) and AuditLog (`92 passed`) in default time zone and `TZ=Europe/Amsterdam`; production build passed. Exact published-head smoke evidence is publication-only evidence recorded in the PR and external `/tmp` report, not in a post-smoke source commit. Do not merge or enable auto-merge. C3-II-B, C4, Restore, packaging, installation, update and release-candidate work remain inactive.
+
+## HISTORICAL — SUPERSEDED — C3-I closure and C3-II-A authorization handoff (2026-07-30)
+
+> This section was the handoff before C3-II-A implementation began. It remains historical and is superseded by the implementation handoff above.
 
 This is a documentation-only lifecycle handoff. No runtime code, test, schema, migration, dependency, lockfile or generated artifact changes.
 

@@ -1742,7 +1742,7 @@ onboarding
 restore
 ```
 
-> **This `source` vocabulary is aspirational and is NOT implemented.** No write call site persists a source/process dimension — there is no column, no parameter and no value carrying it. The only field that exists is **`actor_type`**, created by `0001_infrastructure` and written by `AuditLogRepository.create_log`, and the only values in the current write vocabulary are **`system`** (the `create_log` default, used by every call site except one) and **`user`** (written only for `tax_rate_setting_changed`).
+> **This `source` vocabulary is aspirational and is NOT implemented.** No write call site persists a source/process dimension — there is no column, no parameter and no value carrying it. The only field that exists is **`actor_type`**, created by `0001_infrastructure` and written by `AuditLogRepository.create_log`, and the only values in the current write vocabulary are **`system`** and **`user`**. User-initiated tax-rate and Workshop-profile mutations write `user`.
 >
 > **`system` and `user` are actors, not sources.** They describe who or what initiated the action, not the process it came from. `C3-I` therefore exposes **`actor_type` / `actor_label`** and **does not** expose a `source` field, because mapping one onto the other would silently change the meaning of the field.
 >
@@ -1761,7 +1761,7 @@ restore
 - The **raw persisted `summary` is never returned either.** It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text. The read API returns `display_summary`, a backend-owned safe Russian value resolved from `action` by a focused presenter, with the raw summary never used as a value or a fallback. Historical rows are not rewritten — only what is shown changes.
 - The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
 - `C3-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159, but C3 is incomplete.
-- `C3-II-A` is the only authorized follow-up runtime slice after the lifecycle documentation PR merges: one real canonical `workshop_profile` change and exactly one safe `workshop_profile.updated` row share one caller-owned SQLite transaction; either both commit or neither commits; a canonical no-op preserves `updated_at` and writes neither.
+- `C3-II-A` is implemented on its PR branch and not merged: one real canonical `workshop_profile` change and exactly one safe `workshop_profile.updated` row share one caller-owned SQLite transaction; either both commit or neither commits; a canonical no-op preserves `updated_at` and writes neither.
 - `C3-II-B` for manual backup, JSON export and report-document audit semantics remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. These file-backed operations need an explicit product result for artifact-success/audit-failure before any write call site is added.
 
 ### Examples

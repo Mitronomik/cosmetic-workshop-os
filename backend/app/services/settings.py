@@ -1,11 +1,15 @@
 import json
+import sqlite3
 import unicodedata
 from datetime import UTC, datetime
+from typing import Final
 
-from app.db.config import DatabaseConfig
+from app.db.config import DatabaseConfig, get_database_config
+from app.db.connection import session
 from app.db.paths import resolve_user_data_paths
 from app.models.settings import AppSetting
-from app.repositories.settings import SettingsRepository
+from app.repositories.audit import AuditLogRepository
+from app.repositories.settings import SettingsNotInitializedError, SettingsRepository
 from app.schemas.settings import (
     AppSettingsInfo,
     LocalDataStatus,
@@ -64,6 +68,11 @@ def get_settings_status() -> SettingsStatusResponse:
 
 WORKSHOP_PROFILE_KEY = "workshop_profile"
 WORKSHOP_PROFILE_DESCRIPTION = "Workshop profile settings: display-only identity fields for Settings and future documents."
+WORKSHOP_PROFILE_AUDIT_ACTION: Final = "workshop_profile.updated"
+WORKSHOP_PROFILE_AUDIT_ENTITY_TYPE: Final = "app_setting"
+WORKSHOP_PROFILE_AUDIT_SUMMARY: Final = "Workshop profile updated"
+WORKSHOP_PROFILE_SAVED_MESSAGE: Final = "Профиль мастерской сохранен."
+WORKSHOP_PROFILE_NOOP_MESSAGE: Final = "Профиль мастерской уже сохранён без изменений."
 PROFILE_LIMITS = {
     "workshop_name": 120,
     "master_name": 120,
@@ -82,38 +91,118 @@ class WorkshopProfileValidationError(ValueError):
     pass
 
 
+class WorkshopProfilePersistenceError(RuntimeError):
+    """The profile could not be saved atomically with its audit record."""
+
+
 class WorkshopProfileSettingsService:
     def __init__(self, config: DatabaseConfig | None = None) -> None:
-        self.repository = SettingsRepository(config)
+        self.config = config or get_database_config()
+        self.repository = SettingsRepository(self.config)
+        self.audit_repository = AuditLogRepository(self.config)
 
     def get_profile(self) -> WorkshopProfileResponse:
         setting = self.repository.get_setting(WORKSHOP_PROFILE_KEY)
-        profile = WorkshopProfile()
-        updated_at = setting.updated_at if setting else None
-        if setting and setting.value:
-            try:
-                profile = WorkshopProfile(**json.loads(setting.value))
-            except (json.JSONDecodeError, TypeError, ValueError):
-                profile = WorkshopProfile()
-        return self._response(profile, updated_at, "Профиль мастерской загружен." if self._is_configured(profile) else "Профиль мастерской пока не заполнен.")
+        profile = self._profile_from_setting(setting)
+        return self._response(
+            profile,
+            setting.updated_at if setting else None,
+            "Профиль мастерской загружен." if self._is_configured(profile) else "Профиль мастерской пока не заполнен.",
+        )
 
     def update_profile(self, request: WorkshopProfileUpdateRequest) -> WorkshopProfileResponse:
-        profile = WorkshopProfile(
+        requested_profile = WorkshopProfile(
             workshop_name=self._clean_value("workshop_name", request.workshop_name),
             master_name=self._clean_value("master_name", request.master_name),
             workshop_contact_text=self._clean_value("workshop_contact_text", request.workshop_contact_text),
             workshop_note=self._clean_value("workshop_note", request.workshop_note),
         )
-        self.repository.upsert_setting(
-            WORKSHOP_PROFILE_KEY,
-            json.dumps(profile.model_dump(), ensure_ascii=False),
-            "json",
-            WORKSHOP_PROFILE_DESCRIPTION,
+        return self._atomic_update(requested_profile)
+
+    def _atomic_update(self, requested_profile: WorkshopProfile) -> WorkshopProfileResponse:
+        try:
+            with session(self.config) as connection:
+                return self._apply_update(connection, requested_profile)
+        except WorkshopProfilePersistenceError:
+            raise
+        except SettingsNotInitializedError:
+            raise
+        except Exception as failure:
+            raise WorkshopProfilePersistenceError(
+                "Не удалось сохранить профиль мастерской вместе с записью в истории действий."
+            ) from failure
+
+    def _apply_update(
+        self,
+        connection: sqlite3.Connection,
+        requested_profile: WorkshopProfile,
+    ) -> WorkshopProfileResponse:
+        previous_setting = self.repository.get_setting(WORKSHOP_PROFILE_KEY, connection)
+        previous_profile = self._profile_from_setting(previous_setting)
+        if previous_profile == requested_profile:
+            return self._response(
+                previous_profile,
+                previous_setting.updated_at if previous_setting else None,
+                WORKSHOP_PROFILE_NOOP_MESSAGE,
+            )
+        changed_fields = sorted(
+            field
+            for field in PROFILE_LIMITS
+            if getattr(previous_profile, field) != getattr(requested_profile, field)
         )
-        return self.get_profile().model_copy(update={"message": "Профиль мастерской сохранен."})
+        try:
+            self.repository.upsert_setting(
+                WORKSHOP_PROFILE_KEY,
+                json.dumps(requested_profile.model_dump(), ensure_ascii=False),
+                "json",
+                WORKSHOP_PROFILE_DESCRIPTION,
+                connection=connection,
+            )
+            self._write_audit(connection, previous_profile, requested_profile, changed_fields)
+            stored = self.repository.get_setting(WORKSHOP_PROFILE_KEY, connection)
+        except Exception as failure:
+            raise WorkshopProfilePersistenceError(
+                "Не удалось сохранить профиль мастерской вместе с записью в истории действий."
+            ) from failure
+        return self._response(
+            self._profile_from_setting(stored),
+            stored.updated_at if stored else None,
+            WORKSHOP_PROFILE_SAVED_MESSAGE,
+        )
+
+    def _write_audit(
+        self,
+        connection: sqlite3.Connection,
+        previous_profile: WorkshopProfile,
+        requested_profile: WorkshopProfile,
+        changed_fields: list[str],
+    ) -> None:
+        self.audit_repository.create_log(
+            action=WORKSHOP_PROFILE_AUDIT_ACTION,
+            entity_type=WORKSHOP_PROFILE_AUDIT_ENTITY_TYPE,
+            entity_id=WORKSHOP_PROFILE_KEY,
+            summary=WORKSHOP_PROFILE_AUDIT_SUMMARY,
+            actor_type="user",
+            metadata={
+                "setting_key": WORKSHOP_PROFILE_KEY,
+                "changed_fields": changed_fields,
+                "changed_field_count": len(changed_fields),
+                "previous_configured": self._is_configured(previous_profile),
+                "new_configured": self._is_configured(requested_profile),
+            },
+            connection=connection,
+        )
 
     def _response(self, profile: WorkshopProfile, updated_at: str | None, message: str) -> WorkshopProfileResponse:
         return WorkshopProfileResponse(profile=profile, is_configured=self._is_configured(profile), updated_at=updated_at, message=message)
+
+    def _profile_from_setting(self, setting: AppSetting | None) -> WorkshopProfile:
+        if setting and setting.value:
+            try:
+                return WorkshopProfile(**json.loads(setting.value))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pass
+        return WorkshopProfile()
 
     def _is_configured(self, profile: WorkshopProfile) -> bool:
         return any(value.strip() for value in profile.model_dump().values())

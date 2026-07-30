@@ -49,7 +49,8 @@
 
 ### Current baseline
 
-- **Current baseline `origin/main`: `ba3ca7443e3280bc7f700af11e75dc4fa810665f`** (VERIFIED FROM REPOSITORY / GITHUB). This is the PR #159 merge commit.
+- **Current baseline `origin/main`: `4ef02b8478c3eba06883f5b71290f91edb42a871`** (VERIFIED FROM REPOSITORY / GITHUB). This is the PR #160 merge commit.
+- PR #160 — lifecycle closure authorizing C3-II-A, state `MERGED`: final published head `cd43014a0233b153b8106e2d279a5a1b333b70d8`; merge commit `4ef02b8478c3eba06883f5b71290f91edb42a871`; merged `2026-07-30T05:02:55Z`.
 - PR #159 — `C3-I — Implement the read-only AuditLog workspace`, state `MERGED`: final reviewed and published head `bf7cde060a43190fdf22c612a16b0c137aa5531b`; merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`; merged `2026-07-30T03:20:23Z`.
 - Exact-final-head frontend evidence: focused AuditLog suite `92 passed / 0 failed / 0 skipped` in both the default run and `TZ=Europe/Amsterdam`; all frontend `test:*` scripts pass with `0 failed / 0 skipped`; production build `PASS`; `frontend/src/main.ts` is `6380` lines; exact-head browser smoke `PASS — EXACT-HEAD BROWSER SMOKE PASSED`, 60 scenarios.
 - Backend attribution is separate: complete backend `1364 passed / 0 failed`, focused backend `422 passed`, and all `942` established node IDs preserved were executed on `2848880f2009158749398aec7d504c0364336ba9`. The backend tree is byte-identical at final head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, but those suites were not re-executed there. API smoke `150 checks / 0 failures` was also executed on `2848880f2009158749398aec7d504c0364336ba9`, not on the final head.
@@ -58,7 +59,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. `C3-I` is merged and closed; C3 remains incomplete. After this documentation PR merges, exactly one runtime slice is authorized: `C3-II-A — Atomic workshop-profile AuditLog coverage`. `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains inactive. Product release readiness is not claimed.
+`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. `C3-I` is merged and closed; C3 remains incomplete. `C3-II-A — Atomic workshop-profile AuditLog coverage` is implemented on its PR branch and not merged. `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -160,7 +161,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
 | Себестоимость, налог и маржа (расчёты и снапшоты) | **ЗАКРЫТО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154); отчёты и «Сводка мастерской» читают персистентные снапшоты (`C2-III-B`, PR #157). C2 завершён | Выполнено — контракт принят как `CR-008`; все четыре нарезки влиты и проверены по точному head |
-| AuditLog workspace | `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий») — **DONE — MERGED AND EXACT-HEAD VERIFIED**; контракт: `docs/audit-log.md` | C3 incomplete: only atomic workshop-profile slice `C3-II-A` is authorized after this documentation PR merges; file-backed `C3-II-B` needs a product decision |
+| AuditLog workspace | `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий») — **DONE — MERGED AND EXACT-HEAD VERIFIED**; `C3-II-A` — **IMPLEMENTED ON PR BRANCH — NOT MERGED**; контракт: `docs/audit-log.md` | C3 incomplete: file-backed `C3-II-B` still needs a product decision |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
 
@@ -886,7 +887,7 @@ Do not classify the behavior as unsafe and do not prescribe a correction design 
 
 Clearing these four failures does **not** make the product release-ready. The following stayed outside the backend baseline correction gate and were not activated by it: final macOS `.app`/`.dmg` and user-ready launch; packaged update flow and update smoke; verified user/remote installation process; Restore product decision and implementation; C1 tax setting; C2 cost, tax, and margin completion; C3 user-facing read-only AuditLog workspace; full release-candidate smoke; continued documentation accuracy. See section 7 and sections 11–13.
 
-> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3-I has also merged and closed as PR #159, but C3 is incomplete: only C3-II-A is authorized after this documentation PR merges, while C3-II-B needs a product decision and is not authorized. Every other obligation in the list above is still open, and product release readiness is still not claimed. Current state: § C3.
+> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3-I has also merged and closed as PR #159. C3-II-A is implemented on its PR branch and not merged; C3-II-B still needs a product decision and is not authorized. C3 remains incomplete, and product release readiness is still not claimed. Current state: § C3.
 
 ---
 
@@ -1102,7 +1103,7 @@ Authorization states:
 C2 — COMPLETED
 ```
 
-Every condition for C2 completion is met: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed. C3-I has since merged as PR #159; C3 remains incomplete, with only C3-II-A authorized after this documentation PR merges and C3-II-B still `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains inactive.
+Every condition for C2 completion is met: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed. C3-I has since merged as PR #159; C3-II-A is implemented on its PR branch and not merged; C3 remains incomplete because C3-II-B is still `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains inactive.
 
 ### C2 — accepted product contract (`CR-008`)
 
@@ -1665,7 +1666,7 @@ Render backend DTO values; render `Недоступно` for null historical val
 
 ```text
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-A — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED
 C3 — INCOMPLETE
 ```
@@ -1674,11 +1675,11 @@ C3 — INCOMPLETE
 
 ### C3-II-A — Atomic workshop-profile AuditLog coverage
 
-Only this runtime slice is authorized after the documentation PR merges. It covers `WorkshopProfileSettingsService.update_profile()` only.
+This runtime slice is implemented on branch `codex/c3-ii-a-atomic-workshop-profile-audit` and covers `WorkshopProfileSettingsService.update_profile()` only. It is not `DONE`, `MERGED` or `COMPLETED` before review and merge.
 
 **Scope.** Reuse the existing endpoints and response shape. Validate/canonicalize first; open one transaction; read and compare the canonical `workshop_profile`; on a real change upsert through `SettingsRepository` and insert exactly one `workshop_profile.updated` row through `AuditLogRepository.create_log`, both on the same caller-owned connection; commit together. Audit failure rolls the profile update back; profile persistence failure commits no audit. A canonical no-op performs no upsert, preserves `updated_at`, writes no audit and returns the current profile with a normal Russian no-change message. No Clear or profile deletion.
 
-**Event and privacy.** `workshop_profile.updated` / `app_setting` / `workshop_profile` / `user`; technical summary `Workshop profile updated`; user-facing `Профиль мастерской изменён`, `Настройка приложения`, `Профиль мастерской обновлён`. Summary and metadata contain no profile value, contact detail, note, address, phone, email, arbitrary text, JSON, old value or new value. Metadata is limited to bounded structural facts. The C3-I API remains the only read surface and exposes only safe backend-owned presentation.
+**Event and privacy.** `workshop_profile.updated` / `app_setting` / `workshop_profile` / `user`; technical summary `Workshop profile updated`; user-facing `Профиль мастерской изменён`, `Настройка приложения`, `Профиль мастерской обновлён`. Summary and metadata contain no profile value, contact detail, note, address, phone, email, arbitrary text, JSON, old value or new value. Metadata contains exactly `setting_key`, sorted `changed_fields`, `changed_field_count`, `previous_configured`, and `new_configured`. The C3-I API remains the only read surface and exposes only safe backend-owned presentation.
 
 **Architecture and compatibility.** No new endpoint, migration, source field, event bus, generic settings framework, frontend calculation, payload reconstruction, profile-value display or report-document rewrite. Preserve validation, normalization, Settings route/form lifecycle, other settings rows, tax-setting atomic audit and historical documents. No frontend production change is expected unless narrow implementation evidence requires it.
 

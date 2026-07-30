@@ -289,7 +289,8 @@ def test_workshop_profile_behavior_is_unchanged_by_the_tax_setting(client):
     assert saved.json()["profile"]["workshop_name"] == "Мастерская"
     assert client.get(TAX_RATE_URL).json()["tax_rate_percent"] == "6.00"
     assert len(tax_audit_rows(client)) == 1
-    assert rows(client, "SELECT COUNT(*) AS total FROM audit_logs WHERE action LIKE 'workshop%'")[0]["total"] == 0
+    assert rows(client, "SELECT COUNT(*) AS total FROM audit_logs WHERE action = 'workshop_profile.updated'")[0]["total"] == 1
+    assert rows(client, "SELECT COUNT(*) AS total FROM audit_logs WHERE action = 'tax_rate_setting_changed'")[0]["total"] == 1
 
 
 def test_tax_setting_never_mutates_orders_batches_movements_or_report_data(client):

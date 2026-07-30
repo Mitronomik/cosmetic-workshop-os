@@ -1,6 +1,6 @@
-# Current focus — C3-I closed; one atomic workshop-profile audit slice authorized after lifecycle merge
+# Current focus — C3-II-A implemented atomically on PR branch
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I merged and exact-head verified; C3 incomplete; C3-II-A authorized after this documentation PR merges; C3-II-B needs a product decision; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I merged and exact-head verified; C3-II-A implemented on PR branch and not merged; C3 incomplete; C3-II-B needs a product decision; C4 inactive**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -16,12 +16,12 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I mer
 - `C2-III-B — Snapshot-backed reports and report documents`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #157)
 - `C2 — COMPLETED`
 - `C3-I — Read-only AuditLog workspace`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #159)
-- `C3-II-A — Atomic workshop-profile AuditLog coverage`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
+- `C3-II-A — Atomic workshop-profile AuditLog coverage`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
 - `C3-II-B — File-backed artifact AuditLog semantics`: **NEEDS PRODUCT DECISION — NOT AUTHORIZED**
 - `C3 — INCOMPLETE`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **No runtime implementation slice is open in this documentation PR.** Every C2 slice and C3-I are merged and closed. After this documentation PR merges, exactly one runtime slice becomes authorized: `C3-II-A`. No future implementation PR number is assigned.
+- **The active runtime slice is C3-II-A only.** Every C2 slice and C3-I are merged and closed. C3-II-A is implemented on its PR branch and awaits review; no C3-II-B or C4 work is authorized.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
@@ -213,7 +213,7 @@ C2 being complete does **not** make the product release-ready. Restore, packagin
 
 ```text
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-A — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED
 C3 — INCOMPLETE
 C4 — INACTIVE — NEEDS PRODUCT DECISION
@@ -224,7 +224,7 @@ PR #159 merged on `2026-07-30T03:20:23Z` from final reviewed and published head 
 
 Exact-final-head evidence is limited to frontend and browser evidence: focused AuditLog suite `92 passed / 0 failed / 0 skipped` in the default and `TZ=Europe/Amsterdam` runs; every frontend `test:*` script `PASS — 0 failed / 0 skipped`; build `PASS`; `frontend/src/main.ts` `6380`; browser smoke `PASS — EXACT-HEAD BROWSER SMOKE PASSED`, 60 scenarios. Backend `1364 passed / 0 failed`, focused backend `422 passed`, 942 preserved node IDs and API smoke `150 checks / 0 failures` were executed on `2848880f2009158749398aec7d504c0364336ba9`. The backend tree is byte-identical at `bf7cde060a43190fdf22c612a16b0c137aa5531b`, but those runs were not re-executed there and are not relabelled as exact-final-head evidence.
 
-`C3-II-A` covers only atomic workshop-profile audit: a real canonical profile upsert and exactly one safe `workshop_profile.updated` event share one caller-owned SQLite transaction; failure of either write commits neither; canonical no-op preserves `updated_at` and writes neither; summaries and metadata contain no profile values. Existing API, Settings lifecycle and historical documents remain unchanged. Durable contract: `docs/audit-log.md` § 16, `docs/settings.md`, `docs/api.md`, `docs/implementation-plan.md`.
+`C3-II-A` now implements only atomic workshop-profile audit on the PR branch: a real canonical profile upsert and exactly one safe `workshop_profile.updated` event share one caller-owned SQLite transaction; failure of either write commits neither; canonical no-op preserves `updated_at` and writes neither; summaries and bounded metadata contain no profile values. Existing API shape, Settings lifecycle and historical documents remain unchanged. Durable contract: `docs/audit-log.md` § 16, `docs/settings.md`, `docs/api.md`, `docs/implementation-plan.md`.
 
 `C3-II-B` covers only manual backup, JSON export and report-document auditing. It is unresolved because a successfully created filesystem artifact followed by a failed SQLite AuditLog insert has no accepted truthful result, compensation, retry or recovery policy. It is not authorized. `CR-004` and `CR-006` remain unchanged and separate.
 
@@ -382,7 +382,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 and C2 are **complete**. `C3-I` is merged and closed, but C3 is **incomplete**: only `C3-II-A` is authorized after this documentation PR merges, while `C3-II-B` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
+- C1 and C2 are **complete**. `C3-I` is merged and closed, but C3 is **incomplete**: `C3-II-A` is implemented on its PR branch and not merged, while `C3-II-B` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**

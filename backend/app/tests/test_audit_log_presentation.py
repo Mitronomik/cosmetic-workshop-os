@@ -83,6 +83,7 @@ PERSISTED_SUMMARIES = {
     "recipe_version.created": "Recipe version created: template 3 v2",
     "stock_movement.created": "Stock movement created for lot #5",
     "tax_rate_setting_changed": "Налоговая ставка изменена на 6.00%",
+    "workshop_profile.updated": "Workshop profile updated",
 }
 
 # The persisted business name each allowlisted action is authorized to retain.
@@ -121,13 +122,14 @@ LATIN_LETTERS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 # --------------------------------------------------------------------------
 
 def test_action_vocabulary_is_the_documented_fifty_codes():
-    assert len(ACTION_LABELS) == 50
+    assert len(ACTION_LABELS) == 51
     assert set(GENERIC_SUMMARIES) == set(ACTION_LABELS)
     assert set(PERSISTED_SUMMARIES) == set(ACTION_LABELS)
 
 
 def test_entity_and_actor_vocabularies_match_the_contract():
     assert len(ENTITY_LABELS) == 19
+    assert ENTITY_LABELS["app_setting"] == "Настройка приложения"
     assert ACTOR_LABELS == {"system": "Система", "user": "Пользователь"}
 
 
@@ -167,7 +169,9 @@ def test_import_draft_entity_type_is_matched_exactly_as_persisted():
 
 def test_known_labels_resolve():
     assert action_label("client.created") == "Клиент создан"
+    assert action_label("workshop_profile.updated") == "Профиль мастерской изменён"
     assert entity_label("client") == "Клиент"
+    assert entity_label("app_setting") == "Настройка приложения"
     assert actor_label("system") == "Система"
     assert actor_label("user") == "Пользователь"
 
@@ -301,6 +305,8 @@ def test_the_three_required_contract_examples():
     assert display_summary("ingredient_lot.created", "Ingredient lot created for ingredient #12") == "Создана партия компонента"
     assert display_summary("production_confirmed", "Order #4 produced as batch #7") == "Производство заказа подтверждено"
     assert display_summary("client_wish.created", "Client wish created: Убрать компонент X") == "Пожелание клиента добавлено"
+    assert display_summary("workshop_profile.updated", "Workshop profile updated") == "Профиль мастерской обновлён"
+    assert "workshop_profile.updated" not in SUFFIX_PREFIXES
 
 
 def test_unknown_action_falls_back_to_the_unknown_action_label():

@@ -34,14 +34,14 @@ Surrounding lifecycle:
 C1 — COMPLETED
 C2 — COMPLETED
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-A — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED
 C3 — INCOMPLETE
 C4 — INACTIVE — NEEDS PRODUCT DECISION
 Product release readiness — NOT CLAIMED
 ```
 
-`C3-II-A — Atomic workshop-profile AuditLog coverage` is the **only** follow-up runtime slice authorized by this lifecycle document, and only after this documentation PR merges. No implementation PR number is assigned. `C3-II-B — File-backed artifact AuditLog semantics` is a separate unresolved product decision covering only manual backup creation, JSON export creation and report-document generation; it is not authorized.
+`C3-II-A — Atomic workshop-profile AuditLog coverage` is implemented on branch `codex/c3-ii-a-atomic-workshop-profile-audit` and remains **not merged** until review. `C3-II-B — File-backed artifact AuditLog semantics` is a separate unresolved product decision covering only manual backup creation, JSON export creation and report-document generation; it is not authorized.
 
 ### 1.1. Implementation modules
 
@@ -442,6 +442,7 @@ Where the table below shows a plain phrase, that phrase is the whole value. Wher
 | `recipe_version.created` | `Создана версия рецепта` |
 | `stock_movement.created` | `Добавлено движение сырья` |
 | `tax_rate_setting_changed` | `Изменена налоговая ставка для расчётов` |
+| `workshop_profile.updated` | `Профиль мастерской обновлён` |
 | *(any unknown action)* | the resolved `action_label`, i.e. `Другое действие` |
 
 `recipe_version.created`, `ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created` and `production_confirmed` are generic precisely because their persisted summaries embed internal IDs.
@@ -606,7 +607,7 @@ This contract required filter options paired with Russian labels but did not def
 Rules:
 
 - each option contains **exactly** `value` and `label`, and nothing else;
-- values are the distinct values actually persisted in `audit_logs`; a fresh database therefore does **not** list all 50 known actions;
+- values are the distinct values actually persisted in `audit_logs`; a fresh database therefore does **not** list all 51 known actions;
 - options are derived from the whole current `audit_logs` table, not from the current filtered page, so they do **not** change merely because the result filters changed;
 - labels come from the same backend resolver the list items use, so an unknown persisted code stays present under its safe fallback label;
 - options are ordered deterministically by raw persisted value ascending;
@@ -890,13 +891,13 @@ Use focused frontend modules, following the pattern already established by `sett
 
 ---
 
-## 11. Actual AuditLog inventory on merged `main`
+## 11. Actual AuditLog inventory at the merged PR #160 baseline and on the current PR branch
 
 Inventoried from `backend/app/migrations/versions/0001_infrastructure.py`, `backend/app/repositories/audit.py` and every production `AuditLogRepository.create_log` call site.
 
-**Scope of this inventory.** These are the **current write vocabulary** — the values producible by merged-`main` production call sites. They were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. Read-only inventory: no call site was edited.
+**Scope of this inventory.** The merged PR #160 baseline has the pre-C3-II-A write vocabulary. The current PR branch adds exactly one production action, `workshop_profile.updated`, so the resulting PR-branch action vocabulary contains 51 actions; the entity vocabulary remains 19 and the suffix allowlist remains 21. These values were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. This inventory originated as the read-only C3-I inventory. C3-II-A adds exactly one new write call site for Workshop-profile changes and changes no other AuditLog write call site; write call sites for manual backup creation, JSON export creation and report-document generation remain absent and unauthorized.
 
-### 11.1. `action` — 50 codes in the current write vocabulary
+### 11.1. `action` — 51 codes in the current write vocabulary
 
 | `action` | Required `action_label` |
 |---|---|
@@ -950,6 +951,7 @@ Inventoried from `backend/app/migrations/versions/0001_infrastructure.py`, `back
 | `recipe_version.created` | Версия рецепта создана |
 | `stock_movement.created` | Движение сырья добавлено |
 | `tax_rate_setting_changed` | Налоговая ставка изменена |
+| `workshop_profile.updated` | Профиль мастерской изменён |
 
 Note the two naming shapes that already exist and are **not** normalized by `C3-I`: most codes are dotted (`client.created`), while `import_draft_applied` and `production_confirmed` are flat.
 
@@ -957,7 +959,7 @@ Note the two naming shapes that already exist and are **not** normalized by `C3-
 
 | `entity_type` | Required `entity_label` |
 |---|---|
-| `app_setting` | Настройка |
+| `app_setting` | Настройка приложения |
 | `catalog_category` | Категория справочника |
 | `catalog_tag` | Тег справочника |
 | `client` | Клиент |
@@ -988,7 +990,7 @@ The column is nullable; a `null` `entity_type` resolves to `Другая сущ�
 | `system` | Система |
 | `user` | Пользователь |
 
-`system` is the `create_log` default and is written by every call site except one. `user` is written only by `TaxRateSettingsService._write_audit` for `tax_rate_setting_changed`.
+`system` is the `create_log` default. `user` is written by the tax-rate and Workshop-profile settings mutation services.
 
 These are **actor identities, not process sources** (§ 3). Every value of the historical process vocabulary — `manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore` — is produced by **no** call site and is not implementable without a separately authorized write-side decision. Any other value found in a database resolves to `Другой инициатор`.
 
@@ -1025,6 +1027,7 @@ These are **actor identities, not process sources** (§ 3). Every value of the h
 | `recipe_version.created` | `recipe_template_id`, `version_number` |
 | `stock_movement.created` | `ingredient_id`, `ingredient_lot_id` |
 | `tax_rate_setting_changed` | `setting_key`, `previous_configured`, `new_configured`, `previous_rate_percent`, `new_rate_percent`, `previous_effective_at`, `new_effective_at`, `source` |
+| `workshop_profile.updated` | `setting_key`, `changed_fields`, `changed_field_count`, `previous_configured`, `new_configured` |
 
 **No stored metadata contains free-text client notes, allergies, addresses, phone numbers, email addresses or feedback bodies.** It is dominated by internal foreign-key IDs, enum codes and counters. That is exactly the class of value a non-technical user must not be shown, which is why `metadata_json` is excluded from the read model in full rather than field-by-field.
 
@@ -1032,7 +1035,7 @@ The `source` key inside `tax_rate_setting_changed` metadata is an unrelated inte
 
 ### 11.5. Persisted summaries — why § 6 exists
 
-Most persisted summaries are English technical sentences built at write time, for example `Client created: Анна Иванова`, `Order created: Дневной крем`, `Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`, `Recipe version created: template 3 v2`. A minority are Russian: the four `onboarding.*` summaries, the two `demo_data.*` summaries and the three `tax_rate_setting_changed` summaries.
+Most persisted summaries are English technical sentences built at write time, for example `Client created: Анна Иванова`, `Order created: Дневной крем`, `Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`, `Recipe version created: template 3 v2`, and the value-free `Workshop profile updated`. A minority are Russian: the four `onboarding.*` summaries, the two `demo_data.*` summaries and the three `tax_rate_setting_changed` summaries.
 
 Classification:
 
@@ -1042,7 +1045,7 @@ Classification:
 | Embeds user-authored wish text | `client_wish.created`, `client_wish.status_changed`, `client_wish.archived` | generic Russian text, title never exposed |
 | Embeds an individual-formula title | `client_recipe.*` | generic Russian text, title never exposed |
 | Embeds an ordinary business name after a stable exact prefix | exactly the 21 actions enumerated in § 6.4.3 | the suffix may be retained under the bounded § 6.4.1 rule; anything else falls back to the generic phrase |
-| Fixed string, no user value | `client_feedback.created`, `import_draft_applied`, `demo_data.*`, `onboarding.*`, `tax_rate_setting_changed`, catalog-assignment actions | generic Russian text |
+| Fixed string, no user value | `client_feedback.created`, `import_draft_applied`, `demo_data.*`, `onboarding.*`, `tax_rate_setting_changed`, `workshop_profile.updated`, catalog-assignment actions | generic Russian text |
 
 Client **notes, allergies, addresses, preferences, special conditions and feedback bodies are never written into a summary** by any call site, so no such value can reach the workspace even before § 6 applies.
 
@@ -1050,19 +1053,19 @@ Because `display_summary` is derived from `action` and never from the raw stored
 
 ### 11.6. Coverage gap found
 
-`AGENTS.md` § 3.5 and `docs/domain-model.md` § 3.8 both say that backup, export and settings changes are logged. On merged `main`, **only** the tax-rate setting is audited: there is no `create_log` call in `backend/app/services/backup.py`, `backend/app/services/export.py`, the report-document services, or `WorkshopProfileSettingsService.update_profile`. `Журнал действий` will therefore not show backup, export, report-document or workshop-profile events.
+`AGENTS.md` § 3.5 and `docs/domain-model.md` § 3.8 both say that backup, export and settings changes are logged. On this PR branch, the tax-rate setting and Workshop profile are audited. The remaining write-coverage gap is limited to manual backup, JSON export and report-document generation.
 
 `C3-I` did not add those write call sites. It is a completed read-only slice, and the gap is stated here so the workspace is not mistaken for complete coverage. The remaining gap is subdivided rather than assigned to one broad implementation PR:
 
 ```text
 C3-II-A — Atomic workshop-profile AuditLog coverage
-AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 
 C3-II-B — File-backed artifact AuditLog semantics
 NEEDS PRODUCT DECISION — NOT AUTHORIZED
 ```
 
-`C3-II-A` covers only the pure SQLite workshop-profile mutation and its AuditLog row. `C3-II-B` covers only manual backup creation, JSON export creation and report-document generation, whose primary result is a filesystem artifact outside the SQLite transaction.
+`C3-II-A` now covers the pure SQLite workshop-profile mutation and its AuditLog row on this PR branch. `C3-II-B` covers only manual backup creation, JSON export creation and report-document generation, whose primary result is a filesystem artifact outside the SQLite transaction.
 
 ---
 
@@ -1197,10 +1200,10 @@ was executed on `2848880f2009158749398aec7d504c0364336ba9`. The final head is ba
 Status:
 
 ```text
-AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-This is the **only** authorized follow-up runtime slice. No implementation PR number is assigned.
+This is the implemented runtime slice on branch `codex/c3-ii-a-atomic-workshop-profile-audit`. It is not `DONE`, `MERGED` or `COMPLETED` before review and merge.
 
 ### 16.1. User-visible purpose and event vocabulary
 
@@ -1263,20 +1266,31 @@ A canonically identical submission is a no-op:
 - perform no upsert;
 - create no AuditLog row;
 - return the current profile through the existing response shape;
-- return a normal Russian message explaining that no changes were found.
+- return the exact Russian message `Профиль мастерской уже сохранён без изменений.`.
 
 Repeated identical submissions remain no-ops. `GET` remains read-only. Profile deletion and Clear semantics are not part of this slice. An empty-but-valid profile remains governed by the existing storage contract and must not become row deletion.
+
+Empty-profile behavior is exact:
+
+- missing row plus an empty request is a no-op and creates no row;
+- an existing empty row plus an empty request is a no-op;
+- a configured profile changed to all-empty is a real mutation: canonical empty JSON is persisted, the row is not deleted, and exactly one AuditLog row is created.
 
 ### 16.4. Audit privacy
 
 The persisted summary, `display_summary` and metadata must never contain workshop name, master name, contact text, workshop note, address, phone number, email address, arbitrary profile text, raw JSON, old values, new values, or full request/response payloads.
 
-Metadata may contain only bounded structural facts such as:
+Metadata contains exactly:
 
-- `setting_key`;
-- non-sensitive field identifiers that changed;
-- configured-before/configured-after booleans;
-- changed-field count.
+```text
+setting_key
+changed_fields
+changed_field_count
+previous_configured
+new_configured
+```
+
+`setting_key` is `workshop_profile`; `changed_fields` is a sorted list drawn only from `workshop_name`, `master_name`, `workshop_contact_text`, and `workshop_note`; `changed_field_count` equals its length; the configured flags are booleans. No `source`, timestamp, raw JSON, old value or new value is stored.
 
 The C3-I read API continues to expose only the backend-owned safe `display_summary`. It never exposes the raw persisted summary, metadata, profile values or internal setting payload.
 
@@ -1288,10 +1302,11 @@ The C3-I read API continues to expose only the backend-owned safe `display_summa
 - Preserve report-document immutability and all historical documents byte-for-byte.
 - No frontend production change is expected unless implementation evidence proves one narrowly scoped presentation change is required.
 - The generic AuditLog workspace displays the new action through backend-owned labels and presentation; the frontend does not calculate or reconstruct it.
+- Persistence failures return HTTP `500` with `detail.code = workshop_profile_not_saved`, message `Не удалось сохранить профиль мастерской. Предыдущие данные сохранены без изменений.` and next action `Повторите сохранение. Если ошибка повторяется, проверьте, что локальное приложение работает.` Existing validation `422`, database-not-initialized `409`, and the successful response model stay unchanged.
 
-### 16.6. Required future runtime verification
+### 16.6. Runtime verification required by this PR
 
-The future C3-II-A runtime PR must add or extend backend coverage for all of the following:
+This C3-II-A runtime PR adds or extends backend coverage for all of the following:
 
 1. a real profile change writes the setting and exactly one AuditLog row;
 2. both writes use the same connection and transaction;
