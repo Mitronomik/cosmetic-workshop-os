@@ -9,7 +9,7 @@ Status: evolving implementation contract. Existing implemented areas have backen
 
 **Current editable set on merged `main`.** The Workshop profile fields — `workshop_name`, `master_name`, `workshop_contact_text`, `workshop_note` — are `editable_now`, and so is `default_tax_rate`. `default_tax_rate` is the **only calculation-sensitive setting that is currently editable**; it became editable with the merged `C1-I` slice (PR #149) and it never recalculates historical data. Every other calculation-sensitive setting — currency display, target margin, default low-stock threshold, expiry warning days, default measurement units — remains `requires_backend_rules` and stays closed until it has its own separately accepted backend rules. *(Historical note: `PR96` originally made only the Workshop profile editable; that was the state before `C1-I` merged and is no longer the current contract.)*
 
-Standard error shape includes `code`, `message`, `user_message`, and `details`. Planned sections: health, settings, onboarding, clients, recipes, inventory, orders, production, alerts, purchases, imports, exports, backups, reports, audit logs. The audit-log read endpoint is authorized as `C3-I` and is **not implemented** — see § *AuditLog API (`C3-I`)* and `docs/audit-log.md`.
+Standard error shape includes `code`, `message`, `user_message`, and `details`. Planned sections: health, settings, onboarding, clients, recipes, inventory, orders, production, alerts, purchases, imports, exports, backups, reports, audit logs. The audit-log read endpoint is `C3-I` and is **implemented on its PR branch but not merged** — see § *AuditLog API (`C3-I`)* and `docs/audit-log.md`.
 
 ## Orders backend foundation (PR60)
 
@@ -71,7 +71,7 @@ Current limitations: the Orders frontend presents this read-only check, but the 
 | C2-II `ProductionBatch` rate snapshots and transactional persistence | **IMPLEMENTED** and merged (PR #152) |
 | C2-III-A Order and `ProductionBatch` financial presentation | **IMPLEMENTED** and merged (PR #154) |
 | C2-III-B snapshot-backed reports and report documents | **IMPLEMENTED** and merged (PR #157) |
-| C3-I read-only AuditLog workspace (`GET /api/audit-logs`) | `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; the endpoint does not exist on merged `main` |
+| C3-I read-only AuditLog workspace (`GET /api/audit-logs`) | `IMPLEMENTED ON PR BRANCH — NOT MERGED`; the endpoint does not yet exist on merged `main` |
 
 ### Financial estimate extension — `C2-I`
 
@@ -1094,7 +1094,9 @@ Each pair sums to `produced_order_count`. The existing `complete_finance_record_
 
 ## AuditLog API (`C3-I`)
 
-Status: `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`. **This endpoint does not exist on merged `main`.** The durable product, API, privacy and presentation contract is `docs/audit-log.md`; this section is the API-shaped summary of it and defers to that file on any disagreement.
+Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`. The endpoint is implemented on `codex/c3-i-read-only-audit-log-workspace` and **does not yet exist on merged `main`**. The durable product, API, privacy and presentation contract is `docs/audit-log.md`; this section is the API-shaped summary of it and defers to that file on any disagreement.
+
+Implementation: `backend/app/api/audit_logs.py` → `backend/app/services/audit_logs.py` → `backend/app/repositories/audit.py`, with the pure `backend/app/domain/audit_log_presentation.py` and `backend/app/domain/audit_log_query.py`. Response schemas live in `backend/app/schemas/audit_logs.py`. **No migration** was added; the only enum addition is `DomainIssueCode.PAGINATION_OUT_OF_RANGE`.
 
 ### `GET /api/audit-logs`
 
@@ -1112,7 +1114,7 @@ The **only** authorized AuditLog endpoint. Read-only, and the only new endpoint 
 | `entity_type` | stable entity code |
 | `actor_type` | stable actor code |
 | `limit` | omitted → `50`; valid range integer `1..200` |
-| `offset` | omitted → `0`; valid range integer `>= 0` |
+| `offset` | omitted → `0`; valid range integer `0..9223372036854775807` |
 
 There is **no `source` filter**. Filters combine with logical **AND**. Empty filters return the latest events. Filtering performs no writes.
 
@@ -1127,6 +1129,24 @@ filter_options
 ```
 
 `total` counts the rows matching the filters before `limit`/`offset`; `limit` and `offset` echo the effective applied values, which differ from the request only when a parameter was omitted and its default applied. `filter_options` lists the distinct `action`, `entity_type` and `actor_type` values that **actually exist as rows** in `audit_logs`, each with a safe Russian label.
+
+The exact nested `filter_options` DTO — `docs/audit-log.md` § 7.5.1, the one implementation-level clarification `C3-I` adds:
+
+```json
+{
+  "filter_options": {
+    "actions": [{ "value": "client.created", "label": "Клиент создан" }],
+    "entity_types": [{ "value": "client", "label": "Клиент" }],
+    "actor_types": [{ "value": "system", "label": "Система" }]
+  }
+}
+```
+
+Each option carries **exactly** `value` and `label`. Values come from rows that actually exist, so a fresh database does not list all 50 known actions. Options are derived from the whole table rather than the current page, so they do not change when the result filters change, and they are ordered deterministically by raw persisted value ascending. An unknown persisted code stays present under its safe fallback label and is never shown as a raw code.
+
+**`null` is omitted from `filter_options.entity_types`.** It is not an authorized query code and could not be offered without inventing a filter sentinel, and no new query parameter or sentinel is authorized. Rows with `entity_type IS NULL` remain fully readable as items carrying `entity_label: "Другая сущность"`.
+
+A blank filter value (`action=`, `entity_type=`, `actor_type=`, `created_from=`, `created_before=`) is the empty-`<option>` "no filter" state and is treated as absent. A blank `limit` or `offset` is instead a malformed pagination value and is rejected, never defaulted.
 
 Each item contains exactly:
 
@@ -1195,6 +1215,7 @@ The existing router convention raises `HTTPException(status_code=422, detail=iss
 | non-integer, fractional, boolean or malformed `limit` / `offset` | `non_integer_quantity` |
 | negative `limit` / `offset` | `negative_quantity` |
 | non-negative `limit` outside `1..200` — that is, `0` or `> 200` | `pagination_out_of_range` |
+| `offset` greater than `9223372036854775807` | `pagination_out_of_range` |
 
 `invalid_date`, `non_integer_quantity` and `negative_quantity` already exist in `DomainIssueCode`. `pagination_out_of_range` (`PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`) is the one new enum member authorized by `C3-I`, because no existing member carries out-of-range pagination semantics; it must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`. It is a bounded enum addition, not a schema change or migration.
 
@@ -1204,8 +1225,9 @@ The existing router convention raises `HTTPException(status_code=422, detail=iss
 1. Missing value        limit → default 50; offset → default 0
 2. Wrong type/repr      non-integer, fractional, boolean, malformed string → non_integer_quantity
 3. Negative integer     limit < 0, offset < 0                              → negative_quantity
-4. Non-negative limit outside range   limit == 0, limit > 200              → pagination_out_of_range
-5. Accepted             limit: integer 1..200; offset: integer >= 0
+4. Non-negative value outside range
+   limit == 0, limit > 200, offset > 9223372036854775807                   → pagination_out_of_range
+5. Accepted             limit: integer 1..200; offset: integer 0..9223372036854775807
 ```
 
 Because step 3 precedes step 4, a negative `limit` is **only** `negative_quantity`; because step 4 is reached only by a non-negative integer, `limit == 0` and `limit > 200` are **only** `pagination_out_of_range`.
@@ -1215,10 +1237,22 @@ limit=true  → non_integer_quantity      limit=-1  → negative_quantity
 limit=1.5   → non_integer_quantity      offset=-1 → negative_quantity
 limit=abc   → non_integer_quantity      limit=0   → pagination_out_of_range
 limit=200   → accepted                  limit=201 → pagination_out_of_range
-offset=0    → accepted
+limit=-0    → pagination_out_of_range   limit=0001   → accepted as 1
+limit=000201 → pagination_out_of_range  offset=-0    → accepted as 0
+offset=0000 → accepted as 0
+offset=9223372036854775807 → accepted
+offset=9223372036854775808 → pagination_out_of_range
 ```
 
 **An explicitly supplied invalid pagination value is rejected, never silently clamped, coerced, rounded or ignored.**
+
+The upper bound is SQLite's largest bindable signed 64-bit `OFFSET`. Decimal
+shape, sign and range are checked on the raw text before integer conversion, so
+arbitrary 5000-digit positive values are `pagination_out_of_range`, arbitrary
+5000-digit negative values are `negative_quantity`, the rejected value is
+echoed only as a bounded excerpt, and no oversized value reaches Python `int()`
+or SQLite. These rejections keep the exact structured `422` envelope above and
+remain read-only.
 
 **Date-range conflict.** For `created_before <= created_from` the exact structured error is HTTP `422`, `code: invalid_date`, **`field: created_before`**, `value:` the supplied `created_before` value. The Russian `message` explains that the end of the period must be later than its beginning, and the Russian `next_action` tells the user to select an end date later than the start date. Do not use an undefined synthetic field such as `date_range`.
 

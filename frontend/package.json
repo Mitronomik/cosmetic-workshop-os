@@ -23,6 +23,7 @@
     "test:formula-client-workspace-feedback": "rm -rf dist-tests/formula-client-workspace-feedback && tsc -p tsconfig.test.formula-client-workspace-feedback.json && node --test test/formula-client-workspace-feedback.test.mjs",
     "test:inventory-catalog-workspace-feedback": "rm -rf dist-tests/inventory-catalog-workspace-feedback && tsc -p tsconfig.test.inventory-catalog-workspace-feedback.json && node --test test/inventory-catalog-workspace-feedback.test.mjs",
     "test:settings-tax-feedback": "rm -rf dist-tests/settings-tax-feedback && tsc -p tsconfig.test.settings-tax-feedback.json && node --test test/settings-tax-feedback.test.mjs",
+    "test:audit-log-workspace": "rm -rf dist-tests/audit-log-workspace && tsc -p tsconfig.test.audit-log-workspace.json && node --test test/audit-log-workspace.test.mjs",
     "test:core-workspace-feedback": "npm run test:formula-client-workspace-feedback && npm run test:inventory-catalog-workspace-feedback"
   },
   "devDependencies": {

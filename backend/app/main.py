@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.alerts import router as alerts_router
+from app.api.audit_logs import router as audit_logs_router
 from app.api.backups import router as backups_router
 from app.api.catalog import router as catalog_router
 from app.api.catalog_assignments import router as catalog_assignments_router
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(RequestValidationError, _validation_error_response)
     app.include_router(alerts_router, prefix="/api")
+    app.include_router(audit_logs_router, prefix="/api")
     app.include_router(backups_router, prefix="/api")
     app.include_router(exports_router, prefix="/api")
     app.include_router(imports_router, prefix="/api")

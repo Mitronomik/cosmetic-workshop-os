@@ -11,6 +11,7 @@ class DomainIssueCode(StrEnum):
     MISSING_DENSITY = "missing_density"
     ZERO_OR_NEGATIVE_DENSITY = "zero_or_negative_density"
     PERCENTAGE_OUT_OF_RANGE = "percentage_out_of_range"
+    PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"
     RECIPE_PERCENTAGE_SUM_NOT_100 = "recipe_percentage_sum_not_100"
     REQUIRED_FIELD = "required_field"
     INVALID_CATEGORY = "invalid_category"

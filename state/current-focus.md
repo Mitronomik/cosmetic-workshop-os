@@ -1,6 +1,6 @@
-# Current focus — C2 is COMPLETED; the bounded C3-I AuditLog workspace is authorized
+# Current focus — C2 is COMPLETED; the bounded C3-I AuditLog workspace is implemented on its PR branch and awaiting merge
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` merged (PR #157), exact-head verified and closed; one bounded C3 runtime slice, `C3-I — Read-only AuditLog workspace`, authorized after the closure documentation PR merges and not implemented**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; `CR-008` accepted and merged (PR #150); `C2-I` merged (PR #151); `C2-II` merged (PR #152); `C2-III-A` merged (PR #154) and closed; `C2-III-B` merged (PR #157), exact-head verified and closed; `C3-I — Read-only AuditLog workspace` implemented on its PR branch and not merged**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -15,10 +15,10 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; `CR-008`
 - `C2-III-A — Order and ProductionBatch financial presentation`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #154)
 - `C2-III-B — Snapshot-backed reports and report documents`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #157)
 - `C2 — COMPLETED`
-- `C3-I — Read-only AuditLog workspace`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
+- `C3-I — Read-only AuditLog workspace`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **No runtime implementation slice is open.** Every C2 slice is merged and closed. The only authorized next runtime slice is `C3-I`, and it is authorized only after the documentation PR that records this state merges.
+- **One runtime implementation slice is open: `C3-I`.** Every C2 slice is merged and closed. `C3-I` is implemented on `codex/c3-i-read-only-audit-log-workspace`, started from `origin/main` `fa433d03acbf68e16b14ba6245885ab9eaf15c35`, and is **not merged**.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
@@ -206,14 +206,57 @@ Every C2 slice is merged, exact-head verified and closed: `C2-I` (PR #151), `C2-
 
 C2 being complete does **not** make the product release-ready. Restore, packaging, installation verification, the update flow and the full release-candidate smoke all remain open, and **product release readiness is not claimed**.
 
-## What is authorized next — C3-I
+## C3-I — implemented on its PR branch, not merged (2026-07-29)
 
 ```text
 C3-I — Read-only AuditLog workspace
-AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-`C3-I` is the **only** authorized C3 runtime slice. It is not implemented, no branch exists for it, and no PR number is assigned. Do not start it from this unmerged documentation branch.
+Branch `codex/c3-i-read-only-audit-log-workspace`, started from clean `origin/main` `fa433d03acbf68e16b14ba6245885ab9eaf15c35` (the PR #158 merge commit, final reviewed head `4a37f6700e147fb83b64be29db4793e3579a7eff`). This is **not** `DONE`, `COMPLETED` or `MERGED`: it awaits review and merge, and product release readiness is **not** claimed.
+
+The durable contract is `docs/audit-log.md` and was not reinterpreted. The single implementation-level clarification `C3-I` adds is the exact nested `filter_options` DTO and the omission of `null` from selectable entity types, recorded in `docs/audit-log.md` § 7.5.1 and `docs/api.md`.
+
+### Delivered
+
+- **Backend.** `GET /api/audit-logs` only — no detail endpoint, no write surface. Route `backend/app/api/audit_logs.py` → service `backend/app/services/audit_logs.py` → repository reads in `backend/app/repositories/audit.py`, with the pure `backend/app/domain/audit_log_presentation.py` (50 action labels, 19 entity labels, 2 actor labels, the three unknown-code fallbacks, the 50-row generic summary table and the exact 21-action suffix allowlist) and the pure `backend/app/domain/audit_log_query.py` (ordered pagination precedence and date validation). Schemas in `backend/app/schemas/audit_logs.py` use `extra="forbid"` so a forbidden field cannot be serialized accidentally.
+- **Privacy.** The raw persisted `summary`, `metadata_json`, `entity_id`, `source` and `source_label` are absent from every response. Wish titles, individual-recipe titles and internal IDs never appear anywhere in the serialized JSON. `client_wish.*`, `client_recipe.*`, every ID-bearing action and every catalog-assignment action are excluded from the allowlist, which is an exact 21-row table rather than a prefix glob.
+- **Validation.** `PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"` is the only new `DomainIssueCode` member. `limit=-1` is `negative_quantity` only; `limit=0` and `limit=201` are `pagination_out_of_range` only. The date-range conflict returns `field: created_before`. Every rejection uses the `{"detail": {...}}` envelope, never raw Pydantic internals — the route accepts raw query text precisely so typed parsing cannot replace the contract.
+- **Read-only.** Reads write no AuditLog row, mutate no business table, create no file and change no setting; historical rows are byte-identical before and after. `AuditLogRepository.create_log` has an empty diff and no production write call site changed.
+- **Frontend.** Route `/settings/audit-log`, navigation entry `Журнал действий` under `Данные и настройки`, with date/action/entity/actor filters combining with AND, `Очистить фильтры`, `Обновить`, `Показать ещё`, and the loading, empty, filtered-empty, initial-failure-with-retry, refresh-failure-retaining-rows, load-more-failure-retaining-rows, all-loaded, structured-422, narrow-viewport and keyboard states. Focused modules `audit-log-contract.ts`, `audit-log-presentation.ts`, `audit-log-workspace.ts`, `audit-log-bindings.ts` and the extracted `app-navigation-routes.ts` — no `utils`/`helpers`/`manager`/`common` dumping ground.
+- **No migration**, no column, table, index, trigger, backfill or data rewrite. No dependency and no lockfile change.
+
+### Accepted results
+
+| Check | Result |
+|---|---|
+| Complete backend suite | `1364 passed / 0 failed / 0 skipped` |
+| Merged baseline node IDs still collected | all `942`, zero renames |
+| Focused `C3-I` backend tests | `422 passed` |
+| Focused frontend suite `test:audit-log-workspace` | `82 passed / 0 failed / 0 skipped` |
+| `TZ=Europe/Amsterdam` focused frontend suite | `82 passed / 0 failed / 0 skipped` |
+| Frontend `test:*` scripts | `18` (was `17`) — all pass |
+| Frontend production build | `PASS` |
+| `git diff --check` | clean |
+| `frontend/src/main.ts` | `6398` before → `6380` after |
+
+Exact-head API and browser smoke results are recorded in the pull request body against the exact published head.
+
+### Known gaps and limitations
+
+- The `docs/audit-log.md` § 11.6 coverage gap stands: backup, export, report-document and workshop-profile actions are still not audited, so the journal does not show them. `C3-I` is read-only and must not add those write call sites.
+- A true process `source` remains deferred; only `actor_type` exists.
+- No detail endpoint, no metadata viewer, no raw JSON viewer, no export, no search, no analytics.
+- C2 stays closed; C4 stays `INACTIVE — NEEDS PRODUCT DECISION`; **product release readiness is not claimed**.
+
+## The authorized C3 slice — C3-I
+
+```text
+C3-I — Read-only AuditLog workspace
+IMPLEMENTED ON PR BRANCH — NOT MERGED
+```
+
+`C3-I` is the **only** authorized C3 runtime slice. It is implemented on `codex/c3-i-read-only-audit-log-workspace` and awaits review and merge. The accepted boundary below is unchanged and is what the implementation was held to.
 
 The durable product, API, privacy and presentation contract is **`docs/audit-log.md`**. It is authoritative; the summary below does not replace it.
 
@@ -223,7 +266,7 @@ The durable product, API, privacy and presentation contract is **`docs/audit-log
 - **Safe read model.** The response carries `items`, `total`, `limit`, `offset`, `filter_options`; each item carries exactly `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `display_summary`, `actor_type`, `actor_label`. The raw persisted summary and raw `metadata_json` are never returned, and neither are `entity_id`, table names, stack traces, SQL, filesystem paths or raw payloads.
 - **`display_summary`.** The raw `audit_logs.summary` is **never returned verbatim and is never used as an unrestricted API or frontend fallback** — it is write-time technical text, mostly English, sometimes carrying internal record IDs, and `client_wish.*` values carry user-authored wish text. A focused backend presenter (`AuditLogDisplayPresenter` or an equivalently focused module) resolves a safe Russian `display_summary` from the known `action`: no internal IDs, no metadata, no business-table join, no historical rewrite, no sensitive text.
 - **Bounded suffix extraction.** A suffix from the persisted summary may contribute to `display_summary` only when **all seven** conditions hold: the action is explicitly allowlisted; the summary starts with the exact prefix assigned to that action; the suffix is non-empty; the action may retain that category of business name; the suffix is plain text only; the suffix carries no presenter-supplied internal identifier; and no database or metadata lookup happens. Otherwise the generic action-specific phrase applies. The allowlist is the exact 21-row table in `docs/audit-log.md` § 6.4.3 — not a prefix glob — and excludes `client_wish.*`, `client_recipe.*`, every ID-bearing action and every catalog-assignment action. Returning the complete summary, its English prefix, or using it as an unrestricted fallback stays prohibited.
-- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, accepted integer range `1..200`; `offset` default `0`, accepted integer `>= 0`. Validation runs in a fixed order and the first match decides the code: missing → default; wrong type, fractional or boolean → `non_integer_quantity`; negative integer → `negative_quantity`; non-negative `limit` of `0` or `> 200` → `pagination_out_of_range`. So `limit=-1` is only `negative_quantity` and `limit=0` is only `pagination_out_of_range`. Invalid values are **rejected, never silently clamped**. No unbounded history.
+- **Ordering and pagination.** `created_at DESC, id DESC`; `limit` default `50`, accepted integer range `1..200`; `offset` default `0`, accepted integer range `0..9223372036854775807`. Validation runs in a fixed order and the first match decides the code: missing → default; wrong type, fractional or boolean → `non_integer_quantity`; negative integer → `negative_quantity`; non-negative `limit` outside `1..200` or `offset` above the SQLite maximum → `pagination_out_of_range`. Bounds are compared on raw decimal text before conversion, so arbitrary-length values cannot become a Python conversion failure or oversized SQLite bind. Invalid values are **rejected, never silently clamped**. No unbounded history.
 - **Filters.** `created_from` (inclusive), `created_before` (exclusive), `action`, `entity_type`, `actor_type`, `limit`, `offset` — **no `source` filter** — combined with logical AND, with ISO-8601 UTC timestamps, structured `422` with the existing `invalid_date` code for malformed input, filter options derived from values that actually exist as rows in `audit_logs`, and no writes.
 - **Validation wire shape.** The routers raise `HTTPException(status_code=422, detail=issue.__dict__)`, so the `DomainIssue` is the **value of `detail`**, and the body is `{"detail": {"code", "message", "field", "value", "next_action"}}`. Codes: `invalid_date`, `non_integer_quantity`, `negative_quantity`, and one new authorized enum member `PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"`, which must not be replaced by `percentage_out_of_range`, `invalid_category`, `invalid_decimal` or `zero_quantity`.
 - **Date-range conflict.** `created_before <= created_from` returns HTTP `422`, `code: invalid_date`, **`field: created_before`**, `value` the supplied `created_before`, a Russian `message` saying the end of the period must be later than its beginning, and a Russian `next_action` telling the user to pick a later end date. No synthetic `date_range` field.
@@ -315,7 +358,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 is **complete**: `CR-007` is accepted and `C1-I` is merged and `DONE`. C2 is **complete**: `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157) are all merged and exact-head verified. C3 has exactly one authorized runtime slice, `C3-I — Read-only AuditLog workspace`, which is **authorized after this documentation PR merges and is not implemented**; the durable contract is `docs/audit-log.md`. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
+- C1 is **complete**: `CR-007` is accepted and `C1-I` is merged and `DONE`. C2 is **complete**: `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157) are all merged and exact-head verified. C3 has exactly one authorized runtime slice, `C3-I — Read-only AuditLog workspace`, which is **implemented on its PR branch and not merged**; the durable contract is `docs/audit-log.md`. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**

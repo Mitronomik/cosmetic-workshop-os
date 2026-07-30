@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist-tests/audit-log-workspace",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "files": [
+    "src/app-navigation-routes.ts",
+    "src/audit-log-contract.ts",
+    "src/audit-log-local-time.ts",
+    "src/audit-log-presentation.ts",
+    "src/audit-log-workspace.ts",
+    "src/audit-log-bindings.ts",
+    "src/audit-log-dom.ts"
+  ]
+}

@@ -59,7 +59,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 has exactly one authorized runtime slice — `C3-I — Read-only AuditLog workspace`, `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`, durable contract `docs/audit-log.md` — and C4 remains inactive. Product release readiness is not claimed.
+`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 has exactly one authorized runtime slice — `C3-I — Read-only AuditLog workspace`, `IMPLEMENTED ON PR BRANCH — NOT MERGED`, durable contract `docs/audit-log.md` — and C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -161,7 +161,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
 | Себестоимость, налог и маржа (расчёты и снапшоты) | **ЗАКРЫТО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154); отчёты и «Сводка мастерской» читают персистентные снапшоты (`C2-III-B`, PR #157). C2 завершён | Выполнено — контракт принят как `CR-008`; все четыре нарезки влиты и проверены по точному head |
-| AuditLog workspace | Логи пишутся, пользовательского read-only экрана нет. Авторизована одна нарезка `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий»); контракт: `docs/audit-log.md`. Не реализована | Обязательно — реализовать `C3-I` после влития документационного PR, который её авторизует |
+| AuditLog workspace | Одна нарезка `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий»); контракт: `docs/audit-log.md`. Реализована на ветке PR, **не влита** | Обязательно — ревью и merge PR `C3-I`; расширение покрытия записи (backup/export/report-document/workshop-profile) требует отдельной авторизованной нарезки |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
 
@@ -511,7 +511,7 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 
 Статус: `DONE`
 
-> **HISTORICAL — every C1–C4 status inside this closed window is superseded.** Statements below such as *"C1, C2, C3, and C4 remain inactive"* were true while this window was open and are now historical. Current lifecycle: **C1 `COMPLETED`**, **C2 `COMPLETED`**, **C3 with exactly one authorized runtime slice `C3-I` (`AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`, contract `docs/audit-log.md`)**, **C4 `INACTIVE — NEEDS PRODUCT DECISION`**. See § 11 and `state/current-focus.md`. Product release readiness is still not claimed.
+> **HISTORICAL — every C1–C4 status inside this closed window is superseded.** Statements below such as *"C1, C2, C3, and C4 remain inactive"* were true while this window was open and are now historical. Current lifecycle: **C1 `COMPLETED`**, **C2 `COMPLETED`**, **C3 with exactly one authorized runtime slice `C3-I` (`IMPLEMENTED ON PR BRANCH — NOT MERGED`, contract `docs/audit-log.md`)**, **C4 `INACTIVE — NEEDS PRODUCT DECISION`**. See § 11 and `state/current-focus.md`. Product release readiness is still not claimed.
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -1666,10 +1666,18 @@ Render backend DTO values; render `Недоступно` for null historical val
 
 ```text
 C3-I — Read-only AuditLog workspace
-AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-`C3-I` — **единственная** авторизованная C3-нарезка. Ветки нет, номер PR не назначен, runtime-кода нет. Не начинать её с невлитой документационной ветки.
+`C3-I` — **единственная** авторизованная C3-нарезка. Реализация находится на ветке `codex/c3-i-read-only-audit-log-workspace` и **не влита**: это не `DONE`, не `COMPLETED` и не `MERGED` до ревью и merge.
+
+**Реализованные модули.** Backend: `backend/app/domain/audit_log_presentation.py`, `backend/app/domain/audit_log_query.py`, `backend/app/repositories/audit.py` (только чтение — `list_logs`, `distinct_filter_values`), `backend/app/services/audit_logs.py`, `backend/app/schemas/audit_logs.py`, `backend/app/api/audit_logs.py`. Frontend: `frontend/src/audit-log-contract.ts`, `frontend/src/audit-log-local-time.ts`, `frontend/src/audit-log-presentation.ts`, `frontend/src/audit-log-workspace.ts`, `frontend/src/audit-log-bindings.ts`, `frontend/src/audit-log-dom.ts`, `frontend/src/app-navigation-routes.ts`.
+
+**Миграции нет.** Единственное изменение перечисления — `DomainIssueCode.PAGINATION_OUT_OF_RANGE`. `AuditLogRepository.create_log` не изменён, ни один production write call site не тронут.
+
+**Результаты проверок.** Полный backend-набор `1364 passed / 0 failed / 0 skipped`; фокусные backend-тесты — `422 passed`; все `942` узла merged-базовой линии по-прежнему собираются, ноль переименований; фокусный фронтенд-набор `test:audit-log-workspace` — `82 passed / 0 failed / 0 skipped` как в обычном запуске, так и при `TZ=Europe/Amsterdam`; все `18` скриптов `test:*` зелёные; production-сборка `PASS`; `frontend/src/main.ts` `6398` → `6380`. Точный уточняющий контракт вложенного DTO `filter_options` — `docs/audit-log.md` § 7.5.1 и `docs/api.md`.
+
+**Известные ограничения.** Пробел покрытия § 11.6 (backup, export, report-document, workshop-profile не аудируются) сохраняется и закрывается только отдельной авторизованной нарезкой на стороне записи; настоящий процессный `source` отложен; detail-эндпоинта нет; расширения записи нет; готовность продукта к релизу не заявляется.
 
 Полный продуктовый, API-, privacy- и presentation-контракт: **`docs/audit-log.md`**. Он авторитетен; список ниже — это границы нарезки, а не замена контракта.
 
@@ -1691,7 +1699,7 @@ Order #4 produced as batch #7              →  Производство зак�
 Client wish created: Убрать компонент X    →  Пожелание клиента добавлено
 ```
 
-**Порядок и постраничность.** `created_at DESC, id DESC`; `limit` по умолчанию `50`, допустимый диапазон — целое `1..200`; `offset` по умолчанию `0`, допустимо целое `>= 0`. Проверки идут строго по порядку, и первое совпадение определяет код, поэтому у каждого некорректного значения ровно один код: 1) отсутствует — подставляется значение по умолчанию; 2) нецелое, дробное, булево или некорректная строка → `non_integer_quantity`; 3) отрицательное целое → `negative_quantity`; 4) неотрицательный `limit` вне диапазона, то есть `0` или `> 200` → `pagination_out_of_range`; 5) иначе значение принимается. Поэтому `limit=-1` — это только `negative_quantity`, а `limit=0` — только `pagination_out_of_range`. Явно переданное некорректное значение **не подрезается, не приводится, не округляется и не игнорируется**. Неограниченную историю не возвращать.
+**Порядок и постраничность.** `created_at DESC, id DESC`; `limit` по умолчанию `50`, допустимый диапазон — целое `1..200`; `offset` по умолчанию `0`, допустимый диапазон — целое `0..9223372036854775807`, то есть до максимального bindable SQLite `OFFSET`. Проверки идут строго по порядку, и первое совпадение определяет код, поэтому у каждого некорректного значения ровно один код: 1) отсутствует — подставляется значение по умолчанию; 2) нецелое, дробное, булево или некорректная строка → `non_integer_quantity`; 3) отрицательное целое → `negative_quantity`; 4) неотрицательный `limit` вне `1..200` или `offset` выше максимума → `pagination_out_of_range`; 5) иначе значение принимается. Поэтому `limit=-1` — только `negative_quantity`, `limit=-0` — `pagination_out_of_range`, `offset=-0` — допустимый `0`, а `offset=9223372036854775808` — `pagination_out_of_range`. Форма, знак и диапазон проверяются на сыром десятичном тексте до преобразования, поэтому произвольные 5000-значные строки не достигают небезопасного `int()` или SQLite bind. Явно переданное некорректное значение **не подрезается, не приводится, не округляется и не игнорируется**. Неограниченную историю не возвращать.
 
 **Фильтры.** `created_from` (включительно), `created_before` (исключительно), `action`, `entity_type`, `actor_type`, `limit`, `offset`; фильтра `source` нет; объединяются по AND; таймстемпы ISO-8601 UTC; некорректный таймстемп и `created_before <= created_from` отклоняются структурированным HTTP `422` с существующим кодом `invalid_date`, причём диапазон дат называется явно, а не превращается в пустой результат; варианты фильтров берутся из значений, реально существующих в таблице `audit_logs`, с безопасными русскими подписями; фильтрация ничего не пишет.
 
