@@ -158,3 +158,29 @@ Developer/test safety:
 - Tests and smoke checks must use temporary directories, typically through `COSMETIC_WORKSHOP_USER_DATA_DIR` and/or `COSMETIC_WORKSHOP_DB_PATH`.
 - Tests must not write to the real `~/Documents/Мастерская косметолога/` directory.
 - Backup API tests must use temporary directories and environment overrides such as `COSMETIC_WORKSHOP_DB_PATH` and `COSMETIC_WORKSHOP_USER_DATA_DIR`.
+
+## CR-009 manual-backup AuditLog boundary
+
+`CR-009` accepts the durable artifact-primary and reconciliation semantics for
+future manual-backup AuditLog coverage, but does not implement them here. A
+fully written and verified manual backup remains available if AuditLog
+finalization fails; the future create response remains HTTP `201` with
+`audit_status: pending` and a separate Russian warning rather than a false
+total failure.
+
+Runtime status:
+
+```text
+C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
+```
+
+The accepted bounded ledger may be reused for manual backups only after CR-004
+determines SQLite backup consistency behavior. CR-009 does not resolve or
+reactivate CR-004.
+
+Existing backup files are not backfilled, renamed, rewritten or audited
+historically. The automatic `before_migration` startup backup is outside
+CR-009: it is not a user action, remains before migrations, is not audited by
+the CR-009 slices, and cannot depend on a ledger table that may not yet exist.
+Full decision:
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`.

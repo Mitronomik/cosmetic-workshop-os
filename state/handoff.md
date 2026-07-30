@@ -1,6 +1,93 @@
 # Handoff
 
-## C3-II-A implementation handoff — PR branch, not merged (2026-07-30)
+## CR-009 decision handoff — only C3-II-B1 authorized after merge (2026-07-30)
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-009 — ACCEPTED — NOT IMPLEMENTED
+C3-II-B1 — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
+C3 — INCOMPLETE
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+PR #161 is verified `MERGED`, base `main`, final reviewed and smoke-tested
+head `6c327630d0e4cca3c566253bf9f8224aaaa33172`, merge commit
+`3fec160f08aa7e775aa3e7ea650e570bf48955ad`, merged
+`2026-07-30T08:11:41Z`. Exact-final-head evidence is
+`PASS — EXACT-HEAD C3-II-A FOCUSED SMOKE PASSED`.
+
+Focused backend `591 passed / 0 failed / 0 skipped`, complete backend
+`1376 collected / 1376 passed / 0 failed / 0 skipped`, all `1364` baseline
+node IDs preserved with `12` added, all `18` frontend `test:*` scripts,
+focused AuditLog frontend `92 passed`, timezone-focused AuditLog frontend
+`92 passed`, and frontend build `PASS` were executed on
+`354104cc326f1e1374324ef9128e5ef771a4a063`. The final documentation-only
+head was production/test byte-identical; those suites were not rerun on it.
+Do not relabel them as exact-final-head results, and do not call the focused
+exact-head smoke release smoke.
+
+CR-009 is accepted in
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`. For a
+user-created manual backup, JSON export or report document, a fully written
+and verified artifact is authoritative. If AuditLog finalization then fails,
+the artifact remains available and the API returns HTTP `201` with
+`audit_status: pending` plus a separate Russian warning. It never deletes the
+artifact, returns false total failure, silently omits the event or claims
+filesystem/SQLite atomicity.
+
+The future bounded `artifact_audit_operations` ledger commits one `prepared`
+operation before file creation. Stable unique `operation_id`, the exact
+statuses `prepared` / `pending_audit` / `audited` / `abandoned`, stored
+`audit_log_id`, and an idempotent finalizer protect against duplicate events.
+Audit insertion and transition to `audited` commit together or neither does.
+
+Reconciliation runs after migrations during normal startup and before another
+scoped create. It resolves only the expected directory and recorded safe
+relative filenames, verifies the complete artifact unit, and uses the same
+finalizer. GET/list/status endpoints never reconcile. There is no background
+thread, unbounded retry, directory scan, legacy backfill or generic
+outbox/event bus/job queue. The ledger and AuditLog exclude paths, filenames,
+reasons, contents, Workshop profile, entity counts, client data and arbitrary
+text. The automatic `before_migration` backup remains outside CR-009 and before
+migrations.
+
+### Next authorized runtime slice
+
+Only after this documentation PR merges, start a fresh branch from clean
+`origin/main` for `C3-II-B1 — Durable ledger and report-document AuditLog
+coverage`. No runtime PR number is assigned.
+
+B1 scope is limited to the next sequential ledger migration, the bounded
+ledger repository/domain service and idempotent finalizer, post-migration
+startup reconciliation, report-document pre-create reconciliation,
+report-document creation integration only, `report_document.created`,
+additive create fields `audit_status` and `audit_message`, additive status
+field `pending_audit_count`, frontend success-plus-warning presentation,
+directly affected backend/frontend tests and focused exact-head smoke.
+
+The document Markdown/PDF and metadata JSON remain one artifact unit. Existing
+partial-creation compensation remains. Existing report documents are not
+backfilled or modified.
+
+### Still blocked
+
+- C3-II-B2 stays blocked by CR-006. Do not implement export audit or resolve
+  export fallback semantics through B1.
+- C3-II-B3 stays blocked by CR-004. Do not implement backup audit or resolve
+  SQLite backup consistency through B1.
+- C4, Restore, packaging, installation, update and release-candidate smoke
+  remain inactive. Product release readiness is not claimed.
+
+## HISTORICAL — SUPERSEDED — C3-II-A implementation handoff — PR branch, not merged (2026-07-30)
+
+> This handoff was true before PR #161 merged and before CR-009 was accepted.
+> It remains for traceability and is superseded by the section above.
 
 ```text
 C1 — COMPLETED

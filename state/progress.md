@@ -2,15 +2,29 @@
 
 ## Current phase
 
-`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED`. The broader C3 obligation is incomplete.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED — NOT IMPLEMENTED`. The broader C3 obligation is incomplete.
 
 ## Current next step
 
-- Review the C3-II-A runtime PR after its exact-head focused smoke.
-- `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`.
+- Merge this documentation PR only after review; do not enable auto-merge.
+- After it merges, authorize only `C3-II-B1 — Durable ledger and report-document AuditLog coverage`.
+- Keep C3-II-B2 blocked by CR-006 and C3-II-B3 blocked by CR-004.
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
 
-## 2026-07-30 — C3-II-A atomic Workshop-profile AuditLog coverage implemented on PR branch
+## 2026-07-30 — C3-II-A closed; CR-009 accepted; C3-II-B subdivided
+
+- **Verified merged closure:** PR #161 `C3-II-A — Implement atomic workshop-profile AuditLog coverage`, state `MERGED`, base `main`, final reviewed and smoke-tested head `6c327630d0e4cca3c566253bf9f8224aaaa33172`, merge commit `3fec160f08aa7e775aa3e7ea650e570bf48955ad`, merged `2026-07-30T08:11:41Z`. Both commits are ancestors of `origin/main`, which was exactly the merge commit with no later commits at branch start.
+- **Honest evidence attribution:** exact-final-head `6c327630d0e4cca3c566253bf9f8224aaaa33172` has `PASS — EXACT-HEAD C3-II-A FOCUSED SMOKE PASSED`. Focused backend `591 passed / 0 failed / 0 skipped`, complete backend `1376 collected / 1376 passed / 0 failed / 0 skipped`, all `1364` baseline node IDs preserved with `12` added, all `18` frontend `test:*` scripts, focused AuditLog frontend `92 passed`, `TZ=Europe/Amsterdam` focused AuditLog frontend `92 passed`, and frontend build `PASS` were executed on `354104cc326f1e1374324ef9128e5ef771a4a063`. The final documentation-only head was production/test byte-identical, but those suites were not rerun there and are not relabelled as exact-final-head runs. The exact-head focused smoke is not release smoke.
+- **CR-009 accepted:** one new accepted change-request row, no Target PR, with the durable decision in `docs/decisions/0013-file-backed-artifact-audit-semantics.md`. A verified artifact is authoritative; audit-finalization failure preserves it and returns HTTP `201` with `audit_status: pending` plus a separate Russian warning.
+- **Bounded ledger:** stable unique `operation_id`; statuses `prepared`, `pending_audit`, `audited`, `abandoned`; commit `prepared` before file creation; insert exactly one AuditLog row and mark `audited` in one SQLite finalization transaction; no generic outbox/event bus/job queue.
+- **Reconciliation and privacy:** run only after migrations at normal startup and before another scoped create; inspect only recorded safe relative filenames under the expected directory; no GET/list/status mutation, background thread, unbounded retry, directory scan or legacy backfill. No AuditLog path, filename, reason, content, Workshop profile, entity count, client data or arbitrary text. `before_migration` startup backups remain outside CR-009 and before migrations.
+- **Subdivision:** C3-II-B1 alone is `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; C3-II-B2 is `BLOCKED BY CR-006 — NOT AUTHORIZED`; C3-II-B3 is `BLOCKED BY CR-004 — NOT AUTHORIZED`. C3 remains incomplete; C4 remains inactive; product release readiness is not claimed.
+- **Documentation-only scope:** no runtime, test, migration, schema, dependency, lockfile, generated-file or local-artifact change. Runtime tests, builds, API/browser smoke and migration execution were not run because this is a Level 0 documentation-only PR.
+
+## HISTORICAL — SUPERSEDED — 2026-07-30 C3-II-A implemented on PR branch
+
+> This section was true before PR #161 merged and CR-009 was accepted. It is
+> preserved as the implementation-branch record.
 
 - **Baseline:** branch `codex/c3-ii-a-atomic-workshop-profile-audit` from exact `origin/main` `4ef02b8478c3eba06883f5b71290f91edb42a871` (PR #160 merge commit); clean start; baseline backend collection `1364`.
 - **Runtime:** canonical Workshop-profile mutations now read, compare, upsert and append exactly one `workshop_profile.updated` row on one caller-owned SQLite connection and transaction. Failure of either persistence step rolls the whole mutation back.

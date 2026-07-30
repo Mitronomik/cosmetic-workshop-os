@@ -72,8 +72,8 @@ Current limitations: the Orders frontend presents this read-only check, but the 
 | C2-III-A Order and `ProductionBatch` financial presentation | **IMPLEMENTED** and merged (PR #154) |
 | C2-III-B snapshot-backed reports and report documents | **IMPLEMENTED** and merged (PR #157) |
 | C3-I read-only AuditLog workspace (`GET /api/audit-logs`) | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #159); endpoint exists on merged `main` |
-| C3-II-A atomic workshop-profile AuditLog coverage | `IMPLEMENTED ON PR BRANCH — NOT MERGED`; no new endpoint |
-| C3-II-B file-backed artifact AuditLog semantics | `NEEDS PRODUCT DECISION — NOT AUTHORIZED` |
+| C3-II-A atomic workshop-profile AuditLog coverage | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #161); no new endpoint |
+| CR-009 file-backed artifact AuditLog semantics | `ACCEPTED — NOT IMPLEMENTED`; only B1 authorized after this documentation PR merges |
 
 ### Financial estimate extension — `C2-I`
 
@@ -985,6 +985,64 @@ Request:
 
 Response includes created document metadata and the message `Документ отчета создан.`
 
+### CR-009 future create-result contract — not implemented in this documentation PR
+
+`CR-009` accepts one additive API contract for user-created manual backups,
+JSON exports and report documents. The current runtime response shapes above
+remain unchanged until their separately authorized runtime slice implements
+the addition.
+
+If bounded ledger preparation fails before file creation, no file and no
+AuditLog row are created. The structured code is:
+
+```text
+artifact_audit_tracking_unavailable
+```
+
+The message means:
+
+```text
+Не удалось безопасно подготовить создание файла. Файл не создан.
+```
+
+After the artifact is fully written and verified, HTTP remains `201 Created`.
+Ordinary audited success additively returns:
+
+```json
+{
+  "message": "<existing artifact success message>",
+  "audit_status": "recorded",
+  "audit_message": null
+}
+```
+
+If AuditLog finalization fails after artifact verification, the same artifact
+response is returned with HTTP `201`, not `500` or `409`:
+
+```json
+{
+  "message": "<existing artifact success message>",
+  "audit_status": "pending",
+  "audit_message": "Файл создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку автоматически."
+}
+```
+
+Artifact-specific Russian wording is allowed, but it must preserve artifact
+success and separate the pending-Journal warning. The frontend shows success
+for the artifact, presents the warning separately, and sends no duplicate
+create request.
+
+Only C3-II-B1 is authorized after the CR-009 documentation PR merges. It adds
+`audit_status` and `audit_message` to
+`POST /api/report-documents/reports/overview`, and
+`pending_audit_count` to `GET /api/report-documents/status`. B1 does not expose
+paths or AuditLog metadata through those new fields.
+
+The same accepted result semantics are reserved for JSON export and manual
+backup, but their runtime additions are not authorized: C3-II-B2 remains
+blocked by CR-006 and C3-II-B3 by CR-004. Durable contract:
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
+
 ## Reports API
 
 Read-only operational reports are available under `/api/reports`. Reports do not mutate business data, do not create audit logs, do not create backup/export files, and do not regenerate alerts or purchase suggestions.
@@ -1196,7 +1254,7 @@ The allowlist is the exact 21-row table in `docs/audit-log.md` § 6.4.3 — `cli
 
 ### Workshop-profile audit behavior (`C3-II-A`)
 
-Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
+Status: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #161).
 
 `C3-II-A` adds **no endpoint** and preserves the existing workshop-profile request and response shape:
 
@@ -1233,7 +1291,11 @@ Atomic persistence failures return:
 
 HTTP status is `500`. Existing validation `422`, database-not-initialized `409`, and successful response model remain unchanged.
 
-`C3-II-B` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED` for manual backup, JSON export and report-document artifact auditing. No artifact success, partial-success, compensation, retry or recovery behavior is decided here.
+`CR-009` has since accepted the durable artifact-primary, partial-success,
+bounded-ledger and reconciliation contract. Only report-document slice
+C3-II-B1 is authorized after the CR-009 documentation PR merges; export and
+backup slices remain blocked by CR-006 and CR-004. Nothing in the CR-009
+documentation PR changes these runtime endpoints or response schemas.
 
 #### Validation responses
 

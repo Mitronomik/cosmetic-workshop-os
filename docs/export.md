@@ -212,3 +212,27 @@ The list above records the scope of **PR75 specifically** and is historical. Cur
 ## Testing
 
 Automated tests use `tmp_path` and monkeypatch `COSMETIC_WORKSHOP_DB_PATH` and, where needed, `COSMETIC_WORKSHOP_USER_DATA_DIR`. Tests must not write to the real `~/Documents/Мастерская косметолога/` directory.
+
+## CR-009 JSON-export AuditLog boundary
+
+`CR-009` accepts the durable artifact-primary and reconciliation semantics for
+future JSON-export AuditLog coverage, but does not implement them here. A fully
+written and verified export remains available if AuditLog finalization fails;
+the future create response remains HTTP `201` with `audit_status: pending` and
+a separate Russian warning rather than a false total failure.
+
+Runtime status:
+
+```text
+C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+```
+
+The accepted bounded ledger may be reused for JSON exports only after CR-006
+determines the create-response fallback reachability and accepted confirmation
+semantics. CR-009 does not resolve or reactivate CR-006.
+
+Existing export files and manifests are not backfilled, renamed, rewritten or
+audited historically. AuditLog must never store an export path, filename,
+reason, contents, database contents, entity counts, request/response payload or
+arbitrary user text. Full decision:
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`.

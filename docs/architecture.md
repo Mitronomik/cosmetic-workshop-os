@@ -1335,7 +1335,34 @@ onboarding
 >
 > **Сырой сохранённый `summary` тоже не отдаётся.** API возвращает `display_summary` — безопасное русское значение, которое backend-презентер выводит из `action`. Исторические строки не переписываются. Полный контракт: `docs/audit-log.md`.
 >
-> **Lifecycle boundary.** `C3-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159. C3 remains incomplete. `C3-II-A — Atomic workshop-profile AuditLog coverage` is implemented on its PR branch and not merged: the canonical profile upsert and one safe `workshop_profile.updated` row share one caller-owned SQLite transaction, and a canonical no-op writes neither. `C3-II-B` for manual backup, JSON export and report-document artifacts remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`, because filesystem creation and SQLite audit persistence have no accepted cross-resource failure semantics.
+> **Lifecycle boundary.** C3-I (PR #159) and C3-II-A (PR #161) are both `DONE — MERGED AND EXACT-HEAD VERIFIED`. C3 remains incomplete. `CR-009` accepts the cross-resource contract for user-created manual backups, JSON exports and report documents: a verified artifact is authoritative; audit-finalization failure preserves it and returns truthful HTTP `201` partial success; one bounded `artifact_audit_operations` ledger prepares the operation and provides idempotent finalization/reconciliation by `operation_id`. Only C3-II-B1 (report documents) is authorized after the CR-009 documentation PR merges. C3-II-B2 remains blocked by CR-006; C3-II-B3 remains blocked by CR-004. Full decision: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
+
+## File-backed artifact audit boundary
+
+The CR-009 ledger is owned only by manual backup, JSON export and
+report-document create operations. It is not a generic outbox, event bus, job
+queue or workflow engine.
+
+```text
+validate/canonicalize
+→ reserve safe relative artifact identity
+→ commit prepared ledger row
+→ create and verify artifact outside SQLite
+→ insert AuditLog + mark audited in one SQLite transaction
+```
+
+Allowed ledger statuses are `prepared`, `pending_audit`, `audited` and
+`abandoned`. The stable unique identity is `operation_id`; an audited operation
+stores `audit_log_id`. Reconciliation runs after migrations during normal
+startup and before another scoped create, uses only the recorded safe
+filenames under the expected artifact directory, and shares the idempotent
+finalizer. GET/list/status endpoints never reconcile.
+
+The ledger stores no artifact content, reason, Workshop profile, client data or
+arbitrary text. AuditLog stores no path, filename, reason, content, entity
+count, request or response payload. Existing artifacts are not backfilled. The
+automatic `before_migration` backup remains outside CR-009 and before
+migrations, so it never depends on a ledger table that may not exist yet.
 
 ---
 

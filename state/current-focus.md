@@ -1,6 +1,6 @@
-# Current focus — C3-II-A implemented atomically on PR branch
+# Current focus — CR-009 accepted; only C3-II-B1 authorized after merge
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I merged and exact-head verified; C3-II-A implemented on PR branch and not merged; C3 incomplete; C3-II-B needs a product decision; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I and C3-II-A merged and exact-head verified; CR-009 accepted but not implemented; only C3-II-B1 authorized after this documentation PR merges; C3 incomplete; C4 inactive**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -16,14 +16,62 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I mer
 - `C2-III-B — Snapshot-backed reports and report documents`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #157)
 - `C2 — COMPLETED`
 - `C3-I — Read-only AuditLog workspace`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #159)
-- `C3-II-A — Atomic workshop-profile AuditLog coverage`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
-- `C3-II-B — File-backed artifact AuditLog semantics`: **NEEDS PRODUCT DECISION — NOT AUTHORIZED**
+- `C3-II-A — Atomic workshop-profile AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #161)
+- `CR-009 — Durable file-backed artifact AuditLog semantics`: **ACCEPTED — NOT IMPLEMENTED**
+- `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
+- `C3-II-B2 — JSON export AuditLog coverage`: **BLOCKED BY CR-006 — NOT AUTHORIZED**
+- `C3-II-B3 — Manual backup AuditLog coverage`: **BLOCKED BY CR-004 — NOT AUTHORIZED**
 - `C3 — INCOMPLETE`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **The active runtime slice is C3-II-A only.** Every C2 slice and C3-I are merged and closed. C3-II-A is implemented on its PR branch and awaits review; no C3-II-B or C4 work is authorized.
+- **No runtime work is authorized inside this documentation PR.** After it merges, C3-II-B1 is the only authorized runtime slice. B2, B3 and C4 remain unauthorized.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
+
+## C3-II-A closure and CR-009 decision
+
+PR #161 is `MERGED`, base `main`, final reviewed and smoke-tested head
+`6c327630d0e4cca3c566253bf9f8224aaaa33172`, merge commit
+`3fec160f08aa7e775aa3e7ea650e570bf48955ad`, merged
+`2026-07-30T08:11:41Z`. Exact-final-head evidence is
+`PASS — EXACT-HEAD C3-II-A FOCUSED SMOKE PASSED`.
+
+Focused backend `591 passed / 0 failed / 0 skipped`, complete backend
+`1376 collected / 1376 passed / 0 failed / 0 skipped`, all `1364` baseline
+node IDs preserved with `12` added, all `18` frontend `test:*` scripts,
+focused AuditLog frontend `92 passed`, timezone-focused AuditLog frontend
+`92 passed`, and frontend build `PASS` were executed on
+`354104cc326f1e1374324ef9128e5ef771a4a063`. The final documentation-only
+head was production/test byte-identical. Those suites were not rerun on the
+final head and are not exact-final-head runs; the exact-head focused smoke is
+not release smoke.
+
+`CR-009` accepts the durable contract in
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md`. A verified
+manual backup, JSON export or report document is the authoritative primary
+result. Audit finalization failure preserves it and returns HTTP `201` with
+`audit_status: pending` plus a separate Russian warning. One bounded
+`artifact_audit_operations` ledger prepares the operation before the file
+write, and exactly one AuditLog row plus the transition to `audited` commit
+together by stable unique `operation_id`.
+
+Reconciliation runs only after migrations during normal startup and before
+another scoped create. It inspects only recorded safe relative filenames under
+the expected artifact directory and uses the same idempotent finalizer.
+GET/list/status endpoints never reconcile; there is no background thread,
+unbounded retry, directory scan or legacy backfill. Paths, filenames, reasons,
+contents, Workshop profile, entity counts, client data and arbitrary text are
+excluded from AuditLog. The automatic `before_migration` backup stays outside
+CR-009 and before migrations.
+
+Only C3-II-B1 is authorized after this documentation PR merges. B1 is limited
+to the next sequential ledger migration, bounded ledger/finalizer, startup and
+report-document pre-create reconciliation, report-document integration,
+`report_document.created`, additive create fields `audit_status` /
+`audit_message`, additive status field `pending_audit_count`, frontend
+success-plus-warning presentation, tests and focused exact-head smoke. B2
+remains blocked by CR-006; B3 remains blocked by CR-004. No runtime PR number is
+assigned.
 
 ## C1-I — merged, verified, DONE
 
@@ -209,7 +257,10 @@ Every C2 slice is merged, exact-head verified and closed: `C2-I` (PR #151), `C2-
 
 C2 being complete does **not** make the product release-ready. Restore, packaging, installation verification, the update flow and the full release-candidate smoke all remain open, and **product release readiness is not claimed**.
 
-## Current C3 lifecycle (2026-07-30)
+## HISTORICAL — SUPERSEDED — C3-II-A implemented on its PR branch (2026-07-30)
+
+> This section was true before PR #161 merged and before CR-009 was accepted.
+> The active lifecycle is at the top of this file.
 
 ```text
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -382,7 +433,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 and C2 are **complete**. `C3-I` is merged and closed, but C3 is **incomplete**: `C3-II-A` is implemented on its PR branch and not merged, while `C3-II-B` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
+- C1 and C2 are **complete**. C3-I and C3-II-A are merged and closed, but C3 is **incomplete**: CR-009 is accepted and not implemented; only B1 is authorized after this documentation PR merges; B2/B3 remain blocked by CR-006/CR-004. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**
