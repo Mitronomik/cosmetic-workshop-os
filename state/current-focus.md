@@ -61,8 +61,16 @@ the expected artifact directory and uses the same idempotent finalizer.
 GET/list/status endpoints never reconcile; there is no background thread,
 unbounded retry, directory scan or legacy backfill. Paths, filenames, reasons,
 contents, Workshop profile, entity counts, client data and arbitrary text are
-excluded from AuditLog. The automatic `before_migration` backup stays outside
-CR-009 and before migrations.
+excluded from AuditLog.
+
+The ledger filename fields are internal reconciliation identities, not
+AuditLog content. Report-document filenames contain no request reason; future
+B2/B3 primary filenames may contain the canonical filename-derived reason
+segment accepted by CR-005. There is no separate reason column and no raw
+human/request/export-manifest reason or other separate user-authored text.
+CR-005 is not reopened, and existing artifacts are not renamed or rewritten.
+The automatic `before_migration` backup stays outside CR-009 and before
+migrations.
 
 Only C3-II-B1 is authorized after this documentation PR merges. B1 is limited
 to the next sequential ledger migration, bounded ledger/finalizer, startup and
@@ -72,6 +80,17 @@ report-document pre-create reconciliation, report-document integration,
 success-plus-warning presentation, tests and focused exact-head smoke. B2
 remains blocked by CR-006; B3 remains blocked by CR-004. No runtime PR number is
 assigned.
+
+B1 preparation failure has the exact documented HTTP `500` safe detail and
+creates no files, audit or ledger row. Its pending warning names only next
+startup and next document creation. `pending_audit_count` counts
+`report_document` rows in `prepared`/`pending_audit` and excludes
+`audited`/`abandoned`; the status GET only reads it. Finalization uses one
+caller-owned write-serialized connection, a compatible
+`AuditLogRepository.create_log(...) -> int` extension, and commits the AuditLog
+insert plus audited ledger state together or neither. The exact document-pair
+verification and reconciliation failure rules are binding in ADR 0013 and
+`docs/report-documents.md`.
 
 ## C1-I — merged, verified, DONE
 

@@ -166,7 +166,9 @@ future manual-backup AuditLog coverage, but does not implement them here. A
 fully written and verified manual backup remains available if AuditLog
 finalization fails; the future create response remains HTTP `201` with
 `audit_status: pending` and a separate Russian warning rather than a false
-total failure.
+total failure. That future artifact-specific warning must name only the next
+normal startup and the next manual-backup create as retry triggers; it must not
+imply an immediate, periodic or background retry.
 
 Runtime status:
 
@@ -177,6 +179,12 @@ C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 The accepted bounded ledger may be reused for manual backups only after CR-004
 determines SQLite backup consistency behavior. CR-009 does not resolve or
 reactivate CR-004.
+
+The future ledger `primary_filename` is an internal safe relative filename and
+may contain the canonical filename-derived reason segment already accepted by
+CR-005. The ledger has no separate reason column and stores no raw human or
+request reason separately. The filename is never copied into AuditLog or
+exposed by `GET /api/audit-logs`; CR-005 is not reopened.
 
 Existing backup files are not backfilled, renamed, rewritten or audited
 historically. The automatic `before_migration` startup backup is outside

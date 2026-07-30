@@ -1421,20 +1421,58 @@ Ordinary audited success returns `audit_status: recorded` and
 message. The frontend shows artifact success plus a separate Journal warning,
 does not show false failure, and does not send a duplicate create request.
 
-The ledger identity is stable unique `operation_id`; statuses are exactly
-`prepared`, `pending_audit`, `audited`, and `abandoned`. It stores safe relative
-filenames only, no content, Workshop profile, reason, client data or arbitrary
-text. Reconciliation runs only after migrations during normal startup and
-before another create of the scoped kind. It inspects only recorded safe
-filenames under the expected directory, verifies the complete artifact unit,
-and uses the same idempotent finalizer. GET/list/status endpoints do not
-reconcile. There is no background thread, timer, cloud worker, unbounded retry,
-directory scan or filename-history reconstruction.
+For B1, preparation failure is exact HTTP `500` with code
+`artifact_audit_tracking_unavailable`, message `Не удалось безопасно
+подготовить создание документа. Документ не создан.` and next action `Повторите
+создание документа. Если ошибка повторяется, перезапустите приложение.` No
+document, metadata, AuditLog or prepared ledger row is committed; existing
+request validation is unchanged.
+
+The ledger identity is stable unique `operation_id`, an opaque
+backend-generated canonical lowercase UUID; statuses are exactly `prepared`,
+`pending_audit`, `audited`, and `abandoned`. B1 uses the exact conceptual
+columns and constraints in ADR 0013 and creates only
+`artifact_kind = report_document` /
+`audit_action = report_document.created`. Safe filenames are validated on
+write and reconciliation read. One active operation owns an exact
+`(artifact_kind, primary_filename)` identity.
+
+The two filename fields are internal safe relative reconciliation identities.
+Report-document filenames contain no request reason. Future B2/B3 primary
+filenames may include the canonical filename-derived reason segment accepted
+by CR-005. The ledger has no separate reason column and stores no raw human
+reason, request reason, export-manifest reason or other separate user-authored
+text. CR-005 is not reopened; existing artifacts are not renamed or rewritten.
+Ledger filenames are never copied into AuditLog or exposed through `GET
+/api/audit-logs`.
+
+Reconciliation runs only after successful initialization and migrations,
+before the ordinary UI is served, and once before another create of the scoped
+kind. It inspects only recorded safe filenames under the expected directory,
+verifies the complete artifact unit, and uses the same idempotent finalizer.
+GET/list/status endpoints do not reconcile. There is no background thread,
+timer, cloud worker, unbounded retry, directory scan or filename-history
+reconstruction. A per-operation finalization failure leaves the event
+unresolved without making startup or the older artifact fail and without
+hiding independent initialization or migration failures.
 
 Exactly one AuditLog row is permitted per `operation_id`. The finalization
-transaction inserts that row and stores `audit_log_id` while marking the
-operation `audited`, or commits neither. Report-document verification requires
-both the primary Markdown/PDF file and agreeing metadata JSON.
+transaction uses one caller-owned, write-serialized SQLite connection. B1
+compatibly extends `AuditLogRepository.create_log(...)` to return
+`cursor.lastrowid`; parameters and optional caller connection remain intact and
+existing callers may ignore the integer. Under `BEGIN IMMEDIATE` or an
+explicitly tested architecture-equivalent lock, the finalizer returns the
+existing ID for `audited`, inserts only for `prepared`/`pending_audit`, and
+stores the inserted ID while marking the operation `audited`, or commits
+neither. It adds no second insertion API, bypass or generic transaction
+framework.
+
+Report-document verification requires the complete twelve-point safe-name,
+directory, regular-file, metadata parse/identity/type/format/extension/ID/size
+and safe-path contract in ADR 0013 and `docs/report-documents.md`. It neither
+rerenders content nor compares current report data. Missing failed creation
+becomes `abandoned`; mismatched, malformed, unsafe or ambiguous state remains
+unresolved, is not audited or deleted, and stays counted.
 
 Reserved event vocabulary:
 
@@ -1469,6 +1507,18 @@ reconciliation, report-document integration, `report_document.created`,
 additive create fields `audit_status` / `audit_message`, additive status field
 `pending_audit_count`, frontend success-plus-warning presentation, tests and
 focused exact-head smoke.
+
+For B1, `pending_audit_count` counts exactly `report_document` operations in
+`prepared` or `pending_audit`; it excludes `audited` and `abandoned`. The status
+GET reads but never reconciles it, and the frontend presents it only as a
+pending-Journal warning. The exact pending message says retry occurs at the
+next startup or before the next document, never immediately or in the
+background.
+
+B1 tests must prove sequential, startup-plus-pre-create and concurrent
+exactly-once behavior; one concurrent caller resolves the already-audited
+result; AuditLog insert failure leaves the operation unresolved; and ledger
+update failure rolls the insert back.
 
 C3-II-B2 may reuse the ledger only after CR-006 resolves export fallback
 reachability and confirmation semantics. C3-II-B3 may reuse it only after

@@ -1747,6 +1747,47 @@ only:
 The report Markdown/PDF file and metadata JSON remain one artifact unit.
 Existing partial-file compensation remains. No runtime PR number is assigned.
 
+The B1 implementation contract is intentionally complete:
+
+- the ledger uses the exact typed columns, status `CHECK`, nullable
+  `audit_logs.id` reference, backend-generated lowercase UUID operation ID,
+  safe-filename validation and active artifact-identity ownership specified by
+  ADR 0013;
+- report-document creation alone writes
+  `artifact_kind = report_document` /
+  `audit_action = report_document.created`; `json_export` and `manual_backup`
+  remain reserved and unimplemented;
+- inability to commit preparation returns the exact documented HTTP `500`
+  `artifact_audit_tracking_unavailable` detail and creates neither artifact
+  file, metadata, AuditLog nor prepared row;
+- `AuditLogRepository.create_log(...)` receives only the compatible `-> int`
+  return extension from `cursor.lastrowid`; existing parameters, optional
+  caller connection and caller behavior remain;
+- one caller-owned, write-serialized transaction finalizes AuditLog and ledger
+  together, returns the stored ID when already audited, inserts only from
+  `prepared`/`pending_audit`, and rolls both writes back on either failure;
+- the document pair passes the exact twelve-point verification contract in ADR
+  0013 and `docs/report-documents.md`; no content rerender, current-report
+  comparison, rewrite or unsafe guess is permitted;
+- startup reconciliation is bounded, runs after successful initialization and
+  migrations before the ordinary UI, and tolerates an individual pending-event
+  failure without masking an independent database/migration failure;
+- pre-create reconciliation runs once, never loops, and an older finalization
+  failure does not make that artifact a failure; the new create proceeds only
+  if its new prepared row can still be committed;
+- `pending_audit_count` counts only unresolved `report_document` rows in
+  `prepared`/`pending_audit`, excludes `audited`/`abandoned`, and is read
+  without reconciliation or false document-failure presentation;
+- the exact B1 warning names only the next startup and the next document create
+  as retry triggers; no immediate, periodic or background retry is implied.
+
+Required B1 tests include sequential repeated finalization,
+startup-plus-pre-create repetition and two concurrent attempts, each proving
+one AuditLog row; one concurrent caller must receive or resolve the already
+audited result. AuditLog insert failure must leave the operation unresolved,
+and ledger-update failure must roll back the inserted AuditLog row. No generic
+transaction framework is authorized.
+
 #### C3-II-B2 — JSON export AuditLog coverage
 
 ```text

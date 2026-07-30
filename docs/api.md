@@ -1005,6 +1005,23 @@ The message means:
 Не удалось безопасно подготовить создание файла. Файл не создан.
 ```
 
+For B1, inability to commit the prepared operation returns HTTP `500` with
+this exact safe detail:
+
+```json
+{
+  "detail": {
+    "code": "artifact_audit_tracking_unavailable",
+    "message": "Не удалось безопасно подготовить создание документа. Документ не создан.",
+    "next_action": "Повторите создание документа. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
+
+No document file, metadata file, AuditLog row or prepared ledger row is
+committed. No partial success is claimed, and existing request-validation
+errors remain unchanged.
+
 After the artifact is fully written and verified, HTTP remains `201 Created`.
 Ordinary audited success additively returns:
 
@@ -1023,20 +1040,33 @@ response is returned with HTTP `201`, not `500` or `409`:
 {
   "message": "<existing artifact success message>",
   "audit_status": "pending",
-  "audit_message": "Файл создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку автоматически."
+  "audit_message": "Документ создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку при следующем запуске или перед созданием следующего документа."
 }
 ```
 
-Artifact-specific Russian wording is allowed, but it must preserve artifact
-success and separate the pending-Journal warning. The frontend shows success
-for the artifact, presents the warning separately, and sends no duplicate
-create request.
+The exact message above applies to B1. Later B2/B3 must use an
+artifact-specific warning that names the actual bounded triggers: the next
+normal application startup and before creating the next artifact of that same
+scoped kind. It must not imply immediate, periodic or background retry. Every
+warning preserves artifact success and separates the pending-Journal warning.
+The frontend shows success for the artifact, presents the warning separately,
+and sends no duplicate create request.
 
 Only C3-II-B1 is authorized after the CR-009 documentation PR merges. It adds
 `audit_status` and `audit_message` to
 `POST /api/report-documents/reports/overview`, and
 `pending_audit_count` to `GET /api/report-documents/status`. B1 does not expose
 paths or AuditLog metadata through those new fields.
+
+`pending_audit_count` is exactly the count of unresolved ledger operations
+where `artifact_kind = report_document` and `status` is `prepared` or
+`pending_audit`. It excludes `audited` and `abandoned`. The status endpoint
+reads this count but performs no reconciliation. Normal startup reconciliation
+runs before the application serves the ordinary UI. A definitely absent
+incomplete pair becomes `abandoned` and is no longer counted; an ambiguous,
+unsafe or not-yet-finalized operation remains unresolved and counted. The
+frontend presents the count only as a pending-Journal warning, not as failed
+document creation.
 
 The same accepted result semantics are reserved for JSON export and manual
 backup, but their runtime additions are not authorized: C3-II-B2 remains

@@ -1784,33 +1784,60 @@ manual backups, JSON exports and report documents.
 Minimum conceptual fields:
 
 ```text
-operation_id (stable unique idempotency identity)
-artifact_kind
-primary_filename
-companion_filename nullable
-status
-audit_action
-audit_log_id nullable
-created_at
-updated_at
+operation_id TEXT PRIMARY KEY
+artifact_kind TEXT NOT NULL
+primary_filename TEXT NOT NULL
+companion_filename TEXT
+status TEXT NOT NULL
+audit_action TEXT NOT NULL
+audit_log_id INTEGER
+created_at TEXT NOT NULL
+updated_at TEXT NOT NULL
 ```
 
 Allowed statuses are exactly `prepared`, `pending_audit`, `audited` and
-`abandoned`. Filenames are safe relative identities under the expected
-artifact directory, never unrestricted paths. The ledger contains no artifact
-content, reason, Workshop profile, client data or arbitrary text.
+`abandoned`, enforced by a `CHECK`. `audit_log_id` is nullable and references
+`audit_logs.id`. `operation_id` is an opaque backend-generated canonical
+lowercase UUID string, never user-supplied or exposed through the Journal read
+API. B1 creates only `artifact_kind = report_document` with
+`audit_action = report_document.created`; `json_export` and `manual_backup`
+remain reserved future kinds.
+
+`primary_filename` and nullable `companion_filename` are internal safe relative
+filenames required for deterministic reconciliation, never unrestricted
+paths. Both are validated on write and reconciliation read; empty names,
+absolute paths, directory separators, `..`, NUL and control characters are
+invalid. One active operation may own one exact
+`(artifact_kind, primary_filename)` identity, and a second active operation
+cannot reconcile or audit it; active means `prepared` or `pending_audit`.
+
+Report-document filenames contain no request reason. Future B2/B3
+`primary_filename` values may contain the canonical filename-derived reason
+segment accepted by CR-005. The ledger has no separate `reason` column and
+stores no raw human reason, request reason, export-manifest reason or other
+separate user-authored text. CR-005 filename behavior is unchanged. The ledger
+contains no artifact content, Workshop profile or client data. Filenames are
+never copied into AuditLog or exposed through `GET /api/audit-logs`.
 
 The operation is prepared and committed before the filesystem write. After
 artifact verification, exactly one AuditLog row and the transition to
-`audited` commit together on one SQLite connection. The idempotent finalizer,
-stored `audit_log_id` and unique `operation_id` provide duplicate protection.
-Reconciliation runs only after migrations at normal startup and before another
-scoped create. Existing files are not backfilled.
+`audited` commit together on one caller-owned, write-serialized SQLite
+connection. The compatible B1 extension makes
+`AuditLogRepository.create_log(...)` return `cursor.lastrowid` while preserving
+its inputs and optional connection; existing callers may ignore it. The
+idempotent finalizer, stored `audit_log_id` and unique `operation_id` provide
+duplicate protection. Reconciliation runs only after successful initialization
+and migrations at normal startup and once before another scoped create.
+Existing files are not backfilled, renamed or rewritten.
 
 For report documents, `primary_filename` identifies the Markdown/PDF file and
 `companion_filename` identifies its metadata JSON; both must exist and agree
-before audit finalization. The automatic `before_migration` backup remains
-outside this model.
+under the exact verification contract in ADR 0013 and
+`docs/report-documents.md` before audit finalization. Unresolved
+`report_document` rows in `prepared` or `pending_audit` form
+`pending_audit_count`; `audited` and `abandoned` are excluded. The status GET
+only reads the count. The automatic `before_migration` backup remains outside
+this model.
 
 The full persistence, reconciliation, privacy and event vocabulary contract is
 `docs/decisions/0013-file-backed-artifact-audit-semantics.md`.

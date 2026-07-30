@@ -114,6 +114,23 @@ Accepted user-facing message:
 A runtime slice may use a more specific artifact noun while preserving this
 meaning.
 
+For B1, failure to commit the prepared operation returns HTTP `500` with this
+exact safe detail:
+
+```json
+{
+  "detail": {
+    "code": "artifact_audit_tracking_unavailable",
+    "message": "Не удалось безопасно подготовить создание документа. Документ не создан.",
+    "next_action": "Повторите создание документа. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
+
+No document file, metadata file, AuditLog row or prepared ledger row is
+committed, and no partial success is claimed. Existing request-validation
+errors remain unchanged.
+
 ### Artifact creation failure
 
 If the artifact cannot be completed and verified:
@@ -152,14 +169,17 @@ audit_status: pending
 audit_message: <non-empty Russian warning>
 ```
 
-Accepted semantic wording:
+The warning must name the bounded retry triggers: the next normal application
+startup and, before creating the next artifact of that same scoped kind. It
+must not imply an immediate, periodic or background retry. The exact B1
+warning is:
 
 ```text
-Файл создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку автоматически.
+Документ создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку при следующем запуске или перед созданием следующего документа.
 ```
 
-Artifact-specific wording such as `Документ создан` is allowed, but it must
-not say that artifact creation failed.
+Later B2/B3 warnings use their artifact-specific noun and name those same two
+bounded triggers. They must not say that artifact creation failed.
 
 The frontend presents:
 
@@ -184,18 +204,18 @@ must be the next sequential migration after inspecting merged `main`.
 
 The stable unique `operation_id` is the primary idempotency identity.
 
-Minimum conceptual fields:
+For B1, the conceptual schema and column constraints are:
 
 ```text
-operation_id
-artifact_kind
-primary_filename
-companion_filename
-status
-audit_action
-audit_log_id
-created_at
-updated_at
+operation_id TEXT PRIMARY KEY
+artifact_kind TEXT NOT NULL
+primary_filename TEXT NOT NULL
+companion_filename TEXT
+status TEXT NOT NULL
+audit_action TEXT NOT NULL
+audit_log_id INTEGER
+created_at TEXT NOT NULL
+updated_at TEXT NOT NULL
 ```
 
 Allowed statuses:
@@ -209,17 +229,43 @@ abandoned
 
 Ledger rules:
 
-- filenames are safe relative artifact identities, never unrestricted absolute
-  paths;
-- `companion_filename` is nullable and is used for report-document metadata;
+- `operation_id` is an opaque backend-generated canonical lowercase UUID
+  string; it is never user-supplied or exposed through the Journal read API;
+- a status `CHECK` permits only `prepared`, `pending_audit`, `audited` and
+  `abandoned`;
+- `audit_log_id` is nullable and references `audit_logs.id`;
+- B1 creates only `artifact_kind = report_document` with
+  `audit_action = report_document.created`; `json_export` and `manual_backup`
+  are reserved future kinds and are not implemented by B1;
+- `primary_filename` and nullable `companion_filename` are internal safe
+  relative filenames required for deterministic reconciliation, never
+  unrestricted absolute paths;
+- both filename fields are validated on write and again on reconciliation
+  read; empty names, absolute paths, directory separators, `..`, NUL and
+  control characters are rejected;
+- `companion_filename` is nullable at table level; every B1 report-document
+  operation records its metadata filename there;
+- one active operation may own one exact
+  `(artifact_kind, primary_filename)` identity; a second active operation must
+  not reconcile or audit that same artifact identity; here active means
+  `prepared` or `pending_audit`;
+- report-document filenames contain no request reason;
+- future B2/B3 `primary_filename` values may contain the canonical
+  filename-derived reason segment already accepted by CR-005;
+- there is no separate `reason` column and no raw human reason, request reason,
+  export-manifest reason or other separate user-authored text is stored;
+- CR-005 filename behavior is not reopened;
 - no artifact, export or report content is stored;
 - no Workshop-profile value is stored;
-- no user-authored reason is stored;
-- no phone number, email address, address, note or arbitrary text is stored;
+- no phone number, email address, address or note is stored;
 - the ledger is internal and is not a user-facing history viewer;
-- completed and abandoned rows are retained for MVP idempotency and diagnostic
+- audited and abandoned rows are retained for MVP idempotency and diagnostic
   safety;
 - no cleanup policy is authorized by this decision.
+
+Ledger filenames are never copied into AuditLog summary or metadata and are
+never exposed through `GET /api/audit-logs`. Existing artifacts are not
+renamed or rewritten.
 
 ### Required operation sequence
 
@@ -235,15 +281,31 @@ validate and canonicalize request
 → finalize AuditLog and ledger state in one SQLite transaction
 ```
 
-The finalization transaction is:
+For B1, the existing repository contract receives one bounded compatible
+extension:
 
 ```text
-read operation by operation_id
-→ if already audited, return idempotently
-→ insert exactly one AuditLog row
-→ store audit_log_id
-→ set ledger status to audited
-→ commit together
+AuditLogRepository.create_log(...) -> int
+```
+
+It returns the inserted AuditLog row ID from `cursor.lastrowid`, preserves the
+existing parameters and optional caller-owned connection, and permits existing
+callers to ignore the returned integer. B1 must not add a second AuditLog
+insertion API, bypass `AuditLogRepository`, or change existing call-site
+behavior.
+
+The B1 finalizer uses one caller-owned SQLite connection and a
+write-serialized transaction:
+
+```text
+BEGIN IMMEDIATE or an architecture-equivalent explicitly tested SQLite write lock
+→ read operation by operation_id
+→ if status = audited, return the existing audit_log_id without inserting
+→ if status not in (prepared, pending_audit), do not insert
+→ insert exactly one report_document.created AuditLog row
+→ receive its row ID
+→ update the ledger to audited with that audit_log_id
+→ commit both
 ```
 
 If finalization fails:
@@ -256,7 +318,8 @@ artifact remains
 ```
 
 Do not open a second independent SQLite connection while the finalization
-transaction is active.
+transaction is active. If the AuditLog insert or ledger update fails, both are
+rolled back. No generic transaction framework is authorized.
 
 ### Reconciliation contract
 
@@ -293,7 +356,57 @@ For one `prepared` or `pending_audit` operation:
   warning rather than guessing.
 
 For report documents, both the primary Markdown/PDF file and the metadata JSON
-file must exist and agree before auditing.
+file must pass this complete verification before finalization or
+reconciliation:
+
+1. `primary_filename` and `companion_filename` pass safe-name validation;
+2. both resolve inside the configured report-documents directory;
+3. both exist and are regular files;
+4. metadata JSON parses as the existing `ReportDocumentMetadata`;
+5. metadata `filename` equals ledger `primary_filename`;
+6. metadata `metadata_filename` equals ledger `companion_filename`;
+7. metadata `document_type` is exactly `workshop_overview`;
+8. metadata format is one of the currently supported generated formats;
+9. the primary extension matches metadata format;
+10. metadata ID agrees with the generated filename contract;
+11. metadata `size_bytes` equals the current primary-file byte size;
+12. the existing safe-path rules remain satisfied.
+
+Verification does not rerender document content or compare it with current
+report data, and it never rewrites the document or metadata file. If the pair
+is definitely absent because creation failed, the operation becomes
+`abandoned`. If it is mismatched, malformed, unsafe or ambiguous, do not audit
+or delete it: leave it `prepared` or `pending_audit`, include it in
+`pending_audit_count`, and surface the pending warning.
+
+Startup reconciliation runs after successful database initialization and
+migrations, is bounded to unresolved report-document operations, and completes
+before the ordinary UI is served. Failure to finalize one pending event leaves
+that operation unresolved, does not delete or rewrite the artifact, and does
+not make the whole application unusable; startup completes with the pending
+count/warning. This recovery behavior must not hide an independent migration
+or database-initialization failure.
+
+Pre-create reconciliation runs once before preparing the next report-document
+operation. Failure to finalize an older valid artifact does not turn that
+artifact into a failure. A new create may continue only if its new ledger
+preparation can be committed safely; otherwise the new document is not
+created and the exact B1 HTTP `500` contract applies. There is no loop or
+unbounded retry.
+
+For B1, `pending_audit_count` is the number of ledger rows satisfying:
+
+```text
+artifact_kind = report_document
+status IN (prepared, pending_audit)
+```
+
+It excludes `audited` and `abandoned`. `GET
+/api/report-documents/status` reads this count but performs no reconciliation.
+A definitely absent incomplete artifact becomes `abandoned` and is no longer
+counted; an ambiguous, unsafe or not-yet-finalized operation remains
+unresolved and counted. The frontend presents the count only as a
+pending-Journal warning, never as failed document creation.
 
 ### Duplicate-event protection
 
@@ -318,6 +431,13 @@ insert AuditLog + mark operation audited
 ```
 
 or commit neither.
+
+B1 runtime tests must prove that sequential repeated finalization creates one
+row; startup plus pre-create repeated finalization creates one row; two
+concurrent finalizer attempts create exactly one row and one caller receives or
+resolves the already-audited result; AuditLog insert failure leaves the
+operation unresolved; and ledger-update failure rolls back the AuditLog
+insert.
 
 ### Audit privacy and vocabulary
 

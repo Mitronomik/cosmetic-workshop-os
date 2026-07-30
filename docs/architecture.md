@@ -1353,15 +1353,51 @@ validate/canonicalize
 
 Allowed ledger statuses are `prepared`, `pending_audit`, `audited` and
 `abandoned`. The stable unique identity is `operation_id`; an audited operation
-stores `audit_log_id`. Reconciliation runs after migrations during normal
-startup and before another scoped create, uses only the recorded safe
-filenames under the expected artifact directory, and shares the idempotent
-finalizer. GET/list/status endpoints never reconcile.
+stores `audit_log_id`. `operation_id` is an opaque backend-generated canonical
+lowercase UUID, never user-supplied or exposed by the Journal API. B1 creates
+only `artifact_kind = report_document` and
+`audit_action = report_document.created`; `json_export` and `manual_backup`
+remain reserved.
 
-The ledger stores no artifact content, reason, Workshop profile, client data or
-arbitrary text. AuditLog stores no path, filename, reason, content, entity
-count, request or response payload. Existing artifacts are not backfilled. The
-automatic `before_migration` backup remains outside CR-009 and before
+The B1 table has the exact conceptual columns and constraints recorded in ADR
+0013: typed non-null identity/kind/filename/status/action/timestamps, nullable
+companion filename and nullable `audit_log_id` referencing `audit_logs.id`,
+plus a status `CHECK`. Safe filename validation runs on write and
+reconciliation read and rejects empty names, absolute paths, separators, `..`,
+NUL and control characters. Only one active operation may own an exact
+`(artifact_kind, primary_filename)` identity; active means `prepared` or
+`pending_audit`.
+
+`primary_filename` and nullable `companion_filename` are internal safe relative
+filenames required for deterministic reconciliation. Report-document
+filenames contain no request reason. Future B2/B3 primary filenames may contain
+the canonical filename-derived reason segment accepted by CR-005; there is no
+separate reason column and no raw human/request/export-manifest reason or other
+separate user-authored text. CR-005 is not reopened. Ledger filenames are
+never copied into AuditLog or exposed by `GET /api/audit-logs`.
+
+Reconciliation runs after successful initialization and migrations, before
+the ordinary UI is served, and once before another scoped create. It uses only
+the recorded safe filenames under the expected artifact directory and shares
+the idempotent finalizer. GET/list/status endpoints never reconcile. A failure
+to finalize one pending event leaves it unresolved and does not make startup or
+an older artifact fail; it does not hide an independent initialization or
+migration failure, loop, or retry without bound.
+
+For B1, `AuditLogRepository.create_log(...)` compatibly returns the inserted
+row ID while preserving its parameters and optional caller connection.
+Existing callers may ignore it. The finalizer uses that repository on one
+caller-owned connection under `BEGIN IMMEDIATE` or an explicitly tested
+architecture-equivalent SQLite write lock, reads status, returns an existing
+audited ID, inserts only for `prepared`/`pending_audit`, then stores the new ID
+and marks the ledger audited in the same transaction. Insert and ledger update
+commit together or neither; no second insertion API, connection or generic
+transaction framework is authorized.
+
+The ledger stores no artifact content, Workshop profile or client data.
+AuditLog stores no path, filename, reason, content, entity count, request or
+response payload. Existing artifacts are not backfilled, renamed or rewritten.
+The automatic `before_migration` backup remains outside CR-009 and before
 migrations, so it never depends on a ledger table that may not exist yet.
 
 ---

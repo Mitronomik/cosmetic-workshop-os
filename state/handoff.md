@@ -52,9 +52,16 @@ scoped create. It resolves only the expected directory and recorded safe
 relative filenames, verifies the complete artifact unit, and uses the same
 finalizer. GET/list/status endpoints never reconcile. There is no background
 thread, unbounded retry, directory scan, legacy backfill or generic
-outbox/event bus/job queue. The ledger and AuditLog exclude paths, filenames,
-reasons, contents, Workshop profile, entity counts, client data and arbitrary
-text. The automatic `before_migration` backup remains outside CR-009 and before
+outbox/event bus/job queue.
+
+The ledger's safe relative filenames are internal reconciliation identities.
+Report-document filenames contain no request reason; future B2/B3 primary
+filenames may contain the canonical filename-derived reason segment accepted
+by CR-005. There is no separate reason column and no raw human reason, request
+reason, export-manifest reason or other separate user-authored text. Filename,
+path and reason remain prohibited from AuditLog and `GET /api/audit-logs`.
+CR-005 is not reopened and existing artifacts are not renamed or rewritten.
+The automatic `before_migration` backup remains outside CR-009 and before
 migrations.
 
 ### Next authorized runtime slice
@@ -74,6 +81,29 @@ directly affected backend/frontend tests and focused exact-head smoke.
 The document Markdown/PDF and metadata JSON remain one artifact unit. Existing
 partial-creation compensation remains. Existing report documents are not
 backfilled or modified.
+
+B1 must implement these details without further architecture decisions:
+
+- exact typed ledger columns, status `CHECK`, nullable AuditLog foreign key,
+  backend-generated canonical lowercase UUID operation ID, safe-name
+  validation on write/read and one active owner per artifact identity;
+- exact HTTP `500` `artifact_audit_tracking_unavailable` preparation failure,
+  with no document, metadata, AuditLog or prepared row;
+- exact pending warning naming only next startup and next document creation;
+- `pending_audit_count` counting only `report_document` operations in
+  `prepared`/`pending_audit`, excluding `audited`/`abandoned`, read without
+  reconciliation and shown only as a pending-Journal warning;
+- compatible `AuditLogRepository.create_log(...) -> int` using
+  `cursor.lastrowid`, with one caller-owned write-serialized finalization
+  transaction and no second insertion API or connection;
+- the twelve-point report-document filename/path/file/metadata/size
+  verification contract, with no rerender, rewrite, deletion or unsafe guess;
+- bounded post-migration startup and one-shot pre-create reconciliation;
+  failure of one older finalization leaves it unresolved without making
+  startup or the old artifact fail or hiding independent database/migration
+  failure;
+- sequential, cross-trigger, concurrent and rollback tests proving one audit
+  row and atomic audit/ledger finalization.
 
 ### Still blocked
 

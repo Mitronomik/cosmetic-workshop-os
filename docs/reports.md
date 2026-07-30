@@ -307,7 +307,30 @@ success-plus-warning presentation.
 Ordinary success remains HTTP `201` with `audit_status: recorded` and
 `audit_message: null`. Audit finalization failure also remains HTTP `201`, keeps
 the document available, returns `audit_status: pending` and a non-empty Russian
-warning, and must not trigger a duplicate create request.
+warning, and must not trigger a duplicate create request. The exact B1 warning
+is:
+
+```text
+Документ создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку при следующем запуске или перед созданием следующего документа.
+```
+
+It names the only bounded retry triggers and does not imply immediate,
+periodic or background retry.
+
+`pending_audit_count` is exactly the count of ledger operations with
+`artifact_kind = report_document` and status `prepared` or `pending_audit`; it
+excludes `audited` and `abandoned`. `GET /api/report-documents/status` reads the
+count but performs no reconciliation. A definitely absent incomplete pair
+becomes `abandoned`; an ambiguous, unsafe or not-yet-finalized operation stays
+unresolved and counted. The frontend presents this only as a pending-Journal
+warning, not failed document creation.
+
+Before finalization or reconciliation, the primary document and metadata
+sidecar must pass the exact safe-name, configured-directory, regular-file,
+metadata parse/identity/type/format/extension/ID/size and safe-path checks in
+ADR 0013 and `docs/report-documents.md`. Content is not rerendered or compared
+with current report data. Existing files are never rewritten. A mismatched,
+malformed, unsafe or ambiguous pair is not audited or deleted.
 
 The event uses `entity_id = operation_id`, `actor_type = user`, persisted
 summary `Report document created`, and safe display summary
