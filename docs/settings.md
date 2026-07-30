@@ -102,6 +102,45 @@ Validation is backend-owned: values are trimmed, empty strings are allowed, over
 
 Profile values are display-only settings for Settings and future documents. They are not calculation inputs and do not mutate recipes, clients, orders, production batches, stock movements, reports, costs, taxes, margins, alerts, purchases, imports, exports, backups, or historical records. Calculation-sensitive settings such as tax, currency, margin, units, stock thresholds, and expiry warning days remain non-editable and require future backend rules.
 
+## C3-II-A — atomic workshop-profile AuditLog coverage
+
+Status:
+
+```text
+AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+```
+
+This is the only authorized C3 follow-up runtime slice. It preserves the existing `GET` and `PUT /api/settings/workshop-profile` endpoints, field names, response shape, validation limits, NFKC normalization, control-character rejection, form lifecycle and report-document immutability.
+
+A real canonical profile change must run as one caller-owned SQLite transaction:
+
+```text
+validate and canonicalize
+→ read workshop_profile on the transaction connection
+→ compare canonical semantic state
+→ upsert workshop_profile on that connection
+→ insert exactly one workshop_profile.updated AuditLog row on that connection
+→ commit both
+```
+
+If either write fails, neither write commits and the previous profile remains authoritative. No second independent connection may open while the mutation transaction is active. Use the existing connection-aware `SettingsRepository`, `AuditLogRepository.create_log(...)` and the established atomic tax-setting precedent; do not add a migration, parallel settings store, generic settings mutation framework or event bus.
+
+A canonically identical request is a no-op: no upsert, no `updated_at` change, no AuditLog row, the current response shape is returned, and the Russian response message explains that no changes were found. An empty-but-valid profile keeps the existing storage semantics; this slice adds no delete or Clear behavior.
+
+Authorized event:
+
+```text
+action: workshop_profile.updated
+entity_type: app_setting
+entity_id: workshop_profile
+actor_type: user
+persisted summary: Workshop profile updated
+```
+
+User-facing presentation is backend-owned: `Профиль мастерской изменён`, `Настройка приложения`, `Профиль мастерской обновлён`. Neither summary nor metadata may contain any workshop name, master name, contact text, note, address, phone number, email address, arbitrary profile text, raw JSON, old value or new value. Metadata may contain only bounded structural facts such as `setting_key`, changed non-sensitive field identifiers, configured-before/configured-after booleans and a changed-field count.
+
+Full privacy, rollback, compatibility, tests and exact-head smoke requirements: `docs/audit-log.md` § 16.
+
 ## PR98 report-document behavior
 
 Saved Workshop profile fields are display metadata for newly generated report documents. They do not affect recipes, clients, orders, production, stock, costs, taxes, margins, alerts, purchases, imports, exports, backups, demo data, or historical records. Existing documents are not mutated. No tax/currency/margin/unit/stock-threshold/expiry settings, template editor, logo upload, DOCX, invoices, labels, or certificates were added.
@@ -126,7 +165,9 @@ Sections 5, 6, and the tax/margin calculations in section 8 are **C2**. Readines
 - `C2-II` — transactional production financial snapshots, including `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot`: **IMPLEMENTED** and merged (PR #152);
 - `C2-III-A` — Order and `ProductionBatch` financial presentation: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #154);
 - `C2-III-B` — snapshot-backed reports and report documents: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`). **C2 is `COMPLETED`.**
-- `C3-I` — read-only AuditLog workspace: `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; contract `docs/audit-log.md`.
+- `C3-I` — read-only AuditLog workspace: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #159).
+- `C3-II-A` — atomic workshop-profile AuditLog coverage: `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; contract `docs/audit-log.md` § 16.
+- `C3-II-B` — file-backed artifact AuditLog semantics: `NEEDS PRODUCT DECISION — NOT AUTHORIZED`; contract `docs/audit-log.md` § 17.
 
 The current setting is **only ever an input to calculations**. It never recalculates history: changing or clearing it leaves every completed `ProductionBatch`, report value, prior audit record, and generated document exactly as it was. `C2-II` snapshots the active rate **and** its effective timestamp onto the `ProductionBatch` at confirmation time, in nullable columns that are never backfilled, and reports will read those snapshots only.
 

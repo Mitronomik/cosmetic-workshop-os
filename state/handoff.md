@@ -1,6 +1,76 @@
 # Handoff
 
-## C3-I — read-only AuditLog workspace — implemented on its PR branch, not merged
+## C3-I closure and C3-II-A authorization handoff (2026-07-30)
+
+This is a documentation-only lifecycle handoff. No runtime code, test, schema, migration, dependency, lockfile or generated artifact changes.
+
+### Verified merged closure
+
+```text
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+```
+
+- Repository: `Mitronomik/cosmetic-workshop-os`
+- PR #159: `MERGED`, base `main`
+- Final reviewed and published head: `bf7cde060a43190fdf22c612a16b0c137aa5531b`
+- Merge commit: `ba3ca7443e3280bc7f700af11e75dc4fa810665f`
+- Merged at: `2026-07-30T03:20:23Z`
+- `origin/main` at branch start: exactly `ba3ca7443e3280bc7f700af11e75dc4fa810665f`
+- Both commits are ancestors of `origin/main`; tree clean; zero open PRs; no existing exact lifecycle branch.
+
+Exact-final-head evidence: focused AuditLog frontend `92 passed / 0 failed / 0 skipped` in default and `TZ=Europe/Amsterdam`; all frontend `test:*` scripts pass with `0 failed / 0 skipped`; build `PASS`; `frontend/src/main.ts` `6380`; exact-head browser smoke `PASS — EXACT-HEAD BROWSER SMOKE PASSED`, 60 scenarios.
+
+Separately attributed evidence on `2848880f2009158749398aec7d504c0364336ba9`: complete backend `1364 passed / 0 failed`, focused backend `422 passed`, all 942 established node IDs preserved, API smoke `150 checks / 0 failures`. The backend tree is byte-identical at final head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, but backend and API were not re-executed after the final frontend-only correction. Do not claim `PASS — FULL AUTOMATED SMOKE PASSED` for the final head.
+
+### Next authorized slice
+
+```text
+C3-II-A — Atomic workshop-profile AuditLog coverage
+AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+```
+
+Only after this documentation PR merges, start a fresh runtime branch from clean `origin/main`. No implementation PR number is assigned. Scope is only `WorkshopProfileSettingsService.update_profile()`:
+
+- canonical validation before writes where possible;
+- one caller-owned SQLite transaction and connection;
+- read/compare current profile;
+- real change upserts `workshop_profile` and inserts exactly one `workshop_profile.updated` / `app_setting` / `workshop_profile` / `user` audit row;
+- failure of either write commits neither;
+- canonical no-op performs no upsert, preserves `updated_at`, writes no audit and returns an honest Russian no-change message;
+- no Clear or profile deletion;
+- no profile value, contact data, note, JSON, old value or new value in summary or metadata;
+- existing profile endpoints/shape, Settings lifecycle, tax-setting audit, other settings rows and historical report documents stay unchanged;
+- C3-I continues to expose only safe backend-owned labels and `display_summary`.
+
+Full requirements, including all 18 backend assertions, frontend suites and isolated exact-head failure-injection smoke: `docs/audit-log.md` § 16 and `docs/implementation-plan.md` § C3.
+
+### Still unresolved
+
+```text
+C3-II-B — File-backed artifact AuditLog semantics
+NEEDS PRODUCT DECISION — NOT AUTHORIZED
+```
+
+This covers only manual backup, JSON export and report-document audit semantics. Do not choose the result of successful artifact creation followed by failed AuditLog persistence implicitly. Success/partial-success feedback, compensation, artifact authority, retry/reconciliation, duplicate protection, startup recovery and exact smoke all require a future product decision. `CR-004` and `CR-006` remain unchanged and separate.
+
+Final lifecycle:
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED
+C3 — INCOMPLETE
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+Restore, packaging, installation, update and release-candidate smoke remain open and inactive.
+
+## HISTORICAL — SUPERSEDED — C3-I read-only workspace on its pre-merge PR branch
+
+> This section records the true pre-merge state and is preserved for traceability. It is superseded by the 2026-07-30 closure handoff above.
 
 `C3-I — Read-only AuditLog workspace` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`**.
 
@@ -1585,7 +1655,9 @@ C2-III-B — IMPLEMENTED ON PR BRANCH — NOT MERGED
 - Report reads remain read-only: no audit record, no file, no business mutation.
 - No accounting, tax filing, VAT, tax regimes, date filters, charts, forecasting, analytics, tax-rate averages, DOCX, automatic document regeneration, `C3`, `C4`, Restore, packaging or release work. No dependency and no lockfile changed.
 
-## C2 closure and C3-I AuditLog authorization handoff (2026-07-29)
+## HISTORICAL — SUPERSEDED — C2 closure and C3-I authorization handoff (2026-07-29)
+
+> This handoff was true before C3-I implementation and PR #159 merge. Its next-step instructions are superseded by the 2026-07-30 handoff at the top of this file.
 
 ### Verified lifecycle
 

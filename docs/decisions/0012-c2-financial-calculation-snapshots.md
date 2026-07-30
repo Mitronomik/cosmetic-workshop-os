@@ -31,7 +31,7 @@ Authorization state of each slice (current, updated 2026-07-28):
 C2 — COMPLETED
 ```
 
-`C3` has exactly one authorized runtime slice — `C3-I — Read-only AuditLog workspace`, `AUTHORIZED AFTER THE CLOSURE DOCUMENTATION PR MERGES — NOT IMPLEMENTED`, durable contract `docs/audit-log.md`. `C4` remains inactive. Product release readiness is not claimed.
+`C3-I — Read-only AuditLog workspace` has since merged as PR #159 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`, while C3 remains incomplete. Only `C3-II-A — Atomic workshop-profile AuditLog coverage` is authorized after the lifecycle documentation PR merges; `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. Durable contract: `docs/audit-log.md`. `C4` remains inactive. Product release readiness is not claimed.
 
 **Relationship to ADR 0011.** ADR 0011 remains the authoritative C1 tax-setting decision and now records `C1-I` as merged and verified — PR #149, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged `2026-07-27T19:44:53Z`, exact-head `/settings` smoke `PASS — 146 checks / 0 failures`. ADR 0012 does not reopen `CR-007`; it defines the C2 calculation, confirmation-context, and snapshot contract.
 

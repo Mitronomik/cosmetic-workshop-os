@@ -2,19 +2,29 @@
 
 ## Current phase
 
-Slice A5 is DONE. PR #131 merged at `62d372644d00fab38ccb1d652ab44556d8241b6a` (`Merge pull request #131 from Mitronomik/codex/implement-a5-local-artifact-presentation`).
-
-The B1/B2 diagnostic audit found no demo-fixture or backend Dashboard read-model implementation defect requiring a correction PR. It confirmed explicit demo-data installation, safe duplicate-install rejection, stable alert and purchase-suggestion regeneration, meaningful operational source data, and no passive database mutations. B2 browser presentation was not fully verified by that diagnostic audit.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. The broader C3 obligation is incomplete.
 
 ## Current next step
 
-- Complete the focused frontend test-infrastructure repair for the four focused TypeScript/Node test scripts.
-- Keep the task runtime-neutral: no frontend runtime source, CSS, backend, schema, migration, dependency, demo-data, alert, purchase-suggestion, Dashboard, onboarding, Help Center, or B3.1 behavior changes.
-- After this repair, start B3.1 — Shared feedback for Dashboard, Onboarding and Help.
-- No B1 or B2 implementation PR is active, and no future PR number is assigned.
+- Merge this documentation-only lifecycle PR.
+- Only after it merges, `C3-II-A — Atomic workshop-profile AuditLog coverage` becomes authorized for implementation from clean `origin/main`.
+- `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`.
+- Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
 
+## 2026-07-30 — C3-I closed; atomic workshop-profile audit slice authorized (documentation-only)
 
-## C3-I — Read-only AuditLog workspace — IMPLEMENTED ON PR BRANCH — NOT MERGED (2026-07-29)
+- **Verified start gate.** Repository `Mitronomik/cosmetic-workshop-os`; PR #159 `MERGED`, base `main`, final reviewed and published head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`; both commits ancestors of `origin/main`; `origin/main` exactly the merge commit; clean tree including untracked files; zero open PRs; no existing exact documentation-task branch.
+- **`C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`.** `GET /api/audit-logs` and `/settings/audit-log` are on merged `main`.
+- **Honest evidence attribution.** Exact-final-head `bf7cde060a43190fdf22c612a16b0c137aa5531b`: focused frontend `92 passed / 0 failed / 0 skipped` in default and `TZ=Europe/Amsterdam`; all frontend `test:*` scripts pass with `0 failed / 0 skipped`; build `PASS`; `frontend/src/main.ts` `6380`; browser smoke `PASS — EXACT-HEAD BROWSER SMOKE PASSED`, 60 scenarios. Backend `1364 passed / 0 failed`, focused backend `422 passed`, 942 preserved node IDs and API smoke `150 checks / 0 failures` ran on `2848880f2009158749398aec7d504c0364336ba9`; the backend tree is byte-identical at `bf7cde060a43190fdf22c612a16b0c137aa5531b`, but those results were not re-executed or relabelled as exact-final-head results.
+- **`C3-II-A — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`.** One real canonical workshop-profile update and exactly one safe `workshop_profile.updated` row must share one caller-owned SQLite transaction. Failure of either write commits neither; canonical no-op preserves `updated_at` and writes neither. No profile value may enter audit summary or metadata. Existing API/UI and historical documents remain compatible.
+- **`C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED`.** Manual backup, JSON export and report-document generation are file-backed. Artifact-success/audit-failure semantics, feedback, compensation, authority, retry/reconciliation, duplicates, startup recovery and smoke remain undecided.
+- **Lifecycle:** `C3 — INCOMPLETE`; `C4 — INACTIVE — NEEDS PRODUCT DECISION`; product release readiness not claimed. Restore, packaging, installation, update and release-candidate smoke remain open. `CR-004` and `CR-006` are unchanged.
+- **Scope:** Markdown only. No production code, tests, configuration, schema, migration, dependency, lockfile, generated artifact or user data change. No future implementation PR number assigned.
+- **Verification:** Pre-commit Level 0 worktree checks and the semantic stale-claim audit passed; every changed path is Markdown. The `origin/main...HEAD` variants remain a required post-commit, pre-push gate. Runtime tests, build and every runtime smoke are explicitly not part of this documentation PR.
+
+## HISTORICAL — SUPERSEDED — C3-I implemented on its PR branch, not merged (2026-07-29)
+
+> This dated section was true before PR #159 merged. It is preserved for traceability and superseded by the 2026-07-30 closure entry above.
 
 Branch `codex/c3-i-read-only-audit-log-workspace`, from clean `origin/main` `fa433d03acbf68e16b14ba6245885ab9eaf15c35`. Durable contract: `docs/audit-log.md`. **Not merged, not `DONE`, not release-ready.**
 
@@ -1727,7 +1737,9 @@ Explicitly unsupported: ingredient/lot balance overwrite, StockMovement update/d
 - **Smoke re-run.** Because this commit follows the previously accepted smoke, the exact-head API smoke and the exact-head browser smoke were re-run against the new published head under the same isolation requirements, and no commit was added afterwards.
 - **`C2 remains incomplete until C2-III-B is reviewed, exact-head verified and merged, and its active lifecycle is closed.`** `C2-III-B` is not `DONE`, C2 is not marked complete, PR #157 stays open and unmerged with auto-merge disabled, C3 and C4 remain inactive, and **product release readiness is not claimed.**
 
-## 2026-07-29 — C2 closed as COMPLETED; bounded C3-I AuditLog workspace authorized (documentation-only)
+## HISTORICAL — SUPERSEDED — 2026-07-29 C2 closure and C3-I authorization
+
+> This entry records the true state before C3-I implementation and PR #159 merge. Its C3-I authorization status is superseded by the 2026-07-30 closure entry at the top of this file.
 
 - **Documentation-only pull request.** Every changed file ends in `.md`. No backend or frontend production code, no test, no test configuration, no package script, no schema, no migration, no dependency, no lockfile, no generated artifact, no smoke runner and no user data changed.
 - **PR #157 merge evidence independently verified before editing.** `gh pr view 157` returned state `MERGED`, base `main`, head branch `codex/c2-iii-b-snapshot-backed-reports`, head `305d5421e79b8cb833df9588e705e9418781e021`, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged at `2026-07-28T22:21:18Z` — every expected value matched. `origin/main` equalled that merge commit, no commit existed on `main` after it, the working tree was clean, and there were zero open pull requests, so no open PR closed C2 or implemented or authorized C3.

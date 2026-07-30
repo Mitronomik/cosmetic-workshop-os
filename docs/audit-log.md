@@ -2,7 +2,7 @@
 
 Human-facing name: **Журнал действий**.
 
-This document is the durable contract for the C3 AuditLog workspace. It is the authoritative source for the C3-I product boundary, the actor field contract, the safe read model, the backend-owned display summary, ordering, pagination, filters, validation responses, privacy rules and the frontend presentation contract. `docs/roadmap.md` PR27, `docs/implementation-plan.md` § C3, `docs/api.md`, `docs/domain-model.md` § 6.21 and `docs/architecture.md` § 6.18 defer to this file wherever they disagree.
+This document is the durable contract for the C3 AuditLog workspace. It is the authoritative source for the merged C3-I read boundary, the authorized C3-II-A workshop-profile write boundary, the unresolved C3-II-B file-backed artifact boundary, the actor field contract, the safe read model, the backend-owned display summary, ordering, pagination, filters, validation responses, privacy rules and the frontend presentation contract. `docs/roadmap.md` PR27, `docs/implementation-plan.md` § C3, `docs/api.md`, `docs/domain-model.md` § 6.21 and `docs/architecture.md` § 6.18 defer to this file wherever they disagree.
 
 ---
 
@@ -10,20 +10,38 @@ This document is the durable contract for the C3 AuditLog workspace. It is the a
 
 ```text
 C3-I — Read-only AuditLog workspace
-IMPLEMENTED ON PR BRANCH — NOT MERGED
+DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
-`C3-I` is the **only** authorized C3 runtime slice. No other C3 slice exists, is planned, or is authorized. The implementation lives on the branch `codex/c3-i-read-only-audit-log-workspace` and is **not merged**; it is not `DONE`, not `COMPLETED` and not `MERGED` until it is reviewed and merged.
+PR #159 `C3-I — Implement the read-only AuditLog workspace` is merged into `main`:
+
+```text
+Final reviewed and published head:
+bf7cde060a43190fdf22c612a16b0c137aa5531b
+
+Merge commit:
+ba3ca7443e3280bc7f700af11e75dc4fa810665f
+
+Merged at:
+2026-07-30T03:20:23Z
+```
+
+Both commits are ancestors of the verified merged baseline. `GET /api/audit-logs` and `/settings/audit-log` now exist on merged `main`. This closes only the read-only slice; it does **not** complete the broader C3 write-side obligation.
 
 Surrounding lifecycle:
 
 ```text
 C1 — COMPLETED
 C2 — COMPLETED
-C3-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED
+C3 — INCOMPLETE
 C4 — INACTIVE — NEEDS PRODUCT DECISION
 Product release readiness — NOT CLAIMED
 ```
+
+`C3-II-A — Atomic workshop-profile AuditLog coverage` is the **only** follow-up runtime slice authorized by this lifecycle document, and only after this documentation PR merges. No implementation PR number is assigned. `C3-II-B — File-backed artifact AuditLog semantics` is a separate unresolved product decision covering only manual backup creation, JSON export creation and report-document generation; it is not authorized.
 
 ### 1.1. Implementation modules
 
@@ -41,7 +59,7 @@ Product release readiness — NOT CLAIMED
 | Frontend DOM wiring | `frontend/src/audit-log-bindings.ts` |
 | Route table | `frontend/src/app-navigation-routes.ts` |
 
-`AuditLogRepository.create_log` is unchanged — the diff of that method is empty and no production write call site was touched. **No migration exists**; the only schema-adjacent change is the code-level enum member `DomainIssueCode.PAGINATION_OUT_OF_RANGE`.
+In merged C3-I, `AuditLogRepository.create_log` was unchanged — the diff of that method was empty and no production write call site was touched. **No migration exists**; the only schema-adjacent change was the code-level enum member `DomainIssueCode.PAGINATION_OUT_OF_RANGE`.
 
 ---
 
@@ -1034,7 +1052,17 @@ Because `display_summary` is derived from `action` and never from the raw stored
 
 `AGENTS.md` § 3.5 and `docs/domain-model.md` § 3.8 both say that backup, export and settings changes are logged. On merged `main`, **only** the tax-rate setting is audited: there is no `create_log` call in `backend/app/services/backup.py`, `backend/app/services/export.py`, the report-document services, or `WorkshopProfileSettingsService.update_profile`. `Журнал действий` will therefore not show backup, export, report-document or workshop-profile events.
 
-`C3-I` **must not** add those write call sites. It is a read-only slice, and the gap is stated here so the workspace is not mistaken for complete coverage. Closing the gap requires a separately authorized write slice.
+`C3-I` did not add those write call sites. It is a completed read-only slice, and the gap is stated here so the workspace is not mistaken for complete coverage. The remaining gap is subdivided rather than assigned to one broad implementation PR:
+
+```text
+C3-II-A — Atomic workshop-profile AuditLog coverage
+AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+
+C3-II-B — File-backed artifact AuditLog semantics
+NEEDS PRODUCT DECISION — NOT AUTHORIZED
+```
+
+`C3-II-A` covers only the pure SQLite workshop-profile mutation and its AuditLog row. `C3-II-B` covers only manual backup creation, JSON export creation and report-document generation, whose primary result is a filesystem artifact outside the SQLite transaction.
 
 ---
 
@@ -1094,53 +1122,240 @@ Not authorized:
 
 `C3-I` is complete only when: `GET /api/audit-logs` returns exactly the § 5.2 item shape, with `actor_type` / `actor_label` and no `source` field; `display_summary` is produced by the § 6 presenter, the persisted summary is never returned verbatim and never serves as an unrestricted fallback, and a suffix leaves the backend only through the seven conditions and the exact 21-row table of § 6.4; no internal ID, English technical prefix, wish title, individual-formula title, metadata value or table name appears in any response; every invalid pagination input maps to exactly one code under the ordered precedence of § 7.2.1, and the date-range conflict returns `field: created_before`; ordering, pagination and filters behave exactly as § 7 defines, with invalid pagination rejected rather than clamped; every structured rejection uses the exact `{"detail": {...}}` envelope of § 8; the `actor_type` column is neither renamed nor migrated and no write call site changes; `/settings/audit-log` renders every state in § 10.2 and none of the forbidden content in § 10.3; the C3 logic lives in focused modules and `frontend/src/main.ts` has not grown; the complete backend suite and every frontend test script are green; and an exact-head focused smoke against the published head confirms the read-only behavior of § 9 with isolated data.
 
-Documentation-only work does not satisfy any part of this boundary.
+PR #159 satisfied this runtime boundary with the accepted evidence in § 15. This lifecycle documentation records that closure; it does not substitute documentation-only work for runtime verification.
 
 ---
 
-## 15. Delivered on the `C3-I` PR branch — not merged
+## 15. C3-I merged closure and accepted evidence
 
 ```text
-C3-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
-### 15.1. Verification results
+### 15.1. Exact PR #159 evidence
 
-| Check | Result |
+| Item | Verified value |
 |---|---|
-| Complete backend suite | `1364 passed / 0 failed / 0 skipped` |
-| Merged baseline node IDs still collected | all `942`, zero renames |
-| Focused `C3-I` backend tests | `422 passed` (`test_audit_log_presentation.py`, `test_audit_logs.py`, `test_audit_logs_api.py`) |
-| Focused frontend suite `test:audit-log-workspace` | `82 passed / 0 failed / 0 skipped` |
-| `TZ=Europe/Amsterdam` focused frontend suite | `82 passed / 0 failed / 0 skipped` |
-| Frontend test scripts | `18` (was `17`) — all pass, `0 failed` |
-| Frontend production build | `npm run build` — `PASS` |
-| `git diff --check` | clean |
-| `frontend/src/main.ts` | `6398` before → `6380` after |
-| Migration added | none |
-| Dependency or lockfile change | none |
+| PR | #159 — `C3-I — Implement the read-only AuditLog workspace` |
+| State | `MERGED`, base `main` |
+| Final reviewed and published head | `bf7cde060a43190fdf22c612a16b0c137aa5531b` |
+| Merge commit | `ba3ca7443e3280bc7f700af11e75dc4fa810665f` |
+| Merged at | `2026-07-30T03:20:23Z` |
+| Exact-head focused frontend | `npm run test:audit-log-workspace` — `92 passed / 0 failed / 0 skipped` |
+| Exact-head timezone-focused frontend | `TZ=Europe/Amsterdam npm run test:audit-log-workspace` — `92 passed / 0 failed / 0 skipped` |
+| Exact-head all frontend `test:*` scripts | `PASS — 0 failed / 0 skipped` |
+| Exact-head frontend build | `npm run build` — `PASS` |
+| Exact-head `frontend/src/main.ts` | `6380` lines |
+| Exact-head browser smoke | `PASS — EXACT-HEAD BROWSER SMOKE PASSED`, 60 scenarios |
 
-Test commands:
+### 15.2. Backend and API attribution — not transferred to the final head
 
-```bash
-cd backend && python3 -m pytest
-cd frontend && npm run test:audit-log-workspace
-cd frontend && TZ=Europe/Amsterdam npm run test:audit-log-workspace
-cd frontend && npm run build
+The final UI correction changed no backend file. The latest complete and focused backend runs were executed on:
+
+```text
+2848880f2009158749398aec7d504c0364336ba9
 ```
 
-The exact-head API and browser smoke results are recorded in the pull request
-body against the exact published correction head. Evidence for the previous
-published head `749c51992c43af65f8297acb0979aded86fdb607` applies only to
-that head and is superseded for merge-readiness by the correction-head smoke.
+Results:
 
-### 15.2. Known coverage gaps and limitations
+```text
+complete backend suite: 1364 passed / 0 failed
+focused backend result: 422 passed
+all established merged-baseline node IDs preserved: 942
+```
 
-These are properties of the slice as accepted, not defects:
+The complete backend tree is byte-identical between:
 
-- **AuditLog coverage gap (§ 11.6).** Backup, export, report-document and workshop-profile actions are still not audited on `main`, so `Журнал действий` does not show them. `C3-I` is read-only and must not add those write call sites; closing the gap needs a separately authorized write slice.
-- **A true process `source` is deferred (§ 3.3).** Only `actor_type` exists. The `manual` / `import` / `production` / `migration` / `backup` / `onboarding` / `restore` vocabulary remains aspirational and unimplementable without a write-side decision.
-- **No detail endpoint (§ 4.2).** `GET /api/audit-logs/{id}` stays superseded; there is no metadata viewer and no raw JSON viewer.
-- **No write-side expansion.** No AuditLog edit, delete, rollback, restore, export, retention or compaction.
-- **Historical rows are shown, never repaired.** A malformed persisted summary degrades to the generic Russian phrase; it is not fixed, re-summarized or deleted.
-- **Product release readiness is not claimed.** Restore, packaging, installation verification, the update flow and the full release-candidate smoke all remain open, and C4 remains `INACTIVE — NEEDS PRODUCT DECISION`.
+```text
+2848880f2009158749398aec7d504c0364336ba9
+bf7cde060a43190fdf22c612a16b0c137aa5531b
+```
+
+The complete backend suite was **not re-executed** on `bf7cde060a43190fdf22c612a16b0c137aa5531b`.
+
+The API smoke result:
+
+```text
+150 checks / 0 failures
+```
+
+was executed on `2848880f2009158749398aec7d504c0364336ba9`. The final head is backend-identical, but the API smoke was **not re-executed** after the final frontend-only correction. It is not an exact-final-head API smoke and must not be relabelled as `PASS — FULL AUTOMATED SMOKE PASSED`. The truthful final evidence is `PASS — EXACT-HEAD BROWSER SMOKE PASSED` plus the separately attributed backend and API results above.
+
+### 15.3. Known limitations after closure
+
+- The coverage gap of § 11.6 remains; closing C3-I does not complete C3.
+- A true process `source` remains deferred; only `actor_type` exists.
+- The detail endpoint remains superseded; there is no metadata or raw JSON viewer.
+- Historical rows are shown, never repaired.
+- Restore, packaging, installation verification, the update flow and full release-candidate smoke remain open.
+- C4 remains `INACTIVE — NEEDS PRODUCT DECISION`; product release readiness is not claimed.
+
+---
+
+## 16. C3-II-A — Atomic workshop-profile AuditLog coverage
+
+Status:
+
+```text
+AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+```
+
+This is the **only** authorized follow-up runtime slice. No implementation PR number is assigned.
+
+### 16.1. User-visible purpose and event vocabulary
+
+When a user makes a real semantic change to the workshop profile, the application records exactly one safe, human-readable event in `Журнал действий`. The journal explains only that the profile changed; it is not a settings diff viewer.
+
+Authorized event:
+
+```text
+action: workshop_profile.updated
+entity_type: app_setting
+entity_id: workshop_profile
+actor_type: user
+
+action_label: Профиль мастерской изменён
+entity_label: Настройка приложения
+display_summary: Профиль мастерской обновлён
+
+persisted technical summary: Workshop profile updated
+```
+
+No existing action code represents this event exactly. The slice adds this code to the existing backend-owned presenter vocabulary only. It introduces no `source`, `source_label`, process-source column, migration, second AuditLog table, generic event bus or generic settings mutation framework.
+
+### 16.2. Atomic backend ownership
+
+Validation and canonicalization happen before a transaction or write whenever possible. A real mutation follows exactly:
+
+```text
+validate and canonicalize request
+→ open one transaction
+→ read current workshop profile
+→ determine whether a real semantic change exists
+→ write the canonical workshop profile
+→ write exactly one AuditLog row on the same connection
+→ commit both together
+```
+
+The profile mutation and AuditLog insert share one caller-owned SQLite connection and transaction. A second independent database connection must not be opened while that mutation transaction is active.
+
+Failure contract:
+
+```text
+AuditLog insert fails
+→ profile update rolls back
+→ no new AuditLog row exists
+→ API returns failure
+→ previous profile remains authoritative
+
+profile persistence fails
+→ no AuditLog row is committed
+→ previous profile remains authoritative
+```
+
+Use the established `SettingsRepository(..., connection=...)`, `AuditLogRepository.create_log(..., connection=...)` and atomic tax-setting precedent. Do not add a new persistence architecture.
+
+### 16.3. Canonical no-op
+
+A canonically identical submission is a no-op:
+
+- preserve the stored profile and its existing `updated_at`;
+- perform no upsert;
+- create no AuditLog row;
+- return the current profile through the existing response shape;
+- return a normal Russian message explaining that no changes were found.
+
+Repeated identical submissions remain no-ops. `GET` remains read-only. Profile deletion and Clear semantics are not part of this slice. An empty-but-valid profile remains governed by the existing storage contract and must not become row deletion.
+
+### 16.4. Audit privacy
+
+The persisted summary, `display_summary` and metadata must never contain workshop name, master name, contact text, workshop note, address, phone number, email address, arbitrary profile text, raw JSON, old values, new values, or full request/response payloads.
+
+Metadata may contain only bounded structural facts such as:
+
+- `setting_key`;
+- non-sensitive field identifiers that changed;
+- configured-before/configured-after booleans;
+- changed-field count.
+
+The C3-I read API continues to expose only the backend-owned safe `display_summary`. It never exposes the raw persisted summary, metadata, profile values or internal setting payload.
+
+### 16.5. Existing API, UI and history compatibility
+
+- Preserve `GET` and `PUT /api/settings/workshop-profile`; add no endpoint.
+- Preserve profile field names, response shape, validation limits, Unicode normalization and control-character rejection.
+- Preserve Settings route ownership, the existing form lifecycle and mutation-versus-refresh behavior.
+- Preserve report-document immutability and all historical documents byte-for-byte.
+- No frontend production change is expected unless implementation evidence proves one narrowly scoped presentation change is required.
+- The generic AuditLog workspace displays the new action through backend-owned labels and presentation; the frontend does not calculate or reconstruct it.
+
+### 16.6. Required future runtime verification
+
+The future C3-II-A runtime PR must add or extend backend coverage for all of the following:
+
+1. a real profile change writes the setting and exactly one AuditLog row;
+2. both writes use the same connection and transaction;
+3. forced AuditLog failure rolls back the profile update;
+4. forced profile persistence failure commits no AuditLog row;
+5. validation failure writes neither profile nor AuditLog;
+6. canonical no-op performs no upsert and writes no AuditLog;
+7. no-op preserves `updated_at`;
+8. repeated identical submissions remain no-ops;
+9. `GET` creates no AuditLog row;
+10. summary contains no profile value;
+11. metadata contains no profile value;
+12. contact text and workshop note never appear in persisted audit data;
+13. the profile response shape is unchanged;
+14. the AuditLog list exposes safe Russian labels and `display_summary`;
+15. the read API exposes no raw summary, metadata, profile value or internal setting payload;
+16. other settings rows remain unchanged;
+17. existing report documents remain byte-identical;
+18. existing atomic tax-setting audit behavior remains unchanged.
+
+Run the directly affected focused backend suites and the complete backend suite. Preserve every existing node ID unless a rename is unavoidable and explicitly justified; do not delete, skip, `xfail` or weaken tests.
+
+Frontend verification must run the focused Settings suites, `test:audit-log-workspace`, every existing frontend `test:*` script and `npm run build`. Add no frontend arithmetic, payload reconstruction or profile-value display.
+
+The exact-head smoke must use an isolated database, user-data directory, `HOME`, browser profile and runner-owned dynamic ports. It must cover:
+
+```text
+open Settings
+→ update workshop profile
+→ verify successful response
+→ open Журнал действий
+→ see exactly one safe workshop-profile event
+→ verify no profile value appears
+→ repeat identical Save
+→ verify no second AuditLog event
+```
+
+It must also inject AuditLog persistence failure and prove the profile remains unchanged, the API reports failure, no AuditLog row commits, the UI does not claim success, and a retry after removing the fault succeeds exactly once. Check desktop and narrow viewport, keyboard access, console errors, page errors, failed requests and duplicate mutation requests. This is focused exact-head smoke, not release smoke.
+
+---
+
+## 17. C3-II-B — File-backed artifact AuditLog semantics
+
+Status:
+
+```text
+NEEDS PRODUCT DECISION — NOT AUTHORIZED
+```
+
+This boundary covers only:
+
+- manual backup creation;
+- JSON export creation;
+- report-document generation.
+
+These operations create filesystem artifacts outside the SQLite transaction. The unresolved question is:
+
+```text
+What is the truthful product result when the artifact has been created
+successfully but the subsequent AuditLog persistence fails?
+```
+
+This contract deliberately does **not** decide to delete the artifact, report total failure while leaving it on disk, return success with a missing audit event, retry automatically, add an outbox, add a cross-resource transaction abstraction, write an audit sidecar, reconstruct history from filenames, or claim filesystem creation and SQLite commit are fully atomic.
+
+A future product decision must define separately: success and partial-success semantics; user-visible feedback; whether compensation is safe; whether the artifact remains authoritative; retry and reconciliation rules; duplicate-event protection; startup recovery behavior; and exact smoke evidence.
+
+`CR-004` and `CR-006` remain unchanged and separate. `C3-II-B`, C4, Restore, packaging, installation, update and release-candidate work are not activated by this document.

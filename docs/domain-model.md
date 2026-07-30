@@ -1724,7 +1724,7 @@ action
 entity_type
 entity_id
 summary
-source
+actor_type
 created_at
 metadata
 ```
@@ -1760,6 +1760,9 @@ restore
 - `metadata_json` is **never** returned by the read API. It is dominated by internal foreign-key IDs, enum codes and counters — exactly the class of value a non-technical user must not see — so the `C3-I` read model excludes it in full rather than field by field.
 - The **raw persisted `summary` is never returned either.** It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text. The read API returns `display_summary`, a backend-owned safe Russian value resolved from `action` by a focused presenter, with the raw summary never used as a value or a fallback. Historical rows are not rewritten — only what is shown changes.
 - The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
+- `C3-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159, but C3 is incomplete.
+- `C3-II-A` is the only authorized follow-up runtime slice after the lifecycle documentation PR merges: one real canonical `workshop_profile` change and exactly one safe `workshop_profile.updated` row share one caller-owned SQLite transaction; either both commit or neither commits; a canonical no-op preserves `updated_at` and writes neither.
+- `C3-II-B` for manual backup, JSON export and report-document audit semantics remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. These file-backed operations need an explicit product result for artifact-success/audit-failure before any write call site is added.
 
 ### Examples
 
