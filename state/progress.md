@@ -20,7 +20,7 @@
 - **`C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED`.** Manual backup, JSON export and report-document generation are file-backed. Artifact-success/audit-failure semantics, feedback, compensation, authority, retry/reconciliation, duplicates, startup recovery and smoke remain undecided.
 - **Lifecycle:** `C3 — INCOMPLETE`; `C4 — INACTIVE — NEEDS PRODUCT DECISION`; product release readiness not claimed. Restore, packaging, installation, update and release-candidate smoke remain open. `CR-004` and `CR-006` are unchanged.
 - **Scope:** Markdown only. No production code, tests, configuration, schema, migration, dependency, lockfile, generated artifact or user data change. No future implementation PR number assigned.
-- **Verification:** Pre-commit Level 0 worktree checks and the semantic stale-claim audit passed; every changed path is Markdown. The `origin/main...HEAD` variants remain a required post-commit, pre-push gate. Runtime tests, build and every runtime smoke are explicitly not part of this documentation PR.
+- **Verification:** Level 0 documentation checks passed. `git status --short --untracked-files=all` was clean after commit; `git diff origin/main...HEAD --check` passed; `git diff origin/main...HEAD --stat` completed; and `git diff origin/main...HEAD --name-only` confirmed that every changed path is Markdown. The semantic stale-claim audit passed. No runtime tests, builds or runtime smoke were executed because this is a documentation-only PR.
 
 ## HISTORICAL — SUPERSEDED — C3-I implemented on its PR branch, not merged (2026-07-29)
 
