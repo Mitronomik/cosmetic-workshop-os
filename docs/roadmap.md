@@ -54,7 +54,7 @@ The current short-horizon implementation sequence, audit-driven hardening slices
 
 ### Roadmap completion window — current C1–C4 status
 
-Updated `2026-07-29`. This block records only the completion-window status; unrelated historical roadmap entries below are untouched.
+Updated `2026-07-30`. This block records only the completion-window status; unrelated historical roadmap entries below are untouched.
 
 - **C1 — calculation-sensitive Settings: `COMPLETED`.** The product contract was decided as `CR-007` (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`), and its single authorized slice `C1-I — Implement backend-owned tax-rate setting` is **merged and `DONE`** — PR #149, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged `2026-07-27T19:44:53Z`, exact-head `/settings` smoke `PASS — 146 checks / 0 failures`. C1 no longer awaits smoke and is not reopened.
 - **C2 — себестоимость, налог и маржа: `COMPLETED`.** The contract was decided as `CR-008` and divided into bounded slices; every slice is now merged and exact-head verified. Contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`; full slice specifications: `docs/implementation-plan.md` § 11.
@@ -62,12 +62,16 @@ Updated `2026-07-29`. This block records only the completion-window status; unre
   - `C2-II` — transactional production financial snapshots: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #152, final reviewed head `0cdda1b06b9783975f085207527f7d36a2ef7f22`, merge commit `c3a3a7b8db06fe85290216113b784123ed9b6b30`, merged `2026-07-28T09:00:50Z`.
   - `C2-III-A` — Order and `ProductionBatch` financial presentation: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #154, final reviewed head `ef1103811a8f062f9129bfb465a98e0cfa388935`, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`.
   - `C2-III-B` — snapshot-backed reports and report documents: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #157, branch `codex/c2-iii-b-snapshot-backed-reports`, final reviewed head `305d5421e79b8cb833df9588e705e9418781e021`, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`, exact-head API smoke `PASS — 53 checks / 0 failures`, exact-head browser smoke `PASS — FULL AUTOMATED SMOKE PASSED`, complete backend suite `942 passed / 0 failed / 0 skipped`. Snapshot-backed Reports, the additive DTO fields, the `/reports` presentation and the updated «Сводка мастерской» are **on merged `main`**. The report aggregation contract — row sets, `known_tax`, the `known_margin_percent` denominator, counter compatibility and warnings — is settled in `docs/reports.md` § *Accepted `C2-III-B` snapshot aggregation contract* and was unchanged by the implementation.
-- **C3 — AuditLog workspace: one bounded slice authorized.** `C3-I — Read-only AuditLog workspace` is **`IMPLEMENTED ON PR BRANCH — NOT MERGED`** on `codex/c3-i-read-only-audit-log-workspace` in PR #159. It is the **only** authorized C3 runtime slice: one read-only endpoint `GET /api/audit-logs` and one screen `/settings/audit-log` titled `Журнал действий`. The API exposes `actor_type` / `actor_label` — **not** `source`, because `system` and `user` are actors rather than process origins — and a backend-owned safe Russian `display_summary` rather than the raw persisted summary. The durable product, API, privacy and presentation contract is **`docs/audit-log.md`**, which supersedes the `GET /api/audit-logs/{id}` proposal in § PR27 below for the MVP.
+- **C3 — AuditLog workspace: `INCOMPLETE`.**
+  - `C3-I — Read-only AuditLog workspace`: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #159, final reviewed and published head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`.
+  - `C3-II-A — Atomic workshop-profile AuditLog coverage`: **`AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`**. It is the only authorized follow-up runtime slice, and no implementation PR number is assigned.
+  - `C3-II-B — File-backed artifact AuditLog semantics`: **`NEEDS PRODUCT DECISION — NOT AUTHORIZED`**. It covers only manual backup, JSON export and report-document audit semantics.
+  - The merged read API still exposes `actor_type` / `actor_label` rather than `source`, and only backend-owned safe `display_summary`; raw summary and metadata remain prohibited. Durable contract: `docs/audit-log.md`.
 - **C4 — Restore и recovery: `INACTIVE`.** Still `NEEDS PRODUCT DECISION`.
 
 `C2-III` was a planning umbrella; it was subdivided into exactly the two runtime slices above, and both are merged. **C2 is COMPLETED**: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed here.
 
-No C2 implementation PR remains open. `C3-I` is implemented on its PR branch and awaits review and merge; it is not `DONE`, `COMPLETED` or `MERGED`. C4 stays inactive. Product release readiness is **not** claimed.
+No C2 implementation PR remains open. `C3-I` is closed; the broader C3 obligation is not. Only `C3-II-A` is authorized after this documentation PR merges, while `C3-II-B` remains unresolved. C4 stays inactive. Product release readiness is **not** claimed.
 
 ## 2. Главный продуктовый принцип
 
@@ -518,7 +522,7 @@ GET /api/audit-logs
 
 `GET /api/audit-logs` может быть ограниченным или dev-only до PR27, но базовое чтение полезно для проверки.
 
-> **HISTORICAL — не реализовано.** PR2 создал таблицу `audit_logs` и запись в неё, но **не** добавил `GET /api/audit-logs`. На влитом `main` read-эндпоинта для журнала действий не существует; `AuditLogRepository` умеет только `create_log`. Единственный авторизованный read-эндпоинт — тот, что определён в `C3-I`; контракт: `docs/audit-log.md`.
+> **HISTORICAL — SUPERSEDED.** At the time of PR2, it created `audit_logs` and writes but did **not** add `GET /api/audit-logs`; the then-current merged `main` had no AuditLog read endpoint. PR #159 has since merged `C3-I`, so current `main` does contain the read endpoint. Contract: `docs/audit-log.md`.
 >
 > **Поле `source` в списке выше не реализовано.** В базе есть только колонка `actor_type`, и текущий write-словарь — это `system` и `user`, то есть **инициаторы, а не источники**. `C3-I` отдаёт `actor_type` / `actor_label` и **не** вводит поле `source`; настоящее измерение source/process отложено до отдельно принятого решения на стороне записи. Переименования колонки, миграции и backfill нет.
 

@@ -1311,7 +1311,7 @@ action
 entity_type
 entity_id
 summary
-source
+actor_type
 created_at
 ```
 
@@ -1334,6 +1334,8 @@ onboarding
 > Настоящее поле `source` требует, чтобы write call sites начали сохранять это измерение. Это изменение на стороне записи, и оно **отложено** до отдельно принятого продуктового решения и отдельного среза. До тех пор `manual`, `import`, `production`, `migration`, `backup` и `restore` нельзя подавать как реализуемые.
 >
 > **Сырой сохранённый `summary` тоже не отдаётся.** API возвращает `display_summary` — безопасное русское значение, которое backend-презентер выводит из `action`. Исторические строки не переписываются. Полный контракт: `docs/audit-log.md`.
+>
+> **Lifecycle boundary.** `C3-I` is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159. C3 remains incomplete. Only `C3-II-A — Atomic workshop-profile AuditLog coverage` is authorized after the lifecycle documentation PR merges: the canonical profile upsert and one safe `workshop_profile.updated` row must share one caller-owned SQLite transaction, and a canonical no-op writes neither. `C3-II-B` for manual backup, JSON export and report-document artifacts remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`, because filesystem creation and SQLite audit persistence have no accepted cross-resource failure semantics.
 
 ---
 

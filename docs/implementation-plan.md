@@ -49,17 +49,16 @@
 
 ### Current baseline
 
-- **Current baseline `origin/main`: `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`** (VERIFIED FROM REPOSITORY / GITHUB). This is the **PR #149 merge commit** — the `C1-I` merged baseline — and it is the verified current `origin/main` at the start of PR #150.
-- PR #149 — `C1-I — Implement backend-owned tax-rate setting`, state `MERGED`: final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`; merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`; merged `2026-07-27T19:44:53Z`.
-- Merged `main` backend baseline: `671 collected, 671 passed, 0 failed, 0 skipped`, with all 562 previously merged node IDs still collected (VERIFIED FROM MERGED PR EVIDENCE).
-- Accepted `C1-I` frontend evidence: focused tax-setting suite `52 passed, 0 failed, 0 skipped`; all 13 focused frontend suites `568 passed, 0 failed, 0 skipped`; production build `PASS`; exact-head `/settings` smoke `PASS — 146 checks / 0 failures` (VERIFIED FROM MERGED PR EVIDENCE).
-- `frontend/src/main.ts` on merged `main`: `6399` lines.
+- **Current baseline `origin/main`: `ba3ca7443e3280bc7f700af11e75dc4fa810665f`** (VERIFIED FROM REPOSITORY / GITHUB). This is the PR #159 merge commit.
+- PR #159 — `C3-I — Implement the read-only AuditLog workspace`, state `MERGED`: final reviewed and published head `bf7cde060a43190fdf22c612a16b0c137aa5531b`; merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`; merged `2026-07-30T03:20:23Z`.
+- Exact-final-head frontend evidence: focused AuditLog suite `92 passed / 0 failed / 0 skipped` in both the default run and `TZ=Europe/Amsterdam`; all frontend `test:*` scripts pass with `0 failed / 0 skipped`; production build `PASS`; `frontend/src/main.ts` is `6380` lines; exact-head browser smoke `PASS — EXACT-HEAD BROWSER SMOKE PASSED`, 60 scenarios.
+- Backend attribution is separate: complete backend `1364 passed / 0 failed`, focused backend `422 passed`, and all `942` established node IDs preserved were executed on `2848880f2009158749398aec7d504c0364336ba9`. The backend tree is byte-identical at final head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, but those suites were not re-executed there. API smoke `150 checks / 0 failures` was also executed on `2848880f2009158749398aec7d504c0364336ba9`, not on the final head.
 
 ### Current implementation state
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3 has exactly one authorized runtime slice — `C3-I — Read-only AuditLog workspace`, `IMPLEMENTED ON PR BRANCH — NOT MERGED`, durable contract `docs/audit-log.md` — and C4 remains inactive. Product release readiness is not claimed.
+`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. `C3-I` is merged and closed; C3 remains incomplete. After this documentation PR merges, exactly one runtime slice is authorized: `C3-II-A — Atomic workshop-profile AuditLog coverage`. `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -161,7 +160,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
 | Себестоимость, налог и маржа (расчёты и снапшоты) | **ЗАКРЫТО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154); отчёты и «Сводка мастерской» читают персистентные снапшоты (`C2-III-B`, PR #157). C2 завершён | Выполнено — контракт принят как `CR-008`; все четыре нарезки влиты и проверены по точному head |
-| AuditLog workspace | Одна нарезка `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий»); контракт: `docs/audit-log.md`. Реализована на ветке PR, **не влита** | Обязательно — ревью и merge PR `C3-I`; расширение покрытия записи (backup/export/report-document/workshop-profile) требует отдельной авторизованной нарезки |
+| AuditLog workspace | `C3-I` — `GET /api/audit-logs` и `/settings/audit-log` («Журнал действий») — **DONE — MERGED AND EXACT-HEAD VERIFIED**; контракт: `docs/audit-log.md` | C3 incomplete: only atomic workshop-profile slice `C3-II-A` is authorized after this documentation PR merges; file-backed `C3-II-B` needs a product decision |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
 
@@ -511,7 +510,7 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 
 Статус: `DONE`
 
-> **HISTORICAL — every C1–C4 status inside this closed window is superseded.** Statements below such as *"C1, C2, C3, and C4 remain inactive"* were true while this window was open and are now historical. Current lifecycle: **C1 `COMPLETED`**, **C2 `COMPLETED`**, **C3 with exactly one authorized runtime slice `C3-I` (`IMPLEMENTED ON PR BRANCH — NOT MERGED`, contract `docs/audit-log.md`)**, **C4 `INACTIVE — NEEDS PRODUCT DECISION`**. See § 11 and `state/current-focus.md`. Product release readiness is still not claimed.
+> **HISTORICAL — SUPERSEDED.** Every C1–C4 status inside this closed window was true while that window was open and is preserved only as history. Current lifecycle: C1 and C2 `COMPLETED`; C3-I `DONE — MERGED AND EXACT-HEAD VERIFIED`; C3-II-A authorized only after this documentation PR merges and not implemented; C3-II-B `NEEDS PRODUCT DECISION — NOT AUTHORIZED`; C3 incomplete; C4 inactive. See § C3 and `state/current-focus.md`. Product release readiness is still not claimed.
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -887,7 +886,7 @@ Do not classify the behavior as unsafe and do not prescribe a correction design 
 
 Clearing these four failures does **not** make the product release-ready. The following stayed outside the backend baseline correction gate and were not activated by it: final macOS `.app`/`.dmg` and user-ready launch; packaged update flow and update smoke; verified user/remote installation process; Restore product decision and implementation; C1 tax setting; C2 cost, tax, and margin completion; C3 user-facing read-only AuditLog workspace; full release-candidate smoke; continued documentation accuracy. See section 7 and sections 11–13.
 
-> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3 has one authorized, unimplemented slice, `C3-I` (`docs/audit-log.md`). Every other obligation in the list above is still open, and product release readiness is still not claimed. Current state: § 11.
+> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3-I has also merged and closed as PR #159, but C3 is incomplete: only C3-II-A is authorized after this documentation PR merges, while C3-II-B needs a product decision and is not authorized. Every other obligation in the list above is still open, and product release readiness is still not claimed. Current state: § C3.
 
 ---
 
@@ -1103,7 +1102,7 @@ Authorization states:
 C2 — COMPLETED
 ```
 
-Every condition for completion is met: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed. C3 has exactly one authorized runtime slice, `C3-I` (`docs/audit-log.md`), which is **not implemented**; C4 remains inactive.
+Every condition for C2 completion is met: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed. C3-I has since merged as PR #159; C3 remains incomplete, with only C3-II-A authorized after this documentation PR merges and C3-II-B still `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. C4 remains inactive.
 
 ### C2 — accepted product contract (`CR-008`)
 
@@ -1662,70 +1661,42 @@ Render backend DTO values; render `Недоступно` for null historical val
 
 ## C3 — AuditLog workspace
 
-Статус: **одна авторизованная runtime-нарезка — `C3-I`**
+Статус:
 
 ```text
-C3-I — Read-only AuditLog workspace
-IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED
+C3 — INCOMPLETE
 ```
 
-`C3-I` — **единственная** авторизованная C3-нарезка. Реализация находится на ветке `codex/c3-i-read-only-audit-log-workspace` и **не влита**: это не `DONE`, не `COMPLETED` и не `MERGED` до ревью и merge.
+`C3-I` merged as PR #159: final reviewed head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`. Its exact evidence attribution is recorded in `docs/audit-log.md` § 15. The read contract stays unchanged: one `GET /api/audit-logs`, `actor_type` rather than `source`, safe backend-owned `display_summary`, no raw summary or metadata, and a read-only `/settings/audit-log` workspace.
 
-**Реализованные модули.** Backend: `backend/app/domain/audit_log_presentation.py`, `backend/app/domain/audit_log_query.py`, `backend/app/repositories/audit.py` (только чтение — `list_logs`, `distinct_filter_values`), `backend/app/services/audit_logs.py`, `backend/app/schemas/audit_logs.py`, `backend/app/api/audit_logs.py`. Frontend: `frontend/src/audit-log-contract.ts`, `frontend/src/audit-log-local-time.ts`, `frontend/src/audit-log-presentation.ts`, `frontend/src/audit-log-workspace.ts`, `frontend/src/audit-log-bindings.ts`, `frontend/src/audit-log-dom.ts`, `frontend/src/app-navigation-routes.ts`.
+### C3-II-A — Atomic workshop-profile AuditLog coverage
 
-**Миграции нет.** Единственное изменение перечисления — `DomainIssueCode.PAGINATION_OUT_OF_RANGE`. `AuditLogRepository.create_log` не изменён, ни один production write call site не тронут.
+Only this runtime slice is authorized after the documentation PR merges. It covers `WorkshopProfileSettingsService.update_profile()` only.
 
-**Результаты проверок.** Полный backend-набор `1364 passed / 0 failed / 0 skipped`; фокусные backend-тесты — `422 passed`; все `942` узла merged-базовой линии по-прежнему собираются, ноль переименований; фокусный фронтенд-набор `test:audit-log-workspace` — `82 passed / 0 failed / 0 skipped` как в обычном запуске, так и при `TZ=Europe/Amsterdam`; все `18` скриптов `test:*` зелёные; production-сборка `PASS`; `frontend/src/main.ts` `6398` → `6380`. Точный уточняющий контракт вложенного DTO `filter_options` — `docs/audit-log.md` § 7.5.1 и `docs/api.md`.
+**Scope.** Reuse the existing endpoints and response shape. Validate/canonicalize first; open one transaction; read and compare the canonical `workshop_profile`; on a real change upsert through `SettingsRepository` and insert exactly one `workshop_profile.updated` row through `AuditLogRepository.create_log`, both on the same caller-owned connection; commit together. Audit failure rolls the profile update back; profile persistence failure commits no audit. A canonical no-op performs no upsert, preserves `updated_at`, writes no audit and returns the current profile with a normal Russian no-change message. No Clear or profile deletion.
 
-**Известные ограничения.** Пробел покрытия § 11.6 (backup, export, report-document, workshop-profile не аудируются) сохраняется и закрывается только отдельной авторизованной нарезкой на стороне записи; настоящий процессный `source` отложен; detail-эндпоинта нет; расширения записи нет; готовность продукта к релизу не заявляется.
+**Event and privacy.** `workshop_profile.updated` / `app_setting` / `workshop_profile` / `user`; technical summary `Workshop profile updated`; user-facing `Профиль мастерской изменён`, `Настройка приложения`, `Профиль мастерской обновлён`. Summary and metadata contain no profile value, contact detail, note, address, phone, email, arbitrary text, JSON, old value or new value. Metadata is limited to bounded structural facts. The C3-I API remains the only read surface and exposes only safe backend-owned presentation.
 
-Полный продуктовый, API-, privacy- и presentation-контракт: **`docs/audit-log.md`**. Он авторитетен; список ниже — это границы нарезки, а не замена контракта.
+**Architecture and compatibility.** No new endpoint, migration, source field, event bus, generic settings framework, frontend calculation, payload reconstruction, profile-value display or report-document rewrite. Preserve validation, normalization, Settings route/form lifecycle, other settings rows, tax-setting atomic audit and historical documents. No frontend production change is expected unless narrow implementation evidence requires it.
 
-**Продуктовая цель.** Пользователю нужна понятная история важных действий мастерской — `Журнал действий` — чтобы понять, что произошло, не открывая SQLite, JSON, логи, GitHub или терминал. Это не техническая админка, не браузер таблиц БД, не SIEM, не аналитика, не откат, не редактор событий и не отладочная консоль.
+**Required backend tests.** Real change writes one setting and one audit; same connection/transaction; forced audit failure rollback; forced profile failure no audit; validation no writes; no-op no upsert/audit and preserves `updated_at`; repeated no-op; GET no audit; summary/metadata contain no profile values; contact/note absent from persisted audit; response shape unchanged; safe AuditLog labels and `display_summary`; no raw read fields; unrelated settings unchanged; existing documents byte-identical; tax-setting audit unchanged. Run directly affected focused suites and the complete backend suite; preserve node IDs and weaken nothing.
 
-**Поле инициатора — `actor_type`, не `source`.** Колонка в базе остаётся `actor_type`, и API-поля тоже — `actor_type` и `actor_label`. Поле `source` в `C3-I` **не отдаётся и не авторизуется**. Значения, которые реально производят текущие call sites, — `system` и `user` — описывают **инициатора**, а не процесс, поэтому отображение `actor_type → source` не было бы безобидным переименованием: оно изменило бы смысл поля. Подписи: `system → Система`, `user → Пользователь`, всё остальное → `Другой инициатор`. Исторический словарь процессов (`manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore`) **aspirational**: ни один call site не сохраняет это измерение, поэтому настоящий `source` **отложен** до отдельно принятого решения и отдельного среза на стороне записи. Переименования колонки нет, миграции нет, backfill нет, существующие write call sites не меняются.
+**Required frontend checks.** Focused Settings suites, `test:audit-log-workspace`, every `test:*` script and `npm run build`. No frontend arithmetic or reconstruction.
 
-**API.** Ровно один новый эндпоинт — `GET /api/audit-logs`. Прежнее предложение `GET /api/audit-logs/{id}` из `docs/roadmap.md` § PR27 **явно отменено для MVP**. Никаких create/update/delete/rollback/export эндпоинтов.
+**Required exact-head smoke.** Isolated database, user-data directory, `HOME`, browser profile and dynamic ports. Update a real profile, verify one safe journal event and no profile value, submit the identical profile and verify no second event. Inject AuditLog failure and prove rollback, API failure, no committed audit, no false UI success, then one successful retry. Check desktop/narrow viewport, keyboard, console/page errors, failed requests and duplicate mutations. This is not release smoke.
 
-**Безопасная модель чтения.** Ответ: `items`, `total`, `limit`, `offset`, `filter_options`. Элемент — ровно `id`, `created_at`, `action`, `action_label`, `entity_type`, `entity_label`, `display_summary`, `actor_type`, `actor_label`. Сырой `metadata_json` не возвращается никогда; имена таблиц, внутренние `entity_id`, stack traces, SQL, пути файловой системы и сырые payload'ы — тоже. Чувствительные заметки, аллергии, адреса, тексты пожеланий и отзывов не реконструируются и не раскрываются.
+Full implementation contract: `docs/audit-log.md` § 16; Settings/API summaries: `docs/settings.md`, `docs/api.md`.
 
-**`display_summary` вместо сырого summary.** Сохранённый `audit_logs.summary` **никогда не возвращается дословно и никогда не используется как неограниченный fallback** — ни в API, ни во фронтенде. Это write-time техтекст: в основном английский, часть значений содержит внутренние ID (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), а `client_wish.*` содержит пользовательский текст пожелания. Отдельный backend-презентер — `AuditLogDisplayPresenter` или эквивалентный focused-модуль в стиле репозитория — выводит `display_summary` из известного `action`: по-русски, без внутренних ID, без метаданных, без join'ов к бизнес-таблицам, без переписывания исторических строк и без чувствительного текста.
+### C3-II-B — File-backed artifact AuditLog semantics
 
-**Ограниченное извлечение суффикса.** Суффикс из сохранённого summary может попасть в `display_summary` только когда выполнены **все семь** условий: действие явно в allowlist; сохранённый summary начинается с точного префикса, назначенного этому действию; оставшийся суффикс непустой; действие вправе сохранять эту категорию бизнес-имени; суффикс выводится только как обычный текст; суффикс не содержит внутреннего идентификатора, добавленного презентером; никакого обращения к базе или к метаданным не выполняется. Иначе `display_summary` откатывается к generic-фразе конкретного действия. Allowlist — это точная таблица из 21 действия в `docs/audit-log.md` § 6.4.3, а **не** префиксная маска: `client_wish.*`, `client_recipe.*`, все действия с внутренним ID и все catalog-assignment действия исключены. Возврат полного сохранённого summary, возврат его английского техпрефикса и использование его как неограниченного fallback остаются запрещёнными.
+Manual backup creation, JSON export creation and report-document generation write filesystem artifacts outside SQLite. The truthful result after successful artifact creation followed by failed AuditLog persistence is unresolved. Do not choose deletion, partial success, total failure with artifact retained, missing-audit success, retry, outbox, sidecar, filename reconstruction or faux cross-resource atomicity implicitly.
 
-```text
-Ingredient lot created for ingredient #12  →  Создана партия компонента
-Order #4 produced as batch #7              →  Производство заказа подтверждено
-Client wish created: Убрать компонент X    →  Пожелание клиента добавлено
-```
+A future product decision must define success/partial-success, user feedback, compensation safety, artifact authority, retry/reconciliation, duplicate protection, startup recovery and exact smoke. `C3-II-B` is not authorized. `CR-004` and `CR-006` remain separate and unchanged.
 
-**Порядок и постраничность.** `created_at DESC, id DESC`; `limit` по умолчанию `50`, допустимый диапазон — целое `1..200`; `offset` по умолчанию `0`, допустимый диапазон — целое `0..9223372036854775807`, то есть до максимального bindable SQLite `OFFSET`. Проверки идут строго по порядку, и первое совпадение определяет код, поэтому у каждого некорректного значения ровно один код: 1) отсутствует — подставляется значение по умолчанию; 2) нецелое, дробное, булево или некорректная строка → `non_integer_quantity`; 3) отрицательное целое → `negative_quantity`; 4) неотрицательный `limit` вне `1..200` или `offset` выше максимума → `pagination_out_of_range`; 5) иначе значение принимается. Поэтому `limit=-1` — только `negative_quantity`, `limit=-0` — `pagination_out_of_range`, `offset=-0` — допустимый `0`, а `offset=9223372036854775808` — `pagination_out_of_range`. Форма, знак и диапазон проверяются на сыром десятичном тексте до преобразования, поэтому произвольные 5000-значные строки не достигают небезопасного `int()` или SQLite bind. Явно переданное некорректное значение **не подрезается, не приводится, не округляется и не игнорируется**. Неограниченную историю не возвращать.
-
-**Фильтры.** `created_from` (включительно), `created_before` (исключительно), `action`, `entity_type`, `actor_type`, `limit`, `offset`; фильтра `source` нет; объединяются по AND; таймстемпы ISO-8601 UTC; некорректный таймстемп и `created_before <= created_from` отклоняются структурированным HTTP `422` с существующим кодом `invalid_date`, причём диапазон дат называется явно, а не превращается в пустой результат; варианты фильтров берутся из значений, реально существующих в таблице `audit_logs`, с безопасными русскими подписями; фильтрация ничего не пишет.
-
-**Точный ответ валидации.** Роутеры бросают `HTTPException(status_code=422, detail=issue.__dict__)`, поэтому `DomainIssue` — это **значение `detail`**, а не всё тело ответа. Тело ровно такое:
-
-```json
-{
-  "detail": {
-    "code": "invalid_date",
-    "message": "Russian user-readable message",
-    "field": "created_from",
-    "value": "the rejected value",
-    "next_action": "Russian user-readable next action"
-  }
-}
-```
-
-Коды: `invalid_date` — для дат и для конфликта диапазона; `non_integer_quantity` — нецелое, дробное, булево или некорректное `limit`/`offset`; `negative_quantity` — отрицательное значение; `pagination_out_of_range` — неотрицательный `limit` вне `1..200`. Первые три уже есть в `DomainIssueCode`; `PAGINATION_OUT_OF_RANGE = "pagination_out_of_range"` — единственный новый член перечисления, авторизованный в `C3-I`, потому что подходящего существующего кода нет; его нельзя заменять на `percentage_out_of_range`, `invalid_category`, `invalid_decimal` или `zero_quantity`. Это добавление в enum, а не изменение схемы и не миграция.
-
-**Конфликт диапазона дат.** Для `created_before <= created_from` ответ ровно такой: HTTP `422`, `code: invalid_date`, **`field: created_before`**, `value` — переданное значение `created_before`. Русский `message` объясняет, что конец периода должен быть позже его начала; русский `next_action` предлагает выбрать дату окончания позже даты начала. Синтетическое поле вроде `date_range` не используется.
-
-**Только чтение.** Чтение журнала не создаёт запись AuditLog, не меняет бизнес-таблицы, не создаёт файлы, не меняет настройки, не запускает регенерацию и не нормализует исторические строки. AuditLog остаётся append-only: презентер меняет только то, что показано, но не то, что сохранено.
-
-**Frontend.** Канонический маршрут `/settings/audit-log`, заголовок `Журнал действий`, полный набор состояний — загрузка, пусто, пусто по фильтру, ошибка обновления с сохранением ранее принятого списка, ошибка первичной загрузки, узкий вьюпорт, клавиатурная доступность. Фильтры: дата, действие, сущность, инициатор. Сырые коды, сырой сохранённый summary, JSON, `metadata_json`, имена таблиц, внутренние ID, stack traces, SQL, пути разработчика и GitHub/PR-терминология на экране запрещены. Только focused-модули; `frontend/src/main.ts` не должен вырасти по итогу нарезки (текущий размер `6398`).
-
-**Не авторизовано в `C3-I`:** редактирование и удаление AuditLog; rollback/undo; restore из AuditLog; detail-эндпоинт; просмотр метаданных; просмотр сырого JSON; возврат сырого сохранённого summary любым полем или fallback'ом; поле `source`, поле `source_label` или фильтр по источнику; сохранение нового измерения source/process; CSV/XLSX/PDF-экспорт журнала; графики; аналитика; поиск по чувствительному тексту; роли и права; много-пользовательские акторы; отправка журнала наружу; облачная синхронизация; политики хранения; уплотнение логов; миграция схемы; backfill; изменение существующей семантики записи; C4; Restore; packaging; update flow; release-candidate smoke.
+**Non-goals for the active window.** No backup/export/report-document audit, source persistence, detail endpoint, raw metadata viewer, AuditLog export/search/analytics/edit/rollback, Restore, C4, packaging, installation, update or release-candidate smoke.
 
 ## C4 — Restore и recovery
 

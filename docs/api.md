@@ -9,7 +9,7 @@ Status: evolving implementation contract. Existing implemented areas have backen
 
 **Current editable set on merged `main`.** The Workshop profile fields — `workshop_name`, `master_name`, `workshop_contact_text`, `workshop_note` — are `editable_now`, and so is `default_tax_rate`. `default_tax_rate` is the **only calculation-sensitive setting that is currently editable**; it became editable with the merged `C1-I` slice (PR #149) and it never recalculates historical data. Every other calculation-sensitive setting — currency display, target margin, default low-stock threshold, expiry warning days, default measurement units — remains `requires_backend_rules` and stays closed until it has its own separately accepted backend rules. *(Historical note: `PR96` originally made only the Workshop profile editable; that was the state before `C1-I` merged and is no longer the current contract.)*
 
-Standard error shape includes `code`, `message`, `user_message`, and `details`. Planned sections: health, settings, onboarding, clients, recipes, inventory, orders, production, alerts, purchases, imports, exports, backups, reports, audit logs. The audit-log read endpoint is `C3-I` and is **implemented on its PR branch but not merged** — see § *AuditLog API (`C3-I`)* and `docs/audit-log.md`.
+Standard error shape includes `code`, `message`, `user_message`, and `details`. Planned sections: health, settings, onboarding, clients, recipes, inventory, orders, production, alerts, purchases, imports, exports, backups, reports, audit logs. The C3-I AuditLog read endpoint is merged and `DONE — MERGED AND EXACT-HEAD VERIFIED`; see § *AuditLog API (`C3-I`)* and `docs/audit-log.md`.
 
 ## Orders backend foundation (PR60)
 
@@ -71,7 +71,9 @@ Current limitations: the Orders frontend presents this read-only check, but the 
 | C2-II `ProductionBatch` rate snapshots and transactional persistence | **IMPLEMENTED** and merged (PR #152) |
 | C2-III-A Order and `ProductionBatch` financial presentation | **IMPLEMENTED** and merged (PR #154) |
 | C2-III-B snapshot-backed reports and report documents | **IMPLEMENTED** and merged (PR #157) |
-| C3-I read-only AuditLog workspace (`GET /api/audit-logs`) | `IMPLEMENTED ON PR BRANCH — NOT MERGED`; the endpoint does not yet exist on merged `main` |
+| C3-I read-only AuditLog workspace (`GET /api/audit-logs`) | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #159); endpoint exists on merged `main` |
+| C3-II-A atomic workshop-profile AuditLog coverage | `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; no new endpoint |
+| C3-II-B file-backed artifact AuditLog semantics | `NEEDS PRODUCT DECISION — NOT AUTHORIZED` |
 
 ### Financial estimate extension — `C2-I`
 
@@ -1094,7 +1096,7 @@ Each pair sums to `produced_order_count`. The existing `complete_finance_record_
 
 ## AuditLog API (`C3-I`)
 
-Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`. The endpoint is implemented on `codex/c3-i-read-only-audit-log-workspace` and **does not yet exist on merged `main`**. The durable product, API, privacy and presentation contract is `docs/audit-log.md`; this section is the API-shaped summary of it and defers to that file on any disagreement.
+Status: `DONE — MERGED AND EXACT-HEAD VERIFIED`. PR #159 merged the endpoint into `main` from final reviewed head `bf7cde060a43190fdf22c612a16b0c137aa5531b` at merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f` on `2026-07-30T03:20:23Z`. The durable product, API, privacy and presentation contract is `docs/audit-log.md`; this section is the API-shaped summary of it and defers to that file on any disagreement.
 
 Implementation: `backend/app/api/audit_logs.py` → `backend/app/services/audit_logs.py` → `backend/app/repositories/audit.py`, with the pure `backend/app/domain/audit_log_presentation.py` and `backend/app/domain/audit_log_query.py`. Response schemas live in `backend/app/schemas/audit_logs.py`. **No migration** was added; the only enum addition is `DomainIssueCode.PAGINATION_OUT_OF_RANGE`.
 
@@ -1191,6 +1193,23 @@ Client wish created: Убрать компонент X    →  Пожелани�
 **Bounded suffix extraction.** A suffix taken from the persisted summary may contribute to `display_summary` only when **all seven** conditions hold: the action is explicitly allowlisted; the persisted summary starts with the exact prefix assigned to that action; the remaining suffix is non-empty; the action is authorized to retain that category of business name; the suffix is rendered only as plain text; the suffix contains no internal identifier supplied by the presenter; and no database or metadata lookup is performed. Otherwise `display_summary` falls back to the generic action-specific phrase.
 
 The allowlist is the exact 21-row table in `docs/audit-log.md` § 6.4.3 — `client.created` / `.updated` / `.deactivated`, `ingredient.created` / `.updated` / `.deactivated`, `packaging_item.created` / `.updated` / `.deactivated`, `recipe_template.created` / `.deactivated`, `order.created` / `.updated` / `.cancelled` / `.archived`, `catalog_category.created` / `.updated` / `.archived`, and `catalog_tag.created` / `.updated` / `.archived` — each with its exact English prefix, for example `Client created: ` → `Клиент создан: <имя>` with the fallback `Клиент создан`. It is **not** a prefix glob: `client_wish.*`, `client_recipe.*`, every ID-bearing action (`ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created`, `production_confirmed`, `recipe_version.created`) and every catalog-assignment action are excluded. Returning the complete persisted summary, returning its English technical prefix, or using it as an unrestricted fallback all remain prohibited.
+
+### Future workshop-profile audit behavior (`C3-II-A`)
+
+Status: `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`.
+
+`C3-II-A` adds **no endpoint** and preserves the existing workshop-profile request and response shape:
+
+```text
+GET /api/settings/workshop-profile
+PUT /api/settings/workshop-profile
+```
+
+A real canonical `PUT` change must persist `app_settings.workshop_profile` and exactly one `workshop_profile.updated` AuditLog row in one caller-owned SQLite transaction. An AuditLog failure rolls the profile write back and the API returns failure; a profile persistence failure commits no AuditLog row. A canonically identical request returns the current profile with a normal Russian no-change message, performs no upsert, preserves `updated_at` and creates no AuditLog row. `GET` remains read-only.
+
+The existing response fields, profile field names, validation limits, Unicode normalization and control-character rules do not change. No raw summary, metadata, profile value or internal settings payload is added to any response. `GET /api/audit-logs` presents the new action only through backend-owned `action_label`, `entity_label` and `display_summary`; it still returns the exact nine-field item and never returns raw `summary` or `metadata_json`.
+
+`C3-II-B` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED` for manual backup, JSON export and report-document artifact auditing. No artifact success, partial-success, compensation, retry or recovery behavior is decided here.
 
 #### Validation responses
 

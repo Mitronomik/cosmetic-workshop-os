@@ -1,5 +1,7 @@
 # Change Requests
 
+> **PARTIALLY SUPERSEDED — lifecycle wording only.** Product decisions and the `CR-004` / `CR-006` rows below are unchanged. Lifecycle statements embedded in dated accepted rows remain historical records of their dates. In particular, the 2026-07-28 C3 tail inside `CR-008` is superseded: C3-I is now `DONE — MERGED AND EXACT-HEAD VERIFIED`; only C3-II-A is authorized after the lifecycle documentation PR merges; C3-II-B remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`; C3 remains incomplete.
+
 | ID | Date | Request | Status | Target PR | Notes |
 |---|---|---|---|---|---|
 | CR-001 | 2026-06-21 | Add Codex project memory structure | accepted | PR0 | Required for safe Codex workflow |
