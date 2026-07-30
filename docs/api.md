@@ -72,7 +72,7 @@ Current limitations: the Orders frontend presents this read-only check, but the 
 | C2-III-A Order and `ProductionBatch` financial presentation | **IMPLEMENTED** and merged (PR #154) |
 | C2-III-B snapshot-backed reports and report documents | **IMPLEMENTED** and merged (PR #157) |
 | C3-I read-only AuditLog workspace (`GET /api/audit-logs`) | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #159); endpoint exists on merged `main` |
-| C3-II-A atomic workshop-profile AuditLog coverage | `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`; no new endpoint |
+| C3-II-A atomic workshop-profile AuditLog coverage | `IMPLEMENTED ON PR BRANCH — NOT MERGED`; no new endpoint |
 | C3-II-B file-backed artifact AuditLog semantics | `NEEDS PRODUCT DECISION — NOT AUTHORIZED` |
 
 ### Financial estimate extension — `C2-I`
@@ -1144,7 +1144,7 @@ The exact nested `filter_options` DTO — `docs/audit-log.md` § 7.5.1, the one 
 }
 ```
 
-Each option carries **exactly** `value` and `label`. Values come from rows that actually exist, so a fresh database does not list all 50 known actions. Options are derived from the whole table rather than the current page, so they do not change when the result filters change, and they are ordered deterministically by raw persisted value ascending. An unknown persisted code stays present under its safe fallback label and is never shown as a raw code.
+Each option carries **exactly** `value` and `label`. Values come from rows that actually exist, so a fresh database does not list all 51 known actions. Options are derived from the whole table rather than the current page, so they do not change when the result filters change, and they are ordered deterministically by raw persisted value ascending. An unknown persisted code stays present under its safe fallback label and is never shown as a raw code.
 
 **`null` is omitted from `filter_options.entity_types`.** It is not an authorized query code and could not be offered without inventing a filter sentinel, and no new query parameter or sentinel is authorized. Rows with `entity_type IS NULL` remain fully readable as items carrying `entity_label: "Другая сущность"`.
 
@@ -1194,9 +1194,9 @@ Client wish created: Убрать компонент X    →  Пожелани�
 
 The allowlist is the exact 21-row table in `docs/audit-log.md` § 6.4.3 — `client.created` / `.updated` / `.deactivated`, `ingredient.created` / `.updated` / `.deactivated`, `packaging_item.created` / `.updated` / `.deactivated`, `recipe_template.created` / `.deactivated`, `order.created` / `.updated` / `.cancelled` / `.archived`, `catalog_category.created` / `.updated` / `.archived`, and `catalog_tag.created` / `.updated` / `.archived` — each with its exact English prefix, for example `Client created: ` → `Клиент создан: <имя>` with the fallback `Клиент создан`. It is **not** a prefix glob: `client_wish.*`, `client_recipe.*`, every ID-bearing action (`ingredient_lot.*`, `stock_movement.created`, `packaging_stock_movement.created`, `production_confirmed`, `recipe_version.created`) and every catalog-assignment action are excluded. Returning the complete persisted summary, returning its English technical prefix, or using it as an unrestricted fallback all remain prohibited.
 
-### Future workshop-profile audit behavior (`C3-II-A`)
+### Workshop-profile audit behavior (`C3-II-A`)
 
-Status: `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`.
+Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`.
 
 `C3-II-A` adds **no endpoint** and preserves the existing workshop-profile request and response shape:
 
@@ -1207,7 +1207,31 @@ PUT /api/settings/workshop-profile
 
 A real canonical `PUT` change must persist `app_settings.workshop_profile` and exactly one `workshop_profile.updated` AuditLog row in one caller-owned SQLite transaction. An AuditLog failure rolls the profile write back and the API returns failure; a profile persistence failure commits no AuditLog row. A canonically identical request returns the current profile with a normal Russian no-change message, performs no upsert, preserves `updated_at` and creates no AuditLog row. `GET` remains read-only.
 
+The exact no-change message is:
+
+```text
+Профиль мастерской уже сохранён без изменений.
+```
+
+Missing row plus empty request and existing empty row plus empty request are no-ops. Configured profile plus an all-empty request is a real mutation that persists canonical empty JSON without deleting the row and writes exactly one event.
+
 The existing response fields, profile field names, validation limits, Unicode normalization and control-character rules do not change. No raw summary, metadata, profile value or internal settings payload is added to any response. `GET /api/audit-logs` presents the new action only through backend-owned `action_label`, `entity_label` and `display_summary`; it still returns the exact nine-field item and never returns raw `summary` or `metadata_json`.
+
+Audit metadata contains exactly `setting_key`, `changed_fields`, `changed_field_count`, `previous_configured`, and `new_configured`. `changed_fields` is sorted and limited to the four profile field identifiers. No profile value, raw JSON, timestamp, `source`, request payload or response payload is stored.
+
+Atomic persistence failures return:
+
+```json
+{
+  "detail": {
+    "code": "workshop_profile_not_saved",
+    "message": "Не удалось сохранить профиль мастерской. Предыдущие данные сохранены без изменений.",
+    "next_action": "Повторите сохранение. Если ошибка повторяется, проверьте, что локальное приложение работает."
+  }
+}
+```
+
+HTTP status is `500`. Existing validation `422`, database-not-initialized `409`, and successful response model remain unchanged.
 
 `C3-II-B` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED` for manual backup, JSON export and report-document artifact auditing. No artifact success, partial-success, compensation, retry or recovery behavior is decided here.
 

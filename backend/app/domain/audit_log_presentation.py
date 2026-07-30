@@ -25,7 +25,7 @@ UNKNOWN_ACTION_LABEL: Final = "Другое действие"
 UNKNOWN_ENTITY_LABEL: Final = "Другая сущность"
 UNKNOWN_ACTOR_LABEL: Final = "Другой инициатор"
 
-# `docs/audit-log.md` § 11.1 — the 50 action codes the merged-`main` production
+# `docs/audit-log.md` § 11.1 — the 51 action codes the production
 # write call sites can produce. Read from the code, not from a database, so an
 # older local database may hold values absent here; those degrade to the safe
 # unknown label rather than leaking a technical identifier.
@@ -80,13 +80,14 @@ ACTION_LABELS: Final[dict[str, str]] = {
     "recipe_version.created": "Версия рецепта создана",
     "stock_movement.created": "Движение сырья добавлено",
     "tax_rate_setting_changed": "Налоговая ставка изменена",
+    "workshop_profile.updated": "Профиль мастерской изменён",
 }
 
 # `docs/audit-log.md` § 11.2 — 19 entity codes. `ImportDraft` is PascalCase while
 # every other value is snake_case. That inconsistency is persisted history and is
 # matched exactly as stored: it is never normalized, aliased or rewritten.
 ENTITY_LABELS: Final[dict[str, str]] = {
-    "app_setting": "Настройка",
+    "app_setting": "Настройка приложения",
     "catalog_category": "Категория справочника",
     "catalog_tag": "Тег справочника",
     "client": "Клиент",
@@ -169,6 +170,7 @@ GENERIC_SUMMARIES: Final[dict[str, str]] = {
     "recipe_version.created": "Создана версия рецепта",
     "stock_movement.created": "Добавлено движение сырья",
     "tax_rate_setting_changed": "Изменена налоговая ставка для расчётов",
+    "workshop_profile.updated": "Профиль мастерской обновлён",
 }
 
 # `docs/audit-log.md` § 6.4.3 — the exhaustive 21-action allowlist. An action

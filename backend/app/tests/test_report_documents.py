@@ -179,7 +179,8 @@ def test_document_generation_with_profile_does_not_update_settings_or_existing_d
     saved = profile_service.update_profile(WorkshopProfileUpdateRequest(workshop_name="Старая мастерская"))
     first = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown")).document
     first_path = svc.documents_dir / first.filename
-    first_text = first_path.read_text(encoding="utf-8")
+    first_bytes = first_path.read_bytes()
+    first_text = first_bytes.decode("utf-8")
 
     profile_service.update_profile(WorkshopProfileUpdateRequest(workshop_name="Новая мастерская"))
     updated_before_generation = profile_service.get_profile()
@@ -188,7 +189,7 @@ def test_document_generation_with_profile_does_not_update_settings_or_existing_d
 
     assert profile_service.get_profile() == updated_before_generation
     assert counts(c) == before
-    assert first_path.read_text(encoding="utf-8") == first_text
+    assert first_path.read_bytes() == first_bytes
     assert "Старая мастерская" in first_text
     assert "Новая мастерская" in (svc.documents_dir / second.filename).read_text(encoding="utf-8")
 

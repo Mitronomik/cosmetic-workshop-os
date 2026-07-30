@@ -2,16 +2,28 @@
 
 ## Current phase
 
-`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. The broader C3 obligation is incomplete.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED`. The broader C3 obligation is incomplete.
 
 ## Current next step
 
-- Merge this documentation-only lifecycle PR.
-- Only after it merges, `C3-II-A — Atomic workshop-profile AuditLog coverage` becomes authorized for implementation from clean `origin/main`.
+- Review the C3-II-A runtime PR after its exact-head focused smoke.
 - `C3-II-B — File-backed artifact AuditLog semantics` remains `NEEDS PRODUCT DECISION — NOT AUTHORIZED`.
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
 
-## 2026-07-30 — C3-I closed; atomic workshop-profile audit slice authorized (documentation-only)
+## 2026-07-30 — C3-II-A atomic Workshop-profile AuditLog coverage implemented on PR branch
+
+- **Baseline:** branch `codex/c3-ii-a-atomic-workshop-profile-audit` from exact `origin/main` `4ef02b8478c3eba06883f5b71290f91edb42a871` (PR #160 merge commit); clean start; baseline backend collection `1364`.
+- **Runtime:** canonical Workshop-profile mutations now read, compare, upsert and append exactly one `workshop_profile.updated` row on one caller-owned SQLite connection and transaction. Failure of either persistence step rolls the whole mutation back.
+- **No-op and empty behavior:** canonical identical saves perform no upsert or audit and preserve `updated_at`; missing-row + empty is a no-op; existing-empty + empty is a no-op; configured-to-empty persists canonical empty JSON without deleting the row and audits once.
+- **Privacy:** persisted summary is exactly `Workshop profile updated`; metadata is limited to `setting_key`, sorted `changed_fields`, `changed_field_count`, `previous_configured`, and `new_configured`; no profile values, raw payloads, timestamps or `source`.
+- **Presentation:** action vocabulary is 51; entity vocabulary remains 19; suffix allowlist remains 21. `workshop_profile.updated` presents as `Профиль мастерской изменён` / `Настройка приложения` / `Профиль мастерской обновлён`.
+- **Compatibility:** existing profile endpoints and response shape remain unchanged; no frontend production file, migration, schema, repository, backup, export or report-document production service changed.
+- **Lifecycle:** `C3-II-A — IMPLEMENTED ON PR BRANCH — NOT MERGED`; `C3-II-B — NEEDS PRODUCT DECISION — NOT AUTHORIZED`; `C3 — INCOMPLETE`; `C4 — INACTIVE — NEEDS PRODUCT DECISION`; product release readiness is not claimed.
+- **Verification before publication:** focused backend `591 passed`; complete backend `1376 collected / 1376 passed / 0 failed / 0 skipped`; every `1364` baseline node ID remains collected and `12` new nodes were added. All `18` frontend `test:*` scripts passed, including `test:settings-tax-feedback` (`52 passed`) and `test:audit-log-workspace` (`92 passed`) in both default time zone and `TZ=Europe/Amsterdam`; production build passed. Exact published-head smoke evidence belongs to the PR and the external `/tmp` smoke report; this committed lifecycle record does not claim that publication-only check.
+
+## HISTORICAL — SUPERSEDED — 2026-07-30 C3-I closed; atomic workshop-profile audit slice authorized
+
+> This documentation-only state was true before C3-II-A implementation began. It is superseded by the implementation entry above.
 
 - **Verified start gate.** Repository `Mitronomik/cosmetic-workshop-os`; PR #159 `MERGED`, base `main`, final reviewed and published head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`; both commits ancestors of `origin/main`; `origin/main` exactly the merge commit; clean tree including untracked files; zero open PRs; no existing exact documentation-task branch.
 - **`C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`.** `GET /api/audit-logs` and `/settings/audit-log` are on merged `main`.
