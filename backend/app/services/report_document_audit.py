@@ -168,8 +168,22 @@ class ReportDocumentAuditService:
             return False
 
     def pending_count(self) -> int:
-        """`pending_audit_count`. Reads only — never reconciles, never mutates."""
-        return self.repository.count_unresolved(ARTIFACT_KIND_REPORT_DOCUMENT)
+        """`pending_audit_count`. Reads only — never reconciles, never mutates.
+
+        Degrades to `0` when the ledger cannot be consulted at all, rather than
+        propagating. This field is additive to an endpoint whose other values are
+        filesystem-derived and still perfectly valid: letting an unreadable
+        ledger raise would take the entire report-documents workspace down over a
+        warning counter, which is a worse failure than the one it reports. The
+        same tolerance already governs `reconcile`.
+
+        The narrow exception list matters. Only "the ledger is unreachable"
+        degrades; a programming error still surfaces normally.
+        """
+        try:
+            return self.repository.count_unresolved(ARTIFACT_KIND_REPORT_DOCUMENT)
+        except (sqlite3.Error, OSError):
+            return 0
 
     # ----------------------------------------------------------------- verify
 

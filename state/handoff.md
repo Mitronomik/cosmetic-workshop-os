@@ -52,11 +52,19 @@ Evidence executed on the implementation tree: complete backend
 `146` added; focused backend `540 passed`; all `19` frontend `test:*` scripts
 `921 passed / 0 failed`; frontend build `PASS`.
 
-**Pre-existing failure, not from this slice:**
-`launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
-fails identically on untouched baseline `385873f` — its `ALLOWED_TABLES` set
-predates migrations `0012`–`0018`. It is deliberately not corrected here and
-needs its own triage slice.
+**Two pre-existing issues, neither from this slice, both needing their own
+triage:**
+
+1. `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
+   fails identically on untouched baseline `385873f` — its `ALLOWED_TABLES` set
+   predates migrations `0012`–`0018`.
+2. `launcher/runtime.py::start_backend_process` gives the uvicorn child only
+   `PYTHONPATH`, so the API resolves `get_database_config()` to
+   `DEFAULT_DATABASE_PATH` rather than the user-data database that
+   `initialize_startup` just migrated. Found by the B1 exact-head smoke.
+   `pending_audit_count` degrades to `0` on an unreadable ledger so that the
+   read-only status endpoint behaves exactly as it did before CR-009, but the
+   underlying launcher wiring is untouched and still needs fixing.
 
 B2 and B3 remain unauthorized. Do not reuse the ledger for `json_export` or
 `manual_backup` until CR-006 and CR-004 are resolved respectively.

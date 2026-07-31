@@ -61,11 +61,24 @@ Only `report_document` has a runtime writer. `json_export` and `manual_backup`
 exist solely in the table's `CHECK` vocabulary so B2 and B3 need no second
 migration.
 
-**Known pre-existing baseline failure, not caused by this slice:**
-`launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
-fails identically on the untouched baseline `385873f`, because its
-`ALLOWED_TABLES` set predates migrations `0012`–`0018`. It is outside B1's
-scope and is not corrected here.
+**Known pre-existing issues, neither caused by nor corrected by this slice:**
+
+1. `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
+   fails identically on the untouched baseline `385873f`, because its
+   `ALLOWED_TABLES` set predates migrations `0012`–`0018`.
+2. `launcher/runtime.py::start_backend_process` passes only `PYTHONPATH` to the
+   uvicorn child process. In user mode `initialize_startup` migrates
+   `<user_data>/data/cosmetic_workshop.sqlite`, but the API process then calls
+   `get_database_config()`, which falls back to `DEFAULT_DATABASE_PATH` unless
+   `COSMETIC_WORKSHOP_DB_PATH` happens to be set in the environment. The API can
+   therefore serve a different database than startup prepared. This was found by
+   the C3-II-B1 exact-head smoke and predates it; fixing the launcher's
+   environment wiring is outside B1's authorized scope and needs its own slice.
+
+   B1 does not paper over (2), but it does not make it worse either:
+   `pending_audit_count` degrades to `0` when the ledger cannot be read, so the
+   read-only status endpoint keeps answering exactly as it did before CR-009
+   instead of turning an unreadable ledger into an HTTP 500.
 
 ## C3-II-A closure and CR-009 decision
 

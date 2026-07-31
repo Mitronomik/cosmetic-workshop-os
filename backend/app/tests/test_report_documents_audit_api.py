@@ -380,6 +380,31 @@ def test_the_status_response_keeps_every_existing_field(monkeypatch, tmp_path):
     assert body["pending_audit_count"] == 0
 
 
+def test_status_still_answers_when_the_ledger_cannot_be_read(monkeypatch, tmp_path):
+    """An unreadable ledger must not take the whole workspace down.
+
+    Before CR-009 this endpoint touched no database at all, so it answered even
+    against an unmigrated one. The added counter must not turn that into a 500:
+    every other field here is filesystem-derived and still correct, and the
+    frontend needs them to render the page.
+    """
+    _config, _documents_dir, client = environment(monkeypatch, tmp_path)
+
+    def failing_count(*_args, **_kwargs):
+        raise sqlite3.OperationalError("no such table: artifact_audit_operations")
+
+    monkeypatch.setattr(ArtifactAuditOperationRepository, "count_unresolved", failing_count)
+
+    response = client.get("/api/report-documents/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["pending_audit_count"] == 0
+    assert body["can_create"] is True
+    assert body["available_document_types"] == ["workshop_overview"]
+    assert "no such table" not in response.text
+
+
 def test_the_pending_audit_count_excludes_audited_and_abandoned(monkeypatch, tmp_path):
     config, _documents_dir, client = environment(monkeypatch, tmp_path)
     client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
