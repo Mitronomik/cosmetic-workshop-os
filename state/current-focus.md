@@ -61,24 +61,36 @@ Only `report_document` has a runtime writer. `json_export` and `manual_backup`
 exist solely in the table's `CHECK` vocabulary so B2 and B3 need no second
 migration.
 
-**Known pre-existing issues, neither caused by nor corrected by this slice:**
+**Two issues found in review of the first PR head, both corrected on the branch:**
 
-1. `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
-   fails identically on the untouched baseline `385873f`, because its
-   `ALLOWED_TABLES` set predates migrations `0012`–`0018`.
-2. `launcher/runtime.py::start_backend_process` passes only `PYTHONPATH` to the
-   uvicorn child process. In user mode `initialize_startup` migrates
-   `<user_data>/data/cosmetic_workshop.sqlite`, but the API process then calls
-   `get_database_config()`, which falls back to `DEFAULT_DATABASE_PATH` unless
-   `COSMETIC_WORKSHOP_DB_PATH` happens to be set in the environment. The API can
-   therefore serve a different database than startup prepared. This was found by
-   the C3-II-B1 exact-head smoke and predates it; fixing the launcher's
-   environment wiring is outside B1's authorized scope and needs its own slice.
+1. `launcher/runtime.py::start_backend_process` passed only `PYTHONPATH` to the
+   uvicorn child, so the API resolved `get_database_config()` on its own and
+   could fall back to `DEFAULT_DATABASE_PATH` while `initialize_startup` had
+   backed up, migrated and reconciled `<user_data>/data/cosmetic_workshop.sqlite`.
+   Startup and the API could therefore use different databases.
 
-   B1 does not paper over (2), but it does not make it worse either:
-   `pending_audit_count` degrades to `0` when the ledger cannot be read, so the
-   read-only status endpoint keeps answering exactly as it did before CR-009
-   instead of turning an unreadable ledger into an HTTP 500.
+   `run_local_runtime` now passes `startup.database_path` explicitly, and
+   `start_backend_process` writes it to `COSMETIC_WORKSHOP_DB_PATH`, overriding
+   any stale inherited value. The key is read from the backend's own
+   `DATABASE_PATH_ENV` rather than duplicated as a literal. This applies to
+   development mode as well.
+   `launcher/tests/test_runtime_database_continuity.py` proves the continuity
+   through the database itself — migration `0020`, the ledger row and the
+   AuditLog event all land in the startup-selected file, the repository default
+   stays untouched, and a restart reconciles that same database.
+
+2. `ReportDocumentAuditService.pending_count()` degraded to `0` when the ledger
+   could not be read. That was untruthful: `0` is a claim that nothing is
+   awaiting a Journal entry, and the frontend clears a standing warning on it.
+   The fallback is removed; a read failure now surfaces through the existing
+   service/API error boundary as a fixed Russian message with no SQLite detail,
+   and the status endpoint stays read-only.
+
+`launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
+was failing on the untouched baseline `385873f` because its local
+`ALLOWED_TABLES` copy was frozen near the `0011` schema. It now uses the shared
+`app.tests.table_guards`, so it tracks the real migration head and stays a
+bounded check. The complete launcher suite is green.
 
 ## C3-II-A closure and CR-009 decision
 

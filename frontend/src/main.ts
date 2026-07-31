@@ -496,7 +496,7 @@ type ReportDocumentCreateResponse = { document: ReportDocumentMetadata; message:
 // CR-009 B1: the mutation result carries the created document *and* the separate
 // Journal outcome, so the runtime can validate both before anything is shown.
 type ReportDocumentCreationResult = { document: ReportDocumentMetadata; auditValid: boolean; auditWarning: string };
-type ReportDocumentsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; warning: string; message: string; documentStatus: ReportDocumentStatusResponse | null; documents: ReportDocumentMetadata[]; lastCreatedDocument: ReportDocumentMetadata | null; reason: string; auditWarning: string; pendingAuditCount: number };
+type ReportDocumentsUiState = { status: 'idle' | 'loading' | 'ready' | 'error'; actionStatus: 'idle' | 'creating'; error: string; warning: string; message: string; documentStatus: ReportDocumentStatusResponse | null; documents: ReportDocumentMetadata[]; lastCreatedDocument: ReportDocumentMetadata | null; reason: string; auditWarning: string; pendingAuditCount: number | null };
 
 type NavigationSection = 'Главная' | 'Алерты' | 'Демо-данные' | 'Резервные копии' | 'Рецепты' | 'Индивидуальные рецепты' | 'Клиенты' | 'Заказы' | 'Склад' | 'Компоненты' | 'Партии' | 'Движения сырья' | 'Тара' | 'Закупки' | 'Производство' | 'Экспорт' | 'Документы отчетов' | 'Импорт' | 'Отчеты' | 'Настройки' | 'Журнал действий' | 'Помощь';
 type NavigationStatus = 'ready' | 'empty' | 'planned';
@@ -759,7 +759,7 @@ let ingredientCatalogControls: CatalogControlState = { categorySearch: '', tagSe
 let packagingCatalogControls: CatalogControlState = { categorySearch: '', tagSearch: '', showAllTags: false };
 let helpUiState: HelpUiState = { search: '', category: '', selectedArticleId: 'getting-started' };
 let reportsUiState: ReportsUiState = { status: 'idle', selectedReport: 'overview', error: '', warning: '', message: '', overview: null, inventory: null, orders: null, production: null, finance: null };
-let reportDocumentsUiState: ReportDocumentsUiState = { status: 'idle', actionStatus: 'idle', error: '', warning: '', message: '', documentStatus: null, documents: [], lastCreatedDocument: null, reason: '', auditWarning: '', pendingAuditCount: 0 };
+let reportDocumentsUiState: ReportDocumentsUiState = { status: 'idle', actionStatus: 'idle', error: '', warning: '', message: '', documentStatus: null, documents: [], lastCreatedDocument: null, reason: '', auditWarning: '', pendingAuditCount: null };
 
 type BackupReadSnapshot = { status: BackupStatusResponse; list: BackupListResponse };
 type ExportReadSnapshot = { status: ExportStatusResponse; list: ExportListResponse };
@@ -1887,7 +1887,7 @@ function applyReportDocumentsLifecycleState() {
   reportDocumentsUiState.error = reportDocumentsLifecycle.state.feedback.error;
   reportDocumentsUiState.warning = reportDocumentsLifecycle.state.feedback.warning;
   reportDocumentsUiState.message = reportDocumentsLifecycle.state.feedback.success;
-  if (snapshot) { reportDocumentsUiState.documentStatus = snapshot.status; reportDocumentsUiState.documents = snapshot.list.items; reportDocumentsUiState.pendingAuditCount = reportDocumentPendingAuditCount(snapshot.status); }
+  if (snapshot) { reportDocumentsUiState.documentStatus = snapshot.status; reportDocumentsUiState.documents = snapshot.list.items; const mirroredPendingAudit = reportDocumentPendingAuditCount(snapshot.status); if (mirroredPendingAudit !== null) reportDocumentsUiState.pendingAuditCount = mirroredPendingAudit; }
   reportDocumentsUiState.lastCreatedDocument = reportDocumentsLifecycle.state.lastCreated?.document ?? null;
 }
 function applyReportsLifecycleState() {

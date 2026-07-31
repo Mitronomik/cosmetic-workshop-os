@@ -23,7 +23,13 @@ router = APIRouter(prefix="/report-documents", tags=["report-documents"])
 
 @router.get("/status", response_model=ReportDocumentStatusResponse)
 def get_report_documents_status() -> ReportDocumentStatusResponse:
-    return ReportDocumentService().status()
+    try:
+        return ReportDocumentService().status()
+    except ReportDocumentError as exc:
+        # A status that cannot report its pending-Journal count truthfully is an
+        # error, not a zero. `str(exc)` is fixed Russian text from the service;
+        # no SQLite message, SQL fragment or path is carried in it.
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
 @router.get("", response_model=ReportDocumentListResponse)

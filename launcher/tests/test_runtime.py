@@ -8,11 +8,16 @@ from launcher.config import build_runtime_config, resolve_runtime_paths, Runtime
 from launcher import runtime
 from launcher.runtime import RuntimeLaunchError, initialize_backend_startup
 
-FORBIDDEN_TABLES = {
-    "recipes", "orders", "production_batches", "import_sources",
-    "import_drafts", "backup_records",
-}
-ALLOWED_TABLES = {"schema_migrations", "app_settings", "audit_logs", "ingredients", "ingredient_lots", "stock_movements", "packaging_items", "packaging_stock_movements", "recipe_templates", "recipe_versions", "recipe_ingredients", "clients", "client_recipes", "client_recipe_ingredients", "catalog_categories", "catalog_tags", "ingredient_catalog_tags", "packaging_item_catalog_tags", "recipe_template_catalog_tags", "client_wishes", "client_feedback", "sqlite_sequence"}
+# The single shared table guard, so the launcher's expectation of the migrated
+# schema cannot drift away from the backend's own. The previous local copy was
+# frozen at roughly the `0011` schema and had gone stale: every table added by
+# `0012`–`0020` broke this assertion for reasons unrelated to the launcher, and
+# its local "forbidden" list still named `orders`, `production_batches`,
+# `import_sources` and `import_drafts` — all of which are ordinary tables today.
+#
+# `assert_only_current_tables` stays a bounded check: an unexpected table still
+# fails it. It is now bounded by the list the backend actually maintains.
+from app.tests.table_guards import assert_no_forbidden_future_tables, assert_only_current_tables
 
 
 def table_names(database_path: Path) -> set[str]:
@@ -56,8 +61,11 @@ def test_launcher_startup_respects_user_data_override(monkeypatch, tmp_path):
     assert result.database_path.exists()
     assert not (fake_home / "Documents" / "Мастерская косметолога").exists()
     tables = table_names(result.database_path)
-    assert tables <= ALLOWED_TABLES
-    assert not FORBIDDEN_TABLES & tables
+    assert_only_current_tables(tables)
+    assert_no_forbidden_future_tables(tables)
+    # The launcher must have migrated all the way to the current head, including
+    # the CR-009 ledger — that is what startup reconciliation depends on.
+    assert "artifact_audit_operations" in tables
 
 
 def test_launcher_startup_creates_backup_before_migration(monkeypatch, tmp_path):

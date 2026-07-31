@@ -948,6 +948,19 @@ where `artifact_kind = report_document` and `status` is `prepared` or
 count and performs no reconciliation, creates no AuditLog row and mutates no
 ledger or file state.
 
+If the ledger cannot be read, this endpoint returns HTTP `500` with the safe
+Russian detail `Не удалось прочитать сведения о документах отчетов. Данные
+мастерской не изменялись.` rather than reporting `pending_audit_count: 0`. A
+zero is a factual claim that nothing is awaiting a Journal entry, and the
+frontend clears its standing warning on it, so it is never published for a count
+that was not actually read. No SQLite message, SQL fragment, stack trace or
+internal path is exposed, and the failed read still mutates nothing.
+
+In normal operation the launcher makes this unreachable: `run_local_runtime`
+passes the database path that `initialize_startup` backed up, migrated and
+reconciled to the API child through `COSMETIC_WORKSHOP_DB_PATH`, so the API
+always serves a database whose ledger exists.
+
 ### `GET /api/report-documents`
 
 Returns generated document metadata newest first. Supports `limit` and `offset`.

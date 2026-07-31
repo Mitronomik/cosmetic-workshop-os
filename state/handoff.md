@@ -52,19 +52,30 @@ Evidence executed on the implementation tree: complete backend
 `146` added; focused backend `540 passed`; all `19` frontend `test:*` scripts
 `921 passed / 0 failed`; frontend build `PASS`.
 
-**Two pre-existing issues, neither from this slice, both needing their own
-triage:**
+**Three review findings on the first PR head, all corrected on the branch:**
 
-1. `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
-   fails identically on untouched baseline `385873f` — its `ALLOWED_TABLES` set
-   predates migrations `0012`–`0018`.
-2. `launcher/runtime.py::start_backend_process` gives the uvicorn child only
-   `PYTHONPATH`, so the API resolves `get_database_config()` to
-   `DEFAULT_DATABASE_PATH` rather than the user-data database that
-   `initialize_startup` just migrated. Found by the B1 exact-head smoke.
-   `pending_audit_count` degrades to `0` on an unreadable ledger so that the
-   read-only status endpoint behaves exactly as it did before CR-009, but the
-   underlying launcher wiring is untouched and still needs fixing.
+1. **User-mode database continuity.** `start_backend_process` gave the uvicorn
+   child only `PYTHONPATH`, so the API could resolve `get_database_config()` to
+   `DEFAULT_DATABASE_PATH` instead of the user-data database that
+   `initialize_startup` had just backed up, migrated and reconciled.
+   `run_local_runtime` now passes `startup.database_path` down explicitly and the
+   child environment pins `COSMETIC_WORKSHOP_DB_PATH` to it, overriding any
+   inherited value, in both user and development mode.
+2. **No fabricated pending count.** `pending_count()` no longer degrades to `0`
+   on a ledger read failure — `0` would falsely assert that nothing is awaiting a
+   Journal entry and would clear a real warning. The failure surfaces as a fixed
+   Russian message through the existing error boundary, with no SQLite detail,
+   and status stays read-only.
+3. **Strict frontend contracts.** A `recorded` create response now requires an
+   explicit `audit_message: null`; an absent field is an incomplete contract.
+   `pending_audit_count` parses to `number | null`, and a missing or malformed
+   value leaves the previously known count and warning untouched instead of
+   becoming an authoritative zero.
+
+`launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
+had been failing on untouched baseline `385873f` because its local
+`ALLOWED_TABLES` copy was frozen near the `0011` schema. It now uses the shared
+`app.tests.table_guards`, and the complete launcher suite is green.
 
 B2 and B3 remain unauthorized. Do not reuse the ledger for `json_export` or
 `manual_backup` until CR-006 and CR-004 are resolved respectively.

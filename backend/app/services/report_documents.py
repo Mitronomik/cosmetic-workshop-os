@@ -51,6 +51,16 @@ class UnsupportedReportDocumentDispositionError(ReportDocumentError):
     """Raised when requested file disposition is not supported."""
 
 
+class ReportDocumentStatusUnavailableError(ReportDocumentError):
+    """Raised when report-document status cannot be reported truthfully.
+
+    Specifically: the pending-Journal count could not be read. Reporting the
+    status without it would mean publishing `pending_audit_count: 0`, which the
+    frontend treats as proof that nothing is awaiting a Journal entry and uses to
+    clear a standing warning. Failing loudly is the honest option.
+    """
+
+
 SUPPORTED_FORMAT = "markdown"
 PDF_FORMAT = "pdf"
 SUPPORTED_DOCUMENT_TYPE = "workshop_overview"
@@ -74,7 +84,17 @@ class ReportDocumentService:
         Deliberately does not reconcile. Opening the workspace is a read, and a
         read must never insert an AuditLog row or move ledger state — otherwise
         simply looking at the page would change history.
+
+        If the ledger cannot be read, this raises rather than reporting a count
+        it does not actually know. The raised error carries fixed Russian text
+        only: the underlying SQLite message never reaches the user.
         """
+        try:
+            pending_audit_count = self.audit_service.pending_count()
+        except Exception as failure:
+            raise ReportDocumentStatusUnavailableError(
+                "Не удалось прочитать сведения о документах отчетов. Данные мастерской не изменялись."
+            ) from failure
         return ReportDocumentStatusResponse(
             documents_dir=str(self.documents_dir),
             available_formats=_available_formats(),
@@ -82,7 +102,7 @@ class ReportDocumentService:
             can_create=True,
             documents_count=len(_list_metadata_files(self.documents_dir)),
             message="Документы отчетов можно создавать вручную.",
-            pending_audit_count=self.audit_service.pending_count(),
+            pending_audit_count=pending_audit_count,
         )
 
     def list_documents(self, limit: int = 50, offset: int = 0) -> ReportDocumentListResponse:

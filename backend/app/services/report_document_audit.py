@@ -170,20 +170,19 @@ class ReportDocumentAuditService:
     def pending_count(self) -> int:
         """`pending_audit_count`. Reads only — never reconciles, never mutates.
 
-        Degrades to `0` when the ledger cannot be consulted at all, rather than
-        propagating. This field is additive to an endpoint whose other values are
-        filesystem-derived and still perfectly valid: letting an unreadable
-        ledger raise would take the entire report-documents workspace down over a
-        warning counter, which is a worse failure than the one it reports. The
-        same tolerance already governs `reconcile`.
+        Deliberately does **not** degrade to `0` on failure. `0` is a factual
+        claim — "nothing is awaiting a Journal entry" — and the frontend acts on
+        it by clearing a standing warning. Returning it when the ledger could not
+        actually be read would turn "I don't know" into "definitely nothing",
+        which is precisely the silent audit gap CR-009 exists to prevent.
 
-        The narrow exception list matters. Only "the ledger is unreachable"
-        degrades; a programming error still surfaces normally.
+        A read failure is therefore raised and surfaced through the existing safe
+        API error boundary, which returns fixed Russian text and no SQLite detail.
+        This is not the same tolerance `reconcile` has: reconcile failing leaves
+        state untouched and is retried at the next bounded trigger, whereas a
+        fabricated count actively erases a true warning.
         """
-        try:
-            return self.repository.count_unresolved(ARTIFACT_KIND_REPORT_DOCUMENT)
-        except (sqlite3.Error, OSError):
-            return 0
+        return self.repository.count_unresolved(ARTIFACT_KIND_REPORT_DOCUMENT)
 
     # ----------------------------------------------------------------- verify
 

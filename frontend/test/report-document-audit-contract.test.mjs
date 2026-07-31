@@ -38,7 +38,7 @@ const statusResponse = (pending = 0) => ({ documents_dir: '/local/exports/report
  * state mirror is rebuilt the same way on every render.
  */
 function makeReportDocumentsRoute() {
-  const ui = { lastCreatedDocument: null, auditWarning: '', pendingAuditCount: 0, reason: 'еженедельная проверка' };
+  const ui = { lastCreatedDocument: null, auditWarning: '', pendingAuditCount: null, reason: 'еженедельная проверка' };
   const h = { active: true, renders: 0, polite: [], assertive: [], focus: [], reads: [], mutations: [], postCount: 0, readCount: 0, ui };
   const runtime = createLocalArtifactRouteRuntime({
     route: 'reportDocuments',
@@ -69,10 +69,14 @@ const visibleWarning = (ui) => reportDocumentAuditWarning(ui);
 // Contract classification
 // ---------------------------------------------------------------------------
 
-test('a recorded response is valid and carries no warning', () => {
+test('a recorded response is valid only with an explicit null audit_message', () => {
   const result = reportDocumentAuditResult(recordedResponse());
   assert.deepEqual(result, { valid: true, status: 'recorded', warning: '' });
-  assert.equal(reportDocumentAuditResult({ ...recordedResponse(), audit_message: undefined }).valid, true);
+  // An absent field is an incomplete contract, not "recorded with no warning":
+  // it cannot be told apart from a truncated or older-shaped body.
+  assert.equal(reportDocumentAuditResult({ ...recordedResponse(), audit_message: undefined }).valid, false);
+  const withoutMessage = { document: documentMetadata(), message: 'Документ отчета создан.', audit_status: 'recorded' };
+  assert.equal(reportDocumentAuditResult(withoutMessage).valid, false);
 });
 
 test('a pending response is valid only with the exact accepted warning', () => {
@@ -92,6 +96,9 @@ test('an incomplete or unrecognized audit contract is invalid, never a silent su
     { ...base, audit_status: 'pending', audit_message: null },
     { ...base, audit_status: 'pending', audit_message: 'какое-то другое предупреждение' },
     { ...base, audit_status: 'recorded', audit_message: 'unexpected' },
+    { ...base, audit_status: 'recorded' },
+    { ...base, audit_status: 'recorded', audit_message: undefined },
+    { ...base, audit_message: null },
     { ...base, audit_status: 'ok', audit_message: null },
     { ...base, audit_status: '', audit_message: null },
     { ...base, audit_status: 'RECORDED', audit_message: null },
@@ -106,20 +113,57 @@ test('an incomplete or unrecognized audit contract is invalid, never a silent su
   }
 });
 
-test('the pending count is read defensively and never goes negative', () => {
+test('a knowable pending count is an exact non-negative integer', () => {
   assert.equal(reportDocumentPendingAuditCount(statusResponse(3)), 3);
   assert.equal(reportDocumentPendingAuditCount(statusResponse(0)), 0);
-  for (const value of [undefined, null, -1, Number.NaN, Infinity, '2', {}]) {
-    assert.equal(reportDocumentPendingAuditCount({ pending_audit_count: value }), 0);
+  assert.equal(reportDocumentPendingAuditCount(statusResponse(1)), 1);
+});
+
+test('an unknowable pending count is null, never a fabricated zero', () => {
+  // `null` and `0` are different answers: `0` is a claim that nothing is
+  // pending, and the UI clears a standing warning on it. Anything we cannot
+  // read must not be able to make that claim.
+  const { pending_audit_count: _omitted, ...withoutField } = statusResponse(1);
+  assert.equal(reportDocumentPendingAuditCount(withoutField), null);
+  for (const value of [undefined, null, -1, -0.5, Number.NaN, Infinity, -Infinity, '2', '', {}, [], true, 0.5, 2.9]) {
+    assert.equal(reportDocumentPendingAuditCount({ pending_audit_count: value }), null, String(value));
   }
-  assert.equal(reportDocumentPendingAuditCount(null), 0);
-  assert.equal(reportDocumentPendingAuditCount(2.9), 0);
+  for (const status of [null, undefined, 'nope', 5]) {
+    assert.equal(reportDocumentPendingAuditCount(status), null, String(status));
+  }
 });
 
 test('one warning region: the created-document warning outranks the standing count warning', () => {
   assert.equal(reportDocumentAuditWarning({ auditWarning: '', pendingAuditCount: 0 }), '');
   assert.equal(reportDocumentAuditWarning({ auditWarning: '', pendingAuditCount: 2 }), REPORT_DOCUMENT_PENDING_AUDIT_COUNT_WARNING);
   assert.equal(reportDocumentAuditWarning({ auditWarning: REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE, pendingAuditCount: 1 }), REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE);
+  // An unknown count shows nothing on its own, but never suppresses a warning
+  // that a create already established.
+  assert.equal(reportDocumentAuditWarning({ auditWarning: '', pendingAuditCount: null }), '');
+  assert.equal(reportDocumentAuditWarning({ auditWarning: REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE, pendingAuditCount: null }), REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE);
+});
+
+test('adopting a malformed count preserves the last thing actually known', () => {
+  for (const malformed of [{}, { pending_audit_count: undefined }, { pending_audit_count: '3' }, { pending_audit_count: -1 }, { pending_audit_count: 1.5 }, { pending_audit_count: Number.NaN }, { pending_audit_count: Infinity }, null, undefined]) {
+    const state = { auditWarning: REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE, pendingAuditCount: 2 };
+    adoptReportDocumentPendingAuditCount(state, malformed);
+    assert.equal(state.pendingAuditCount, 2, JSON.stringify(malformed));
+    assert.equal(state.auditWarning, REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE);
+    assert.equal(reportDocumentAuditWarning(state), REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE);
+  }
+});
+
+test('adopting a validated zero is the only thing that clears the warning', () => {
+  const cleared = { auditWarning: REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE, pendingAuditCount: 1 };
+  adoptReportDocumentPendingAuditCount(cleared, statusResponse(0));
+  assert.equal(cleared.pendingAuditCount, 0);
+  assert.equal(cleared.auditWarning, '');
+  assert.equal(reportDocumentAuditWarning(cleared), '');
+
+  const kept = { auditWarning: REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE, pendingAuditCount: 1 };
+  adoptReportDocumentPendingAuditCount(kept, statusResponse(3));
+  assert.equal(kept.pendingAuditCount, 3);
+  assert.equal(kept.auditWarning, REPORT_DOCUMENT_PENDING_AUDIT_MESSAGE);
 });
 
 test('neither user-facing warning exposes a filename, path, identifier or database wording', () => {

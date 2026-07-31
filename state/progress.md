@@ -9,7 +9,6 @@
 - Review the open C3-II-B1 PR on `claude/c3-ii-b1-report-document-audit`; do not enable auto-merge.
 - Keep C3-II-B2 blocked by CR-006 and C3-II-B3 blocked by CR-004.
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
-- Triage the pre-existing `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override` failure separately; it fails on baseline `385873f` and is not caused by B1.
 
 ## 2026-07-31 — C3-II-B1 implemented on a PR branch (not merged)
 
@@ -25,7 +24,8 @@
 - **Startup:** bounded reconciliation runs strictly after successful initialization and migrations and before the API is served. It never raises, so one pending event cannot make the app unusable — but migration and database-initialization failures still propagate untouched. The `before_migration` backup still runs before migrations, is not audited and creates no ledger row.
 - **Privacy:** the event is `report_document.created` / `report_document` / `operation_id` / `user` / `Report document created`, with metadata of exactly `operation_id`, `document_type`, `format`, `reconciled_after_failure`. No filename, path, request reason, Workshop profile, report content or count is persisted; the action is not added to the suffix allowlist; no Journal details route was added.
 - **Frontend:** a focused `report-document-audit-contract` module classifies the response; `main.ts` gained only wiring and shrank from `6399` to `6393` lines. Recorded success renders as before; pending renders success plus a separate warning region; an invalid audit contract routes into the existing reconciliation path and never re-POSTs; the standing pending-count warning clears only on a later status read of zero.
-- **Evidence:** complete backend `1522 collected / 1522 passed` with all `1376` baseline node IDs preserved and `146` added; focused backend `540 passed`; all `19` frontend `test:*` scripts `921 passed / 0 failed`; frontend build `PASS`. One pre-existing baseline failure remains, `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`, verified to fail identically on untouched `385873f` and left uncorrected as out of scope.
+- **Review corrections (second PR head):** `run_local_runtime` now passes the startup-selected database path to the uvicorn child via `COSMETIC_WORKSHOP_DB_PATH`, overriding any inherited value, so startup backup, migration `0020`, reconciliation and the served API all use one database in both user and development mode. `pending_count()` no longer fabricates `0` on a ledger read failure; it surfaces through the existing service/API boundary as fixed Russian text with no SQLite detail, and status stays read-only. The frontend now requires an explicit `audit_message: null` for `recorded`, and parses `pending_audit_count` as `number | null` so a missing or malformed value cannot clear a real warning. The stale launcher `ALLOWED_TABLES` copy was replaced with the shared `app.tests.table_guards`.
+- **Evidence:** complete suite `1539 passed / 0 failed` (backend and launcher), with all `1376` baseline node IDs preserved and `149` added; focused backend report-document suites `142 passed`; complete launcher `14 passed / 0 failed`; all `19` frontend `test:*` scripts `945 passed / 0 failed`; frontend build `PASS`.
 - **Lifecycle unchanged:** `C3-II-B2` blocked by CR-006, `C3-II-B3` blocked by CR-004, C3 incomplete, C4 inactive, product release readiness not claimed.
 
 ## 2026-07-30 — C3-II-A closed; CR-009 accepted; C3-II-B subdivided

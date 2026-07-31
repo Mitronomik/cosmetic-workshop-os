@@ -380,15 +380,20 @@ def test_the_status_response_keeps_every_existing_field(monkeypatch, tmp_path):
     assert body["pending_audit_count"] == 0
 
 
-def test_status_still_answers_when_the_ledger_cannot_be_read(monkeypatch, tmp_path):
-    """An unreadable ledger must not take the whole workspace down.
+def test_status_never_reports_a_fabricated_zero_when_the_ledger_cannot_be_read(monkeypatch, tmp_path):
+    """An unreadable ledger is an error, not a count of zero.
 
-    Before CR-009 this endpoint touched no database at all, so it answered even
-    against an unmigrated one. The added counter must not turn that into a 500:
-    every other field here is filesystem-derived and still correct, and the
-    frontend needs them to render the page.
+    `pending_audit_count: 0` is a factual claim that nothing is awaiting a
+    Journal entry, and the frontend acts on it by clearing a standing warning.
+    Publishing it when the ledger could not actually be read would convert "I
+    don't know" into "definitely nothing" and silently erase a true warning —
+    the exact audit gap CR-009 exists to prevent.
+
+    The correct production answer to an unmigrated database is that the launcher
+    migrates the database it is about to serve, which
+    `launcher/tests/test_runtime_database_continuity.py` proves.
     """
-    _config, _documents_dir, client = environment(monkeypatch, tmp_path)
+    config, _documents_dir, client = environment(monkeypatch, tmp_path)
 
     def failing_count(*_args, **_kwargs):
         raise sqlite3.OperationalError("no such table: artifact_audit_operations")
@@ -397,12 +402,39 @@ def test_status_still_answers_when_the_ledger_cannot_be_read(monkeypatch, tmp_pa
 
     response = client.get("/api/report-documents/status")
 
+    assert response.status_code == 500
+    assert "pending_audit_count" not in response.text
+    # A safe fixed Russian message, with no technical detail behind it.
+    assert response.json()["detail"] == "Не удалось прочитать сведения о документах отчетов. Данные мастерской не изменялись."
+    for forbidden in ("no such table", "sqlite", "SQLite", "Traceback", "SELECT", "COUNT(", "artifact_audit_operations"):
+        assert forbidden not in response.text, forbidden
+    # Still read-only: nothing was reconciled, audited or mutated.
+    assert audit_actions(config) == []
+    assert operations(config) == []
+
+
+def test_status_reports_an_exact_zero_only_when_the_ledger_really_is_empty(monkeypatch, tmp_path):
+    _config, _documents_dir, client = environment(monkeypatch, tmp_path)
+
+    response = client.get("/api/report-documents/status")
+
     assert response.status_code == 200
-    body = response.json()
-    assert body["pending_audit_count"] == 0
-    assert body["can_create"] is True
-    assert body["available_document_types"] == ["workshop_overview"]
-    assert "no such table" not in response.text
+    assert response.json()["pending_audit_count"] == 0
+
+
+def test_status_reports_the_exact_positive_count_of_unresolved_operations(monkeypatch, tmp_path):
+    config, _documents_dir, client = environment(monkeypatch, tmp_path)
+    fail_audit_insert(monkeypatch)
+    for _ in range(2):
+        assert client.post("/api/report-documents/reports/overview", json={"format": "markdown"}).status_code == 201
+    monkeypatch.undo()
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(config.path))
+    monkeypatch.setenv(USER_DATA_DIR_ENV, str(tmp_path / "user-data"))
+
+    response = client.get("/api/report-documents/status")
+
+    assert response.status_code == 200
+    assert response.json()["pending_audit_count"] == 2
 
 
 def test_the_pending_audit_count_excludes_audited_and_abandoned(monkeypatch, tmp_path):

@@ -54,7 +54,11 @@ export function reportDocumentAuditResult(response: unknown): ReportDocumentAudi
   const status = record.audit_status;
   const message = record.audit_message;
   if (status === 'recorded') {
-    return message === null || message === undefined
+    // Explicit `null`, not merely absent. An omitted `audit_message` means the
+    // response did not carry the field at all, which is an *incomplete* contract
+    // — it cannot be distinguished from a truncated or older-shaped body, so it
+    // must not be read as a confident "recorded with no warning".
+    return message === null && 'audit_message' in record
       ? { valid: true, status: 'recorded', warning: '' }
       : invalid;
   }
@@ -66,12 +70,23 @@ export function reportDocumentAuditResult(response: unknown): ReportDocumentAudi
   return invalid;
 }
 
-/** A non-negative pending count from a status response, or 0 when unusable. */
-export function reportDocumentPendingAuditCount(status: unknown): number {
-  if (!status || typeof status !== 'object') return 0;
+/**
+ * The pending count from a status response, or `null` when it is not knowable.
+ *
+ * `null` and `0` are deliberately different answers. `0` is a factual claim that
+ * nothing is awaiting a Journal entry, and the UI clears a standing warning on
+ * it. A missing, non-numeric, non-finite, negative or fractional value tells us
+ * nothing, so it must not be coerced into that claim — an older or truncated
+ * response could otherwise erase a real warning.
+ *
+ * Fractional values are rejected rather than floored: a count is a whole number
+ * of operations, and `0.5` is a malformed body, not "zero-ish".
+ */
+export function reportDocumentPendingAuditCount(status: unknown): number | null {
+  if (!status || typeof status !== 'object') return null;
   const value = (status as Record<string, unknown>).pending_audit_count;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return 0;
-  return Math.floor(value);
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return null;
+  return value;
 }
 
 /**
@@ -85,23 +100,28 @@ export function reportDocumentPendingAuditCount(status: unknown): number {
  * Neither string mentions a filename, path, operation ID, ledger or SQLite —
  * they are the backend's accepted wording, used verbatim.
  */
-export function reportDocumentAuditWarning(state: { auditWarning: string; pendingAuditCount: number }): string {
+export function reportDocumentAuditWarning(state: { auditWarning: string; pendingAuditCount: number | null }): string {
   if (state.auditWarning) return state.auditWarning;
-  return state.pendingAuditCount > 0 ? REPORT_DOCUMENT_PENDING_AUDIT_COUNT_WARNING : '';
+  return (state.pendingAuditCount ?? 0) > 0 ? REPORT_DOCUMENT_PENDING_AUDIT_COUNT_WARNING : '';
 }
 
 /**
- * Adopt the authoritative pending count from a status read.
+ * Adopt a pending count from a status read, but only a knowable one.
  *
- * The just-created document's warning is kept while the count still confirms
- * something is outstanding, so a create keeps its own wording through the
- * refresh that immediately follows it. A count of zero is the only signal the
- * accepted contract allows for clearing the standing warning — notably, a
- * *failed* read is not one, because it confirms nothing.
+ * An unusable value leaves both the previous count and the previous warning
+ * exactly as they were. That is the whole point: the last thing we actually
+ * knew stays on screen until something authoritative replaces it, so a
+ * malformed body can never quietly retract a real warning.
+ *
+ * A validated `0` is the only signal the accepted contract allows for clearing
+ * the standing warning — a failed or malformed read is not one, because it
+ * confirms nothing.
  */
 export function adoptReportDocumentPendingAuditCount(state: ReportDocumentAuditUiState, status: unknown): void {
-  state.pendingAuditCount = reportDocumentPendingAuditCount(status);
-  if (state.pendingAuditCount === 0) state.auditWarning = '';
+  const count = reportDocumentPendingAuditCount(status);
+  if (count === null) return;
+  state.pendingAuditCount = count;
+  if (count === 0) state.auditWarning = '';
 }
 
-export type ReportDocumentAuditUiState = { auditWarning: string; pendingAuditCount: number };
+export type ReportDocumentAuditUiState = { auditWarning: string; pendingAuditCount: number | null };
