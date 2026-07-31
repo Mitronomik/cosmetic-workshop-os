@@ -32,6 +32,28 @@ def service(tmp_path):
     return c, ReportDocumentService(c, documents_dir=tmp_path / "exports" / "report-documents")
 
 
+def assert_only_report_document_events(c, before, expected_events: int):
+    """No business table moved, and only the accepted CR-009 events were added.
+
+    `BUSINESS_TABLES` bundles `audit_logs` in with the real business tables. Since
+    CR-009 B1, creating a report document deliberately appends exactly one
+    `report_document.created` row, so asserting that column is *unchanged* would
+    now assert the opposite of the accepted contract.
+
+    Every other table is still compared for exact equality, and the appended
+    AuditLog rows must be exactly the expected number of exactly that action.
+    That is stricter than the original equality, which could not distinguish
+    "wrote nothing" from "wrote the wrong event".
+    """
+    after = counts(c)
+    business = [table for table in BUSINESS_TABLES if table != "audit_logs"]
+    assert {table: after[table] for table in business} == {table: before[table] for table in business}
+    assert after["audit_logs"] - before["audit_logs"] == expected_events
+    with sqlite3.connect(c.path) as con:
+        actions = [row[0] for row in con.execute("SELECT action FROM audit_logs ORDER BY id").fetchall()]
+    assert actions[before["audit_logs"]:] == ["report_document.created"] * expected_events
+
+
 def test_status_and_empty_list_work_on_empty_db(tmp_path):
     _c, svc = service(tmp_path)
     status = svc.status()
@@ -61,7 +83,7 @@ def test_create_overview_markdown_document_on_empty_db(tmp_path):
     assert metadata.size_bytes > 0
     assert md_path.exists()
     assert json_path.exists()
-    assert counts(c) == before
+    assert_only_report_document_events(c, before, 1)
 
     text = md_path.read_text(encoding="utf-8")
     assert "# Сводка мастерской" in text
@@ -188,7 +210,7 @@ def test_document_generation_with_profile_does_not_update_settings_or_existing_d
     second = svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="markdown")).document
 
     assert profile_service.get_profile() == updated_before_generation
-    assert counts(c) == before
+    assert_only_report_document_events(c, before, 1)
     assert first_path.read_bytes() == first_bytes
     assert "Старая мастерская" in first_text
     assert "Новая мастерская" in (svc.documents_dir / second.filename).read_text(encoding="utf-8")
@@ -328,7 +350,7 @@ def test_changing_the_tax_rate_never_rewrites_an_existing_document_or_its_sideca
     second_text = (svc.documents_dir / second.filename).read_text(encoding="utf-8")
     assert "Зафиксированный налог: 60.00" in second_text
     assert "20" not in second_text.split("## Базовые финансы")[1].split("###")[0]
-    assert counts(c) == before
+    assert_only_report_document_events(c, before, 1)
 
 
 def test_create_overview_pdf_document_on_empty_db(tmp_path, monkeypatch):
@@ -356,7 +378,7 @@ def test_create_overview_pdf_document_on_empty_db(tmp_path, monkeypatch):
     assert pdf_path.exists()
     assert json_path.exists()
     assert pdf_path.read_bytes().startswith(b"%PDF-")
-    assert counts(c) == before
+    assert_only_report_document_events(c, before, 1)
 
     sidecar = json.loads(json_path.read_text(encoding="utf-8"))
     assert sidecar["format"] == "pdf"
@@ -477,7 +499,7 @@ def test_document_generation_only_writes_report_document_files(tmp_path, monkeyp
     monkeypatch.setattr(report_documents_module, "_write_pdf_exclusive", fake_write_pdf_exclusive)
     before = counts(c)
     svc.create_overview_document(ReportOverviewDocumentCreateRequest(format="pdf"))
-    assert counts(c) == before
+    assert_only_report_document_events(c, before, 1)
     assert not (tmp_path / "backups").exists()
     export_root = tmp_path / "exports"
     json_exports = [p for p in export_root.rglob("*.json") if p.parent == export_root]
@@ -563,7 +585,7 @@ def test_get_document_file_returns_existing_markdown_with_attachment(tmp_path):
     assert media_type.startswith("text/markdown")
     assert disposition == "attachment"
     assert path.read_text(encoding="utf-8").startswith("# Сводка мастерской")
-    assert counts(c) == before
+    assert_only_report_document_events(c, before, 1)
     assert len(list(svc.documents_dir.glob("*.md"))) == 1
     assert len(list(svc.documents_dir.glob("*.json"))) == 1
 
@@ -586,7 +608,7 @@ def test_get_document_file_returns_existing_pdf_with_inline(tmp_path, monkeypatc
     assert media_type == "application/pdf"
     assert disposition == "inline"
     assert path.read_bytes().startswith(b"%PDF-")
-    assert counts(c) == before
+    assert_only_report_document_events(c, before, 1)
 
 
 def test_get_document_file_rejects_unknown_missing_and_unsupported_disposition(tmp_path):

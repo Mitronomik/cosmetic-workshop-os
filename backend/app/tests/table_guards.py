@@ -31,6 +31,7 @@ CURRENT_ALLOWED_TABLES = {
     "import_draft_rows",
     "demo_data_sessions",
     "demo_data_records",
+    "artifact_audit_operations",
     "sqlite_sequence",
 }
 

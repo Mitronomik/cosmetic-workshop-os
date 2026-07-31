@@ -2,14 +2,31 @@
 
 ## Current phase
 
-`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED — NOT IMPLEMENTED`. The broader C3 obligation is incomplete.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED`. The broader C3 obligation is incomplete.
 
 ## Current next step
 
-- Merge this documentation PR only after review; do not enable auto-merge.
-- After it merges, authorize only `C3-II-B1 — Durable ledger and report-document AuditLog coverage`.
+- Review the open C3-II-B1 PR on `claude/c3-ii-b1-report-document-audit`; do not enable auto-merge.
 - Keep C3-II-B2 blocked by CR-006 and C3-II-B3 blocked by CR-004.
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
+- Triage the pre-existing `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override` failure separately; it fails on baseline `385873f` and is not caused by B1.
+
+## 2026-07-31 — C3-II-B1 implemented on a PR branch (not merged)
+
+- **Baseline:** branched from verified `origin/main` = `385873fa9f393f9dc4dcac14e7bc79e0da12c5d1` (PR #162 merge commit) with a clean worktree. Branch `claude/c3-ii-b1-report-document-audit`.
+- **Migration:** `0020_artifact_audit_operations`, registered exactly once after `0019`. One table plus a partial unique index on the active `(artifact_kind, primary_filename)` identity and a kind/status lookup index. `CHECK` constraints pin the status, artifact-kind and audit-action vocabularies, require an `audited` row to carry its `audit_logs.id` and a non-`audited` row to carry none, and require a `report_document` row to record its companion sidecar. No legacy backfill, no artifact touched, no AuditLog row created by the migration.
+- **Reservation:** report-document creation validates the request, runs one bounded pre-create reconciliation pass, advances the existing deterministic numeric-suffix identity search — now also treating an active ledger identity (primary *or* companion name) as a collision — commits one `prepared` row, and only then writes either file.
+- **Preparation failure:** exact HTTP `500` `artifact_audit_tracking_unavailable` with the accepted Russian message and next action. No document, sidecar, AuditLog row or committed ledger row; no raw SQLite text, SQL or stack trace. Existing `422` format validation still takes precedence.
+- **Compensation:** an incomplete pair keeps its existing Russian error and file cleanup, and the operation is marked `abandoned` best-effort; a failure to transition preserves the original error and leaves the operation for reconciliation.
+- **Verification:** one shared verifier for immediate finalization, startup reconciliation and pre-create reconciliation. It classifies a pair as `valid`, `definitely_absent` or `ambiguous`, never rerenders, never compares against current report data, and never rewrites a document or sidecar. Ambiguous pairs stay unresolved, counted and warned about rather than guessed at.
+- **Exactly-once finalization:** verification happens outside the write transaction; the transaction uses one caller-owned connection with `BEGIN IMMEDIATE`, re-reads the operation, returns an existing `audit_log_id` without inserting when already `audited`, and commits the AuditLog insert together with the `audited` transition or neither. A ledger-update miss rolls the insert back. Proven for sequential repeats, startup-then-pre-create, and two concurrent finalizers.
+- **API:** additive `audit_status` (`recorded` | `pending`) and `audit_message` on create, bound by a model validator so an inconsistent pair cannot be returned; additive `pending_audit_count` on status. Every existing field and the exact `Документ отчета создан.` message are preserved. A verified pair with a failed Journal write returns `201` + `pending`, never `409` or `500`.
+- **Read-only endpoints:** status, list, download and `GET /api/audit-logs` reconcile nothing, write nothing and change no artifact bytes.
+- **Startup:** bounded reconciliation runs strictly after successful initialization and migrations and before the API is served. It never raises, so one pending event cannot make the app unusable — but migration and database-initialization failures still propagate untouched. The `before_migration` backup still runs before migrations, is not audited and creates no ledger row.
+- **Privacy:** the event is `report_document.created` / `report_document` / `operation_id` / `user` / `Report document created`, with metadata of exactly `operation_id`, `document_type`, `format`, `reconciled_after_failure`. No filename, path, request reason, Workshop profile, report content or count is persisted; the action is not added to the suffix allowlist; no Journal details route was added.
+- **Frontend:** a focused `report-document-audit-contract` module classifies the response; `main.ts` gained only wiring and shrank from `6399` to `6393` lines. Recorded success renders as before; pending renders success plus a separate warning region; an invalid audit contract routes into the existing reconciliation path and never re-POSTs; the standing pending-count warning clears only on a later status read of zero.
+- **Evidence:** complete backend `1522 collected / 1522 passed` with all `1376` baseline node IDs preserved and `146` added; focused backend `540 passed`; all `19` frontend `test:*` scripts `921 passed / 0 failed`; frontend build `PASS`. One pre-existing baseline failure remains, `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`, verified to fail identically on untouched `385873f` and left uncorrected as out of scope.
+- **Lifecycle unchanged:** `C3-II-B2` blocked by CR-006, `C3-II-B3` blocked by CR-004, C3 incomplete, C4 inactive, product release readiness not claimed.
 
 ## 2026-07-30 — C3-II-A closed; CR-009 accepted; C3-II-B subdivided
 

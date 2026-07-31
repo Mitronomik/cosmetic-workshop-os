@@ -33,7 +33,8 @@ Generation:
 - reads display-only Workshop profile fields from Settings for newly generated documents;
 - does not recalculate core report values in the renderer;
 - does not let Workshop profile values affect calculations, stock, costs, taxes, margins, reports, or historical records;
-- does not mutate ingredients, lots, packaging, stock movements, recipes, clients, orders, production batches, alerts, purchase suggestions, imports, demo data, or audit logs;
+- does not mutate ingredients, lots, packaging, stock movements, recipes, clients, orders, production batches, alerts, purchase suggestions, imports or demo data;
+- appends exactly one `report_document.created` audit log row per created document (CR-009 B1) and never edits or deletes an existing one;
 - does not create backup files;
 - does not create JSON export snapshots;
 - does not regenerate alerts or purchase suggestions;
@@ -125,10 +126,14 @@ The backend validates that the document ID is known from metadata, the metadata 
 
 ## CR-009 B1 durable AuditLog contract
 
-This is an accepted future contract for C3-II-B1 and is not implemented by the
-CR-009 documentation PR.
+Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED** (C3-II-B1).
 
-Before writing either file, B1 must commit one prepared
+Creating a report document now writes exactly one `report_document.created`
+Journal event. The document and its metadata sidecar remain the authoritative
+primary result: a Journal failure never deletes them and never reports the
+creation as failed.
+
+Before writing either file, B1 commits one prepared
 `artifact_audit_operations` row. If that preparation cannot be committed,
 `POST /api/report-documents/reports/overview` returns HTTP `500`:
 
@@ -145,7 +150,7 @@ Before writing either file, B1 must commit one prepared
 No document, metadata file, AuditLog row or prepared ledger row is committed.
 Existing request-validation errors remain unchanged.
 
-After both files are written, finalization or reconciliation may create
+After both files are written, finalization or reconciliation creates
 `report_document.created` only after all of these checks pass:
 
 1. ledger `primary_filename` and `companion_filename` pass safe-name validation;
@@ -180,7 +185,7 @@ HTTP still remains `201`, with `audit_status: pending` and this exact warning:
 The frontend shows document success and the Journal warning separately, sends
 no duplicate create request, and exposes no raw path or AuditLog metadata.
 
-The future `pending_audit_count` returned by `GET
+The `pending_audit_count` returned by `GET
 /api/report-documents/status` is the count of rows where
 `artifact_kind = report_document` and `status` is `prepared` or
 `pending_audit`. It excludes `audited` and `abandoned`. The status endpoint
@@ -206,6 +211,29 @@ Report-document ledger filenames contain no request reason. Future export and
 manual-backup filename semantics are outside B1 and remain governed by CR-005.
 No filename, path or reason is copied into AuditLog or exposed through `GET
 /api/audit-logs`.
+
+## PR — C3-II-B1 durable report-document AuditLog coverage
+
+Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED**.
+
+- Added migration `0020_artifact_audit_operations`: one bounded ledger table for
+  the three CR-009 artifact operations, with `CHECK`-pinned status, artifact-kind
+  and audit-action vocabularies and a partial unique index on the active
+  `(artifact_kind, primary_filename)` identity.
+- Creating a document now reserves its final identity, commits one `prepared`
+  ledger row, writes the pair, verifies it, and finalizes exactly one
+  `report_document.created` AuditLog row together with the `audited` transition
+  in one write-serialized SQLite transaction.
+- A Journal failure after a verified pair returns HTTP `201` with
+  `audit_status: pending` and the accepted warning; the document is preserved,
+  listed and downloadable.
+- Bounded reconciliation runs at exactly two moments: after successful
+  migrations during normal startup, and once before creating the next document.
+  There is no background thread, timer, queue or unbounded retry.
+- Existing documents are not backfilled, renamed, rewritten or re-timestamped.
+- Only `report_document` is implemented. `json_export` and `manual_backup` are
+  reserved vocabulary with no runtime writer: C3-II-B2 remains blocked by CR-006
+  and C3-II-B3 by CR-004.
 
 ## Future work
 

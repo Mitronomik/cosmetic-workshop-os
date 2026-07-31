@@ -1761,8 +1761,8 @@ restore
 - The **raw persisted `summary` is never returned either.** It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text. The read API returns `display_summary`, a backend-owned safe Russian value resolved from `action` by a focused presenter, with the raw summary never used as a value or a fallback. Historical rows are not rewritten — only what is shown changes.
 - The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
 - C3-I (PR #159) and C3-II-A (PR #161) are both `DONE — MERGED AND EXACT-HEAD VERIFIED`, but C3 is incomplete.
-- `CR-009` is accepted and not implemented. For a scoped file-backed create, a fully written and verified artifact is the authoritative result. Audit finalization failure preserves it and returns HTTP `201` with a separate pending-Journal warning; it never becomes false total failure or silent ordinary success.
-- Only `C3-II-B1` is authorized after the CR-009 documentation PR merges. `C3-II-B2` remains blocked by CR-006 and `C3-II-B3` by CR-004.
+- `CR-009` is accepted, and `C3-II-B1` implements its report-document slice on the PR branch. For a scoped file-backed create, a fully written and verified artifact is the authoritative result. Audit finalization failure preserves it and returns HTTP `201` with a separate pending-Journal warning; it never becomes false total failure or silent ordinary success.
+- `C3-II-B1` is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. `C3-II-B2` remains blocked by CR-006 and `C3-II-B3` by CR-004.
 
 ### Examples
 
@@ -1771,14 +1771,16 @@ client_created
 recipe_version_created
 order_status_changed
 production_confirmed
+report_document.created (CR-009 B1)
 backup.created (reserved by CR-009; not implemented)
 settings_updated
 ```
 
 ### Bounded file-backed artifact audit ledger (`CR-009`)
 
-The future `artifact_audit_operations` table is a narrowly scoped internal
-ledger, not a generic outbox or job queue. It is owned only by user-created
+The `artifact_audit_operations` table, created by migration
+`0020_artifact_audit_operations`, is a narrowly scoped internal ledger, not a
+generic outbox or job queue. It is owned only by user-created
 manual backups, JSON exports and report documents.
 
 Minimum conceptual fields:

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
 import json
 import os
@@ -17,6 +18,11 @@ from app.schemas.report_documents import (
 )
 from app.schemas.reports import FinanceReportResponse, OverviewReportResponse, ReportWarning
 from app.schemas.settings import WorkshopProfile
+from app.services.report_document_audit import (
+    PENDING_AUDIT_MESSAGE,
+    ReportDocumentAuditService,
+    ReportDocumentAuditTrackingUnavailableError,
+)
 from app.services.reports import ReportsService
 from app.services.settings import WorkshopProfileSettingsService
 
@@ -60,8 +66,15 @@ class ReportDocumentService:
         self.documents_dir = documents_dir or resolve_report_documents_dir(self.config)
         self.reports_service = ReportsService(self.config)
         self.workshop_profile_service = WorkshopProfileSettingsService(self.config)
+        self.audit_service = ReportDocumentAuditService(self.documents_dir, self.config)
 
     def status(self) -> ReportDocumentStatusResponse:
+        """Read-only status, including the pending-Journal count.
+
+        Deliberately does not reconcile. Opening the workspace is a read, and a
+        read must never insert an AuditLog row or move ledger state — otherwise
+        simply looking at the page would change history.
+        """
         return ReportDocumentStatusResponse(
             documents_dir=str(self.documents_dir),
             available_formats=_available_formats(),
@@ -69,6 +82,7 @@ class ReportDocumentService:
             can_create=True,
             documents_count=len(_list_metadata_files(self.documents_dir)),
             message="Документы отчетов можно создавать вручную.",
+            pending_audit_count=self.audit_service.pending_count(),
         )
 
     def list_documents(self, limit: int = 50, offset: int = 0) -> ReportDocumentListResponse:
@@ -108,6 +122,11 @@ class ReportDocumentService:
             raise UnsupportedReportDocumentFormatError("PDF сейчас недоступен: не найден безопасный локальный способ сформировать PDF с русским текстом.")
         if request.format not in _available_formats():
             raise UnsupportedReportDocumentFormatError("Этот формат пока не поддерживается. Сейчас доступны: Markdown и PDF.")
+        # One bounded pre-create reconciliation pass, after request validation and
+        # before anything is reserved. An older unresolved operation is given its
+        # chance here; it never blocks this document by itself.
+        self.audit_service.reconcile()
+
         reason = sanitize_reason(request.reason)
         report = self.reports_service.get_overview()
         workshop_profile = self.workshop_profile_service.get_profile().profile
@@ -123,7 +142,20 @@ class ReportDocumentService:
         )
 
         self.documents_dir.mkdir(parents=True, exist_ok=True)
-        document_id, document_path, metadata_path = _unique_document_paths(self.documents_dir, base_document_id, request.format)
+        document_id, document_path, metadata_path = _unique_document_paths(
+            self.documents_dir,
+            base_document_id,
+            request.format,
+            is_identity_active=self._is_identity_active,
+        )
+        # The prepared ledger row must be committed before either file is
+        # written. If it cannot be, no document is created at all — that is the
+        # one case where the create is refused outright, and refusing it is
+        # honest: an artifact we could not have tracked would be an artifact we
+        # could never audit.
+        operation_id = self.audit_service.prepare_operation(
+            primary_filename=document_path.name, companion_filename=metadata_path.name
+        )
         document_created = False
         metadata_created = False
         try:
@@ -158,9 +190,44 @@ class ReportDocumentService:
                     document_path.unlink()
                 except OSError:
                     pass
+            # The pair never completed, so this operation can be resolved now.
+            # Best-effort by contract: if the transition itself fails, the
+            # original creation error still reaches the user unchanged and the
+            # operation is left for a later reconciliation pass to resolve.
+            self.audit_service.abandon_operation(operation_id)
             message = "Не удалось создать PDF-документ отчета. Данные мастерской не изменялись." if request.format == PDF_FORMAT else "Не удалось создать документ отчета. Данные мастерской не изменялись."
             raise ReportDocumentError(message) from exc
-        return ReportDocumentCreateResponse(document=metadata, message="Документ отчета создан.")
+
+        # The pair is complete and is now the authoritative result. Everything
+        # below is the secondary Journal result, and no outcome of it may delete
+        # the document or turn this into a failure.
+        audit_log_id = self.audit_service.finalize(operation_id, reconciled_after_failure=False)
+        if audit_log_id is None:
+            return ReportDocumentCreateResponse(
+                document=metadata,
+                message="Документ отчета создан.",
+                audit_status="pending",
+                audit_message=PENDING_AUDIT_MESSAGE,
+            )
+        return ReportDocumentCreateResponse(
+            document=metadata, message="Документ отчета создан.", audit_status="recorded", audit_message=None
+        )
+
+    def _is_identity_active(self, primary_filename: str, companion_filename: str) -> bool:
+        """Treat an active ledger identity as a filename collision.
+
+        A `prepared` operation owns its names before its files exist, so file
+        existence alone is not enough to tell whether a candidate identity is
+        free. Failing to read the ledger here is a preparation failure, not a
+        silent "no collision": guessing would let two operations claim one
+        artifact identity.
+        """
+        try:
+            return self.audit_service.is_identity_active(primary_filename, companion_filename)
+        except Exception as failure:
+            raise ReportDocumentAuditTrackingUnavailableError(
+                "Не удалось безопасно подготовить создание документа. Документ не создан."
+            ) from failure
 
 
 def resolve_report_documents_dir(config: DatabaseConfig | None = None) -> Path:
@@ -183,14 +250,28 @@ def _document_id(created_at: datetime) -> str:
     return f"workshop-overview-{created_at.strftime('%Y%m%d-%H%M%S')}"
 
 
-def _unique_document_paths(documents_dir: Path, document_id: str, format: str = SUPPORTED_FORMAT) -> tuple[str, Path, Path]:
+def _unique_document_paths(
+    documents_dir: Path,
+    document_id: str,
+    format: str = SUPPORTED_FORMAT,
+    *,
+    is_identity_active: "Callable[[str, str], bool] | None" = None,
+) -> tuple[str, Path, Path]:
+    """The existing deterministic numeric-suffix identity search, plus the ledger.
+
+    CR-009 adds one condition to the same loop rather than a new policy: an
+    identity is free only when neither file exists *and* no active operation
+    already owns those names. The suffix advances exactly as before, so
+    generated filenames stay byte-compatible with every document created so far.
+    """
     suffix = 0
     extension = ".pdf" if format == PDF_FORMAT else ".md"
     while True:
         candidate_id = document_id if suffix == 0 else f"{document_id}-{suffix}"
         document_path = documents_dir / f"{candidate_id}{extension}"
         metadata_path = documents_dir / f"{candidate_id}.json"
-        if not document_path.exists() and not metadata_path.exists():
+        free_on_disk = not document_path.exists() and not metadata_path.exists()
+        if free_on_disk and not (is_identity_active and is_identity_active(document_path.name, metadata_path.name)):
             return candidate_id, document_path, metadata_path
         suffix += 1
 

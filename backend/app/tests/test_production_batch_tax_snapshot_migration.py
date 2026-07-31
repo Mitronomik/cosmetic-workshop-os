@@ -92,8 +92,12 @@ def test_fresh_database_gets_both_columns_nullable_and_without_defaults(tmp_path
 def test_migration_0019_is_registered_last_in_the_existing_ordering():
     ids = expected_migration_ids()
 
-    assert ids[-1] == MIGRATION_ID
-    assert ids[-2] == PREVIOUS_MIGRATION_ID
+    # `0019` is no longer the tail of the list: CR-009 B1 appends
+    # `0020_artifact_audit_operations` after it. What this test has always been
+    # about is `0019`'s *position* — still immediately after `0018`, still
+    # registered exactly once — so it is pinned relative to its neighbour rather
+    # than to the end of a list that is expected to keep growing.
+    assert ids.index(MIGRATION_ID) == ids.index(PREVIOUS_MIGRATION_ID) + 1
     assert ids.count(MIGRATION_ID) == 1
 
 
@@ -161,7 +165,12 @@ def test_user_mode_startup_backs_up_before_applying_0019(monkeypatch, tmp_path):
     # The backup is the pre-migration state: no new columns, all data intact.
     assert not set(SNAPSHOT_COLUMNS) & set(columns(result.backup.backup_path))
     assert snapshot(result.backup.backup_path) == before
-    assert applied(result.backup.backup_path)[-1] == PREVIOUS_MIGRATION_ID
+    # The point is that the backup predates `0019`, which is what makes it a
+    # genuine pre-migration copy. Asserting it directly rather than through the
+    # last element of an ID-sorted list, because `build_pre_c2_ii_database`
+    # removes only `0019` and later migrations legitimately sort after it.
+    assert MIGRATION_ID not in applied(result.backup.backup_path)
+    assert PREVIOUS_MIGRATION_ID in applied(result.backup.backup_path)
     # The live database received the columns and kept every existing value.
     assert set(SNAPSHOT_COLUMNS) <= set(columns(database_path))
     assert snapshot(database_path) == before

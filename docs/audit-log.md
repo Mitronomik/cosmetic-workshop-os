@@ -35,8 +35,8 @@ C1 — COMPLETED
 C2 — COMPLETED
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-009 — ACCEPTED — NOT IMPLEMENTED
-C3-II-B1 — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+CR-009 — ACCEPTED
+C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
@@ -443,6 +443,7 @@ Where the table below shows a plain phrase, that phrase is the whole value. Wher
 | `recipe_template.created` | `Рецепт создан: <название>` |
 | `recipe_template.deactivated` | `Рецепт архивирован: <название>` |
 | `recipe_version.created` | `Создана версия рецепта` |
+| `report_document.created` | `Документ отчёта создан` |
 | `stock_movement.created` | `Добавлено движение сырья` |
 | `tax_rate_setting_changed` | `Изменена налоговая ставка для расчётов` |
 | `workshop_profile.updated` | `Профиль мастерской обновлён` |
@@ -610,7 +611,7 @@ This contract required filter options paired with Russian labels but did not def
 Rules:
 
 - each option contains **exactly** `value` and `label`, and nothing else;
-- values are the distinct values actually persisted in `audit_logs`; a fresh database therefore does **not** list all 51 known actions;
+- values are the distinct values actually persisted in `audit_logs`; a fresh database therefore does **not** list all 52 known actions;
 - options are derived from the whole current `audit_logs` table, not from the current filtered page, so they do **not** change merely because the result filters changed;
 - labels come from the same backend resolver the list items use, so an unknown persisted code stays present under its safe fallback label;
 - options are ordered deterministically by raw persisted value ascending;
@@ -898,9 +899,9 @@ Use focused frontend modules, following the pattern already established by `sett
 
 Inventoried from `backend/app/migrations/versions/0001_infrastructure.py`, `backend/app/repositories/audit.py` and every production `AuditLogRepository.create_log` call site.
 
-**Scope of this inventory.** Merged PR #161 adds exactly one production action, `workshop_profile.updated`, so the current merged action vocabulary contains 51 actions; the entity vocabulary remains 19 and the suffix allowlist remains 21. These values were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. This inventory originated as the read-only C3-I inventory. C3-II-A added exactly one write call site for Workshop-profile changes and changed no other AuditLog write call site; write call sites for manual backup creation, JSON export creation and report-document generation remain absent in the current runtime.
+**Scope of this inventory.** Merged PR #161 added exactly one production action, `workshop_profile.updated`. `C3-II-B1` (CR-009) then added exactly one more, `report_document.created`, plus its entity `report_document`, so the current action vocabulary contains 52 actions and the entity vocabulary 20; the suffix allowlist remains 21. These values were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. This inventory originated as the read-only C3-I inventory. C3-II-A added exactly one write call site for Workshop-profile changes, and C3-II-B1 added exactly one for report-document creation; no other AuditLog write call site changed. Write call sites for manual backup creation and JSON export creation remain absent, because C3-II-B2 is blocked by CR-006 and C3-II-B3 by CR-004.
 
-### 11.1. `action` — 51 codes in the current write vocabulary
+### 11.1. `action` — 52 codes in the current write vocabulary
 
 | `action` | Required `action_label` |
 |---|---|
@@ -952,13 +953,14 @@ Inventoried from `backend/app/migrations/versions/0001_infrastructure.py`, `back
 | `recipe_template.created` | Рецепт создан |
 | `recipe_template.deactivated` | Рецепт архивирован |
 | `recipe_version.created` | Версия рецепта создана |
+| `report_document.created` | Документ отчёта создан |
 | `stock_movement.created` | Движение сырья добавлено |
 | `tax_rate_setting_changed` | Налоговая ставка изменена |
 | `workshop_profile.updated` | Профиль мастерской изменён |
 
 Note the two naming shapes that already exist and are **not** normalized by `C3-I`: most codes are dotted (`client.created`), while `import_draft_applied` and `production_confirmed` are flat.
 
-### 11.2. `entity_type` — 19 values in the current write vocabulary
+### 11.2. `entity_type` — 20 values in the current write vocabulary
 
 | `entity_type` | Required `entity_label` |
 |---|---|
@@ -980,6 +982,7 @@ Note the two naming shapes that already exist and are **not** normalized by `C3-
 | `production_batch` | Производственная партия |
 | `recipe_template` | Рецепт |
 | `recipe_version` | Версия рецепта |
+| `report_document` | Документ отчёта |
 | `stock_movement` | Движение сырья |
 
 `ImportDraft` is PascalCase while every other value is snake_case. This inconsistency is persisted history and is **matched as-is**. `C3-I` must not normalize, alias, or rewrite it.
@@ -1028,17 +1031,20 @@ These are **actor identities, not process sources** (§ 3). Every value of the h
 | `packaging_stock_movement.created` | `packaging_item_id` |
 | `production_confirmed` | `order_id`, `production_batch_id`, `status`, `ingredient_rows`, `packaging_rows` |
 | `recipe_version.created` | `recipe_template_id`, `version_number` |
+| `report_document.created` | `operation_id`, `document_type`, `format`, `reconciled_after_failure` |
 | `stock_movement.created` | `ingredient_id`, `ingredient_lot_id` |
 | `tax_rate_setting_changed` | `setting_key`, `previous_configured`, `new_configured`, `previous_rate_percent`, `new_rate_percent`, `previous_effective_at`, `new_effective_at`, `source` |
 | `workshop_profile.updated` | `setting_key`, `changed_fields`, `changed_field_count`, `previous_configured`, `new_configured` |
 
 **No stored metadata contains free-text client notes, allergies, addresses, phone numbers, email addresses or feedback bodies.** It is dominated by internal foreign-key IDs, enum codes and counters. That is exactly the class of value a non-technical user must not be shown, which is why `metadata_json` is excluded from the read model in full rather than field-by-field.
 
+`report_document.created` metadata is exactly four keys and nothing else. `operation_id` is the internal idempotency identity that makes exactly-once finalization provable; `reconciled_after_failure` is a plain boolean saying whether the event was written immediately or recovered later. No filename, path, request reason, Workshop-profile value, report content or entity count is stored, and `entity_id` — which holds the same opaque operation UUID — stays excluded from the read model like every other entity ID.
+
 The `source` key inside `tax_rate_setting_changed` metadata is an unrelated internal write-time marker with the constant value `settings`. It is not an audit source dimension, it is never returned, and it must not be confused with the deferred process-source field of § 3.3.
 
 ### 11.5. Persisted summaries — why § 6 exists
 
-Most persisted summaries are English technical sentences built at write time, for example `Client created: Анна Иванова`, `Order created: Дневной крем`, `Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`, `Recipe version created: template 3 v2`, and the value-free `Workshop profile updated`. A minority are Russian: the four `onboarding.*` summaries, the two `demo_data.*` summaries and the three `tax_rate_setting_changed` summaries.
+Most persisted summaries are English technical sentences built at write time, for example `Client created: Анна Иванова`, `Order created: Дневной крем`, `Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`, `Recipe version created: template 3 v2`, and the value-free `Workshop profile updated` and `Report document created`. A minority are Russian: the four `onboarding.*` summaries, the two `demo_data.*` summaries and the three `tax_rate_setting_changed` summaries.
 
 Classification:
 
@@ -1064,13 +1070,13 @@ Because `display_summary` is derived from `action` and never from the raw stored
 C3-II-A — Atomic workshop-profile AuditLog coverage
 DONE — MERGED AND EXACT-HEAD VERIFIED
 
-CR-009 — ACCEPTED — NOT IMPLEMENTED
-C3-II-B1 — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+CR-009 — ACCEPTED
+C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```
 
-`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Only report-document runtime slice B1 is authorized after this documentation PR merges; export and backup remain blocked by their separate evidence requests.
+`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document runtime slice B1 is implemented on a PR branch and not merged; export and backup remain blocked by their separate evidence requests.
 
 ---
 
@@ -1496,7 +1502,7 @@ migrations, and must not depend on a ledger table that may not yet exist.
 ### 17.1. Runtime subdivision
 
 ```text
-C3-II-B1 — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```

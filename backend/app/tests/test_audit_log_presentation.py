@@ -81,6 +81,9 @@ PERSISTED_SUMMARIES = {
     "recipe_template.created": "Recipe template created: Дневной крем",
     "recipe_template.deactivated": "Recipe template deactivated: Дневной крем",
     "recipe_version.created": "Recipe version created: template 3 v2",
+    # CR-009 B1 persists this fixed English string and nothing else. There is no
+    # filename, path, reason or document ID in it to leak.
+    "report_document.created": "Report document created",
     "stock_movement.created": "Stock movement created for lot #5",
     "tax_rate_setting_changed": "Налоговая ставка изменена на 6.00%",
     "workshop_profile.updated": "Workshop profile updated",
@@ -122,13 +125,16 @@ LATIN_LETTERS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 # --------------------------------------------------------------------------
 
 def test_action_vocabulary_is_the_documented_fifty_codes():
-    assert len(ACTION_LABELS) == 51
+    # 51 + `report_document.created`, added by CR-009 B1.
+    assert len(ACTION_LABELS) == 52
     assert set(GENERIC_SUMMARIES) == set(ACTION_LABELS)
     assert set(PERSISTED_SUMMARIES) == set(ACTION_LABELS)
 
 
 def test_entity_and_actor_vocabularies_match_the_contract():
-    assert len(ENTITY_LABELS) == 19
+    # 19 + `report_document`, added by CR-009 B1.
+    assert len(ENTITY_LABELS) == 20
+    assert ENTITY_LABELS["report_document"] == "Документ отчёта"
     assert ENTITY_LABELS["app_setting"] == "Настройка приложения"
     assert ACTOR_LABELS == {"system": "Система", "user": "Пользователь"}
 

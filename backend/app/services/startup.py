@@ -7,6 +7,7 @@ from app.db.paths import UserDataPaths, create_user_data_directories, resolve_us
 from app.db.migrations import pending_migration_ids
 from app.services.backup import BackupResult, backup_sqlite_database
 from app.services.database import initialize_database
+from app.services.report_document_audit import ReportDocumentReconciliationResult, reconcile_report_documents
 
 StartupMode = Literal["development", "user"]
 ALLOWED_STARTUP_MODES: tuple[StartupMode, ...] = ("development", "user")
@@ -19,6 +20,9 @@ class StartupInitializationResult:
     user_data_paths: UserDataPaths | None
     applied_migrations: list[str]
     backup: BackupResult | None = None
+    # CR-009 B1. Internal reconciliation counters, exposed to startup code for
+    # logging and tests only; never rendered in ordinary launcher output.
+    report_document_audit_reconciliation: ReportDocumentReconciliationResult | None = None
 
 
 def validate_startup_mode(mode: str) -> StartupMode:
@@ -57,10 +61,20 @@ def initialize_startup(mode: str = "development") -> StartupInitializationResult
     else:
         config = get_database_config()
     applied_migrations = initialize_database(config)
+    # CR-009 B1: bounded report-document reconciliation, strictly after
+    # successful initialization and migrations — the ledger table may not exist
+    # until `0020` has run — and strictly before the API is served. It is not a
+    # background task: it completes here, once, and then startup continues.
+    #
+    # It never raises, so a pending Journal event cannot make the application
+    # unusable. That deliberately does not extend to migration or database
+    # failures above: those still propagate untouched.
+    reconciliation = reconcile_report_documents(config)
     return StartupInitializationResult(
         mode=validated_mode,
         database_path=config.path,
         user_data_paths=user_data_paths,
         applied_migrations=applied_migrations,
         backup=backup,
+        report_document_audit_reconciliation=reconciliation,
     )

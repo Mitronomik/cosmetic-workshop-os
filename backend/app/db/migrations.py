@@ -23,6 +23,7 @@ MIGRATION_MODULES = [
     "app.migrations.versions.0017_import_apply_status",
     "app.migrations.versions.0018_demo_data_tracking",
     "app.migrations.versions.0019_production_batch_tax_rate_snapshots",
+    "app.migrations.versions.0020_artifact_audit_operations",
 ]
 MIGRATION_TABLE = "schema_migrations"
 

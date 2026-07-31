@@ -1335,13 +1335,17 @@ onboarding
 >
 > **Сырой сохранённый `summary` тоже не отдаётся.** API возвращает `display_summary` — безопасное русское значение, которое backend-презентер выводит из `action`. Исторические строки не переписываются. Полный контракт: `docs/audit-log.md`.
 >
-> **Lifecycle boundary.** C3-I (PR #159) and C3-II-A (PR #161) are both `DONE — MERGED AND EXACT-HEAD VERIFIED`. C3 remains incomplete. `CR-009` accepts the cross-resource contract for user-created manual backups, JSON exports and report documents: a verified artifact is authoritative; audit-finalization failure preserves it and returns truthful HTTP `201` partial success; one bounded `artifact_audit_operations` ledger prepares the operation and provides idempotent finalization/reconciliation by `operation_id`. Only C3-II-B1 (report documents) is authorized after the CR-009 documentation PR merges. C3-II-B2 remains blocked by CR-006; C3-II-B3 remains blocked by CR-004. Full decision: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
+> **Lifecycle boundary.** C3-I (PR #159) and C3-II-A (PR #161) are both `DONE — MERGED AND EXACT-HEAD VERIFIED`. C3 remains incomplete. `CR-009` accepts the cross-resource contract for user-created manual backups, JSON exports and report documents: a verified artifact is authoritative; audit-finalization failure preserves it and returns truthful HTTP `201` partial success; one bounded `artifact_audit_operations` ledger prepares the operation and provides idempotent finalization/reconciliation by `operation_id`. C3-II-B1 (report documents) is `IMPLEMENTED ON PR BRANCH — NOT MERGED`: migration `0020_artifact_audit_operations` creates the ledger, report-document creation reserves and commits a `prepared` row before writing either file, and one write-serialized transaction commits the `report_document.created` AuditLog row together with the `audited` transition. Bounded reconciliation runs after migrations at normal startup and once before the next document create; there is no background retry. C3-II-B2 remains blocked by CR-006; C3-II-B3 remains blocked by CR-004. Full decision: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
 
 ## File-backed artifact audit boundary
 
 The CR-009 ledger is owned only by manual backup, JSON export and
 report-document create operations. It is not a generic outbox, event bus, job
 queue or workflow engine.
+
+As of C3-II-B1 only the report-document operation has a runtime writer. The
+`json_export` and `manual_backup` kinds exist in the table's `CHECK` vocabulary
+so that B2 and B3 need no second migration, but no code writes them.
 
 ```text
 validate/canonicalize
