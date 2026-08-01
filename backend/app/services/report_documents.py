@@ -251,10 +251,16 @@ class ReportDocumentService:
         free. Failing to read the ledger here is a preparation failure, not a
         silent "no collision": guessing would let two operations claim one
         artifact identity.
+
+        Only the expected persistence failures are translated. This runs before
+        either file is written, so letting an unexpected defect propagate is
+        safe — the create still fails with nothing on disk — and it keeps a
+        `TypeError` from being reported to the user as the specific, recoverable
+        "tracking unavailable" condition.
         """
         try:
             return self.audit_service.is_identity_active(primary_filename, companion_filename)
-        except Exception as failure:
+        except (sqlite3.Error, OSError) as failure:
             raise ReportDocumentAuditTrackingUnavailableError(
                 "Не удалось безопасно подготовить создание документа. Документ не создан."
             ) from failure

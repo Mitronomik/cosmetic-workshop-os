@@ -245,6 +245,14 @@ class ReportDocumentAuditService:
         try:
             metadata = ReportDocumentMetadata.model_validate(raw)
         except Exception:
+            # Deliberately broad, and it must stay that way. `verify` is called
+            # from the create path *after* both files are on disk, and not
+            # inside a `try`. Anything escaping here would propagate out of
+            # `finalize` and turn a successfully created document into an HTTP
+            # 500 — the false total failure CR-009 exists to prevent. Classifying
+            # as `ambiguous` instead keeps the artifact, leaves the operation
+            # unresolved and counted, and surfaces the pending warning, so a
+            # defect stays visible rather than destroying a result.
             return ReportDocumentVerification("ambiguous", "metadata-invalid")
 
         # 7 and 8 — the sidecar must describe this operation's own pair.
@@ -328,6 +336,15 @@ class ReportDocumentAuditService:
             # failed, so the operation is merely moved to `pending_audit` — and
             # that move happens on a fresh connection, after the failed
             # transaction has already been rolled back and closed.
+            #
+            # `RuntimeError` is this module's own rollback signal from
+            # `_commit_finalization`. Keeping the catch here — rather than
+            # narrowing it — is deliberate: by this point both files exist, and
+            # the accepted contract requires HTTP 201 with `audit_status:
+            # pending`, never a total failure. An unexpected error that escaped
+            # instead would destroy a completed result. Degrading to `pending`
+            # keeps the artifact, the count and the warning, so nothing is lost
+            # and nothing is silently forgotten.
             self._try_mark_pending(operation_id)
             return None
 

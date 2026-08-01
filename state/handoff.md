@@ -47,12 +47,13 @@ This is compatible: parameters, the optional caller-owned connection and the
 insert are unchanged, and callers that ignore the value behave exactly as
 before. Do not add a second AuditLog insertion API.
 
-Evidence executed on the implementation tree: complete backend
-`1522 collected / 1522 passed`, all `1376` baseline node IDs preserved with
-`146` added; focused backend `540 passed`; all `19` frontend `test:*` scripts
-`921 passed / 0 failed`; frontend build `PASS`.
+Evidence executed on the final implementation tree: complete suite
+`1550 passed / 0 failed` (backend and launcher together), backend collection
+`1533` with all `1376` baseline node IDs preserved and `157` added; complete
+launcher `17 passed / 0 failed`; all `19` frontend `test:*` scripts pass;
+frontend build `PASS`. Earlier per-head counts in this file are superseded.
 
-**Three review findings on the first PR head, all corrected on the branch:**
+**Review findings across the PR heads, all corrected on the branch:**
 
 1. **User-mode database continuity.** `start_backend_process` gave the uvicorn
    child only `PYTHONPATH`, so the API could resolve `get_database_config()` to

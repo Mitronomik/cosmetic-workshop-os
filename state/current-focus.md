@@ -99,6 +99,33 @@ was failing on the untouched baseline `385873f` because its local
 `app.tests.table_guards`, so it tracks the real migration head and stays a
 bounded check. The complete launcher suite is green.
 
+**Hardening and independent audit of the published branch:**
+
+`ReportDocumentService.status()` and the create path's identity reservation both
+caught `except Exception`, which would have reported a programming defect to the
+user as a specific, recoverable condition it is not. Both are narrowed to
+`(sqlite3.Error, OSError)` — what the persistence boundary genuinely raises —
+and both run where letting an unexpected error propagate costs nothing, because
+no artifact exists yet at that point.
+
+Two broad catches are deliberately **kept**, and documented in place: the
+metadata-validation catch inside `verify()` and the `RuntimeError` catch in
+`finalize()`. Both guard the path *after* both files exist, where the accepted
+contract requires HTTP `201` with `audit_status: pending`. Narrowing them would
+let an unexpected error escape and turn a completed document into a false total
+failure — the exact outcome CR-009 forbids.
+
+`start_backend_process()` now requires `database_path: Path` with no default and
+sets the environment unconditionally, so the startup/API database split cannot
+be reintroduced by a future caller; omitting it is a `TypeError` at the call.
+
+The finalizer's exactly-once guarantee was re-verified independently under
+12-way concurrent finalization and under racing finalize/reconcile, and seven
+mutation checks (false-zero fallback, loose audit contract, count coercion,
+removed write serialization, removed in-transaction re-read, primary-only
+identity check, abandoning ambiguous pairs) were each confirmed to fail the
+suite.
+
 ## C3-II-A closure and CR-009 decision
 
 PR #161 is `MERGED`, base `main`, final reviewed and smoke-tested head

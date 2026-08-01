@@ -31,7 +31,10 @@ from app.repositories.audit import AuditLogRepository
 from app.services.database import initialize_database
 from app.services import report_document_audit as audit_module
 from app.services import report_documents as report_documents_module
-from app.services.report_document_audit import PENDING_AUDIT_MESSAGE
+from app.services.report_document_audit import (
+    PENDING_AUDIT_MESSAGE,
+    ReportDocumentAuditTrackingUnavailableError,
+)
 
 pytestmark = pytest.mark.skipif(
     TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment."
@@ -482,6 +485,68 @@ def test_an_unexpected_programming_defect_is_not_disguised_as_ledger_unavailabil
     assert raised.value is defect
     assert not isinstance(raised.value, ReportDocumentStatusUnavailableError)
     assert "Не удалось прочитать сведения" not in str(raised.value)
+
+
+def test_an_unexpected_defect_reserving_an_identity_is_not_disguised_as_tracking_unavailable(monkeypatch, tmp_path):
+    """The create path must not dress a bug up as "tracking unavailable" either.
+
+    Identity reservation runs before either file is written, so letting an
+    unexpected defect propagate costs nothing: the create fails with nothing on
+    disk either way. What it buys is that a real bug is not reported to the user
+    as the specific, recoverable condition it is not.
+    """
+    config, documents_dir, client = environment(monkeypatch, tmp_path)
+
+    def defective_identity(*_args, **_kwargs):
+        raise TypeError("programming defect")
+
+    monkeypatch.setattr(ArtifactAuditOperationRepository, "has_active_identity", defective_identity)
+
+    # The defect surfaces as itself rather than as the tracking-unavailable
+    # contract. `TestClient` re-raises server exceptions, which is exactly the
+    # observable difference: a translated error would have returned a response.
+    with pytest.raises(TypeError, match="programming defect") as raised:
+        client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+
+    assert not isinstance(raised.value, ReportDocumentAuditTrackingUnavailableError)
+    assert "Не удалось безопасно подготовить создание документа" not in str(raised.value)
+    # Still nothing created, and nothing recorded.
+    assert not documents_dir.exists() or list(documents_dir.iterdir()) == []
+    assert audit_actions(config) == []
+    assert operations(config) == []
+
+
+def test_a_completed_document_survives_an_unexpected_defect_in_finalization(monkeypatch, tmp_path):
+    """After both files exist, no failure may become a total failure.
+
+    This pins the deliberately broad protection on the post-artifact path. A
+    defect raised while finalizing must degrade to `pending` — HTTP 201, artifact
+    intact, operation counted — never an HTTP 500 that tells the user their
+    document was not created when it plainly was.
+    """
+    config, documents_dir, client = environment(monkeypatch, tmp_path)
+
+    def defective_finalizer(*_args, **_kwargs):
+        raise RuntimeError("programming defect during finalization")
+
+    monkeypatch.setattr(
+        audit_module.ReportDocumentAuditService, "_commit_finalization", defective_finalizer
+    )
+
+    response = client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["audit_status"] == "pending"
+    assert body["audit_message"] == PENDING_AUDIT_MESSAGE
+    document = body["document"]
+    assert (documents_dir / document["filename"]).exists()
+    assert (documents_dir / document["metadata_filename"]).exists()
+    assert client.get(f"/api/report-documents/{document['id']}/download").status_code == 200
+    # Unresolved and counted, not lost.
+    assert audit_actions(config) == []
+    assert [row["status"] for row in operations(config)] == ["pending_audit"]
+    assert client.get("/api/report-documents/status").json()["pending_audit_count"] == 1
 
 
 def test_the_status_exception_boundary_is_narrow_by_construction():
