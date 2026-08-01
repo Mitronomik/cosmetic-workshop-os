@@ -31,6 +31,8 @@ EXPORT_FILE_SUFFIX = ".json"
 # The structural middle of the export filename grammar:
 # `{timestamp}-cosmetic_workshop-export-{canonical_reason}[-N].json`.
 EXPORT_FILENAME_MARKER = "-cosmetic_workshop-export-"
+# The one timestamp spelling the generator emits and the strict parser accepts.
+EXPORT_TIMESTAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
 EXPORT_PAYLOAD_KEYS: frozenset[str] = frozenset({"manifest", "data"})
 EXPORT_TABLES = (
     "app_settings",
@@ -125,10 +127,84 @@ def resolve_export_paths() -> ExportPaths:
 
 
 def _export_filename(created_at: datetime, reason: str, suffix: int | None = None) -> str:
-    timestamp = created_at.strftime("%Y%m%dT%H%M%S%fZ")
+    timestamp = created_at.strftime(EXPORT_TIMESTAMP_FORMAT)
     reason_part = normalize_artifact_reason_segment(reason)
     suffix_part = f"-{suffix}" if suffix is not None else ""
     return f"{timestamp}{EXPORT_FILENAME_MARKER}{reason_part}{suffix_part}{EXPORT_FILE_SUFFIX}"
+
+
+@dataclass(frozen=True)
+class GeneratedExportFilename:
+    """The three fields a generated export filename encodes, once proven valid."""
+
+    created_at: datetime
+    reason: str
+    suffix: int | None
+
+
+def parse_generated_export_filename(name: str) -> GeneratedExportFilename | None:
+    """Strictly parse a filename **this application's generator could have produced**.
+
+    Returns `None` for anything else. This is the exact-grammar boundary the
+    CR-009 ledger and the export writer both need: a name that merely *looks*
+    export-shaped — right marker, right extension, a reason that happens to
+    parse — is not proof that this application generated it, and the ledger must
+    never audit an artifact on that basis.
+
+    The check that does the real work is the final one: the parsed fields are
+    fed back through `_export_filename`, the single generation algorithm, and
+    the result must equal the original name byte for byte. That is why this
+    function cannot drift from the generator, and why it needs no separate
+    description of the grammar. Everything before it exists to extract
+    candidate fields safely, or to reject input `strptime` and `int` would
+    otherwise accept too liberally.
+
+    Deliberately **not** applied to `list_export_files`. That listing stays
+    best-effort so legacy exports written before this contract keep appearing in
+    `GET /api/exports` and `GET /api/exports/status`; CR-005 accepted exactly
+    that, and tightening it here would make old files silently vanish from the
+    user's history.
+    """
+    if not isinstance(name, str) or not name or Path(name).name != name:
+        return None
+    if not name.endswith(EXPORT_FILE_SUFFIX):
+        return None
+    stem = name[: -len(EXPORT_FILE_SUFFIX)]
+    timestamp_part, marker, remainder = stem.partition(EXPORT_FILENAME_MARKER)
+    if not marker or not timestamp_part or not remainder:
+        return None
+
+    try:
+        created_at = datetime.strptime(timestamp_part, EXPORT_TIMESTAMP_FORMAT).replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+    reason_part = remainder
+    suffix: int | None = None
+    head, separator, tail = remainder.rpartition("-")
+    if separator and _is_ascii_digits(tail):
+        # `int()` accepts Unicode digits, surrounding whitespace and a sign, so
+        # the ASCII-only test comes first; the round trip below then rejects any
+        # spelling the generator would not produce, such as a leading zero.
+        reason_part, suffix = head, int(tail)
+
+    if not reason_part or reason_part.isdigit():
+        return None
+    if normalize_artifact_reason_segment(reason_part) != reason_part:
+        return None
+
+    if _export_filename(created_at, reason_part, suffix) != name:
+        return None
+    return GeneratedExportFilename(created_at=created_at, reason=reason_part, suffix=suffix)
+
+
+def is_generated_export_filename(name: str) -> bool:
+    """Whether `name` is exactly a filename this application's generator produces."""
+    return parse_generated_export_filename(name) is not None
+
+
+def _is_ascii_digits(value: str) -> bool:
+    return bool(value) and all("0" <= character <= "9" for character in value)
 
 
 def reserve_export_path(
@@ -164,7 +240,7 @@ def reserve_export_path(
 def _parse_export_created_at(filename: str) -> datetime | None:
     timestamp_part = filename.split("-", 1)[0]
     try:
-        return datetime.strptime(timestamp_part, "%Y%m%dT%H%M%S%fZ").replace(tzinfo=UTC)
+        return datetime.strptime(timestamp_part, EXPORT_TIMESTAMP_FORMAT).replace(tzinfo=UTC)
     except ValueError:
         return None
 
@@ -283,10 +359,12 @@ def _validate_reserved_export_path(export_dir: Path, reserved_export_path: Path)
     somewhere reconciliation can never find it.
     """
     candidate = Path(reserved_export_path)
-    name = candidate.name
     if candidate.parent.resolve(strict=False) != export_dir.resolve(strict=False):
         raise ExportError("Reserved export path is not inside the configured export directory.")
-    if Path(name).name != name or not name.endswith(EXPORT_FILE_SUFFIX) or EXPORT_FILENAME_MARKER not in name:
+    if not is_generated_export_filename(candidate.name):
+        # The full grammar, verified by round-tripping through the generator —
+        # not merely the marker and the extension. A name this writer could not
+        # have produced is not a name the ledger can later reconcile.
         raise ExportError("Reserved export filename does not match the accepted export filename grammar.")
     if candidate.exists():
         raise ExportError("Reserved export path already exists; exports are never overwritten.")

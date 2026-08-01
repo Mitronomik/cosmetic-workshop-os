@@ -325,13 +325,23 @@ coverage*. `C3-II-B3` remains blocked by `CR-004`.
   migration**; `0020` is reused unchanged.
 - **Exact-path verification.** The verifier inspects only the exact ledger-named
   file: safe name, resolution inside the export directory, escaping symlinks
-  refused, existence, regular file, accepted filename grammar, a canonical
-  reason that parses and excludes the uniqueness suffix, JSON parses, top-level
-  keys exactly `manifest` and `data`, supported `export_schema_version`,
-  `source == "cosmetic-workshop-os"`, a **human** `manifest.reason` that is not
-  required to equal the canonical slug, and manifest table counts that agree
-  with the exported data. It never rewrites the export and never compares
-  historical exported data with the current database.
+  refused, existence, regular file, the **complete** filename grammar, JSON
+  parses, top-level keys exactly `manifest` and `data`, supported
+  `export_schema_version`, `source == "cosmetic-workshop-os"`, a **human**
+  `manifest.reason` that is not required to equal the canonical slug, and
+  manifest table counts that agree with the exported data. It never rewrites the
+  export and never compares historical exported data with the current database.
+- **The filename grammar is checked by round trip, not by resemblance.**
+  `parse_generated_export_filename` validates the complete timestamp, extracts
+  the canonical reason and the optional numeric uniqueness suffix, requires the
+  reason to satisfy `normalize_artifact_reason_segment(reason) == reason` and to
+  not be digits-only, and then rebuilds the name through `_export_filename` —
+  the one generation algorithm — and requires byte-for-byte equality. Both the
+  writer's `reserved_export_path` check and the ledger verifier use it, so a
+  name this application could not have generated can be neither reserved nor
+  audited, however valid its JSON contents are. `list_export_files` deliberately
+  does **not** use it: the independent `GET` listing stays best-effort so legacy
+  exports keep appearing in the user's history, exactly as CR-005 accepted.
 - **Exactly-once finalization.** One `BEGIN IMMEDIATE` transaction on one
   connection commits the `export.created` AuditLog row together with the
   `audited` ledger transition, or commits neither.

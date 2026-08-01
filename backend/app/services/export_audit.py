@@ -44,12 +44,11 @@ from app.domain.artifact_audit_operations import (
 from app.repositories.artifact_audit_operations import ArtifactAuditOperation, ArtifactAuditOperationRepository
 from app.repositories.audit import AuditLogRepository
 from app.services.export import (
-    EXPORT_FILENAME_MARKER,
-    EXPORT_FILE_SUFFIX,
     EXPORT_PAYLOAD_KEYS,
     EXPORT_SOURCE,
     SUPPORTED_EXPORT_SCHEMA_VERSIONS,
     parse_export_reason,
+    parse_generated_export_filename,
     resolve_export_dir,
 )
 
@@ -214,17 +213,19 @@ class ExportAuditService:
         if path is None:
             return ExportVerification("ambiguous", "path-outside-export-directory")
 
-        # 6 and 7 — the accepted filename grammar, and a reason that parses.
-        if not name.endswith(EXPORT_FILE_SUFFIX) or EXPORT_FILENAME_MARKER not in name:
+        # 6, 7 and 8 — the *complete* accepted filename grammar, proved by
+        # round-tripping the parsed fields back through the one generator:
+        # timestamp, canonical reason and optional numeric uniqueness suffix must
+        # reconstruct this exact name. A file whose JSON contents happen to
+        # validate is still not something this application generated, and must
+        # never be audited on contents alone.
+        generated = parse_generated_export_filename(name)
+        if generated is None:
             return ExportVerification("ambiguous", "filename-grammar-mismatch")
-        canonical_reason = parse_export_reason(Path(name))
-        if not canonical_reason:
-            return ExportVerification("ambiguous", "filename-reason-unparsable")
-        # 8 — the uniqueness suffix is a filename mechanism, never a reason. A
-        # canonical segment is never digits-only, so a parsed reason that is
-        # would mean the suffix leaked into it.
-        if canonical_reason.isdigit():
-            return ExportVerification("ambiguous", "uniqueness-suffix-in-reason")
+        # The suffix is a filename mechanism and never part of the reason; the
+        # strict parser has already separated the two.
+        if generated.reason != parse_export_reason(Path(name)):
+            return ExportVerification("ambiguous", "filename-reason-mismatch")
 
         # 3 — existence. Absent is the one state that can be resolved safely.
         if not path.exists():

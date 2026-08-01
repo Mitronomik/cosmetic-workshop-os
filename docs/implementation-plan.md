@@ -1841,7 +1841,13 @@ that branch, and nothing beyond it:
   committed before the export is written — **no new migration**, `0020` reused
   unchanged, `companion_filename` null because an export is one file;
 - an exact-path, read-only JSON-export verifier classifying `valid`,
-  `definitely_absent` and `ambiguous` exactly as B1 does;
+  `definitely_absent` and `ambiguous` exactly as B1 does, whose filename check is
+  a strict round trip through the one generator — `parse_generated_export_filename`
+  validates the timestamp, canonical reason and optional numeric suffix and then
+  requires `_export_filename` to rebuild the identical name, so valid JSON
+  contents can never rescue a filename this application could not have produced;
+  the same validator guards `reserved_export_path`, while `list_export_files`
+  stays best-effort for legacy artifacts;
 - exactly-once `export.created` finalization through one `BEGIN IMMEDIATE`
   transaction committing the AuditLog row and the `audited` transition together;
 - JSON-export startup reconciliation after migrations, ordered after the

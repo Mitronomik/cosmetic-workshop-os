@@ -29,10 +29,15 @@ from app.services import export_audit as audit_module
 from app.services.export import (
     EXPORT_SCHEMA_VERSION,
     EXPORT_SOURCE,
+    _export_filename,
     create_json_export,
+    is_generated_export_filename,
+    list_export_files,
     parse_export_reason,
+    parse_generated_export_filename,
     reserve_export_path,
 )
+from app.services.local_artifact_filenames import normalize_artifact_reason_segment
 from app.services.export_audit import ExportAuditService, ExportAuditTrackingUnavailableError
 
 FROZEN = datetime(2026, 8, 1, 10, 11, 12, 131415, tzinfo=UTC)
@@ -401,6 +406,151 @@ def test_a_filename_outside_the_export_grammar_is_ambiguous(tmp_path, name):
 
     assert verification.outcome == "ambiguous"
     assert verification.reason == "filename-grammar-mismatch"
+
+
+# --------------------------------------------------------------------------
+# Strict generated-filename grammar
+#
+# The boundary these cover is narrow and load-bearing: a name that merely looks
+# export-shaped — right marker, right extension, a reason that happens to parse
+# — is not proof this application generated it. Every malformed name below is
+# written with **valid** export JSON inside, so a verifier that trusted contents
+# would audit it.
+# --------------------------------------------------------------------------
+
+VALID_STEM = "20260801T101112131415Z" + "-cosmetic_workshop-export-"
+
+MALFORMED_NAMES = [
+    # malformed timestamp, correct marker, correct suffix
+    ("wrong-timestamp-cosmetic_workshop-export-manual-1.json", "malformed-timestamp"),
+    # missing timestamp entirely
+    ("-cosmetic_workshop-export-manual.json", "missing-timestamp"),
+    # truncated timestamp the generator never emits
+    ("20260801T101112Z-cosmetic_workshop-export-manual.json", "timestamp-without-microseconds"),
+    # human, noncanonical reason containing a hyphen
+    (f"{VALID_STEM}before-update.json", "hyphen-in-reason"),
+    # repeated separators the canonical form collapses
+    (f"{VALID_STEM}__manual__.json", "repeated-separators"),
+    (f"{VALID_STEM}before__import.json", "repeated-inner-separator"),
+    # malformed uniqueness suffix
+    (f"{VALID_STEM}manual-invalid.json", "non-numeric-suffix"),
+    (f"{VALID_STEM}manual-1-2.json", "double-suffix"),
+    (f"{VALID_STEM}manual-.json", "empty-suffix"),
+    # leading zero: the generator emits `-1`, never `-01`
+    (f"{VALID_STEM}manual-01.json", "leading-zero-suffix"),
+    # extra trailing filename segments
+    (f"{VALID_STEM}manual.json.json", "double-extension"),
+    (f"{VALID_STEM}manual.backup.json", "extra-segment"),
+    # digits-only reason: a canonical segment is always `reason_`-prefixed
+    (f"{VALID_STEM}123.json", "digits-only-reason"),
+]
+
+
+@pytest.mark.parametrize(("name", "label"), MALFORMED_NAMES, ids=[label for _n, label in MALFORMED_NAMES])
+def test_a_filename_the_generator_could_never_produce_is_ambiguous(tmp_path, name, label):
+    """Valid contents must never rescue an invalid filename."""
+    _config, export_dir, service = setup(tmp_path)
+    path = write_export(export_dir, suffix=name)
+    assert json.loads(path.read_text(encoding="utf-8"))["manifest"]["source"] == EXPORT_SOURCE
+
+    verification = verify_name(service, name)
+
+    assert verification.outcome == "ambiguous", label
+    assert verification.reason == "filename-grammar-mismatch", label
+    # Never audited and never deleted.
+    assert path.exists()
+    assert audit_rows(service.config) == []
+
+
+@pytest.mark.parametrize(("name", "label"), MALFORMED_NAMES, ids=[label for _n, label in MALFORMED_NAMES])
+def test_the_writer_refuses_a_reserved_path_the_generator_could_never_produce(tmp_path, name, label):
+    config, export_dir, _service = setup(tmp_path)
+
+    with pytest.raises(Exception) as failure:
+        create_json_export(config.path, export_dir, reason="manual", reserved_export_path=export_dir / name)
+
+    assert "grammar" in str(failure.value), label
+    assert list(export_dir.iterdir()) == [], label
+
+
+@pytest.mark.parametrize(
+    ("name", "label"),
+    [
+        (f"{VALID_STEM}manual.json", "ordinary"),
+        (f"{VALID_STEM}manual-1.json", "numeric-suffix"),
+        (f"{VALID_STEM}manual-12.json", "multi-digit-suffix"),
+        (f"{VALID_STEM}reason_123.json", "reason_123"),
+        (f"{VALID_STEM}перед_обновлением.json", "unicode-reason"),
+        (f"{VALID_STEM}before_update_unsafe.json", "canonicalized-human-reason"),
+        (f"{VALID_STEM}before_update_unsafe-2.json", "canonicalized-with-suffix"),
+    ],
+    ids=lambda value: value if isinstance(value, str) and not value.endswith(".json") else "",
+)
+def test_a_filename_the_generator_does_produce_stays_valid(tmp_path, name, label):
+    _config, export_dir, service = setup(tmp_path)
+    write_export(export_dir, suffix=name)
+
+    assert verify_name(service, name).outcome == "valid", label
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        f"{VALID_STEM}manual-01.json",
+        f"{VALID_STEM}manual-invalid.json",
+        f"{VALID_STEM}before-update.json",
+        "wrong-timestamp-cosmetic_workshop-export-manual-1.json",
+    ],
+)
+def test_partially_parsable_names_are_still_refused_by_the_strict_grammar(name):
+    """`parse_export_reason` is lenient by design; the strict parser is not.
+
+    The lenient parser exists for the best-effort legacy listing and will happily
+    return something for all of these. Only the round trip through the one
+    generator decides whether this application produced the name.
+    """
+    assert parse_export_reason(Path(name)) is not None
+    assert parse_generated_export_filename(name) is None
+    assert is_generated_export_filename(name) is False
+
+
+def test_the_strict_parser_round_trips_every_name_the_generator_emits(tmp_path):
+    """Whatever `reserve_export_path` chooses must satisfy the strict parser."""
+    _config, export_dir, _service = setup(tmp_path)
+    for reason in ["manual", "before-update ../unsafe", "перед обновлением", "123", "___", "a-b-c"]:
+        for suffix in [None, 1, 2, 17]:
+            name = _export_filename(FROZEN, reason, suffix)
+            parsed = parse_generated_export_filename(name)
+            assert parsed is not None, name
+            assert parsed.suffix == suffix
+            assert parsed.created_at == FROZEN
+            # The parsed reason is canonical and matches what the API reports.
+            assert parsed.reason == parse_export_reason(Path(name))
+            assert normalize_artifact_reason_segment(parsed.reason) == parsed.reason
+
+
+def test_legacy_listing_stays_best_effort_and_is_not_tightened(tmp_path):
+    """Old files must not vanish from the user's history.
+
+    CR-005 accepted best-effort legacy listing. The strict grammar governs what
+    may be *reserved* and *audited*, not what may be *listed*.
+    """
+    _config, export_dir, _service = setup(tmp_path)
+    legacy = [
+        "20250101T000000Z-cosmetic_workshop-export-before-update.json",
+        "cosmetic_workshop-export-manual.json",
+        "manual-export.json",
+        "20250101T000000000000Z-cosmetic_workshop-export-manual-01.json",
+    ]
+    for name in legacy:
+        (export_dir / name).write_text('{"legacy": true}', encoding="utf-8")
+
+    listed = {item.filename for item in list_export_files(export_dir)}
+
+    assert listed == set(legacy)
+    # None of them would be accepted for reservation or auditing.
+    for name in legacy:
+        assert is_generated_export_filename(name) is False
 
 
 def test_verification_never_reads_or_compares_the_current_database(tmp_path, monkeypatch):
