@@ -1,6 +1,6 @@
-# Current focus — C3-II-B1 merged and closed; CR-006 diagnostic is next
+# Current focus — CR-006 decided; C3-II-B2 authorized after the decision PR merges
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A and C3-II-B1 merged and exact-head verified; CR-009 accepted and implemented for report documents; C3 incomplete; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A and C3-II-B1 merged and exact-head verified; CR-009 accepted and implemented for report documents; CR-006 accepted; C3 incomplete; C4 inactive**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -19,13 +19,14 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3
 - `C3-II-A — Atomic workshop-profile AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #161)
 - `CR-009 — Durable file-backed artifact AuditLog semantics`: **ACCEPTED**
 - `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #163)
-- `C3-II-B2 — JSON export AuditLog coverage`: **BLOCKED BY CR-006 — NOT AUTHORIZED**
+- `CR-006 — JSON export create-response confirmation semantics`: **ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED**
+- `C3-II-B2 — JSON export AuditLog coverage`: **AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED**
 - `C3-II-B3 — Manual backup AuditLog coverage`: **BLOCKED BY CR-004 — NOT AUTHORIZED**
 - `C3 — INCOMPLETE`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **C3-II-B1 is merged into `main` through PR #163.** B2, B3 and C4 remain unauthorized.
-- Next active work: **`CR-006` — evidence-only diagnostic of JSON export create-response fallback reachability and required product contract.**
+- **C3-II-B1 is merged into `main` through PR #163.** B3 and C4 remain unauthorized.
+- Next active work: **`C3-II-B2` — one bounded JSON export AuditLog implementation PR, to begin only after the `CR-006` decision PR merges.**
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
@@ -35,7 +36,8 @@ All four accepted backend baseline gate failures are closed on `main`. The accep
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
+C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
 C4 — INACTIVE
@@ -172,50 +174,40 @@ removed write serialization, removed in-transaction re-read, primary-only
 identity check, abandoning ambiguous pairs) were each confirmed to fail the
 suite.
 
-## What is authorized next — the CR-006 diagnostic only
+## What is authorized next — C3-II-B2 only, after this decision PR merges
 
 ```text
-CR-006 diagnostic — ACTIVE NEXT EVIDENCE TASK
+C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
 ```
 
-Next active work: **`CR-006` — evidence-only diagnostic of JSON export
-create-response fallback reachability and required product contract.**
+Next active work: **`C3-II-B2` — one bounded JSON export AuditLog
+implementation pull request**, begun only after the `CR-006` decision pull
+request is merged and only from `origin/main`.
 
 Explicit boundary:
 
 ```text
-Diagnostic only.
-No export AuditLog implementation.
-No C3-II-B2 authorization.
-No migration.
-No production change.
+One bounded implementation PR.
+Reuse the existing artifact_audit_operations ledger.
+No new migration.
+No manual-backup coverage.
+No CR-004 resolution.
 ```
 
-**The CR-006 diagnostic is authorized. C3-II-B2 implementation is not
-authorized.** The diagnostic must first establish whether the defensive
-fallback in the JSON export create-response path is reachable in real
-production behavior, and only then define the intended contract. No B2 runtime
-implementation may be scoped before that evidence exists.
+`C3-II-B2` scope, the exact export verification contract, the future create and
+status response contract, the AuditLog privacy contract and the non-goals are in
+`docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog coverage*, with
+the reserved event vocabulary in `docs/decisions/0013-file-backed-artifact-audit-semantics.md`
+§ *Audit privacy and vocabulary* and the create-response contract in
+`docs/decisions/0014-json-export-create-confirmation-semantics.md`.
 
-The diagnostic question is:
+`C3-II-B2` also carries the accepted `CR-006` create-response correction, so the
+export create path is touched exactly once: the create response is built from
+the creator's exact `ExportResult`, its `reason` is parsed from the exact final
+filename through the same contract list and status use, and the directory-wide
+re-scan leaves the create path.
 
-```text
-Can the defensive fallback in the JSON export create-response path occur in
-real production behavior, and what must the API do if the exact created
-artifact cannot be confirmed after the file write?
-```
-
-The diagnostic must investigate at least: artifact disappearance after a
-successful write; a filesystem race; a permission failure; a `stat` failure; a
-list/read failure; an exact-filename lookup failure; mocked or injected service
-behavior; whether the created export still exists; whether its metadata can be
-reconstructed safely; whether returning the human manifest reason violates the
-canonical filename-derived API contract; and whether the correct response is
-canonical reconstruction, truthful partial success, or explicit failure.
-
-`CR-006` remains a **`needs evidence`** row. Resolving it is **not** complete,
-no severity is assigned, and no correction design is authorized. `CR-004`
-likewise remains `needs evidence` and unresolved, so `C3-II-B3` stays blocked.
+`CR-004` remains `needs evidence` and unresolved, so `C3-II-B3` stays blocked.
 
 ## C3-II-A closure and CR-009 decision
 
@@ -621,21 +613,70 @@ app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_u
 
 `R4` is closed and is **not reopened**. `CR-005` is closed and is **not reopened**.
 
-## CR-006 — export create-response fallback — NEEDS EVIDENCE, active next diagnostic
+## CR-006 — export create-response confirmation semantics — ACCEPTED (2026-08-01)
 
-`CR-006 — Investigate export create-response fallback confirmation semantics` remains a **`needs evidence`** row in `state/change-requests.md`. It is **not an implementation slice** and is **non-blocking for merged work**, but it is now the **active next evidence task**: the evidence-only diagnostic described in § *What is authorized next* above. The diagnostic is authorized; `C3-II-B2` implementation is not.
+```text
+CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
+```
 
-Exact current behavior in `backend/app/api/exports.py::create_export`:
+The evidence-only diagnostic is **complete**. It was executed against
+`origin/main` = `1d4e90ccffb6f154882e685b09803f67f2f75ceb` through the real
+FastAPI route and the real `create_json_export`, with an isolated migrated
+SQLite database and an isolated export directory per scenario, and with faults
+injected only at named OS boundaries (`pathlib.Path.stat`,
+`pathlib.Path.iterdir`) and named module seams. **No production file was
+changed**, and the temporary harness lived outside the repository and was not
+committed.
 
-- after `create_json_export` writes an export, the endpoint attempts to find the exact created file through `list_export_files`;
-- when the exact file is found, the API response uses parsed filename metadata and therefore returns the canonical filename-derived reason;
-- when the exact file is **not** found, the defensive fallback constructs an `ExportFile` using `ExportResult.reason`;
-- `ExportResult.reason` is the normalized **human** reason preserved in the export manifest;
-- therefore the fallback may return a human reason where the API contract normally expects the canonical filename-derived slug.
+**Reachability — answered.** The fallback is reachable in
+production-equivalent behavior, not only through mocks. A per-file `stat`
+failure on the exact created file during the endpoint's secondary
+`list_export_files(...)` reaches it, and so does a directory-entry race between
+`iterdir()` and that `stat`, in both cases while the created export is present
+and correct on disk. When it runs, the response `reason` is the human manifest
+reason `before-update ../unsafe` instead of the canonical
+`before_update_unsafe`, which the frontend would render verbatim on `/exports`.
+The same redundant re-scan can also return HTTP `500` after a fully successful
+creation, and can match a foreign object that replaced the exact path and
+report its size as the created export's size.
 
-Classification: **NEEDS EVIDENCE.** Not a confirmed product defect. No user-visible failure has been reproduced, and no data loss, overwrite, incorrect file content, or unsafe mutation is proven. Fallback reachability is not established, **no severity is assigned**, and **no correction design is authorized**. Scheduling the diagnostic changes none of that: `CR-006` stays `needs evidence` until the diagnostic produces evidence, and `C3-II-B2` cannot be scoped before then.
+**Classification.**
 
-`CR-006` is not part of `CR-004`, is not a reason to reopen `CR-005`, and is not a reason to reopen `R4`. It is **not** a fifth backend baseline failure. Full evidence: `docs/backend-baseline-failure-triage.md` §17.
+```text
+PRODUCT DEFECT — CREATE-RESPONSE CONTRACT MISMATCH
+Severity: MEDIUM
+```
+
+No application-caused data loss, no overwrite, no incorrect export bytes, no
+source database mutation, and no privacy exposure were found. A file removed by
+an injected external actor after the creator returned is not application data
+loss.
+
+**Accepted contract.** A successfully returned `ExportResult` is the
+authoritative result of the create operation; the create response is built only
+from it; the API `reason` is parsed from the exact final filename through the
+same canonical parsing contract list and status use; `ExportResult.reason` is
+never the API reason; `list_export_files` leaves the create path but stays
+authoritative for the independent `GET` reads, whose contract is unchanged;
+`201 Created` describes the operation boundary and promises no permanent
+retention; a creator that does not return successfully is never reported as
+success.
+
+**Preserved boundaries.** `CR-005`, `R4`, `CR-009` and `C3-II-B1` are **not
+reopened**; the export manifest keeps the normalized human reason; the export
+schema version is unchanged; no sidecar, metadata table, second persisted
+reason or new API reason field; no migration; no production change in the
+decision itself.
+
+**Adjacent findings, separated and not resolved by `CR-006`:** the creator's own
+post-write `stat` at `backend/app/services/export.py:266` escaping as a raw
+`OSError` while a complete export remains on disk, and the `GET` list/status
+behavior under the same read failures.
+
+`CR-006` is not part of `CR-004`, is not a reason to reopen `CR-005`, and is not
+a reason to reopen `R4`. It is **not** a fifth backend baseline failure. Durable
+decision: `docs/decisions/0014-json-export-create-confirmation-semantics.md`.
+Completed evidence: `docs/backend-baseline-failure-triage.md` §17.5.
 
 ## Remaining release obligations
 
@@ -647,7 +688,7 @@ None of these is activated here.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 and C2 are **complete**. C3-I, C3-II-A and C3-II-B1 are merged and closed, but C3 is **incomplete**: CR-009 is accepted and implemented for report documents only; B2/B3 remain blocked by CR-006/CR-004. The only authorized next task is the evidence-only CR-006 diagnostic. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
+- C1 and C2 are **complete**. C3-I, C3-II-A and C3-II-B1 are merged and closed, but C3 is **incomplete**: CR-009 is accepted and implemented for report documents only. `CR-006` is accepted, so the only authorized next task is `C3-II-B2`, after the CR-006 decision PR merges; `C3-II-B3` remains blocked by CR-004. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**

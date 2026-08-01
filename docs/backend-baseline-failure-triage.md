@@ -610,3 +610,83 @@ Second, only once reachability is established, the desired contract:
 - **Not** added as a fifth backend baseline failure; the gate scope in §1 is unchanged and closed.
 
 Tracked as `CR-006 — Investigate export create-response fallback confirmation semantics`, status `needs evidence`, with no target PR assigned.
+
+> **Superseded status line.** The `needs evidence` status above was correct when
+> §17 was written and is preserved as that record. The diagnostic has since been
+> executed; the completed evidence conclusion is §17.5, and `CR-006` is now
+> `accepted`.
+
+### 17.5 Completed evidence conclusion (2026-08-01)
+
+`CR-006` is **resolved**. The evidence-only diagnostic required by §17.3 was
+executed against `origin/main` = `1d4e90ccffb6f154882e685b09803f67f2f75ceb`,
+Python `3.12.10`, FastAPI `0.115.12`, through the real FastAPI route, the real
+`create_json_export`, an isolated migrated SQLite database and an isolated
+export directory per scenario. Faults were injected only at named OS boundaries
+(`pathlib.Path.stat`, `pathlib.Path.iterdir`) and named module seams
+(`app.api.exports.list_export_files`, `app.api.exports.create_json_export`). **No
+production file was modified**, and the temporary harness lived outside the
+repository and was not committed. The reason under test was
+`before-update ../unsafe`, whose canonical filename segment is
+`before_update_unsafe`.
+
+**Question 1 — can the fallback occur at all? Yes.** A synthetic empty-list
+control reached it directly.
+
+**Question 1b — is it reachable outside mocks? Yes.** A per-file `stat` failure
+on the exact created file during the endpoint's secondary
+`list_export_files(...)` reaches it while the export is present and correct on
+disk, and so does a directory-entry race in which the file is gone from
+`stat`'s point of view after `iterdir()` listed it. `list_export_files` catches
+`OSError` from `_export_file_metadata` and silently skips the entry.
+
+**Question 2 — the required contract.** Decided as **canonical reconstruction
+from the authoritative create result**, recorded durably in
+`docs/decisions/0014-json-export-create-confirmation-semantics.md`: a
+successfully returned `ExportResult` is the authoritative result of the create
+operation; the response is built only from it; the API `reason` is parsed from
+the exact final filename through the same contract list and status use;
+`ExportResult.reason` (the human manifest reason) is never the API reason; the
+directory re-scan is removed from the create path but remains authoritative for
+the independent `GET` reads; `201 Created` describes the operation boundary and
+promises no permanent retention.
+
+**Classification.**
+
+```text
+PRODUCT DEFECT — CREATE-RESPONSE CONTRACT MISMATCH
+Severity: MEDIUM
+```
+
+Confirmed impact: inaccurate create-response metadata; human/canonical reason
+mismatch that would be visible verbatim on `/exports`; false total failure —
+HTTP `500` after a fully created export — when the same secondary scan raises a
+non-ignorable `OSError`; and a duplicate-create risk that follows from that
+false failure.
+
+Explicitly **not** found: application-caused data loss, overwrite, incorrect
+export bytes, source database mutation, or privacy exposure. A file removed by
+an injected external actor after the creator returned is **not** treated as
+application data loss.
+
+**Adjacent findings, deliberately separated and not resolved by `CR-006`:**
+
+1. The creator's own post-write `stat` at `backend/app/services/export.py:266`
+   sits outside the `try` that maps `OSError` to `ExportError`, so a failure
+   there escapes as a raw `OSError`, the endpoint returns a generic `500`, and a
+   complete export remains on disk unreported. The fallback is unreachable on
+   this path. `C3-II-B2` must carry a verification test for it; whether the
+   endpoint's error mapping changes is not decided.
+2. `GET /api/exports` and `GET /api/exports/status` inherit the same best-effort
+   listing: a per-file `stat` failure silently omits a real export and reports
+   `export_count: 0` / `latest_export: null`, and a directory `iterdir` failure
+   makes both return `500`. Their contract is **unchanged** by this decision.
+
+**Boundaries preserved.** `CR-005`, `R4`, `CR-009` and `C3-II-B1` are not
+reopened; the export manifest reason and export schema version are unchanged; no
+migration and no production change was made; `CR-004` is untouched and
+`C3-II-B3` stays blocked. `C3-II-B2` is authorized only after the `CR-006`
+decision pull request merges and is **not implemented**. The four-node gate
+scope in §1 is unchanged and stays closed; this is still not a fifth backend
+baseline failure. Full diagnostic matrix:
+`docs/decisions/0014-json-export-create-confirmation-semantics.md`.

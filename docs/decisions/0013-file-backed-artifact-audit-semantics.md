@@ -29,10 +29,16 @@ only the first runtime slice after this documentation pull request merges.
 > PR #163 — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`,
 > merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged
 > `2026-08-01T05:30:38Z` — and is `DONE — MERGED AND EXACT-HEAD VERIFIED`.
-> `C3-II-B2` and `C3-II-B3` are still blocked by `CR-006` and `CR-004`, both of
-> which remain `needs evidence`; C3 is still incomplete, C4 is still inactive,
-> and product release readiness is still not claimed. Current authority:
-> `state/current-focus.md`.
+> `CR-006` has since been resolved and **accepted** in
+> `docs/decisions/0014-json-export-create-confirmation-semantics.md`, so
+> `C3-II-B2` is now
+> `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED`; its scope
+> is `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
+> coverage*, and nothing in the accepted decision below — including the
+> reserved `export.created` vocabulary and metadata keys — is changed by it.
+> `C3-II-B3` is still blocked by `CR-004`, which remains `needs evidence`; C3 is
+> still incomplete, C4 is still inactive, and product release readiness is still
+> not claimed. Current authority: `state/current-focus.md`.
 
 ## Context
 
@@ -592,6 +598,12 @@ BLOCKED BY CR-006 — NOT AUTHORIZED
 It may reuse the accepted ledger only after `CR-006` determines export
 create-response fallback reachability and accepted confirmation semantics.
 This ADR neither resolves nor implements `CR-006`.
+
+> **Superseded status, 2026-08-01 — the scope above is unchanged.** `CR-006` is
+> now `accepted` (ADR 0014), so this slice is
+> `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED`. Full
+> scope: `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
+> coverage*.
 
 ### C3-II-B3 - Manual backup AuditLog coverage
 

@@ -62,7 +62,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` remains a `needs evidence` row; it is not an implementation slice, and its evidence-only diagnostic is the next authorized task. `CR-004` remains a `needs evidence` row and inactive. C3-I, C3-II-A and C3-II-B1 are merged and closed; C3 remains incomplete. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted, and `C3-II-B1 — Durable ledger and report-document AuditLog coverage` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #163, final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. `C3-II-B2` remains blocked by CR-006, and `C3-II-B3` remains blocked by CR-004. C4 remains inactive. Product release readiness is not claimed.
+`CR-006` is **accepted**: the evidence-only diagnostic is complete, the create-response fallback is confirmed reachable in production-equivalent behavior, and the confirmation contract is decided in `docs/decisions/0014-json-export-create-confirmation-semantics.md`. `CR-004` remains a `needs evidence` row and inactive. C3-I, C3-II-A and C3-II-B1 are merged and closed; C3 remains incomplete. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted, and `C3-II-B1 — Durable ledger and report-document AuditLog coverage` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #163, final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. `C3-II-B2` is `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED`, and `C3-II-B3` remains blocked by CR-004. C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -524,7 +524,7 @@ Non-goals: onboarding mutations, Alerts mutations, Purchases mutations, producti
 - Backend baseline correction gate: **DONE** — all four accepted gate failures are closed on `main`
 - Merged `main` backend baseline: **GREEN** — `562 collected, 562 passed, 0 failed, 0 skipped`
 - **No active runtime implementation slice at the time this window closed.** *(Superseded: the `C1` window then ran and completed — `CR-007` merged as PR #148 and `C1-I` merged as PR #149. The current implementation state is section 3: no runtime implementation is active in PR #150, and `C2-I` becomes the only authorized runtime slice after PR #150 merges.)* No future PR number is assigned.
-- `CR-006 — Investigate export create-response fallback confirmation semantics`: **`needs evidence`**, non-blocking, **not activated** — see the `CR-006` subsection below
+- `CR-006 — Investigate export create-response fallback confirmation semantics`: **`needs evidence`**, non-blocking, **not activated** — see the `CR-006` subsection below. *(Superseded 2026-08-01: `CR-006` is now `accepted`; the decision is `docs/decisions/0014-json-export-create-confirmation-semantics.md` and the completed evidence is `docs/backend-baseline-failure-triage.md` §17.5.)*
 
 ## R3 closure record
 
@@ -674,7 +674,17 @@ The merged slice involved no frontend production change, no database migration, 
 
 **No active runtime implementation slice is selected here.** Selecting the next slice requires a separate authorized task. No future PR number is assigned.
 
-### CR-006 — export create-response fallback — NEEDS EVIDENCE, not authorized
+### HISTORICAL — SUPERSEDED — CR-006 — export create-response fallback — NEEDS EVIDENCE, not authorized
+
+> **Superseded 2026-08-01.** This subsection records the `CR-006` state at `R4`
+> closure and is preserved as that record. The diagnostic has since been
+> executed: the fallback **is** reachable in production-equivalent behavior,
+> `CR-006` is **accepted**, and the classification is `PRODUCT DEFECT —
+> CREATE-RESPONSE CONTRACT MISMATCH`, severity `MEDIUM`. The current contract is
+> `docs/decisions/0014-json-export-create-confirmation-semantics.md`, the
+> completed evidence is `docs/backend-baseline-failure-triage.md` §17.5, and the
+> authorized implementation is § *C3-II-B2 — JSON export AuditLog coverage*
+> above. Do not read the paragraphs below as open questions.
 
 `CR-006 — Investigate export create-response fallback confirmation semantics` is recorded as a **`needs evidence`** row in `state/change-requests.md`. It is **non-blocking**, is **not an active implementation slice**, and **its implementation is not authorized**.
 
@@ -1672,10 +1682,10 @@ C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-009 — ACCEPTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
+C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
-CR-006 diagnostic — ACTIVE NEXT EVIDENCE TASK
 ```
 
 `C3-I` merged as PR #159: final reviewed head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`. Its exact evidence attribution is recorded in `docs/audit-log.md` § 15. The read contract stays unchanged: one `GET /api/audit-logs`, `actor_type` rather than `source`, safe backend-owned `display_summary`, no raw summary or metadata, and a read-only `/settings/audit-log` workspace.
@@ -1803,12 +1813,98 @@ transaction framework is authorized.
 #### C3-II-B2 — JSON export AuditLog coverage
 
 ```text
-BLOCKED BY CR-006 — NOT AUTHORIZED
+AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
 ```
 
-Do not implement or resolve CR-006 here. Export may reuse the accepted ledger
-only after the existing fallback-reachability and confirmation-semantics
-evidence gate is resolved.
+`CR-006` is resolved and accepted in
+`docs/decisions/0014-json-export-create-confirmation-semantics.md`. The
+create-response fallback is **reachable in production-equivalent behavior**, and
+when it runs it returns the human manifest reason where `CR-005` requires the
+canonical filename-derived slug — classified `PRODUCT DEFECT — CREATE-RESPONSE
+CONTRACT MISMATCH`, severity `MEDIUM`. `C3-II-B2` is therefore authorized as
+**one bounded implementation pull request**, to begin only after the `CR-006`
+decision pull request is merged and only from `origin/main`. It is **not
+implemented**, and no implementation PR number is assigned.
+
+**Scope.** Only the following:
+
+- reuse of the existing `artifact_audit_operations` ledger — **no new
+  migration**;
+- `artifact_kind = json_export`;
+- `audit_action = export.created`;
+- the exact final safe primary filename as the ledger identity, with **no
+  companion filename** (an export is a single file, unlike the
+  report-document pair);
+- a `prepared` ledger row committed **before** the export write;
+- active-ledger collision protection during final filename reservation, so
+  `_unique_export_path` also treats an active ledger identity as taken;
+- one bounded JSON-export pre-create reconciliation pass;
+- JSON-export startup reconciliation, reusing the existing post-migration hook;
+- direct exact-path export verification (§ *Export verification contract*
+  below);
+- exactly-once finalization through the existing B1 finalizer infrastructure;
+- the `export.created` AuditLog event;
+- additive create-response fields `audit_status` and `audit_message`;
+- the additive status field `pending_audit_count`;
+- frontend success-plus-warning presentation on `/exports`, reusing the B1
+  pattern;
+- **the accepted `CR-006` create-response correction** — see below;
+- directly affected backend and frontend tests;
+- an exact-head export smoke.
+
+**The accepted `CR-006` create-response correction.** `POST /api/exports` must
+build its response only from the exact `ExportResult` returned by
+`create_json_export`: `result.export_path.name`, `result.export_path`,
+`result.created_at`, `result.size_bytes`, `result.entity_counts`, and a `reason`
+derived from the **exact final filename** through the same canonical filename
+parsing contract list and status use. The directory-wide `list_export_files`
+re-scan is removed from the create path, and `ExportResult.reason` — the human
+manifest reason — must never become the API `reason`. `list_export_files`
+remains authoritative for the independent `GET` reads, whose contract is
+unchanged.
+
+**Export verification contract.** The verifier must, at minimum:
+
+1. validate the ledger filename against the safe-name rules;
+2. resolve the filename inside the configured export directory;
+3. confirm the exact path exists;
+4. confirm the exact path is a regular file;
+5. reject a symlink that escapes the export directory;
+6. match the filename against the accepted export filename grammar;
+7. parse the filename reason to the canonical reason;
+8. confirm the uniqueness suffix is not part of the parsed reason;
+9. compare the file size with the creator/ledger-known result where applicable;
+10. parse the JSON;
+11. confirm the top-level shape is exactly compatible with the existing export
+    contract (`manifest` and `data` only);
+12. confirm `manifest.export_schema_version` is supported;
+13. confirm `manifest.source` is `cosmetic-workshop-os`;
+14. treat `manifest.reason` as a **human** reason and **not** require it to
+    equal the canonical slug;
+15. confirm the manifest table counts agree with the exported data;
+16. never rewrite the export;
+17. never compare historical exported data with the current database state.
+
+The verifier classifies exactly as B1 does — `valid`, `definitely absent`, or
+`ambiguous` — under the same artifact-primary rules. No content hashing and no
+new manifest field is authorized; current evidence does not prove either
+necessary.
+
+**Adjacent path that B2 must cover with a test.** The creator's own post-write
+`stat` failure — `backend/app/services/export.py:266`, outside the `try` that
+maps `OSError` to `ExportError` — leaves a complete export on disk while the
+endpoint returns a generic `500`. `C3-II-B2` must carry a verification test for
+that path because it is exactly what reconciliation exists for. Whether the
+endpoint's own error mapping should change is **not** decided by `CR-006` and is
+**not** authorized here.
+
+**Non-goals.** `C3-II-B2` must not: implement manual-backup AuditLog coverage;
+resolve `CR-004`; create migration `0021`; add a second ledger; add a generic
+outbox; add a background worker; scan arbitrary legacy exports; backfill
+existing exports; rename or rewrite exports; change the manifest reason; change
+the export schema version; store a filename or reason in AuditLog; expose ledger
+IDs in the Journal; add export download or delete; implement Restore; activate
+C4; or claim release readiness.
 
 #### C3-II-B3 — Manual backup AuditLog coverage
 
