@@ -1,6 +1,9 @@
 # Handoff
 
-## C3-II-B1 handoff — implemented on a PR branch, not merged (2026-07-31)
+## C3-II-B1 closure handoff — merged and exact-head verified (2026-08-01)
+
+> This is the single current authoritative B1 lifecycle conclusion. Every
+> earlier B1 branch-head section in this file is historical and superseded.
 
 ```text
 C1 — COMPLETED
@@ -8,7 +11,7 @@ C2 — COMPLETED
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-009 — ACCEPTED
-C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
@@ -16,9 +19,52 @@ C4 — INACTIVE — NEEDS PRODUCT DECISION
 Product release readiness — NOT CLAIMED
 ```
 
-Branch `claude/c3-ii-b1-report-document-audit`, based on verified
-`origin/main` = `385873fa9f393f9dc4dcac14e7bc79e0da12c5d1`. The PR is open,
-non-draft, unmerged, with auto-merge disabled. Do not merge it without review.
+Verified merged facts:
+
+```text
+PR:                   #163
+Head branch:          claude/c3-ii-b1-report-document-audit
+Final reviewed head:  afd65fd2878fa02a0d4dc4963812c80644a4e787
+Merge commit:         ef0297e41a731f082a2a21a46b361aa9aac36cfa
+Base:                 main
+State:                MERGED (2026-08-01T05:30:38Z)
+```
+
+The final reviewed head is an ancestor of the merge commit, and the merge
+commit is an ancestor of `origin/main`. The branch was based on verified
+`origin/main` = `385873fa9f393f9dc4dcac14e7bc79e0da12c5d1`.
+
+**Accepted final PR #163 evidence** — merged-PR evidence, not re-executed in
+the closure documentation task:
+
+```text
+Complete backend + launcher suite:   1550 passed / 0 failed
+Backend collection:                  1533
+Original backend baseline node IDs:  1376 preserved / 0 missing
+Added backend tests:                 157
+Complete launcher suite:             17 passed / 0 failed
+Frontend:                            all 19 test:* scripts passed
+Frontend build:                      PASS
+Final exact-head launcher smoke:     PASS on afd65fd
+Final audit:                         no unresolved P0 or P1 findings
+```
+
+`P0 — none. P1 — none remaining` (the one P1, the broad create-path catch, was
+fixed in `afd65fd`). `P2 — documented and non-blocking`. The focused exact-head
+launcher smoke is not release smoke.
+
+**Production behavior delivered on merged `main`:** creating a report document
+now writes exactly one `report_document.created` Journal event through the
+bounded `artifact_audit_operations` ledger; a verified document/sidecar pair is
+authoritative and survives a Journal failure as HTTP `201` with
+`audit_status: pending` and a separate Russian warning; bounded reconciliation
+runs after migrations at startup and once before the next create.
+
+**Next authorized work: the `CR-006` evidence-only diagnostic** of JSON export
+create-response fallback reachability and the required product contract —
+diagnostic only, no export AuditLog implementation, no `C3-II-B2`
+authorization, no migration, no production change. `CR-006` and `CR-004` both
+remain `needs evidence`.
 
 What now exists in the runtime: migration `0020_artifact_audit_operations`; a
 bounded ledger repository over it; a pure operation/filename identity domain
@@ -47,13 +93,14 @@ This is compatible: parameters, the optional caller-owned connection and the
 insert are unchanged, and callers that ignore the value behave exactly as
 before. Do not add a second AuditLog insertion API.
 
-Evidence executed on the final implementation tree: complete suite
+Evidence executed on the final implementation head `afd65fd`: complete suite
 `1550 passed / 0 failed` (backend and launcher together), backend collection
 `1533` with all `1376` baseline node IDs preserved and `157` added; complete
 launcher `17 passed / 0 failed`; all `19` frontend `test:*` scripts pass;
-frontend build `PASS`. Earlier per-head counts in this file are superseded.
+frontend build `PASS`. Earlier per-head counts in this file are historical and
+superseded per-head evidence.
 
-**Review findings across the PR heads, all corrected on the branch:**
+**Review findings across the PR heads, all corrected before merge:**
 
 1. **User-mode database continuity.** `start_backend_process` gave the uvicorn
    child only `PYTHONPATH`, so the API could resolve `get_database_config()` to

@@ -126,7 +126,7 @@ The backend validates that the document ID is known from metadata, the metadata 
 
 ## CR-009 B1 durable AuditLog contract
 
-Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED** (C3-II-B1).
+Status: **DONE — MERGED AND EXACT-HEAD VERIFIED** (C3-II-B1, PR #163).
 
 Creating a report document now writes exactly one `report_document.created`
 Journal event. The document and its metadata sidecar remain the authoritative
@@ -212,9 +212,11 @@ manual-backup filename semantics are outside B1 and remain governed by CR-005.
 No filename, path or reason is copied into AuditLog or exposed through `GET
 /api/audit-logs`.
 
-## PR — C3-II-B1 durable report-document AuditLog coverage
+## PR #163 — C3-II-B1 durable report-document AuditLog coverage
 
-Status: **IMPLEMENTED ON PR BRANCH — NOT MERGED**.
+Status: **DONE — MERGED AND EXACT-HEAD VERIFIED** — final reviewed head
+`afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit
+`ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`.
 
 - Added migration `0020_artifact_audit_operations`: one bounded ledger table for
   the three CR-009 artifact operations, with `CHECK`-pinned status, artifact-kind

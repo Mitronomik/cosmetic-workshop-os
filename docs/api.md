@@ -1039,11 +1039,11 @@ or ledger row is created, and the endpoint returns HTTP `500`:
 Existing request-validation errors are unchanged and still take precedence: an
 unsupported `format` is still rejected with `422` before anything is prepared.
 
-### CR-009 future create-result contract — B1 implemented; B2 and B3 not authorized
+### CR-009 create-result contract — B1 merged; B2 and B3 not authorized
 
 `CR-009` accepts one additive API contract for user-created manual backups,
 JSON exports and report documents. C3-II-B1 implements it for report documents
-only, as documented above. The manual-backup and JSON-export response shapes
+only, as documented above, and is merged into `main` through PR #163. The manual-backup and JSON-export response shapes
 remain unchanged until their separately authorized runtime slice implements the
 addition.
 
@@ -1376,10 +1376,11 @@ Atomic persistence failures return:
 HTTP status is `500`. Existing validation `422`, database-not-initialized `409`, and successful response model remain unchanged.
 
 `CR-009` has since accepted the durable artifact-primary, partial-success,
-bounded-ledger and reconciliation contract. Only report-document slice
-C3-II-B1 is authorized after the CR-009 documentation PR merges; export and
-backup slices remain blocked by CR-006 and CR-004. Nothing in the CR-009
-documentation PR changes these runtime endpoints or response schemas.
+bounded-ledger and reconciliation contract. Its report-document slice
+C3-II-B1 merged as PR #163 (merge commit
+`ef0297e41a731f082a2a21a46b361aa9aac36cfa`); export and backup slices remain
+blocked by CR-006 and CR-004. Neither the CR-009 documentation PR nor the B1
+closure documentation PR changes these runtime endpoints or response schemas.
 
 #### Validation responses
 

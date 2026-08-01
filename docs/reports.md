@@ -287,18 +287,20 @@ PR89/PR90 add an explicit document-export path for reports, and PR92 adds PDF ge
 
 ## CR-009 report-document AuditLog boundary
 
-`CR-009` is accepted; its report-document slice `C3-II-B1` is implemented on a
-PR branch and not merged. A generated Markdown/PDF document
+`CR-009` is accepted; its report-document slice `C3-II-B1` is
+`DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #163. A generated Markdown/PDF document
 and its metadata JSON remain one artifact unit. Existing compensation for a
 document-file or metadata-file creation failure remains valid. Once both files
 are complete, verified and agreeing, the artifact is authoritative and is
 never deleted merely because AuditLog finalization failed.
 
 ```text
-C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
-B1 delivered the `0020_artifact_audit_operations` migration, the bounded ledger/finalizer, startup
+B1 merged as PR #163 (final reviewed head
+`afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit
+`ef0297e41a731f082a2a21a46b361aa9aac36cfa`) and delivered the `0020_artifact_audit_operations` migration, the bounded ledger/finalizer, startup
 reconciliation after migrations, report-document pre-create reconciliation,
 `report_document.created`, additive create fields `audit_status` and
 `audit_message`, additive status field `pending_audit_count`, and frontend

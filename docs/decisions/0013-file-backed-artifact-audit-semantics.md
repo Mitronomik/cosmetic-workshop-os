@@ -22,6 +22,18 @@ only the first runtime slice after this documentation pull request merges.
 `C3` remains **incomplete**. `C4` remains
 `INACTIVE — NEEDS PRODUCT DECISION`. Product release readiness is not claimed.
 
+> **Current lifecycle pointer — not part of the accepted decision.** The table
+> above records the slice authorization as it stood when this ADR was accepted
+> on 2026-07-30, and the accepted product decision below is unchanged and is
+> not reopened. Since then `C3-II-B1` has been implemented and merged through
+> PR #163 — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`,
+> merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged
+> `2026-08-01T05:30:38Z` — and is `DONE — MERGED AND EXACT-HEAD VERIFIED`.
+> `C3-II-B2` and `C3-II-B3` are still blocked by `CR-006` and `CR-004`, both of
+> which remain `needs evidence`; C3 is still incomplete, C4 is still inactive,
+> and product release readiness is still not claimed. Current authority:
+> `state/current-focus.md`.
+
 ## Context
 
 The scoped operations create durable filesystem artifacts outside SQLite:
