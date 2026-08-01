@@ -67,14 +67,15 @@ Updated `2026-07-30`. This block records only the completion-window status; unre
   - `C3-II-A — Atomic workshop-profile AuditLog coverage`: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #161, final reviewed and smoke-tested head `6c327630d0e4cca3c566253bf9f8224aaaa33172`, merge commit `3fec160f08aa7e775aa3e7ea650e570bf48955ad`, merged `2026-07-30T08:11:41Z`.
   - `CR-009 — Durable file-backed artifact AuditLog semantics`: **`ACCEPTED`**. Contract: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
   - `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #163, final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`, final exact-head launcher smoke `PASS`, complete backend + launcher suite `1550 passed / 0 failed`, no unresolved P0 or P1 findings.
-  - `C3-II-B2 — JSON export AuditLog coverage`: **`BLOCKED BY CR-006 — NOT AUTHORIZED`**.
+  - `CR-006 — JSON export create-response confirmation semantics`: **`ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED`**. Contract: `docs/decisions/0014-json-export-create-confirmation-semantics.md`. The create-response fallback is reachable in production-equivalent behavior and returns the human manifest reason where `CR-005` requires the canonical filename-derived slug; classified `PRODUCT DEFECT — CREATE-RESPONSE CONTRACT MISMATCH`, severity `MEDIUM`, with no data loss, overwrite or incorrect export bytes.
+  - `C3-II-B2 — JSON export AuditLog coverage`: **`AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED`**. One bounded implementation PR, reusing the existing `artifact_audit_operations` ledger with no new migration, and carrying the accepted `CR-006` create-response correction. Full scope: `docs/implementation-plan.md` § *C3-II-B2*.
   - `C3-II-B3 — Manual backup AuditLog coverage`: **`BLOCKED BY CR-004 — NOT AUTHORIZED`**.
   - The merged read API still exposes `actor_type` / `actor_label` rather than `source`, and only backend-owned safe `display_summary`; raw summary and metadata remain prohibited. Durable contract: `docs/audit-log.md`.
 - **C4 — Restore и recovery: `INACTIVE`.** Still `NEEDS PRODUCT DECISION`.
 
 `C2-III` was a planning umbrella; it was subdivided into exactly the two runtime slices above, and both are merged. **C2 is COMPLETED**: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed here.
 
-No implementation PR remains open. C3-I, C3-II-A and C3-II-B1 are closed. The broader C3 obligation remains incomplete: CR-009 is accepted and implemented for report documents only, and B2/B3 remain blocked by CR-006/CR-004, both of which remain `needs evidence`. The next authorized task is the evidence-only CR-006 diagnostic; C3-II-B2 implementation is not authorized. C4 stays inactive. Product release readiness is **not** claimed.
+No implementation PR remains open. C3-I, C3-II-A and C3-II-B1 are closed. The broader C3 obligation remains incomplete: CR-009 is accepted and implemented for report documents only. `CR-006` is now accepted, so the next authorized runtime slice is `C3-II-B2`, which begins only after the CR-006 decision PR merges and is not implemented. `C3-II-B3` remains blocked by `CR-004`, which remains `needs evidence`. C4 stays inactive. Product release readiness is **not** claimed.
 
 ## 2. Главный продуктовый принцип
 

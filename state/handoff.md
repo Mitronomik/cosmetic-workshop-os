@@ -1,9 +1,102 @@
 # Handoff
 
+## CR-006 decision handoff — accepted; C3-II-B2 authorized after merge (2026-08-01)
+
+> This is the single current authoritative lifecycle conclusion. The
+> `C3-II-B1` closure handoff below remains accurate for B1 itself, but its
+> closing line "B2 and B3 remain unauthorized" is superseded by this section.
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-009 — ACCEPTED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
+C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
+C3 — INCOMPLETE
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+Verified predecessor: PR #164 `C3-II-B1 closure — Record PR #163 as merged and
+exact-head verified`, state `MERGED`, final reviewed head
+`117f8b08d509c8862930919ddfe497302f391ab2`, merge commit
+`1d4e90ccffb6f154882e685b09803f67f2f75ceb`, merged `2026-08-01T06:04:24Z`. The
+head is an ancestor of the merge commit, and the merge commit is `origin/main`.
+
+**The `CR-006` diagnostic is complete and the contract is decided.** It was
+executed against `1d4e90ccffb6f154882e685b09803f67f2f75ceb` through the real
+FastAPI route and the real `create_json_export`, with an isolated migrated
+SQLite database and an isolated export directory per scenario, and with faults
+injected only at named OS boundaries (`pathlib.Path.stat`,
+`pathlib.Path.iterdir`) and named module seams. **No production file was
+changed**; the harness lived outside the repository and was not committed.
+
+The fallback is **reachable in production-equivalent behavior** — a per-file
+`stat` failure on the exact created file during the endpoint's secondary
+`list_export_files(...)`, and a directory-entry race between `iterdir()` and
+that `stat`, both reach it while the export is present and correct on disk.
+When it runs, the response `reason` is the human manifest reason instead of the
+canonical filename-derived slug required by `CR-005`. The same redundant
+re-scan can also return HTTP `500` after a fully successful creation, and can
+match a foreign object that replaced the exact path.
+
+```text
+PRODUCT DEFECT — CREATE-RESPONSE CONTRACT MISMATCH
+Severity: MEDIUM
+```
+
+No application-caused data loss, overwrite, incorrect export bytes, source
+database mutation, or privacy exposure.
+
+The contract that must not be weakened by later work:
+
+- a successfully returned `ExportResult` is the authoritative create result, and
+  the endpoint must not re-scan the export directory to confirm it;
+- the create response is built only from that exact result;
+- the API `reason` is parsed from the exact final filename through the same
+  canonical parsing contract list and status use — `ExportResult.reason`, the
+  human manifest reason, is never the API reason;
+- `list_export_files` stays authoritative for the independent `GET` reads, whose
+  contract is unchanged;
+- `201 Created` describes the operation boundary and promises no permanent
+  retention; externally substituted content is never the application-created
+  artifact;
+- a creator that does not return successfully is never reported as success.
+
+**Next authorized work: `C3-II-B2` — one bounded JSON export AuditLog
+implementation pull request**, begun only after the `CR-006` decision pull
+request merges and only from `origin/main`. It reuses the existing
+`artifact_audit_operations` ledger with **no new migration**, uses
+`artifact_kind = json_export` and `audit_action = export.created` with the exact
+final safe primary filename and no companion filename, and carries the accepted
+`CR-006` create-response correction so the export create path is touched exactly
+once. Full scope, verification contract and non-goals:
+`docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog coverage*.
+Event vocabulary and metadata keys are already fixed by ADR 0013 and are
+unchanged.
+
+**Adjacent findings — do not fold them into `C3-II-B2`'s decision surface.** The
+creator's own post-write `stat` at `backend/app/services/export.py:266` escapes
+as a raw `OSError`, so a complete export can remain on disk while the endpoint
+returns a generic `500`; `C3-II-B2` must carry a verification test for that
+path, but whether the endpoint's error mapping changes is **not decided**. `GET`
+list and status behavior under the same read failures is likewise recorded and
+**unchanged**.
+
+`CR-005`, `R4`, `CR-009` and `C3-II-B1` are **not reopened**. `CR-004` remains
+`needs evidence`, so `C3-II-B3` stays blocked. C3 remains incomplete, C4 remains
+inactive, and **product release readiness is not claimed**.
+
 ## C3-II-B1 closure handoff — merged and exact-head verified (2026-08-01)
 
-> This is the single current authoritative B1 lifecycle conclusion. Every
-> earlier B1 branch-head section in this file is historical and superseded.
+> This is the authoritative B1 lifecycle conclusion. Every earlier B1
+> branch-head section in this file is historical and superseded. Its `CR-006`
+> and `C3-II-B2` lines below record the state **before** the CR-006 decision and
+> are superseded by the CR-006 handoff above.
 
 ```text
 C1 — COMPLETED
@@ -60,11 +153,10 @@ authoritative and survives a Journal failure as HTTP `201` with
 `audit_status: pending` and a separate Russian warning; bounded reconciliation
 runs after migrations at startup and once before the next create.
 
-**Next authorized work: the `CR-006` evidence-only diagnostic** of JSON export
-create-response fallback reachability and the required product contract —
-diagnostic only, no export AuditLog implementation, no `C3-II-B2`
-authorization, no migration, no production change. `CR-006` and `CR-004` both
-remain `needs evidence`.
+**Next authorized work at the time of this B1 closure was the `CR-006`
+evidence-only diagnostic.** That diagnostic has since been executed and
+`CR-006` is now `accepted`; see the CR-006 decision handoff at the top of this
+file for the current next step. `CR-004` still remains `needs evidence`.
 
 What now exists in the runtime: migration `0020_artifact_audit_operations`; a
 bounded ledger repository over it; a pure operation/filename identity domain
@@ -125,8 +217,11 @@ had been failing on untouched baseline `385873f` because its local
 `ALLOWED_TABLES` copy was frozen near the `0011` schema. It now uses the shared
 `app.tests.table_guards`, and the complete launcher suite is green.
 
-B2 and B3 remain unauthorized. Do not reuse the ledger for `json_export` or
-`manual_backup` until CR-006 and CR-004 are resolved respectively.
+> **Superseded.** At B1 closure, B2 and B3 were both unauthorized. `CR-006` has
+> since been resolved and accepted, so `C3-II-B2` is now
+> `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED` and may
+> reuse the ledger for `json_export`. `C3-II-B3` stays unauthorized: do not
+> reuse the ledger for `manual_backup` until `CR-004` is resolved.
 
 ## HISTORICAL — SUPERSEDED — CR-009 decision handoff (2026-07-30)
 

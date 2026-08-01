@@ -37,7 +37,7 @@ C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-009 — ACCEPTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
 C4 — INACTIVE — NEEDS PRODUCT DECISION
@@ -1072,11 +1072,11 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 
 CR-009 — ACCEPTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```
 
-`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document runtime slice B1 merged as PR #163, so report-document creation is audited on merged main; export and backup remain blocked by their separate evidence requests.
+`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document runtime slice B1 merged as PR #163, so report-document creation is audited on merged main. `CR-006` is now accepted, so B2 is authorized after its decision PR merges but is **not implemented** — JSON export creation is still **not** audited on merged main. Manual backup remains blocked by `CR-004`.
 
 ---
 
@@ -1503,7 +1503,7 @@ migrations, and must not depend on a ledger table that may not yet exist.
 
 ```text
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```
 
@@ -1528,9 +1528,30 @@ exactly-once behavior; one concurrent caller resolves the already-audited
 result; AuditLog insert failure leaves the operation unresolved; and ledger
 update failure rolls the insert back.
 
-C3-II-B2 may reuse the ledger only after CR-006 resolves export fallback
-reachability and confirmation semantics. C3-II-B3 may reuse it only after
-CR-004 resolves SQLite backup consistency behavior. CR-004 and CR-006 remain
-open and unchanged. C3 remains incomplete; C4, Restore, packaging,
-installation, update and release-candidate work remain inactive; product
-release readiness is not claimed.
+`CR-006` is now **accepted** — the JSON export create-response fallback is
+confirmed reachable in production-equivalent behavior, and the confirmation
+contract is decided in
+`docs/decisions/0014-json-export-create-confirmation-semantics.md`. `C3-II-B2`
+may therefore reuse the ledger, as **one bounded implementation pull request**
+beginning only after the `CR-006` decision pull request merges. It is **not
+implemented** and no implementation PR number is assigned.
+
+For B2, `pending_audit_count` on `GET /api/exports/status` counts exactly
+`json_export` operations in `prepared` or `pending_audit`, excluding `audited`
+and `abandoned`; that GET reads but never reconciles it. The `export.created`
+event, its `entity_type = export_file`, its `entity_id = operation_id`, its
+`actor_type = user`, its persisted summary `JSON export created`, its display
+summary `Экспорт создан` and its exact allowed metadata keys — `operation_id`,
+`export_schema_version`, `reconciled_after_failure` — are already fixed by
+ADR 0013 § *Audit privacy and vocabulary* and are **unchanged** by `CR-006`. No
+export filename, path, human reason, canonical reason, manifest, entity count,
+exported data, database filename or path, request payload, response payload,
+client data or arbitrary user text may reach AuditLog, and the action is not
+added to the suffix allowlist. `C3-II-B2` scope, verification contract and
+non-goals: `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
+coverage*.
+
+`C3-II-B3` may reuse the ledger only after CR-004 resolves SQLite backup
+consistency behavior; `CR-004` remains open and unchanged. C3 remains
+incomplete; C4, Restore, packaging, installation, update and release-candidate
+work remain inactive; product release readiness is not claimed.

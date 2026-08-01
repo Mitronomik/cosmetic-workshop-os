@@ -687,6 +687,57 @@ Safety guarantees:
 - does not implement import, restore, download, delete, CSV/XLSX, PDF, cloud export, scheduled export, or UI behavior;
 - does not mutate recipes, clients, orders, stock, lots, packaging, production, alerts, purchase suggestions, settings, or audit records.
 
+### Export create-response confirmation semantics (`CR-006`, decided 2026-08-01)
+
+`CR-006` is **accepted**. Durable decision:
+`docs/decisions/0014-json-export-create-confirmation-semantics.md`. Product
+summary: `docs/export.md` § *Create-response confirmation contract*.
+
+**Accepted contract for `POST /api/exports`:**
+
+| Response field | Authoritative source |
+|---|---|
+| `export.filename` | the exact final filename the create operation produced |
+| `export.path` | the exact final path the create operation produced |
+| `export.created_at` | the create operation's own timestamp |
+| `export.size_bytes` | the size the create operation measured on the finished file |
+| `export.reason` | the **canonical reason parsed from that exact final filename**, through the same parsing contract `GET /api/exports` and `GET /api/exports/status` use |
+| `entity_counts` | the create operation's own counts |
+
+- A successfully completed create operation is **authoritative**. The endpoint
+  must not re-scan the export directory to decide whether the operation it just
+  performed succeeded.
+- The **normalized human reason** preserved in the export JSON manifest must
+  **never** be returned as the API `reason`. That would violate the `CR-005`
+  contract documented above.
+- `HTTP 201 Created` means the application completed creation at the operation
+  boundary. It does **not** promise that an external process never removes or
+  replaces the file afterwards; `GET /api/exports` and
+  `GET /api/exports/status` remain the truthful current-state surface.
+- If the create operation does not complete successfully, the endpoint must not
+  synthesize success. Its existing `404` and `409` error responses are
+  unchanged.
+- `GET /api/exports` and `GET /api/exports/status` keep their existing
+  best-effort listing contract; `CR-006` does not change it.
+
+**Diagnostic status.** The defensive fallback in the current implementation is
+confirmed reachable in production-equivalent behavior, and when it runs it
+returns the human manifest reason. Classification: `PRODUCT DEFECT —
+CREATE-RESPONSE CONTRACT MISMATCH`, severity `MEDIUM`; no data loss, overwrite,
+incorrect export bytes, or privacy exposure was found. **The correction is not
+implemented**; it is carried by `C3-II-B2`, which is `AUTHORIZED AFTER THE
+CR-006 DECISION PR MERGES — NOT IMPLEMENTED`. The response shape above is the
+shape merged `main` already documents — `CR-006` adds no field and changes no
+schema.
+
+**Future `C3-II-B2` additive fields, recorded and not implemented.** Under the
+`CR-009` contract already accepted in ADR 0013, `C3-II-B2` will add
+`audit_status` (`recorded` | `pending`) and `audit_message` to
+`POST /api/exports`, and `pending_audit_count` to `GET /api/exports/status`,
+counting exactly the ledger rows with `artifact_kind = json_export` and
+`status IN (prepared, pending_audit)`. That status GET stays read-only and
+reconciles nothing. No other export response field is added, renamed or removed.
+
 ## Import drafts API (PR77)
 
 CSV/XLSX import uses safe drafts first: upload → parse → preview → validation → explicit confirmation → apply for supported safe targets. Upload/preview still does not mutate domain tables; applying requires the dedicated apply endpoint and confirmation flags.
@@ -1123,9 +1174,12 @@ frontend presents the count only as a pending-Journal warning, not as failed
 document creation.
 
 The same accepted result semantics are reserved for JSON export and manual
-backup, but their runtime additions are not authorized: C3-II-B2 remains
-blocked by CR-006 and C3-II-B3 by CR-004. Durable contract:
-`docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
+backup. `C3-II-B2` is now `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES —
+NOT IMPLEMENTED`, so `audit_status` / `audit_message` on `POST /api/exports`
+and `pending_audit_count` on `GET /api/exports/status` are recorded but **not
+yet present**. `C3-II-B3` remains blocked by CR-004. Durable contracts:
+`docs/decisions/0013-file-backed-artifact-audit-semantics.md` and
+`docs/decisions/0014-json-export-create-confirmation-semantics.md`.
 
 ## Reports API
 

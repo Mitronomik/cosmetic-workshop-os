@@ -169,6 +169,72 @@ This contract applies to newly generated artifacts only. Existing export files m
 
 Legacy artifact listing remains **best-effort**. Filename, path, created-timestamp fallback, size, and list availability must be preserved even when an old filename contains an ambiguous legacy reason. Exact round-trip recovery is **not** claimed for legacy ambiguous filenames. Legacy export manifests remain readable and are not rewritten.
 
+## Create-response confirmation contract (CR-006, decided 2026-08-01)
+
+`CR-006` is **accepted**. The durable decision is
+`docs/decisions/0014-json-export-create-confirmation-semantics.md`; this section
+is the product-facing summary. It does **not** change `CR-005`, the manifest
+reason, or the export schema version.
+
+### What the diagnostic found
+
+The current `POST /api/exports` re-scans the whole export directory after
+`create_json_export` has already written and stat-ed the exact final file, then
+falls back to `ExportResult` when that exact-path lookup fails. Executed
+evidence against `1d4e90ccffb6f154882e685b09803f67f2f75ceb` shows:
+
+- the fallback is **reachable in production-equivalent behavior**, not only
+  through mocks — an ordinary per-file `stat` failure during the re-scan, or a
+  directory-entry race between `iterdir()` and that `stat`, reaches it while the
+  created export is present and correct on disk;
+- when it runs, the response `reason` is the **human manifest reason**
+  (`before-update ../unsafe`) instead of the canonical filename-derived slug
+  (`before_update_unsafe`) that `CR-005` requires — and the frontend renders an
+  unmapped API reason verbatim, so the wrong value would be visible on
+  `/exports`;
+- the same redundant re-scan can also turn a **fully successful** creation into
+  a generic HTTP `500` when the listing raises;
+- the re-scan can even match a **foreign** object that replaced the exact path
+  after creation, and report its size as the created export's size.
+
+Classification: **`PRODUCT DEFECT — CREATE-RESPONSE CONTRACT MISMATCH`**,
+severity **`MEDIUM`**. No data loss, overwrite, incorrect export bytes, source
+database mutation, or privacy exposure was found.
+
+### The decided contract
+
+1. **A successfully returned `ExportResult` is the authoritative result of the
+   create operation.** The endpoint must not re-scan the export directory to
+   decide whether the operation it just performed succeeded.
+2. **The create response is built only from that exact result** — the exact
+   final path and filename, the creator's timestamp, the creator's captured
+   size, and the creator's entity counts.
+3. **The API `reason` is the canonical reason parsed from the exact final
+   filename**, through the same filename parsing contract list and status use.
+   `ExportResult.reason` — the human manifest reason — must never be used as the
+   API reason.
+4. **`list_export_files` stays authoritative for the independent `GET` reads.**
+   It is not the confirmation mechanism for a `POST` that already returned an
+   exact result, and the `GET` contract is unchanged.
+5. **External disappearance does not retroactively falsify creation.** `201
+   Created` means the application completed creation at the operation boundary;
+   it does not promise that no external process ever removes or replaces the
+   file afterwards. The `GET` endpoints remain the truthful current-state
+   surface, and externally substituted content is never the
+   application-created artifact.
+6. **A creator that does not return successfully must never be reported as
+   success.** Post-write failures before a successful return keep their own
+   explicit error contract and are governed by the future `C3-II-B2`
+   verification and reconciliation contract.
+
+### What this decision does not change
+
+The manifest keeps the normalized human reason; the export schema version is
+unchanged; no sidecar, metadata table, second persisted reason, or new reason
+field is introduced; existing exports are never renamed or rewritten; and
+`CR-005` is not reopened. **No production code is changed by the decision
+itself** — the correction is carried by `C3-II-B2`.
+
 ## Exported entity groups
 
 The export service uses an explicit whitelist and skips whitelisted tables that do not exist in the current database. Current groups include:
@@ -227,12 +293,45 @@ or background retry.
 Runtime status:
 
 ```text
-C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
 ```
 
-The accepted bounded ledger may be reused for JSON exports only after CR-006
-determines the create-response fallback reachability and accepted confirmation
-semantics. CR-009 does not resolve or reactivate CR-006.
+`CR-006` is now resolved and accepted
+(`docs/decisions/0014-json-export-create-confirmation-semantics.md`), so the
+accepted bounded ledger may be reused for JSON exports. `C3-II-B2` is **one
+bounded implementation pull request** that begins only after the `CR-006`
+decision pull request merges; it is **not implemented** and no implementation PR
+number is assigned. It also carries the accepted `CR-006` create-response
+correction, so the export create path is touched exactly once. Its full scope,
+export verification contract and non-goals are in `docs/implementation-plan.md`
+§ *C3-II-B2 — JSON export AuditLog coverage*. `C3-II-B3` remains blocked by
+`CR-004`.
+
+Future `C3-II-B2` create response, recorded here and **not implemented**:
+
+```json
+{
+  "message": "Экспорт создан.",
+  "audit_status": "recorded",
+  "audit_message": null
+}
+```
+
+```json
+{
+  "message": "Экспорт создан.",
+  "audit_status": "pending",
+  "audit_message": "Экспорт создан, но запись в журнал действий пока не добавлена. Приложение повторит попытку при следующем запуске или перед созданием следующего экспорта."
+}
+```
+
+Every existing export metadata field stays present, and the response `reason`
+stays the canonical final-filename-derived reason. In the pending case the
+export remains available and the user must **not** repeat the create request.
+`GET /api/exports/status` additionally gains `pending_audit_count`, counting
+exactly the ledger rows with `artifact_kind = json_export` and
+`status IN (prepared, pending_audit)`; that GET stays read-only and performs no
+reconciliation.
 
 The future ledger `primary_filename` is an internal safe relative filename and
 may contain the canonical filename-derived reason segment already accepted by
