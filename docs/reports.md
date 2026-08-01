@@ -18,7 +18,7 @@ This is not advanced analytics and not an accounting module.
 
 - Reports are read-only.
 - Report endpoints do not mutate business records.
-- Report endpoints do not create audit logs.
+- Report endpoints do not create audit logs. (Creating a report *document* is a separate explicit POST under `/api/report-documents`, and that one does write a `report_document.created` entry — see `docs/report-documents.md`.)
 - Report endpoints do not create backup or export files.
 - Report endpoints do not regenerate alerts or purchase suggestions.
 - Report endpoints do not create report persistence tables.
@@ -238,7 +238,7 @@ Previously generated documents remain immutable and are never rewritten, regener
 
 ### 10. Lifecycle
 
-`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3-I and C3-II-A are `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159 and PR #161. CR-009 is accepted and not implemented; only report-document slice B1 is authorized after this documentation PR merges, export B2 remains blocked by CR-006, and backup B3 remains blocked by CR-004. C3 remains incomplete. Contracts: `docs/audit-log.md` and ADR 0013. C4 remains inactive. Product release readiness is not claimed.
+`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3-I and C3-II-A are `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159 and PR #161. CR-009 is accepted; report-document slice B1 is implemented on a PR branch and not merged, export B2 remains blocked by CR-006, and backup B3 remains blocked by CR-004. C3 remains incomplete. Contracts: `docs/audit-log.md` and ADR 0013. C4 remains inactive. Product release readiness is not claimed.
 
 ## Incomplete data
 
@@ -287,18 +287,18 @@ PR89/PR90 add an explicit document-export path for reports, and PR92 adds PDF ge
 
 ## CR-009 report-document AuditLog boundary
 
-`CR-009` is accepted and not implemented. A generated Markdown/PDF document
+`CR-009` is accepted; its report-document slice `C3-II-B1` is implemented on a
+PR branch and not merged. A generated Markdown/PDF document
 and its metadata JSON remain one artifact unit. Existing compensation for a
 document-file or metadata-file creation failure remains valid. Once both files
 are complete, verified and agreeing, the artifact is authoritative and is
 never deleted merely because AuditLog finalization failed.
 
 ```text
-C3-II-B1 — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-B1 is the only authorized next runtime slice. It may add the next sequential
-`artifact_audit_operations` migration, the bounded ledger/finalizer, startup
+B1 delivered the `0020_artifact_audit_operations` migration, the bounded ledger/finalizer, startup
 reconciliation after migrations, report-document pre-create reconciliation,
 `report_document.created`, additive create fields `audit_status` and
 `audit_message`, additive status field `pending_audit_count`, and frontend

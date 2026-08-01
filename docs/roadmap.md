@@ -65,8 +65,8 @@ Updated `2026-07-30`. This block records only the completion-window status; unre
 - **C3 — AuditLog workspace: `INCOMPLETE`.**
   - `C3-I — Read-only AuditLog workspace`: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #159, final reviewed and published head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`.
   - `C3-II-A — Atomic workshop-profile AuditLog coverage`: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #161, final reviewed and smoke-tested head `6c327630d0e4cca3c566253bf9f8224aaaa33172`, merge commit `3fec160f08aa7e775aa3e7ea650e570bf48955ad`, merged `2026-07-30T08:11:41Z`.
-  - `CR-009 — Durable file-backed artifact AuditLog semantics`: **`ACCEPTED — NOT IMPLEMENTED`**. Contract: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
-  - `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **`AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED`**.
+  - `CR-009 — Durable file-backed artifact AuditLog semantics`: **`ACCEPTED`**. Contract: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`.
+  - `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **`IMPLEMENTED ON PR BRANCH — NOT MERGED`**.
   - `C3-II-B2 — JSON export AuditLog coverage`: **`BLOCKED BY CR-006 — NOT AUTHORIZED`**.
   - `C3-II-B3 — Manual backup AuditLog coverage`: **`BLOCKED BY CR-004 — NOT AUTHORIZED`**.
   - The merged read API still exposes `actor_type` / `actor_label` rather than `source`, and only backend-owned safe `display_summary`; raw summary and metadata remain prohibited. Durable contract: `docs/audit-log.md`.
@@ -74,7 +74,7 @@ Updated `2026-07-30`. This block records only the completion-window status; unre
 
 `C2-III` was a planning umbrella; it was subdivided into exactly the two runtime slices above, and both are merged. **C2 is COMPLETED**: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed here.
 
-No C2 implementation PR remains open. C3-I and C3-II-A are closed. The broader C3 obligation remains incomplete: CR-009 is accepted but not implemented, only C3-II-B1 is authorized after this documentation PR merges, and B2/B3 remain blocked by CR-006/CR-004. C4 stays inactive. Product release readiness is **not** claimed.
+No C2 implementation PR remains open. C3-I and C3-II-A are closed. The broader C3 obligation remains incomplete: CR-009 is accepted, C3-II-B1 is implemented on an open unmerged PR branch, and B2/B3 remain blocked by CR-006/CR-004. C4 stays inactive. Product release readiness is **not** claimed.
 
 ## 2. Главный продуктовый принцип
 

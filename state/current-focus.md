@@ -1,6 +1,6 @@
-# Current focus — CR-009 accepted; only C3-II-B1 authorized after merge
+# Current focus — C3-II-B1 implemented on a PR branch, not merged
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I and C3-II-A merged and exact-head verified; CR-009 accepted but not implemented; only C3-II-B1 authorized after this documentation PR merges; C3 incomplete; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I and C3-II-A merged and exact-head verified; CR-009 accepted; C3-II-B1 implemented on a PR branch and not merged; C3 incomplete; C4 inactive**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -17,16 +17,114 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I and
 - `C2 — COMPLETED`
 - `C3-I — Read-only AuditLog workspace`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #159)
 - `C3-II-A — Atomic workshop-profile AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #161)
-- `CR-009 — Durable file-backed artifact AuditLog semantics`: **ACCEPTED — NOT IMPLEMENTED**
-- `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
+- `CR-009 — Durable file-backed artifact AuditLog semantics`: **ACCEPTED**
+- `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
 - `C3-II-B2 — JSON export AuditLog coverage`: **BLOCKED BY CR-006 — NOT AUTHORIZED**
 - `C3-II-B3 — Manual backup AuditLog coverage`: **BLOCKED BY CR-004 — NOT AUTHORIZED**
 - `C3 — INCOMPLETE`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **No runtime work is authorized inside this documentation PR.** After it merges, C3-II-B1 is the only authorized runtime slice. B2, B3 and C4 remain unauthorized.
+- **C3-II-B1 is implemented on `claude/c3-ii-b1-report-document-audit` and is not merged.** B2, B3 and C4 remain unauthorized.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
+
+## C3-II-B1 — implemented on a PR branch, not merged
+
+```text
+C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
+C3 — INCOMPLETE
+C4 — INACTIVE
+Product release readiness — NOT CLAIMED
+```
+
+Branch `claude/c3-ii-b1-report-document-audit`, based on verified
+`origin/main` = `385873fa9f393f9dc4dcac14e7bc79e0da12c5d1` (PR #162 merge
+commit).
+
+Delivered: migration `0020_artifact_audit_operations` registered once after
+`0019`; the bounded ledger repository and its pure domain vocabulary; the
+shared report-document pair verifier; the idempotent write-serialized
+finalizer; startup reconciliation after migrations; one pre-create
+reconciliation pass; additive `audit_status` / `audit_message` create fields
+and `pending_audit_count` status field; the backend-owned safe Journal
+vocabulary for `report_document.created`; and the frontend
+success-plus-separate-warning presentation.
+
+`AuditLogRepository.create_log(...)` now returns `cursor.lastrowid` as `int`.
+Every existing parameter, the optional caller-owned connection and the insert
+itself are unchanged, and existing callers that ignore the value are
+unaffected.
+
+Only `report_document` has a runtime writer. `json_export` and `manual_backup`
+exist solely in the table's `CHECK` vocabulary so B2 and B3 need no second
+migration.
+
+**Two issues found in review of the first PR head, both corrected on the branch:**
+
+1. `launcher/runtime.py::start_backend_process` passed only `PYTHONPATH` to the
+   uvicorn child, so the API resolved `get_database_config()` on its own and
+   could fall back to `DEFAULT_DATABASE_PATH` while `initialize_startup` had
+   backed up, migrated and reconciled `<user_data>/data/cosmetic_workshop.sqlite`.
+   Startup and the API could therefore use different databases.
+
+   `run_local_runtime` now passes `startup.database_path` explicitly, and
+   `start_backend_process` writes it to `COSMETIC_WORKSHOP_DB_PATH`, overriding
+   any stale inherited value. The key is read from the backend's own
+   `DATABASE_PATH_ENV` rather than duplicated as a literal. This applies to
+   development mode as well.
+   `launcher/tests/test_runtime_database_continuity.py` proves the continuity
+   through the database itself — migration `0020`, the ledger row and the
+   AuditLog event all land in the startup-selected file, the repository default
+   stays untouched, and a restart reconciles that same database.
+
+   `start_backend_process()` takes `database_path: Path` as a **required**
+   parameter and pins the environment unconditionally, so no future caller can
+   quietly reintroduce the split; omitting it is a `TypeError` at the call site.
+
+2. `ReportDocumentAuditService.pending_count()` degraded to `0` when the ledger
+   could not be read. That was untruthful: `0` is a claim that nothing is
+   awaiting a Journal entry, and the frontend clears a standing warning on it.
+   The fallback is removed; a read failure now surfaces through the existing
+   service/API error boundary as a fixed Russian message with no SQLite detail,
+   and the status endpoint stays read-only. The caught tuple is narrowed to
+   `(sqlite3.Error, OSError)` — the failures the persistence boundary genuinely
+   produces — so an unexpected programming defect propagates as itself instead
+   of being dressed up as a known availability problem.
+
+`launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
+was failing on the untouched baseline `385873f` because its local
+`ALLOWED_TABLES` copy was frozen near the `0011` schema. It now uses the shared
+`app.tests.table_guards`, so it tracks the real migration head and stays a
+bounded check. The complete launcher suite is green.
+
+**Hardening and independent audit of the published branch:**
+
+`ReportDocumentService.status()` and the create path's identity reservation both
+caught `except Exception`, which would have reported a programming defect to the
+user as a specific, recoverable condition it is not. Both are narrowed to
+`(sqlite3.Error, OSError)` — what the persistence boundary genuinely raises —
+and both run where letting an unexpected error propagate costs nothing, because
+no artifact exists yet at that point.
+
+Two broad catches are deliberately **kept**, and documented in place: the
+metadata-validation catch inside `verify()` and the `RuntimeError` catch in
+`finalize()`. Both guard the path *after* both files exist, where the accepted
+contract requires HTTP `201` with `audit_status: pending`. Narrowing them would
+let an unexpected error escape and turn a completed document into a false total
+failure — the exact outcome CR-009 forbids.
+
+`start_backend_process()` now requires `database_path: Path` with no default and
+sets the environment unconditionally, so the startup/API database split cannot
+be reintroduced by a future caller; omitting it is a `TypeError` at the call.
+
+The finalizer's exactly-once guarantee was re-verified independently under
+12-way concurrent finalization and under racing finalize/reconcile, and seven
+mutation checks (false-zero fallback, loose audit contract, count coercion,
+removed write serialization, removed in-transaction re-read, primary-only
+identity check, abandoning ambiguous pairs) were each confirmed to fail the
+suite.
 
 ## C3-II-A closure and CR-009 decision
 

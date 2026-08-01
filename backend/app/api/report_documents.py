@@ -7,6 +7,7 @@ from app.schemas.report_documents import (
     ReportDocumentStatusResponse,
     ReportOverviewDocumentCreateRequest,
 )
+from app.services.report_document_audit import ReportDocumentAuditTrackingUnavailableError
 from app.services.report_documents import (
     ReportDocumentError,
     ReportDocumentFileMissingError,
@@ -22,7 +23,13 @@ router = APIRouter(prefix="/report-documents", tags=["report-documents"])
 
 @router.get("/status", response_model=ReportDocumentStatusResponse)
 def get_report_documents_status() -> ReportDocumentStatusResponse:
-    return ReportDocumentService().status()
+    try:
+        return ReportDocumentService().status()
+    except ReportDocumentError as exc:
+        # A status that cannot report its pending-Journal count truthfully is an
+        # error, not a zero. `str(exc)` is fixed Russian text from the service;
+        # no SQLite message, SQL fragment or path is carried in it.
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
 
 @router.get("", response_model=ReportDocumentListResponse)
@@ -66,5 +73,17 @@ def create_overview_report_document(
         return ReportDocumentService().create_overview_document(request or ReportOverviewDocumentCreateRequest())
     except UnsupportedReportDocumentFormatError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except ReportDocumentAuditTrackingUnavailableError as exc:
+        # CR-009: audit tracking could not be durably prepared, so no document
+        # was written. The structured detail is deliberately fixed text — no
+        # SQLite message, stack trace or SQL fragment reaches the user.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": ReportDocumentAuditTrackingUnavailableError.code,
+                "message": ReportDocumentAuditTrackingUnavailableError.message,
+                "next_action": ReportDocumentAuditTrackingUnavailableError.next_action,
+            },
+        ) from exc
     except ReportDocumentError as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc

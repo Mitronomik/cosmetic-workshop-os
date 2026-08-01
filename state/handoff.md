@@ -1,6 +1,90 @@
 # Handoff
 
-## CR-009 decision handoff — only C3-II-B1 authorized after merge (2026-07-30)
+## C3-II-B1 handoff — implemented on a PR branch, not merged (2026-07-31)
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-009 — ACCEPTED
+C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
+C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
+C3 — INCOMPLETE
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+Branch `claude/c3-ii-b1-report-document-audit`, based on verified
+`origin/main` = `385873fa9f393f9dc4dcac14e7bc79e0da12c5d1`. The PR is open,
+non-draft, unmerged, with auto-merge disabled. Do not merge it without review.
+
+What now exists in the runtime: migration `0020_artifact_audit_operations`; a
+bounded ledger repository over it; a pure operation/filename identity domain
+module; a shared report-document pair verifier; an idempotent write-serialized
+finalizer; startup reconciliation after migrations; one pre-create
+reconciliation pass; `audit_status` / `audit_message` on the create response;
+`pending_audit_count` on the status response; safe Journal vocabulary for
+`report_document.created`; and a focused frontend contract module.
+
+The contract that must not be weakened by later work:
+
+- a verified document/sidecar pair is authoritative and is never deleted
+  because the Journal write failed;
+- a failed Journal write is HTTP `201` + `pending`, never `409` or `500`;
+- inability to commit tracking *before* writing is the only refusal, and it
+  creates nothing;
+- exactly one AuditLog row per `operation_id`, committed together with the
+  `audited` transition or not at all;
+- reconciliation runs at exactly two moments and has no background thread,
+  timer, queue or unbounded retry;
+- no filename, path, request reason, profile value or report content reaches
+  AuditLog or `GET /api/audit-logs`.
+
+`AuditLogRepository.create_log(...)` now returns the inserted row ID as `int`.
+This is compatible: parameters, the optional caller-owned connection and the
+insert are unchanged, and callers that ignore the value behave exactly as
+before. Do not add a second AuditLog insertion API.
+
+Evidence executed on the final implementation tree: complete suite
+`1550 passed / 0 failed` (backend and launcher together), backend collection
+`1533` with all `1376` baseline node IDs preserved and `157` added; complete
+launcher `17 passed / 0 failed`; all `19` frontend `test:*` scripts pass;
+frontend build `PASS`. Earlier per-head counts in this file are superseded.
+
+**Review findings across the PR heads, all corrected on the branch:**
+
+1. **User-mode database continuity.** `start_backend_process` gave the uvicorn
+   child only `PYTHONPATH`, so the API could resolve `get_database_config()` to
+   `DEFAULT_DATABASE_PATH` instead of the user-data database that
+   `initialize_startup` had just backed up, migrated and reconciled.
+   `run_local_runtime` now passes `startup.database_path` down explicitly and the
+   child environment pins `COSMETIC_WORKSHOP_DB_PATH` to it, overriding any
+   inherited value, in both user and development mode.
+2. **No fabricated pending count.** `pending_count()` no longer degrades to `0`
+   on a ledger read failure — `0` would falsely assert that nothing is awaiting a
+   Journal entry and would clear a real warning. The failure surfaces as a fixed
+   Russian message through the existing error boundary, with no SQLite detail,
+   and status stays read-only.
+3. **Strict frontend contracts.** A `recorded` create response now requires an
+   explicit `audit_message: null`; an absent field is an incomplete contract.
+   `pending_audit_count` parses to `number | null`, and a missing or malformed
+   value leaves the previously known count and warning untouched instead of
+   becoming an authoritative zero.
+
+`launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
+had been failing on untouched baseline `385873f` because its local
+`ALLOWED_TABLES` copy was frozen near the `0011` schema. It now uses the shared
+`app.tests.table_guards`, and the complete launcher suite is green.
+
+B2 and B3 remain unauthorized. Do not reuse the ledger for `json_export` or
+`manual_backup` until CR-006 and CR-004 are resolved respectively.
+
+## HISTORICAL — SUPERSEDED — CR-009 decision handoff (2026-07-30)
+
+> True while CR-009 was accepted and B1 unimplemented. Superseded by the
+> C3-II-B1 handoff above; preserved as the decision-time record.
 
 ```text
 C1 — COMPLETED

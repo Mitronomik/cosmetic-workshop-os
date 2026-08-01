@@ -32,15 +32,29 @@ class AuditLogRepository:
         actor_type: str = "system",
         metadata: dict[str, object] | None = None,
         connection: sqlite3.Connection | None = None,
-    ) -> None:
+    ) -> int:
+        """Insert one AuditLog row and return its row ID.
+
+        `docs/decisions/0013-file-backed-artifact-audit-semantics.md` §
+        "Required operation sequence". Returning the ID is a compatible
+        extension: every parameter, the optional caller-owned connection and the
+        insert itself are unchanged, and existing callers that ignore the return
+        value keep behaving exactly as before.
+
+        The ID exists because a durable artifact operation has to record *which*
+        row it committed with, inside the same transaction as the insert. Reading
+        it back by matching action and timestamp afterwards would be ambiguous
+        and would need a second statement outside the write lock.
+        """
         with _connection_scope(self.config, connection) as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
                 INSERT INTO audit_logs (actor_type, action, entity_type, entity_id, summary, metadata_json)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (actor_type, action, entity_type, entity_id, summary, json.dumps(metadata or {}, ensure_ascii=False)),
             )
+            return int(cursor.lastrowid)
 
     def list_logs(self, query: AuditLogQuery, *, connection: sqlite3.Connection | None = None) -> tuple[list[sqlite3.Row], int]:
         """One page of history plus the pre-pagination total for the same filters.

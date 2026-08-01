@@ -107,9 +107,16 @@ def test_report_document_api_endpoints_create_metadata_and_are_safe(monkeypatch,
     suspicious_path = (user_data / "exports" / "report-documents" / suspicious_document["filename"]).resolve()
     assert suspicious_path.parent == (user_data / "exports" / "report-documents").resolve()
 
+    # Three documents were created above (Markdown, PDF, and the one with the
+    # suspicious reason). Since CR-009 B1 each of those appends exactly one
+    # `report_document.created` Journal row, and nothing else moved: no business
+    # table changed, and no other action was written.
     with sqlite3.connect(db) as con:
         after = {table: con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in BUSINESS_TABLES}
-    assert after == before
+        actions = [row[0] for row in con.execute("SELECT action FROM audit_logs ORDER BY id").fetchall()]
+    business = [table for table in BUSINESS_TABLES if table != "audit_logs"]
+    assert {table: after[table] for table in business} == {table: before[table] for table in business}
+    assert actions == ["report_document.created"] * 3
     assert not (user_data / "backups").exists()
     assert list((user_data / "exports").glob("*.json")) == []
 

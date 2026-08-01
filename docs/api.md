@@ -939,7 +939,27 @@ Returns document export availability:
 - `available_document_types` (`["workshop_overview"]` in the MVP);
 - `can_create`;
 - `documents_count`;
-- `message`.
+- `message`;
+- `pending_audit_count` (CR-009 B1; documents whose Journal entry is not committed yet).
+
+`pending_audit_count` is exactly the number of unresolved ledger operations
+where `artifact_kind = report_document` and `status` is `prepared` or
+`pending_audit`; it excludes `audited` and `abandoned`. This endpoint reads the
+count and performs no reconciliation, creates no AuditLog row and mutates no
+ledger or file state.
+
+If the ledger cannot be read, this endpoint returns HTTP `500` with the safe
+Russian detail `Не удалось прочитать сведения о документах отчетов. Данные
+мастерской не изменялись.` rather than reporting `pending_audit_count: 0`. A
+zero is a factual claim that nothing is awaiting a Journal entry, and the
+frontend clears its standing warning on it, so it is never published for a count
+that was not actually read. No SQLite message, SQL fragment, stack trace or
+internal path is exposed, and the failed read still mutates nothing.
+
+In normal operation the launcher makes this unreachable: `run_local_runtime`
+passes the database path that `initialize_startup` backed up, migrated and
+reconciled to the API child through `COSMETIC_WORKSHOP_DB_PATH`, so the API
+always serves a database whose ledger exists.
 
 ### `GET /api/report-documents`
 
@@ -985,12 +1005,47 @@ Request:
 
 Response includes created document metadata and the message `Документ отчета создан.`
 
-### CR-009 future create-result contract — not implemented in this documentation PR
+Since C3-II-B1 the response additively carries the separate result of recording
+the document in the Journal:
+
+```json
+{
+  "document": { "...": "unchanged metadata" },
+  "message": "Документ отчета создан.",
+  "audit_status": "recorded",
+  "audit_message": null
+}
+```
+
+`audit_status` is `recorded` or `pending`. `recorded` always carries
+`audit_message: null`; `pending` always carries the exact accepted Russian
+warning below. Both are HTTP `201`: the document exists, is listed and is
+downloadable in either case, and `message` keeps its existing meaning as the
+artifact result.
+
+If audit tracking cannot be durably prepared, no document, sidecar, AuditLog row
+or ledger row is created, and the endpoint returns HTTP `500`:
+
+```json
+{
+  "detail": {
+    "code": "artifact_audit_tracking_unavailable",
+    "message": "Не удалось безопасно подготовить создание документа. Документ не создан.",
+    "next_action": "Повторите создание документа. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
+
+Existing request-validation errors are unchanged and still take precedence: an
+unsupported `format` is still rejected with `422` before anything is prepared.
+
+### CR-009 future create-result contract — B1 implemented; B2 and B3 not authorized
 
 `CR-009` accepts one additive API contract for user-created manual backups,
-JSON exports and report documents. The current runtime response shapes above
-remain unchanged until their separately authorized runtime slice implements
-the addition.
+JSON exports and report documents. C3-II-B1 implements it for report documents
+only, as documented above. The manual-backup and JSON-export response shapes
+remain unchanged until their separately authorized runtime slice implements the
+addition.
 
 If bounded ledger preparation fails before file creation, no file and no
 AuditLog row are created. The structured code is:
@@ -1052,11 +1107,10 @@ warning preserves artifact success and separates the pending-Journal warning.
 The frontend shows success for the artifact, presents the warning separately,
 and sends no duplicate create request.
 
-Only C3-II-B1 is authorized after the CR-009 documentation PR merges. It adds
-`audit_status` and `audit_message` to
-`POST /api/report-documents/reports/overview`, and
-`pending_audit_count` to `GET /api/report-documents/status`. B1 does not expose
-paths or AuditLog metadata through those new fields.
+C3-II-B1 adds `audit_status` and `audit_message` to
+`POST /api/report-documents/reports/overview`, and `pending_audit_count` to
+`GET /api/report-documents/status`. B1 exposes no path, filename, operation ID
+or AuditLog metadata through those new fields.
 
 `pending_audit_count` is exactly the count of unresolved ledger operations
 where `artifact_kind = report_document` and `status` is `prepared` or

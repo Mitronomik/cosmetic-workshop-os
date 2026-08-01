@@ -25,7 +25,7 @@ UNKNOWN_ACTION_LABEL: Final = "Другое действие"
 UNKNOWN_ENTITY_LABEL: Final = "Другая сущность"
 UNKNOWN_ACTOR_LABEL: Final = "Другой инициатор"
 
-# `docs/audit-log.md` § 11.1 — the 51 action codes the production
+# `docs/audit-log.md` § 11.1 — the 52 action codes the production
 # write call sites can produce. Read from the code, not from a database, so an
 # older local database may hold values absent here; those degrade to the safe
 # unknown label rather than leaking a technical identifier.
@@ -78,12 +78,13 @@ ACTION_LABELS: Final[dict[str, str]] = {
     "recipe_template.created": "Рецепт создан",
     "recipe_template.deactivated": "Рецепт архивирован",
     "recipe_version.created": "Версия рецепта создана",
+    "report_document.created": "Документ отчёта создан",
     "stock_movement.created": "Движение сырья добавлено",
     "tax_rate_setting_changed": "Налоговая ставка изменена",
     "workshop_profile.updated": "Профиль мастерской изменён",
 }
 
-# `docs/audit-log.md` § 11.2 — 19 entity codes. `ImportDraft` is PascalCase while
+# `docs/audit-log.md` § 11.2 — 20 entity codes. `ImportDraft` is PascalCase while
 # every other value is snake_case. That inconsistency is persisted history and is
 # matched exactly as stored: it is never normalized, aliased or rewritten.
 ENTITY_LABELS: Final[dict[str, str]] = {
@@ -105,6 +106,10 @@ ENTITY_LABELS: Final[dict[str, str]] = {
     "production_batch": "Производственная партия",
     "recipe_template": "Рецепт",
     "recipe_version": "Версия рецепта",
+    # CR-009 B1. The Journal shows that a report document was created; the
+    # persisted `entity_id` is an internal operation UUID and stays suppressed
+    # by the read model, exactly as every other entity ID is.
+    "report_document": "Документ отчёта",
     "stock_movement": "Движение сырья",
 }
 
@@ -168,6 +173,10 @@ GENERIC_SUMMARIES: Final[dict[str, str]] = {
     "recipe_template.created": "Рецепт создан",
     "recipe_template.deactivated": "Рецепт архивирован",
     "recipe_version.created": "Создана версия рецепта",
+    # Deliberately absent from `SUFFIX_PREFIXES` below: the persisted summary is
+    # the fixed English string `Report document created`, there is no business
+    # name to retain, and no filename may ever be shown.
+    "report_document.created": "Документ отчёта создан",
     "stock_movement.created": "Добавлено движение сырья",
     "tax_rate_setting_changed": "Изменена налоговая ставка для расчётов",
     "workshop_profile.updated": "Профиль мастерской обновлён",

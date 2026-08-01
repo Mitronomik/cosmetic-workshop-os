@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "outDir": "dist-tests/report-document-audit-contract", "rootDir": "src", "noEmit": false },
+  "include": [
+    "src/report-document-audit-contract.ts",
+    "src/local-artifacts-reports-feedback.ts",
+    "src/local-artifacts-reports-runtime.ts",
+    "src/local-artifacts-reports-route.ts",
+    "src/local-artifacts-reports-presentation.ts",
+    "src/local-artifact-presentation.ts"
+  ]
+}

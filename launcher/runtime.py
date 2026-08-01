@@ -42,13 +42,51 @@ def assert_port_available(host: str, port: int) -> None:
             ) from exc
 
 
-def start_backend_process(config: RuntimeConfig, paths: RuntimePaths) -> subprocess.Popen[str]:
+def backend_database_path_env(paths: RuntimePaths) -> str:
+    """The environment key the backend reads its database path from.
+
+    Read from the backend's own constant rather than repeated as a literal here,
+    so the launcher and the backend cannot drift apart on the name. The import is
+    deferred because `backend/` only joins `sys.path` at runtime, via
+    `ensure_backend_import_path`.
+    """
+    ensure_backend_import_path(paths)
+    from app.db.config import DATABASE_PATH_ENV
+
+    return DATABASE_PATH_ENV
+
+
+def start_backend_process(
+    config: RuntimeConfig, paths: RuntimePaths, database_path: Path
+) -> subprocess.Popen[str]:
+    """Start the API child, pinned to the database startup actually prepared.
+
+    `database_path` is the path `initialize_startup()` selected, backed up,
+    migrated and reconciled. Passing it explicitly is what keeps one database
+    across the whole user-mode flow. Without it the child calls
+    `get_database_config()` on its own and, with no environment value set, falls
+    back to the repository default — so it would serve a database that was never
+    migrated, while the real user database sat untouched.
+
+    The parameter is **required**, with no default and no `None` branch. Making
+    it optional would leave the startup/API split one forgetful call site away
+    from returning, and that split is silent: every individual step still looks
+    like it succeeded. A caller that cannot name the database has no business
+    starting the API, so omitting it is a `TypeError` at the call, not a
+    corrupted run.
+
+    An inherited value is deliberately overwritten rather than respected: a stale
+    `COSMETIC_WORKSHOP_DB_PATH` left in the parent shell is exactly the case that
+    would otherwise split the two processes apart again. The startup result is
+    authoritative.
+    """
     assert_port_available(config.host, config.backend_port)
     env = os.environ.copy()
     python_path_parts = [str(paths.backend_dir)]
     if env.get("PYTHONPATH"):
         python_path_parts.append(env["PYTHONPATH"])
     env["PYTHONPATH"] = os.pathsep.join(python_path_parts)
+    env[backend_database_path_env(paths)] = str(database_path)
     command = [
         sys.executable,
         "-m",
@@ -94,7 +132,10 @@ def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths |
     if startup.backup is not None:
         print(f"Перед миграцией создана резервная копия: {startup.backup.backup_path}")
     print(f"Запускаю локальный API: {runtime_config.backend_url}")
-    process = start_backend_process(runtime_config, runtime_paths)
+    # The API child must serve the database that was just backed up, migrated and
+    # reconciled — not one it resolves for itself. This applies to development
+    # mode as well: whatever `initialize_startup()` chose is what gets served.
+    process = start_backend_process(runtime_config, runtime_paths, startup.database_path)
     try:
         time.sleep(1)
         if process.poll() is not None:
