@@ -37,7 +37,7 @@ C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-009 — ACCEPTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
 C4 — INACTIVE — NEEDS PRODUCT DECISION
@@ -899,7 +899,7 @@ Use focused frontend modules, following the pattern already established by `sett
 
 Inventoried from `backend/app/migrations/versions/0001_infrastructure.py`, `backend/app/repositories/audit.py` and every production `AuditLogRepository.create_log` call site.
 
-**Scope of this inventory.** Merged PR #161 added exactly one production action, `workshop_profile.updated`. `C3-II-B1` (CR-009) then added exactly one more, `report_document.created`, plus its entity `report_document`, so the current action vocabulary contains 52 actions and the entity vocabulary 20; the suffix allowlist remains 21. These values were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. This inventory originated as the read-only C3-I inventory. C3-II-A added exactly one write call site for Workshop-profile changes, and C3-II-B1 added exactly one for report-document creation; no other AuditLog write call site changed. Write call sites for manual backup creation and JSON export creation remain absent, because C3-II-B2 is blocked by CR-006 and C3-II-B3 by CR-004.
+**Scope of this inventory.** Merged PR #161 added exactly one production action, `workshop_profile.updated`. `C3-II-B1` (CR-009) then added exactly one more, `report_document.created`, plus its entity `report_document`, so the current action vocabulary contains 52 actions and the entity vocabulary 20; the suffix allowlist remains 21. These values were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. This inventory originated as the read-only C3-I inventory. C3-II-A added exactly one write call site for Workshop-profile changes, and C3-II-B1 added exactly one for report-document creation; no other AuditLog write call site changed. On merged `main` the write call sites for manual backup creation and JSON export creation remain absent. `C3-II-B2` adds exactly one more action, `export.created`, plus its entity `export_file`, on its unmerged PR branch — taking the branch vocabulary to 53 actions and 21 entities, with the suffix allowlist still 21 — and `C3-II-B3` stays blocked by CR-004.
 
 ### 11.1. `action` — 52 codes in the current write vocabulary
 
@@ -1072,7 +1072,7 @@ DONE — MERGED AND EXACT-HEAD VERIFIED
 
 CR-009 — ACCEPTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```
 
@@ -1503,7 +1503,7 @@ migrations, and must not depend on a ledger table that may not yet exist.
 
 ```text
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```
 
@@ -1528,13 +1528,24 @@ exactly-once behavior; one concurrent caller resolves the already-audited
 result; AuditLog insert failure leaves the operation unresolved; and ledger
 update failure rolls the insert back.
 
-`CR-006` is now **accepted** — the JSON export create-response fallback is
+`CR-006` is **accepted** — the JSON export create-response fallback was
 confirmed reachable in production-equivalent behavior, and the confirmation
 contract is decided in
 `docs/decisions/0014-json-export-create-confirmation-semantics.md`. `C3-II-B2`
-may therefore reuse the ledger, as **one bounded implementation pull request**
-beginning only after the `CR-006` decision pull request merges. It is **not
-implemented** and no implementation PR number is assigned.
+therefore reuses the ledger, as **one bounded implementation pull request**. It
+is **implemented on branch `claude/c3-ii-b2-json-export-audit` and not merged**,
+so no `export.created` row exists on merged `main`.
+
+On that branch JSON export creation reserves its exact final filename once,
+commits one `prepared` `json_export` ledger row before writing the file, writes
+to exactly that reserved path, verifies the exact artifact read-only, and
+finalizes exactly one `export.created` row together with the `audited`
+transition in one `BEGIN IMMEDIATE` transaction. No new migration is added;
+`0020` is reused. Reconciliation runs at normal startup after migrations —
+ordered after the report-document pass — and once before the next JSON-export
+create. A finalization failure leaves the export in place and returns HTTP `201`
+with `audit_status: pending`, never a false total failure and never a
+compensating delete.
 
 For B2, `pending_audit_count` on `GET /api/exports/status` counts exactly
 `json_export` operations in `prepared` or `pending_audit`, excluding `audited`

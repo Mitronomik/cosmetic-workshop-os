@@ -58,6 +58,9 @@ PERSISTED_SUMMARIES = {
     "client_feedback.created": "Client feedback created for client #3",
     "demo_data.installed": "Демонстрационные данные установлены",
     "demo_data.cleared": "Демонстрационные данные удалены",
+    # CR-009 B2 persists this fixed English string and nothing else. There is no
+    # filename, path, reason, manifest or entity count in it to leak.
+    "export.created": "JSON export created",
     "import_draft_applied": "Import draft 7 applied",
     "ingredient.created": "Ingredient created: Масло ши",
     "ingredient.updated": "Ingredient updated: Масло ши",
@@ -125,16 +128,17 @@ LATIN_LETTERS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 # --------------------------------------------------------------------------
 
 def test_action_vocabulary_is_the_documented_fifty_codes():
-    # 51 + `report_document.created`, added by CR-009 B1.
-    assert len(ACTION_LABELS) == 52
+    # 51 + `report_document.created` (CR-009 B1) + `export.created` (CR-009 B2).
+    assert len(ACTION_LABELS) == 53
     assert set(GENERIC_SUMMARIES) == set(ACTION_LABELS)
     assert set(PERSISTED_SUMMARIES) == set(ACTION_LABELS)
 
 
 def test_entity_and_actor_vocabularies_match_the_contract():
-    # 19 + `report_document`, added by CR-009 B1.
-    assert len(ENTITY_LABELS) == 20
+    # 19 + `report_document` (CR-009 B1) + `export_file` (CR-009 B2).
+    assert len(ENTITY_LABELS) == 21
     assert ENTITY_LABELS["report_document"] == "Документ отчёта"
+    assert ENTITY_LABELS["export_file"] == "Экспорт"
     assert ENTITY_LABELS["app_setting"] == "Настройка приложения"
     assert ACTOR_LABELS == {"system": "Система", "user": "Пользователь"}
 

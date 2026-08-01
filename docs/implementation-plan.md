@@ -62,7 +62,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` is **accepted**: the evidence-only diagnostic is complete, the create-response fallback is confirmed reachable in production-equivalent behavior, and the confirmation contract is decided in `docs/decisions/0014-json-export-create-confirmation-semantics.md`. `CR-004` remains a `needs evidence` row and inactive. C3-I, C3-II-A and C3-II-B1 are merged and closed; C3 remains incomplete. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted, and `C3-II-B1 — Durable ledger and report-document AuditLog coverage` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #163, final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. `C3-II-B2` is `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED`, and `C3-II-B3` remains blocked by CR-004. C4 remains inactive. Product release readiness is not claimed.
+`CR-006` is **accepted**: the evidence-only diagnostic is complete, the create-response fallback is confirmed reachable in production-equivalent behavior, and the confirmation contract is decided in `docs/decisions/0014-json-export-create-confirmation-semantics.md`. `CR-004` remains a `needs evidence` row and inactive. C3-I, C3-II-A and C3-II-B1 are merged and closed; C3 remains incomplete. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted, and `C3-II-B1 — Durable ledger and report-document AuditLog coverage` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #163, final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. `C3-II-B2` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` — it reuses the existing ledger with no new migration and carries the accepted `CR-006` create-response correction — and `C3-II-B3` remains blocked by CR-004. C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -1683,7 +1683,7 @@ C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-009 — ACCEPTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
-C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
 ```
@@ -1813,18 +1813,56 @@ transaction framework is authorized.
 #### C3-II-B2 — JSON export AuditLog coverage
 
 ```text
-AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
 `CR-006` is resolved and accepted in
 `docs/decisions/0014-json-export-create-confirmation-semantics.md`. The
-create-response fallback is **reachable in production-equivalent behavior**, and
-when it runs it returns the human manifest reason where `CR-005` requires the
+create-response fallback was **reachable in production-equivalent behavior**, and
+when it ran it returned the human manifest reason where `CR-005` requires the
 canonical filename-derived slug — classified `PRODUCT DEFECT — CREATE-RESPONSE
-CONTRACT MISMATCH`, severity `MEDIUM`. `C3-II-B2` is therefore authorized as
-**one bounded implementation pull request**, to begin only after the `CR-006`
-decision pull request is merged and only from `origin/main`. It is **not
-implemented**, and no implementation PR number is assigned.
+CONTRACT MISMATCH`, severity `MEDIUM`. `C3-II-B2` was therefore authorized as
+**one bounded implementation pull request**, begun from merged `main` after the
+`CR-006` decision pull request merged.
+
+**Implementation status.** The slice is implemented on branch
+`claude/c3-ii-b2-json-export-audit` and is **open and unmerged**. Delivered on
+that branch, and nothing beyond it:
+
+- the `CR-006` create-response correction — the directory re-scan is gone from
+  `POST /api/exports`, the response is built from the exact `ExportResult`, and
+  the API `reason` is parsed from the exact final filename through
+  `parse_export_reason`, the same function list and status use;
+- `reserve_export_path` as the single filename-selection algorithm, with an
+  active `json_export` ledger identity treated as occupied alongside an existing
+  file, and `create_json_export` accepting a strictly validated
+  `reserved_export_path`;
+- one `prepared` row in the existing `artifact_audit_operations` ledger,
+  committed before the export is written — **no new migration**, `0020` reused
+  unchanged, `companion_filename` null because an export is one file;
+- an exact-path, read-only JSON-export verifier classifying `valid`,
+  `definitely_absent` and `ambiguous` exactly as B1 does;
+- exactly-once `export.created` finalization through one `BEGIN IMMEDIATE`
+  transaction committing the AuditLog row and the `audited` transition together;
+- JSON-export startup reconciliation after migrations, ordered after the
+  report-document pass, and one bounded pre-create reconciliation pass;
+- additive `audit_status` / `audit_message` on the create response and additive
+  `pending_audit_count` on the status response;
+- the accepted `export.created` Journal presentation vocabulary
+  (`Экспорт создан` / `Экспорт`), deliberately absent from the suffix allowlist;
+- frontend success-plus-warning presentation on `/exports` through
+  `frontend/src/export-audit-contract.ts`, reusing the B1 pattern;
+- directly affected backend and frontend tests.
+
+Executed on that branch: complete backend + launcher suite `1648 passed / 0
+failed`, with all `1550` baseline node IDs preserved and `98` added and none
+lost; complete launcher suite `17 passed / 0 failed`; all `20` frontend `test:*`
+scripts passed; frontend build `PASS`; `frontend/src/main.ts` exactly at the
+accepted `6399`-line ceiling.
+
+The slice is **not merged**, so JSON export creation is still not audited on
+merged `main`. `C3-II-B3` remains blocked by `CR-004`, C3 remains incomplete, C4
+remains inactive, and product release readiness is not claimed.
 
 **Scope.** Only the following:
 

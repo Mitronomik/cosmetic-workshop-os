@@ -1,6 +1,6 @@
-# Current focus — CR-006 decided; C3-II-B2 authorized after the decision PR merges
+# Current focus — C3-II-B2 implemented on its PR branch, open and unmerged
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A and C3-II-B1 merged and exact-head verified; CR-009 accepted and implemented for report documents; CR-006 accepted; C3 incomplete; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A and C3-II-B1 merged and exact-head verified; CR-009 accepted and implemented for report documents on merged `main` and for JSON exports on the unmerged C3-II-B2 branch; CR-006 accepted and its correction implemented on that same branch; C3 incomplete; C4 inactive**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -20,13 +20,13 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3
 - `CR-009 — Durable file-backed artifact AuditLog semantics`: **ACCEPTED**
 - `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #163)
 - `CR-006 — JSON export create-response confirmation semantics`: **ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED**
-- `C3-II-B2 — JSON export AuditLog coverage`: **AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED**
+- `C3-II-B2 — JSON export AuditLog coverage`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
 - `C3-II-B3 — Manual backup AuditLog coverage`: **BLOCKED BY CR-004 — NOT AUTHORIZED**
 - `C3 — INCOMPLETE`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
 - **C3-II-B1 is merged into `main` through PR #163.** B3 and C4 remain unauthorized.
-- Next active work: **`C3-II-B2` — one bounded JSON export AuditLog implementation PR, to begin only after the `CR-006` decision PR merges.**
+- Next active work: **review of the open `C3-II-B2` pull request.** The slice is implemented on `claude/c3-ii-b2-json-export-audit`, reuses the existing ledger with no new migration, carries the accepted `CR-006` create-response correction, and is **not merged**. Nothing further is authorized until it merges: `C3-II-B3` stays blocked by `CR-004`.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
@@ -37,7 +37,7 @@ C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
-C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
 C4 — INACTIVE
@@ -177,7 +177,7 @@ suite.
 ## What is authorized next — C3-II-B2 only, after this decision PR merges
 
 ```text
-C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
 Next active work: **`C3-II-B2` — one bounded JSON export AuditLog
