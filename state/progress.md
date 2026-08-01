@@ -2,15 +2,27 @@
 
 ## Current phase
 
-`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED`. The broader C3 obligation is incomplete.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED`. The broader C3 obligation is incomplete.
 
 ## Current next step
 
-- Review the open C3-II-B1 PR on `claude/c3-ii-b1-report-document-audit`; do not enable auto-merge.
-- Keep C3-II-B2 blocked by CR-006 and C3-II-B3 blocked by CR-004.
+- Run the `CR-006` evidence-only diagnostic: establish whether the JSON export create-response fallback is reachable, then define the required contract. Diagnostic only — no export AuditLog implementation, no C3-II-B2 authorization, no migration, no production change.
+- Keep C3-II-B2 blocked by CR-006 and C3-II-B3 blocked by CR-004; both change requests stay `needs evidence`.
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
 
-## 2026-07-31 — C3-II-B1 implemented on a PR branch (not merged)
+## 2026-08-01 — C3-II-B1 merged and closed
+
+- **Milestone:** `C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED`.
+- **Merged facts:** PR #163, base `main`, state `MERGED` at `2026-08-01T05:30:38Z`; head branch `claude/c3-ii-b1-report-document-audit`; final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`; merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. The final reviewed head is an ancestor of the merge commit, and the merge commit is an ancestor of `origin/main`.
+- **Accepted merged PR #163 evidence — not re-executed in the closure documentation PR:** complete backend + launcher suite `1550 passed / 0 failed`; backend collection `1533`; all `1376` original backend baseline node IDs preserved with `0` missing and `157` added; complete launcher suite `17 passed / 0 failed`; all `19` frontend `test:*` scripts passed; frontend build `PASS`; final exact-head launcher smoke `PASS` on `afd65fd`; final audit with no unresolved P0 or P1 findings (`P0 — none`, `P1 — none remaining`, `P2 — documented and non-blocking`). The focused exact-head launcher smoke is not release smoke.
+- **Delivered on merged `main`:** the `0020_artifact_audit_operations` ledger, the idempotent write-serialized finalizer, startup and pre-create reconciliation, `report_document.created`, additive `audit_status` / `audit_message` / `pending_audit_count`, and the frontend success-plus-separate-warning presentation.
+- **Next authorized work:** the `CR-006` evidence-only diagnostic of JSON export create-response fallback reachability and the required product contract. C3-II-B2 implementation is **not** authorized.
+- **Lifecycle unchanged:** `C3-II-B2` blocked by CR-006, `C3-II-B3` blocked by CR-004, `CR-006` and `CR-004` both `needs evidence`, C3 incomplete, C4 inactive, product release readiness not claimed.
+- **Documentation-only scope of the closure PR:** no production, migration, dependency, lockfile or test-code change; no product suite re-executed.
+
+## HISTORICAL SNAPSHOT — SUPERSEDED — 2026-07-31 — C3-II-B1 implemented on a PR branch (not merged)
+
+> True while PR #163 was open and unmerged. The implementation record below stands; its lifecycle statement and its per-head evidence counts are superseded by the `2026-08-01` closure entry above, which records the merged final head `afd65fd` and its `1550 passed / 0 failed` result.
 
 - **Baseline:** branched from verified `origin/main` = `385873fa9f393f9dc4dcac14e7bc79e0da12c5d1` (PR #162 merge commit) with a clean worktree. Branch `claude/c3-ii-b1-report-document-audit`.
 - **Migration:** `0020_artifact_audit_operations`, registered exactly once after `0019`. One table plus a partial unique index on the active `(artifact_kind, primary_filename)` identity and a kind/status lookup index. `CHECK` constraints pin the status, artifact-kind and audit-action vocabularies, require an `audited` row to carry its `audit_logs.id` and a non-`audited` row to carry none, and require a `report_document` row to record its companion sidecar. No legacy backfill, no artifact touched, no AuditLog row created by the migration.

@@ -62,7 +62,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` remains a `needs evidence` row and is not activated. `CR-004` remains inactive. C3-I and C3-II-A are merged and closed; C3 remains incomplete. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted, and `C3-II-B1 — Durable ledger and report-document AuditLog coverage` is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. `C3-II-B2` remains blocked by CR-006, and `C3-II-B3` remains blocked by CR-004. C4 remains inactive. Product release readiness is not claimed.
+`CR-006` remains a `needs evidence` row; it is not an implementation slice, and its evidence-only diagnostic is the next authorized task. `CR-004` remains a `needs evidence` row and inactive. C3-I, C3-II-A and C3-II-B1 are merged and closed; C3 remains incomplete. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted, and `C3-II-B1 — Durable ledger and report-document AuditLog coverage` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #163, final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. `C3-II-B2` remains blocked by CR-006, and `C3-II-B3` remains blocked by CR-004. C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -164,7 +164,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
 | Себестоимость, налог и маржа (расчёты и снапшоты) | **ЗАКРЫТО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154); отчёты и «Сводка мастерской» читают персистентные снапшоты (`C2-III-B`, PR #157). C2 завершён | Выполнено — контракт принят как `CR-008`; все четыре нарезки влиты и проверены по точному head |
-| AuditLog workspace | C3-I and C3-II-A — **DONE — MERGED AND EXACT-HEAD VERIFIED**; `CR-009` — **ACCEPTED**; `C3-II-B1` — **IMPLEMENTED ON PR BRANCH — NOT MERGED**; contracts: `docs/audit-log.md`, ADR 0013 | C3 incomplete: B1 not merged; B2 blocked by CR-006; B3 blocked by CR-004 |
+| AuditLog workspace | C3-I, C3-II-A and C3-II-B1 — **DONE — MERGED AND EXACT-HEAD VERIFIED** (B1 = PR #163); `CR-009` — **ACCEPTED**; contracts: `docs/audit-log.md`, ADR 0013 | C3 incomplete: B2 blocked by CR-006; B3 blocked by CR-004; next task is the evidence-only CR-006 diagnostic |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
 
@@ -890,7 +890,7 @@ Do not classify the behavior as unsafe and do not prescribe a correction design 
 
 Clearing these four failures does **not** make the product release-ready. The following stayed outside the backend baseline correction gate and were not activated by it: final macOS `.app`/`.dmg` and user-ready launch; packaged update flow and update smoke; verified user/remote installation process; Restore product decision and implementation; C1 tax setting; C2 cost, tax, and margin completion; C3 user-facing read-only AuditLog workspace; full release-candidate smoke; continued documentation accuracy. See section 7 and sections 11–13.
 
-> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3-I and C3-II-A have merged and closed as PR #159 and PR #161. CR-009 is accepted and not implemented; only C3-II-B1 is authorized after this documentation PR merges, while B2/B3 remain blocked by CR-006/CR-004. C3 remains incomplete, and product release readiness is still not claimed. Current state: § C3.
+> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3-I, C3-II-A and C3-II-B1 have merged and closed as PR #159, PR #161 and PR #163. CR-009 is accepted and implemented for report documents only, while B2/B3 remain blocked by CR-006/CR-004. C3 remains incomplete, and product release readiness is still not claimed. Current state: § C3.
 
 ---
 
@@ -1671,10 +1671,11 @@ Render backend DTO values; render `Недоступно` for null historical val
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-009 — ACCEPTED
-C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
+CR-006 diagnostic — ACTIVE NEXT EVIDENCE TASK
 ```
 
 `C3-I` merged as PR #159: final reviewed head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`. Its exact evidence attribution is recorded in `docs/audit-log.md` § 15. The read contract stays unchanged: one `GET /api/audit-logs`, `actor_type` rather than `source`, safe backend-owned `display_summary`, no raw summary or metadata, and a read-only `/settings/audit-log` workspace.
@@ -1699,7 +1700,7 @@ Full implementation contract and honest evidence attribution: `docs/audit-log.md
 
 ### CR-009 and C3-II-B — Durable file-backed artifact AuditLog semantics
 
-`CR-009` is **accepted**; its report-document slice `C3-II-B1` is implemented on a PR branch and not merged. Durable contract:
+`CR-009` is **accepted**; its report-document slice `C3-II-B1` is `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #163. Durable contract:
 `docs/decisions/0013-file-backed-artifact-audit-semantics.md`; AuditLog summary:
 `docs/audit-log.md` § 17.
 
@@ -1727,10 +1728,21 @@ migrations.
 Status:
 
 ```text
-IMPLEMENTED ON PR BRANCH — NOT MERGED
+DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
-Delivered on the PR branch, and nothing beyond it:
+PR #163, base `main`, final reviewed head
+`afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit
+`ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`.
+Accepted merged evidence: complete backend + launcher suite
+`1550 passed / 0 failed`; backend collection `1533` with all `1376` baseline
+node IDs preserved and `157` added; complete launcher suite
+`17 passed / 0 failed`; all `19` frontend `test:*` scripts passed; frontend
+build `PASS`; final exact-head launcher smoke `PASS` on `afd65fd`; no
+unresolved P0 or P1 findings. The focused exact-head smoke is not release
+smoke.
+
+Delivered on merged `main`, and nothing beyond it:
 
 - the next sequential migration for `artifact_audit_operations`;
 - the bounded ledger repository/domain service and idempotent finalizer;

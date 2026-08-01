@@ -1760,9 +1760,9 @@ restore
 - `metadata_json` is **never** returned by the read API. It is dominated by internal foreign-key IDs, enum codes and counters — exactly the class of value a non-technical user must not see — so the `C3-I` read model excludes it in full rather than field by field.
 - The **raw persisted `summary` is never returned either.** It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text. The read API returns `display_summary`, a backend-owned safe Russian value resolved from `action` by a focused presenter, with the raw summary never used as a value or a fallback. Historical rows are not rewritten — only what is shown changes.
 - The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
-- C3-I (PR #159) and C3-II-A (PR #161) are both `DONE — MERGED AND EXACT-HEAD VERIFIED`, but C3 is incomplete.
-- `CR-009` is accepted, and `C3-II-B1` implements its report-document slice on the PR branch. For a scoped file-backed create, a fully written and verified artifact is the authoritative result. Audit finalization failure preserves it and returns HTTP `201` with a separate pending-Journal warning; it never becomes false total failure or silent ordinary success.
-- `C3-II-B1` is `IMPLEMENTED ON PR BRANCH — NOT MERGED`. `C3-II-B2` remains blocked by CR-006 and `C3-II-B3` by CR-004.
+- C3-I (PR #159), C3-II-A (PR #161) and C3-II-B1 (PR #163) are all `DONE — MERGED AND EXACT-HEAD VERIFIED`, but C3 is incomplete.
+- `CR-009` is accepted, and `C3-II-B1` implements its report-document slice on merged `main`. For a scoped file-backed create, a fully written and verified artifact is the authoritative result. Audit finalization failure preserves it and returns HTTP `201` with a separate pending-Journal warning; it never becomes false total failure or silent ordinary success.
+- `C3-II-B1` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. `C3-II-B2` remains blocked by CR-006 and `C3-II-B3` by CR-004.
 
 ### Examples
 

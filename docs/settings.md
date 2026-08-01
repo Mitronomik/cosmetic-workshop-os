@@ -107,10 +107,10 @@ Profile values are display-only settings for Settings and future documents. They
 Status:
 
 ```text
-IMPLEMENTED ON PR BRANCH — NOT MERGED
+DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
-This C3 follow-up runtime slice is implemented on branch `codex/c3-ii-a-atomic-workshop-profile-audit` and is not merged. It preserves the existing `GET` and `PUT /api/settings/workshop-profile` endpoints, field names, response shape, validation limits, NFKC normalization, control-character rejection, form lifecycle and report-document immutability.
+This C3 follow-up runtime slice merged as PR #161 — final reviewed and smoke-tested head `6c327630d0e4cca3c566253bf9f8224aaaa33172`, merge commit `3fec160f08aa7e775aa3e7ea650e570bf48955ad`, merged `2026-07-30T08:11:41Z`. It preserves the existing `GET` and `PUT /api/settings/workshop-profile` endpoints, field names, response shape, validation limits, NFKC normalization, control-character rejection, form lifecycle and report-document immutability.
 
 A real canonical profile change must run as one caller-owned SQLite transaction:
 
@@ -168,8 +168,8 @@ Sections 5, 6, and the tax/margin calculations in section 8 are **C2**. Readines
 - `C2-III-A` — Order and `ProductionBatch` financial presentation: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #154);
 - `C2-III-B` — snapshot-backed reports and report documents: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`). **C2 is `COMPLETED`.**
 - `C3-I` — read-only AuditLog workspace: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #159).
-- `C3-II-A` — atomic workshop-profile AuditLog coverage: `IMPLEMENTED ON PR BRANCH — NOT MERGED`; contract `docs/audit-log.md` § 16.
-- `C3-II-B` — file-backed artifact AuditLog semantics: `NEEDS PRODUCT DECISION — NOT AUTHORIZED`; contract `docs/audit-log.md` § 17.
+- `C3-II-A` — atomic workshop-profile AuditLog coverage: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #161); contract `docs/audit-log.md` § 16.
+- `C3-II-B` — file-backed artifact AuditLog semantics: decided as `CR-009` (ADR 0013) and subdivided. `C3-II-B1` — durable ledger and report-document coverage: `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #163). `C3-II-B2` remains `BLOCKED BY CR-006 — NOT AUTHORIZED` and `C3-II-B3` remains `BLOCKED BY CR-004 — NOT AUTHORIZED`; contract `docs/audit-log.md` § 17.
 
 The current setting is **only ever an input to calculations**. It never recalculates history: changing or clearing it leaves every completed `ProductionBatch`, report value, prior audit record, and generated document exactly as it was. `C2-II` snapshots the active rate **and** its effective timestamp onto the `ProductionBatch` at confirmation time, in nullable columns that are never backfilled, and reports will read those snapshots only.
 

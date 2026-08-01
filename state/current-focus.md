@@ -1,6 +1,6 @@
-# Current focus — C3-II-B1 implemented on a PR branch, not merged
+# Current focus — C3-II-B1 merged and closed; CR-006 diagnostic is next
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I and C3-II-A merged and exact-head verified; CR-009 accepted; C3-II-B1 implemented on a PR branch and not merged; C3 incomplete; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A and C3-II-B1 merged and exact-head verified; CR-009 accepted and implemented for report documents; C3 incomplete; C4 inactive**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -18,20 +18,23 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I and
 - `C3-I — Read-only AuditLog workspace`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #159)
 - `C3-II-A — Atomic workshop-profile AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #161)
 - `CR-009 — Durable file-backed artifact AuditLog semantics`: **ACCEPTED**
-- `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
+- `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #163)
 - `C3-II-B2 — JSON export AuditLog coverage`: **BLOCKED BY CR-006 — NOT AUTHORIZED**
 - `C3-II-B3 — Manual backup AuditLog coverage`: **BLOCKED BY CR-004 — NOT AUTHORIZED**
 - `C3 — INCOMPLETE`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **C3-II-B1 is implemented on `claude/c3-ii-b1-report-document-audit` and is not merged.** B2, B3 and C4 remain unauthorized.
+- **C3-II-B1 is merged into `main` through PR #163.** B2, B3 and C4 remain unauthorized.
+- Next active work: **`CR-006` — evidence-only diagnostic of JSON export create-response fallback reachability and required product contract.**
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
-## C3-II-B1 — implemented on a PR branch, not merged
+## C3-II-B1 — merged and exact-head verified (2026-08-01)
 
 ```text
-C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
@@ -39,11 +42,54 @@ C4 — INACTIVE
 Product release readiness — NOT CLAIMED
 ```
 
-Branch `claude/c3-ii-b1-report-document-audit`, based on verified
+`VERIFIED FROM REPOSITORY / GITHUB / MERGED PR #163 EVIDENCE — NOT RE-EXECUTED IN THIS DOCUMENTATION PR`
+
+| Item | Verified value |
+|---|---|
+| PR | #163 — `C3-II-B1 — Durable ledger and report-document AuditLog coverage` |
+| State | `MERGED`, base `main`, non-draft |
+| Head branch | `claude/c3-ii-b1-report-document-audit` |
+| Final reviewed head | `afd65fd2878fa02a0d4dc4963812c80644a4e787` |
+| Merge commit | `ef0297e41a731f082a2a21a46b361aa9aac36cfa` |
+| Merged at | `2026-08-01T05:30:38Z` |
+| Merged implementation state | `DONE` |
+| Final exact-head result | `PASS` |
+
+The final reviewed head is an ancestor of the merge commit, and the merge
+commit is an ancestor of `origin/main`. The branch was based on verified
 `origin/main` = `385873fa9f393f9dc4dcac14e7bc79e0da12c5d1` (PR #162 merge
 commit).
 
-Delivered: migration `0020_artifact_audit_operations` registered once after
+**Accepted merged PR #163 evidence.** None of these results was executed in
+the documentation task that recorded this closure.
+
+| Check | Accepted result |
+|---|---|
+| Complete backend + launcher suite | `1550 passed / 0 failed` |
+| Backend collection | `1533` |
+| Original backend baseline node IDs | all `1376` preserved / `0` missing |
+| Added backend tests | `157` |
+| Complete launcher suite | `17 passed / 0 failed` |
+| Frontend | all `19` `test:*` scripts passed |
+| Frontend build | `PASS` |
+| Final exact-head launcher smoke | `PASS` on `afd65fd2878fa02a0d4dc4963812c80644a4e787` |
+
+The final exact-head audit found:
+
+```text
+P0 — none
+P1 — none remaining
+P2 — documented and non-blocking
+```
+
+The single P1 the audit found — the broad `except Exception` on the create-path
+identity reservation — was fixed in the final head `afd65fd`. The recorded P2
+items are the verifier's local copy of the format vocabulary (pinned by a test),
+`_unique_document_paths` being bounded by ledger contents rather than an explicit
+cap, and the finalizer's rollback signal overloading `RuntimeError`. The focused
+exact-head launcher smoke is **not** release smoke.
+
+Delivered on merged `main`: migration `0020_artifact_audit_operations` registered once after
 `0019`; the bounded ledger repository and its pure domain vocabulary; the
 shared report-document pair verifier; the idempotent write-serialized
 finalizer; startup reconciliation after migrations; one pre-create
@@ -126,6 +172,51 @@ removed write serialization, removed in-transaction re-read, primary-only
 identity check, abandoning ambiguous pairs) were each confirmed to fail the
 suite.
 
+## What is authorized next — the CR-006 diagnostic only
+
+```text
+CR-006 diagnostic — ACTIVE NEXT EVIDENCE TASK
+```
+
+Next active work: **`CR-006` — evidence-only diagnostic of JSON export
+create-response fallback reachability and required product contract.**
+
+Explicit boundary:
+
+```text
+Diagnostic only.
+No export AuditLog implementation.
+No C3-II-B2 authorization.
+No migration.
+No production change.
+```
+
+**The CR-006 diagnostic is authorized. C3-II-B2 implementation is not
+authorized.** The diagnostic must first establish whether the defensive
+fallback in the JSON export create-response path is reachable in real
+production behavior, and only then define the intended contract. No B2 runtime
+implementation may be scoped before that evidence exists.
+
+The diagnostic question is:
+
+```text
+Can the defensive fallback in the JSON export create-response path occur in
+real production behavior, and what must the API do if the exact created
+artifact cannot be confirmed after the file write?
+```
+
+The diagnostic must investigate at least: artifact disappearance after a
+successful write; a filesystem race; a permission failure; a `stat` failure; a
+list/read failure; an exact-filename lookup failure; mocked or injected service
+behavior; whether the created export still exists; whether its metadata can be
+reconstructed safely; whether returning the human manifest reason violates the
+canonical filename-derived API contract; and whether the correct response is
+canonical reconstruction, truthful partial success, or explicit failure.
+
+`CR-006` remains a **`needs evidence`** row. Resolving it is **not** complete,
+no severity is assigned, and no correction design is authorized. `CR-004`
+likewise remains `needs evidence` and unresolved, so `C3-II-B3` stays blocked.
+
 ## C3-II-A closure and CR-009 decision
 
 PR #161 is `MERGED`, base `main`, final reviewed and smoke-tested head
@@ -169,6 +260,12 @@ human/request/export-manifest reason or other separate user-authored text.
 CR-005 is not reopened, and existing artifacts are not renamed or rewritten.
 The automatic `before_migration` backup stays outside CR-009 and before
 migrations.
+
+> **Decision-time authorization text — superseded by the current lifecycle
+> above.** The paragraph below records the boundary CR-009 set when it was
+> accepted, and it is the boundary the merged B1 slice was held to. B1 is now
+> `DONE — MERGED AND EXACT-HEAD VERIFIED` through PR #163; it must not be read
+> as open work.
 
 Only C3-II-B1 is authorized after this documentation PR merges. B1 is limited
 to the next sequential ledger migration, bounded ledger/finalizer, startup and
@@ -524,9 +621,9 @@ app/tests/test_exports_api.py::test_export_reason_defaults_empty_and_sanitizes_u
 
 `R4` is closed and is **not reopened**. `CR-005` is closed and is **not reopened**.
 
-## CR-006 — export create-response fallback — NEEDS EVIDENCE, not active
+## CR-006 — export create-response fallback — NEEDS EVIDENCE, active next diagnostic
 
-`CR-006 — Investigate export create-response fallback confirmation semantics` remains a **`needs evidence`** row in `state/change-requests.md`. It is **not an active implementation slice** and is **non-blocking**.
+`CR-006 — Investigate export create-response fallback confirmation semantics` remains a **`needs evidence`** row in `state/change-requests.md`. It is **not an implementation slice** and is **non-blocking for merged work**, but it is now the **active next evidence task**: the evidence-only diagnostic described in § *What is authorized next* above. The diagnostic is authorized; `C3-II-B2` implementation is not.
 
 Exact current behavior in `backend/app/api/exports.py::create_export`:
 
@@ -536,7 +633,7 @@ Exact current behavior in `backend/app/api/exports.py::create_export`:
 - `ExportResult.reason` is the normalized **human** reason preserved in the export manifest;
 - therefore the fallback may return a human reason where the API contract normally expects the canonical filename-derived slug.
 
-Classification: **NEEDS EVIDENCE.** Not a confirmed product defect. No user-visible failure has been reproduced, and no data loss, overwrite, incorrect file content, or unsafe mutation is proven. Fallback reachability is not established, **no severity is assigned**, and **no correction design is authorized**.
+Classification: **NEEDS EVIDENCE.** Not a confirmed product defect. No user-visible failure has been reproduced, and no data loss, overwrite, incorrect file content, or unsafe mutation is proven. Fallback reachability is not established, **no severity is assigned**, and **no correction design is authorized**. Scheduling the diagnostic changes none of that: `CR-006` stays `needs evidence` until the diagnostic produces evidence, and `C3-II-B2` cannot be scoped before then.
 
 `CR-006` is not part of `CR-004`, is not a reason to reopen `CR-005`, and is not a reason to reopen `R4`. It is **not** a fifth backend baseline failure. Full evidence: `docs/backend-baseline-failure-triage.md` §17.
 
@@ -544,13 +641,13 @@ Classification: **NEEDS EVIDENCE.** Not a confirmed product defect. No user-visi
 
 None of these is activated here.
 
-- `CR-004` — SQLite backup transaction-consistency investigation — remains a separate `needs evidence` row and is **not active**.
+- `CR-004` — SQLite backup transaction-consistency investigation — remains a separate `needs evidence` row and is **not active**. It is unresolved, so `C3-II-B3` stays blocked.
 - Restore product decision and implementation remains **open**.
 - Final macOS packaging and user-ready launch remains **open**.
 - Installation verification remains **open**.
 - Packaged update flow and update smoke remain **open**.
 - Full release-candidate smoke remains **open**.
-- C1 and C2 are **complete**. C3-I and C3-II-A are merged and closed, but C3 is **incomplete**: CR-009 is accepted and not implemented; only B1 is authorized after this documentation PR merges; B2/B3 remain blocked by CR-006/CR-004. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
+- C1 and C2 are **complete**. C3-I, C3-II-A and C3-II-B1 are merged and closed, but C3 is **incomplete**: CR-009 is accepted and implemented for report documents only; B2/B3 remain blocked by CR-006/CR-004. The only authorized next task is the evidence-only CR-006 diagnostic. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**

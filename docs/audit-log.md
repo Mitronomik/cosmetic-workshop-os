@@ -36,7 +36,7 @@ C2 — COMPLETED
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-009 — ACCEPTED
-C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
@@ -44,7 +44,7 @@ C4 — INACTIVE — NEEDS PRODUCT DECISION
 Product release readiness — NOT CLAIMED
 ```
 
-`C3-II-A — Atomic workshop-profile AuditLog coverage` merged as PR #161 and is closed with honest exact-head attribution in § 16.7. `CR-009` accepts the durable file-backed partial-success and reconciliation contract. Only report-document slice C3-II-B1 becomes authorized after this documentation pull request merges; export and backup coverage remain blocked by CR-006 and CR-004 respectively.
+`C3-II-A — Atomic workshop-profile AuditLog coverage` merged as PR #161 and is closed with honest exact-head attribution in § 16.7. `CR-009` accepts the durable file-backed partial-success and reconciliation contract. Its report-document slice `C3-II-B1` merged as PR #163 — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`, final exact-head launcher smoke `PASS`, no unresolved P0 or P1 findings — so `report_document.created` exists on merged `main`. Export and backup coverage remain blocked by CR-006 and CR-004 respectively; the next authorized task is the evidence-only CR-006 diagnostic.
 
 ### 1.1. Implementation modules
 
@@ -1071,12 +1071,12 @@ C3-II-A — Atomic workshop-profile AuditLog coverage
 DONE — MERGED AND EXACT-HEAD VERIFIED
 
 CR-009 — ACCEPTED
-C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```
 
-`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document runtime slice B1 is implemented on a PR branch and not merged; export and backup remain blocked by their separate evidence requests.
+`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document runtime slice B1 merged as PR #163, so report-document creation is audited on merged main; export and backup remain blocked by their separate evidence requests.
 
 ---
 
@@ -1502,12 +1502,14 @@ migrations, and must not depend on a ledger table that may not yet exist.
 ### 17.1. Runtime subdivision
 
 ```text
-C3-II-B1 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B2 — BLOCKED BY CR-006 — NOT AUTHORIZED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```
 
-C3-II-B1 covers the next sequential ledger migration, bounded repository/domain
+C3-II-B1 merged as PR #163 (merge commit
+`ef0297e41a731f082a2a21a46b361aa9aac36cfa`, final reviewed head
+`afd65fd2878fa02a0d4dc4963812c80644a4e787`). It covers the next sequential ledger migration, bounded repository/domain
 service, post-migration startup reconciliation, report-document pre-create
 reconciliation, report-document integration, `report_document.created`,
 additive create fields `audit_status` / `audit_message`, additive status field
