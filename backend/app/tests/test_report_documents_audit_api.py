@@ -413,6 +413,90 @@ def test_status_never_reports_a_fabricated_zero_when_the_ledger_cannot_be_read(m
     assert operations(config) == []
 
 
+def test_a_filesystem_failure_opening_the_ledger_is_also_safely_translated(monkeypatch, tmp_path):
+    """`OSError` is a real path here, not a hypothetical one.
+
+    Opening the database goes through `ensure_database_parent`, whose `mkdir`
+    raises `OSError` when the user-data directory cannot be created — a full or
+    read-only volume, for instance. It must reach the user as the same safe
+    availability answer as a SQLite failure.
+    """
+    config, _documents_dir, client = environment(monkeypatch, tmp_path)
+
+    def failing_count(*_args, **_kwargs):
+        raise PermissionError("[Errno 13] Permission denied: '/private/data'")
+
+    monkeypatch.setattr(ArtifactAuditOperationRepository, "count_unresolved", failing_count)
+
+    response = client.get("/api/report-documents/status")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Не удалось прочитать сведения о документах отчетов. Данные мастерской не изменялись."
+    assert "pending_audit_count" not in response.text
+    for forbidden in ("Permission denied", "Errno", "/private/data", "Traceback"):
+        assert forbidden not in response.text, forbidden
+    assert audit_actions(config) == []
+    assert operations(config) == []
+
+
+@pytest.mark.parametrize(
+    "defect",
+    [
+        TypeError("programming defect"),
+        AttributeError("programming defect"),
+        RuntimeError("programming defect"),
+        AssertionError("programming defect"),
+    ],
+)
+def test_an_unexpected_programming_defect_is_not_disguised_as_ledger_unavailability(tmp_path, defect):
+    """A bug must not be reported as the known "ledger unavailable" condition.
+
+    The safe status error means something specific and recoverable: the ledger
+    could not be read, try again. Translating a `TypeError` into it would hand
+    the user a reassuring Russian sentence about a problem they do not have,
+    while the real defect disappears without a trace and without a stack.
+
+    Asserted at the service layer, where the distinction is observable. At the
+    API layer such a defect becomes the framework's generic 500 — which is
+    correct, and is deliberately *not* the known availability response.
+    """
+    from app.db.config import DatabaseConfig
+    from app.services.report_documents import (
+        ReportDocumentService,
+        ReportDocumentStatusUnavailableError,
+    )
+
+    database_path = tmp_path / "defect.sqlite"
+    initialize_database(DatabaseConfig(path=database_path))
+    service = ReportDocumentService(DatabaseConfig(path=database_path), documents_dir=tmp_path / "documents")
+
+    def raising_pending_count():
+        raise defect
+
+    service.audit_service.pending_count = raising_pending_count
+
+    with pytest.raises(type(defect)) as raised:
+        service.status()
+
+    # The original defect propagates unchanged, not wrapped in the safe error.
+    assert raised.value is defect
+    assert not isinstance(raised.value, ReportDocumentStatusUnavailableError)
+    assert "Не удалось прочитать сведения" not in str(raised.value)
+
+
+def test_the_status_exception_boundary_is_narrow_by_construction():
+    """No broad catch may be reintroduced around the pending-count read."""
+    import inspect
+
+    from app.services import report_documents as module
+
+    source = inspect.getsource(module.ReportDocumentService.status)
+
+    assert "except (sqlite3.Error, OSError)" in source
+    assert "except Exception" not in source
+    assert "except BaseException" not in source
+
+
 def test_status_reports_an_exact_zero_only_when_the_ledger_really_is_empty(monkeypatch, tmp_path):
     _config, _documents_dir, client = environment(monkeypatch, tmp_path)
 

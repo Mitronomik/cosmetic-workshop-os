@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sqlite3
 from typing import Any, Literal
 import struct
 
@@ -88,10 +89,19 @@ class ReportDocumentService:
         If the ledger cannot be read, this raises rather than reporting a count
         it does not actually know. The raised error carries fixed Russian text
         only: the underlying SQLite message never reaches the user.
+
+        The caught tuple is deliberately narrow. `sqlite3.Error` and `OSError`
+        are the failures the persistence boundary genuinely produces — opening
+        the database goes through `ensure_database_parent`, whose `mkdir` raises
+        `OSError`, and through `sqlite3.connect` plus the count query, which
+        raise `sqlite3.Error`. Catching `Exception` here would additionally
+        swallow `TypeError`, `AttributeError` and friends, dressing a programming
+        defect up as the known "ledger temporarily unavailable" condition and
+        hiding a real bug behind a reassuring Russian sentence.
         """
         try:
             pending_audit_count = self.audit_service.pending_count()
-        except Exception as failure:
+        except (sqlite3.Error, OSError) as failure:
             raise ReportDocumentStatusUnavailableError(
                 "Не удалось прочитать сведения о документах отчетов. Данные мастерской не изменялись."
             ) from failure

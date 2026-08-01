@@ -154,6 +154,56 @@ def test_the_child_keeps_its_existing_pythonpath_host_port_and_cwd(monkeypatch, 
     assert "--host" in child.command and "127.0.0.1" in child.command
 
 
+def test_start_backend_process_requires_a_database_path(monkeypatch, tmp_path, recorded_child):
+    """The path is mandatory, so the startup/API split cannot silently return.
+
+    An optional parameter would leave this defect one forgetful call site away,
+    and it fails silently: startup migrates one database, the API serves
+    another, and every individual step still reports success. Requiring it turns
+    that into an immediate, loud `TypeError` at the call.
+    """
+    import inspect
+
+    signature = inspect.signature(runtime.start_backend_process)
+    parameter = signature.parameters["database_path"]
+
+    assert parameter.default is inspect.Parameter.empty, "database_path must have no default"
+    assert parameter.annotation in (Path, "Path"), "database_path must be a plain Path, not Path | None"
+
+    config = build_runtime_config(backend_port=free_port(), mode="user", open_browser=False)
+    with pytest.raises(TypeError):
+        runtime.start_backend_process(config, resolve_runtime_paths())
+
+
+def test_start_backend_process_pins_the_database_environment_unconditionally(monkeypatch, tmp_path, recorded_child):
+    """Every start pins the key — there is no branch that can skip it."""
+    import inspect
+
+    source = inspect.getsource(runtime.start_backend_process)
+    assert "if database_path is not None" not in source
+    assert "database_path or " not in source
+
+    monkeypatch.delenv(DATABASE_PATH_ENV, raising=False)
+    chosen = tmp_path / "chosen" / "workshop.sqlite"
+    config = build_runtime_config(backend_port=free_port(), mode="user", open_browser=False)
+
+    runtime.start_backend_process(config, resolve_runtime_paths(), chosen)
+
+    assert RecordedPopen.instances[-1].env[DATABASE_PATH_ENV] == str(chosen)
+
+
+def test_no_production_call_site_starts_the_api_without_a_database_path():
+    """Every real caller supplies the startup-selected path."""
+    import inspect
+
+    source = inspect.getsource(runtime)
+    calls = [line.strip() for line in source.splitlines() if "start_backend_process(" in line and "def " not in line]
+
+    assert calls, "expected at least one production call site"
+    for call in calls:
+        assert "startup.database_path" in call, call
+
+
 def test_the_launcher_reads_the_database_environment_key_from_the_backend(monkeypatch, tmp_path):
     """The key is not duplicated as a literal in the launcher.
 

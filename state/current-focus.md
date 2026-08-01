@@ -79,12 +79,19 @@ migration.
    AuditLog event all land in the startup-selected file, the repository default
    stays untouched, and a restart reconciles that same database.
 
+   `start_backend_process()` takes `database_path: Path` as a **required**
+   parameter and pins the environment unconditionally, so no future caller can
+   quietly reintroduce the split; omitting it is a `TypeError` at the call site.
+
 2. `ReportDocumentAuditService.pending_count()` degraded to `0` when the ledger
    could not be read. That was untruthful: `0` is a claim that nothing is
    awaiting a Journal entry, and the frontend clears a standing warning on it.
    The fallback is removed; a read failure now surfaces through the existing
    service/API error boundary as a fixed Russian message with no SQLite detail,
-   and the status endpoint stays read-only.
+   and the status endpoint stays read-only. The caught tuple is narrowed to
+   `(sqlite3.Error, OSError)` — the failures the persistence boundary genuinely
+   produces — so an unexpected programming defect propagates as itself instead
+   of being dressed up as a known availability problem.
 
 `launcher/tests/test_runtime.py::test_launcher_startup_respects_user_data_override`
 was failing on the untouched baseline `385873f` because its local

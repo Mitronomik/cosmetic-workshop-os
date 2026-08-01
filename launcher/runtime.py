@@ -57,7 +57,7 @@ def backend_database_path_env(paths: RuntimePaths) -> str:
 
 
 def start_backend_process(
-    config: RuntimeConfig, paths: RuntimePaths, database_path: Path | None = None
+    config: RuntimeConfig, paths: RuntimePaths, database_path: Path
 ) -> subprocess.Popen[str]:
     """Start the API child, pinned to the database startup actually prepared.
 
@@ -67,6 +67,13 @@ def start_backend_process(
     `get_database_config()` on its own and, with no environment value set, falls
     back to the repository default — so it would serve a database that was never
     migrated, while the real user database sat untouched.
+
+    The parameter is **required**, with no default and no `None` branch. Making
+    it optional would leave the startup/API split one forgetful call site away
+    from returning, and that split is silent: every individual step still looks
+    like it succeeded. A caller that cannot name the database has no business
+    starting the API, so omitting it is a `TypeError` at the call, not a
+    corrupted run.
 
     An inherited value is deliberately overwritten rather than respected: a stale
     `COSMETIC_WORKSHOP_DB_PATH` left in the parent shell is exactly the case that
@@ -79,8 +86,7 @@ def start_backend_process(
     if env.get("PYTHONPATH"):
         python_path_parts.append(env["PYTHONPATH"])
     env["PYTHONPATH"] = os.pathsep.join(python_path_parts)
-    if database_path is not None:
-        env[backend_database_path_env(paths)] = str(database_path)
+    env[backend_database_path_env(paths)] = str(database_path)
     command = [
         sys.executable,
         "-m",
