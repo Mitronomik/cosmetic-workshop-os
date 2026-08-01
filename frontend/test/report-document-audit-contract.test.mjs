@@ -454,17 +454,22 @@ test('the pending notice is rendered as its own warning region, apart from the s
   assert.doesNotMatch(source, /feedbackMessage\('error', warning\)/);
 });
 
-test('Backup and Export audit behaviour is untouched by this slice', async () => {
+test('Backup audit behaviour is still untouched, and Export uses its own contract', async () => {
   const source = await mainSource();
-  for (const forbidden of [/backupUiState\.auditWarning/, /exportUiState\.auditWarning/, /backupUiState\.pendingAuditCount/, /exportUiState\.pendingAuditCount/]) {
+  // Manual backup remains unimplemented: C3-II-B3 is blocked by CR-004.
+  for (const forbidden of [/backupUiState\.auditWarning/, /backupUiState\.pendingAuditCount/]) {
     assert.doesNotMatch(source, forbidden);
   }
   // Neither backup nor export create paths consult the report-document contract.
+  // CR-009 B2 gave exports their own contract module with its own Russian
+  // wording; sharing this one would let a document's warning appear on /exports.
   const backupMutate = source.split('\n').find((line) => line.includes('const backupRuntime = createLocalArtifactRouteRuntime'));
   const exportMutate = source.split('\n').find((line) => line.includes('const exportRuntime = createLocalArtifactRouteRuntime'));
   assert.ok(backupMutate && exportMutate);
   assert.doesNotMatch(backupMutate, /reportDocumentAudit/);
+  assert.doesNotMatch(backupMutate, /exportAudit/);
   assert.doesNotMatch(exportMutate, /reportDocumentAudit/);
+  assert.match(exportMutate, /exportAuditResult/);
 });
 
 test('the report-documents page keeps its focus targets and stays keyboard operable', async () => {

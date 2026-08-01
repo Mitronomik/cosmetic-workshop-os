@@ -31,6 +31,20 @@ This ADR changes **no production code**, adds **no migration**, changes **no
 dependency**, and does **not** implement `C3-II-B2`. It records a product
 decision and the diagnostic evidence behind it.
 
+> **Current lifecycle pointer — not part of the accepted decision.** The block
+> above records the slice authorization as it stood when this ADR was accepted on
+> 2026-08-01, and the accepted decision below is unchanged and is not reopened.
+> Since then `C3-II-B2` has been implemented on branch
+> `claude/c3-ii-b2-json-export-audit` and is
+> `IMPLEMENTED ON PR BRANCH — NOT MERGED`; that branch carries the
+> create-response correction decided here, so `POST /api/exports` no longer
+> re-scans the export directory and its `reason` is parsed from the exact final
+> filename. Because the branch is unmerged, merged `main` still exhibits the
+> behavior this ADR classifies as the defect. `CR-004` remains `needs evidence`,
+> `C3-II-B3` stays blocked, C3 is still incomplete, C4 is still inactive, and
+> product release readiness is still not claimed. Current authority:
+> `state/current-focus.md`.
+
 ---
 
 ## Context

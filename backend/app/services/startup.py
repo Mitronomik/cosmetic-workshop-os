@@ -7,6 +7,7 @@ from app.db.paths import UserDataPaths, create_user_data_directories, resolve_us
 from app.db.migrations import pending_migration_ids
 from app.services.backup import BackupResult, backup_sqlite_database
 from app.services.database import initialize_database
+from app.services.export_audit import ExportReconciliationResult, reconcile_json_exports
 from app.services.report_document_audit import ReportDocumentReconciliationResult, reconcile_report_documents
 
 StartupMode = Literal["development", "user"]
@@ -23,6 +24,8 @@ class StartupInitializationResult:
     # CR-009 B1. Internal reconciliation counters, exposed to startup code for
     # logging and tests only; never rendered in ordinary launcher output.
     report_document_audit_reconciliation: ReportDocumentReconciliationResult | None = None
+    # CR-009 B2. The same, for JSON exports.
+    json_export_audit_reconciliation: ExportReconciliationResult | None = None
 
 
 def validate_startup_mode(mode: str) -> StartupMode:
@@ -70,6 +73,10 @@ def initialize_startup(mode: str = "development") -> StartupInitializationResult
     # unusable. That deliberately does not extend to migration or database
     # failures above: those still propagate untouched.
     reconciliation = reconcile_report_documents(config)
+    # CR-009 B2: JSON exports reconcile next, in this fixed order, on the same
+    # config. Neither pass raises, so one artifact kind failing cannot prevent
+    # the other from being reconciled or the application from starting.
+    export_reconciliation = reconcile_json_exports(config)
     return StartupInitializationResult(
         mode=validated_mode,
         database_path=config.path,
@@ -77,4 +84,5 @@ def initialize_startup(mode: str = "development") -> StartupInitializationResult
         applied_migrations=applied_migrations,
         backup=backup,
         report_document_audit_reconciliation=reconciliation,
+        json_export_audit_reconciliation=export_reconciliation,
     )

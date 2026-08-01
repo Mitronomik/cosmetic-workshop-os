@@ -2,13 +2,21 @@
 
 ## Current phase
 
-`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-006 — ACCEPTED`. The broader C3 obligation is incomplete.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-006 — ACCEPTED`. `C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED`. The broader C3 obligation is incomplete.
 
 ## Current next step
 
-- Implement `C3-II-B2 — JSON export AuditLog coverage` as **one bounded implementation pull request**, begun only after the `CR-006` decision pull request merges and only from `origin/main`. It reuses the existing `artifact_audit_operations` ledger with **no new migration** and carries the accepted `CR-006` create-response correction. Scope: `docs/implementation-plan.md` § *C3-II-B2*.
+- Review the open `C3-II-B2 — JSON export AuditLog coverage` pull request. It is implemented on `claude/c3-ii-b2-json-export-audit`, reuses the existing `artifact_audit_operations` ledger with **no new migration**, and carries the accepted `CR-006` create-response correction. It is **not merged**, so JSON export creation is still not audited on merged `main`. Scope: `docs/implementation-plan.md` § *C3-II-B2*.
 - Keep C3-II-B3 blocked by CR-004; `CR-004` stays `needs evidence`.
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
+
+## 2026-08-01 — C3-II-B2 implemented on its PR branch; open and unmerged
+
+- **Slice:** `C3-II-B2 — JSON export AuditLog coverage`, one bounded implementation pull request from merged `main` (`1513ff6411baf1dcbc473c24c01d00852f10c677`, the PR #165 merge commit).
+- **Delivered:** the `CR-006` create-response correction — the directory-wide `list_export_files` re-scan is removed from `POST /api/exports`, the response is built from the exact `ExportResult`, and the API `reason` is parsed from the exact final filename through `parse_export_reason`; `reserve_export_path` as the single filename-selection algorithm with an active ledger identity treated as occupied; one `prepared` `json_export` ledger row committed before the write; a strictly validated `reserved_export_path` accepted by `create_json_export`; an exact-path read-only JSON-export verifier; exactly-once `export.created` finalization sharing one `BEGIN IMMEDIATE` transaction with the `audited` transition; JSON-export startup reconciliation after migrations and one bounded pre-create pass; additive `audit_status` / `audit_message` and `pending_audit_count`; the accepted `export.created` Journal vocabulary; and the frontend success-plus-warning presentation on `/exports`.
+- **No new migration.** Migration `0020_artifact_audit_operations` is reused unchanged; no `0021` exists.
+- **Executed evidence:** complete backend + launcher suite `1648 passed / 0 failed`; all `1550` baseline node IDs preserved, `98` added, `0` lost; complete launcher suite `17 passed / 0 failed`; all `20` frontend `test:*` scripts passed; frontend build `PASS`; `frontend/src/main.ts` exactly `6399` lines.
+- **Not merged.** `C3-II-B3` stays blocked by `CR-004`; C3 remains incomplete; C4 remains inactive; product release readiness is not claimed.
 
 ## 2026-08-01 — CR-006 decided; C3-II-B2 authorized after merge
 

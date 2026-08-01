@@ -32,7 +32,7 @@ only the first runtime slice after this documentation pull request merges.
 > `CR-006` has since been resolved and **accepted** in
 > `docs/decisions/0014-json-export-create-confirmation-semantics.md`, so
 > `C3-II-B2` is now
-> `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED`; its scope
+> `IMPLEMENTED ON PR BRANCH — NOT MERGED`; its scope
 > is `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
 > coverage*, and nothing in the accepted decision below — including the
 > reserved `export.created` vocabulary and metadata keys — is changed by it.
@@ -601,7 +601,7 @@ This ADR neither resolves nor implements `CR-006`.
 
 > **Superseded status, 2026-08-01 — the scope above is unchanged.** `CR-006` is
 > now `accepted` (ADR 0014), so this slice is
-> `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED`. Full
+> `IMPLEMENTED ON PR BRANCH — NOT MERGED`. Full
 > scope: `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
 > coverage*.
 

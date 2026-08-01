@@ -55,6 +55,7 @@ ACTION_LABELS: Final[dict[str, str]] = {
     "client_feedback.created": "Добавлена обратная связь клиента",
     "demo_data.installed": "Демонстрационные данные установлены",
     "demo_data.cleared": "Демонстрационные данные удалены",
+    "export.created": "Экспорт создан",
     "import_draft_applied": "Импорт применён",
     "ingredient.created": "Компонент создан",
     "ingredient.updated": "Компонент изменён",
@@ -96,6 +97,10 @@ ENTITY_LABELS: Final[dict[str, str]] = {
     "client_recipe": "Индивидуальный рецепт",
     "client_wish": "Пожелание клиента",
     "demo_data_session": "Демонстрационные данные",
+    # CR-009 B2. The Journal shows that an export was created; the persisted
+    # `entity_id` is an internal operation UUID and stays suppressed by the read
+    # model, exactly as every other entity ID is.
+    "export_file": "Экспорт",
     "ImportDraft": "Черновик импорта",
     "ingredient": "Компонент",
     "ingredient_lot": "Партия компонента",
@@ -150,6 +155,10 @@ GENERIC_SUMMARIES: Final[dict[str, str]] = {
     "client_feedback.created": "Добавлена обратная связь клиента",
     "demo_data.installed": "Установлены демонстрационные данные",
     "demo_data.cleared": "Демонстрационные данные удалены",
+    # CR-009 B2, and deliberately absent from `SUFFIX_PREFIXES` below: the
+    # persisted summary is the fixed English string `JSON export created`, there
+    # is no business name to retain, and no filename or reason may ever be shown.
+    "export.created": "Экспорт создан",
     "import_draft_applied": "Импорт применён",
     "ingredient.created": "Компонент создан",
     "ingredient.updated": "Компонент изменён",

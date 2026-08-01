@@ -1,10 +1,8 @@
 # Handoff
 
-## CR-006 decision handoff — accepted; C3-II-B2 authorized after merge (2026-08-01)
+## C3-II-B2 implementation handoff — implemented on its PR branch, open and unmerged (2026-08-01)
 
-> This is the single current authoritative lifecycle conclusion. The
-> `C3-II-B1` closure handoff below remains accurate for B1 itself, but its
-> closing line "B2 and B3 remain unauthorized" is superseded by this section.
+> This is the single current authoritative lifecycle conclusion.
 
 ```text
 C1 — COMPLETED
@@ -14,7 +12,63 @@ C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-009 — ACCEPTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
-C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
+C3 — INCOMPLETE
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Product release readiness — NOT CLAIMED
+```
+
+`C3-II-B2 — JSON export AuditLog coverage` is implemented on branch
+`claude/c3-ii-b2-json-export-audit`, cut from merged `main`
+`1513ff6411baf1dcbc473c24c01d00852f10c677` (the PR #165 merge commit). The pull
+request is **open and unmerged**, so JSON export creation is still not audited on
+merged `main`.
+
+What that branch delivers, and nothing beyond it:
+
+- the accepted `CR-006` create-response correction — no directory re-scan on
+  `POST /api/exports`, the response built from the exact `ExportResult`, and the
+  API `reason` parsed from the exact final filename through the same
+  `parse_export_reason` contract list and status use;
+- `reserve_export_path` as the one filename-selection algorithm, with an active
+  `json_export` ledger identity treated as occupied alongside an existing file;
+- one `prepared` ledger row committed before the export write, reusing
+  `artifact_audit_operations` — **no new migration**, `0020` unchanged;
+- an exact-path, read-only JSON-export verifier classifying `valid`,
+  `definitely_absent` and `ambiguous`;
+- exactly-once `export.created` finalization sharing one `BEGIN IMMEDIATE`
+  transaction with the `audited` ledger transition;
+- JSON-export startup reconciliation after migrations, ordered after the
+  report-document pass, plus one bounded pre-create pass;
+- additive `audit_status` / `audit_message` and `pending_audit_count`;
+- frontend success-plus-warning presentation on `/exports`.
+
+Executed on the branch: complete backend + launcher suite `1648 passed / 0
+failed`, all `1550` baseline node IDs preserved and `98` added; complete launcher
+suite `17 passed / 0 failed`; all `20` frontend `test:*` scripts passed; frontend
+build `PASS`.
+
+**Next step: review that pull request.** Nothing further is authorized until it
+merges. Do not resolve `CR-004`, do not implement `C3-II-B3`, do not activate
+C4, and do not claim release readiness.
+
+## CR-006 decision handoff — accepted; C3-II-B2 authorized after merge (2026-08-01)
+
+> Superseded by the section above for the `C3-II-B2` status line only; every
+> other conclusion here stands. The `C3-II-B1` closure handoff below remains
+> accurate for B1 itself, but its closing line "B2 and B3 remain unauthorized"
+> is superseded.
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-009 — ACCEPTED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 C3 — INCOMPLETE
 C4 — INACTIVE — NEEDS PRODUCT DECISION
@@ -219,7 +273,7 @@ had been failing on untouched baseline `385873f` because its local
 
 > **Superseded.** At B1 closure, B2 and B3 were both unauthorized. `CR-006` has
 > since been resolved and accepted, so `C3-II-B2` is now
-> `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED` and may
+> `IMPLEMENTED ON PR BRANCH — NOT MERGED` and may
 > reuse the ledger for `json_export`. `C3-II-B3` stays unauthorized: do not
 > reuse the ledger for `manual_backup` until `CR-004` is resolved.
 

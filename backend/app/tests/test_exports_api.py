@@ -12,11 +12,12 @@ except (RuntimeError, ImportError):
     TestClient = None
 
 from app.db.config import DATABASE_PATH_ENV, DatabaseConfig
+from app.db.connection import session
 from app.db.migrations import apply_migrations
 from app.db.paths import USER_DATA_DIR_ENV
 from app.main import create_app
 from app.schemas.exports import ExportCreateRequest
-from app.services.export import create_json_export, list_export_files
+from app.services.export import EXPORT_TABLES, create_json_export, list_export_files
 
 
 class _FrozenDatetime(datetime):
@@ -116,7 +117,12 @@ def test_post_export_creates_json_snapshot_without_modifying_source(tmp_path, mo
     db_path = tmp_path / "cosmetic_workshop.sqlite"
     _create_database(db_path)
     before_bytes = db_path.read_bytes()
-    before_mtime = db_path.stat().st_mtime_ns
+    with session(DatabaseConfig(path=db_path)) as connection:
+        business_rows_before = {
+            table_name: connection.execute(f'SELECT * FROM "{table_name}" ORDER BY rowid').fetchall()
+            for table_name in EXPORT_TABLES
+            if table_name != "audit_logs"
+        }
     monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
     monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
 
@@ -149,8 +155,33 @@ def test_post_export_creates_json_snapshot_without_modifying_source(tmp_path, mo
     assert "schema_migrations" not in export_payload["data"]
     assert "alembic_version" not in export_payload["data"]
     assert db_path.exists()
-    assert db_path.read_bytes() == before_bytes
-    assert db_path.stat().st_mtime_ns == before_mtime
+    # CR-009 B2: creating an export now also records one `export.created`
+    # Journal event and one ledger row in this same database, so the file is
+    # legitimately no longer byte-identical. What this test has always protected
+    # — that an export never mutates workshop business data — is asserted
+    # directly instead, table by table.
+    assert db_path.read_bytes() != before_bytes
+    with session(DatabaseConfig(path=db_path)) as connection:
+        business_rows_after = {
+            table_name: connection.execute(f'SELECT * FROM "{table_name}" ORDER BY rowid').fetchall()
+            for table_name in EXPORT_TABLES
+            if table_name != "audit_logs"
+        }
+        audit_actions = [
+            row["action"] for row in connection.execute("SELECT action FROM audit_logs ORDER BY id").fetchall()
+        ]
+        ledger_statuses = [
+            row["status"]
+            for row in connection.execute(
+                "SELECT status FROM artifact_audit_operations WHERE artifact_kind = 'json_export' ORDER BY created_at"
+            ).fetchall()
+        ]
+    assert business_rows_before == business_rows_after
+    assert audit_actions == ["export.created", "export.created"]
+    assert ledger_statuses == ["audited", "audited"]
+    # The snapshot is read before its own event is inserted, so an export never
+    # contains the record of its own creation.
+    assert export_payload["data"]["audit_logs"] == []
 
     listed = client.get("/api/exports").json()["exports"]
     assert [item["filename"] for item in listed] == [second_export["filename"], first_export["filename"]]

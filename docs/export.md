@@ -233,7 +233,8 @@ The manifest keeps the normalized human reason; the export schema version is
 unchanged; no sidecar, metadata table, second persisted reason, or new reason
 field is introduced; existing exports are never renamed or rewritten; and
 `CR-005` is not reopened. **No production code is changed by the decision
-itself** — the correction is carried by `C3-II-B2`.
+itself** — the correction is carried by `C3-II-B2`, which is implemented on
+branch `claude/c3-ii-b2-json-export-audit` and **not merged**.
 
 ## Exported entity groups
 
@@ -279,35 +280,75 @@ The list above records the scope of **PR75 specifically** and is historical. Cur
 
 Automated tests use `tmp_path` and monkeypatch `COSMETIC_WORKSHOP_DB_PATH` and, where needed, `COSMETIC_WORKSHOP_USER_DATA_DIR`. Tests must not write to the real `~/Documents/Мастерская косметолога/` directory.
 
-## CR-009 JSON-export AuditLog boundary
+## CR-009 JSON-export AuditLog coverage
 
 `CR-009` accepts the durable artifact-primary and reconciliation semantics for
-future JSON-export AuditLog coverage, but does not implement them here. A fully
-written and verified export remains available if AuditLog finalization fails;
-the future create response remains HTTP `201` with `audit_status: pending` and
-a separate Russian warning rather than a false total failure. That future
-artifact-specific warning must name only the next normal startup and the next
-JSON-export create as retry triggers; it must not imply an immediate, periodic
-or background retry.
+JSON-export AuditLog coverage. A fully written and verified export remains
+available if AuditLog finalization fails; the create response remains HTTP `201`
+with `audit_status: pending` and a separate Russian warning rather than a false
+total failure. That artifact-specific warning names only the next normal startup
+and the next JSON-export create as retry triggers; it does not imply an
+immediate, periodic or background retry.
 
 Runtime status:
 
 ```text
-C3-II-B2 — AUTHORIZED AFTER THE CR-006 DECISION PR MERGES — NOT IMPLEMENTED
+C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-`CR-006` is now resolved and accepted
+`CR-006` is resolved and accepted
 (`docs/decisions/0014-json-export-create-confirmation-semantics.md`), so the
-accepted bounded ledger may be reused for JSON exports. `C3-II-B2` is **one
-bounded implementation pull request** that begins only after the `CR-006`
-decision pull request merges; it is **not implemented** and no implementation PR
-number is assigned. It also carries the accepted `CR-006` create-response
-correction, so the export create path is touched exactly once. Its full scope,
-export verification contract and non-goals are in `docs/implementation-plan.md`
-§ *C3-II-B2 — JSON export AuditLog coverage*. `C3-II-B3` remains blocked by
-`CR-004`.
+accepted bounded ledger is reused for JSON exports. `C3-II-B2` is **one bounded
+implementation pull request**, implemented on branch
+`claude/c3-ii-b2-json-export-audit` and **not merged**. It also carries the
+accepted `CR-006` create-response correction, so the export create path is
+touched exactly once. Its full scope, export verification contract and non-goals
+are in `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
+coverage*. `C3-II-B3` remains blocked by `CR-004`.
 
-Future `C3-II-B2` create response, recorded here and **not implemented**:
+### What the branch implements
+
+- **The `CR-006` correction.** `POST /api/exports` no longer calls
+  `list_export_files`. The response is built from the exact `ExportResult`, and
+  `reason` comes from the exact final filename through `parse_export_reason` —
+  the same function list and status use. `ExportResult.reason` is never the API
+  reason.
+- **One filename-selection algorithm.** `reserve_export_path` chooses the exact
+  final path once; `create_json_export` accepts it as a strictly validated
+  `reserved_export_path` and writes to that path and no other. An active ledger
+  identity counts as occupied alongside an existing file, so the `-N` uniqueness
+  suffix advances past both.
+- **Ledger preparation before the write.** One `prepared` row in the existing
+  `artifact_audit_operations` table — `artifact_kind = json_export`,
+  `audit_action = export.created`, `primary_filename` = the exact safe final
+  filename, `companion_filename = null`, because an export is one file. **No new
+  migration**; `0020` is reused unchanged.
+- **Exact-path verification.** The verifier inspects only the exact ledger-named
+  file: safe name, resolution inside the export directory, escaping symlinks
+  refused, existence, regular file, the **complete** filename grammar, JSON
+  parses, top-level keys exactly `manifest` and `data`, supported
+  `export_schema_version`, `source == "cosmetic-workshop-os"`, a **human**
+  `manifest.reason` that is not required to equal the canonical slug, and
+  manifest table counts that agree with the exported data. It never rewrites the
+  export and never compares historical exported data with the current database.
+- **The filename grammar is checked by round trip, not by resemblance.**
+  `parse_generated_export_filename` validates the complete timestamp, extracts
+  the canonical reason and the optional numeric uniqueness suffix, requires the
+  reason to satisfy `normalize_artifact_reason_segment(reason) == reason` and to
+  not be digits-only, and then rebuilds the name through `_export_filename` —
+  the one generation algorithm — and requires byte-for-byte equality. Both the
+  writer's `reserved_export_path` check and the ledger verifier use it, so a
+  name this application could not have generated can be neither reserved nor
+  audited, however valid its JSON contents are. `list_export_files` deliberately
+  does **not** use it: the independent `GET` listing stays best-effort so legacy
+  exports keep appearing in the user's history, exactly as CR-005 accepted.
+- **Exactly-once finalization.** One `BEGIN IMMEDIATE` transaction on one
+  connection commits the `export.created` AuditLog row together with the
+  `audited` ledger transition, or commits neither.
+- **Reconciliation** at normal startup after migrations, and once before the
+  next JSON-export create. No background worker, timer or unbounded retry.
+
+Create response, implemented on that branch:
 
 ```json
 {
@@ -327,13 +368,20 @@ Future `C3-II-B2` create response, recorded here and **not implemented**:
 
 Every existing export metadata field stays present, and the response `reason`
 stays the canonical final-filename-derived reason. In the pending case the
-export remains available and the user must **not** repeat the create request.
-`GET /api/exports/status` additionally gains `pending_audit_count`, counting
-exactly the ledger rows with `artifact_kind = json_export` and
-`status IN (prepared, pending_audit)`; that GET stays read-only and performs no
-reconciliation.
+export remains available, listable and byte-identical, and the user must **not**
+repeat the create request. `GET /api/exports/status` additionally gains
+`pending_audit_count`, counting exactly the ledger rows with
+`artifact_kind = json_export` and `status IN (prepared, pending_audit)`; that
+GET stays read-only, performs no reconciliation, and raises a safe HTTP `500`
+rather than reporting a fabricated `0` when the ledger cannot be read.
 
-The future ledger `primary_filename` is an internal safe relative filename and
+The adjacent post-write `stat` failure recorded as ADR 0014 § 8.8 is covered:
+the export stays on disk, its committed `prepared` row stays unresolved, no
+success event is written during the failed request, and a later startup or
+pre-create reconciliation verifies the exact reserved file and finalizes it
+exactly once.
+
+The ledger `primary_filename` is an internal safe relative filename and
 may contain the canonical filename-derived reason segment already accepted by
 CR-005. The ledger has no separate reason column and stores no raw human
 reason, request reason or export-manifest reason separately. The filename is

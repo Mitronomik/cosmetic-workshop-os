@@ -720,23 +720,28 @@ summary: `docs/export.md` § *Create-response confirmation contract*.
 - `GET /api/exports` and `GET /api/exports/status` keep their existing
   best-effort listing contract; `CR-006` does not change it.
 
-**Diagnostic status.** The defensive fallback in the current implementation is
-confirmed reachable in production-equivalent behavior, and when it runs it
-returns the human manifest reason. Classification: `PRODUCT DEFECT —
-CREATE-RESPONSE CONTRACT MISMATCH`, severity `MEDIUM`; no data loss, overwrite,
-incorrect export bytes, or privacy exposure was found. **The correction is not
-implemented**; it is carried by `C3-II-B2`, which is `AUTHORIZED AFTER THE
-CR-006 DECISION PR MERGES — NOT IMPLEMENTED`. The response shape above is the
-shape merged `main` already documents — `CR-006` adds no field and changes no
-schema.
+**Diagnostic status.** The defensive fallback in the pre-correction
+implementation was confirmed reachable in production-equivalent behavior, and
+when it ran it returned the human manifest reason. Classification: `PRODUCT
+DEFECT — CREATE-RESPONSE CONTRACT MISMATCH`, severity `MEDIUM`; no data loss,
+overwrite, incorrect export bytes, or privacy exposure was found. **The
+correction is implemented on the `C3-II-B2` PR branch and is not merged.** On
+that branch `POST /api/exports` no longer calls `list_export_files` at all: the
+response is built from the exact `ExportResult`, and `reason` comes from the
+exact final filename through `parse_export_reason`, the same function list and
+status use. `CR-006` adds no field and changes no schema.
 
-**Future `C3-II-B2` additive fields, recorded and not implemented.** Under the
-`CR-009` contract already accepted in ADR 0013, `C3-II-B2` will add
-`audit_status` (`recorded` | `pending`) and `audit_message` to
-`POST /api/exports`, and `pending_audit_count` to `GET /api/exports/status`,
-counting exactly the ledger rows with `artifact_kind = json_export` and
-`status IN (prepared, pending_audit)`. That status GET stays read-only and
-reconciles nothing. No other export response field is added, renamed or removed.
+**`C3-II-B2` additive fields — implemented on the PR branch, not merged.** Under
+the `CR-009` contract accepted in ADR 0013, `C3-II-B2` adds `audit_status`
+(`recorded` | `pending`) and `audit_message` to `POST /api/exports`, and
+`pending_audit_count` to `GET /api/exports/status`, counting exactly the ledger
+rows with `artifact_kind = json_export` and
+`status IN (prepared, pending_audit)`. A `recorded` result carries
+`audit_message: null`; a `pending` result carries the exact accepted Russian
+warning and is still HTTP `201`, because the export file exists and is
+authoritative. That status GET stays read-only, reconciles nothing, and raises a
+safe HTTP `500` rather than reporting a fabricated `0` when the ledger cannot be
+read. No other export response field is added, renamed or removed.
 
 ## Import drafts API (PR77)
 
@@ -1173,11 +1178,11 @@ unsafe or not-yet-finalized operation remains unresolved and counted. The
 frontend presents the count only as a pending-Journal warning, not as failed
 document creation.
 
-The same accepted result semantics are reserved for JSON export and manual
-backup. `C3-II-B2` is now `AUTHORIZED AFTER THE CR-006 DECISION PR MERGES —
-NOT IMPLEMENTED`, so `audit_status` / `audit_message` on `POST /api/exports`
-and `pending_audit_count` on `GET /api/exports/status` are recorded but **not
-yet present**. `C3-II-B3` remains blocked by CR-004. Durable contracts:
+The same accepted result semantics now cover JSON export. `C3-II-B2` is
+`IMPLEMENTED ON PR BRANCH — NOT MERGED`, so `audit_status` / `audit_message` on
+`POST /api/exports` and `pending_audit_count` on `GET /api/exports/status` exist
+on that branch and are **not yet on merged `main`**. Manual backup keeps the
+reserved semantics only: `C3-II-B3` remains blocked by CR-004. Durable contracts:
 `docs/decisions/0013-file-backed-artifact-audit-semantics.md` and
 `docs/decisions/0014-json-export-create-confirmation-semantics.md`.
 
