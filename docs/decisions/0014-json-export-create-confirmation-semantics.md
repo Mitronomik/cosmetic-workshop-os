@@ -27,6 +27,12 @@ C4 — INACTIVE — NEEDS PRODUCT DECISION
 Product release readiness — NOT CLAIMED
 ```
 
+**HISTORICAL — the block above records 2026-08-01 and is superseded.** Current
+lifecycle: `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`;
+`CR-010 — ACCEPTED — NOT IMPLEMENTED`;
+`C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED`;
+`Restore — NOT IMPLEMENTED`; product release readiness — `NOT CLAIMED`.
+
 This ADR changes **no production code**, adds **no migration**, changes **no
 dependency**, and does **not** implement `C3-II-B2`. It records a product
 decision and the diagnostic evidence behind it.
@@ -34,15 +40,21 @@ decision and the diagnostic evidence behind it.
 > **Current lifecycle pointer — not part of the accepted decision.** The block
 > above records the slice authorization as it stood when this ADR was accepted on
 > 2026-08-01, and the accepted decision below is unchanged and is not reopened.
-> Since then `C3-II-B2` has been implemented on branch
-> `claude/c3-ii-b2-json-export-audit` and is
-> `IMPLEMENTED ON PR BRANCH — NOT MERGED`; that branch carries the
-> create-response correction decided here, so `POST /api/exports` no longer
+> Since then `C3-II-B2` has merged as **PR #166** — final reviewed head
+> `530b3a112b937f8955dd5768741f0ec403809b5a`, merge commit
+> `844526ae4057a454312f790abcaf21be518cdbd9` — and is
+> `DONE — MERGED AND EXACT-HEAD VERIFIED`. It carried the create-response
+> correction decided here, so on **merged `main`** `POST /api/exports` no longer
 > re-scans the export directory and its `reason` is parsed from the exact final
-> filename. Because the branch is unmerged, merged `main` still exhibits the
-> behavior this ADR classifies as the defect. `CR-004` remains `needs evidence`,
-> `C3-II-B3` stays blocked, C3 is still incomplete, C4 is still inactive, and
-> product release readiness is still not claimed. Current authority:
+> filename; merged `main` no longer exhibits the behavior this ADR classifies as
+> the defect. `CR-004` has since been resolved and accepted (ADR 0015), and
+> `C3-II-B3` merged as PR #167; the C3 artifact-finalization hardening then
+> merged as PR #168 (merge commit
+> `867afeb0967637d07172f88c95e02e9bc500a311`), so
+> **`C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`**. C4 now has an
+> accepted product decision — `CR-010`, launcher-assisted Restore, ADR 0016 —
+> and no implementation; Restore remains not implemented and product release
+> readiness is still not claimed. Current authority:
 > `state/current-focus.md`.
 
 ---
@@ -422,9 +434,12 @@ No new migration is required. No export response schema change beyond what
   decision PR merges, and it carries the correction as part of its bounded
   create-path work, so the export create path is touched exactly once.
 - `CR-005`, `R4`, `CR-009` and `C3-II-B1` are **not reopened**.
-- `CR-004` remains `needs evidence`, so `C3-II-B3` stays blocked.
-- C3 remains incomplete, C4 remains inactive, and **product release readiness is
-  not claimed**.
+- *(Recorded 2026-08-01, now **superseded**: `CR-004` remains `needs evidence`,
+  so `C3-II-B3` stays blocked; C3 remains incomplete and C4 remains inactive.
+  `CR-004` was accepted on 2026-08-02, `C3-II-B3` merged as PR #167, the
+  artifact-finalization hardening merged as PR #168, and `CR-010` decided C4
+  Restore.)*
+- **Product release readiness is not claimed.**
 
 ---
 

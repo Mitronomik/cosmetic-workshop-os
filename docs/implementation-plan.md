@@ -62,7 +62,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` is **accepted** and its slice `C3-II-B2` merged as PR #166 (merge commit `844526ae4057a454312f790abcaf21be518cdbd9`). `CR-004` is **accepted** — classified `PRODUCT DEFECT — BACKUP CONSISTENCY`, severity `HIGH`, contract `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`. C3-I, C3-II-A, C3-II-B1 and C3-II-B2 are merged and closed. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted and implemented on merged `main` for report documents and JSON exports. `C3-II-B3 — Manual backup AuditLog coverage` — the last C3 slice — is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #167, merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727`), so **C3 is `COMPLETED` on merged `main`**. The follow-up `C3 artifact-finalization hardening` slice — separating artifact verification failure from AuditLog persistence failure for report documents and JSON exports — is `IMPLEMENTED ON PR BRANCH — NOT MERGED` on `claude/c3-hardening-artifact-finalization`, reusing the existing ledger with no new migration. C4 remains inactive. Product release readiness is not claimed.
+`CR-006` is **accepted** and its slice `C3-II-B2` merged as PR #166 (merge commit `844526ae4057a454312f790abcaf21be518cdbd9`). `CR-004` is **accepted** — classified `PRODUCT DEFECT — BACKUP CONSISTENCY`, severity `HIGH`, contract `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`. C3-I, C3-II-A, C3-II-B1 and C3-II-B2 are merged and closed. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted and implemented on merged `main` for report documents and JSON exports. `C3-II-B3 — Manual backup AuditLog coverage` — the last C3 slice — is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #167, merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727`). The follow-up `C3 artifact-finalization hardening` slice — separating artifact verification failure from AuditLog persistence failure for report documents and JSON exports — is also **`DONE — MERGED AND EXACT-HEAD VERIFIED`** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`), reusing the existing ledger with no new migration. **`C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`.** C4 now has an accepted product decision — `CR-010`, launcher-assisted Restore — and **no implementation**; `C4-I` is the only authorized runtime slice and is `NOT IMPLEMENTED`. Restore is not implemented, and product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -900,7 +900,7 @@ Do not classify the behavior as unsafe and do not prescribe a correction design 
 
 Clearing these four failures does **not** make the product release-ready. The following stayed outside the backend baseline correction gate and were not activated by it: final macOS `.app`/`.dmg` and user-ready launch; packaged update flow and update smoke; verified user/remote installation process; Restore product decision and implementation; C1 tax setting; C2 cost, tax, and margin completion; C3 user-facing read-only AuditLog workspace; full release-candidate smoke; continued documentation accuracy. See section 7 and sections 11–13.
 
-> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). C3-I, C3-II-A and C3-II-B1 have merged and closed as PR #159, PR #161 and PR #163. CR-009 is accepted and implemented for report documents only, while B2/B3 remain blocked by CR-006/CR-004. C3 remains incomplete, and product release readiness is still not claimed. Current state: § C3.
+> **Status update.** The C1 tax setting has since been completed separately: `CR-007` merged as PR #148 and `C1-I` merged as PR #149, so C1 is `DONE`. C2 is also complete: its contract was decided as `CR-008` and all four slices merged — `C2-I` (PR #151), `C2-II` (PR #152), `C2-III-A` (PR #154) and `C2-III-B` (PR #157). **C3 is also complete**: C3-I (PR #159), C3-II-A (PR #161), C3-II-B1 (PR #163), C3-II-B2 (PR #166) and C3-II-B3 (PR #167) all merged, `CR-009`, `CR-006` and `CR-004` are accepted and implemented, and the artifact-finalization hardening merged as PR #168, so `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`. The **Restore product decision** is made as `CR-010` (launcher-assisted, ADR 0016); **Restore implementation** remains open and Restore is `NOT IMPLEMENTED`. Final macOS packaging, the packaged update flow, installation verification and the full release-candidate smoke remain **not completed**, and product release readiness is still **not claimed**. Current state: § C3 and § C4.
 
 ---
 
@@ -1116,7 +1116,7 @@ Authorization states:
 C2 — COMPLETED
 ```
 
-Every condition for C2 completion is met: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed. C3-I and C3-II-A have since merged as PR #159 and PR #161. C3 remains incomplete because CR-009 is accepted but not implemented: only B1 is authorized after this documentation PR merges, B2 remains blocked by CR-006, and B3 remains blocked by CR-004. C4 remains inactive.
+Every condition for C2 completion is met: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed. *(The C3/C4 sentence that followed here — describing C3 as incomplete with B1 alone authorized, B2 blocked by CR-006 and B3 blocked by CR-004, and C4 inactive — was **true when written on 2026-07-28 and is now superseded**: C3-I, C3-II-A, C3-II-B1, C3-II-B2 and C3-II-B3 all merged, the artifact-finalization hardening merged as PR #168, C3 is `COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`, and C4 has an accepted product decision with no implementation. See § C3 and § C4 below.)*
 
 ### C2 — accepted product contract (`CR-008`)
 
@@ -1680,12 +1680,14 @@ Render backend DTO values; render `Недоступно` for null historical val
 ```text
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-009 — ACCEPTED
+CR-009 — ACCEPTED AND IMPLEMENTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
-C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
-C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
-C3 — INCOMPLETE
+CR-006 — ACCEPTED AND IMPLEMENTED
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-004 — ACCEPTED AND IMPLEMENTED
+C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3 artifact-finalization hardening — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 ```
 
 `C3-I` merged as PR #159: final reviewed head `bf7cde060a43190fdf22c612a16b0c137aa5531b`, merge commit `ba3ca7443e3280bc7f700af11e75dc4fa810665f`, merged `2026-07-30T03:20:23Z`. Its exact evidence attribution is recorded in `docs/audit-log.md` § 15. The read contract stays unchanged: one `GET /api/audit-logs`, `actor_type` rather than `source`, safe backend-owned `display_summary`, no raw summary or metadata, and a read-only `/settings/audit-log` workspace.
@@ -1813,8 +1815,16 @@ transaction framework is authorized.
 #### C3-II-B2 — JSON export AuditLog coverage
 
 ```text
-IMPLEMENTED ON PR BRANCH — NOT MERGED
+DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
+
+> Merged as PR #166 — final reviewed head `530b3a112b937f8955dd5768741f0ec403809b5a`,
+> merge commit `844526ae4057a454312f790abcaf21be518cdbd9`. The branch-era
+> lifecycle wording below (*"implemented on branch … open and unmerged"*, *"not
+> merged, so JSON export creation is still not audited on merged `main`"*,
+> *"`C3-II-B3` remains blocked by `CR-004`"*, *"C3 remains incomplete"*, *"C4
+> remains inactive"*) is **HISTORICAL and superseded**; the delivered scope it
+> describes is on merged `main`.
 
 `CR-006` is resolved and accepted in
 `docs/decisions/0014-json-export-create-confirmation-semantics.md`. The
@@ -1953,12 +1963,14 @@ C4; or claim release readiness.
 #### C3-II-B3 — Manual backup AuditLog coverage
 
 ```text
-IMPLEMENTED ON PR BRANCH — NOT MERGED
+DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
 `CR-004` is resolved by `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`,
-so this slice is authorized and implemented on `claude/cr-004-c3-ii-b3-manual-backup`.
-It is the **last remaining C3 slice**.
+and this slice merged as **PR #167** — final reviewed head
+`259697805660fd4dc37e6ac5f50567d48037be94`, merge commit
+`7af53a3305fa9fdb984d4c478e1186685fbb6727`. It was the **last remaining C3
+slice**.
 
 **Scope as implemented.** The raw `shutil.copy2` is replaced by the SQLite
 Online Backup API with a single whole-database step and bounded busy behaviour;
@@ -1972,14 +1984,16 @@ built from the exact `BackupResult` with no directory re-list; the
 `backup-audit-contract.ts` frontend module with success-plus-separate-warning;
 and the backend-owned Journal vocabulary.
 
-**Required follow-up.** `report_document_audit.py` and `export_audit.py` still
-return `int | None` from finalization and map every `None` to `201` with
-`audit_status: pending`, so an artifact that fails mandatory verification can be
-reported as successfully created. This slice corrected that for manual backups
-through the typed `BackupFinalization`; the same correction for B1 and B2 is one
-bounded follow-up slice, to run immediately after `C3-II-B3` merges. It is **not
-cosmetic**, and **C4 must not be activated until it is resolved or explicitly
-accepted as a known release blocker**.
+**Required follow-up — DONE.** At the time this slice was written,
+`report_document_audit.py` and `export_audit.py` still returned `int | None` from
+finalization and mapped every `None` to `201` with `audit_status: pending`, so an
+artifact that failed mandatory verification could be reported as successfully
+created. This slice corrected that for manual backups through the typed
+`BackupFinalization`, and the same correction for B1 and B2 ran immediately
+afterwards as the **C3 artifact-finalization hardening**, merged as **PR #168**
+(final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit
+`867afeb0967637d07172f88c95e02e9bc500a311`). The C4 gate it carried is therefore
+satisfied.
 
 **Boundaries.** No migration `0021` and no change to `0020`; no second ledger;
 no sidecar; no outbox; no Restore; no scheduled or cloud backup; no retention
@@ -1992,26 +2006,162 @@ outbox/event bus/job queue, source persistence, detail endpoint, raw metadata
 viewer, AuditLog export/search/analytics/edit/rollback, Restore, C4, packaging,
 installation, update or release-candidate smoke.
 
+#### C3 artifact-finalization hardening
+
+```text
+DONE — MERGED AND EXACT-HEAD VERIFIED
+```
+
+Merged as **PR #168** — `C3 hardening — Separate artifact verification from
+AuditLog persistence`, final reviewed and exact-head-smoke-tested head
+`6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit
+`867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`
+(VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE). The final reviewed head
+is an ancestor of the merge commit, and the merge commit is an ancestor of
+`origin/main`.
+
+**Accepted merged behaviour.** Report-document and JSON-export finalization use
+typed, artifact-specific results:
+
+- `recorded` — the artifact was verified and its AuditLog event committed;
+- `audit_pending` — the artifact was verified but AuditLog persistence did not
+  commit;
+- `artifact_invalid` — mandatory verification did not prove the artifact
+  authoritative.
+
+Only `recorded` and `audit_pending` may produce HTTP `201`. `artifact_invalid`
+produces a fixed structured HTTP `500`. An invalid artifact is not deleted, is
+not audited, remains unresolved and is counted for bounded reconciliation.
+Filenames, paths, reasons, operation IDs, schema versions, entity counts,
+verifier details and SQLite details are not exposed through safe error responses.
+No migration, no second ledger, no outbox, no generic artifact framework, no
+worker; backup finalization and `CR-006` create-response behaviour are untouched.
+
+**Accepted merged PR #168 evidence — not re-executed in the closure
+documentation PR:** complete backend `1826 passed`; complete root suite
+`1843 passed`; launcher `17 passed`; baseline node IDs `1804` preserved, `0`
+lost, `39` added; all `21` frontend `test:*` scripts passed; frontend production
+build `PASS`; `frontend/src/main.ts` `6399` lines; final independent audit
+`P0 — none`, `P1 — none`, `P2 — documented only`; exact-head launcher/API/browser
+smoke `PASS`.
+
+```text
+C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
+```
+
+`CR-004`, `CR-006` and `CR-009` and their accepted decisions are **not reopened**.
+
 ## C4 — Restore и recovery
 
-Статус: `NEEDS PRODUCT DECISION`
+```text
+CR-010 — ACCEPTED — NOT IMPLEMENTED
+C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED
+Restore — NOT IMPLEMENTED
+```
 
-Выбрать:
+> **The product decision is made.** The historical two-option choice below —
+> *"safe user-facing restore в приложении/launcher"* versus *"support-assisted
+> restore без терминала"* — is **resolved**: option 1, in the **launcher**.
+> Support-assisted recovery is retained only as a fallback. Durable decision:
+> `docs/decisions/0016-launcher-assisted-restore.md`; complete product contract:
+> `docs/backup-and-restore.md`; architecture: `docs/architecture.md` § 12.4.
 
-1. safe user-facing restore в приложении/launcher; либо
-2. support-assisted restore без терминала для конечного пользователя.
+```text
+MVP Restore is launcher-assisted.
 
-Обязательно:
+Restore is not performed by a running FastAPI backend endpoint and is not
+implemented as an ordinary SPA mutation.
 
-- lock/close database;
-- валидация backup;
-- pre-restore safety copy;
-- schema compatibility;
-- rollback/recovery;
-- явное подтверждение;
-- isolated end-to-end smoke.
+The launcher owns process shutdown, backup validation, the pre-restore safety
+copy, staging, atomic database replacement, post-restore startup verification,
+rollback, and incomplete-restore recovery.
+```
 
-Без cloud backup, scheduler и arbitrary file access.
+The user must never need Git, Python, Node.js, Docker, SQLite tools, GitHub or a
+terminal. The original mandatory list still holds and is now specified rather
+than merely listed:
+
+- lock/close database — the launcher stops the backend, prevents a second
+  instance and confirms the database is out of active application use before it
+  touches anything;
+- валидация backup — from a **staged read-only copy before any current-workspace
+  mutation**, including migration-lineage checks; `PRAGMA quick_check = ok` alone
+  is never sufficient;
+- pre-restore safety copy — **mandatory and verified**, through the ADR 0015
+  SQLite Online Backup engine, under the canonical reason `before_restore`;
+- schema compatibility — a newer-than-current schema is **rejected before
+  replacement**; an older known schema is migrated by the normal startup
+  migration system on the **restored working copy only**;
+- rollback/recovery — automatic after any post-replacement failure, plus durable
+  incomplete-operation recovery **before the ordinary backend starts**;
+- явное подтверждение — two-step select → validate → explicit destructive
+  confirmation → execute, never offered when validation failed;
+- isolated end-to-end smoke — reserved for `C4-III`.
+
+Без cloud backup, scheduler и arbitrary file access. Restore is whole-database
+only; the selected backup is immutable read-only input; **no Restore AuditLog
+event is authorized** and `restore.completed` needs a separately explicit C4
+decision.
+
+### C4-I — Launcher-owned restore safety engine
+
+```text
+AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+```
+
+The **only** runtime slice authorized by `CR-010`. It is not in progress and must
+not be started from the unmerged decision branch. Scope:
+
+- launcher-owned restore operation domain vocabulary;
+- source and staged-candidate validation;
+- schema-lineage compatibility validation;
+- pre-restore safety-copy orchestration using the existing safe backup engine;
+- isolated restore operation directory;
+- durable narrow Restore operation state;
+- same-filesystem staging;
+- atomic working-database replacement;
+- automatic rollback;
+- incomplete-operation recovery before backend startup;
+- backend/database-path continuity;
+- backend startup and bounded health verification;
+- focused backend/launcher tests;
+- isolated exact-head launcher smoke.
+
+`C4-I` must not expose a final user-facing Restore entry point yet and must
+provide **no terminal workflow** to the product user; its surface is internal
+launcher infrastructure. It must not modify frontend production code unless
+repository evidence proves a minimal shared contract module unavoidable, and any
+such need must be documented before implementation rather than assumed.
+
+**Non-goals for `C4-I`.** No Restore API endpoint, Restore button, file picker or
+user-facing entry point; no `restore.completed` event; no migration; no second
+migration framework; no generic operation framework, job queue or outbox; no
+scheduled or cloud backup; no packaging, `.app`/`.dmg`, updater or release smoke;
+no `C4-II` or `C4-III` work; no release-readiness claim.
+
+### C4-II — User-facing launcher Restore flow
+
+```text
+PLANNED — NOT AUTHORIZED
+```
+
+Reserved: file selection; validation progress; human-readable backup summary;
+explicit destructive confirmation; progress and restart states; successful
+completion screen; rollback-completed screen; support-assisted failure screen;
+keyboard and accessibility behaviour; narrow-viewport behaviour where
+applicable; no terminal requirement.
+
+### C4-III — Restore end-to-end verification and lifecycle closure
+
+```text
+PLANNED — NOT AUTHORIZED
+```
+
+Reserved: complete exact-package Restore smoke; older supported schema Restore;
+current schema Restore; corrupt/foreign/newer-schema rejection; interruption
+recovery; post-replacement startup failure and rollback; repeated launch after
+successful Restore; selected source immutability; safety-copy retention; C4
+lifecycle closure.
 
 ---
 
