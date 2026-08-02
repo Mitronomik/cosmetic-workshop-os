@@ -1262,3 +1262,28 @@ def test_the_create_path_still_accepts_a_verified_export_with_a_pending_journal(
     # CR-006 is untouched: the response still describes the exact ExportResult.
     assert created.result.export_path.exists()
     assert created.canonical_reason == "manual"
+
+
+def test_finalization_still_takes_the_immediate_write_lock(tmp_path, monkeypatch):
+    """`BEGIN IMMEDIATE` is what orders two concurrent finalizers.
+
+    The concurrency test above proves the *effect* only when the race actually
+    materialises, which is timing-dependent. This pins the mechanism itself, so
+    quietly downgrading to a deferred `BEGIN` — which would let two readers both
+    reach the insert and deadlock one of them into a spurious `audit_pending` —
+    cannot pass unnoticed.
+    """
+    config, export_dir, service = setup(tmp_path)
+    operation_id = prepare(service, write_export(export_dir))
+
+    original = audit_module.transaction
+    observed: list[bool] = []
+
+    def recording_transaction(config_arg=None, *, immediate=False):
+        observed.append(immediate)
+        return original(config_arg, immediate=immediate)
+
+    monkeypatch.setattr(audit_module, "transaction", recording_transaction)
+
+    assert service.finalize(operation_id, reconciled_after_failure=False).is_recorded
+    assert observed == [True]

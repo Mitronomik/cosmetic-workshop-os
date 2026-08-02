@@ -1111,3 +1111,29 @@ def test_the_create_path_still_accepts_a_verified_artifact_with_a_pending_journa
     assert response.audit_status == "pending"
     assert response.message == "Документ отчета создан."
     assert response.audit_message == PENDING_AUDIT_MESSAGE
+
+
+def test_finalization_still_takes_the_immediate_write_lock(tmp_path, monkeypatch):
+    """`BEGIN IMMEDIATE` is what orders two concurrent finalizers.
+
+    The concurrency test above proves the *effect* only when the race actually
+    materialises, which is timing-dependent. This pins the mechanism itself, so
+    quietly downgrading to a deferred `BEGIN` — which would let two readers both
+    reach the insert and deadlock one of them into a spurious `audit_pending` —
+    cannot pass unnoticed.
+    """
+    config, documents_dir, service = setup(tmp_path)
+    document_path, sidecar_path = write_pair(documents_dir)
+    operation_id = prepare(service, document_path, sidecar_path)
+
+    original = audit_module.transaction
+    observed: list[bool] = []
+
+    def recording_transaction(config_arg=None, *, immediate=False):
+        observed.append(immediate)
+        return original(config_arg, immediate=immediate)
+
+    monkeypatch.setattr(audit_module, "transaction", recording_transaction)
+
+    assert service.finalize(operation_id, reconciled_after_failure=False).is_recorded
+    assert observed == [True]
