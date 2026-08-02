@@ -1762,7 +1762,7 @@ restore
 - The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
 - C3-I (PR #159), C3-II-A (PR #161) and C3-II-B1 (PR #163) are all `DONE — MERGED AND EXACT-HEAD VERIFIED`, but C3 is incomplete.
 - `CR-009` is accepted, and `C3-II-B1` implements its report-document slice on merged `main`. For a scoped file-backed create, a fully written and verified artifact is the authoritative result. Audit finalization failure preserves it and returns HTTP `201` with a separate pending-Journal warning; it never becomes false total failure or silent ordinary success.
-- `C3-II-B1` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. `CR-006` is now accepted (ADR 0014), so `C3-II-B2` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` and JSON export creation is still not audited on merged `main`; `C3-II-B3` remains blocked by CR-004.
+- `C3-II-B1` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa` — and `C3-II-B2` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `844526ae4057a454312f790abcaf21be518cdbd9`. `CR-004` is now accepted (ADR 0015), so `C3-II-B3` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` and manual backup creation is not yet audited on merged `main`.
 
 ### Examples
 
@@ -2015,8 +2015,14 @@ deleted
 
 - Backup must be stored in user data directory.
 - Before migration, backup is mandatory.
-- Manual backup audit is governed by CR-009, but runtime coverage remains
-  `C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED`.
+- Manual backup audit is governed by CR-009, and runtime coverage is
+  `C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED`.
+- A manual backup is a **transactionally consistent snapshot of committed state**
+  written through the SQLite Online Backup API (ADR 0015), never a raw file copy,
+  and is not byte-identical to the source.
+- A manual backup snapshot contains its own `manual_backup` ledger operation in
+  `status = prepared`, which is how the artifact proves which operation created
+  it. It is never rewritten afterwards.
 - The automatic `before_migration` backup is not a manual user action and is
   outside CR-009; it remains before migrations and cannot depend on the future
   ledger table.
@@ -2024,14 +2030,14 @@ deleted
 
 ### Audit
 
-Reserved success event after C3-II-B3 becomes separately authorized:
+Success event, implemented by `C3-II-B3` on its unmerged PR branch:
 
 ```text
 backup.created
 ```
 
-`backup_failed` and `backup_verified` are not authorized by CR-009. B3 remains
-blocked by CR-004.
+`backup_failed` and `backup_verified` are not authorized by CR-009. The
+automatic `before_migration` backup is never audited.
 
 ---
 

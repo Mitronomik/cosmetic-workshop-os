@@ -62,7 +62,7 @@
 
 `C2-I` merged as PR #151, `C2-II` as PR #152, `C2-III-A` as PR #154 and `C2-III-B` as PR #157; all four are `DONE — MERGED AND EXACT-HEAD VERIFIED`. **`C2 — COMPLETED`.** No runtime implementation slice is open, and reports on merged `main` are snapshot-backed.
 
-`CR-006` is **accepted**: the evidence-only diagnostic is complete, the create-response fallback is confirmed reachable in production-equivalent behavior, and the confirmation contract is decided in `docs/decisions/0014-json-export-create-confirmation-semantics.md`. `CR-004` remains a `needs evidence` row and inactive. C3-I, C3-II-A and C3-II-B1 are merged and closed; C3 remains incomplete. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted, and `C3-II-B1 — Durable ledger and report-document AuditLog coverage` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — PR #163, final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`. `C3-II-B2` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` — it reuses the existing ledger with no new migration and carries the accepted `CR-006` create-response correction — and `C3-II-B3` remains blocked by CR-004. C4 remains inactive. Product release readiness is not claimed.
+`CR-006` is **accepted** and its slice `C3-II-B2` merged as PR #166 (merge commit `844526ae4057a454312f790abcaf21be518cdbd9`). `CR-004` is **accepted** — classified `PRODUCT DEFECT — BACKUP CONSISTENCY`, severity `HIGH`, contract `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`. C3-I, C3-II-A, C3-II-B1 and C3-II-B2 are merged and closed. `CR-009 — Durable file-backed artifact AuditLog semantics` is accepted and implemented on merged `main` for report documents and JSON exports. `C3-II-B3 — Manual backup AuditLog coverage` — the **last remaining C3 slice** — is `IMPLEMENTED ON PR BRANCH — NOT MERGED`: it reuses the existing ledger with no new migration and carries the `CR-004` backup-engine correction. C3 is therefore complete on that branch and **incomplete on merged `main`**. C4 remains inactive. Product release readiness is not claimed.
 
 ### HISTORICAL RECORD — Block B closure baseline
 
@@ -164,7 +164,7 @@ PR106 Hermes smoke подтвердил только scoped scenarios для Imp
 | Restore | Backup создаётся, restore не реализован | Нужно выбрать и реализовать безопасный user/launcher-assisted или support-assisted путь без терминала для пользователя |
 | Налоговая настройка (`default_tax_rate`) | **ЗАКРЫТО.** Настройка реализована и редактируема: `GET`/`PUT /api/settings/tax-rate`, ключ `default_tax_rate`, merged `C1-I` / PR #149. C1 завершён. Это **единственная** редактируемая calculation-sensitive настройка; остальные (валюта, целевая маржа, порог остатка, дни предупреждения о сроке, единицы измерения) по-прежнему закрыты и требуют отдельно принятых backend-правил | Выполнено — `CR-007` / `C1-I`, PR #149 merged `2026-07-27` |
 | Себестоимость, налог и маржа (расчёты и снапшоты) | **ЗАКРЫТО.** Оценка готовности считает налог, маржу и процент маржи (`C2-I`, PR #151); неизменяемые снапшоты `ProductionBatch` персистятся в транзакции подтверждения производства (`C2-II`, PR #152); финансовое представление в UI заказов и `ProductionBatch` влито (`C2-III-A`, PR #154); отчёты и «Сводка мастерской» читают персистентные снапшоты (`C2-III-B`, PR #157). C2 завершён | Выполнено — контракт принят как `CR-008`; все четыре нарезки влиты и проверены по точному head |
-| AuditLog workspace | C3-I, C3-II-A and C3-II-B1 — **DONE — MERGED AND EXACT-HEAD VERIFIED** (B1 = PR #163); `CR-009` — **ACCEPTED**; contracts: `docs/audit-log.md`, ADR 0013 | C3 incomplete: B2 blocked by CR-006; B3 blocked by CR-004; next task is the evidence-only CR-006 diagnostic |
+| AuditLog workspace | C3-I, C3-II-A, C3-II-B1 and C3-II-B2 — **DONE — MERGED AND EXACT-HEAD VERIFIED** (B1 = PR #163, B2 = PR #166); `CR-009` and `CR-004` — **ACCEPTED**; contracts: `docs/audit-log.md`, ADR 0013, ADR 0015 | C3 incomplete on merged `main`: B3, the last remaining slice, is implemented on its PR branch and not merged |
 | Полный release smoke | Есть focused smoke отдельных PR, но нет итогового release-candidate smoke | Обязательно |
 | Актуальность документации | Ряд документов всё ещё описывает реализованные функции как будущие | Обязательно поддерживать синхронно |
 
@@ -1953,11 +1953,39 @@ C4; or claim release readiness.
 #### C3-II-B3 — Manual backup AuditLog coverage
 
 ```text
-BLOCKED BY CR-004 — NOT AUTHORIZED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-Do not implement or resolve CR-004 here. Manual backup may reuse the accepted
-ledger only after SQLite backup consistency behavior is decided.
+`CR-004` is resolved by `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`,
+so this slice is authorized and implemented on `claude/cr-004-c3-ii-b3-manual-backup`.
+It is the **last remaining C3 slice**.
+
+**Scope as implemented.** The raw `shutil.copy2` is replaced by the SQLite
+Online Backup API with a single whole-database step and bounded busy behaviour;
+one strict generated-filename grammar with a byte-for-byte round trip; exact
+filename reservation guarded by active-ledger identity; one `prepared`
+`manual_backup` ledger row committed *before* the snapshot; exact artifact
+verification including the embedded operation row; exactly-once `backup.created`
+finalization; startup and bounded pre-create reconciliation; additive
+`audit_status` / `audit_message` and `pending_audit_count`; a create response
+built from the exact `BackupResult` with no directory re-list; the
+`backup-audit-contract.ts` frontend module with success-plus-separate-warning;
+and the backend-owned Journal vocabulary.
+
+**Required follow-up.** `report_document_audit.py` and `export_audit.py` still
+return `int | None` from finalization and map every `None` to `201` with
+`audit_status: pending`, so an artifact that fails mandatory verification can be
+reported as successfully created. This slice corrected that for manual backups
+through the typed `BackupFinalization`; the same correction for B1 and B2 is one
+bounded follow-up slice, to run immediately after `C3-II-B3` merges. It is **not
+cosmetic**, and **C4 must not be activated until it is resolved or explicitly
+accepted as a known release blocker**.
+
+**Boundaries.** No migration `0021` and no change to `0020`; no second ledger;
+no sidecar; no outbox; no Restore; no scheduled or cloud backup; no retention
+policy; the automatic `before_migration` backup stays before migrations, is
+never audited and creates no ledger row; historical backups are never
+backfilled, renamed or rewritten; `CR-005` is not reopened.
 
 **Non-goals for the active window.** No backup or export audit, generic
 outbox/event bus/job queue, source persistence, detail endpoint, raw metadata

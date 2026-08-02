@@ -1,8 +1,77 @@
 # Handoff
 
-## C3-II-B2 implementation handoff — implemented on its PR branch, open and unmerged (2026-08-01)
+## C3-II-B3 implementation handoff — implemented on its PR branch, open and unmerged (2026-08-02)
 
 > This is the single current authoritative lifecycle conclusion.
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-009 — ACCEPTED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-004 — ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)
+C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3 — INCOMPLETE ON MERGED MAIN — COMPLETE ON THE B3 BRANCH
+C4 — INACTIVE — NEEDS PRODUCT DECISION
+Restore — NOT IMPLEMENTED
+Product release readiness — NOT CLAIMED
+```
+
+`C3-II-B2` merged as PR #166 — final reviewed head
+`530b3a112b937f8955dd5768741f0ec403809b5a`, merge commit
+`844526ae4057a454312f790abcaf21be518cdbd9`, merged `2026-08-01T11:19:55Z`.
+
+`CR-004` is **resolved and accepted**. The raw `shutil.copy2` of the live main
+database file was classified `PRODUCT DEFECT — BACKUP CONSISTENCY`, severity
+`HIGH`: under WAL it silently omitted **all** committed-but-uncheckpointed rows
+while returning `quick_check = ok`; under rollback journal it produced mixed
+transaction state including never-committed rows, reproduced with the **stock**
+page cache; and one scenario produced genuine structural corruption. The source
+database was never mutated in any scenario, so this is not live-data loss — the
+damage surfaces only when the backup is needed. Plain
+`sqlite3.Connection.backup()` was also found to **never return** while the source
+stayed locked, which is why the shipped engine refuses `SQLITE_BUSY` /
+`SQLITE_LOCKED` instead of retrying. Evidence:
+`docs/backend-baseline-failure-triage.md` §18; decision:
+`docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`.
+
+`C3-II-B3 — Manual backup AuditLog coverage` is implemented on branch
+`claude/cr-004-c3-ii-b3-manual-backup`, cut from merged `main`
+`844526ae4057a454312f790abcaf21be518cdbd9` (the PR #166 merge commit). The pull
+request is **open and unmerged**, so manual backup creation is still not audited
+on merged `main`, and merged `main` still copies the database file raw.
+
+It is the **last remaining C3 slice**: C3 becomes `COMPLETED` only when it
+merges. C4 stays inactive and Restore stays unimplemented regardless.
+
+**Known follow-up, required and not cosmetic.** `report_document_audit.py` and
+`export_audit.py` still return `int | None` from finalization and still map every
+`None` to `201` with `audit_status: pending`, so a report document or JSON export
+that fails mandatory verification can be reported as successfully created — the
+same defect class that was classified blocking for backups and corrected here by
+the typed `BackupFinalization`. It is kept out of PR #167 because correcting two
+merged, separately accepted slices in a backup PR would be an unrelated refactor,
+and it is scheduled as one bounded slice immediately after `C3-II-B3` merges.
+**C4 must not be activated until it is resolved or explicitly accepted as a
+release blocker.**
+
+The load-bearing detail for a reviewer: because the snapshot is taken **after**
+the prepared ledger row commits, a manual backup contains its own operation row
+in `status = prepared` with `audit_log_id IS NULL` and no `backup.created` event
+for itself. That embedded row is how the artifact proves which operation created
+it — an unrelated but perfectly healthy SQLite database placed at the reserved
+path passes every structural check, and an empty file returns `quick_check = ok`.
+The completed backup is never rewritten afterwards to promote that row.
+
+---
+
+## HISTORICAL — C3-II-B2 implementation handoff (2026-08-01)
+
+> Superseded by the section above; preserved as the record of that slice.
 
 ```text
 C1 — COMPLETED

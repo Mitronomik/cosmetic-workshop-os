@@ -45,6 +45,9 @@ PERSISTED_SUMMARIES = {
     "packaging_item.catalog_tags.updated": "Catalog tags updated",
     "recipe_template.catalog_category.assigned": "Catalog category assigned",
     "recipe_template.catalog_tags.updated": "Catalog tags updated",
+    # CR-009 B3 persists this fixed English string and nothing else. There is no
+    # filename, path, reason, database size or migration list in it to leak.
+    "backup.created": "Backup created",
     "client.created": "Client created: Анна Иванова",
     "client.updated": "Client updated: Анна Иванова",
     "client.deactivated": "Client deactivated: Анна Иванова",
@@ -128,17 +131,19 @@ LATIN_LETTERS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 # --------------------------------------------------------------------------
 
 def test_action_vocabulary_is_the_documented_fifty_codes():
-    # 51 + `report_document.created` (CR-009 B1) + `export.created` (CR-009 B2).
-    assert len(ACTION_LABELS) == 53
+    # 51 + `report_document.created` (B1) + `export.created` (B2) +
+    # `backup.created` (B3) — the complete CR-009 artifact vocabulary.
+    assert len(ACTION_LABELS) == 54
     assert set(GENERIC_SUMMARIES) == set(ACTION_LABELS)
     assert set(PERSISTED_SUMMARIES) == set(ACTION_LABELS)
 
 
 def test_entity_and_actor_vocabularies_match_the_contract():
-    # 19 + `report_document` (CR-009 B1) + `export_file` (CR-009 B2).
-    assert len(ENTITY_LABELS) == 21
+    # 19 + `report_document` (B1) + `export_file` (B2) + `backup_file` (B3).
+    assert len(ENTITY_LABELS) == 22
     assert ENTITY_LABELS["report_document"] == "Документ отчёта"
     assert ENTITY_LABELS["export_file"] == "Экспорт"
+    assert ENTITY_LABELS["backup_file"] == "Резервная копия"
     assert ENTITY_LABELS["app_setting"] == "Настройка приложения"
     assert ACTOR_LABELS == {"system": "Система", "user": "Пользователь"}
 

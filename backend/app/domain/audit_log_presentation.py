@@ -42,6 +42,7 @@ ACTION_LABELS: Final[dict[str, str]] = {
     "packaging_item.catalog_tags.updated": "У тары изменены теги",
     "recipe_template.catalog_category.assigned": "Рецепту назначена категория",
     "recipe_template.catalog_tags.updated": "У рецепта изменены теги",
+    "backup.created": "Резервная копия создана",
     "client.created": "Клиент создан",
     "client.updated": "Клиент изменён",
     "client.deactivated": "Клиент архивирован",
@@ -90,6 +91,11 @@ ACTION_LABELS: Final[dict[str, str]] = {
 # matched exactly as stored: it is never normalized, aliased or rewritten.
 ENTITY_LABELS: Final[dict[str, str]] = {
     "app_setting": "Настройка приложения",
+    # CR-009 B3. The Journal shows that a backup was created; the persisted
+    # `entity_id` is an internal operation UUID and stays suppressed by the read
+    # model, exactly as every other entity ID is. Neither the backup filename nor
+    # its path nor its reason is ever carried here.
+    "backup_file": "Резервная копия",
     "catalog_category": "Категория справочника",
     "catalog_tag": "Тег справочника",
     "client": "Клиент",
@@ -142,6 +148,10 @@ GENERIC_SUMMARIES: Final[dict[str, str]] = {
     "packaging_item.catalog_tags.updated": "У тары изменены теги",
     "recipe_template.catalog_category.assigned": "Рецепту назначена категория",
     "recipe_template.catalog_tags.updated": "У рецепта изменены теги",
+    # CR-009 B3, and deliberately absent from `SUFFIX_PREFIXES` below: the
+    # persisted summary is the fixed English string `Backup created`, there is no
+    # business name to retain, and no filename, path or reason may ever be shown.
+    "backup.created": "Резервная копия создана",
     "client.created": "Клиент создан",
     "client.updated": "Клиент изменён",
     "client.deactivated": "Клиент архивирован",

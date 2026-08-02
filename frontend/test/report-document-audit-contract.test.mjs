@@ -454,21 +454,20 @@ test('the pending notice is rendered as its own warning region, apart from the s
   assert.doesNotMatch(source, /feedbackMessage\('error', warning\)/);
 });
 
-test('Backup audit behaviour is still untouched, and Export uses its own contract', async () => {
+test('Backup and Export each use their own contract, never this one', async () => {
   const source = await mainSource();
-  // Manual backup remains unimplemented: C3-II-B3 is blocked by CR-004.
-  for (const forbidden of [/backupUiState\.auditWarning/, /backupUiState\.pendingAuditCount/]) {
-    assert.doesNotMatch(source, forbidden);
-  }
-  // Neither backup nor export create paths consult the report-document contract.
-  // CR-009 B2 gave exports their own contract module with its own Russian
-  // wording; sharing this one would let a document's warning appear on /exports.
+  // CR-009 B2 gave exports their own contract module and B3 gave manual backups
+  // theirs, each with its own backend-owned Russian wording. Sharing this one
+  // would let a document's warning appear on /exports or /backups, which is the
+  // reason the three were never generalized into one "artifact" abstraction.
   const backupMutate = source.split('\n').find((line) => line.includes('const backupRuntime = createLocalArtifactRouteRuntime'));
   const exportMutate = source.split('\n').find((line) => line.includes('const exportRuntime = createLocalArtifactRouteRuntime'));
   assert.ok(backupMutate && exportMutate);
   assert.doesNotMatch(backupMutate, /reportDocumentAudit/);
   assert.doesNotMatch(backupMutate, /exportAudit/);
+  assert.match(backupMutate, /backupAuditResult/);
   assert.doesNotMatch(exportMutate, /reportDocumentAudit/);
+  assert.doesNotMatch(exportMutate, /backupAudit/);
   assert.match(exportMutate, /exportAuditResult/);
 });
 

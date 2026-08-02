@@ -522,7 +522,17 @@ Manual backups are explicit local SQLite safety copies. The API does not restore
 
 ### `GET /api/backups/status`
 
-Returns the current configured SQLite database path, whether that database exists, the selected backup directory, whether it exists, the number of listed backups, and the latest backup if any. This endpoint is read-only and does not create the database or backup directory.
+Returns the current configured SQLite database path, whether that database exists, the selected backup directory, whether it exists, the number of listed backups, the latest backup if any, and `pending_audit_count`. This endpoint is read-only: it does not create the database or backup directory, and it never reconciles.
+
+`pending_audit_count` (CR-009 B3) is exactly the number of unresolved
+`manual_backup` ledger operations — `prepared` plus `pending_audit` — and
+excludes `audited`, `abandoned` and every other artifact kind. When the ledger
+cannot be read the endpoint returns `500` with the fixed Russian detail
+`Не удалось прочитать сведения о резервных копиях. Данные мастерской не
+изменялись.` rather than reporting `pending_audit_count: 0`. A `0` is a factual
+claim the frontend clears a standing warning on, so it is never fabricated from
+a failed read. When no database exists the count is a conclusive `0` and no
+connection is opened.
 
 Example response:
 
@@ -540,7 +550,8 @@ Example response:
     "created_at": "2026-07-05T10:00:00Z",
     "reason": "manual",
     "size_bytes": 245760
-  }
+  },
+  "pending_audit_count": 0
 }
 ```
 
@@ -559,7 +570,11 @@ Example response:
 
 ### `POST /api/backups`
 
-Creates an explicit manual backup of the currently configured SQLite database by copying the source database into the selected backup directory. The API does not accept arbitrary source or destination paths. Existing backup files are never overwritten.
+Creates an explicit manual backup of the currently configured SQLite database by writing a **transactionally consistent SQLite snapshot** into the selected backup directory through the SQLite Online Backup API (ADR 0015). The API does not accept arbitrary source or destination paths. Existing backup files are never overwritten, and the source database is never modified.
+
+The snapshot contains only committed data and is independently openable without the source WAL or rollback journal. It is **not** byte-identical to the source. If the source database stays locked for the whole bounded wait, the endpoint returns `409` rather than producing an inconsistent file.
+
+The response is built from the backup engine's exact result. The endpoint does **not** re-list the backup directory after a successful create: CR-004 measured that re-scan turning a complete, verified backup into an HTTP `500`.
 
 Request body is optional; missing, null, or blank `reason` becomes `manual`. Reasons are limited to 80 characters and are sanitized for filenames by the backup service. The returned `reason` is the canonical filename-derived segment — see *Backup and export `reason` field semantics* below.
 
@@ -582,11 +597,79 @@ Success response:
   },
   "database_path": "/path/to/cosmetic_workshop.sqlite",
   "backup_dir": "/path/to/backups",
-  "message": "Резервная копия создана."
+  "message": "Резервная копия создана.",
+  "audit_status": "recorded",
+  "audit_message": null
 }
 ```
 
-If the database file is missing, the endpoint returns `404` with a human-readable Russian message. If the configured database path exists but is not a file, it returns `409`.
+If the database file is missing, the endpoint returns `404` with a fixed Russian message. If the configured database path exists but is not a file, or the snapshot cannot be written safely, it returns `409` with a structured `{code, message, next_action}` detail — `backup_source_busy` when the source stayed locked for the whole bounded wait, `backup_failed` otherwise.
+
+No user-facing backup error carries an absolute path, a filename, a SQLite message, a Python exception class or SQL. The underlying exception keeps that detail for logs and tests through exception chaining.
+
+#### The five create failure modes are distinct
+
+| Condition | Result |
+|---|---|
+| source database missing | `404`, fixed Russian text |
+| audit tracking could not be prepared | `500` `artifact_audit_tracking_unavailable` — nothing written |
+| snapshot could not be produced | `409` `backup_source_busy` / `backup_failed` |
+| artifact did not pass verification | `500` `backup_verification_failed` |
+| verified, AuditLog write failed | `201` `audit_status: pending` |
+| verified and audited | `201` `audit_status: recorded` |
+
+An artifact that did not verify is **not** a created backup. It never returns
+`201`, never reports `Резервная копия создана.`, never writes a `backup.created`
+event, and is never described as merely awaiting a Journal entry:
+
+```json
+{
+  "detail": {
+    "code": "backup_verification_failed",
+    "message": "Не удалось проверить созданную резервную копию, поэтому она не считается надёжной. Рабочие данные мастерской не изменялись.",
+    "next_action": "Повторите создание резервной копии. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
+
+The file is left on disk untouched — the create cannot prove it owns that path,
+which is exactly what verification failed to establish — and the ledger row stays
+unresolved and counted for bounded reconciliation.
+
+#### Manual-backup AuditLog fields (CR-009 B3)
+
+`audit_status` and `audit_message` are additive and report only the **secondary**
+Journal result. `message` remains the artifact result and never changes meaning.
+The two are bound: `recorded` always carries `audit_message: null`, and `pending`
+always carries exactly the accepted warning.
+
+A verified backup whose Journal entry could not be committed still returns
+HTTP `201`:
+
+```json
+{
+  "message": "Резервная копия создана.",
+  "audit_status": "pending",
+  "audit_message": "Резервная копия создана, но запись в журнал действий пока не добавлена. Приложение повторит попытку при следующем запуске или перед созданием следующей резервной копии."
+}
+```
+
+The backup is kept, listed and counted; nothing is deleted and no duplicate
+request is sent. The retry happens at exactly two bounded moments: the next
+normal startup, and once before the next manual backup.
+
+If audit tracking cannot be durably prepared **before** anything is written, the
+create is refused outright and no backup, ledger row or event exists:
+
+```json
+{
+  "detail": {
+    "code": "artifact_audit_tracking_unavailable",
+    "message": "Не удалось безопасно подготовить создание резервной копии. Резервная копия не создана.",
+    "next_action": "Повторите создание резервной копии. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
 
 ### Backup and export `reason` field semantics (CR-005, decided 2026-07-27)
 
