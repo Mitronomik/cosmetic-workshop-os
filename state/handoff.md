@@ -1,6 +1,6 @@
 # Handoff
 
-## C3-II-B3 implementation handoff — implemented on its PR branch, open and unmerged (2026-08-02)
+## C3 artifact-finalization hardening handoff — implemented on its PR branch, open and unmerged (2026-08-02)
 
 > This is the single current authoritative lifecycle conclusion.
 
@@ -13,13 +13,48 @@ CR-009 — ACCEPTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
 C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-004 — ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)
-C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED
-C3 — INCOMPLETE ON MERGED MAIN — COMPLETE ON THE B3 BRANCH
+CR-004 — ACCEPTED AND IMPLEMENTED
+C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3 — COMPLETED — MERGED AND EXACT-HEAD VERIFIED
+C3 artifact-finalization hardening — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C4 — INACTIVE — NEEDS PRODUCT DECISION
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
+
+`C3-II-B3` merged as PR #167 — final reviewed head
+`259697805660fd4dc37e6ac5f50567d48037be94`, merge commit
+`7af53a3305fa9fdb984d4c478e1186685fbb6727`, merged `2026-08-02T01:47:25Z`. It
+was the last remaining C3 slice, so **C3 is `COMPLETED` on merged `main`** and
+`CR-004` is `ACCEPTED AND IMPLEMENTED`.
+
+The follow-up **C3 artifact-finalization hardening** slice is implemented on
+`claude/c3-hardening-artifact-finalization` and is **not merged**. It applies the
+three-outcome finalization rule B3 established to the two earlier merged slices.
+
+Before the correction, `ReportDocumentAuditService.finalize()` and
+`ExportAuditService.finalize()` both returned `int | None`, where `None` meant
+*either* "the artifact failed mandatory verification" *or* "the artifact verified
+but its AuditLog event did not commit". Both create paths mapped every `None` to
+`201` with `audit_status: pending`, so an artifact that failed verification was
+presented as successfully created. That was reproduced against merged `main` in
+ten cases across both artifact kinds, including two genuine verifier verdicts,
+before any code changed.
+
+Both finalizers now return artifact-specific typed results carrying `recorded`,
+`audit_pending` or `artifact_invalid`. Only the first two make the artifact
+authoritative; `artifact_invalid` raises a dedicated fixed-contract error mapped
+to a structured HTTP `500` (`report_document_verification_failed` /
+`export_verification_failed`) that leaks no filename, path, reason, operation ID,
+schema version, entity count or SQLite detail. A verified artifact whose Journal
+write failed still returns `201 pending`. The artifact is never deleted, no event
+is written, and the operation stays unresolved and counted for bounded
+reconciliation.
+
+No migration, no second ledger, no outbox, no generic artifact framework, no
+worker, no frontend production change. Backup finalization and `CR-006` are
+untouched. **C4 remains inactive** until this merges or is explicitly accepted as
+a known release blocker.
 
 `C3-II-B2` merged as PR #166 — final reviewed head
 `530b3a112b937f8955dd5768741f0ec403809b5a`, merge commit

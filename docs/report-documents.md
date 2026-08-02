@@ -185,6 +185,31 @@ HTTP still remains `201`, with `audit_status: pending` and this exact warning:
 The frontend shows document success and the Journal warning separately, sends
 no duplicate create request, and exposes no raw path or AuditLog metadata.
 
+### Verification failure is not a pending Journal entry
+
+*C3 artifact-finalization hardening — implemented on the PR branch, not merged.*
+
+Finalization reports three distinct outcomes — `recorded`, `audit_pending` and
+`artifact_invalid` — instead of an ID-or-nothing. Only the first two make the
+pair authoritative.
+
+`artifact_invalid` means mandatory verification did not conclude the pair is
+valid: an `ambiguous` verdict, `definitely_absent` on the immediate create path,
+a verifier that raised, or a ledger that could not be read. In that case the
+create does **not** return `201`, does **not** say `Документ отчета создан.`,
+writes no `report_document.created` event, and is never described as merely
+awaiting a Journal entry. It returns HTTP `500` with the fixed structured detail
+`report_document_verification_failed` and no filename, path, operation ID,
+verifier reason, SQLite message or user-supplied reason.
+
+The pair is left on disk untouched — the create cannot prove it owns those
+files, which is exactly what verification failed to establish — and its
+operation stays unresolved and counted, so a later bounded reconciliation pass
+finalizes it exactly once if the artifact turns out to be valid.
+
+`audit_pending` is unchanged and remains a success: the pair is verified and
+authoritative, and only its Journal entry is outstanding.
+
 The `pending_audit_count` returned by `GET
 /api/report-documents/status` is the count of rows where
 `artifact_kind = report_document` and `status` is `prepared` or

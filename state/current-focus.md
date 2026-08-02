@@ -1,6 +1,6 @@
-# Current focus — C3-II-B3 implemented on its PR branch, open and unmerged
+# Current focus — C3 complete on merged `main`; artifact-finalization hardening implemented on its PR branch, open and unmerged
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A, C3-II-B1 and C3-II-B2 merged and exact-head verified; CR-004 resolved and accepted; CR-009 implemented on merged `main` for report documents and JSON exports, and on the unmerged C3-II-B3 branch for manual backups; C3 incomplete on merged `main`; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A, C3-II-B1, C3-II-B2 and C3-II-B3 all merged and exact-head verified; CR-004 and CR-006 resolved and implemented; CR-009 implemented on merged `main` for report documents, JSON exports and manual backups; C3 COMPLETED on merged `main`; the artifact-finalization hardening follow-up is implemented on its PR branch and unmerged; C4 inactive**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -22,12 +22,15 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3
 - `CR-006 — JSON export create-response confirmation semantics`: **ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED**
 - `C3-II-B2 — JSON export AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #166)
 - `CR-004 — SQLite backup transaction consistency`: **ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)**
-- `C3-II-B3 — Manual backup AuditLog coverage`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
-- `C3 — INCOMPLETE ON MERGED MAIN` — complete on the B3 branch; B3 is the last remaining slice
+- `C3-II-B3 — Manual backup AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #167, merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727`, final reviewed head `259697805660fd4dc37e6ac5f50567d48037be94`)
+- `CR-004 — SQLite backup transaction consistency`: **ACCEPTED AND IMPLEMENTED**
+- `C3 — COMPLETED — MERGED AND EXACT-HEAD VERIFIED`
+- `C3 artifact-finalization hardening — IMPLEMENTED ON PR BRANCH — NOT MERGED`
+- `C4 — INACTIVE`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **C3-II-B2 is merged into `main` through PR #166.** C4 remains unauthorized.
-- Next active work: **review of the open `C3-II-B3` pull request.** The slice is implemented on `claude/cr-004-c3-ii-b3-manual-backup`, reuses the existing ledger with no new migration, carries the `CR-004` backup-engine correction, and is **not merged**. It is the last remaining C3 slice, so C3 becomes `COMPLETED` only when that PR merges. C4 stays inactive and Restore stays unimplemented regardless.
+- **C3-II-B3 is merged into `main` through PR #167, so C3 is `COMPLETED` on merged `main`.** C4 remains unauthorized.
+- Next active work: **review of the open C3 artifact-finalization hardening pull request.** It is implemented on `claude/c3-hardening-artifact-finalization`, reuses the existing ledger with no new migration, and is **not merged**. C4 stays inactive and Restore stays unimplemented regardless.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
@@ -44,19 +47,38 @@ report documents and JSON exports.
 an artifact that fails mandatory verification can never be reported as a created
 artifact with a merely pending Journal entry.
 
-`report_document_audit.py` and `export_audit.py` still return `int | None`, and
-their create paths still map every `None` to `201` with `audit_status: pending`.
-They therefore appear to carry **the same defect class** that was classified
-blocking for backups: a report document or JSON export that fails verification
-can be reported to the user as successfully created.
+`report_document_audit.py` and `export_audit.py` returned `int | None`, and
+their create paths mapped every `None` to `201` with `audit_status: pending`.
+They therefore carried **the same defect class** that was classified blocking
+for backups: a report document or JSON export that failed verification was
+reported to the user as successfully created.
 
 This was deliberately kept out of PR #167 — correcting two merged, separately
 accepted slices there would have been an unrelated refactor across a diff whose
-subject is backups — but it is **not cosmetic** and is not deferred
-indefinitely. It is one bounded follow-up slice, to be run immediately after
-`C3-II-B3` merges.
+subject is backups — and it was run as the immediate follow-up instead.
 
-**C4 must not be activated until this follow-up is resolved, or until it is
+**Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`** on
+`claude/c3-hardening-artifact-finalization`.
+
+The defect was reproduced against merged `main` before any correction, in ten
+cases across both artifact kinds, including two genuine (non-injected) verifier
+verdicts: a report-document size mismatch and an unreadable export. Every case
+returned `201` with `audit_status: pending` and wrote no AuditLog event.
+
+Both finalizers now return artifact-specific typed results —
+`ReportDocumentFinalization` and `ExportFinalization` — carrying `recorded`,
+`audit_pending` or `artifact_invalid`. Only `recorded` and `audit_pending` make
+the artifact authoritative. `artifact_invalid` raises a dedicated fixed-contract
+error (`report_document_verification_failed` / `export_verification_failed`)
+that the API maps to a structured HTTP `500` with no filename, path, reason,
+operation ID, schema version, entity count or SQLite detail. A verified artifact
+whose Journal write failed still returns `201 pending`.
+
+No migration, no second ledger, no outbox, no generic artifact framework, no
+worker. Backup finalization is untouched. `CR-006` create-response behaviour is
+unchanged.
+
+**C4 must not be activated until this follow-up merges, or until it is
 explicitly accepted as a known release blocker.**
 
 ## CR-004 resolved; C3-II-B3 implemented on its PR branch (2026-08-02)
