@@ -44,7 +44,7 @@ C4 — INACTIVE — NEEDS PRODUCT DECISION
 Product release readiness — NOT CLAIMED
 ```
 
-`C3-II-A — Atomic workshop-profile AuditLog coverage` merged as PR #161 and is closed with honest exact-head attribution in § 16.7. `CR-009` accepts the durable file-backed partial-success and reconciliation contract. Its report-document slice `C3-II-B1` merged as PR #163 — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`, final exact-head launcher smoke `PASS`, no unresolved P0 or P1 findings — so `report_document.created` exists on merged `main`. Export and backup coverage remain blocked by CR-006 and CR-004 respectively; the next authorized task is the evidence-only CR-006 diagnostic.
+`C3-II-A — Atomic workshop-profile AuditLog coverage` merged as PR #161 and is closed with honest exact-head attribution in § 16.7. `CR-009` accepts the durable file-backed partial-success and reconciliation contract. Its report-document slice `C3-II-B1` merged as PR #163 — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`, final exact-head launcher smoke `PASS`, no unresolved P0 or P1 findings — so `report_document.created` exists on merged `main`. `CR-006` was then accepted and its export slice `C3-II-B2` merged as PR #166 — final reviewed head `530b3a112b937f8955dd5768741f0ec403809b5a`, merge commit `844526ae4057a454312f790abcaf21be518cdbd9` — so `export.created` also exists on merged `main`. `CR-004` is now resolved (ADR 0015) and its manual-backup slice `C3-II-B3` adds `backup.created`; that slice is **implemented on its PR branch and not merged**.
 
 ### 1.1. Implementation modules
 
@@ -899,7 +899,7 @@ Use focused frontend modules, following the pattern already established by `sett
 
 Inventoried from `backend/app/migrations/versions/0001_infrastructure.py`, `backend/app/repositories/audit.py` and every production `AuditLogRepository.create_log` call site.
 
-**Scope of this inventory.** Merged PR #161 added exactly one production action, `workshop_profile.updated`. `C3-II-B1` (CR-009) then added exactly one more, `report_document.created`, plus its entity `report_document`, so the current action vocabulary contains 52 actions and the entity vocabulary 20; the suffix allowlist remains 21. These values were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. This inventory originated as the read-only C3-I inventory. C3-II-A added exactly one write call site for Workshop-profile changes, and C3-II-B1 added exactly one for report-document creation; no other AuditLog write call site changed. On merged `main` the write call sites for manual backup creation and JSON export creation remain absent. `C3-II-B2` adds exactly one more action, `export.created`, plus its entity `export_file`, on its unmerged PR branch — taking the branch vocabulary to 53 actions and 21 entities, with the suffix allowlist still 21 — and `C3-II-B3` stays blocked by CR-004.
+**Scope of this inventory.** Merged PR #161 added exactly one production action, `workshop_profile.updated`. `C3-II-B1` (CR-009) then added exactly one more, `report_document.created`, plus its entity `report_document`, so the current action vocabulary contains 52 actions and the entity vocabulary 20; the suffix allowlist remains 21. These values were read from the code, **not** by querying a database that contains a row for every code. A real local database may hold fewer of them, and an older database may hold values no current call site produces. That is exactly why the unknown-code fallbacks of § 5.4 are mandatory and why `filter_options` (§ 7.5) is derived from rows that actually exist rather than from these tables. This inventory originated as the read-only C3-I inventory. C3-II-A added exactly one write call site for Workshop-profile changes, and C3-II-B1 added exactly one for report-document creation; no other AuditLog write call site changed. `C3-II-B2` then added exactly one more action, `export.created`, plus its entity `export_file`, taking merged `main` to 53 actions and 21 entities. `C3-II-B3` adds exactly one more, `backup.created`, plus its entity `backup_file`, on its unmerged PR branch — taking the branch vocabulary to **54 actions and 22 entities**, with the suffix allowlist still 21. None of the three artifact actions is allowlisted for suffix retention: each persists a fixed English summary with no business name to retain.
 
 ### 11.1. `action` — 52 codes in the current write vocabulary
 
@@ -1076,7 +1076,7 @@ C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
 ```
 
-`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document runtime slice B1 merged as PR #163, so report-document creation is audited on merged main. `CR-006` is now accepted, so B2 is authorized after its decision PR merges but is **not implemented** — JSON export creation is still **not** audited on merged main. Manual backup remains blocked by `CR-004`.
+`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document slice B1 merged as PR #163 and JSON-export slice B2 merged as PR #166, so both are audited on merged main. `CR-004` is now resolved by ADR 0015, and manual-backup slice B3 is **implemented on its PR branch and not merged** — so manual backup creation is not yet audited on merged main.
 
 ---
 
@@ -1503,9 +1503,29 @@ migrations, and must not depend on a ledger table that may not yet exist.
 
 ```text
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
-C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
+
+C3-II-B2 merged as PR #166 (merge commit
+`844526ae4057a454312f790abcaf21be518cdbd9`, final reviewed head
+`530b3a112b937f8955dd5768741f0ec403809b5a`).
+
+C3-II-B3 is implemented on `claude/cr-004-c3-ii-b3-manual-backup` and is **not
+merged**. It reuses the existing ledger with **no new migration**, and it also
+carries the `CR-004` backup-engine correction: the raw file copy is replaced by
+the SQLite Online Backup API with bounded busy behaviour, and the create
+response is built from the engine's exact `BackupResult` instead of a directory
+re-list.
+
+For B3, `pending_audit_count` counts exactly `manual_backup` operations in
+`prepared` or `pending_audit`. Its verification is stricter than B1's and B2's
+because the artifact is itself a SQLite database: a valid backup must contain
+its own matching ledger operation in `status = prepared` with
+`audit_log_id IS NULL`, so an unrelated but structurally healthy database placed
+at the reserved path cannot be audited. `PRAGMA quick_check = ok` alone is never
+sufficient — an empty file returns `ok`. Full contract:
+`docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`.
 
 C3-II-B1 merged as PR #163 (merge commit
 `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, final reviewed head

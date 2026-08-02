@@ -1,6 +1,6 @@
-# Current focus — C3-II-B2 implemented on its PR branch, open and unmerged
+# Current focus — C3-II-B3 implemented on its PR branch, open and unmerged
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A and C3-II-B1 merged and exact-head verified; CR-009 accepted and implemented for report documents on merged `main` and for JSON exports on the unmerged C3-II-B2 branch; CR-006 accepted and its correction implemented on that same branch; C3 incomplete; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A, C3-II-B1 and C3-II-B2 merged and exact-head verified; CR-004 resolved and accepted; CR-009 implemented on merged `main` for report documents and JSON exports, and on the unmerged C3-II-B3 branch for manual backups; C3 incomplete on merged `main`; C4 inactive**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -20,15 +20,74 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3
 - `CR-009 — Durable file-backed artifact AuditLog semantics`: **ACCEPTED**
 - `C3-II-B1 — Durable ledger and report-document AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #163)
 - `CR-006 — JSON export create-response confirmation semantics`: **ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED**
-- `C3-II-B2 — JSON export AuditLog coverage`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
-- `C3-II-B3 — Manual backup AuditLog coverage`: **BLOCKED BY CR-004 — NOT AUTHORIZED**
-- `C3 — INCOMPLETE`
+- `C3-II-B2 — JSON export AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #166)
+- `CR-004 — SQLite backup transaction consistency`: **ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)**
+- `C3-II-B3 — Manual backup AuditLog coverage`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
+- `C3 — INCOMPLETE ON MERGED MAIN` — complete on the B3 branch; B3 is the last remaining slice
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **C3-II-B1 is merged into `main` through PR #163.** B3 and C4 remain unauthorized.
-- Next active work: **review of the open `C3-II-B2` pull request.** The slice is implemented on `claude/c3-ii-b2-json-export-audit`, reuses the existing ledger with no new migration, carries the accepted `CR-006` create-response correction, and is **not merged**. Nothing further is authorized until it merges: `C3-II-B3` stays blocked by `CR-004`.
+- **C3-II-B2 is merged into `main` through PR #166.** C4 remains unauthorized.
+- Next active work: **review of the open `C3-II-B3` pull request.** The slice is implemented on `claude/cr-004-c3-ii-b3-manual-backup`, reuses the existing ledger with no new migration, carries the `CR-004` backup-engine correction, and is **not merged**. It is the last remaining C3 slice, so C3 becomes `COMPLETED` only when that PR merges. C4 stays inactive and Restore stays unimplemented regardless.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
+
+## CR-004 resolved; C3-II-B3 implemented on its PR branch (2026-08-02)
+
+`CR-004` is **accepted** and classified:
+
+```text
+CR-004 — PRODUCT DEFECT — BACKUP CONSISTENCY — HIGH
+```
+
+The evidence ran against merged `main` = `844526ae4057a454312f790abcaf21be518cdbd9`
+with Python `3.12.10` and SQLite `3.49.1`, on isolated temporary user-data
+directories with no real user data.
+
+| Scenario | Result on the raw `shutil.copy2` path |
+|---|---|
+| Quiescent copy (control) | correct — 25/25 rows, `ok`/`ok`, source unchanged |
+| WAL, committed uncheckpointed | **0 of 200** committed rows in the copy, `quick_check = ok` |
+| Concurrent writers under WAL | 954 committed transactions, **0 rows** in all 10 snapshots |
+| Rollback journal, transaction in flight | **12 of 12** copies held two transaction states, including rolled-back rows |
+| Same, with the stock page cache | reproduced — not a harness artefact |
+| Uncommitted spilled pages | `quick_check` **failed**; 506 committed rows missing, 465 never-committed exposed |
+| Source mutation | **none observed**, either engine, any scenario |
+| Plain `Connection.backup()` under a held lock | **never returned** |
+| Aborted copy | 0-byte file that passes `quick_check` and is listed |
+| Create-path directory re-list | HTTP `500` under all four injected faults, with a complete backup on disk |
+
+The categories are kept distinct: the WAL findings are **omission of committed
+data**, the rollback-journal findings are **mixed transaction state and
+inclusion of never-committed data**, and **corruption** is claimed only for the
+one scenario where a structural check actually failed. This is not live-data
+loss — the source database is never modified — but the artifact whose only
+purpose is recovery could be silently incomplete.
+
+Delivered on the branch: the SQLite Online Backup API engine with a single
+whole-database step and bounded busy behaviour; one strict generated-filename
+grammar proved by a byte-for-byte round trip; exact filename reservation guarded
+by active-ledger identity; a `prepared` `manual_backup` ledger row committed
+before the snapshot; exact artifact verification including the embedded
+operation row; exactly-once `backup.created` finalization; startup and bounded
+pre-create reconciliation; additive `audit_status` / `audit_message` and
+`pending_audit_count`; a create response built from the exact `BackupResult`
+with no directory re-list; `frontend/src/backup-audit-contract.ts`; and the
+backend-owned Journal vocabulary `Резервная копия создана` / `Резервная копия`.
+
+The load-bearing property is the **embedded prepared operation**. A backup is
+itself a SQLite database, so unlike a document or an export it can prove which
+operation produced it — and it must, because an unrelated but perfectly healthy
+database placed at the reserved path passes every structural check, and an empty
+file returns `quick_check = ok`. The completed backup is never rewritten
+afterwards to promote that row to `audited`.
+
+No migration was added and `0020` is unchanged. The automatic `before_migration`
+backup keeps using the same safe engine, stays before migrations, creates no
+ledger row and is never audited.
+
+`C3-II-B3` is the **last remaining C3 slice**, so C3 is complete on this branch
+and incomplete on merged `main`. C4 stays inactive, Restore stays unimplemented,
+and product release readiness is not claimed.
 
 ## C3-II-B1 — merged and exact-head verified (2026-08-01)
 
@@ -37,10 +96,12 @@ C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-006 — ACCEPTED — PRODUCT DEFECT CONFIRMED AND CONTRACT DECIDED
-C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
-C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
-C3 — INCOMPLETE
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-004 — ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)
+C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3 — INCOMPLETE ON MERGED MAIN — COMPLETE ON THE B3 BRANCH
 C4 — INACTIVE
+Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 

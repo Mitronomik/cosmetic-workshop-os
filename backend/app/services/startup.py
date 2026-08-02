@@ -6,6 +6,7 @@ from app.db.config import DatabaseConfig, get_database_config
 from app.db.paths import UserDataPaths, create_user_data_directories, resolve_user_data_paths
 from app.db.migrations import pending_migration_ids
 from app.services.backup import BackupResult, backup_sqlite_database
+from app.services.backup_audit import BackupReconciliationResult, reconcile_manual_backups
 from app.services.database import initialize_database
 from app.services.export_audit import ExportReconciliationResult, reconcile_json_exports
 from app.services.report_document_audit import ReportDocumentReconciliationResult, reconcile_report_documents
@@ -26,6 +27,9 @@ class StartupInitializationResult:
     report_document_audit_reconciliation: ReportDocumentReconciliationResult | None = None
     # CR-009 B2. The same, for JSON exports.
     json_export_audit_reconciliation: ExportReconciliationResult | None = None
+    # CR-009 B3. The same, for user-created manual SQLite backups. The automatic
+    # `before_migration` backup below is deliberately not covered by it.
+    manual_backup_audit_reconciliation: BackupReconciliationResult | None = None
 
 
 def validate_startup_mode(mode: str) -> StartupMode:
@@ -77,6 +81,11 @@ def initialize_startup(mode: str = "development") -> StartupInitializationResult
     # config. Neither pass raises, so one artifact kind failing cannot prevent
     # the other from being reconciled or the application from starting.
     export_reconciliation = reconcile_json_exports(config)
+    # CR-009 B3: manual backups reconcile last, in this fixed order, on the same
+    # config. It also never raises. The automatic `before_migration` backup taken
+    # above stays outside this pass entirely: it runs before migrations, is not a
+    # user action, has no ledger row, and is never audited.
+    backup_reconciliation = reconcile_manual_backups(config)
     return StartupInitializationResult(
         mode=validated_mode,
         database_path=config.path,
@@ -85,4 +94,5 @@ def initialize_startup(mode: str = "development") -> StartupInitializationResult
         backup=backup,
         report_document_audit_reconciliation=reconciliation,
         json_export_audit_reconciliation=export_reconciliation,
+        manual_backup_audit_reconciliation=backup_reconciliation,
     )

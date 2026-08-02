@@ -690,3 +690,87 @@ decision pull request merges and is **not implemented**. The four-node gate
 scope in §1 is unchanged and stays closed; this is still not a fifth backend
 baseline failure. Full diagnostic matrix:
 `docs/decisions/0014-json-export-create-confirmation-semantics.md`.
+
+## 18. CR-004 SQLite backup consistency — completed evidence (2026-08-02)
+
+`CR-004` is **resolved and accepted**. It was never one of the four accepted
+backend baseline gate failures of §1, and it is not a fifth: the gate scope is
+unchanged and stays closed. This section records the completed evidence matrix;
+the durable decision is
+`docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`.
+
+### 18.1. Provenance
+
+| Item | Value |
+|---|---|
+| Repository SHA under test | `844526ae4057a454312f790abcaf21be518cdbd9` |
+| Python | `3.12.10` |
+| `sqlite3.sqlite_version` | `3.49.1` |
+| Default journal mode | `delete` — no mode is forced anywhere in the codebase |
+| Default `busy_timeout` | `5000` ms, from `sqlite3.connect(timeout=5.0)` |
+
+The harness ran outside the repository against the exact checked-out production
+service, on isolated user-data directories, with no real user data, real SQLite
+connections and controlled writer threads. Faults were injected only at named
+boundaries (`pathlib.Path.stat`, `pathlib.Path.iterdir`, the named
+`list_backup_files` seam, and the engine's own destination boundaries). No
+production file was changed while gathering evidence and the harness is not
+committed.
+
+### 18.2. Evidence matrix
+
+| # | Scenario | Result |
+|---|---|---|
+| 7.1 | Quiescent raw copy (control) | 25/25 committed rows, `ok`/`ok`, source unchanged — **correct** |
+| 7.2 | WAL, committed uncheckpointed | **0 of 200** committed rows in the copy; `quick_check = ok`; all migrations present |
+| 7.3 | Rollback journal, transaction in flight | **12 of 12** copies held two transaction states at once; rolled-back rows present; `ok` |
+| 7.3b | Same, with the **stock** page cache (`-2000`), 42 MB DB | mixed state and never-committed rows reproduced — **not a harness artefact** |
+| 7.4 | Concurrent committed writers | raw+WAL: 954 committed, **0 rows** in all 10 snapshots. online+WAL: 246→885, always paired |
+| 7.5 | Uncommitted exclusion, spilled | raw: `quick_check` **failed**, 506 committed rows missing, 465 never-committed exposed |
+| 7.5 | Uncommitted exclusion, cached | raw and online both correct: 4000/4000 committed, 0 uncommitted |
+| 7.6 | Online Backup API | committed WAL state included, uncommitted excluded, no sidecars, source byte-identical |
+| 7.7 | Busy/lock | plain `backup()` **never returned** under a held lock; bounded form refused at 2.08 s |
+| 7.8 | Destination failure | aborted copy leaves a **0-byte file that passes `quick_check`** and is listed |
+| 7.9 | Create-response re-list | all four injected faults escape the route as `500` while a complete backup exists |
+| 7.10 | Automatic pre-migration backup | before migrations, snapshot at `0019`, 0 ledger rows, 0 events |
+
+### 18.3. Classification
+
+```text
+CR-004 — PRODUCT DEFECT — BACKUP CONSISTENCY — HIGH
+```
+
+The categories are kept distinct and are not used interchangeably:
+
+- **omission of committed data** — the WAL findings (7.2, 7.4). Structurally
+  valid, transactionally stale. **Not** corruption.
+- **mixed transaction state and inclusion of never-committed data** — the
+  rollback-journal findings (7.3, 7.3b). `integrity_check` passes throughout.
+  **Not** corruption.
+- **corrupt snapshot** — claimed for **one** scenario only (7.5 spilled), where
+  `quick_check` actually failed with `wrong # of entries in index
+  idx_ingredients_category`.
+- **source mutation** — **not observed** in any scenario, with either engine.
+- **writer blocking** — **not observed** for the raw copy.
+
+High severity because the affected artifact is the user's only recovery path,
+the failure is silent, and it is reachable with default settings. It is **not**
+live-data loss: no workshop record is harmed by taking a backup, and the damage
+surfaces only when the backup is needed.
+
+### 18.4. Adjacent finding carried by the same slice
+
+The create-path directory re-list (7.9) is the backup-side twin of the accepted
+`CR-006` export finding: a complete, verified `quick_check = ok` backup already
+on disk, and an HTTP `500` returned to the user. Re-armed so the fault fires only
+**after** `backup_sqlite_database` returns successfully, the route still raised.
+`C3-II-B3` corrects it while touching the create path once — the response is
+built from the engine's exact `BackupResult`.
+
+### 18.5. Boundaries preserved
+
+`CR-005`, `R4`, `CR-006`, `CR-009`, ADR 0013, ADR 0014, `C3-II-B1` and
+`C3-II-B2` are **not** reopened. No migration was added and migration `0020` is
+unchanged. The automatic `before_migration` backup remains before migrations and
+unaudited. Restore is not implemented, C4 is not activated, and product release
+readiness is not claimed.

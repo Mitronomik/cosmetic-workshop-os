@@ -2,13 +2,23 @@
 
 ## Current phase
 
-`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-006 — ACCEPTED`. `C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED`. The broader C3 obligation is incomplete.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-006 — ACCEPTED`. `C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #166). `CR-004 — ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)`. `C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED`. B3 is the last remaining C3 slice, so the broader C3 obligation is incomplete on merged `main` and complete on that branch.
 
 ## Current next step
 
-- Review the open `C3-II-B2 — JSON export AuditLog coverage` pull request. It is implemented on `claude/c3-ii-b2-json-export-audit`, reuses the existing `artifact_audit_operations` ledger with **no new migration**, and carries the accepted `CR-006` create-response correction. It is **not merged**, so JSON export creation is still not audited on merged `main`. Scope: `docs/implementation-plan.md` § *C3-II-B2*.
-- Keep C3-II-B3 blocked by CR-004; `CR-004` stays `needs evidence`.
+- Review the open `C3-II-B3 — Manual backup AuditLog coverage` pull request. It is implemented on `claude/cr-004-c3-ii-b3-manual-backup`, reuses the existing `artifact_audit_operations` ledger with **no new migration**, and carries the `CR-004` backup-engine correction. It is **not merged**, so manual backup creation is still not audited on merged `main` and merged `main` still copies the database file raw. Scope: `docs/implementation-plan.md` § *C3-II-B3*.
+- `CR-004` is resolved and accepted; no change request remains in `needs evidence`.
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
+
+## 2026-08-02 — CR-004 resolved; C3-II-B3 implemented on its PR branch; open and unmerged
+
+- **Change request:** `CR-004 — Investigate potential SQLite backup transaction consistency` is **accepted**, classified `PRODUCT DEFECT — BACKUP CONSISTENCY`, severity `HIGH`. Evidence gathered against merged `main` `844526ae4057a454312f790abcaf21be518cdbd9` with Python `3.12.10` and SQLite `3.49.1`, on isolated temporary user-data directories with no real user data; the harness is not committed.
+- **Findings:** under WAL the raw `shutil.copy2` produced a `quick_check = ok`, fully migrated file containing **0 of 200** committed rows, and **0 rows** in all 10 snapshots against 954 committed transactions; under rollback journal **12 of 12** copies held two transaction states at once including rolled-back rows, reproduced with the **stock** page cache on a 42 MB database; one scenario (spilled uncommitted pages) produced genuine corruption — `quick_check` failed, 506 committed rows missing, 465 never-committed exposed. **No source mutation was observed in any scenario**, and the raw copy never blocked writers. Plain `sqlite3.Connection.backup()` **never returned** under a held lock. An aborted copy leaves a 0-byte file that passes `quick_check`. The create-path directory re-list escapes as HTTP `500` under all four injected read faults while a complete verified backup exists.
+- **Slice:** `C3-II-B3 — Manual backup AuditLog coverage`, one bounded implementation pull request from merged `main` (`844526ae4057a454312f790abcaf21be518cdbd9`, the PR #166 merge commit).
+- **Delivered:** the SQLite Online Backup API engine with a single whole-database step and bounded busy behaviour refusing `SQLITE_BUSY`/`SQLITE_LOCKED`; removal of the create-path directory re-list in favour of the exact `BackupResult`; one strict generated-filename grammar proved by a byte-for-byte round trip; `reserve_backup_path` as the single filename-selection algorithm with an active ledger identity treated as occupied; one `prepared` `manual_backup` ledger row committed before the snapshot; an exact-path read-only verifier requiring the embedded operation row; exactly-once `backup.created` finalization sharing one `BEGIN IMMEDIATE` transaction with the `audited` transition; manual-backup startup reconciliation after migrations and one bounded pre-create pass; additive `audit_status` / `audit_message` and `pending_audit_count`; the accepted `backup.created` Journal vocabulary; and `frontend/src/backup-audit-contract.ts` with success-plus-separate-warning on `/backups`.
+- **No new migration.** Migration `0020_artifact_audit_operations` is reused unchanged; no `0021` exists.
+- **Automatic backup unchanged in kind:** it uses the same safe engine, stays before migrations, creates no ledger row and is never audited.
+- **Not merged.** C3-II-B3 is the last remaining C3 slice, so C3 is complete on the branch and **incomplete on merged `main`**; C4 remains inactive; Restore remains unimplemented; product release readiness is not claimed.
 
 ## 2026-08-01 — C3-II-B2 implemented on its PR branch; open and unmerged
 

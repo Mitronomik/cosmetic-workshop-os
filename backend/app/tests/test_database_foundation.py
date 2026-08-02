@@ -15,6 +15,7 @@ from app.db.migrations import apply_migrations, current_migrations, expected_mig
 from app.main import create_app
 from app.repositories.database import DatabaseRepository
 from app.repositories.settings import SettingsNotInitializedError
+import app.services.backup as backup_service
 from app.services.backup import BackupSourceMissingError, backup_sqlite_database
 from app.services.database import database_status, initialize_database
 from app.services.settings import read_app_settings
@@ -362,39 +363,103 @@ def test_backup_fails_clearly_when_source_database_is_missing(tmp_path):
     assert not backup_dir.exists()
 
 
+def _seed_source_database(path, values):
+    """A real SQLite source with identifiable committed rows.
+
+    ADR 0015 replaced the raw file copy with the SQLite Online Backup API, so a
+    backup source must now actually be a database. These tests previously used a
+    few literal bytes, which only ever worked because the old implementation
+    copied bytes it did not understand.
+    """
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE IF NOT EXISTS marker (value TEXT NOT NULL)")
+        connection.execute("DELETE FROM marker")
+        connection.executemany("INSERT INTO marker (value) VALUES (?)", [(value,) for value in values])
+    return path
+
+
+def _marker_values(path):
+    """Read one database independently, without its source WAL or journal."""
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        return [row[0] for row in connection.execute("SELECT value FROM marker ORDER BY value")]
+    finally:
+        connection.close()
+
+
 def test_backup_creates_copy_with_matching_file_content(tmp_path):
-    source = tmp_path / "source.sqlite"
+    """The backup reproduces the source's committed content.
+
+    The node ID is preserved from before ADR 0015 because the subject is
+    unchanged; only the definition of "matching" moved. A raw file copy promised
+    matching *bytes* and, as CR-004 measured, could still omit every committed
+    row. The Online Backup API promises matching *committed state*, which is the
+    property a backup is actually for, and does not promise byte equality.
+    """
+    source = _seed_source_database(tmp_path / "source.sqlite", ["alpha", "beta"])
     backup_dir = tmp_path / "backups"
-    source.write_bytes(b"sqlite bytes for backup test")
 
     result = backup_sqlite_database(source, backup_dir, reason="before_migration")
 
     assert result.source_path == source
     assert result.reason == "before_migration"
     assert result.backup_path.parent == backup_dir
-    assert result.size_bytes == source.stat().st_size
-    assert result.backup_path.read_bytes() == source.read_bytes()
-    assert source.read_bytes() == b"sqlite bytes for backup test"
+    assert result.size_bytes == result.backup_path.stat().st_size
+    # The committed source state, opened independently. Byte-for-byte equality
+    # with the source file is deliberately not asserted: ADR 0015 accepts a
+    # transactionally consistent snapshot, not a file-level clone.
+    assert _marker_values(result.backup_path) == ["alpha", "beta"]
+    assert _marker_values(source) == ["alpha", "beta"]
+    connection = sqlite3.connect(f"file:{result.backup_path}?mode=ro", uri=True)
+    try:
+        assert connection.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    finally:
+        connection.close()
+
+
+def test_backup_never_uses_a_raw_file_copy_for_database_contents():
+    """No file-copy machinery may be reachable from the backup service.
+
+    CR-004 classified the raw main-file copy as the defect itself, so this is a
+    structural guard rather than a style check: reintroducing `shutil.copy2`
+    would silently restore silent omission of committed data under WAL, and a
+    green `quick_check` would not reveal it.
+
+    The module's own prose is allowed to name `shutil` — explaining why it is
+    gone is the point — so this inspects the parsed imports and the module
+    namespace rather than the text.
+    """
+    import ast
+
+    tree = ast.parse(Path(backup_service.__file__).read_text(encoding="utf-8"))
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+
+    assert "shutil" not in imported
+    assert not hasattr(backup_service, "shutil")
+    assert "sqlite3" in imported
 
 
 def test_backup_filename_does_not_overwrite_existing_backup(tmp_path):
-    source = tmp_path / "source.sqlite"
+    source = _seed_source_database(tmp_path / "source.sqlite", ["first"])
     backup_dir = tmp_path / "backups"
-    source.write_bytes(b"first")
 
     first = backup_sqlite_database(source, backup_dir, reason="manual")
-    source.write_bytes(b"second")
+    _seed_source_database(source, ["second"])
     second = backup_sqlite_database(source, backup_dir, reason="manual")
 
     assert first.backup_path != second.backup_path
-    assert first.backup_path.read_bytes() == b"first"
-    assert second.backup_path.read_bytes() == b"second"
+    assert _marker_values(first.backup_path) == ["first"]
+    assert _marker_values(second.backup_path) == ["second"]
 
 
 def test_backup_directory_is_created_only_through_explicit_backup_call(tmp_path):
-    source = tmp_path / "source.sqlite"
+    source = _seed_source_database(tmp_path / "source.sqlite", ["database"])
     backup_dir = tmp_path / "backups"
-    source.write_bytes(b"database")
 
     assert not backup_dir.exists()
 
