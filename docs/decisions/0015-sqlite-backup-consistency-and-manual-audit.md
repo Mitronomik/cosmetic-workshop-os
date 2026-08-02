@@ -178,8 +178,14 @@ Injected at named boundaries, against the candidate engine:
 
 The aborted case is the important one: **a zero-byte file is a valid empty SQLite
 database and returns `quick_check = ok`**, while being listed as a backup. Size,
-schema and embedded-identity checks are therefore load-bearing, and the engine
-must remove its own partial destination.
+schema and embedded-identity checks are therefore load-bearing.
+
+This table measures the *candidate* engine, which wrote directly to the final
+path. The shipped engine no longer does: it writes to an exclusively owned
+scratch file and publishes atomically, so rows 2 to 4 above cannot occur under
+the final design. In particular the `final size read` row is superseded — the
+size is now read before publication, so that failure can no longer follow a
+completed artifact. See *Publication is the artifact commit point* below.
 
 ### The current create-response directory re-list
 
@@ -389,6 +395,29 @@ is exactly the filename committed to the ledger; the scratch file carries a
 suffix the listing ignores, so an interrupted operation cannot leave a misleading
 successful-looking backup; and cleanup only ever removes the engine's own scratch
 file.
+
+### Publication is the artifact commit point
+
+```text
+Publication is the artifact commit point.
+All fallible engine-owned size collection occurs before publication.
+After publication, mandatory verification determines whether the artifact is
+authoritative; AuditLog persistence is a separate secondary result.
+```
+
+The engine reads the snapshot's size from the **scratch** file, before
+publishing. The two paths are hard links to one inode once `os.link` succeeds, so
+that size describes the published content exactly.
+
+Reading it afterwards would leave one fallible call after the commit point: a
+transient `stat` failure would raise while a complete, correct backup sat on
+disk under its reserved name, and the user would be told the backup was not
+created — a false total failure that invites a duplicate manual backup. That is
+the same product-level defect as the create-response directory re-list this ADR
+already removed, and it is not accepted at any point in the sequence.
+
+A size read that fails *before* publication is a genuine failure: nothing has
+been published, the scratch file is removed, and reporting failure is truthful.
 
 ## Rejected alternatives
 

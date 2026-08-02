@@ -8,6 +8,7 @@
 
 - Review the open `C3-II-B3 — Manual backup AuditLog coverage` pull request. It is implemented on `claude/cr-004-c3-ii-b3-manual-backup`, reuses the existing `artifact_audit_operations` ledger with **no new migration**, and carries the `CR-004` backup-engine correction. It is **not merged**, so manual backup creation is still not audited on merged `main` and merged `main` still copies the database file raw. Scope: `docs/implementation-plan.md` § *C3-II-B3*.
 - `CR-004` is resolved and accepted; no change request remains in `needs evidence`.
+- **C3 hardening follow-up (required, not cosmetic):** separate artifact verification failure from AuditLog persistence failure for report documents and JSON exports. `C3-II-B3` fixed this for manual backups through a typed `BackupFinalization`; `report_document_audit.py` and `export_audit.py` still return `int | None` and still map every `None` to `201 pending`, so a document or export that fails verification can be reported as successfully created. One bounded slice, immediately after `C3-II-B3` merges. **C4 must not be activated until it is resolved or explicitly accepted as a release blocker.**
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
 
 ## 2026-08-02 — CR-004 resolved; C3-II-B3 implemented on its PR branch; open and unmerged

@@ -48,6 +48,17 @@ on merged `main`, and merged `main` still copies the database file raw.
 It is the **last remaining C3 slice**: C3 becomes `COMPLETED` only when it
 merges. C4 stays inactive and Restore stays unimplemented regardless.
 
+**Known follow-up, required and not cosmetic.** `report_document_audit.py` and
+`export_audit.py` still return `int | None` from finalization and still map every
+`None` to `201` with `audit_status: pending`, so a report document or JSON export
+that fails mandatory verification can be reported as successfully created — the
+same defect class that was classified blocking for backups and corrected here by
+the typed `BackupFinalization`. It is kept out of PR #167 because correcting two
+merged, separately accepted slices in a backup PR would be an unrelated refactor,
+and it is scheduled as one bounded slice immediately after `C3-II-B3` merges.
+**C4 must not be activated until it is resolved or explicitly accepted as a
+release blocker.**
+
 The load-bearing detail for a reviewer: because the snapshot is taken **after**
 the prepared ledger row commits, a manual backup contains its own operation row
 in `status = prepared` with `audit_log_id IS NULL` and no `backup.created` event

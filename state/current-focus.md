@@ -31,6 +31,34 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
+## C3 hardening follow-up — required, not cosmetic
+
+```text
+C3 hardening follow-up:
+separate artifact verification failure from AuditLog persistence failure for
+report documents and JSON exports.
+```
+
+`C3-II-B3` corrected this for manual backups: `finalize()` returns a typed
+`BackupFinalization` with `recorded`, `audit_pending` and `artifact_invalid`, so
+an artifact that fails mandatory verification can never be reported as a created
+artifact with a merely pending Journal entry.
+
+`report_document_audit.py` and `export_audit.py` still return `int | None`, and
+their create paths still map every `None` to `201` with `audit_status: pending`.
+They therefore appear to carry **the same defect class** that was classified
+blocking for backups: a report document or JSON export that fails verification
+can be reported to the user as successfully created.
+
+This was deliberately kept out of PR #167 — correcting two merged, separately
+accepted slices there would have been an unrelated refactor across a diff whose
+subject is backups — but it is **not cosmetic** and is not deferred
+indefinitely. It is one bounded follow-up slice, to be run immediately after
+`C3-II-B3` merges.
+
+**C4 must not be activated until this follow-up is resolved, or until it is
+explicitly accepted as a known release blocker.**
+
 ## CR-004 resolved; C3-II-B3 implemented on its PR branch (2026-08-02)
 
 `CR-004` is **accepted** and classified:

@@ -356,43 +356,132 @@ def test_an_interrupted_copy_never_leaves_a_listable_partial(tmp_path, monkeypat
     assert list_backup_files(backup_dir) == []
 
 
-def test_a_failure_after_publication_keeps_the_completed_backup(tmp_path, monkeypatch):
-    """Publication is the commit point, and it is deliberate that it stands.
+def test_a_scratch_size_read_failure_publishes_nothing(tmp_path, monkeypatch):
+    """The size is read from the scratch file, so its failure is a real failure.
 
-    The injected fault is the engine's own post-publication size read. By then
-    the snapshot is complete and atomically published under its reserved name, so
-    deleting it would destroy a real backup for a failure that says nothing about
-    its contents. The ledger row stays unresolved, and reconciliation verifies and
-    finalizes the artifact exactly once later.
+    Moving that read before publication is what makes publication the commit
+    point. It also means the read can still fail — and when it does, nothing has
+    been published, so reporting failure is truthful.
     """
     database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
     backup_dir = tmp_path / "backups"
     original_stat = Path.stat
-    armed = {"value": False}
 
     def failing_stat(self, *args, **kwargs):
-        if armed["value"] and self.parent == backup_dir and self.suffix == ".sqlite":
-            raise OSError("simulated size read failure")
+        if self.suffix == backup_service.PARTIAL_BACKUP_SUFFIX:
+            raise OSError("simulated scratch size read failure")
         return original_stat(self, *args, **kwargs)
 
-    original_publish = backup_service._publish_without_replacing
-
-    def publish_then_arm(partial_path, backup_path):
-        original_publish(partial_path, backup_path)
-        armed["value"] = True
-
-    monkeypatch.setattr(backup_service, "_publish_without_replacing", publish_then_arm)
     monkeypatch.setattr(Path, "stat", failing_stat)
     with pytest.raises(BackupError):
         backup_sqlite_database(database, backup_dir, reason="manual")
-    armed["value"] = False
     monkeypatch.undo()
 
-    published = list_backup_files(backup_dir)
-    assert len(published) == 1
-    assert quick_check(published[0].path) == "ok"
-    # The scratch file is still cleaned up; only the published artifact remains.
-    assert [p.name for p in backup_dir.iterdir()] == [published[0].filename]
+    assert list_backup_files(backup_dir) == []
+    # No final backup was published, and the scratch file was cleaned up.
+    assert list(backup_dir.iterdir()) == []
+
+
+def test_the_engine_never_stats_the_final_path_after_publication(tmp_path, monkeypatch):
+    """Nothing fallible may run after the artifact is committed.
+
+    A `stat` of the published path would let a transient metadata failure turn a
+    completed backup into a reported failure — a false total failure that invites
+    the user to make a second copy of the same thing.
+    """
+    database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    reserved = reserve_backup_path(backup_dir, database, FIXED_TIME, "manual")
+
+    published = {"value": False}
+    stats_after_publication: list[str] = []
+    original_stat = Path.stat
+    original_publish = backup_service._publish_without_replacing
+
+    def recording_stat(self, *args, **kwargs):
+        if published["value"] and self == reserved:
+            stats_after_publication.append(str(self))
+        return original_stat(self, *args, **kwargs)
+
+    def publish_then_watch(partial_path, backup_path):
+        original_publish(partial_path, backup_path)
+        published["value"] = True
+
+    monkeypatch.setattr(backup_service, "_publish_without_replacing", publish_then_watch)
+    monkeypatch.setattr(Path, "stat", recording_stat)
+    result = backup_sqlite_database(
+        database, backup_dir, reason="manual", reserved_backup_path=reserved
+    )
+    published["value"] = False
+    monkeypatch.undo()
+
+    assert stats_after_publication == []
+    assert result.backup_path == reserved
+
+
+def test_the_reported_size_is_the_published_file_size(tmp_path):
+    """The scratch and final paths are links to one inode, so the size is exact."""
+    database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
+    seed = sqlite3.connect(database)
+    try:
+        insert_ingredients(seed, [f"sized-{index}" for index in range(200)])
+        seed.commit()
+    finally:
+        seed.close()
+    backup_dir = tmp_path / "backups"
+
+    result = backup_sqlite_database(database, backup_dir, reason="manual")
+
+    assert result.size_bytes == result.backup_path.stat().st_size
+    assert result.size_bytes > 0
+
+
+def test_a_published_backup_never_fails_on_unavailable_final_metadata(tmp_path, monkeypatch):
+    """Once published, no filesystem metadata read can make this a failure."""
+    database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    reserved = reserve_backup_path(backup_dir, database, FIXED_TIME, "manual")
+
+    published = {"value": False}
+    original_stat = Path.stat
+    original_publish = backup_service._publish_without_replacing
+
+    def failing_final_stat(self, *args, **kwargs):
+        # Every read of the *final* path fails from publication onwards.
+        if published["value"] and self == reserved:
+            raise OSError("final path metadata unavailable")
+        return original_stat(self, *args, **kwargs)
+
+    def publish_then_break(partial_path, backup_path):
+        original_publish(partial_path, backup_path)
+        published["value"] = True
+
+    monkeypatch.setattr(backup_service, "_publish_without_replacing", publish_then_break)
+    monkeypatch.setattr(Path, "stat", failing_final_stat)
+    result = backup_sqlite_database(
+        database, backup_dir, reason="manual", reserved_backup_path=reserved
+    )
+    published["value"] = False
+    monkeypatch.undo()
+
+    # A completed, published backup — reported as the success it is.
+    assert result.backup_path == reserved
+    assert result.size_bytes > 0
+    assert quick_check(reserved) == "ok"
+    assert [item.filename for item in list_backup_files(backup_dir)] == [reserved.name]
+
+
+def test_the_correction_creates_exactly_one_backup(tmp_path):
+    """No duplicate artifact is produced by the pre-publication size read."""
+    database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
+    backup_dir = tmp_path / "backups"
+
+    result = backup_sqlite_database(database, backup_dir, reason="manual")
+
+    assert [p.name for p in backup_dir.iterdir()] == [result.backup_path.name]
+    assert len(list_backup_files(backup_dir)) == 1
 
 
 def test_backup_never_overwrites_an_existing_file(tmp_path):

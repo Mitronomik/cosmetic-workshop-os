@@ -1972,6 +1972,15 @@ built from the exact `BackupResult` with no directory re-list; the
 `backup-audit-contract.ts` frontend module with success-plus-separate-warning;
 and the backend-owned Journal vocabulary.
 
+**Required follow-up.** `report_document_audit.py` and `export_audit.py` still
+return `int | None` from finalization and map every `None` to `201` with
+`audit_status: pending`, so an artifact that fails mandatory verification can be
+reported as successfully created. This slice corrected that for manual backups
+through the typed `BackupFinalization`; the same correction for B1 and B2 is one
+bounded follow-up slice, to run immediately after `C3-II-B3` merges. It is **not
+cosmetic**, and **C4 must not be activated until it is resolved or explicitly
+accepted as a known release blocker**.
+
 **Boundaries.** No migration `0021` and no change to `0020`; no second ledger;
 no sidecar; no outbox; no Restore; no scheduled or cloud backup; no retention
 policy; the automatic `before_migration` backup stays before migrations, is

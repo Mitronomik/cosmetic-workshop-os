@@ -202,13 +202,19 @@ The artifact is left where it is — this operation cannot prove it owns that pa
 which is precisely what verification failed to establish — and the ledger row
 stays unresolved and counted for diagnosis and bounded reconciliation.
 
-### Destination ownership
+### Destination ownership and the commit point
 
 The snapshot is written into an exclusively created scratch file and then
 published onto the reserved name with no-replace semantics. An existence check
 followed by an open is not an ownership guarantee, because another process can
 create the destination in between. No foreign file is ever overwritten, and
 failure cleanup only ever removes the engine's own scratch file.
+
+**Publication is the artifact commit point.** All fallible engine-owned size
+collection happens before it, so once a backup is published no filesystem
+metadata failure can turn it into a reported failure. After publication,
+mandatory verification decides whether the artifact is authoritative, and
+AuditLog persistence is a separate secondary result.
 
 ### The embedded prepared operation
 

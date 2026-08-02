@@ -388,6 +388,12 @@ def backup_sqlite_database(
     journal. It is not required to be byte-identical to the source file, and the
     source's own business data is never modified.
 
+    **Publication is the artifact commit point.** The snapshot is written into an
+    exclusively created scratch file, every fallible engine-owned read is taken
+    from that scratch file, and only then is it published onto the reserved name
+    atomically. Once publication succeeds this function cannot fail, so a
+    completed backup is never reported to the user as a failure.
+
     `reserved_backup_path` is the exact final path an audited manual backup
     already committed to the CR-009 ledger. Without it — the automatic
     `before_migration` startup backup — the same single filename-selection
@@ -438,8 +444,18 @@ def backup_sqlite_database(
     partial_path = _create_owned_partial(resolved_backup_dir, backup_path.name)
     try:
         _copy_sqlite_database(resolved_source, partial_path)
+        # Every fallible engine-owned read happens *before* publication. Reading
+        # the size afterwards would mean a `stat` failure could turn a completed,
+        # published backup into a reported failure — a false total failure that
+        # invites the user to make a second copy of the same thing, which is the
+        # exact class of defect removing the create-response directory re-list
+        # was meant to end.
+        #
+        # The two paths are hard links to one inode once publication succeeds, so
+        # this size describes the published content exactly.
+        size_bytes = partial_path.stat().st_size
+        # Publication is the commit point. Nothing below it may fail.
         _publish_without_replacing(partial_path, backup_path)
-        size_bytes = backup_path.stat().st_size
     except (BackupError, sqlite3.Error, OSError) as exc:
         if isinstance(exc, BackupError):
             raise
