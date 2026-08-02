@@ -2331,7 +2331,7 @@ Before schema migration:
 > C4 — ACTIVE
 > C4 product decision — COMPLETE
 > CR-010 — ACCEPTED
-> C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
+> C4-I — IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
 > C4-II — PLANNED — NOT AUTHORIZED
 > C4-III — PLANNED — NOT AUTHORIZED
 > Restore — NOT IMPLEMENTED
@@ -2351,13 +2351,27 @@ Before schema migration:
 > database, backup and Restore directories are never caller input.
 >
 > The backend gains exactly one thing: it holds a **backend-liveness lock** for
-> its process lifetime, taken in its FastAPI lifespan from a path the launcher
-> assigns. The kernel releases that lock when the process dies, so a launcher that
-> crashed hard leaves an orphaned backend that the *next* launcher can still
-> detect — a fact an in-memory process handle cannot survive to report. An orphan
-> blocks Restore and startup recovery; it is never killed, because this launcher
-> did not start it. No migration, no schema change, no AuditLog event, no Restore
-> route, and no frontend production change.
+> its process lifetime, from a path the launcher assigns. The kernel releases that
+> lock when the process dies, so a launcher that crashed hard leaves an orphaned
+> backend that the *next* launcher can still detect — a fact an in-memory process
+> handle cannot survive to report. An orphan blocks Restore and startup recovery,
+> as a **typed blocked result rather than an exception**; it is never killed,
+> because this launcher did not start it. No migration, no schema change, no
+> AuditLog event, no Restore route, and no frontend production change.
+>
+> Launcher-managed backends take that lock **before importing the application**,
+> through the narrow `backend/app/launcher_backend_entrypoint.py`, and report the
+> acquisition to the launcher over a bounded one-run handshake. Acquiring it in the
+> FastAPI lifespan — which remains, as an idempotent defence — would leave the whole
+> application import as a window in which a launcher-managed child holds nothing.
+>
+> The launcher, in turn, does not merely *check* that lock before destructive work;
+> it **holds** it. A retained maintenance lease over the same canonical lock covers
+> the safety copy, journal settlement, replacement, rollback replacement and
+> post-replacement verification, and is released only for the one owned backend a
+> verification cycle has to start — then reacquired before anything continues. A
+> lock that was checked and released proves availability at an instant and reserves
+> nothing.
 
 ```text
 MVP Restore is launcher-assisted.

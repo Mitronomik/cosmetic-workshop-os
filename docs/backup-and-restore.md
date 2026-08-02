@@ -815,7 +815,7 @@ Product release readiness — NOT CLAIMED
 # 16. C4-I implementation — the launcher-owned safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -914,16 +914,86 @@ running and keeps the database open, while the next launcher owns nothing and
 would otherwise conclude that nothing was running.
 
 So the backend process itself holds `<restore dir>/backend-liveness.lock` for its
-whole lifetime, taken in the FastAPI lifespan from the exact path the launcher
-passes in `COSMETIC_WORKSHOP_BACKEND_LIVENESS_LOCK`. The kernel releases an
-`fcntl.flock` when the holder dies, for any reason, with no cleanup code of ours
-involved — so a held lock means a live backend, whoever started it, and a free
-lock means none. That is a fact about the operating system's process table rather
-than about anything this application remembered to write down.
+whole lifetime, taken from the exact path the launcher passes in
+`COSMETIC_WORKSHOP_BACKEND_LIVENESS_LOCK`. The kernel releases an `fcntl.flock`
+when the holder dies, for any reason, with no cleanup code of ours involved — so
+a held lock means a live backend, whoever started it, and a free lock means none.
+That is a fact about the operating system's process table rather than about
+anything this application remembered to write down.
+
+**The retained maintenance lease.** A lock that is checked and released proves
+availability at an instant and reserves nothing:
+
+```text
+launcher checks the lock            ← free
+launcher releases it
+another backend acquires it         ← nothing prevented this
+launcher settles the SQLite journal
+launcher replaces the working database
+```
+
+Every step reports success and a live writer holds the database throughout. So
+the launcher takes that same canonical lock and **keeps** it —
+`BackendMaintenanceLease` — for the whole destructive interval: safety-copy
+creation, journal settlement, replacement-artifact preparation, working-database
+replacement, rollback replacement and post-replacement filesystem verification.
+While the lease is held no backend can start against this workspace, because the
+child's own acquisition is the thing that would have to succeed.
 
 `stop_backend()` therefore stops the owned handle, waits for the lock to be
-released, and then proves the lock is free. `require_backend_stopped()` re-checks
-both before journal settlement and before every replacement, including rollback.
+released, and then **takes and retains** the lease. `require_backend_stopped()`
+requires that lease to still be held, before journal settlement and before every
+replacement including rollback. A released lease is a refusal even when the stop
+proof is intact and no backend is running: an unreserved workspace is not
+authority for destructive work.
+
+**Pre-import acquisition.** Taking the lock in the FastAPI lifespan takes it after
+Python has imported uvicorn, `app.main`, every router and the database layer.
+Everything before that is a window in which a launcher-managed backend exists and
+holds nothing:
+
+```text
+launcher spawns the child
+→ child is importing the application, holding no lock
+→ launcher dies hard
+→ the next launcher sees a free lock and begins destructive work
+→ the delayed child finishes importing and opens the database underneath it
+```
+
+Launcher-managed children therefore run `python -m app.launcher_backend_entrypoint`,
+which acquires the lock **before importing any application module** and exits
+without ever reaching `app.main` when it cannot. The lifespan acquisition remains
+as an idempotent defence; it is simply no longer the first acquisition point.
+
+**The exact-child handshake.** Owning a `Popen` says the launcher started a
+process; it does not say the process took the lock. The entrypoint reports its
+acquisition over a pipe the launcher created for that one spawn, carrying a token
+generated for that one spawn, and `start_owned_backend_process` returns only once
+that report arrives. Both halves are one-run values, so stale evidence cannot
+satisfy a later start and a replayed token is refused. Timeout, EOF, an early
+child exit and a foreign token are the same answer: the child is stopped, no
+browser opens and Restore does not proceed. Health is checked as well, never
+instead — it answers after the import this mechanism exists to gate. No PID file,
+no port, no process-name discovery.
+
+**The verification cycle.** Verification is the one part of Restore that must
+start a backend, so the lease is released for exactly that interval and taken
+back before anything continues:
+
+```text
+release the maintenance lease
+→ start the owned child through the pre-import lock entrypoint
+→ wait for that exact child's lock-acquired handshake
+→ verify
+→ stop the child by its owned handle
+→ wait for the lock to be released
+→ reacquire the maintenance lease
+→ only then continue, replace or roll back
+```
+
+The lease is reacquired on the failure path too, because the failure path leads to
+rollback and rollback replaces the working database. A reacquisition that fails
+blocks recovery; it never proceeds to a replacement without the lease.
 
 **An orphan is detected, never killed.** This launcher did not start it, so it
 has detection but no authority: Restore and startup recovery refuse, nothing is
@@ -932,14 +1002,27 @@ process discovered by PID file, port, name or pattern is not a safety measure �
 it is a second failure mode — and a future support flow, not `C4-I`, is where a
 user is told to close the other window.
 
+**And an orphan is refused as a result, never as an exception.** An orphan is the
+exact condition this gate exists to notice, so startup recovery returns a typed
+`RecoveryResult` with `normal_startup_allowed=False`, the fixed
+`RECOVERY_BLOCKED_MESSAGE` and the phase that is really on disk.
+`run_local_runtime` branches on that and returns `RESTORE_BLOCKED_EXIT_CODE`.
+Nothing starts, the browser never opens, the working database and the operation
+record are untouched, no transition is attempted, and the user sees one sentence
+rather than a traceback — every technical detail stays in the local log. This
+holds both with an interrupted Restore record present and with no record at all:
+with no Restore ever attempted, the orphan alone is still reason to refuse,
+because ordinary startup would put a second writer on one SQLite database.
+
 When the environment variable is absent — the ordinary test client, a developer
 importing the app — no lock is taken and nothing is claimed. When it is present
 and the lock cannot be taken, backend startup fails rather than putting a second
 writer on one SQLite database.
 
 Nothing discovers a process by port, name or command-line pattern. `pkill`,
-`lsof`, `pgrep` and `killall` are absent from `context.py`, and a test enforces
-that against the module's executable source.
+`lsof`, `pgrep` and `killall` are absent from `context.py`, `maintenance_lease.py`
+and `backend_handshake.py`, and tests enforce that against each module's
+executable source.
 
 Backends started for verification are owned by `verify_restored_backend` and
 stopped in a `finally`, on the failure path too. `recovery_blocked` starts
@@ -974,6 +1057,19 @@ safety_copy_filename
 Reading rejects any record whose field set differs. There is no
 `replacement_happened`, no `rollback_completed` and no `restore_succeeded`: both
 facts are derived from `phase`. No raw absolute selected-source path is stored.
+
+**Only a previously completed record may be replaced.** `create()` admits exactly
+the positive `SAFE_TERMINAL_STARTUP_PHASES` vocabulary — `completed`, `aborted`,
+`rolled_back` — and refuses everything else, including every live phase and an
+unreadable record.
+
+`recovery_blocked` is refused specifically. It is terminal but it is not
+*completed*: it is the authoritative pointer to an operation nothing could
+resolve, and it names the staged candidate and the safety copy that a support
+procedure needs. Grouping it with the other terminal phases let an ordinary new
+attempt overwrite that pointer and start past a blocked recovery. Clearing a
+blocked recovery is a separately authorized support procedure — outside `C4-I`,
+and not something pressing Restore again may do.
 
 `operation_id` must be a **canonical launcher-generated UUID4** — the backend's
 own `is_canonical_operation_id` round-trip, plus the version check, plus the safe
@@ -1243,6 +1339,43 @@ can — an edge the graph does authorize — and otherwise blocks startup so the
 launcher start closes it. Ordinary startup never proceeds while `prepared`
 remains persisted.
 
+**And the re-read checks whose record it found.** The rename may simply never have
+landed, leaving the *previous* operation's terminal record in place:
+
+```text
+operation A ends at `completed`
+operation B is generated
+B's `prepared` publication fails ambiguously
+the record on disk still says A / completed
+```
+
+Reading that as this attempt's outcome would report a Restore that never staged a
+byte as a success, carrying another operation's identity. So `operation_id` is
+compared first. When it differs, the attempt was never published, and:
+
+- the previous record is never transitioned, rewritten or cleaned;
+- its outcome is never inherited — the result is `aborted`, always, with the fixed
+  `PREPARATION_NOT_PUBLISHED` sentence saying the attempt did not start;
+- the result keeps **this** attempt's operation ID, so it cannot be mistaken for a
+  report about the previous operation;
+- only this attempt's own freshly created, empty operation directory is cleaned;
+- whether ordinary startup may then proceed is the previous record's question,
+  answered by the same positive rule — its durability is re-proved without
+  modifying it, and a `recovery_blocked`, live or unprovable record blocks.
+
+**A visible `completed` whose durability cannot be confirmed is described
+truthfully.** The restored data are in place and verified, `completed` is on disk,
+and only the flush that would make that rename survive a host interruption is
+unproved. Nothing was rolled back — there was nothing to roll back from — and
+nothing was lost. Reporting the rollback sentence there claimed two things that
+did not happen, so the window has one fixed category of its own,
+`COMPLETION_DURABILITY_UNCONFIRMED`, whose message says the data were restored and
+verified, that the technical finalization could not be completed safely, that all
+data are preserved, and that reopening the application retries the confirmation.
+It is not a phase and not a transition: `phase` stays `completed`,
+`restore_succeeded` stays false while startup is refused, and the next start
+reports an ordinary success once the confirmation succeeds.
+
 ## 16.12. Verification of this slice
 
 `C4-I` is verified by the automated backend and launcher suites plus a
@@ -1288,3 +1421,38 @@ user is told to close the other window.
 ran, not the one intended. And no power-loss guarantee is claimed anywhere: what
 is proved is old-or-new atomicity across process death and OS crash, plus the
 strongest flush the platform actually performed.
+
+## 16.14. Third correction — what the third audit found
+
+A third independent audit ran against the second correction and found four safety
+gaps and two reporting gaps, all in code the earlier rounds had introduced or left
+in place. All are closed on the same branch, and **none required a change to the
+accepted phase machine**: the twelve phases, the transition graph and `phase` as
+the sole authoritative lifecycle field are unchanged.
+
+| Finding | Closed by |
+|---|---|
+| The backend-liveness lock was checked momentarily and released, so nothing prevented a backend from starting during the destructive interval. | A retained launcher maintenance lease over the same canonical lock, required by `require_backend_stopped()` (§ 16.3). |
+| The lock was acquired in the FastAPI lifespan, leaving the whole application import as a window in which a launcher-managed child held nothing. | `app.launcher_backend_entrypoint` acquires the lock before importing any application module, proved to the launcher by a bounded one-run handshake (§ 16.3). |
+| An orphaned backend made `RestoreLifecycleError` escape startup recovery, where the caller expects a `RecoveryResult`. | A typed blocked `RecoveryResult`, with or without an interrupted record present (§ 16.3). |
+| An ambiguous initial `prepared` publication could report a *previous* operation's terminal record as this attempt's outcome. | The operation ID is compared before anything is concluded; a foreign record is never inherited and never modified (§ 16.11). |
+| `RestoreOperationStateStore.create()` treated `recovery_blocked` as replaceable, letting a new attempt overwrite the pointer to an unresolved operation. | Only the positive `SAFE_TERMINAL_STARTUP_PHASES` vocabulary is replaceable (§ 16.4). |
+| A visible-but-unconfirmed `completed` was reported with the rollback sentence, claiming a rollback that did not happen. | One fixed `COMPLETION_DURABILITY_UNCONFIRMED` category saying only what is known (§ 16.11). |
+
+Three standing rules come out of this round.
+
+**Availability is not reservation.** A lock that is checked and released answers
+"was it free at that instant" and nothing about the interval afterwards. Every
+destructive step now runs under a lock that is *held*, and the retained lease is
+itself the authority — not a memory of having once seen the lock free.
+
+**A process is not proved by owning its handle.** Starting a child says the
+launcher started something; it does not say that something took the lock. The
+handshake is what joins those two facts, and it is bounded, one-run and
+unforgeable by replay. A health endpoint cannot substitute: it answers after the
+import the handshake exists to gate.
+
+**Identity is checked before an outcome is read.** A record on disk is only this
+attempt's record if it carries this attempt's operation ID. A previous
+operation's `completed` is not a new attempt's success, and a `recovery_blocked`
+record is a pointer to be preserved rather than a terminal state to be replaced.

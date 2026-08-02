@@ -27,7 +27,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
 - `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
 - `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED**
-- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED**
+- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
 - `C4 — ACTIVE`
@@ -42,7 +42,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 
 ```text
 C4-I — Launcher-owned restore safety engine
-IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
 ```
 
 **Next action: an independent audit of the new published head of PR #170.** The
@@ -82,8 +82,44 @@ P2-1  a hard launcher crash lost the in-memory process handle, so an orphaned
 P2-2  the `F_FULLFSYNC` fallback was documented as "recorded" but was not
 ```
 
-Neither audit required a change to the accepted twelve-phase machine, and no
-condition either of them found justified a new phase.
+A third audit of that second correction found six more, all closed as well:
+
+```text
+P1-1  the backend-liveness lock was checked momentarily and released, which
+      proves availability at an instant and reserves nothing — a backend could
+      start during journal settlement or the replacement itself. It is now a
+      retained launcher maintenance lease, required by
+      `require_backend_stopped()`, held through the safety copy, journal
+      settlement, replacement, rollback replacement and post-replacement
+      verification, and released only for an owned backend that must run.
+      The lock was also taken too late: a launcher-managed child now acquires
+      it in `app.launcher_backend_entrypoint` **before importing any
+      application module** and proves that acquisition to the launcher over a
+      bounded one-run pipe-and-token handshake.
+P1-2  an orphaned backend made `RestoreLifecycleError` escape startup
+      recovery, where `run_local_runtime` expects a `RecoveryResult`. Startup
+      recovery now returns a typed blocked result — nothing starts, the browser
+      stays closed, nothing on disk changes, and the user sees one sentence
+      rather than a traceback.
+P1-3  an ambiguous initial `prepared` publication re-read `operation.json`
+      without checking whose record it is, so a previous operation's terminal
+      record could be reported as this attempt's outcome and identity. The
+      operation ID is compared first; a foreign record is never inherited and
+      never modified.
+P1-4  `RestoreOperationStateStore.create()` treated all four terminal phases as
+      replaceable, including `recovery_blocked` — the authoritative pointer to
+      an unresolved operation and the evidence it names. Only the positive
+      `SAFE_TERMINAL_STARTUP_PHASES` vocabulary is replaceable now.
+P2-1  a visible-but-unconfirmed `completed` used the rollback sentence,
+      claiming a rollback that did not happen and a return to previous data
+      that are not authoritative. One fixed
+      `COMPLETION_DURABILITY_UNCONFIRMED` category says only what is known.
+P2-2  the PR body still described the previous head, test counts and smoke.
+P2-3  one pre-correction test node ID had been renamed rather than preserved.
+```
+
+No audit required a change to the accepted twelve-phase machine, and no
+condition any of them found justified a new phase.
 
 `C4-I` implements the accepted `CR-010` state machine exactly — the same twelve
 phases, transition graph, recovery matrix and `replacement_intent` crash rule — so

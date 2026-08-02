@@ -11,7 +11,7 @@ implement Restore** and changes no runtime code.
 | Item | Status |
 |---|---|
 | `CR-010` — launcher-assisted Restore semantics | `ACCEPTED` |
-| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED` |
+| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED` |
 | `C4-II` — user-facing launcher Restore flow | `PLANNED — NOT AUTHORIZED` |
 | `C4-III` — Restore end-to-end verification and lifecycle closure | `PLANNED — NOT AUTHORIZED` |
 | Restore | `NOT IMPLEMENTED` |
@@ -29,7 +29,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 ```
@@ -849,7 +849,7 @@ There is no frontend implementation in this decision:
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
 ```
 
 This is the **only** runtime slice authorized by this decision. Its scope:
@@ -1051,14 +1051,42 @@ proof, canonical destructive paths, rollback-publication failure handling and th
 durability boundary). A second audit of that correction found five more (terminal
 `completed` publication handling, positive startup permission and the initial
 `prepared` ambiguity, same-size in-place source modification, orphaned backends
-after a hard launcher crash, and the unrecorded flush method). All ten are closed.
+after a hard launcher crash, and the unrecorded flush method). A third audit of
+that second correction found six more:
+
+- the backend-liveness lock was **checked momentarily and released**, which proves
+  availability at an instant and reserves nothing, leaving the whole destructive
+  interval open to a backend starting;
+- the lock was acquired only in the FastAPI lifespan, so the entire application
+  import was a window in which a launcher-managed child held nothing;
+- an orphaned backend made `RestoreLifecycleError` escape startup recovery, where
+  the launcher expects a `RecoveryResult`, turning a designed refusal into an
+  unhandled exception;
+- an ambiguous initial `prepared` publication could read a **previous**
+  operation's terminal record as this attempt's outcome and identity;
+- `recovery_blocked` was grouped with the completed terminal phases and could be
+  overwritten by an ordinary new attempt;
+- a visible-but-unconfirmed `completed` was reported with the rollback sentence,
+  claiming a rollback that did not happen.
+
+All sixteen are closed.
 
 **None of them required a change to this decision** — the twelve phases, the
 transition graph, the recovery matrix and the `replacement_intent` rule are
-exactly as accepted here. In particular no condition discovered by either audit
-justified a new phase: `completed`-but-unconfirmed, `durability_failed` and
-`backend_orphaned` are transient result and diagnostic states, not lifecycle
-facts, and they are reported through the typed result rather than persisted. Implementing `C4-I` changes nothing above — no phase was renamed, no
+exactly as accepted here. In particular no condition discovered by any audit
+justified a new phase: `completed`-but-unconfirmed, `durability_failed`,
+`backend_orphaned` and the newly named `preparation_not_published` and
+`completion_durability_unconfirmed` are transient result and diagnostic
+categories, not lifecycle facts, and they are reported through the typed result
+rather than persisted.
+
+The third correction adds three implementation-level rules that this decision's
+§ 2 launcher-ownership requirement already implies and which are now stated
+explicitly: the launcher **retains** exclusive backend exclusion for the whole
+destructive interval rather than sampling it; a launcher-managed backend acquires
+that exclusion **before importing the application** and proves it to the launcher
+through a bounded exact-child handshake; and an operation record is only this
+attempt's record when it carries this attempt's operation ID. Implementing `C4-I` changes nothing above — no phase was renamed, no
 transition added or removed, and no recovery behaviour substituted — and it does
 **not** make Restore a shipped product capability. `Restore` stays
 `NOT IMPLEMENTED`, `C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED`, and

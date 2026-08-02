@@ -2057,7 +2057,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -2115,7 +2115,7 @@ decision.
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
 ```
 
 The **only** runtime slice authorized by `CR-010`. It is implemented on the
@@ -2127,8 +2127,16 @@ failure handling and the durability boundary. A second audit of that correction
 found five more: terminal `completed` publication handling, positive startup
 permission plus the initial `prepared` ambiguity, same-size in-place source
 modification, orphaned backends surviving a hard launcher crash, and the
-unrecorded flush method. All ten are closed on that branch, and none required a
-change to the accepted phase machine. It has no user-facing entry point, so **`Restore` remains
+unrecorded flush method. A third audit of that second correction found six more:
+the backend-liveness lock was checked momentarily rather than retained through the
+destructive interval; it was acquired only in the FastAPI lifespan, after the
+application had already been imported; an orphaned backend made a lifecycle error
+escape startup recovery instead of producing a typed blocked result; an ambiguous
+initial `prepared` publication could report a *previous* operation's terminal
+record as this attempt's outcome; `recovery_blocked` was replaceable by a new
+attempt; and a visible-but-unconfirmed `completed` was described with rollback
+wording. All sixteen are closed on that branch, and none required a change to the
+accepted phase machine. It has no user-facing entry point, so **`Restore` remains
 `NOT IMPLEMENTED`** and product release readiness remains **not claimed**.
 
 The implementation is `launcher/restore/` — a focused package covering phase

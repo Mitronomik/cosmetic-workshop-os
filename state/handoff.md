@@ -1,6 +1,6 @@
 # Handoff
 
-## C4-I implemented and twice corrected on its PR branch — not merged (2026-08-02)
+## C4-I implemented and corrected three times on its PR branch — not merged (2026-08-03)
 
 > This is the single current authoritative lifecycle conclusion. Every earlier
 > section in this file, including the one immediately below, is a historical
@@ -10,12 +10,14 @@
 CR-010 — ACCEPTED (PR #169, merge commit b89cbaaaf41a56c810847d7c1e593712c5591eb6)
 
 C4-I — Launcher-owned restore safety engine
-— IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
+— IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
 — PR #170, draft
 — branch codex/c4-i-launcher-restore-safety-engine
 — based on origin/main = b89cbaaaf41a56c810847d7c1e593712c5591eb6
 — head a66ddd6 was audited; five safety blockers found and closed by 2bf53e7
-— head 2bf53e7 was audited again; five more found and closed by this correction
+— head 2bf53e7 was audited again; five more found and closed by 606b219
+— head 606b219 was audited a third time; six more found and closed by this
+  correction
 
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -63,22 +65,33 @@ PR stays draft until that audit clears it. Nothing else is authorized.
   verifies. The runner is created outside the repository and drives a detached
   worktree at the exact published head. `scripts/restore_backup.sh` is unrelated
   to `C4-I` and is unchanged.
-- **The ten closed review findings** are summarized in `state/current-focus.md`
-  and specified in `docs/backup-and-restore.md` § 16, with § 16.13 covering the
-  second round. The most load-bearing rules to keep in mind when reading the code:
-  a caller supplies **only** the selected source; the backend is stopped **by
-  owned handle** *and* proved absent through the **backend-liveness lock**, which
-  is what survives a hard launcher crash; a publication that may have landed is
-  **re-read**, never assumed; **terminal records are never transitioned again**;
-  ordinary startup is permitted by a **positive allow-list** plus confirmed record
-  durability; source staging proves content stability with **two SHA-256 passes**
-  over one held descriptor; and the parent-directory flush is **mandatory**.
-- **An orphaned backend is detected, never killed.** Restore and recovery refuse
-  and preserve everything. Do not add PID/port/pattern killing to "fix" this — it
-  is the accepted behaviour, and a future support flow owns the user-facing half.
-- **Evidence on the branch**: baseline `1843` node IDs all preserved, `321` added;
-  `2164 passed` for the complete backend + launcher suite; external exact-head
-  Restore smoke against a detached checkout; repository clean before and after.
+- **The sixteen closed review findings** are summarized in
+  `state/current-focus.md` and specified in `docs/backup-and-restore.md` § 16,
+  with § 16.13 covering the second round and § 16.14 the third. The most
+  load-bearing rules to keep in mind when reading the code: a caller supplies
+  **only** the selected source; the backend is stopped **by owned handle** *and*
+  excluded by a **retained maintenance lease** over the backend-liveness lock,
+  held for the whole destructive interval — a lock that is checked and released
+  proves availability at an instant and reserves nothing; a launcher-managed child
+  takes that lock **before importing the application** and proves it through a
+  bounded one-run handshake; a publication that may have landed is **re-read**,
+  never assumed, and the record it finds is only this attempt's when it carries
+  this attempt's **operation ID**; **terminal records are never transitioned
+  again** and `recovery_blocked` is never replaced; ordinary startup is permitted
+  by a **positive allow-list** plus confirmed record durability; source staging
+  proves content stability with **two SHA-256 passes** over one held descriptor;
+  and the parent-directory flush is **mandatory**.
+- **An orphaned backend is detected, never killed — and refused as a result, not
+  an exception.** Restore and recovery return a typed blocked `RecoveryResult`,
+  preserve everything, and the launcher prints one fixed sentence and returns
+  `RESTORE_BLOCKED_EXIT_CODE`. Do not add PID/port/pattern killing to "fix" this —
+  it is the accepted behaviour, and a future support flow owns the user-facing
+  half. Do not let a lifecycle error escape the public launcher boundary again.
+- **Evidence on the branch**: baseline `1843` pre-`C4-I` node IDs all preserved;
+  all `2254` node IDs of `606b219` preserved with the named `2bf53e7` node
+  restored; `2327 passed` for the complete backend + launcher suite; external
+  exact-head Restore smoke against a detached checkout; repository clean before
+  and after.
 
 ---
 
