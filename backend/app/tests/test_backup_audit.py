@@ -197,7 +197,9 @@ def test_an_unrelated_valid_sqlite_database_is_ambiguous(workspace, tmp_path):
 
     assert verification.outcome == "ambiguous"
     assert verification.reason == "embedded-operation-missing"
-    assert service.finalize(operation_id, reconciled_after_failure=False) is None
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.artifact_is_authoritative is False
     assert audit_events(config) == []
 
 
@@ -352,7 +354,9 @@ def test_repeated_finalization_commits_exactly_one_event(workspace):
 
     for _ in range(5):
         repeated = service.finalize(created.operation_id, reconciled_after_failure=True)
-        assert repeated == first[0][0]
+        assert repeated.outcome == "recorded"
+        # The existing audit ID is reused, never a second insert.
+        assert repeated.audit_log_id == first[0][0]
 
     assert audit_events(config) == first
 
@@ -384,11 +388,11 @@ def test_concurrent_finalization_commits_exactly_one_event(workspace):
 
     def finalize() -> None:
         start.wait(timeout=30)
-        value = BackupAuditService(paths.backup_dir, config).finalize(
+        outcome = BackupAuditService(paths.backup_dir, config).finalize(
             created.operation_id, reconciled_after_failure=False
         )
         with lock:
-            results.append(value)
+            results.append(outcome.audit_log_id if outcome.is_recorded else None)
 
     threads = [threading.Thread(target=finalize) for _ in range(12)]
     for thread in threads:
@@ -420,7 +424,11 @@ def test_a_failed_audit_insert_rolls_back_the_ledger_transition(workspace, monke
 
     monkeypatch.setattr(service.audit_repository, "create_log", failing_create_log)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is None
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+    # The artifact verified; only the Journal entry failed. That is a pending
+    # success, not an invalid artifact.
+    assert finalization.outcome == "audit_pending"
+    assert finalization.artifact_is_authoritative is True
     assert audit_events(config) == []
     assert ArtifactAuditOperationRepository(config).get_operation(operation_id).status == (
         STATUS_PENDING_AUDIT
@@ -441,7 +449,8 @@ def test_a_failed_ledger_transition_rolls_back_the_audit_insert(workspace, monke
 
     monkeypatch.setattr(service.repository, "mark_audited", lambda *a, **k: False)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is None
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+    assert finalization.outcome == "audit_pending"
     # The insert and the transition commit together or not at all.
     assert audit_events(config) == []
     assert ArtifactAuditOperationRepository(config).get_operation(operation_id).status == (
@@ -709,8 +718,11 @@ def test_the_create_path_advances_past_an_occupied_identity(workspace):
 def test_a_failed_finalization_keeps_the_backup_and_reports_pending(workspace, monkeypatch):
     paths, config = workspace
 
+    from app.services.backup_audit import BackupFinalization
+
     def failing_finalize(self, operation_id, *, reconciled_after_failure):
-        return None
+        # The artifact verified; only the AuditLog write failed.
+        return BackupFinalization("audit_pending")
 
     monkeypatch.setattr(BackupAuditService, "finalize", failing_finalize)
     created = create_audited_backup(paths, "manual", config=config)

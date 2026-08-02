@@ -10,13 +10,17 @@ from app.schemas.backups import (
     BackupStatusResponse,
 )
 from app.services.backup import (
+    BackupBusyError,
     BackupError,
     BackupFileMetadata,
     BackupSourceMissingError,
     list_backup_files,
     resolve_backup_paths,
 )
-from app.services.backup_audit import BackupAuditTrackingUnavailableError
+from app.services.backup_audit import (
+    BackupArtifactUnverifiedError,
+    BackupAuditTrackingUnavailableError,
+)
 from app.services.backup_creation import (
     AuditedBackupResult,
     create_audited_backup,
@@ -27,6 +31,26 @@ router = APIRouter(prefix="/backups", tags=["backups"])
 
 STATUS_UNAVAILABLE_MESSAGE = (
     "Не удалось прочитать сведения о резервных копиях. Данные мастерской не изменялись."
+)
+
+DATABASE_MISSING_MESSAGE = (
+    "База данных не найдена. Сначала запустите приложение и создайте рабочую базу."
+)
+
+# Fixed user-facing text for the two ways the snapshot itself can fail. A
+# `BackupError` may carry an absolute database path and a SQLite message, so its
+# text is never propagated to the API — it stays available through exception
+# chaining, logs and tests.
+BACKUP_BUSY_MESSAGE = (
+    "База данных сейчас занята другой операцией, поэтому резервная копия не создана. "
+    "Рабочие данные мастерской не изменялись."
+)
+BACKUP_BUSY_NEXT_ACTION = "Подождите несколько секунд и повторите создание резервной копии."
+BACKUP_FAILED_MESSAGE = (
+    "Не удалось создать резервную копию. Рабочие данные мастерской не изменялись."
+)
+BACKUP_FAILED_NEXT_ACTION = (
+    "Повторите создание резервной копии. Если ошибка повторяется, перезапустите приложение."
 )
 
 
@@ -119,13 +143,11 @@ def create_backup(
         created = create_audited_backup(paths, request.reason if request is not None else None)
     except BackupSourceMissingError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="База данных не найдена. Сначала запустите приложение и создайте рабочую базу.",
+            status_code=status.HTTP_404_NOT_FOUND, detail=DATABASE_MISSING_MESSAGE
         ) from exc
     except BackupAuditTrackingUnavailableError as exc:
         # CR-009: audit tracking could not be durably prepared, so no backup was
-        # written. The structured detail is deliberately fixed text — no SQLite
-        # message, stack trace or SQL fragment reaches the user.
+        # written at all.
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -134,8 +156,40 @@ def create_backup(
                 "next_action": BackupAuditTrackingUnavailableError.next_action,
             },
         ) from exc
+    except BackupArtifactUnverifiedError as exc:
+        # Something exists at the reserved path but did not pass mandatory
+        # verification, so it is not a trustworthy backup. This is deliberately
+        # *not* a `201` with a pending Journal entry: that would report an
+        # unverified artifact as a created backup.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": BackupArtifactUnverifiedError.code,
+                "message": BackupArtifactUnverifiedError.message,
+                "next_action": BackupArtifactUnverifiedError.next_action,
+            },
+        ) from exc
+    except BackupBusyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "backup_source_busy",
+                "message": BACKUP_BUSY_MESSAGE,
+                "next_action": BACKUP_BUSY_NEXT_ACTION,
+            },
+        ) from exc
     except BackupError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        # `str(exc)` is never returned: a `BackupError` may embed an absolute
+        # database path, a filename or a SQLite message. The chained exception
+        # keeps all of that for logs and tests.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "backup_failed",
+                "message": BACKUP_FAILED_MESSAGE,
+                "next_action": BACKUP_FAILED_NEXT_ACTION,
+            },
+        ) from exc
 
     return BackupCreateResponse(
         backup=_created_backup_response(created),

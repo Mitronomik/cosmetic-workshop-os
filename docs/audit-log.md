@@ -1518,7 +1518,12 @@ the SQLite Online Backup API with bounded busy behaviour, and the create
 response is built from the engine's exact `BackupResult` instead of a directory
 re-list.
 
-For B3, `pending_audit_count` counts exactly `manual_backup` operations in
+For B3, verification and AuditLog persistence are separate results and are never
+collapsed: finalization reports `recorded`, `audit_pending` or `artifact_invalid`
+rather than an ID-or-nothing, so an artifact that failed verification can never be
+reported as a created backup with a merely pending Journal entry.
+
+`pending_audit_count` counts exactly `manual_backup` operations in
 `prepared` or `pending_audit`. Its verification is stricter than B1's and B2's
 because the artifact is itself a SQLite database: a valid backup must contain
 its own matching ledger operation in `status = prepared` with

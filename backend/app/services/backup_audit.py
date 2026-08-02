@@ -95,6 +95,19 @@ TRACKING_UNAVAILABLE_NEXT_ACTION: Final = (
     "Повторите создание резервной копии. Если ошибка повторяется, перезапустите приложение."
 )
 
+# The artifact exists but did not pass mandatory verification, so it is not a
+# trustworthy backup and must not be presented as one. The wording deliberately
+# does not claim the backup was created, and carries no filename, path, operation
+# ID, SQLite message or verifier-internal reason.
+VERIFICATION_FAILED_CODE: Final = "backup_verification_failed"
+VERIFICATION_FAILED_MESSAGE: Final = (
+    "Не удалось проверить созданную резервную копию, поэтому она не считается надёжной. "
+    "Рабочие данные мастерской не изменялись."
+)
+VERIFICATION_FAILED_NEXT_ACTION: Final = (
+    "Повторите создание резервной копии. Если ошибка повторяется, перезапустите приложение."
+)
+
 VerificationOutcome = Literal["valid", "definitely_absent", "ambiguous"]
 
 
@@ -111,6 +124,29 @@ class BackupAuditTrackingUnavailableError(RuntimeError):
     next_action = TRACKING_UNAVAILABLE_NEXT_ACTION
 
 
+class BackupArtifactUnverifiedError(RuntimeError):
+    """Raised when the created artifact did not pass mandatory verification.
+
+    Distinct from every other failure on the create path, and deliberately so:
+
+    - a *source or preparation* failure means nothing was written;
+    - an *artifact creation* failure means the snapshot did not complete;
+    - **this** means something exists at the reserved path but could not be
+      proven to be the backup this operation created;
+    - an *AuditLog* failure means the backup is verified and only its Journal
+      entry is outstanding — which is a `201 pending` success, not this.
+
+    The artifact is left on disk untouched. This operation cannot prove it owns
+    what is there — that is exactly what verification failed to establish — so
+    deleting it could destroy a file belonging to something else. The ledger row
+    stays unresolved and counted for diagnosis and bounded reconciliation.
+    """
+
+    code = VERIFICATION_FAILED_CODE
+    message = VERIFICATION_FAILED_MESSAGE
+    next_action = VERIFICATION_FAILED_NEXT_ACTION
+
+
 @dataclass(frozen=True)
 class BackupVerification:
     outcome: VerificationOutcome
@@ -119,6 +155,47 @@ class BackupVerification:
     @property
     def is_valid(self) -> bool:
         return self.outcome == "valid"
+
+
+FinalizationOutcome = Literal["recorded", "audit_pending", "artifact_invalid"]
+
+
+@dataclass(frozen=True)
+class BackupFinalization:
+    """What one finalization attempt concluded, as three distinct answers.
+
+    A single `int | None` cannot carry this. `None` previously meant *both* "the
+    artifact did not verify" and "the artifact verified but its Journal entry did
+    not commit", and the create path mapped every `None` to `201 pending` — so an
+    artifact that failed mandatory verification could be reported to the user as
+    a created backup with a merely pending Journal entry. Those are different
+    facts and they need different names.
+
+    `recorded`
+        Verified, and exactly one `backup.created` event is committed.
+    `audit_pending`
+        **Verified** — the artifact is authoritative — but the AuditLog insert or
+        the ledger transition did not commit. The backup is kept and the
+        operation stays unresolved and counted.
+    `artifact_invalid`
+        Verification did not conclude that the artifact is valid. That covers an
+        `ambiguous` or `definitely_absent` verdict, a verifier that raised, and a
+        ledger that could not be read to verify against. The artifact is **not**
+        an authoritative result and must never be reported as a created backup.
+    """
+
+    outcome: FinalizationOutcome
+    audit_log_id: int | None = None
+    verification: BackupVerification | None = None
+
+    @property
+    def is_recorded(self) -> bool:
+        return self.outcome == "recorded"
+
+    @property
+    def artifact_is_authoritative(self) -> bool:
+        """Whether the artifact itself may be reported as a created backup."""
+        return self.outcome in ("recorded", "audit_pending")
 
 
 @dataclass(frozen=True)
@@ -347,13 +424,13 @@ class BackupAuditService:
 
     # --------------------------------------------------------------- finalize
 
-    def finalize(self, operation_id: str, *, reconciled_after_failure: bool) -> int | None:
-        """Idempotently commit this operation's single AuditLog event.
+    def finalize(self, operation_id: str, *, reconciled_after_failure: bool) -> BackupFinalization:
+        """Verify this operation's artifact, then idempotently commit its event.
 
-        Returns the AuditLog row ID when the operation is audited — whether this
-        call inserted it or found it already there — and `None` when it could
-        not be, which the caller must treat as `pending`, never as a failure of
-        the backup itself.
+        Returns a `BackupFinalization` rather than an ID-or-`None`, because the
+        caller has to tell three different things apart: audited, verified but
+        not yet audited, and not verified at all. Collapsing the last two is how
+        an unverified artifact would end up presented as a created backup.
 
         Verification happens *before* the write transaction opens. Reading and
         `quick_check`-ing a whole database file while holding a SQLite write lock
@@ -362,42 +439,55 @@ class BackupAuditService:
         try:
             operation = self.repository.get_operation(operation_id)
         except (sqlite3.Error, OSError):
-            return None
+            # The ledger could not be read, so nothing was verified. Claiming the
+            # artifact is authoritative here would be a guess.
+            return BackupFinalization("artifact_invalid")
         if operation is None:
-            return None
+            return BackupFinalization("artifact_invalid")
         if operation.status == STATUS_AUDITED:
-            return operation.audit_log_id
+            # Already audited: the artifact was verified when that event was
+            # committed, and the existing ID is returned without inserting again.
+            return BackupFinalization("recorded", audit_log_id=operation.audit_log_id)
         if operation.status not in UNRESOLVED_STATUSES:
-            return None
+            return BackupFinalization("artifact_invalid")
 
         try:
             verification = self.verify(operation)
         except Exception:
-            # `finalize` runs on the create path *after* the backup is on disk and
-            # is deliberately not wrapped in a `try` there. An unexpected error
-            # escaping the verifier would therefore turn a successfully created
-            # backup into an HTTP 500 — the false total failure CR-009 exists to
-            # prevent. Degrading to `pending` keeps the backup, the count and the
-            # warning, so a defect stays visible rather than destroying a result.
+            # An unexpected verifier defect is not evidence that the artifact is
+            # good. It is left unresolved and counted so the operation stays
+            # visible, and the caller refuses rather than reporting a success it
+            # cannot stand behind.
             self._try_mark_pending(operation_id)
-            return None
+            return BackupFinalization("artifact_invalid")
         if not verification.is_valid:
-            return None
+            # Deliberately *not* marked abandoned, even for `definitely_absent`:
+            # abandoning here would discard the only record of what happened, and
+            # bounded reconciliation is the place that decision belongs. Left
+            # unresolved, the operation stays counted and diagnosable.
+            self._try_mark_pending(operation_id)
+            return BackupFinalization("artifact_invalid", verification=verification)
 
         try:
-            return self._commit_finalization(operation, reconciled_after_failure)
+            audit_log_id = self._commit_finalization(operation, reconciled_after_failure)
         except (sqlite3.Error, OSError, RuntimeError):
-            # The backup stays exactly as it is. Only the secondary result
-            # failed, so the operation is merely moved to `pending_audit` — and
-            # that move happens on a fresh connection, after the failed
-            # transaction has already been rolled back and closed.
+            # The artifact is verified and stays exactly as it is. Only the
+            # secondary result failed, so the operation moves to `pending_audit`
+            # — on a fresh connection, after the failed transaction has already
+            # been rolled back and closed.
             #
             # `RuntimeError` is this module's own rollback signal from
-            # `_commit_finalization`. Keeping the catch here is deliberate: by
-            # this point the backup exists, and the accepted contract requires
-            # HTTP 201 with `audit_status: pending`, never a total failure.
+            # `_commit_finalization`. Keeping the catch here is deliberate: the
+            # accepted contract requires HTTP 201 with `audit_status: pending` for
+            # a verified artifact, never a total failure.
             self._try_mark_pending(operation_id)
-            return None
+            return BackupFinalization("audit_pending", verification=verification)
+        if audit_log_id is None:
+            # The row moved under us between the pre-read and the write lock. The
+            # artifact is still verified, so this is a pending Journal entry.
+            self._try_mark_pending(operation_id)
+            return BackupFinalization("audit_pending", verification=verification)
+        return BackupFinalization("recorded", audit_log_id=audit_log_id, verification=verification)
 
     def _commit_finalization(
         self, operation: ArtifactAuditOperation, reconciled_after_failure: bool
@@ -482,10 +572,13 @@ class BackupAuditService:
                     self.repository.mark_abandoned(operation.operation_id)
                     abandoned += 1
                 elif verification.outcome == "valid":
-                    if self.finalize(operation.operation_id, reconciled_after_failure=True) is None:
-                        unresolved += 1
-                    else:
+                    finalization = self.finalize(
+                        operation.operation_id, reconciled_after_failure=True
+                    )
+                    if finalization.is_recorded:
                         audited += 1
+                    else:
+                        unresolved += 1
                 else:
                     self._try_mark_pending(operation.operation_id)
                     unresolved += 1

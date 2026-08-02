@@ -603,7 +603,38 @@ Success response:
 }
 ```
 
-If the database file is missing, the endpoint returns `404` with a human-readable Russian message. If the configured database path exists but is not a file, or the backup cannot be written safely, it returns `409`.
+If the database file is missing, the endpoint returns `404` with a fixed Russian message. If the configured database path exists but is not a file, or the snapshot cannot be written safely, it returns `409` with a structured `{code, message, next_action}` detail — `backup_source_busy` when the source stayed locked for the whole bounded wait, `backup_failed` otherwise.
+
+No user-facing backup error carries an absolute path, a filename, a SQLite message, a Python exception class or SQL. The underlying exception keeps that detail for logs and tests through exception chaining.
+
+#### The five create failure modes are distinct
+
+| Condition | Result |
+|---|---|
+| source database missing | `404`, fixed Russian text |
+| audit tracking could not be prepared | `500` `artifact_audit_tracking_unavailable` — nothing written |
+| snapshot could not be produced | `409` `backup_source_busy` / `backup_failed` |
+| artifact did not pass verification | `500` `backup_verification_failed` |
+| verified, AuditLog write failed | `201` `audit_status: pending` |
+| verified and audited | `201` `audit_status: recorded` |
+
+An artifact that did not verify is **not** a created backup. It never returns
+`201`, never reports `Резервная копия создана.`, never writes a `backup.created`
+event, and is never described as merely awaiting a Journal entry:
+
+```json
+{
+  "detail": {
+    "code": "backup_verification_failed",
+    "message": "Не удалось проверить созданную резервную копию, поэтому она не считается надёжной. Рабочие данные мастерской не изменялись.",
+    "next_action": "Повторите создание резервной копии. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
+
+The file is left on disk untouched — the create cannot prove it owns that path,
+which is exactly what verification failed to establish — and the ledger row stays
+unresolved and counted for bounded reconciliation.
 
 #### Manual-backup AuditLog fields (CR-009 B3)
 

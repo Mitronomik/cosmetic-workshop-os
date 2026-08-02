@@ -190,6 +190,26 @@ built from the engine's exact `BackupResult` and no longer re-lists the backup
 directory; `GET /api/backups/status` gains a read-only additive
 `pending_audit_count`.
 
+### Verification failure is not a pending Journal entry
+
+Only a fully written **and successfully verified** backup is an authoritative
+result eligible for `201`. If verification does not conclude that the artifact is
+valid, the create returns one fixed safe Russian error instead: it does not
+report a created backup, does not write a `backup.created` event, and does not
+present the problem as a merely pending Journal entry.
+
+The artifact is left where it is — this operation cannot prove it owns that path,
+which is precisely what verification failed to establish — and the ledger row
+stays unresolved and counted for diagnosis and bounded reconciliation.
+
+### Destination ownership
+
+The snapshot is written into an exclusively created scratch file and then
+published onto the reserved name with no-replace semantics. An existence check
+followed by an open is not an ownership guarantee, because another process can
+create the destination in between. No foreign file is ever overwritten, and
+failure cleanup only ever removes the engine's own scratch file.
+
 ### The embedded prepared operation
 
 Because the snapshot is taken **after** the prepared ledger row is committed, a

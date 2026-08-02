@@ -45,6 +45,7 @@ from app.services.backup import (
 )
 from app.services.backup_audit import (
     PENDING_AUDIT_MESSAGE,
+    BackupArtifactUnverifiedError,
     BackupAuditService,
     BackupAuditTrackingUnavailableError,
 )
@@ -88,13 +89,17 @@ def create_audited_backup(
 ) -> AuditedBackupResult:
     """Create one manual backup and record it in the Journal, in that order.
 
-    Raises `BackupSourceMissingError` / `BackupError` exactly as before when the
-    backup itself cannot be created, and `BackupAuditTrackingUnavailableError`
-    when the operation could not be durably tracked — the one case where the
-    create is refused outright, before anything is written.
+    The failure modes stay distinct on purpose, because they mean different
+    things to the user and to recovery:
 
-    Once the backup file exists and verifies, it is the authoritative result: no
-    audit outcome below deletes it or turns this into a failure.
+    - `BackupSourceMissingError` / `BackupError` — the snapshot itself could not
+      be produced, so there is no artifact;
+    - `BackupAuditTrackingUnavailableError` — the operation could not be durably
+      tracked, so nothing was written at all;
+    - `BackupArtifactUnverifiedError` — something exists at the reserved path but
+      did not pass mandatory verification, so it is not a trustworthy backup;
+    - a returned result with `audit_status="pending"` — the backup is **verified**
+      and authoritative, and only its Journal entry is outstanding.
     """
     resolved_config = config or get_database_config()
     audit_service = BackupAuditService(paths.backup_dir, resolved_config)
@@ -140,14 +145,24 @@ def create_audited_backup(
         reserved_backup_path=reserved_path,
     )
 
-    # The backup is complete and is now the authoritative result. Everything
-    # below is the secondary Journal result, and no outcome of it may delete the
-    # backup or turn this into a failure.
-    audit_log_id = audit_service.finalize(operation_id, reconciled_after_failure=False)
+    # Verification decides whether there is an authoritative result at all, and
+    # the Journal entry is a separate, secondary question. Collapsing the two is
+    # how an unverified artifact would be reported as a created backup with a
+    # merely pending Journal entry.
+    finalization = audit_service.finalize(operation_id, reconciled_after_failure=False)
+    if not finalization.artifact_is_authoritative:
+        # Something is at the reserved path, but this operation could not prove it
+        # is the backup it just wrote. It is left exactly where it is — deleting a
+        # path whose ownership is precisely what failed to verify could destroy
+        # someone else's file — and the ledger row stays unresolved and counted.
+        raise BackupArtifactUnverifiedError(BackupArtifactUnverifiedError.message)
+
+    # From here the backup is verified and is the authoritative result. No audit
+    # outcome below deletes it or turns this into a failure.
     return AuditedBackupResult(
         result=result,
         operation_id=operation_id,
-        audit_status="recorded" if audit_log_id is not None else "pending",
+        audit_status="recorded" if finalization.is_recorded else "pending",
     )
 
 

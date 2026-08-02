@@ -329,13 +329,66 @@ Verification never writes to, migrates or modifies the backup, never compares it
 historical business rows with the live database, and never exposes its contents
 through AuditLog.
 
-### Partial success
+### Partial success, and what is *not* partial success
 
-A verified backup plus a failed AuditLog finalization returns HTTP `201` with
-`audit_status: pending`, keeps and lists the backup, leaves the operation
+Verification and AuditLog persistence are separate results and are never
+collapsed. Finalization therefore reports three distinct outcomes — `recorded`,
+`audit_pending` and `artifact_invalid` — rather than an ID-or-nothing.
+
+A **verified** backup plus a failed AuditLog finalization returns HTTP `201`
+with `audit_status: pending`, keeps and lists the backup, leaves the operation
 unresolved and counted, and never deletes the backup, re-POSTs or reports total
-failure. A ledger-preparation failure before the snapshot returns the accepted
-structured HTTP `500` with no backup, no event and no committed operation.
+failure.
+
+An artifact that did **not** pass verification is not a created backup at all.
+It must never return `201`, never say `Резервная копия создана.`, never write a
+`backup.created` event, and never be described as merely awaiting a Journal
+entry — telling a user their data is safely copied when nothing proved that is
+the worst outcome available here. It returns one fixed safe Russian error
+carrying no filename, path, operation ID, SQLite message, verifier-internal
+reason or stack trace.
+
+The artifact is left on disk untouched. This operation cannot prove it owns what
+is at that path — establishing exactly that is what verification failed to do —
+so deleting it could destroy a file belonging to something else. The ledger row
+is left unresolved and counted: neither audited nor abandoned, so the operation
+stays diagnosable and eligible for bounded reconciliation.
+
+A ledger-preparation failure before the snapshot returns the accepted structured
+HTTP `500` with no backup, no event and no committed operation.
+
+The five create failure modes stay distinct in the API, and a test pins that:
+
+| Condition | Result |
+|---|---|
+| source missing | `404`, fixed Russian text |
+| tracking could not be prepared | `500` `artifact_audit_tracking_unavailable` |
+| snapshot could not be produced | `409` `backup_source_busy` / `backup_failed` |
+| artifact did not verify | `500` `backup_verification_failed` |
+| verified, AuditLog failed | `201` `audit_status: pending` |
+| verified and audited | `201` `audit_status: recorded` |
+
+`BackupError` may embed an absolute database path and a SQLite message, so its
+text is never propagated to a response; it stays available through exception
+chaining, logs and tests.
+
+### Destination ownership
+
+The engine writes into a file it creates exclusively (`O_CREAT | O_EXCL`) in the
+destination directory, then publishes it onto the reserved name with `os.link`,
+which is atomic and **refuses** when the target exists.
+
+`exists()` followed by an open is not an ownership guarantee: another process can
+create the destination in between, and the Online Backup API would then overwrite
+a foreign file while failure cleanup unlinked one this operation never created.
+The no-replace decision therefore belongs to the same syscall that publishes. A
+plain rename is rejected for the same reason — it silently replaces.
+
+Consequences: no foreign file is ever overwritten or unlinked; the published path
+is exactly the filename committed to the ledger; the scratch file carries a
+suffix the listing ignores, so an interrupted operation cannot leave a misleading
+successful-looking backup; and cleanup only ever removes the engine's own scratch
+file.
 
 ## Rejected alternatives
 

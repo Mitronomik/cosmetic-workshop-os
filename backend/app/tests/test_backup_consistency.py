@@ -20,6 +20,7 @@ from app.db.config import DatabaseConfig
 from app.db.paths import USER_DATA_DIR_ENV
 from app.services.backup import (
     BACKUP_BUSY_TIMEOUT_SECONDS,
+    BackupPaths,
     BackupBusyError,
     BackupError,
     BackupSourceMissingError,
@@ -306,13 +307,63 @@ def test_the_bounded_wait_is_the_repository_connection_timeout():
     assert BACKUP_BUSY_TIMEOUT_SECONDS == 5.0
 
 
-def test_a_failed_backup_leaves_no_listable_file(tmp_path, monkeypatch):
-    """The engine owns its destination and removes it when the create fails.
+def test_a_failure_before_publication_leaves_nothing_behind(tmp_path, monkeypatch):
+    """A copy that never completes publishes nothing and leaves no scratch file.
 
-    The injected fault is the engine's own post-copy size read — one of the named
-    boundaries the CR-004 diagnostic exercised — so a *complete* destination
-    exists at the moment of failure. Leaving it behind would publish a backup
-    the caller was told it did not get.
+    The engine writes into a file it exclusively created and only then links that
+    content onto the reserved name, so a failure during the copy cannot leave a
+    half-written artifact under a name the listing would show.
+    """
+    database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
+    backup_dir = tmp_path / "backups"
+
+    def failing_copy(source, destination):
+        # The scratch file already exists at this point; the copy into it fails.
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(backup_service, "_copy_sqlite_database", failing_copy)
+    with pytest.raises(BackupError):
+        backup_sqlite_database(database, backup_dir, reason="manual")
+    monkeypatch.undo()
+
+    assert list_backup_files(backup_dir) == []
+    assert list(backup_dir.iterdir()) == []
+
+
+def test_an_interrupted_copy_never_leaves_a_listable_partial(tmp_path, monkeypatch):
+    """Even if the scratch file survives, it can never look like a backup."""
+    database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
+    backup_dir = tmp_path / "backups"
+    leaked: dict[str, Path] = {}
+
+    def failing_copy(source, destination):
+        leaked["partial"] = Path(destination)
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(backup_service, "_copy_sqlite_database", failing_copy)
+    # Removing the scratch file is what normally cleans up; suppress it so the
+    # crash-equivalent leftover is the thing under test.
+    monkeypatch.setattr(Path, "unlink", lambda self, **kwargs: None)
+    with pytest.raises(BackupError):
+        backup_sqlite_database(database, backup_dir, reason="manual")
+    monkeypatch.undo()
+
+    partial = leaked["partial"]
+    assert partial.exists()
+    assert partial.suffix == backup_service.PARTIAL_BACKUP_SUFFIX
+    assert partial.suffix not in backup_service.SQLITE_BACKUP_SUFFIXES
+    # A crash therefore cannot leave a misleading successful-looking backup.
+    assert list_backup_files(backup_dir) == []
+
+
+def test_a_failure_after_publication_keeps_the_completed_backup(tmp_path, monkeypatch):
+    """Publication is the commit point, and it is deliberate that it stands.
+
+    The injected fault is the engine's own post-publication size read. By then
+    the snapshot is complete and atomically published under its reserved name, so
+    deleting it would destroy a real backup for a failure that says nothing about
+    its contents. The ledger row stays unresolved, and reconciliation verifies and
+    finalizes the artifact exactly once later.
     """
     database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
     backup_dir = tmp_path / "backups"
@@ -324,24 +375,24 @@ def test_a_failed_backup_leaves_no_listable_file(tmp_path, monkeypatch):
             raise OSError("simulated size read failure")
         return original_stat(self, *args, **kwargs)
 
-    original_copy = backup_service._copy_sqlite_database
+    original_publish = backup_service._publish_without_replacing
 
-    def copy_then_arm(source, destination):
-        original_copy(source, destination)
-        # Arm only once a complete snapshot exists, so the failure under test is
-        # the engine's own post-copy size read rather than its precondition
-        # checks.
+    def publish_then_arm(partial_path, backup_path):
+        original_publish(partial_path, backup_path)
         armed["value"] = True
 
-    monkeypatch.setattr(backup_service, "_copy_sqlite_database", copy_then_arm)
+    monkeypatch.setattr(backup_service, "_publish_without_replacing", publish_then_arm)
     monkeypatch.setattr(Path, "stat", failing_stat)
     with pytest.raises(BackupError):
         backup_sqlite_database(database, backup_dir, reason="manual")
     armed["value"] = False
     monkeypatch.undo()
 
-    assert list_backup_files(backup_dir) == []
-    assert list(backup_dir.iterdir()) == []
+    published = list_backup_files(backup_dir)
+    assert len(published) == 1
+    assert quick_check(published[0].path) == "ok"
+    # The scratch file is still cleaned up; only the published artifact remains.
+    assert [p.name for p in backup_dir.iterdir()] == [published[0].filename]
 
 
 def test_backup_never_overwrites_an_existing_file(tmp_path):
@@ -644,3 +695,117 @@ def test_startup_reconciles_manual_backups_after_migrations_and_after_exports(tm
     # The automatic backup is not routed through the audited orchestration.
     assert result.backup is not None
     assert result.backup.reason == "before_migration"
+
+
+# --------------------------------------------------------------------------
+# Destination ownership under a race
+# --------------------------------------------------------------------------
+
+def test_a_foreign_file_appearing_after_the_check_is_never_overwritten(tmp_path, monkeypatch):
+    """The no-overwrite guarantee must survive a TOCTOU race.
+
+    `exists()` followed by an open is not ownership: another process can create
+    the destination in between. Here a foreign, perfectly valid SQLite database
+    appears at the reserved path *after* the early check and *before* publication.
+    The engine must fail without touching it.
+    """
+    database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    reserved = reserve_backup_path(backup_dir, database, FIXED_TIME, "manual")
+
+    foreign_bytes: dict[str, bytes] = {}
+    original_copy = backup_service._copy_sqlite_database
+
+    def copy_then_race(source, destination):
+        original_copy(source, destination)
+        # The race window: the destination was free at the early check, and a
+        # different process creates it before this operation publishes.
+        initialize_database(DatabaseConfig(path=reserved))
+        foreign_bytes["content"] = reserved.read_bytes()
+
+    monkeypatch.setattr(backup_service, "_copy_sqlite_database", copy_then_race)
+    with pytest.raises(BackupError):
+        backup_sqlite_database(
+            database, backup_dir, reason="manual", reserved_backup_path=reserved
+        )
+    monkeypatch.undo()
+
+    # The foreign file is untouched, byte for byte.
+    assert reserved.exists()
+    assert reserved.read_bytes() == foreign_bytes["content"]
+    assert quick_check(reserved) == "ok"
+    # Cleanup removed only the engine's own scratch file.
+    assert [p.name for p in backup_dir.iterdir()] == [reserved.name]
+
+
+def test_publication_refuses_rather_than_replacing_an_existing_destination(tmp_path):
+    """`os.link` is what refuses; a plain rename would silently replace."""
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    partial = backup_dir / "scratch.partial"
+    partial.write_bytes(b"engine-owned content")
+    occupied = backup_dir / "20260801T101500123456Z-cosmetic_workshop-manual.sqlite"
+    occupied.write_bytes(b"a foreign file")
+
+    with pytest.raises(BackupError):
+        backup_service._publish_without_replacing(partial, occupied)
+
+    assert occupied.read_bytes() == b"a foreign file"
+    assert partial.read_bytes() == b"engine-owned content"
+
+
+def test_a_racing_foreign_destination_leaves_the_ledger_unresolved(tmp_path, monkeypatch):
+    """The audited create must not audit anything when publication is refused."""
+    from app.services.backup_audit import BackupAuditService
+    from app.services.backup_creation import create_audited_backup
+
+    database = tmp_path / "data" / "cosmetic_workshop.sqlite"
+    database.parent.mkdir(parents=True)
+    config = DatabaseConfig(path=database)
+    initialize_database(config)
+    paths = BackupPaths(database_path=database, backup_dir=tmp_path / "backups")
+
+    original_publish = backup_service._publish_without_replacing
+
+    def occupy_then_publish(partial_path, backup_path):
+        # The race window, at its narrowest: a foreign process creates the exact
+        # reserved path in the instant before this operation publishes onto it.
+        initialize_database(DatabaseConfig(path=Path(backup_path)))
+        original_publish(partial_path, backup_path)
+
+    monkeypatch.setattr(backup_service, "_publish_without_replacing", occupy_then_publish)
+    with pytest.raises(BackupError):
+        create_audited_backup(paths, "manual", config=config)
+    monkeypatch.undo()
+
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM audit_logs WHERE action = 'backup.created'"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM artifact_audit_operations WHERE status = 'audited'"
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()
+    # The unresolved operation stays counted for bounded reconciliation.
+    assert BackupAuditService(paths.backup_dir, config).pending_count() == 1
+    # Only the foreign file remains; the scratch file was cleaned up.
+    assert len(list(paths.backup_dir.iterdir())) == 1
+
+
+def test_the_successful_path_publishes_exactly_the_reserved_filename(tmp_path):
+    database = migrated_database(tmp_path / "data" / "cosmetic_workshop.sqlite")
+    backup_dir = tmp_path / "backups"
+    reserved = reserve_backup_path(backup_dir, database, FIXED_TIME, "before-import")
+
+    result = backup_sqlite_database(
+        database, backup_dir, reason="before-import", reserved_backup_path=reserved
+    )
+
+    assert result.backup_path == reserved
+    assert result.backup_path.exists()
+    # Exactly one file: the published backup, with no scratch file left over.
+    assert [p.name for p in backup_dir.iterdir()] == [reserved.name]
+    assert quick_check(reserved) == "ok"

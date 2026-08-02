@@ -378,8 +378,12 @@ def test_a_failed_audit_returns_pending_201_and_keeps_the_backup(tmp_path, monke
 
     from app.services.backup_audit import PENDING_AUDIT_MESSAGE, BackupAuditService
 
+    from app.services.backup_audit import BackupFinalization
+
     monkeypatch.setattr(
-        BackupAuditService, "finalize", lambda self, operation_id, *, reconciled_after_failure: None
+        BackupAuditService,
+        "finalize",
+        lambda self, operation_id, *, reconciled_after_failure: BackupFinalization("audit_pending"),
     )
     client = TestClient(create_app())
     response = client.post("/api/backups", json={"reason": "manual"})
@@ -521,3 +525,292 @@ def test_the_create_response_schema_binds_the_two_audit_fields():
         BackupCreateResponse(**base, audit_status="pending", audit_message=None)
     with pytest.raises(ValidationError):
         BackupCreateResponse(**base, audit_status="pending", audit_message="a different warning")
+
+
+# --------------------------------------------------------------------------
+# Verification failure is not a pending Journal entry
+# --------------------------------------------------------------------------
+
+def _workspace(tmp_path, monkeypatch):
+    db_path = make_database(tmp_path / "cosmetic_workshop.sqlite")
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+    monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+    return db_path
+
+
+def _backup_events(db_path: Path) -> int:
+    connection = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        return connection.execute(
+            "SELECT COUNT(*) FROM audit_logs WHERE action = 'backup.created'"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+
+VERIFICATION_FAILED_DETAIL = {
+    "code": "backup_verification_failed",
+    "message": (
+        "Не удалось проверить созданную резервную копию, поэтому она не считается надёжной. "
+        "Рабочие данные мастерской не изменялись."
+    ),
+    "next_action": (
+        "Повторите создание резервной копии. Если ошибка повторяется, перезапустите приложение."
+    ),
+}
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+@pytest.mark.parametrize(
+    ("outcome", "reason"),
+    [("ambiguous", "embedded-operation-missing"), ("definitely_absent", "backup-absent")],
+)
+def test_a_non_valid_verification_never_returns_201(tmp_path, monkeypatch, outcome, reason):
+    """An artifact that did not verify is not a created backup.
+
+    Reporting it as `201` with a pending Journal entry would tell the user their
+    data is safely copied when nothing proved that.
+    """
+    db_path = _workspace(tmp_path, monkeypatch)
+    from app.services.backup_audit import BackupAuditService, BackupVerification
+
+    monkeypatch.setattr(
+        BackupAuditService, "verify", lambda self, operation: BackupVerification(outcome, reason)
+    )
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    response = client.post("/api/backups", json={"reason": "manual"})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == VERIFICATION_FAILED_DETAIL
+    body = response.text
+    assert "Резервная копия создана" not in body
+    assert "журнал действий пока не добавлена" not in body
+    assert _backup_events(db_path) == 0
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_a_verifier_that_raises_never_returns_201(tmp_path, monkeypatch):
+    db_path = _workspace(tmp_path, monkeypatch)
+    from app.services.backup_audit import BackupAuditService
+
+    def exploding_verify(self, operation):
+        raise RuntimeError("verifier defect")
+
+    monkeypatch.setattr(BackupAuditService, "verify", exploding_verify)
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    response = client.post("/api/backups", json={"reason": "manual"})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == VERIFICATION_FAILED_DETAIL
+    assert _backup_events(db_path) == 0
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_an_unrelated_sqlite_destination_never_returns_201(tmp_path, monkeypatch):
+    """A healthy but foreign database at the reserved path is not our backup."""
+    db_path = _workspace(tmp_path, monkeypatch)
+    import app.services.backup as backup_service
+    from app.db.config import DatabaseConfig as Config
+    from app.services.database import initialize_database as init
+
+    original_copy = backup_service._copy_sqlite_database
+
+    def copy_unrelated(source, destination):
+        # A complete, valid, fully migrated database — that this operation did
+        # not create and cannot claim.
+        original_copy(source, destination)
+        Path(destination).unlink()
+        init(Config(path=Path(destination)))
+
+    monkeypatch.setattr(backup_service, "_copy_sqlite_database", copy_unrelated)
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    response = client.post("/api/backups", json={"reason": "manual"})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == VERIFICATION_FAILED_DETAIL
+    assert _backup_events(db_path) == 0
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+@pytest.mark.parametrize(
+    "columns",
+    [
+        {"operation_id": "11111111-1111-4111-8111-111111111111"},
+        {"primary_filename": "20260801T101500123456Z-other-manual.sqlite"},
+        {"audit_action": "export.created"},
+    ],
+)
+def test_a_wrong_or_missing_embedded_operation_never_returns_201(tmp_path, monkeypatch, columns):
+    db_path = _workspace(tmp_path, monkeypatch)
+    import app.services.backup as backup_service
+
+    original_copy = backup_service._copy_sqlite_database
+
+    def copy_then_tamper(source, destination):
+        original_copy(source, destination)
+        connection = sqlite3.connect(destination)
+        try:
+            connection.execute("PRAGMA ignore_check_constraints = ON")
+            assignments = ", ".join(f"{name} = ?" for name in columns)
+            connection.execute(
+                f"UPDATE artifact_audit_operations SET {assignments}", tuple(columns.values())
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+    monkeypatch.setattr(backup_service, "_copy_sqlite_database", copy_then_tamper)
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    response = client.post("/api/backups", json={"reason": "manual"})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == VERIFICATION_FAILED_DETAIL
+    assert _backup_events(db_path) == 0
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_an_unverified_artifact_leaves_the_operation_unresolved_and_counted(tmp_path, monkeypatch):
+    """Neither audited nor abandoned: left for diagnosis and bounded reconciliation."""
+    db_path = _workspace(tmp_path, monkeypatch)
+    from app.services.backup_audit import BackupAuditService, BackupVerification
+
+    monkeypatch.setattr(
+        BackupAuditService,
+        "verify",
+        lambda self, operation: BackupVerification("ambiguous", "embedded-operation-missing"),
+    )
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    assert client.post("/api/backups", json={"reason": "manual"}).status_code == 500
+
+    monkeypatch.undo()
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+    monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+    connection = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        statuses = dict(
+            connection.execute(
+                "SELECT status, COUNT(*) FROM artifact_audit_operations GROUP BY status"
+            ).fetchall()
+        )
+    finally:
+        connection.close()
+    assert statuses == {"pending_audit": 1}
+    assert TestClient(create_app()).get("/api/backups/status").json()["pending_audit_count"] == 1
+
+
+# --------------------------------------------------------------------------
+# Safe user-facing errors
+# --------------------------------------------------------------------------
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_a_source_that_is_a_directory_returns_a_safe_error_without_any_path(tmp_path, monkeypatch):
+    """`BackupError` embeds an absolute path; the API must never propagate it."""
+    db_path = tmp_path / "cosmetic_workshop.sqlite"
+    db_path.mkdir()
+    monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+    monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    response = client.post("/api/backups", json={"reason": "manual"})
+
+    assert response.status_code == 409
+    body = response.text
+    assert str(db_path) not in body
+    assert str(tmp_path) not in body
+    assert "sqlite" not in body.lower()
+    assert "BackupError" not in body
+    assert response.json()["detail"]["message"] == (
+        "Не удалось создать резервную копию. Рабочие данные мастерской не изменялись."
+    )
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_a_busy_source_returns_a_safe_distinct_conflict(tmp_path, monkeypatch):
+    db_path = _workspace(tmp_path, monkeypatch)
+    import app.services.backup as backup_service
+    from app.services.backup import BackupBusyError
+
+    def busy(source, destination):
+        raise BackupBusyError(f"The database at {db_path} stayed busy")
+
+    monkeypatch.setattr(backup_service, "_copy_sqlite_database", busy)
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    response = client.post("/api/backups", json={"reason": "manual"})
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "backup_source_busy"
+    assert str(db_path) not in response.text
+    assert _backup_events(db_path) == 0
+
+
+@pytest.mark.skipif(TestClient is None, reason="FastAPI TestClient dependencies are unavailable in this environment.")
+def test_the_five_create_failure_modes_stay_distinct(tmp_path, monkeypatch):
+    """Source, preparation, creation, verification and audit failures differ.
+
+    Collapsing any two of them into one `BackupError`, one `None` or one HTTP
+    result is exactly the defect this slice corrects.
+    """
+    import app.services.backup as backup_service
+    from app.services.backup import BackupBusyError
+    from app.services.backup_audit import (
+        BackupAuditService,
+        BackupAuditTrackingUnavailableError,
+        BackupFinalization,
+        BackupVerification,
+    )
+
+    def observe(setup) -> tuple[int, object]:
+        monkeypatch.undo()
+        db_path = make_database(tmp_path / f"{setup}.sqlite")
+        monkeypatch.setenv(DATABASE_PATH_ENV, str(db_path))
+        monkeypatch.delenv(USER_DATA_DIR_ENV, raising=False)
+        if setup == "source":
+            monkeypatch.setenv(DATABASE_PATH_ENV, str(tmp_path / "absent.sqlite"))
+        elif setup == "preparation":
+            monkeypatch.setattr(
+                BackupAuditService,
+                "prepare_operation",
+                lambda self, *, primary_filename: (_ for _ in ()).throw(
+                    BackupAuditTrackingUnavailableError("nope")
+                ),
+            )
+        elif setup == "creation":
+            monkeypatch.setattr(
+                backup_service,
+                "_copy_sqlite_database",
+                lambda source, destination: (_ for _ in ()).throw(BackupBusyError("busy")),
+            )
+        elif setup == "verification":
+            monkeypatch.setattr(
+                BackupAuditService,
+                "verify",
+                lambda self, operation: BackupVerification("ambiguous", "embedded-operation-missing"),
+            )
+        elif setup == "audit":
+            monkeypatch.setattr(
+                BackupAuditService,
+                "finalize",
+                lambda self, operation_id, *, reconciled_after_failure: BackupFinalization(
+                    "audit_pending"
+                ),
+            )
+        client = TestClient(create_app(), raise_server_exceptions=False)
+        response = client.post("/api/backups", json={"reason": "manual"})
+        payload = response.json()
+        marker = payload.get("audit_status") if response.status_code == 201 else (
+            payload["detail"].get("code") if isinstance(payload.get("detail"), dict) else "plain-text"
+        )
+        return response.status_code, marker
+
+    observed = {name: observe(name) for name in
+                ("source", "preparation", "creation", "verification", "audit", "recorded")}
+
+    assert observed["source"] == (404, "plain-text")
+    assert observed["preparation"] == (500, "artifact_audit_tracking_unavailable")
+    assert observed["creation"] == (409, "backup_source_busy")
+    assert observed["verification"] == (500, "backup_verification_failed")
+    assert observed["audit"] == (201, "pending")
+    assert observed["recorded"] == (201, "recorded")
+    # Five failure modes, five distinct outcomes — none collapsed into another.
+    assert len(set(observed.values())) == 6

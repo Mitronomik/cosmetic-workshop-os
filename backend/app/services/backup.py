@@ -28,6 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 import contextlib
 import sqlite3
+import tempfile
 
 import os
 
@@ -70,6 +71,10 @@ class BackupResult:
 
 SQLITE_BACKUP_SUFFIXES = {".sqlite", ".db", ".sqlite3"}
 DEFAULT_BACKUP_SUFFIX = ".sqlite"
+
+# Deliberately not an accepted SQLite backup suffix: an interrupted operation
+# must leave something `list_backup_files` ignores, never a listable backup.
+PARTIAL_BACKUP_SUFFIX = ".partial"
 
 # The one timestamp spelling the generator emits and the strict parser accepts.
 BACKUP_TIMESTAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
@@ -324,6 +329,51 @@ def _copy_sqlite_database(source_path: Path, destination_path: Path) -> None:
         source_connection.close()
 
 
+def _create_owned_partial(backup_dir: Path, final_name: str) -> Path:
+    """Create an exclusively-owned scratch file in the destination directory.
+
+    `mkstemp` creates with `O_CREAT | O_EXCL`, so the returned path is one this
+    process definitely created and definitely owns. That is what makes the
+    cleanup below safe: it can never unlink a file some other process put there.
+
+    The scratch suffix is deliberately **not** an accepted SQLite backup suffix,
+    so an interrupted operation leaves something `list_backup_files` ignores.
+    A crash therefore cannot leave a misleading, successful-looking backup — the
+    final name does not exist until the snapshot is complete.
+
+    Same directory on purpose: publication below must stay within one filesystem.
+    """
+    handle, partial = tempfile.mkstemp(
+        dir=backup_dir, prefix=f".{final_name}.", suffix=PARTIAL_BACKUP_SUFFIX
+    )
+    os.close(handle)
+    return Path(partial)
+
+
+def _publish_without_replacing(partial_path: Path, backup_path: Path) -> None:
+    """Move a completed snapshot onto its final name, or fail without touching it.
+
+    `os.link` is the whole point. It is atomic and it **refuses** when the target
+    exists, which `os.rename` does not: rename would silently replace whatever is
+    already there. `exists()` followed by an open is not an ownership guarantee
+    either — another process can create the file in between — so the no-replace
+    decision has to be made by the same syscall that publishes.
+
+    On `FileExistsError` the foreign file is left exactly as it was; the caller
+    removes only the scratch file it created itself.
+    """
+    try:
+        os.link(partial_path, backup_path)
+    except FileExistsError as exc:
+        raise BackupError(
+            f"Backup destination already exists: {backup_path.name}"
+        ) from exc
+    except OSError as exc:
+        raise BackupError(
+            f"Could not publish the backup {backup_path.name}: {type(exc).__name__}"
+        ) from exc
+
+
 def backup_sqlite_database(
     source_path: Path,
     backup_dir: Path,
@@ -365,36 +415,43 @@ def backup_sqlite_database(
         created_at = generated.created_at
         resolved_backup_dir.mkdir(parents=True, exist_ok=True)
 
-    # The destination check runs *outside* the cleanup block below on purpose: if
-    # the path is already occupied, that file belongs to someone else and must
-    # not be unlinked. A filesystem failure while merely asking becomes a
-    # `BackupError` rather than escaping raw, because nothing has been created
-    # yet and the caller's existing safe error contract covers it.
+    if backup_path == resolved_source:
+        raise BackupError("A backup cannot be written over its own source database.")
+    # An early courtesy check only. It is deliberately **not** the no-overwrite
+    # guarantee: another process can create the file between this call and the
+    # publication below, so the guarantee has to come from the publishing syscall
+    # itself. A filesystem failure while merely asking becomes a `BackupError`
+    # rather than escaping raw, because nothing has been created yet.
     try:
-        destination_is_free = not backup_path.exists()
+        if backup_path.exists():
+            raise BackupError(f"Backup destination already exists: {backup_path.name}")
     except OSError as exc:
         raise BackupError(
             f"Could not check the backup destination {backup_path.name}: {type(exc).__name__}"
         ) from exc
-    if not destination_is_free:
-        raise BackupError(f"Backup destination already exists: {backup_path.name}")
-    if backup_path == resolved_source:
-        raise BackupError("A backup cannot be written over its own source database.")
 
+    # Write into a file this process exclusively created, then publish it onto
+    # the reserved name with no-replace semantics. Everything the engine may
+    # delete on failure is the scratch file it made itself, so cleanup can never
+    # touch a foreign file — and the reserved name never exists in a half-written
+    # state, so a crash cannot leave a misleading successful-looking backup.
+    partial_path = _create_owned_partial(resolved_backup_dir, backup_path.name)
     try:
-        _copy_sqlite_database(resolved_source, backup_path)
+        _copy_sqlite_database(resolved_source, partial_path)
+        _publish_without_replacing(partial_path, backup_path)
         size_bytes = backup_path.stat().st_size
     except (BackupError, sqlite3.Error, OSError) as exc:
-        # The engine owns its destination. A half-written or empty file left
-        # behind would be listed as a backup and would pass `quick_check`,
-        # because an empty file is a valid empty SQLite database.
-        with contextlib.suppress(OSError):
-            backup_path.unlink(missing_ok=True)
         if isinstance(exc, BackupError):
             raise
         raise BackupError(
             f"Could not create SQLite database backup {backup_path.name}: {type(exc).__name__}"
         ) from exc
+    finally:
+        # Only ever the scratch file. After a successful publication the final
+        # name is a second link to the same content, so removing this one leaves
+        # the published backup intact.
+        with contextlib.suppress(OSError):
+            partial_path.unlink(missing_ok=True)
 
     return BackupResult(
         source_path=resolved_source,
