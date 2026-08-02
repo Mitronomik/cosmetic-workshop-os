@@ -776,8 +776,16 @@ def test_no_second_sqlite_connection_participates_in_the_finalizer(tmp_path, mon
     assert sum(opened) == 1
 
 
-def test_an_unexpected_verifier_defect_is_artifact_invalid_and_destroys_nothing(tmp_path, monkeypatch):
+def test_an_unexpected_verifier_defect_never_destroys_a_created_export(tmp_path, monkeypatch):
     """A verifier defect proves nothing about the export, so it cannot be trusted.
+
+    The name is the merged baseline's and is kept deliberately: what this test
+    protects — a verifier defect must never destroy the written file — is
+    unchanged. What changed is the *conclusion* drawn from that defect. The
+    baseline asserted `finalize(...) is None`, which the create path mapped to
+    `201 pending`; that was the defect. The assertions below now require
+    `artifact_invalid` instead, while every original protective assertion is
+    preserved verbatim.
 
     `finalize` runs after the export exists, so it must still not raise and must
     not delete the file. But a defect that prevented verification is not evidence

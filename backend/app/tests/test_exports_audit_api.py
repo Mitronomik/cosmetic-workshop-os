@@ -346,8 +346,15 @@ def test_a_later_reconciliation_completes_the_pending_event_exactly_once(monkeyp
     assert client.get("/api/exports/status").json()["pending_audit_count"] == 0
 
 
-def test_a_defect_in_finalization_is_a_safe_error_and_never_a_created_export(monkeypatch, tmp_path):
+def test_a_completed_export_survives_an_unexpected_defect_in_finalization(monkeypatch, tmp_path):
     """A defect that prevented verification must not be reported as a success.
+
+    The name is the merged baseline's and is kept deliberately: what this test
+    protects — the written export survives an unexpected finalization defect and
+    the raw defect never reaches the user — is unchanged. What changed is the
+    *conclusion*. The baseline asserted `201` with `audit_status: pending`, which
+    presented an unverified export as created; it is now the fixed safe `500`,
+    with the file-preservation and no-event assertions preserved verbatim.
 
     The written file is still never deleted and the raw defect never reaches the
     user — but the export was never verified, so it is not an authoritative
