@@ -1,6 +1,6 @@
-# Current focus — C3 complete on merged `main`; artifact-finalization hardening implemented on its PR branch, open and unmerged
+# Current focus — C3 closed, merged, exact-head verified and hardened; C4 Restore decided as launcher-assisted
 
-Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3-II-A, C3-II-B1, C3-II-B2 and C3-II-B3 all merged and exact-head verified; CR-004 and CR-006 resolved and implemented; CR-009 implemented on merged `main` for report documents, JSON exports and manual backups; C3 COMPLETED on merged `main`; the artifact-finalization hardening follow-up is implemented on its PR branch and unmerged; C4 inactive**
+Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED` after PR #167 and PR #168; `CR-004`, `CR-006` and `CR-009` accepted and implemented; `CR-010` accepts launcher-assisted Restore; C4 has an accepted product decision and no implementation**
 
 - Diagnostic audit: `DONE` (PATH A / COMPLETE)
 - `R3 — Repair purchase-suggestions API smoke seeding`: **DONE**
@@ -24,17 +24,206 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3-I, C3
 - `CR-004 — SQLite backup transaction consistency`: **ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)**
 - `C3-II-B3 — Manual backup AuditLog coverage`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #167, merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727`, final reviewed head `259697805660fd4dc37e6ac5f50567d48037be94`)
 - `CR-004 — SQLite backup transaction consistency`: **ACCEPTED AND IMPLEMENTED**
-- `C3 — COMPLETED — MERGED AND EXACT-HEAD VERIFIED`
-- `C3 artifact-finalization hardening — IMPLEMENTED ON PR BRANCH — NOT MERGED`
-- `C4 — INACTIVE`
+- `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
+- `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
+- `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED — NOT IMPLEMENTED**
+- `C4-I — Launcher-owned restore safety engine`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
+- `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
+- `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
+- `C4 — ACTIVE`
+- `C4 product decision — COMPLETE`
+- `C4 implementation — NOT STARTED`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
-- **C3-II-B3 is merged into `main` through PR #167, so C3 is `COMPLETED` on merged `main`.** C4 remains unauthorized.
-- Next active work: **review of the open C3 artifact-finalization hardening pull request.** It is implemented on `claude/c3-hardening-artifact-finalization`, reuses the existing ledger with no new migration, and is **not merged**. C4 stays inactive and Restore stays unimplemented regardless.
+- **PR #168 is merged.** The artifact-finalization hardening is on merged `main`, not on a branch, so C3 is complete **and hardened**.
+
+## What is authorized next
+
+```text
+C4-I — Launcher-owned restore safety engine
+AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+```
+
+`C4-I` is the **only** runtime slice authorized by the `CR-010` decision. It is
+**not in progress** and must not be started from this unmerged documentation
+branch. `C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED`. Restore remains
+**not implemented**; macOS packaging, the safe packaged update flow and the full
+release-candidate smoke remain **not completed**; product release readiness is
+**not claimed**.
+
+## C3 closed and hardened; C4 Restore decided (2026-08-02)
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-004 — ACCEPTED AND IMPLEMENTED
+CR-006 — ACCEPTED AND IMPLEMENTED
+CR-009 — ACCEPTED AND IMPLEMENTED
+C3 artifact-finalization hardening — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
+CR-010 — ACCEPTED — NOT IMPLEMENTED
+C4-I — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C4-II — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
+C4 — ACTIVE
+C4 product decision — COMPLETE
+C4 implementation — NOT STARTED
+Restore — NOT IMPLEMENTED
+macOS packaging — NOT COMPLETED
+safe packaged update flow — NOT COMPLETED
+full release-candidate smoke — NOT COMPLETED
+Product release readiness — NOT CLAIMED
+```
+
+`VERIFIED FROM REPOSITORY / GITHUB / MERGED PR #168 EVIDENCE — NOT RE-EXECUTED IN THIS DOCUMENTATION PR`
+
+| Item | Verified value |
+|---|---|
+| PR | #168 — `C3 hardening — Separate artifact verification from AuditLog persistence` |
+| State | `MERGED`, base `main`, non-draft |
+| Head branch | `claude/c3-hardening-artifact-finalization` |
+| Final reviewed head | `6c57c7f5ba851ce2124577268baeda07d19ce4ae` |
+| Merge commit | `867afeb0967637d07172f88c95e02e9bc500a311` |
+| Merged at | `2026-08-02T08:34:02Z` |
+
+The final reviewed head is an ancestor of the merge commit, and the merge commit
+is an ancestor of `origin/main`.
+
+**Accepted merged PR #168 evidence.** None of these results was executed in this
+documentation pull request.
+
+| Check | Accepted result |
+|---|---|
+| Complete backend | `1826 passed` |
+| Complete root suite | `1843 passed` |
+| Launcher | `17 passed` |
+| Baseline node IDs | `1804` preserved / `0` lost / `39` added |
+| Frontend | all `21` `test:*` scripts passed |
+| Frontend production build | `PASS` |
+| `frontend/src/main.ts` | `6399` lines |
+| Final independent audit | `P0 — none`, `P1 — none`, `P2 — documented only` |
+| Exact-head launcher/API/browser smoke | `PASS` |
+
+**Accepted hardened behaviour on merged `main`.** Report-document and JSON-export
+finalization use typed, artifact-specific results. `recorded` means the artifact
+was verified and its AuditLog event committed. `audit_pending` means the artifact
+was verified but AuditLog persistence did not commit. `artifact_invalid` means
+mandatory verification did not prove the artifact authoritative. Only `recorded`
+and `audit_pending` may produce HTTP `201`; `artifact_invalid` produces a fixed
+structured HTTP `500`. An invalid artifact is not deleted, is not audited,
+remains unresolved and is counted for bounded reconciliation. Filenames, paths,
+reasons, operation IDs, schema versions, entity counts, verifier details and
+SQLite details are not exposed through safe error responses.
+
+`CR-004`, `CR-006` and `CR-009` and their accepted decisions are **not reopened**.
+
+**`CR-010 — Decide launcher-assisted Restore semantics` is accepted.** MVP
+Restore is launcher-assisted: Restore is not performed by a running FastAPI
+backend endpoint and is not an ordinary SPA mutation, and the launcher owns
+process shutdown, backup validation, the pre-restore safety copy, staging,
+atomic database replacement, post-restore startup verification, rollback and
+incomplete-restore recovery. Support-assisted recovery stays a fallback for
+failures that cannot be resolved automatically. The user never needs Git,
+Python, Node.js, Docker, SQLite tools, GitHub or a terminal. Durable decision:
+`docs/decisions/0016-launcher-assisted-restore.md`; complete contract:
+`docs/backup-and-restore.md`.
+
+### The accepted Restore phase machine — C4-I must implement it exactly
+
+`CR-010` decides the durable crash-recovery state machine so that `C4-I` does not
+invent a safety-critical one as an undocumented implementation decision. The
+launcher-owned operation record carries **exactly one authoritative field,
+`phase`**, and it is mutually exclusive. Whether replacement occurred and whether
+rollback completed are **derived** from it, never persisted as independent
+authoritative fields that could contradict it.
+
+```text
+prepared
+source_staged
+candidate_validated
+safety_copy_verified
+replacement_intent
+replacement_committed
+verification_in_progress
+completed
+aborted
+rollback_in_progress
+rolled_back
+recovery_blocked
+```
+
+No alias, no prose-only synonym, no thirteenth phase. Allowed transitions:
+
+```text
+prepared → source_staged → candidate_validated → safety_copy_verified
+→ replacement_intent → replacement_committed → verification_in_progress
+→ completed
+
+prepared | source_staged | candidate_validated | safety_copy_verified
+→ aborted
+
+replacement_intent | replacement_committed | verification_in_progress
+→ rollback_in_progress
+
+rollback_in_progress → rolled_back
+rollback_in_progress → recovery_blocked
+```
+
+Terminal phases are `completed`, `aborted`, `rolled_back` and
+`recovery_blocked`. A new attempt is a new operation with a new operation ID; a
+terminal record is never reactivated.
+
+**Why `replacement_intent` exists.** Filesystem replacement and SQLite are not
+one transaction, so the window `persist intent → atomic replacement → persist
+committed` cannot be observed from outside after a crash. The launcher durably
+records `replacement_intent` immediately **before** the replacement boundary,
+and:
+
+```text
+A persisted replacement_intent is treated as though replacement may have
+occurred, even when the current working file appears unchanged.
+```
+
+No timestamp, size, filename, inode, migration version or content check may be
+used to guess otherwise — the staged candidate is by construction a valid
+workspace database. The safe outcome is rollback from the verified safety copy.
+
+**Ordering and gates.** Every transition is persisted through one documented,
+tested, atomic publication boundary before the next action that depends on it;
+an in-place truncate-and-rewrite of the only record is insufficient.
+`replacement_intent`, `replacement_committed` and `verification_in_progress` all
+block ordinary startup and all recover through rollback. `rolled_back` is a
+**failed** Restore, never success. `recovery_blocked` never permits ordinary
+startup. **The ordinary browser opens only after `completed` has been durably
+recorded.**
+
+Every persisted phase has exactly one required startup behaviour, fixed by the
+recovery matrix in `docs/decisions/0016-launcher-assisted-restore.md` § 7.5 and
+`docs/backup-and-restore.md` § 7.4. `C4-I` implements that matrix exactly and may
+not substitute an alternative state machine.
+
+**Working-database mutation boundary.** The staged candidate must pass the
+complete validation contract before any mutation, replacement, deletion or
+migration of the current **working database**. Creating the isolated operation
+directory, the narrow durable operation record, launcher-owned staging files and
+local technical logs is Restore infrastructure and is not such a mutation. The
+user-selected source stays immutable.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 
-## C3 hardening follow-up — required, not cosmetic
+## HISTORICAL — PARTIALLY SUPERSEDED — C3 hardening follow-up while its PR was open
+
+> **What the hardening does is unchanged and is the merged behaviour.** Only its
+> lifecycle statements are superseded: its `IMPLEMENTED ON PR BRANCH — NOT
+> MERGED` status line and its instruction that *"C4 must not be activated until
+> this follow-up merges"* were true while PR #168 was open. PR #168 is now
+> **merged** at `867afeb0967637d07172f88c95e02e9bc500a311`, so C3 is complete and
+> hardened and that C4 gate is satisfied.
 
 ```text
 C3 hardening follow-up:
@@ -57,8 +246,9 @@ This was deliberately kept out of PR #167 — correcting two merged, separately
 accepted slices there would have been an unrelated refactor across a diff whose
 subject is backups — and it was run as the immediate follow-up instead.
 
-**Status: `IMPLEMENTED ON PR BRANCH — NOT MERGED`** on
-`claude/c3-hardening-artifact-finalization`.
+**Status at the time of writing (HISTORICAL): `IMPLEMENTED ON PR BRANCH — NOT
+MERGED`** on `claude/c3-hardening-artifact-finalization`. It is now
+`DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #168.
 
 The defect was reproduced against merged `main` before any correction, in ten
 cases across both artifact kinds, including two genuine (non-injected) verifier
@@ -79,9 +269,15 @@ worker. Backup finalization is untouched. `CR-006` create-response behaviour is
 unchanged.
 
 **C4 must not be activated until this follow-up merges, or until it is
-explicitly accepted as a known release blocker.**
+explicitly accepted as a known release blocker.** *(HISTORICAL — satisfied. The
+follow-up merged as PR #168 on 2026-08-02, so this gate no longer blocks C4.)*
 
-## CR-004 resolved; C3-II-B3 implemented on its PR branch (2026-08-02)
+## HISTORICAL — PARTIALLY SUPERSEDED — CR-004 resolved; C3-II-B3 implemented on its PR branch (2026-08-02)
+
+> The `CR-004` evidence and the delivered scope below stand. Its closing
+> lifecycle sentence — *"C3 is complete on this branch and incomplete on merged
+> `main`"* — is superseded: `C3-II-B3` merged as PR #167 and the hardening
+> follow-up merged as PR #168, so C3 is complete and hardened on merged `main`.
 
 `CR-004` is **accepted** and classified:
 
@@ -139,7 +335,12 @@ ledger row and is never audited.
 and incomplete on merged `main`. C4 stays inactive, Restore stays unimplemented,
 and product release readiness is not claimed.
 
-## C3-II-B1 — merged and exact-head verified (2026-08-01)
+## HISTORICAL — PARTIALLY SUPERSEDED — C3-II-B1 merged and exact-head verified (2026-08-01)
+
+> The PR #163 closure facts and evidence below stand. The surrounding lifecycle
+> block is **superseded**: `C3-II-B3` has since merged as PR #167, the
+> artifact-finalization hardening merged as PR #168, and C3 is
+> `COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`.
 
 ```text
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -285,7 +486,10 @@ removed write serialization, removed in-transaction re-read, primary-only
 identity check, abandoning ambiguous pairs) were each confirmed to fail the
 suite.
 
-## What is authorized next — C3-II-B2 only, after this decision PR merges
+## HISTORICAL — SUPERSEDED — what was authorized next at the CR-006 decision (C3-II-B2 only)
+
+> Superseded by § *What is authorized next* at the top of this file. `C3-II-B2`
+> merged as PR #166 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`.
 
 ```text
 C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
@@ -793,13 +997,13 @@ Completed evidence: `docs/backend-baseline-failure-triage.md` §17.5.
 
 None of these is activated here.
 
-- `CR-004` — SQLite backup transaction-consistency investigation — remains a separate `needs evidence` row and is **not active**. It is unresolved, so `C3-II-B3` stays blocked.
-- Restore product decision and implementation remains **open**.
-- Final macOS packaging and user-ready launch remains **open**.
+- `CR-004` is **accepted and implemented**; no change request remains in `needs evidence`.
+- The Restore **product decision is complete** — `CR-010`, ADR 0016, launcher-assisted. Restore **implementation** remains open and Restore is **not implemented**.
+- Final macOS packaging and user-ready launch remains **open** and **not completed**.
 - Installation verification remains **open**.
-- Packaged update flow and update smoke remain **open**.
-- Full release-candidate smoke remains **open**.
-- C1 and C2 are **complete**. C3-I, C3-II-A and C3-II-B1 are merged and closed, but C3 is **incomplete**: CR-009 is accepted and implemented for report documents only. `CR-006` is accepted, so the only authorized next task is `C3-II-B2`, after the CR-006 decision PR merges; `C3-II-B3` remains blocked by CR-004. C4 remains **inactive** and still `NEEDS PRODUCT DECISION`.
+- Packaged update flow and update smoke remain **open** and **not completed**.
+- Full release-candidate smoke remains **open** and **not completed**.
+- C1 and C2 are **complete**. C3 is `COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`: C3-I, C3-II-A, C3-II-B1, C3-II-B2 and C3-II-B3 are all merged, and the artifact-finalization hardening merged as PR #168. `CR-004`, `CR-006` and `CR-009` are accepted and implemented. C4 has an accepted product decision and **no implementation**; `C4-I` is the only authorized future runtime slice, and it is authorized only after this documentation PR merges.
 - Continuing documentation accuracy remains an ongoing obligation.
 
 **Product release readiness is not claimed.**

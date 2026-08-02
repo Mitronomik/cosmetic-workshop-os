@@ -31,7 +31,7 @@ Authorization state of each slice (current, updated 2026-07-28):
 C2 — COMPLETED
 ```
 
-`C3-I — Read-only AuditLog workspace` has since merged as PR #159 and is `DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — Atomic workshop-profile AuditLog coverage` is implemented on its PR branch and not merged; C3 remains incomplete because `C3-II-B — File-backed artifact AuditLog semantics` is still `NEEDS PRODUCT DECISION — NOT AUTHORIZED`. Durable contract: `docs/audit-log.md`. `C4` remains inactive. Product release readiness is not claimed.
+**C3 has since completed.** C3-I (PR #159), C3-II-A (PR #161), C3-II-B1 (PR #163), C3-II-B2 (PR #166) and C3-II-B3 (PR #167) are all `DONE — MERGED AND EXACT-HEAD VERIFIED`; `CR-009`, `CR-006` and `CR-004` are accepted and implemented; and the C3 artifact-finalization hardening merged as PR #168 (merge commit `867afeb0967637d07172f88c95e02e9bc500a311`), so `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`. Durable contract: `docs/audit-log.md`. `C4` has an accepted product decision — `CR-010`, launcher-assisted Restore, ADR 0016 — and no implementation; Restore is `NOT IMPLEMENTED`. Product release readiness is not claimed. None of this reopens the C2 decision recorded here.
 
 **Relationship to ADR 0011.** ADR 0011 remains the authoritative C1 tax-setting decision and now records `C1-I` as merged and verified — PR #149, final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, merged `2026-07-27T19:44:53Z`, exact-head `/settings` smoke `PASS — 146 checks / 0 failures`. ADR 0012 does not reopen `CR-007`; it defines the C2 calculation, confirmation-context, and snapshot contract.
 

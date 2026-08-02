@@ -1,8 +1,245 @@
 # Handoff
 
-## C3 artifact-finalization hardening handoff — implemented on its PR branch, open and unmerged (2026-08-02)
+## C3 closed and hardened; C4 Restore decided as launcher-assisted (2026-08-02)
 
-> This is the single current authoritative lifecycle conclusion.
+> This is the single current authoritative lifecycle conclusion. Every earlier
+> section in this file is a historical record of its own date.
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+
+CR-004 — ACCEPTED AND IMPLEMENTED
+CR-006 — ACCEPTED AND IMPLEMENTED
+CR-009 — ACCEPTED AND IMPLEMENTED
+
+C3 artifact-finalization hardening
+— DONE — MERGED AND EXACT-HEAD VERIFIED
+— PR #168
+— final reviewed head 6c57c7f5ba851ce2124577268baeda07d19ce4ae
+— merge commit 867afeb0967637d07172f88c95e02e9bc500a311
+
+C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
+
+CR-010 — Launcher-assisted Restore semantics
+— ACCEPTED — NOT IMPLEMENTED
+
+C4-I — Launcher-owned restore safety engine
+— AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES
+— NOT IMPLEMENTED
+
+C4-II — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
+
+C4 — ACTIVE
+C4 product decision — COMPLETE
+C4 implementation — NOT STARTED
+Restore — NOT IMPLEMENTED
+macOS packaging — NOT COMPLETED
+safe packaged update flow — NOT COMPLETED
+full release-candidate smoke — NOT COMPLETED
+Product release readiness — NOT CLAIMED
+```
+
+### PR #168 — merged and exact-head verified
+
+`C3 hardening — Separate artifact verification from AuditLog persistence` merged
+into `main`:
+
+```text
+Final reviewed and exact-head-smoke-tested head:
+6c57c7f5ba851ce2124577268baeda07d19ce4ae
+
+Merge commit:
+867afeb0967637d07172f88c95e02e9bc500a311
+
+Merged at:
+2026-08-02T08:34:02Z
+```
+
+The final reviewed head is an ancestor of the merge commit, and the merge commit
+is an ancestor of `origin/main`. **PR #168 is not open, not unmerged, and no
+longer branch-only**, so merged `main` can no longer report an unverified
+document or export as successfully created.
+
+**Accepted merged PR #168 evidence — not re-executed in the closure
+documentation pull request:**
+
+| Check | Accepted result |
+|---|---|
+| Complete backend | `1826 passed` |
+| Complete root suite | `1843 passed` |
+| Launcher | `17 passed` |
+| Baseline node IDs | `1804` preserved / `0` lost / `39` added |
+| Frontend | all `21` `test:*` scripts passed |
+| Frontend production build | `PASS` |
+| `frontend/src/main.ts` | `6399` lines |
+| Final independent audit | `P0 — none`, `P1 — none`, `P2 — documented only` |
+| Exact-head launcher/API/browser smoke | `PASS` |
+
+**Accepted hardened behaviour.** Report-document and JSON-export finalization use
+typed, artifact-specific results. `recorded` means the artifact was verified and
+its AuditLog event committed; `audit_pending` means the artifact was verified but
+AuditLog persistence did not commit; `artifact_invalid` means mandatory
+verification did not prove the artifact authoritative. Only `recorded` and
+`audit_pending` may produce HTTP `201`; `artifact_invalid` produces a fixed
+structured HTTP `500`. An invalid artifact is not deleted, is not audited,
+remains unresolved and is counted for bounded reconciliation. Filenames, paths,
+reasons, operation IDs, schema versions, entity counts, verifier details and
+SQLite details are not exposed through safe error responses. `CR-004`, `CR-006`
+and `CR-009` are not reopened.
+
+### CR-010 — launcher-assisted Restore accepted
+
+**MVP Restore is launcher-assisted.** Restore is not performed by a running
+FastAPI backend endpoint and is not implemented as an ordinary SPA mutation. The
+launcher owns process shutdown, backup validation, the pre-restore safety copy,
+staging, atomic database replacement, post-restore startup verification,
+rollback and incomplete-restore recovery. Support-assisted recovery remains a
+fallback for failures that cannot be resolved automatically, never the primary
+MVP workflow. The user must never need Git, Python, Node.js, Docker, SQLite
+tools, GitHub or a terminal.
+
+Load-bearing points for the next session:
+
+- Restore is **whole-database only**, from one locally selected SQLite backup;
+  the selected file is read-only input and is never modified, renamed, migrated,
+  deleted or rewritten;
+- validation runs from a **staged read-only copy** and must complete **before any
+  mutation, replacement, deletion or migration of the current working
+  database**; the isolated operation directory, the durable operation record,
+  launcher-owned staging files and local technical logs are Restore
+  infrastructure, not such a mutation. `PRAGMA quick_check = ok` alone is never
+  sufficient proof;
+- a newer-than-current schema is **rejected before replacement**; an older known
+  schema is migrated by the normal startup migration system on the **restored
+  working copy only**;
+- a **verified `before_restore` safety copy is mandatory**, taken through the
+  accepted ADR 0015 SQLite Online Backup engine — never `shutil.copy2`;
+- replacement goes through launcher-owned staging and a **same-directory atomic
+  replacement boundary**; filesystem replacement and SQLite are never claimed to
+  be one transaction;
+- exactly one **narrow launcher-owned durable Restore operation record** lives
+  outside the working database and is recovered **before** the ordinary backend
+  starts; an interrupted Restore is never ignored;
+- any failure after replacement triggers **automatic rollback**, and a successful
+  rollback is never reported as a successful Restore;
+- the browser UI is **not** opened into the workspace until `completed` has been
+  durably recorded;
+- **no Restore AuditLog event is authorized**, and `restore.completed` is not
+  implicitly authorized — it needs a separately explicit C4 decision.
+
+### The accepted Restore phase machine
+
+`CR-010` fixes the durable crash-recovery state machine, so `C4-I` implements it
+rather than inventing one. The operation record carries **exactly one
+authoritative field, `phase`**, mutually exclusive. Whether replacement occurred
+and whether rollback completed are **derived** from it and must never be
+persisted as independent authoritative fields.
+
+```text
+prepared
+source_staged
+candidate_validated
+safety_copy_verified
+replacement_intent
+replacement_committed
+verification_in_progress
+completed
+aborted
+rollback_in_progress
+rolled_back
+recovery_blocked
+```
+
+No alias, no prose-only synonym, no thirteenth phase. Allowed transitions:
+
+```text
+prepared → source_staged → candidate_validated → safety_copy_verified
+→ replacement_intent → replacement_committed → verification_in_progress
+→ completed
+
+prepared | source_staged | candidate_validated | safety_copy_verified
+→ aborted
+
+replacement_intent | replacement_committed | verification_in_progress
+→ rollback_in_progress
+
+rollback_in_progress → rolled_back
+rollback_in_progress → recovery_blocked
+```
+
+Terminal: `completed`, `aborted`, `rolled_back`, `recovery_blocked`. A new
+attempt is a new operation with a new operation ID; a terminal record is never
+reactivated.
+
+`replacement_intent` is durably recorded **immediately before** the atomic
+replacement boundary and deliberately marks an ambiguous crash window:
+
+```text
+A persisted replacement_intent is treated as though replacement may have
+occurred, even when the current working file appears unchanged.
+```
+
+The launcher must never guess from timestamps, size, filenames, inode identity,
+migration version or the apparent contents of the working database. The safe
+outcome is rollback from the verified safety copy. `replacement_committed` and
+`verification_in_progress` behave the same way: both leave the restored database
+provisional, both block ordinary startup, both recover through rollback. Only a
+durably recorded `completed` makes the restored database authoritative, and only
+then may the browser open. `rolled_back` is a **failed** Restore;
+`recovery_blocked` never permits ordinary startup.
+
+Every transition is persisted through one documented, tested, atomic publication
+boundary before the next dependent action; an in-place truncate-and-rewrite of
+the only record is insufficient. Every persisted phase has exactly one required
+startup behaviour, fixed by the recovery matrix.
+
+Durable decision and complete matrix:
+`docs/decisions/0016-launcher-assisted-restore.md` § 7. Complete operational
+contract: `docs/backup-and-restore.md` § 7. Architecture boundaries:
+`docs/architecture.md` § 12.4. `C4-I` implementation obligation:
+`docs/implementation-plan.md` § C4-I.
+
+### Next steps
+
+After this documentation pull request merges, implement only:
+
+```text
+C4-I — Launcher-owned restore safety engine
+```
+
+`C4-I` must implement the accepted phase machine and recovery matrix **exactly**.
+It must not rename phases, omit `replacement_intent`, infer replacement from
+filesystem appearance, start the ordinary backend from an unsafe phase, expose
+the browser before durable `completed`, treat `rolled_back` as successful
+Restore, recover `recovery_blocked` by guessing, use independent contradictory
+replacement/rollback booleans, or use an in-place rewrite as the sole
+authoritative operation-state persistence mechanism. Any deviation needs a new
+explicit documentation decision first.
+
+Do not implement `C4-II`, `C4-III`, packaging, the updater or release smoke
+through `C4-I`. Do not start `C4-I` from this unmerged documentation branch, and
+do not assign a future pull request number.
+
+---
+
+## HISTORICAL — PARTIALLY SUPERSEDED — C3 artifact-finalization hardening handoff, while its PR was open (2026-08-02)
+
+> Superseded by the section above. What the hardening and `C3-II-B3` do is
+> unchanged and is the merged behaviour. **Every lifecycle statement in this
+> section is superseded**, including `IMPLEMENTED ON PR BRANCH — NOT MERGED`,
+> `C4 — INACTIVE — NEEDS PRODUCT DECISION`, *"C4 remains inactive until this
+> merges"*, the `C3-II-B3` paragraph describing its pull request as *"open and
+> unmerged"*, and the *"Known follow-up"* paragraph. PR #167 merged at
+> `7af53a3305fa9fdb984d4c478e1186685fbb6727`, PR #168 merged at
+> `867afeb0967637d07172f88c95e02e9bc500a311`, and `CR-010` has since decided C4
+> Restore.
 
 ```text
 C1 — COMPLETED
@@ -157,8 +394,13 @@ build `PASS`.
 merges. Do not resolve `CR-004`, do not implement `C3-II-B3`, do not activate
 C4, and do not claim release readiness.
 
-## CR-006 decision handoff — accepted; C3-II-B2 authorized after merge (2026-08-01)
+## HISTORICAL — PARTIALLY SUPERSEDED — CR-006 decision handoff; C3-II-B2 authorized after merge (2026-08-01)
 
+> **Every lifecycle statement in this section is superseded** by the current
+> section at the top of this file — including `C3 — INCOMPLETE`,
+> `C4 — INACTIVE — NEEDS PRODUCT DECISION` and *"`C3-II-B3` stays blocked"*. The
+> accepted `CR-006` decision itself stands and is not reopened.
+>
 > Superseded by the section above for the `C3-II-B2` status line only; every
 > other conclusion here stands. The `C3-II-B1` closure handoff below remains
 > accurate for B1 itself, but its closing line "B2 and B3 remain unauthorized"
@@ -249,12 +491,14 @@ list and status behavior under the same read failures is likewise recorded and
 `needs evidence`, so `C3-II-B3` stays blocked. C3 remains incomplete, C4 remains
 inactive, and **product release readiness is not claimed**.
 
-## C3-II-B1 closure handoff — merged and exact-head verified (2026-08-01)
+## HISTORICAL — PARTIALLY SUPERSEDED — C3-II-B1 closure handoff (2026-08-01)
 
-> This is the authoritative B1 lifecycle conclusion. Every earlier B1
-> branch-head section in this file is historical and superseded. Its `CR-006`
-> and `C3-II-B2` lines below record the state **before** the CR-006 decision and
-> are superseded by the CR-006 handoff above.
+> The PR #163 closure facts and evidence stand and remain the authoritative B1
+> record. **Every surrounding lifecycle statement is superseded** by the current
+> section at the top of this file — including `C3 — INCOMPLETE` and
+> `C4 — INACTIVE — NEEDS PRODUCT DECISION`. Its `CR-006` and `C3-II-B2` lines
+> record the state **before** the CR-006 decision. Every earlier B1 branch-head
+> section in this file is historical and superseded.
 
 ```text
 C1 — COMPLETED

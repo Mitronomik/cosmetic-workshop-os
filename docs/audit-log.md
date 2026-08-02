@@ -35,16 +35,21 @@ C1 — COMPLETED
 C2 — COMPLETED
 C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-009 — ACCEPTED
+CR-009 — ACCEPTED AND IMPLEMENTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
-C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
-C3 — INCOMPLETE
-C4 — INACTIVE — NEEDS PRODUCT DECISION
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3 artifact-finalization hardening — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
+CR-010 — ACCEPTED — NOT IMPLEMENTED
+C4 — ACTIVE
+C4 product decision — COMPLETE
+C4 implementation — NOT STARTED
+Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-`C3-II-A — Atomic workshop-profile AuditLog coverage` merged as PR #161 and is closed with honest exact-head attribution in § 16.7. `CR-009` accepts the durable file-backed partial-success and reconciliation contract. Its report-document slice `C3-II-B1` merged as PR #163 — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`, final exact-head launcher smoke `PASS`, no unresolved P0 or P1 findings — so `report_document.created` exists on merged `main`. `CR-006` was then accepted and its export slice `C3-II-B2` merged as PR #166 — final reviewed head `530b3a112b937f8955dd5768741f0ec403809b5a`, merge commit `844526ae4057a454312f790abcaf21be518cdbd9` — so `export.created` also exists on merged `main`. `CR-004` is now resolved (ADR 0015) and its manual-backup slice `C3-II-B3` adds `backup.created`; that slice is **implemented on its PR branch and not merged**.
+`C3-II-A — Atomic workshop-profile AuditLog coverage` merged as PR #161 and is closed with honest exact-head attribution in § 16.7. `CR-009` accepts the durable file-backed partial-success and reconciliation contract. Its report-document slice `C3-II-B1` merged as PR #163 — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`, final exact-head launcher smoke `PASS`, no unresolved P0 or P1 findings — so `report_document.created` exists on merged `main`. `CR-006` was then accepted and its export slice `C3-II-B2` merged as PR #166 — final reviewed head `530b3a112b937f8955dd5768741f0ec403809b5a`, merge commit `844526ae4057a454312f790abcaf21be518cdbd9` — so `export.created` also exists on merged `main`. `CR-004` was resolved (ADR 0015) and its manual-backup slice `C3-II-B3` merged as PR #167 — final reviewed head `259697805660fd4dc37e6ac5f50567d48037be94`, merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727` — so `backup.created` exists on merged `main` too. The **C3 artifact-finalization hardening** then merged as PR #168 — final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z` — so all three artifact kinds separate artifact verification from AuditLog persistence. **C3 is complete and hardened.**
 
 ### 1.1. Implementation modules
 
@@ -1070,13 +1075,13 @@ Because `display_summary` is derived from `action` and never from the raw stored
 C3-II-A — Atomic workshop-profile AuditLog coverage
 DONE — MERGED AND EXACT-HEAD VERIFIED
 
-CR-009 — ACCEPTED
+CR-009 — ACCEPTED AND IMPLEMENTED
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
-C3-II-B3 — BLOCKED BY CR-004 — NOT AUTHORIZED
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
-`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document slice B1 merged as PR #163 and JSON-export slice B2 merged as PR #166, so both are audited on merged main. `CR-004` is now resolved by ADR 0015, and manual-backup slice B3 is **implemented on its PR branch and not merged** — so manual backup creation is not yet audited on merged main.
+`C3-II-A` covers the pure SQLite workshop-profile mutation and its AuditLog row on merged main. CR-009 decides the durable artifact-primary, partial-success and reconciliation semantics. Report-document slice B1 merged as PR #163, JSON-export slice B2 as PR #166 and manual-backup slice B3 as PR #167, so **the write-coverage gap named above is closed on merged main**. The PR #168 hardening then made the three-outcome finalization rule uniform across all three artifact kinds.
 
 ---
 
@@ -1201,8 +1206,8 @@ was executed on `2848880f2009158749398aec7d504c0364336ba9`. The final head is ba
 - A true process `source` remains deferred; only `actor_type` exists.
 - The detail endpoint remains superseded; there is no metadata or raw JSON viewer.
 - Historical rows are shown, never repaired.
-- Restore, packaging, installation verification, the update flow and full release-candidate smoke remain open.
-- C4 remains `INACTIVE — NEEDS PRODUCT DECISION`; product release readiness is not claimed.
+- Restore implementation, packaging, installation verification, the update flow and full release-candidate smoke remain open. *(The Restore **product decision** has since been made as `CR-010`; Restore itself remains `NOT IMPLEMENTED`.)*
+- `C4 — ACTIVE`; `C4 product decision — COMPLETE`; `C4 implementation — NOT STARTED`; product release readiness is not claimed.
 
 ---
 
@@ -1504,7 +1509,9 @@ migrations, and must not depend on a ledger table that may not yet exist.
 ```text
 C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3 artifact-finalization hardening — DONE — MERGED AND EXACT-HEAD VERIFIED
+C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 ```
 
 C3-II-B2 merged as PR #166 (merge commit
@@ -1525,7 +1532,12 @@ collapsed: finalization reports `recorded`, `audit_pending` or `artifact_invalid
 rather than an ID-or-nothing, so an artifact that failed verification can never be
 reported as a created backup with a merely pending Journal entry.
 
-### C3 artifact-finalization hardening — implemented on the PR branch, not merged
+### C3 artifact-finalization hardening — merged and exact-head verified
+
+Merged as **PR #168** — final reviewed and exact-head-smoke-tested head
+`6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit
+`867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`. The
+behaviour described below is on merged `main`.
 
 B1 and B2 shipped before B3 established the three-outcome finalization rule, and
 both collapsed two different facts into one `int | None`. `None` meant *either*
@@ -1632,7 +1644,28 @@ added to the suffix allowlist. `C3-II-B2` scope, verification contract and
 non-goals: `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
 coverage*.
 
-`C3-II-B3` may reuse the ledger only after CR-004 resolves SQLite backup
-consistency behavior; `CR-004` remains open and unchanged. C3 remains
-incomplete; C4, Restore, packaging, installation, update and release-candidate
-work remain inactive; product release readiness is not claimed.
+`CR-004` has since been resolved and accepted (ADR 0015), and `C3-II-B3` reused
+the ledger and merged as PR #167. **C3 is complete and hardened.** Restore
+implementation, packaging, installation, update and release-candidate work remain
+open, and product release readiness is not claimed.
+
+### 17.2. Restore AuditLog boundary — nothing is authorized
+
+`CR-010` decides launcher-assisted Restore (`docs/decisions/0016-launcher-assisted-restore.md`).
+It authorizes **no Restore AuditLog event**, and in particular
+`restore.completed` is **not implicitly authorized**.
+
+A Restore AuditLog event requires a **separately explicit C4 decision**, because
+the database that would contain the event is itself being replaced and migrated:
+
+- writing the event into the database being discarded records nothing;
+- writing it into the restored database asserts a business action that database
+  never performed.
+
+The launcher's durable Restore operation state is **filesystem recovery
+metadata**, not AuditLog. It lives outside the working database, has a different
+owner, a different lifetime and a different privacy contract, and it must never
+be surfaced in `Журнал действий` or through `GET /api/audit-logs`.
+
+No action, entity type, metadata key or display vocabulary is reserved for
+Restore by this boundary. `Restore — NOT IMPLEMENTED`.

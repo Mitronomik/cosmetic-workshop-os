@@ -19,8 +19,9 @@ only the first runtime slice after this documentation pull request merges.
 | `C3-II-B2` — JSON export AuditLog coverage | `BLOCKED BY CR-006 — NOT AUTHORIZED` |
 | `C3-II-B3` — manual backup AuditLog coverage | `BLOCKED BY CR-004 — NOT AUTHORIZED` |
 
-`C3` remains **incomplete**. `C4` remains
-`INACTIVE — NEEDS PRODUCT DECISION`. Product release readiness is not claimed.
+*(As recorded on 2026-07-30: `C3` remains **incomplete** and `C4` remains
+`INACTIVE — NEEDS PRODUCT DECISION`. **Both statements are superseded** — see the
+current lifecycle pointer below.)* Product release readiness is not claimed.
 
 > **Current lifecycle pointer — not part of the accepted decision.** The table
 > above records the slice authorization as it stood when this ADR was accepted
@@ -31,14 +32,25 @@ only the first runtime slice after this documentation pull request merges.
 > `2026-08-01T05:30:38Z` — and is `DONE — MERGED AND EXACT-HEAD VERIFIED`.
 > `CR-006` has since been resolved and **accepted** in
 > `docs/decisions/0014-json-export-create-confirmation-semantics.md`, so
-> `C3-II-B2` is now
-> `IMPLEMENTED ON PR BRANCH — NOT MERGED`; its scope
-> is `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
-> coverage*, and nothing in the accepted decision below — including the
-> reserved `export.created` vocabulary and metadata keys — is changed by it.
-> `C3-II-B3` is still blocked by `CR-004`, which remains `needs evidence`; C3 is
-> still incomplete, C4 is still inactive, and product release readiness is still
-> not claimed. Current authority: `state/current-focus.md`.
+> `C3-II-B2` is now `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #166, merge
+> commit `844526ae4057a454312f790abcaf21be518cdbd9`); its scope is
+> `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog coverage*, and
+> nothing in the accepted decision below — including the reserved
+> `export.created` vocabulary and metadata keys — is changed by it. `CR-004` has
+> likewise been resolved and **accepted** in
+> `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`, so
+> `C3-II-B3` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #167, merge commit
+> `7af53a3305fa9fdb984d4c478e1186685fbb6727`). The **C3 artifact-finalization
+> hardening** then merged as PR #168 (final reviewed head
+> `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit
+> `867afeb0967637d07172f88c95e02e9bc500a311`), making finalization report
+> `recorded`, `audit_pending` or `artifact_invalid` for all three artifact kinds;
+> only the first two produce HTTP `201`, and `artifact_invalid` produces a fixed
+> structured HTTP `500`. **`C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND
+> HARDENED`.** No change request remains in `needs evidence`. C4 now has an
+> accepted product decision — `CR-010`, launcher-assisted Restore, ADR 0016 —
+> and no implementation; Restore remains **not implemented** and product release
+> readiness is still not claimed. Current authority: `state/current-focus.md`.
 
 ## Context
 
@@ -599,11 +611,11 @@ It may reuse the accepted ledger only after `CR-006` determines export
 create-response fallback reachability and accepted confirmation semantics.
 This ADR neither resolves nor implements `CR-006`.
 
-> **Superseded status, 2026-08-01 — the scope above is unchanged.** `CR-006` is
-> now `accepted` (ADR 0014), so this slice is
-> `IMPLEMENTED ON PR BRANCH — NOT MERGED`. Full
-> scope: `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
-> coverage*.
+> **Superseded status — the scope above is unchanged.** `CR-006` is
+> `accepted` (ADR 0014), and this slice is now
+> `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #166, merge commit
+> `844526ae4057a454312f790abcaf21be518cdbd9`). Full scope:
+> `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog coverage*.
 
 ### C3-II-B3 - Manual backup AuditLog coverage
 
@@ -615,6 +627,13 @@ BLOCKED BY CR-004 — NOT AUTHORIZED
 
 It may reuse the accepted ledger only after `CR-004` determines SQLite backup
 consistency behavior. This ADR neither resolves nor implements `CR-004`.
+
+> **Superseded status — the scope above is unchanged.** `CR-004` is `accepted`
+> (ADR 0015), and this slice is now `DONE — MERGED AND EXACT-HEAD VERIFIED`
+> (PR #167, merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727`). The C3
+> artifact-finalization hardening then merged as PR #168, so all three artifact
+> kinds separate artifact verification from AuditLog persistence.
+> **`C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`.**
 
 ## Considered alternatives
 

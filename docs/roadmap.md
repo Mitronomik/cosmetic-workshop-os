@@ -72,12 +72,17 @@ Updated `2026-07-30`. This block records only the completion-window status; unre
   - `CR-004 — SQLite backup transaction consistency`: **`ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)`**. Contract: `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`. The raw `shutil.copy2` of the live main database file reproducibly omitted **all** committed-but-uncheckpointed WAL data while returning `quick_check = ok`, produced mixed transaction state including never-committed rows with the stock page cache, and in one scenario produced a structurally corrupt file. The source database was never mutated. Replaced by the SQLite Online Backup API with bounded busy behaviour.
   - `C3-II-B3 — Manual backup AuditLog coverage`: **`DONE — MERGED AND EXACT-HEAD VERIFIED`** (PR #167, merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727`, final reviewed head `259697805660fd4dc37e6ac5f50567d48037be94`). One bounded implementation PR, reusing the existing `artifact_audit_operations` ledger with no new migration, and carrying the `CR-004` backup-engine correction. Full scope: `docs/implementation-plan.md` § *C3-II-B3*.
   - The merged read API still exposes `actor_type` / `actor_label` rather than `source`, and only backend-owned safe `display_summary`; raw summary and metadata remain prohibited. Durable contract: `docs/audit-log.md`.
-  - **C3 artifact-finalization hardening — `IMPLEMENTED ON PR BRANCH — NOT MERGED`.** Separates artifact verification failure from AuditLog persistence failure for report documents and JSON exports. `C3-II-B3` corrected this for manual backups; `report_document_audit.py` and `export_audit.py` returned `int | None` and mapped every `None` to `201 pending`, so an artifact that failed mandatory verification could be reported as successfully created. Both finalizers now return artifact-specific typed results with `recorded`, `audit_pending` and `artifact_invalid`, and only the first two produce a successful create. One bounded slice on `claude/c3-hardening-artifact-finalization`, reusing the existing ledger with no new migration. **C4 must not be activated until it merges or is explicitly accepted as a known release blocker.**
-- **C4 — Restore и recovery: `INACTIVE`.** Still `NEEDS PRODUCT DECISION`, and additionally gated on the C3 hardening follow-up above.
+  - **C3 artifact-finalization hardening — `DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #168, final reviewed and exact-head-smoke-tested head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`. It separates artifact verification failure from AuditLog persistence failure for report documents and JSON exports, applying the rule `C3-II-B3` established for manual backups. On merged `main`, both finalizers return artifact-specific typed results: `recorded` (verified, event committed), `audit_pending` (verified, AuditLog persistence did not commit) and `artifact_invalid` (mandatory verification did not prove the artifact authoritative). Only `recorded` and `audit_pending` may produce HTTP `201`; `artifact_invalid` produces a fixed structured HTTP `500`, and the artifact is not deleted, not audited, left unresolved and counted for bounded reconciliation, with no filename, path, reason, operation ID, schema version, entity count, verifier detail or SQLite detail exposed. It reused the existing ledger with no new migration. Accepted PR #168 evidence, **not re-executed** in the closure documentation PR: complete backend `1826 passed`; complete root suite `1843 passed`; launcher `17 passed`; baseline node IDs `1804` preserved, `0` lost, `39` added; all `21` frontend `test:*` scripts passed; frontend production build `PASS`; `frontend/src/main.ts` `6399` lines; final independent audit `P0 — none`, `P1 — none`, `P2 — documented only`; exact-head launcher/API/browser smoke `PASS`.
+- **C3 — `COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`.**
+- **C4 — Restore и recovery: `ACTIVE`; `C4 product decision — COMPLETE`; `C4 implementation — NOT STARTED`.** `CR-010 — Decide launcher-assisted Restore semantics` is **accepted**: MVP Restore is launcher-assisted, is not a running-backend FastAPI mutation and is not an ordinary SPA mutation, and the launcher owns process shutdown, backup validation, the pre-restore safety copy, staging, atomic database replacement, post-restore startup verification, rollback and incomplete-restore recovery. Support-assisted recovery stays a fallback; the user never needs Git, Python, Node.js, Docker, SQLite tools, GitHub or a terminal. Durable decision: `docs/decisions/0016-launcher-assisted-restore.md`; complete contract: `docs/backup-and-restore.md`.
+  - `C4-I — Launcher-owned restore safety engine`: **`AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED`**. The only authorized runtime slice.
+  - `C4-II — User-facing launcher Restore flow`: **`PLANNED — NOT AUTHORIZED`**.
+  - `C4-III — Restore end-to-end verification and lifecycle closure`: **`PLANNED — NOT AUTHORIZED`**.
+  - **Restore is `NOT IMPLEMENTED`.** No Restore API endpoint, button, file picker or `restore.completed` AuditLog event is authorized.
 
 `C2-III` was a planning umbrella; it was subdivided into exactly the two runtime slices above, and both are merged. **C2 is COMPLETED**: `C2-III-B` was reviewed, exact-head verified and merged, and its active lifecycle is closed here.
 
-C3-I, C3-II-A, C3-II-B1, C3-II-B2 and C3-II-B3 are all merged and closed. `CR-004` is resolved, and with PR #167 merged, **C3 is `COMPLETED` on merged `main`**. CR-009 is accepted and implemented on merged `main` for report documents, JSON exports and manual backups. The C3 artifact-finalization hardening slice is implemented on `claude/c3-hardening-artifact-finalization` and is **not merged**. C4 stays inactive, Restore stays unimplemented, and product release readiness is **not** claimed.
+C3-I, C3-II-A, C3-II-B1, C3-II-B2 and C3-II-B3 are all merged and closed, and the artifact-finalization hardening merged as PR #168, so **C3 is `COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`**. `CR-004`, `CR-006` and `CR-009` are accepted and implemented on merged `main` for report documents, JSON exports and manual backups. C4 now has an accepted product decision and no implementation. Restore stays unimplemented, macOS packaging, the safe packaged update flow and the full release-candidate smoke stay **not completed**, and product release readiness is **not** claimed.
 
 ## 2. Главный продуктовый принцип
 
@@ -2379,6 +2384,16 @@ Example error:
 ---
 
 ## PR23 — Export and restore foundation
+
+> **HISTORICAL — PARTIALLY SUPERSEDED.** The export half of this entry shipped and
+> is documented in `docs/export.md`. The **restore half is superseded** by
+> `CR-010` (2026-08-02): the `POST /api/restore` sketch below is **not** the
+> accepted design and must not be implemented. MVP Restore is **launcher-assisted**
+> — the ordinary backend is stopped while the working database is replaced, so no
+> running-backend Restore mutation and no SPA-owned replacement is authorized, and
+> `restore backup if implemented` is not a Settings → Data action. Restore is
+> **not implemented**. Accepted contract: `docs/backup-and-restore.md`; decision:
+> `docs/decisions/0016-launcher-assisted-restore.md`.
 
 ### Goal
 

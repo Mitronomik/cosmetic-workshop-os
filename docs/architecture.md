@@ -1335,7 +1335,7 @@ onboarding
 >
 > **Сырой сохранённый `summary` тоже не отдаётся.** API возвращает `display_summary` — безопасное русское значение, которое backend-презентер выводит из `action`. Исторические строки не переписываются. Полный контракт: `docs/audit-log.md`.
 >
-> **Lifecycle boundary.** C3-I (PR #159), C3-II-A (PR #161) and C3-II-B1 (PR #163) are all `DONE — MERGED AND EXACT-HEAD VERIFIED`. C3 remains incomplete. `CR-009` accepts the cross-resource contract for user-created manual backups, JSON exports and report documents: a verified artifact is authoritative; audit-finalization failure preserves it and returns truthful HTTP `201` partial success; one bounded `artifact_audit_operations` ledger prepares the operation and provides idempotent finalization/reconciliation by `operation_id`. C3-II-B1 (report documents) is `DONE — MERGED AND EXACT-HEAD VERIFIED` — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`: migration `0020_artifact_audit_operations` creates the ledger, report-document creation reserves and commits a `prepared` row before writing either file, and one write-serialized transaction commits the `report_document.created` AuditLog row together with the `audited` transition. Bounded reconciliation runs after migrations at normal startup and once before the next document create; there is no background retry. `CR-006` is accepted and its slice C3-II-B2 merged as PR #166, so JSON export creation is audited on merged `main`. `CR-004` is now **accepted** (`PRODUCT DEFECT — BACKUP CONSISTENCY`, `HIGH`): the raw `shutil.copy2` of the live main database file silently omitted all committed-but-uncheckpointed WAL data while returning `quick_check = ok`, and produced mixed transaction state including never-committed rows. Backups now use the SQLite Online Backup API with bounded busy behaviour, and a manual backup carries its own `prepared` ledger row inside the snapshot so it can prove which operation created it. C3-II-B3 is `IMPLEMENTED ON PR BRANCH — NOT MERGED`; manual backup creation is not yet audited on merged `main`. Full decisions: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`, `docs/decisions/0014-json-export-create-confirmation-semantics.md` and `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`.
+> **Lifecycle boundary.** C3-I (PR #159), C3-II-A (PR #161), C3-II-B1 (PR #163), C3-II-B2 (PR #166) and C3-II-B3 (PR #167) are all `DONE — MERGED AND EXACT-HEAD VERIFIED`, and the C3 artifact-finalization hardening merged as PR #168 (final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`), so `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`. `CR-009` accepts the cross-resource contract for user-created manual backups, JSON exports and report documents: a verified artifact is authoritative; audit-finalization failure preserves it and returns truthful HTTP `201` partial success; one bounded `artifact_audit_operations` ledger prepares the operation and provides idempotent finalization/reconciliation by `operation_id`. C3-II-B1 (report documents) is `DONE — MERGED AND EXACT-HEAD VERIFIED` — final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`: migration `0020_artifact_audit_operations` creates the ledger, report-document creation reserves and commits a `prepared` row before writing either file, and one write-serialized transaction commits the `report_document.created` AuditLog row together with the `audited` transition. Bounded reconciliation runs after migrations at normal startup and once before the next document create; there is no background retry. `CR-006` is accepted and its slice C3-II-B2 merged as PR #166, so JSON export creation is audited on merged `main`. `CR-004` is now **accepted** (`PRODUCT DEFECT — BACKUP CONSISTENCY`, `HIGH`): the raw `shutil.copy2` of the live main database file silently omitted all committed-but-uncheckpointed WAL data while returning `quick_check = ok`, and produced mixed transaction state including never-committed rows. Backups now use the SQLite Online Backup API with bounded busy behaviour, and a manual backup carries its own `prepared` ledger row inside the snapshot so it can prove which operation created it. C3-II-B3 merged as PR #167, so manual backup creation is audited on merged `main`. The PR #168 hardening then made artifact verification and AuditLog persistence separate typed results for report documents and JSON exports as well: `recorded` and `audit_pending` may produce HTTP `201`, while `artifact_invalid` produces a fixed structured HTTP `500` and leaves the artifact undeleted, unaudited, unresolved and counted for bounded reconciliation, exposing no filename, path, reason, operation ID, schema version, entity count, verifier detail or SQLite detail. Full decisions: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`, `docs/decisions/0014-json-export-create-confirmation-semantics.md` and `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`.
 
 ## File-backed artifact audit boundary
 
@@ -2245,6 +2245,11 @@ scripts/
   restore_backup.sh
 ```
 
+> **`restore_backup.sh` is a developer/support script sketch, not the product
+> Restore workflow.** `CR-010` decided that MVP Restore is **launcher-assisted**
+> (§ 12.4), and a terminal command must never become the permanent workflow for
+> the product user. Restore is **not implemented**.
+
 ---
 
 # 11.5. Install docs
@@ -2308,15 +2313,243 @@ Before schema migration:
 
 ---
 
-# 12.4. Restore
+# 12.4. Restore — launcher-assisted (CR-010, decided 2026-08-02)
 
-Restore может быть ограничен в MVP, но должен быть предусмотрен.
+> **Status: decided, `NOT IMPLEMENTED`.** This section describes accepted
+> architecture, not shipped behaviour. Durable decision:
+> `docs/decisions/0016-launcher-assisted-restore.md`; complete product contract:
+> `docs/backup-and-restore.md`.
+>
+> ```text
+> C4 — ACTIVE
+> C4 product decision — COMPLETE
+> C4 implementation — NOT STARTED
+> CR-010 — ACCEPTED — NOT IMPLEMENTED
+> C4-I — AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+> C4-II — PLANNED — NOT AUTHORIZED
+> C4-III — PLANNED — NOT AUTHORIZED
+> Restore — NOT IMPLEMENTED
+> ```
 
-Если restore не реализован полностью, docs должны честно объяснять:
+```text
+MVP Restore is launcher-assisted.
 
-- где лежит backup;
-- как восстановить вручную;
-- когда обращаться к разработчику.
+Restore is not performed by a running FastAPI backend endpoint and is not
+implemented as an ordinary SPA mutation.
+
+The launcher owns process shutdown, backup validation, the pre-restore safety
+copy, staging, atomic database replacement, post-restore startup verification,
+rollback, and incomplete-restore recovery.
+```
+
+Support-assisted recovery remains a **fallback** for failures that cannot be
+resolved automatically; it is not the primary MVP workflow. The user must never
+need Git, Python, Node.js, Docker, SQLite tools, GitHub or a terminal.
+
+## Launcher ownership and the closed-backend boundary
+
+The launcher already owns the lifecycle boundary Restore requires: it resolves
+the user data directory, takes the `before_migration` backup, runs migrations
+before the API is served, starts the uvicorn child against an explicit
+`COSMETIC_WORKSHOP_DB_PATH`, and opens the browser only after startup succeeds.
+Restore additionally requires that **no backend is running at all**, which a
+backend request cannot arrange for itself.
+
+The launcher therefore must prevent a second instance, stop the current backend
+cleanly, confirm the database is out of active application use, perform Restore
+outside the ordinary API process, start the backend only at the verification
+stage, and open the browser only after complete success.
+
+Architecturally excluded:
+
+- replacing the database from a running FastAPI request;
+- frontend coordination as the locking mechanism;
+- a hidden terminal command as the user workflow;
+- direct database replacement while Uvicorn still has the database open.
+
+## Validation before working-database mutation
+
+```text
+The staged candidate must pass the complete Restore validation contract
+before any mutation, replacement, deletion or migration of the current
+working database.
+```
+
+Before candidate validation completes, the launcher may create only the isolated
+launcher-owned restore-operation directory, the narrow durable operation record,
+launcher-owned staging files inside that directory, and local technical logs that
+follow the accepted privacy contract. Those writes are **Restore infrastructure**
+and do not mutate the current working database or business data.
+
+The selected backup is validated from a **staged read-only copy**. Validation
+covers regular-file resolution,
+symlink and path-escape refusal, a read-only SQLite open, non-emptiness,
+structural checks, the migration-history table, a known ordered migration-ID
+prefix with no unknown, duplicated, reordered or skipped IDs, rejection of a
+newer-than-current schema, required tables for the recorded schema level,
+recognizable `cosmetic-workshop-os` workspace identity, and independence from any
+external `-wal`, `-shm` or rollback-journal file. It mutates no business data and
+silently repairs nothing.
+
+`PRAGMA quick_check = ok` alone is **never** sufficient proof — see the `CR-004`
+evidence in `docs/backup-and-restore.md`. The selected source file is read-only
+input and is never modified, renamed, migrated, deleted or rewritten. Restore is
+whole-database only.
+
+## Mandatory pre-restore safety copy
+
+Before replacement, the launcher creates and **verifies** a transactionally
+consistent copy of the current database through the accepted SQLite Online Backup
+engine (ADR 0015) under the canonical reason `before_restore`. `shutil.copy2` is
+not reintroduced for SQLite contents. If the current database exists and the
+safety copy cannot be created and verified, Restore stops before replacing
+anything. The safety copy survives a successful Restore and is never silently
+deleted.
+
+## Staging, atomic replacement and the transaction boundary
+
+```text
+validate request and source path
+→ create an isolated restore-operation directory
+→ copy the selected source into a launcher-owned staging file
+→ validate the staged candidate
+→ create and verify the pre-restore safety copy
+→ persist the restore-operation phase
+→ atomically replace the working database from a file staged in the same
+  filesystem/directory boundary
+→ start the application against the exact restored database path
+→ run migrations when required
+→ verify startup and basic reads
+→ mark Restore completed
+→ clean only launcher-owned temporary staging files
+```
+
+No unrelated foreign file is silently overwritten. The atomic step is the
+same-directory filesystem replacement boundary **only**; startup, migration and
+verification lie outside it. **Filesystem replacement and SQLite do not form one
+database transaction, and no document may claim they do.** That gap is precisely
+why durable operation state and rollback are mandatory rather than optional.
+
+## Durable restore-operation state
+
+Exactly one narrow, launcher-owned Restore operation record lives **outside the
+working database**, because the working database is what is being replaced. It is
+not a workflow engine, job queue, outbox, cloud state store or application-wide
+transaction framework.
+
+It holds only an operation ID, safe relative launcher-owned filenames, **the
+authoritative `phase`** and timestamps — never database contents, client
+information, arbitrary user text, credentials, raw absolute source paths where a
+staged relative identity suffices, or SQL errors and stack traces.
+
+**`phase` is the sole authoritative lifecycle field, and it is mutually
+exclusive.** Whether replacement occurred and whether rollback completed are
+**derived from `phase`**, never persisted as independent authoritative fields
+that could contradict it. The accepted vocabulary is exactly twelve
+lowercase-ASCII values:
+
+```text
+prepared
+source_staged
+candidate_validated
+safety_copy_verified
+replacement_intent
+replacement_committed
+verification_in_progress
+completed
+aborted
+rollback_in_progress
+rolled_back
+recovery_blocked
+```
+
+Terminal phases are `completed`, `aborted`, `rolled_back` and
+`recovery_blocked`. Complete definitions, the transition graph, the crash-safe
+persistence ordering and the startup recovery matrix are in
+`docs/decisions/0016-launcher-assisted-restore.md` § 7 and
+`docs/backup-and-restore.md` § 7; this section states only the architectural
+boundaries.
+
+## The `replacement_intent` crash boundary
+
+Because filesystem replacement and SQLite are not one transaction, the window
+
+```text
+persist replacement intent
+→ atomic replacement
+→ persist replacement committed
+```
+
+cannot be observed from the outside after a crash. The launcher therefore
+durably records `replacement_intent` **immediately before** entering the atomic
+replacement boundary, and:
+
+```text
+A persisted replacement_intent is treated as though replacement may have
+occurred, even when the current working file appears unchanged.
+```
+
+The launcher must **never** resolve that ambiguity from modification timestamps,
+file size alone, filenames, inode identity alone, migration version alone, or the
+apparent business contents of the working database. Every such heuristic is
+unsound, because the staged candidate is by construction a valid workspace
+database. **The conservative outcome is rollback from the verified safety copy.**
+
+The same conservative rule governs `replacement_committed` and
+`verification_in_progress`: both leave the restored database **provisional**,
+both block ordinary startup, and both recover through rollback. Only a durably
+recorded `completed` makes the restored database authoritative, and only then may
+the ordinary browser open.
+
+An incomplete operation is detected and resolved **before the ordinary backend
+starts**. Every persisted phase has exactly one required startup behaviour, fixed
+by the recovery matrix; an interrupted Restore is never ignored, and no
+implementation may substitute an alternative state machine.
+
+## Rollback and post-restore verification
+
+Any failure after replacement and before successful completion stops the
+partially started backend, preserves diagnostic evidence without exposing it,
+durably records `rollback_in_progress` **before** entering the rollback
+replacement boundary, restores the safety copy through the same safe replacement
+boundary, verifies the rolled-back database starts, durably records `rolled_back`
+— or `recovery_blocked` when the result cannot be proved safe — and reports that
+Restore did **not** complete.
+
+`rolled_back` is a **failed Restore**: a successful rollback is never reported as
+a successful Restore. A failed rollback never continues with an uncertain
+database — `recovery_blocked` means the ordinary application does not start,
+evidence is preserved, and the user is directed to support-assisted recovery
+through a fixed non-technical message. `recovery_blocked` never permits ordinary
+startup, and only a separately defined support procedure may leave it.
+
+Restore succeeds only after the backend starts, backend and launcher use the
+exact same restored database path, required migrations complete, the database
+opens normally, health succeeds, a bounded set of representative read-only
+endpoints succeeds, no unexpected fallback database exists, the application can
+be restarted against the restored data, the selected source is byte-identical and
+the safety backup is available. Those checks run under
+`verification_in_progress` and may use the existing backend health and read-only
+endpoints; passing them all is what authorizes the durable transition to
+`completed`. **The browser UI is not opened into the normal workspace until
+`completed` has been durably recorded.**
+
+## Boundaries
+
+Schema: Restore and migration stay distinct. The launcher restores a validated
+working copy; the normal startup migration system may then migrate an older
+supported schema **on the restored working copy only**. No second migration
+framework, and the selected source backup is never migrated.
+
+AuditLog: **no Restore event is authorized**, and `restore.completed` is not
+implicitly authorized. Filesystem operation-state evidence is not AuditLog.
+
+Privacy: nothing is uploaded, no network connection is required, user-visible
+errors are fixed and non-technical, and technical detail stays in local logs.
+
+Documentation obligation while Restore is unimplemented: the docs must still
+honestly explain where backups live, how to recover with support assistance, and
+when to contact the developer.
 
 ---
 

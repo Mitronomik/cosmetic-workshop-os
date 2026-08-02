@@ -8,12 +8,26 @@
 | Item | Status |
 |---|---|
 | `CR-004` — SQLite backup transaction consistency | `ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)` |
-| `C3-II-B3` — manual backup AuditLog coverage | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
-| Restore | not implemented, not authorized |
-| C4 | inactive |
+| `C3-II-B3` — manual backup AuditLog coverage | `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #167) |
+| Restore | not implemented; its product contract is decided separately by `CR-010` / ADR 0016 |
+| C4 | active decision completed / implementation not started |
 | Product release readiness | not claimed |
 
 This ADR does not reopen `CR-005`, `CR-006`, `CR-009`, ADR 0013 or ADR 0014.
+
+> **Current lifecycle pointer — not part of the accepted decision.** `C3-II-B3`
+> merged as PR #167 — final reviewed head
+> `259697805660fd4dc37e6ac5f50567d48037be94`, merge commit
+> `7af53a3305fa9fdb984d4c478e1186685fbb6727` — and the C3 artifact-finalization
+> hardening then merged as PR #168 — final reviewed head
+> `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit
+> `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`. So
+> **`C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`**. `CR-010` has
+> since decided **launcher-assisted Restore**
+> (`docs/decisions/0016-launcher-assisted-restore.md`), which reuses the safe
+> backup engine accepted here for the mandatory `before_restore` pre-restore
+> safety copy and does not reopen this decision. Restore is still **not
+> implemented**. Current authority: `state/current-focus.md`.
 
 ## Context
 

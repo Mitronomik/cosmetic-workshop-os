@@ -520,6 +520,15 @@ Marks an open suggestion as `dismissed` and sets `resolved_at`. Terminal suggest
 
 Manual backups are explicit local SQLite safety copies. The API does not restore databases, delete backups, download backup files, export business tables as CSV/XLSX, schedule background backups, or use cloud storage. Status and list endpoints are read-only: they must not create directories, databases, backup files, migrations, exports, imports, stock movements, orders, production batches, alerts, or purchase suggestions.
 
+> **MVP Restore is not an ordinary running-backend API mutation.** `CR-010`
+> decided that Restore is **launcher-assisted**: the ordinary backend is stopped
+> while the working database is replaced, so no FastAPI Restore mutation
+> endpoint exists or is authorized, and none may be added by an implementation
+> slice. The historical `docs/roadmap.md` PR23 `POST /api/restore` sketch is
+> **superseded**. Restore is **not implemented**. Contract:
+> `docs/backup-and-restore.md`; decision:
+> `docs/decisions/0016-launcher-assisted-restore.md`.
+
 ### `GET /api/backups/status`
 
 Returns the current configured SQLite database path, whether that database exists, the selected backup directory, whether it exists, the number of listed backups, the latest backup if any, and `pending_audit_count`. This endpoint is read-only: it does not create the database or backup directory, and it never reconciles.
@@ -1335,11 +1344,29 @@ unsafe or not-yet-finalized operation remains unresolved and counted. The
 frontend presents the count only as a pending-Journal warning, not as failed
 document creation.
 
-The same accepted result semantics now cover JSON export. `C3-II-B2` is
-`IMPLEMENTED ON PR BRANCH — NOT MERGED`, so `audit_status` / `audit_message` on
+The same accepted result semantics cover JSON export and manual backup on merged
+`main`. `C3-II-B2` merged as PR #166, so `audit_status` / `audit_message` on
 `POST /api/exports` and `pending_audit_count` on `GET /api/exports/status` exist
-on that branch and are **not yet on merged `main`**. Manual backup keeps the
-reserved semantics only: `C3-II-B3` remains blocked by CR-004. Durable contracts:
+there; `C3-II-B3` merged as PR #167 and added the equivalent fields to
+`POST /api/backups` and `GET /api/backups/status`.
+
+The PR #168 hardening then separated artifact verification from AuditLog
+persistence for report documents and JSON exports as well, so across all three
+artifact kinds finalization is a typed, artifact-specific result:
+
+- `recorded` — the artifact was verified and its AuditLog event committed;
+- `audit_pending` — the artifact was verified but AuditLog persistence did not
+  commit;
+- `artifact_invalid` — mandatory verification did not prove the artifact
+  authoritative.
+
+Only `recorded` and `audit_pending` may produce HTTP `201`. `artifact_invalid`
+produces a **fixed structured HTTP `500`**; the artifact is not deleted, is not
+audited, remains unresolved and is counted for bounded reconciliation. Safe error
+responses expose no filename, path, reason, operation ID, schema version, entity
+count, verifier detail or SQLite detail.
+
+Durable contracts:
 `docs/decisions/0013-file-backed-artifact-audit-semantics.md` and
 `docs/decisions/0014-json-export-create-confirmation-semantics.md`.
 

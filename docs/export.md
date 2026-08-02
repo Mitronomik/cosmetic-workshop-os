@@ -293,20 +293,25 @@ immediate, periodic or background retry.
 Runtime status:
 
 ```text
-C3-II-B2 — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 ```
 
 `CR-006` is resolved and accepted
 (`docs/decisions/0014-json-export-create-confirmation-semantics.md`), so the
-accepted bounded ledger is reused for JSON exports. `C3-II-B2` is **one bounded
-implementation pull request**, implemented on branch
-`claude/c3-ii-b2-json-export-audit` and **not merged**. It also carries the
-accepted `CR-006` create-response correction, so the export create path is
-touched exactly once. Its full scope, export verification contract and non-goals
-are in `docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog
-coverage*. `C3-II-B3` remains blocked by `CR-004`.
+accepted bounded ledger is reused for JSON exports. `C3-II-B2` was **one bounded
+implementation pull request** and merged as **PR #166** — final reviewed head
+`530b3a112b937f8955dd5768741f0ec403809b5a`, merge commit
+`844526ae4057a454312f790abcaf21be518cdbd9`. It also carried the accepted
+`CR-006` create-response correction, so the export create path was touched
+exactly once. Its full scope, export verification contract and non-goals are in
+`docs/implementation-plan.md` § *C3-II-B2 — JSON export AuditLog coverage*.
+`C3-II-B3` merged as PR #167, and the C3 artifact-finalization hardening merged
+as PR #168 — so on merged `main` export finalization reports `recorded`,
+`audit_pending` or `artifact_invalid`, only the first two produce HTTP `201`, and
+`artifact_invalid` produces a fixed structured HTTP `500` while leaving the
+export undeleted, unaudited, unresolved and counted for bounded reconciliation.
 
-### What the branch implements
+### What the slice implements
 
 - **The `CR-006` correction.** `POST /api/exports` no longer calls
   `list_export_files`. The response is built from the exact `ExportResult`, and

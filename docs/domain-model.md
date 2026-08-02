@@ -1760,9 +1760,10 @@ restore
 - `metadata_json` is **never** returned by the read API. It is dominated by internal foreign-key IDs, enum codes and counters — exactly the class of value a non-technical user must not see — so the `C3-I` read model excludes it in full rather than field by field.
 - The **raw persisted `summary` is never returned either.** It is write-time technical text: mostly English, several values embed internal record IDs (`Ingredient lot created for ingredient #12`, `Order #4 produced as batch #7`), and `client_wish.*` values embed user-authored wish text. The read API returns `display_summary`, a backend-owned safe Russian value resolved from `action` by a focused presenter, with the raw summary never used as a value or a fallback. Historical rows are not rewritten — only what is shown changes.
 - The read surface is one endpoint, `GET /api/audit-logs`, defined in `docs/audit-log.md`. The former `GET /api/audit-logs/{id}` proposal is superseded for the MVP.
-- C3-I (PR #159), C3-II-A (PR #161) and C3-II-B1 (PR #163) are all `DONE — MERGED AND EXACT-HEAD VERIFIED`, but C3 is incomplete.
+- C3-I (PR #159), C3-II-A (PR #161), C3-II-B1 (PR #163), C3-II-B2 (PR #166) and C3-II-B3 (PR #167) are all `DONE — MERGED AND EXACT-HEAD VERIFIED`, and the artifact-finalization hardening merged as PR #168, so `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`.
 - `CR-009` is accepted, and `C3-II-B1` implements its report-document slice on merged `main`. For a scoped file-backed create, a fully written and verified artifact is the authoritative result. Audit finalization failure preserves it and returns HTTP `201` with a separate pending-Journal warning; it never becomes false total failure or silent ordinary success.
-- `C3-II-B1` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa` — and `C3-II-B2` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `844526ae4057a454312f790abcaf21be518cdbd9`. `CR-004` is now accepted (ADR 0015), so `C3-II-B3` is `IMPLEMENTED ON PR BRANCH — NOT MERGED` and manual backup creation is not yet audited on merged `main`.
+- `C3-II-B1` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa` — `C3-II-B2` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `844526ae4057a454312f790abcaf21be518cdbd9` — and `C3-II-B3` is `DONE — MERGED AND EXACT-HEAD VERIFIED` — merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727` — so manual backup creation is audited on merged `main`. The artifact-finalization hardening merged as PR #168 (merge commit `867afeb0967637d07172f88c95e02e9bc500a311`): finalization now reports `recorded`, `audit_pending` or `artifact_invalid` for every artifact kind, only the first two produce HTTP `201`, and `artifact_invalid` produces a fixed structured HTTP `500` while leaving the artifact undeleted, unaudited, unresolved and counted for bounded reconciliation.
+- **No Restore AuditLog event is authorized.** `restore.completed` is not implicitly authorized by the `CR-010` Restore decision and requires a separately explicit C4 decision, because the database that would hold the event is itself being replaced and migrated. See `docs/audit-log.md` and `docs/backup-and-restore.md`.
 
 ### Examples
 
@@ -2016,7 +2017,7 @@ deleted
 - Backup must be stored in user data directory.
 - Before migration, backup is mandatory.
 - Manual backup audit is governed by CR-009, and runtime coverage is
-  `C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED`.
+  `C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #167).
 - A manual backup is a **transactionally consistent snapshot of committed state**
   written through the SQLite Online Backup API (ADR 0015), never a raw file copy,
   and is not byte-identical to the source.
@@ -2027,17 +2028,42 @@ deleted
   outside CR-009; it remains before migrations and cannot depend on the future
   ledger table.
 - User must be able to see where backup file is located.
+- `before_restore` is the **canonical system reason for the mandatory
+  pre-restore safety copy** decided by `CR-010`. That safety copy is an ordinary
+  Backup record taken through the same safe SQLite Online Backup engine — it is
+  not a new entity, it is not the selected Restore source, it must verify before
+  the working database is replaced, and it must remain available after a
+  successful Restore. Restore itself is **not implemented**.
+
+### Restore and recovery lifecycle
+
+Restore has an accepted product contract and **no implementation**. It is
+launcher-assisted: the ordinary backend is stopped while the working database is
+replaced, so no backend Restore mutation and no SPA-owned replacement exists or
+is authorized. The selected backup is immutable read-only input, Restore is
+whole-database only, validation completes before any mutation, replacement,
+deletion or migration of the current working database, a
+verified `before_restore` safety copy is mandatory, and any post-replacement
+failure rolls back. Contract: `docs/backup-and-restore.md`; decision:
+`docs/decisions/0016-launcher-assisted-restore.md`.
+
+The launcher's durable Restore operation state is **launcher recovery metadata
+outside the working database**, not a business entity. It is deliberately **not**
+modelled here, has no table, and must not be given one.
 
 ### Audit
 
-Success event, implemented by `C3-II-B3` on its unmerged PR branch:
+Success event, implemented by `C3-II-B3` and merged as PR #167:
 
 ```text
 backup.created
 ```
 
 `backup_failed` and `backup_verified` are not authorized by CR-009. The
-automatic `before_migration` backup is never audited.
+automatic `before_migration` backup is never audited. **No Restore AuditLog
+event is authorized**: `restore.completed` requires a separately explicit C4
+decision, because the database that would contain it is itself being replaced
+and migrated.
 
 ---
 

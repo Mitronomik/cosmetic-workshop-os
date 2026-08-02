@@ -238,7 +238,7 @@ Previously generated documents remain immutable and are never rewritten, regener
 
 ### 10. Lifecycle
 
-`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3-I and C3-II-A are `DONE — MERGED AND EXACT-HEAD VERIFIED` as PR #159 and PR #161. CR-009 is accepted; report-document slice B1 is implemented on a PR branch and not merged, export B2 remains blocked by CR-006, and backup B3 remains blocked by CR-004. C3 remains incomplete. Contracts: `docs/audit-log.md` and ADR 0013. C4 remains inactive. Product release readiness is not claimed.
+`C2-III-B` is `DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #157), and its active lifecycle is closed. **C2 is `COMPLETED`.** C3-I (PR #159), C3-II-A (PR #161), C3-II-B1 (PR #163), C3-II-B2 (PR #166) and C3-II-B3 (PR #167) are all `DONE — MERGED AND EXACT-HEAD VERIFIED`, `CR-004`, `CR-006` and `CR-009` are accepted and implemented, and the C3 artifact-finalization hardening merged as PR #168 — so **`C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`**. Contracts: `docs/audit-log.md` and ADR 0013. C4 has an accepted product decision (`CR-010`, launcher-assisted Restore, ADR 0016) and **no implementation**; Restore is `NOT IMPLEMENTED` and changes nothing in this reports contract. Product release readiness is not claimed.
 
 ## Incomplete data
 
