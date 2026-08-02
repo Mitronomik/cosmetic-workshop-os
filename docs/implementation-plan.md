@@ -2054,11 +2054,14 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 ## C4 — Restore и recovery
 
 ```text
-CR-010 — ACCEPTED — NOT IMPLEMENTED
+CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4 implementation — NOT STARTED
+C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C4-II — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
+Product release readiness — NOT CLAIMED
 ```
 
 > **The product decision is made.** The historical two-option choice below —
@@ -2112,11 +2115,27 @@ decision.
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-The **only** runtime slice authorized by `CR-010`. It is not in progress and must
-not be started from the unmerged decision branch. Scope:
+The **only** runtime slice authorized by `CR-010`. It is implemented on the
+pull-request branch `codex/c4-i-launcher-restore-safety-engine` and is **not
+merged**. It has no user-facing entry point, so **`Restore` remains
+`NOT IMPLEMENTED`** and product release readiness remains **not claimed**.
+
+The implementation is `launcher/restore/` — a focused package covering phase
+vocabulary, typed contracts, durable operation state, staging, validation,
+schema lineage, disk-space preflight, safety copy, replacement primitives,
+rollback, backend verification, orchestration and startup recovery — plus one
+bounded read-only backend helper, `backend/app/db/migration_lineage.py`. It adds
+no migration, no schema change, no AuditLog event, no API endpoint and no
+frontend change. The exact operational detail — state-file location and allowed
+fields, the atomic publication primitive and its durability limits, the
+disk-space formula, the launcher lock, target WAL/SHM/journal handling, the
+verification endpoints and the developer-only smoke command — is recorded in
+`docs/backup-and-restore.md` § 16.
+
+Scope:
 
 - launcher-owned restore operation domain vocabulary;
 - source and staged-candidate validation;
@@ -2227,6 +2246,12 @@ user-facing entry point; no `restore.completed` event; no migration; no second
 migration framework; no generic operation framework, job queue or outbox; no
 scheduled or cloud backup; no packaging, `.app`/`.dmg`, updater or release smoke;
 no `C4-II` or `C4-III` work; no release-readiness claim.
+
+**Every one of those non-goals holds on the implemented branch**, and the accepted
+state machine was implemented exactly — same twelve phases, same transition graph,
+same recovery matrix, same `replacement_intent` crash rule — so no amending
+decision was required. Evidence (complete backend and launcher suites, and a
+developer-only isolated exact-head Restore smoke) belongs to that pull request.
 
 ### C4-II — User-facing launcher Restore flow
 

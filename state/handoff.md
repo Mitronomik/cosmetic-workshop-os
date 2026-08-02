@@ -1,9 +1,72 @@
 # Handoff
 
-## C3 closed and hardened; C4 Restore decided as launcher-assisted (2026-08-02)
+## C4-I implemented on its PR branch — not merged (2026-08-02)
 
 > This is the single current authoritative lifecycle conclusion. Every earlier
-> section in this file is a historical record of its own date.
+> section in this file, including the one immediately below, is a historical
+> record of its own date.
+
+```text
+CR-010 — ACCEPTED (PR #169, merge commit b89cbaaaf41a56c810847d7c1e593712c5591eb6)
+
+C4-I — Launcher-owned restore safety engine
+— IMPLEMENTED ON PR BRANCH — NOT MERGED
+— branch codex/c4-i-launcher-restore-safety-engine
+— based on origin/main = b89cbaaaf41a56c810847d7c1e593712c5591eb6
+
+C4-II — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
+
+C4 — ACTIVE
+C4 product decision — COMPLETE
+Restore — NOT IMPLEMENTED
+macOS packaging — NOT COMPLETED
+safe packaged update flow — NOT COMPLETED
+full release-candidate smoke — NOT COMPLETED
+Product release readiness — NOT CLAIMED
+```
+
+**Next action: review and merge the `C4-I` pull request.** Nothing else is
+authorized until it merges.
+
+### What the next agent needs to know
+
+- **`C4-I` is internal only.** `launcher/restore/` exposes `execute_restore(...)`
+  and `recover_incomplete_restore(...)` for a future `C4-II`. There is no Restore
+  endpoint, route, button, dialog, file picker or product terminal workflow, so
+  **Restore is still `NOT IMPLEMENTED` as a product capability**. Do not describe
+  the branch as shipping Restore.
+- **The accepted state machine was implemented exactly**, so ADR 0016 needed no
+  amendment. If future work appears to need a different phase, transition or
+  recovery behaviour, that is a **new documentation decision first**, not a code
+  change.
+- **Where the detail lives.** ADR 0016 § 7 remains the authoritative decision;
+  `docs/backup-and-restore.md` § 16 records the implementation's operational
+  contract — state-file location and the closed field set, the atomic publication
+  primitive and its honest durability limits, the disk-space formula, the
+  `fcntl.flock` instance lock, target WAL/SHM/journal handling, the verification
+  endpoints and the developer-only smoke command.
+- **One bounded backend change**: `backend/app/db/migration_lineage.py`, read-only,
+  never creates the migration table. `app.db.migrations.applied_migration_ids`
+  could not be reused because it issues `CREATE TABLE IF NOT EXISTS` on a file the
+  Restore contract requires to stay untouched.
+- **The launcher startup path changed.** `run_local_runtime` now takes an
+  exclusive instance lock and resolves any interrupted Restore *before* startup
+  migrations, the backend child and the browser. `recovery_blocked` returns exit
+  code `3` and starts nothing.
+- **`scripts/c4_i_restore_smoke.sh` is developer-only.** It refuses to run outside
+  a clean workspace at an expected published SHA and must never be documented as
+  the product workflow.
+- **Evidence on the branch**: baseline `1843` node IDs all preserved, `238` added;
+  `2081 passed` for the complete backend + launcher suite; exact-head isolated
+  Restore smoke `PASS`; repository clean after.
+
+---
+
+## HISTORICAL — 2026-08-02 — C3 closed and hardened; C4 Restore decided as launcher-assisted
+
+> Superseded by the section above as the current conclusion. Its C3 and `CR-010`
+> facts remain accurate; its `C4-I — NOT IMPLEMENTED` status does not.
 
 ```text
 C1 — COMPLETED

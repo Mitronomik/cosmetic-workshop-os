@@ -10,8 +10,8 @@ implement Restore** and changes no runtime code.
 
 | Item | Status |
 |---|---|
-| `CR-010` — launcher-assisted Restore semantics | `ACCEPTED — NOT IMPLEMENTED` |
-| `C4-I` — launcher-owned restore safety engine | `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED` |
+| `CR-010` — launcher-assisted Restore semantics | `ACCEPTED` |
+| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — NOT MERGED` |
 | `C4-II` — user-facing launcher Restore flow | `PLANNED — NOT AUTHORIZED` |
 | `C4-III` — Restore end-to-end verification and lifecycle closure | `PLANNED — NOT AUTHORIZED` |
 | Restore | `NOT IMPLEMENTED` |
@@ -20,17 +20,27 @@ implement Restore** and changes no runtime code.
 | Full release-candidate smoke | `NOT COMPLETED` |
 | Product release readiness | `NOT CLAIMED` |
 
-Surrounding lifecycle at acceptance:
+Surrounding lifecycle:
 
 ```text
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
-CR-010 — ACCEPTED — NOT IMPLEMENTED
+CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4 implementation — NOT STARTED
+C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C4-II — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 ```
+
+**This decision itself is unchanged.** `C4-I` implements the state machine below
+exactly — same twelve phases, same transition graph, same recovery matrix, same
+`replacement_intent` rule — and required no deviation, so no amending decision was
+needed. The implementation's own operational detail (state-file location, the
+publication primitive and its durability limits, the disk-space formula, target
+journal handling and the verification endpoints) is recorded in
+`docs/backup-and-restore.md` § 16, not restated here.
 
 This ADR does not reopen `CR-004`, `CR-005`, `CR-006`, `CR-007`, `CR-008` or
 `CR-009`, and it does not reopen ADR 0011, 0012, 0013, 0014 or 0015. It adds no
@@ -839,10 +849,10 @@ There is no frontend implementation in this decision:
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-This is the **only** runtime slice authorized by this decision. Its future scope:
+This is the **only** runtime slice authorized by this decision. Its scope:
 
 - launcher-owned restore operation domain vocabulary;
 - source and staged-candidate validation;
@@ -1029,3 +1039,13 @@ frontend or launcher suite was executed for it, no build was run, no smoke was
 run and no runtime artifact was created. The accepted PR #168 evidence recorded
 alongside this decision belongs to that merged pull request and was **not**
 re-executed here.
+
+**`C4-I` verification is separate and belongs to its own pull request.** That
+slice implements this decision on an **unmerged branch**: the complete backend and
+launcher suites and a developer-only isolated exact-head Restore smoke were run
+there, and its evidence is recorded on that pull request rather than restated in
+this ADR. Implementing `C4-I` changes nothing above — no phase was renamed, no
+transition added or removed, and no recovery behaviour substituted — and it does
+**not** make Restore a shipped product capability. `Restore` stays
+`NOT IMPLEMENTED`, `C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED`, and
+product release readiness stays `NOT CLAIMED`.

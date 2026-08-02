@@ -13,6 +13,11 @@ from launcher.config import RuntimeConfig, RuntimePaths, build_runtime_config, r
 
 BACKEND_MODULE = "app.main:app"
 
+# Returned when an interrupted Restore leaves nothing the launcher can prove is
+# safe. Distinct from the generic failure code so a future packaged shell can
+# tell "could not start" apart from "must not start".
+RESTORE_BLOCKED_EXIT_CODE = 3
+
 
 class RuntimeLaunchError(RuntimeError):
     """Raised when local runtime cannot start safely."""
@@ -121,12 +126,90 @@ def terminate_process(process: subprocess.Popen[str], timeout_seconds: float = 5
         process.wait(timeout=timeout_seconds)
 
 
+def resolve_startup_database_path(mode: str, paths: RuntimePaths) -> Path:
+    """The database path startup will prepare, resolved without side effects.
+
+    Needed *before* startup runs, because the Restore recovery gate below has to
+    know which workspace it is guarding. `startup_database_config` only computes
+    a path — it creates no directory, database or migration.
+    """
+    ensure_backend_import_path(paths)
+    from app.services.startup import startup_database_config
+
+    return startup_database_config(mode).path
+
+
+def acquire_launcher_lock(database_path: Path, paths: RuntimePaths):
+    """Take the exclusive launcher-instance lock for the whole lifecycle.
+
+    One boundary covers ordinary startup, Restore execution and incomplete-Restore
+    recovery, so a second launcher cannot begin recovery while the first is
+    halfway through a database replacement. The existing port check stays where it
+    is and keeps its own message: a free port is not proof that nothing else owns
+    the workspace, least of all during Restore, when the backend is stopped by
+    design.
+    """
+    ensure_backend_import_path(paths)
+    from launcher.restore import LauncherAlreadyRunningError, LauncherInstanceLock, RestoreWorkspace
+
+    workspace = RestoreWorkspace.for_database(database_path)
+    try:
+        return LauncherInstanceLock.for_workspace(workspace).acquire()
+    except LauncherAlreadyRunningError as exc:
+        raise RuntimeLaunchError(
+            "Приложение уже запущено. Закройте другое окно приложения и попробуйте снова."
+        ) from exc
+
+
+def resolve_restore_recovery(runtime_config: RuntimeConfig, paths: RuntimePaths, database_path: Path):
+    """Resolve any interrupted Restore before ordinary startup may continue.
+
+    This is the `CR-010` § 7.5 gate. It runs before startup migrations, before
+    the backend child and before the browser, and its verdict is binding: an
+    unsafe persisted phase never falls through to the ordinary startup below.
+    """
+    ensure_backend_import_path(paths)
+    from app.db.config import DatabaseConfig
+    from app.services.backup import resolve_backup_dir
+    from launcher.restore import recover_incomplete_restore
+
+    return recover_incomplete_restore(
+        database_path,
+        resolve_backup_dir(DatabaseConfig(path=database_path)),
+        runtime_config,
+        paths,
+        mode=runtime_config.mode,
+    )
+
+
 def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths | None = None) -> int:
     runtime_config = config or build_runtime_config()
     runtime_paths = paths or resolve_runtime_paths()
     print("Мастерская косметолога: запуск локального режима…")
     assert_port_available(runtime_config.host, runtime_config.backend_port)
     print(f"Данные пользователя будут храниться вне кода приложения (режим: {runtime_config.mode}).")
+    database_path = resolve_startup_database_path(runtime_config.mode, runtime_paths)
+    launcher_lock = acquire_launcher_lock(database_path, runtime_paths)
+    try:
+        return _run_locked_runtime(runtime_config, runtime_paths, database_path)
+    finally:
+        launcher_lock.release()
+
+
+def _run_locked_runtime(
+    runtime_config: RuntimeConfig, runtime_paths: RuntimePaths, database_path: Path
+) -> int:
+    recovery = resolve_restore_recovery(runtime_config, runtime_paths, database_path)
+    if not recovery.normal_startup_allowed:
+        # Nothing starts and the browser never opens. The message is the fixed
+        # non-technical support-assisted text; every technical detail stayed in
+        # the local log.
+        print(recovery.message)
+        return RESTORE_BLOCKED_EXIT_CODE
+    if recovery.message:
+        # A recovered previous workspace. Restore failed, and saying so here is
+        # the honest result — never "restore succeeded".
+        print(recovery.message)
     startup = initialize_backend_startup(runtime_config.mode, runtime_paths)
     print(f"База данных готова: {startup.database_path}")
     if startup.backup is not None:

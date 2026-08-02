@@ -26,28 +26,42 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `CR-004 — SQLite backup transaction consistency`: **ACCEPTED AND IMPLEMENTED**
 - `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
 - `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
-- `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED — NOT IMPLEMENTED**
-- `C4-I — Launcher-owned restore safety engine`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
+- `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED**
+- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
 - `C4 — ACTIVE`
 - `C4 product decision — COMPLETE`
-- `C4 implementation — NOT STARTED`
+- `Restore — NOT IMPLEMENTED`
+- `Product release readiness — NOT CLAIMED`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
 - **PR #168 is merged.** The artifact-finalization hardening is on merged `main`, not on a branch, so C3 is complete **and hardened**.
 
-## What is authorized next
+## Current next action
 
 ```text
 C4-I — Launcher-owned restore safety engine
-AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — NOT MERGED
 ```
 
-`C4-I` is the **only** runtime slice authorized by the `CR-010` decision. It is
-**not in progress** and must not be started from this unmerged documentation
-branch. `C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED`. Restore remains
-**not implemented**; macOS packaging, the safe packaged update flow and the full
+**Next action: review and merge the `C4-I` pull request.** The branch is
+`codex/c4-i-launcher-restore-safety-engine`, started from `origin/main` at
+`b89cbaaaf41a56c810847d7c1e593712c5591eb6` (the PR #169 merge commit). Nothing
+else is authorized until it merges.
+
+`C4-I` implements the accepted `CR-010` state machine exactly — the same twelve
+phases, transition graph, recovery matrix and `replacement_intent` crash rule — so
+no amending decision was required. It is internal launcher infrastructure only:
+`launcher/restore/` plus one bounded read-only backend helper
+(`backend/app/db/migration_lineage.py`), with **no** API endpoint, route, button,
+dialog, file picker, product terminal workflow, migration, schema change,
+AuditLog event or frontend change. Implementation detail:
+`docs/backup-and-restore.md` § 16.
+
+`C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED` and must not be started from
+this branch. **Restore remains `NOT IMPLEMENTED`** — the engine has no user-facing
+entry point. macOS packaging, the safe packaged update flow and the full
 release-candidate smoke remain **not completed**; product release readiness is
 **not claimed**.
 

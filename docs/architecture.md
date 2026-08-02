@@ -2243,12 +2243,19 @@ scripts/
   start_local.sh
   create_backup.sh
   restore_backup.sh
+  c4_i_restore_smoke.sh
+  c4_i_restore_smoke.py
 ```
 
 > **`restore_backup.sh` is a developer/support script sketch, not the product
 > Restore workflow.** `CR-010` decided that MVP Restore is **launcher-assisted**
 > (§ 12.4), and a terminal command must never become the permanent workflow for
 > the product user. Restore is **not implemented**.
+>
+> The same rule covers `c4_i_restore_smoke.sh` / `c4_i_restore_smoke.py`: they are
+> a **developer-only** exact-head verification runner for the internal `C4-I`
+> engine, refuse to run outside a clean workspace at an expected published SHA,
+> work only inside a temporary directory, and are never the user-facing workflow.
 
 ---
 
@@ -2315,21 +2322,31 @@ Before schema migration:
 
 # 12.4. Restore — launcher-assisted (CR-010, decided 2026-08-02)
 
-> **Status: decided, `NOT IMPLEMENTED`.** This section describes accepted
-> architecture, not shipped behaviour. Durable decision:
-> `docs/decisions/0016-launcher-assisted-restore.md`; complete product contract:
-> `docs/backup-and-restore.md`.
+> **Status: decided; product Restore `NOT IMPLEMENTED`.** This section describes
+> accepted architecture. Durable decision:
+> `docs/decisions/0016-launcher-assisted-restore.md`; complete product contract
+> and the implementation detail of the internal engine:
+> `docs/backup-and-restore.md` (§ 16 for `C4-I`).
 >
 > ```text
 > C4 — ACTIVE
 > C4 product decision — COMPLETE
-> C4 implementation — NOT STARTED
-> CR-010 — ACCEPTED — NOT IMPLEMENTED
-> C4-I — AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+> CR-010 — ACCEPTED
+> C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
 > C4-II — PLANNED — NOT AUTHORIZED
 > C4-III — PLANNED — NOT AUTHORIZED
 > Restore — NOT IMPLEMENTED
 > ```
+>
+> The internal launcher-owned safety engine exists on an **unmerged** pull-request
+> branch as `launcher/restore/`, with one bounded read-only backend helper
+> (`backend/app/db/migration_lineage.py`). It has **no** API endpoint, route,
+> button, dialog, file picker or product terminal workflow, so it changes no
+> user-visible architecture: the launcher gains a durable operation record under
+> `<user data base>/restore/`, an exclusive `flock` instance lock, and a recovery
+> gate that resolves any interrupted Restore before startup migrations, the backend
+> child and the browser. No migration, no schema change, no AuditLog event, and no
+> frontend production change.
 
 ```text
 MVP Restore is launcher-assisted.
