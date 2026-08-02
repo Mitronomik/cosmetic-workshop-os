@@ -62,7 +62,11 @@ from launcher.restore.durability import (
     confirm_existing_durability,
     write_and_publish_bytes,
 )
-from launcher.restore.phases import RestorePhase, require_allowed_transition
+from launcher.restore.phases import (
+    SAFE_TERMINAL_STARTUP_PHASES,
+    RestorePhase,
+    require_allowed_transition,
+)
 from launcher.restore.workspace import (
     OWNED_TEMP_PREFIX,
     OWNED_TEMP_SUFFIX,
@@ -360,17 +364,36 @@ class RestoreOperationStateStore:
     ) -> RestoreOperationRecord:
         """Publish the initial record for a new attempt.
 
-        Refuses to start on top of a non-terminal operation. A live record means
-        another attempt is in flight or an interrupted one has not been recovered
-        yet, and starting a second attempt over either would leave two operations
-        claiming the same working database.
+        A new attempt may replace **only** a previously *completed* record —
+        `completed`, `aborted` or `rolled_back`, the same positive
+        `SAFE_TERMINAL_STARTUP_PHASES` vocabulary the startup rule uses, rather
+        than a second hand-maintained list that could drift from it.
+
+        Everything else is refused, and for two different reasons.
+
+        A live record means another attempt is in flight or an interrupted one has
+        not been recovered yet, and starting a second attempt over either would
+        leave two operations claiming the same working database.
+
+        `recovery_blocked` is terminal but is emphatically **not** completed. It
+        is the authoritative pointer to an operation that could not be resolved,
+        and it names the staged candidate and the safety copy a support procedure
+        needs. Treating it as replaceable — which "terminal" alone would — lets an
+        ordinary new attempt overwrite that pointer, and the evidence it names
+        then has nothing left claiming it. Clearing a blocked recovery is a
+        separately authorized support procedure, not a side effect of pressing
+        Restore again.
         """
         if not is_launcher_operation_id(operation_id):
             raise RestoreStateError(
                 "A Restore operation identity must be a canonical launcher-generated UUID."
             )
         existing = self.read()
-        if existing is not None and existing.phase not in _TERMINAL:
+        if existing is not None and existing.phase is RestorePhase.RECOVERY_BLOCKED:
+            raise RestoreStateError(
+                "A blocked Restore recovery is never replaced by a new attempt."
+            )
+        if existing is not None and existing.phase not in SAFE_TERMINAL_STARTUP_PHASES:
             raise RestoreStateError(
                 "A Restore operation is already in progress and has not been recovered."
             )
@@ -410,13 +433,3 @@ class RestoreOperationStateStore:
             safety_copy_filename=safety_copy_filename or record.safety_copy_filename,
         )
         return self.publish(updated)
-
-
-_TERMINAL = frozenset(
-    {
-        RestorePhase.COMPLETED,
-        RestorePhase.ABORTED,
-        RestorePhase.ROLLED_BACK,
-        RestorePhase.RECOVERY_BLOCKED,
-    }
-)

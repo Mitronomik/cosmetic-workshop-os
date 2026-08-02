@@ -154,6 +154,43 @@ def test_the_unsafe_phase_set_is_unchanged():
     }
 
 
+def test_unsafe_phases_never_permit_ordinary_startup():
+    """`UNSAFE_STARTUP_PHASES` keeps its original architectural purpose.
+
+    The set is still the recovery matrix's answer to "which phases must never
+    fall through to ordinary startup", and every member of it is still refused.
+    What this test deliberately no longer asserts is the converse. Its earlier
+    form checked `permits_ordinary_startup(phase) is (phase not in
+    UNSAFE_STARTUP_PHASES)`, which quietly claimed that every phase *outside* the
+    set is safe to start from — and that is false for the four unresolved
+    pre-replacement phases. They are safe for the **database**, because
+    replacement never happened, and unsafe for **startup**, because the operation
+    is still live and recovery has not closed it.
+
+    The permission rule is an allow-list, tested positively by
+    `test_only_three_terminal_phases_may_permit_ordinary_startup` and
+    `test_every_phase_gets_its_exact_startup_permission`. This test covers the one
+    direction the set is actually authoritative about: membership means refusal.
+    """
+    assert {phase.value for phase in UNSAFE_STARTUP_PHASES} == {
+        "replacement_intent",
+        "replacement_committed",
+        "verification_in_progress",
+        "rollback_in_progress",
+        "recovery_blocked",
+    }
+    for phase in UNSAFE_STARTUP_PHASES:
+        assert (
+            permits_ordinary_startup(
+                phase, record_exists=True, durability_confirmed=True
+            )
+            is False
+        ), phase.value
+    # And the two sets cannot overlap: a phase cannot be both unsafe for startup
+    # and one the positive rule admits.
+    assert UNSAFE_STARTUP_PHASES & SAFE_TERMINAL_STARTUP_PHASES == frozenset()
+
+
 def test_only_three_terminal_phases_may_permit_ordinary_startup():
     """Stated positively, as an allow-list.
 

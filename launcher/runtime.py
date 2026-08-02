@@ -13,6 +13,14 @@ from launcher.config import RuntimeConfig, RuntimePaths, build_runtime_config, r
 
 BACKEND_MODULE = "app.main:app"
 
+# The launcher-managed backend entrypoint. It acquires the backend-liveness lock
+# **before** importing `app.main` or anything else that can reach the database,
+# then reports that acquisition to this launcher. Running `uvicorn` directly would
+# take the lock only once the whole application had already been imported, which
+# leaves a window in which a launcher-managed backend is invisible to the check
+# that authorizes replacing the database it is about to open.
+BACKEND_ENTRYPOINT_MODULE = "app.launcher_backend_entrypoint"
+
 # Returned when an interrupted Restore leaves nothing the launcher can prove is
 # safe. Distinct from the generic failure code so a future packaged shell can
 # tell "could not start" apart from "must not start".
@@ -77,7 +85,11 @@ def backend_liveness_lock_env(paths: RuntimePaths) -> str:
 
 
 def start_backend_process(
-    config: RuntimeConfig, paths: RuntimePaths, database_path: Path
+    config: RuntimeConfig,
+    paths: RuntimePaths,
+    database_path: Path,
+    *,
+    handshake=None,
 ) -> subprocess.Popen[str]:
     """Start the API child, pinned to the database startup actually prepared.
 
@@ -99,6 +111,12 @@ def start_backend_process(
     `COSMETIC_WORKSHOP_DB_PATH` left in the parent shell is exactly the case that
     would otherwise split the two processes apart again. The startup result is
     authoritative.
+
+    `handshake`, when supplied, is a one-run pipe and token the child uses to
+    report that **it** acquired the backend-liveness lock. Only its descriptor is
+    inherited; `pass_fds` clears the inheritable flag on everything else. Callers
+    that need the proof use :func:`start_owned_backend_process` rather than
+    waiting for it themselves.
     """
     assert_port_available(config.host, config.backend_port)
     env = os.environ.copy()
@@ -120,19 +138,74 @@ def start_backend_process(
     command = [
         sys.executable,
         "-m",
-        "uvicorn",
-        BACKEND_MODULE,
+        BACKEND_ENTRYPOINT_MODULE,
         "--host",
         config.host,
         "--port",
         str(config.backend_port),
     ]
+    popen_arguments = {}
+    if handshake is not None:
+        env.update(handshake.child_environment)
+        popen_arguments["pass_fds"] = handshake.pass_fds
     return subprocess.Popen(
         command,
         cwd=paths.backend_dir,
         env=env,
         text=True,
+        **popen_arguments,
     )
+
+
+def start_owned_backend_process(
+    config: RuntimeConfig, paths: RuntimePaths, database_path: Path
+) -> subprocess.Popen[str]:
+    """Start a backend child and return only once it **proved** it holds the lock.
+
+    Owning a `Popen` says the launcher started a process. It does not say the
+    process took the backend-liveness lock, and between those two facts lies a
+    window in which a launcher-managed backend is invisible to the check that
+    authorizes replacing the database. This closes it:
+
+    ```text
+    create a one-run pipe and token
+    → spawn the pre-import entrypoint with that pipe inherited
+    → the child acquires the lock before importing any application module
+    → the child writes the token and closes its end
+    → this returns
+    ```
+
+    Timeout, EOF, an early child exit and a token from some other start are all
+    the same answer, and all of them stop the child before returning. A backend
+    that cannot be accounted for is never left running: that is how an orphan is
+    made, and orphans are the failure this whole mechanism exists to prevent.
+    """
+    ensure_backend_import_path(paths)
+    from launcher.restore.backend_handshake import (
+        BackendHandshakeError,
+        new_backend_handshake,
+    )
+
+    handshake = new_backend_handshake()
+    try:
+        process = start_backend_process(
+            config, paths, database_path, handshake=handshake
+        )
+    except BaseException:
+        handshake.close()
+        raise
+
+    # Closed immediately so the pipe reaches EOF if the child dies without
+    # writing; while this end stays open the read below could never see that.
+    handshake.close_child_end()
+    try:
+        handshake.await_acquisition(process)
+    except BackendHandshakeError:
+        terminate_process(process)
+        raise
+    finally:
+        handshake.close()
+    return process
 
 
 def open_runtime_browser(config: RuntimeConfig) -> None:
@@ -219,16 +292,21 @@ def _run_locked_runtime(
     if startup.backup is not None:
         print(f"Перед миграцией создана резервная копия: {startup.backup.backup_path}")
     print(f"Запускаю локальный API: {runtime_config.backend_url}")
+    # Startup recovery took the retained maintenance lease and ordinary startup
+    # migrated the database underneath it. The backend child has to hold that same
+    # canonical lock for its own lifetime, so the lease is handed over here — one
+    # deliberate release, immediately before the one process allowed to take it.
+    context.release_maintenance_lease()
     # The API child must serve the database that was just backed up, migrated and
     # reconciled — not one it resolves for itself. This applies to development
     # mode as well: whatever `initialize_startup()` chose is what gets served.
     #
-    process = start_backend_process(runtime_config, runtime_paths, startup.database_path)
-    # Handed to the lifecycle context immediately, so the launcher owns the exact
-    # handle rather than merely having spawned it. That ownership is what a later
+    # Started *through the owner*, so the launcher holds the exact handle rather
+    # than merely having spawned it, and so the child's own lock acquisition is
+    # proved before anything treats it as running. Ownership is what a later
     # Restore needs in order to *prove* the backend stopped — a free port proves
     # nothing, and the backend never takes the launcher lock.
-    context.backend.adopt(process)
+    process = context.backend.start(runtime_config, runtime_paths, startup.database_path)
     try:
         time.sleep(1)
         if process.poll() is not None:

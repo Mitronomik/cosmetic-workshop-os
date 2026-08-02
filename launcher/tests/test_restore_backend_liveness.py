@@ -46,7 +46,11 @@ from launcher.restore.context import (
     RestoreLifecycleError,
     backend_liveness_lock_is_free,
 )
-from launcher.restore.contracts import RestoreOutcome
+from launcher.restore.contracts import (
+    RECOVERY_BLOCKED_MESSAGE,
+    RecoveryResult,
+    RestoreOutcome,
+)
 from launcher.restore.engine import execute_restore
 from launcher.restore.phases import RestorePhase
 from launcher.restore.recovery import recover_incomplete_restore
@@ -384,7 +388,14 @@ def test_restore_is_blocked_by_an_orphaned_backend(orphaned_backend, tmp_path):
 
 
 def test_startup_recovery_is_blocked_by_an_orphaned_backend(orphaned_backend):
-    """Recovery would replace the database from the safety copy; it must not."""
+    """Recovery would replace the database from the safety copy; it must not.
+
+    An orphan holding the liveness lock is an **expected** condition of this gate,
+    so it is reported as a typed `RecoveryResult`, not raised. `run_local_runtime`
+    branches on that result; a `RestoreLifecycleError` escaping instead would turn
+    a designed refusal into an unhandled exception and a stack trace, and the
+    launcher would print a traceback where it should print one fixed sentence.
+    """
     workspace, backend_pid = orphaned_backend
     safety = create_verified_safety_copy(workspace.database_path, workspace.backup_dir)
     build_workspace_database(workspace.database_path, "workspace-B")
@@ -406,12 +417,19 @@ def test_startup_recovery_is_blocked_by_an_orphaned_backend(orphaned_backend):
 
     context = LauncherLifecycleContext.acquire(*_config_and_paths())
     try:
-        with pytest.raises(RestoreLifecycleError, match="still running"):
-            recover_incomplete_restore(
-                context, services=stub_services(workspace.database_path)
-            )
+        result = recover_incomplete_restore(
+            context, services=stub_services(workspace.database_path)
+        )
     finally:
         context.release()
+
+    assert isinstance(result, RecoveryResult)
+    assert result.normal_startup_allowed is False
+    assert result.outcome is RestoreOutcome.RECOVERY_BLOCKED
+    assert result.message == RECOVERY_BLOCKED_MESSAGE
+    assert result.blocks_browser is True
+    # The phase that is really on disk is reported; nothing was transitioned.
+    assert result.durable_phase is RestorePhase.REPLACEMENT_INTENT
 
     # No rollback replacement occurred while the orphan was alive.
     assert read_marker(workspace.database_path) == "workspace-B"

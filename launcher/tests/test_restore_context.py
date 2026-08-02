@@ -408,11 +408,19 @@ def test_restore_stops_a_real_backend_child_before_touching_the_database(
 
 
 def test_the_launcher_owns_the_backend_child_it_starts(monkeypatch, tmp_path):
-    """`run_local_runtime` hands its child to the context, not just spawns it."""
+    """`run_local_runtime` starts its child *through* the owner, not beside it.
+
+    Starting through `context.backend.start` is stronger than spawning and then
+    adopting: the owner's start waits for the child's own lock-acquisition
+    handshake, so there is no window in which the launcher holds a handle to a
+    process it cannot yet prove took the liveness lock. The maintenance lease is
+    released immediately before, because the child is the one process allowed to
+    hold that lock next.
+    """
     import inspect
 
     from launcher import runtime
 
     body = inspect.getsource(runtime._run_locked_runtime)
-    assert "context.backend.adopt(process)" in body
-    assert "start_backend_process(runtime_config, runtime_paths, startup.database_path)" in body
+    assert "context.backend.start(runtime_config, runtime_paths, startup.database_path)" in body
+    assert "context.release_maintenance_lease()" in body

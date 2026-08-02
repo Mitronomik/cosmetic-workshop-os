@@ -23,7 +23,10 @@ makes "the backend is stopped" provable rather than assumed.
 Everything else is a focused collaborator: `phases` owns the twelve-phase graph,
 `state` the durable record, `durability` the one safety-critical publication
 primitive, `workspace` the isolated operation directory, `instance_lock` the
-exclusive launcher boundary, `context` the lifecycle authority, `staging` and
+exclusive launcher boundary, `maintenance_lease` the retained exclusion that
+keeps a backend from appearing during destructive work, `backend_handshake` the
+bounded proof that an owned child took the liveness lock before importing the
+application, `context` the lifecycle authority, `staging` and
 `validation` the immutable source and its read-only checks, `capacity` the
 disk-space preflight, `safety_copy` the mandatory `before_restore` gate,
 `replacement` the journal handling and the atomic boundary, `verification` the
@@ -37,6 +40,7 @@ from launcher.restore.context import (
     RestoreLifecycleError,
 )
 from launcher.restore.contracts import (
+    COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE,
     RECOVERY_BLOCKED_MESSAGE,
     ROLLED_BACK_MESSAGE,
     SUCCESS_MESSAGE,
@@ -49,6 +53,10 @@ from launcher.restore.contracts import (
 )
 from launcher.restore.engine import RestoreServices, execute_restore
 from launcher.restore.instance_lock import LauncherAlreadyRunningError, LauncherInstanceLock
+from launcher.restore.maintenance_lease import (
+    BackendMaintenanceLease,
+    MaintenanceLeaseError,
+)
 from launcher.restore.phases import (
     ALLOWED_TRANSITIONS,
     TERMINAL_PHASES,
@@ -60,11 +68,14 @@ from launcher.restore.workspace import RestoreWorkspace, resolve_restore_dir
 
 __all__ = [
     "ALLOWED_TRANSITIONS",
+    "BackendMaintenanceLease",
     "BackendProcessOwner",
     "BackendStopProof",
+    "COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE",
     "LauncherAlreadyRunningError",
     "LauncherInstanceLock",
     "LauncherLifecycleContext",
+    "MaintenanceLeaseError",
     "PhaseTransitionError",
     "RestoreLifecycleError",
     "RECOVERY_BLOCKED_MESSAGE",

@@ -70,6 +70,18 @@ def test_the_recovery_blocked_message_points_at_support_without_technical_detail
 
 
 def test_the_error_categories_cover_the_accepted_boundary_set():
+    """The complete closed vocabulary. Categories, never free text.
+
+    Two of these describe conditions that are not failures of the *Restore*, and
+    they exist precisely so those conditions stop borrowing another category's
+    sentence: `preparation_not_published` is an attempt that never started over a
+    record belonging to a previous operation, and
+    `completion_durability_unconfirmed` is a `completed` whose flush could not be
+    proved — restored, verified, in place, and not rolled back.
+
+    Neither adds a lifecycle phase. `phase` remains the sole authoritative field;
+    a category only decides which fixed sentence is rendered.
+    """
     assert {failure.value for failure in RestoreFailure} == {
         "source_rejected",
         "candidate_invalid",
@@ -80,6 +92,8 @@ def test_the_error_categories_cover_the_accepted_boundary_set():
         "replacement_failed",
         "verification_failed_rolled_back",
         "recovery_blocked",
+        "preparation_not_published",
+        "completion_durability_unconfirmed",
     }
 
 

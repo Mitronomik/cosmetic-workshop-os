@@ -26,13 +26,27 @@ One database identity produces the lock, the operation record, the safety copy
 and the replacement target. `verify_derived_paths()` re-derives all of them and
 compares, so a context mutated after construction is refused before any staging.
 
-## The backend must be provably stopped
+## The backend must be provably stopped, and must stay stopped
 
 A held launcher lock does not prove Uvicorn is stopped: the backend child never
 takes that lock. A free port proves even less — during Restore the port is free
 *by design*. The only sound proof is process ownership: the launcher either has
 not started the backend yet, or it holds the exact `Popen` handle it started and
 has watched that handle die.
+
+Ownership answers "is *my* backend gone". It does not answer "can another one
+appear", and neither does a momentary liveness check: proving the lock was free
+at one instant leaves the whole destructive interval afterwards unprotected. So
+the launcher takes the same canonical backend-liveness lock and **retains** it —
+a :class:`~launcher.restore.maintenance_lease.BackendMaintenanceLease` — for
+every step that reads or writes the working database. While it is held no backend
+can start against this workspace, because the child's own lock acquisition is the
+thing that would have to succeed.
+
+The lease is released for exactly one reason: an owned backend genuinely has to
+run, for ordinary startup or for a verification cycle. It is reacquired before
+anything destructive resumes, and a reacquisition that fails blocks rather than
+continues.
 
 `BackendProcessOwner` is that handle. It terminates **only** the process it
 recorded, escalating to `kill()` on the same handle after a bounded wait, and
@@ -44,6 +58,7 @@ launcher did not start is not a safety measure, it is a second failure mode.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
@@ -53,6 +68,10 @@ import os
 import time
 
 from launcher.restore.instance_lock import LauncherInstanceLock
+from launcher.restore.maintenance_lease import (
+    BackendMaintenanceLease,
+    MaintenanceLeaseError,
+)
 from launcher.restore.workspace import RestoreWorkspace, resolve_restore_dir
 
 logger = logging.getLogger(__name__)
@@ -165,14 +184,24 @@ class BackendProcessOwner:
         self._pid = getattr(process, "pid", None)
 
     def start(self, config, paths, database_path: Path):
-        """Start the ordinary backend child and record the handle.
+        """Start an owned backend child that has **proved** it holds the lock.
+
+        The child runs the launcher-managed entrypoint, which acquires the
+        backend-liveness lock before importing any application module and then
+        reports that acquisition over a one-run inherited pipe. This returns only
+        after that report arrives, so "the backend started" and "the backend holds
+        the lock" are the same fact rather than two hopefully-related ones.
+
+        A child that cannot take the lock, exits early, or does not report within
+        the bound is stopped here and raises: the launcher never carries on with a
+        process it cannot account for.
 
         Deferred import: `launcher.runtime` imports this package for the startup
         recovery gate, so a module-scope import would be circular.
         """
-        from launcher.runtime import start_backend_process
+        from launcher.runtime import start_owned_backend_process
 
-        process = start_backend_process(config, paths, Path(database_path))
+        process = start_owned_backend_process(config, paths, Path(database_path))
         self.adopt(process)
         return process
 
@@ -255,6 +284,7 @@ class LauncherLifecycleContext:
     backup_dir: Path
     workspace: RestoreWorkspace
     lock: LauncherInstanceLock
+    maintenance_lease: BackendMaintenanceLease
     backend: BackendProcessOwner = field(default_factory=BackendProcessOwner)
     _backend_stop_proof: BackendStopProof | None = field(default=None, repr=False)
 
@@ -288,6 +318,7 @@ class LauncherLifecycleContext:
             backup_dir=backup_dir,
             workspace=workspace,
             lock=LauncherInstanceLock.for_workspace(workspace),
+            maintenance_lease=BackendMaintenanceLease.for_workspace(workspace),
         )
         context.verify_derived_paths()
         context.lock.acquire()
@@ -324,6 +355,12 @@ class LauncherLifecycleContext:
             raise RestoreLifecycleError(
                 "The launcher lock does not guard the canonical Restore directory."
             )
+        if self.maintenance_lease.lock_path != self.workspace.backend_liveness_lock_path:
+            # A lease over some other path would keep a backend out of a workspace
+            # this Restore is not about, while leaving the real target unguarded.
+            raise RestoreLifecycleError(
+                "The maintenance lease does not guard the canonical backend-liveness lock."
+            )
 
     def require_authority(self) -> None:
         """Refuse destructive work without a held lock and canonical paths."""
@@ -344,23 +381,39 @@ class LauncherLifecycleContext:
         return self.workspace.backend_liveness_lock_path
 
     def no_backend_is_alive(self) -> bool:
-        """Whether the backend-liveness lock is free right now."""
+        """Whether **no** application backend can be holding the working database.
+
+        Two ways to be true, and the first is stronger. When this launcher holds
+        the retained maintenance lease, the answer is yes by construction: the
+        lease *is* the backend-liveness lock, so no backend can hold it. Otherwise
+        the lock is probed momentarily, which answers availability only — it says
+        the lock was free at that instant and reserves nothing.
+        """
+        if self.maintenance_lease.held:
+            return True
         return backend_liveness_lock_is_free(self.backend_liveness_lock_path)
 
     def stop_backend(self) -> BackendStopProof:
-        """Stop any launcher-owned backend, and prove **no** backend is alive.
+        """Stop any launcher-owned backend and **take** the maintenance lease.
 
-        Two separate facts, and the second is not implied by the first:
+        Three facts, and none of them implies the next:
 
         1. the child *this* launcher owns has exited — proved by its handle;
-        2. no application backend at all holds the liveness lock — proved by the
-           lock, which an orphan from a previously crashed launcher would still
-           be holding even though this process owns nothing.
+        2. no application backend at all holds the liveness lock — proved by
+           taking that lock, which an orphan from a previously crashed launcher
+           would still be holding even though this process owns nothing;
+        3. no application backend can appear during what follows — proved by
+           **keeping** the lock rather than releasing it.
 
-        Only the second is sufficient to touch the working database. An orphan is
-        never killed: this launcher did not start it, so it has detection but no
-        authority, and the safe response is to refuse rather than to signal a
-        process it cannot account for.
+        The third is the one a momentary check could never give. Acquiring and
+        immediately releasing establishes availability at an instant and reserves
+        nothing, so a backend starting one millisecond later would be holding the
+        database through journal settlement and replacement while every individual
+        check had reported success.
+
+        An orphan is never killed: this launcher did not start it, so it has
+        detection but no authority, and the safe response is to refuse rather than
+        to signal a process it cannot account for.
         """
         self.require_authority()
         proof = self.backend.stop()
@@ -375,18 +428,70 @@ class LauncherLifecycleContext:
         if proof.was_running:
             self.backend.wait_until_liveness_lock_released(self.backend_liveness_lock_path)
 
-        if not self.no_backend_is_alive():
-            raise RestoreLifecycleError(
-                "Another application backend is still running against this workspace."
-            )
+        self.acquire_maintenance_lease()
         return proof
 
-    def require_backend_stopped(self) -> BackendStopProof:
-        """Assert the backend-stop proof exists and still holds.
+    # ------------------------------------------------------ maintenance lease
 
-        Re-checks both facts rather than trusting the earlier proof: a launcher
-        that started a backend since, and any backend at all — including one this
-        launcher never owned — holding the liveness lock.
+    def acquire_maintenance_lease(self) -> None:
+        """Take and retain exclusive use of the workspace, or refuse.
+
+        A failure here is never "try harder": the lock is held by an application
+        backend this launcher does not own, and the accepted answer to that is to
+        stop, not to clear the way.
+        """
+        try:
+            self.maintenance_lease.acquire_with_retry()
+        except MaintenanceLeaseError as exc:
+            raise RestoreLifecycleError(
+                "Another application backend is still running against this workspace."
+            ) from exc
+
+    def release_maintenance_lease(self) -> None:
+        """Give the workspace back so an owned backend may start."""
+        self.maintenance_lease.release()
+
+    @contextmanager
+    def owned_backend_window(self):
+        """Release the lease for one owned-backend interval, then take it back.
+
+        The exact accepted cycle, in one place so no call site can implement half
+        of it:
+
+        ```text
+        release the maintenance lease
+        → start the owned child through the pre-import lock entrypoint
+        → wait for that exact child's lock-acquired handshake
+        → verify
+        → stop the child by its owned handle
+        → wait for the lock to be released
+        → reacquire the maintenance lease
+        → only then continue, replace or roll back
+        ```
+
+        The lease is reacquired on the failure path too, because the failure path
+        leads to rollback and rollback replaces the working database. When the
+        reacquisition itself fails, that is raised — a rollback without the lease
+        is precisely the destructive work this object exists to gate.
+        """
+        self.release_maintenance_lease()
+        try:
+            yield self
+        finally:
+            self.backend.wait_until_liveness_lock_released(
+                self.backend_liveness_lock_path
+            )
+            self.acquire_maintenance_lease()
+
+    def require_backend_stopped(self) -> BackendStopProof:
+        """Assert the backend is stopped **and still excluded**, right now.
+
+        Re-checks every fact rather than trusting the earlier proof: a launcher
+        that started a backend since, and — the part a momentary check cannot
+        give — that this launcher still holds the retained maintenance lease. A
+        lease that was released, or was never taken, means the workspace is
+        unreserved, and an unreserved workspace is not authority for destructive
+        work no matter how free the lock looked a moment ago.
         """
         proof = self._backend_stop_proof
         if proof is None or not proof.confirmed_stopped:
@@ -397,15 +502,21 @@ class LauncherLifecycleContext:
             raise RestoreLifecycleError(
                 "A launcher-owned backend is running again; Restore cannot continue."
             )
-        if not self.no_backend_is_alive():
-            raise RestoreLifecycleError(
-                "Another application backend holds the liveness lock; Restore cannot continue."
+        try:
+            self.maintenance_lease.require_held(
+                "Touching the working database"
             )
+        except MaintenanceLeaseError as exc:
+            raise RestoreLifecycleError(
+                "Restore does not hold the retained backend maintenance lease; "
+                "the working database may not be touched."
+            ) from exc
         return proof
 
     # ---------------------------------------------------------------- cleanup
 
     def release(self) -> None:
+        self.maintenance_lease.release()
         self.lock.release()
 
     def __enter__(self) -> "LauncherLifecycleContext":

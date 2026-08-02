@@ -28,8 +28,9 @@ from __future__ import annotations
 
 import logging
 
-from launcher.restore.context import LauncherLifecycleContext
+from launcher.restore.context import LauncherLifecycleContext, RestoreLifecycleError
 from launcher.restore.contracts import (
+    COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE,
     RECOVERY_BLOCKED_MESSAGE,
     ROLLED_BACK_MESSAGE,
     RecoveryResult,
@@ -106,6 +107,27 @@ def _blocked_result(
     )
 
 
+def _blocked_by_backend_liveness(store: RestoreOperationStateStore) -> RecoveryResult:
+    """Block startup because another backend owns this workspace.
+
+    Reads the record purely to *report* the phase that is really there — it is
+    never transitioned, rewritten or cleaned, and a record that will not parse
+    simply reports no phase. Works identically whether an interrupted Restore
+    exists or not: with no record, the orphan alone is reason enough to refuse,
+    because ordinary startup would put a second writer on one SQLite database.
+    """
+    phase = None
+    operation_id = None
+    try:
+        record = store.read()
+    except RestoreStateError:
+        record = None
+    if record is not None:
+        phase = record.phase
+        operation_id = record.operation_id
+    return _blocked_result(phase, operation_id, RECOVERY_BLOCKED_MESSAGE)
+
+
 def _clean_non_destructive_artifacts(workspace, context, operation_id: str) -> None:
     """Remove only what this operation provably owns.
 
@@ -137,13 +159,28 @@ def recover_incomplete_restore(
     """
     active_services = services or RestoreServices()
     context.require_authority()
+    workspace = context.workspace
+    store = RestoreOperationStateStore(workspace)
+
     # Recovery runs *before* ordinary startup, so the launcher has not started a
     # backend yet — but that has to be established, not assumed. With no owned
     # handle this records the "never started" proof; if a previous run in this
     # process did start one, it is stopped here, before any rollback replacement.
-    context.stop_backend()
-    workspace = context.workspace
-    store = RestoreOperationStateStore(workspace)
+    # It also takes the retained maintenance lease, which is what keeps a backend
+    # from appearing during a rollback replacement further down.
+    try:
+        context.stop_backend()
+    except RestoreLifecycleError as exc:
+        # An orphaned backend from a hard launcher crash still holds the liveness
+        # lock, so the lease cannot be taken. That is an **expected** condition of
+        # this gate, not a fault in it: the accepted answer is a blocked startup,
+        # and the caller is `run_local_runtime`, which branches on a
+        # `RecoveryResult`. Letting the lifecycle error escape instead would turn
+        # a designed refusal into an unhandled exception and a stack trace on a
+        # user's screen. Nothing is started, nothing is transitioned, the working
+        # database is untouched, and the technical detail stays in the local log.
+        logger.error("Startup recovery is blocked: %s", exc)
+        return _blocked_by_backend_liveness(store)
 
     if not store.has_record():
         return RecoveryResult(normal_startup_allowed=True, no_operation=True)
@@ -177,7 +214,19 @@ def recover_incomplete_restore(
                 "The terminal Restore record could not be proved durable; "
                 "startup is blocked and the next start retries."
             )
-            return _blocked_result(phase, record.operation_id, RECOVERY_BLOCKED_MESSAGE)
+            # Startup is blocked either way, but what the user is told is not the
+            # same. A `completed` record that is visible and unflushed means the
+            # restored data are in place and verified and only the technical
+            # finalization is unproved — nothing failed, nothing was undone and
+            # nothing was lost, so it does not get the "Restore did not finish"
+            # sentence. The next start retries the confirmation and, when it
+            # succeeds, ordinary startup proceeds as an ordinary success.
+            message = (
+                COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE
+                if phase is RestorePhase.COMPLETED
+                else RECOVERY_BLOCKED_MESSAGE
+            )
+            return _blocked_result(phase, record.operation_id, message)
 
         # Only launcher-owned artifacts are cleaned; the safety copy is retained.
         _clean_non_destructive_artifacts(workspace, context, record.operation_id)

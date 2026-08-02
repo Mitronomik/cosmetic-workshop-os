@@ -62,6 +62,14 @@ class RestoreFailure(str, Enum):
     REPLACEMENT_FAILED = "replacement_failed"
     VERIFICATION_FAILED_ROLLED_BACK = "verification_failed_rolled_back"
     RECOVERY_BLOCKED = "recovery_blocked"
+    # The new attempt never got its own `prepared` record published, so the record
+    # on disk still belongs to a *previous* operation. Nothing of this attempt
+    # happened, and the previous operation's outcome is not this attempt's.
+    PREPARATION_NOT_PUBLISHED = "preparation_not_published"
+    # `completed` is visible on disk, the restored data are in place and verified,
+    # and only the flush that would make that record survive a host interruption
+    # could not be proved. Nothing was rolled back and nothing was lost.
+    COMPLETION_DURABILITY_UNCONFIRMED = "completion_durability_unconfirmed"
 
 
 # The complete user-safe vocabulary. Russian, concise, non-technical: these are
@@ -100,6 +108,21 @@ USER_SAFE_MESSAGES: dict[RestoreFailure, str] = {
         "Восстановление не завершилось, и приложение не может продолжить работу "
         "автоматически. Обратитесь в поддержку — все данные сохранены."
     ),
+    RestoreFailure.PREPARATION_NOT_PUBLISHED: (
+        "Восстановление не началось: приложению не удалось подготовить операцию. "
+        "Данные мастерской не изменились. Попробуйте снова."
+    ),
+    # Says only what is known. The restored data are in place and verified — so
+    # this may not claim a rollback, may not say the previous data were returned,
+    # and may not say anything was lost. What actually failed is the technical
+    # finalization of the record, and the honest instruction is to reopen the
+    # application, which retries exactly that.
+    RestoreFailure.COMPLETION_DURABILITY_UNCONFIRMED: (
+        "Данные восстановлены и проверены, но приложению не удалось безопасно "
+        "завершить служебную фиксацию. Закройте и снова откройте приложение — "
+        "проверка повторится. Все данные сохранены. "
+        "Если сообщение повторится, обратитесь в поддержку."
+    ),
 }
 
 SUCCESS_MESSAGE = "Восстановление завершено. Приложение работает с восстановленными данными."
@@ -108,6 +131,13 @@ ROLLED_BACK_MESSAGE = USER_SAFE_MESSAGES[RestoreFailure.VERIFICATION_FAILED_ROLL
 
 # The one fixed non-technical sentence shown when nothing can be proved safe.
 RECOVERY_BLOCKED_MESSAGE = USER_SAFE_MESSAGES[RestoreFailure.RECOVERY_BLOCKED]
+
+# Startup is blocked, but *not* because anything failed or was undone. Kept
+# separate from `RECOVERY_BLOCKED_MESSAGE` so a visible-but-unflushed `completed`
+# is never described with the vocabulary of a Restore that did not finish.
+COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE = USER_SAFE_MESSAGES[
+    RestoreFailure.COMPLETION_DURABILITY_UNCONFIRMED
+]
 
 
 @dataclass(frozen=True)

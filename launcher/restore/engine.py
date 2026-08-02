@@ -336,8 +336,14 @@ def _execute_with_source(
         # "no record, startup fine" would leave a live operation unresolved while
         # the launcher carried on. Re-read and act on what is actually there.
         if not exc.published:
+            # Nothing new was written. But a refusal is not automatically a clean
+            # one: `create()` also refuses over an existing record, including a
+            # `recovery_blocked` one, and reporting "nothing happened, startup is
+            # fine" would step straight past a blocked recovery.
             logger.error("Restore could not be prepared: %s", type(exc).__name__)
-            return _refused_before_any_state(operation_id, RestoreFailure.SOURCE_REJECTED)
+            return _refuse_over_existing_operation(
+                store, workspace, context, operation_id, RestoreFailure.SOURCE_REJECTED
+            )
         logger.error("The initial Restore record may already be published; re-reading.")
         return _resolve_ambiguous_initial_record(
             store, workspace, context, operation_id, RestoreFailure.SOURCE_REJECTED
@@ -499,14 +505,24 @@ def _verify_restored_workspace(context: LauncherLifecycleContext, services: Rest
     restored path, so an older supported schema takes the ordinary
     `before_migration` backup on the way. The selected source and the preserved
     staged candidate are never migrated: neither is this path.
+
+    Verification is the one part of Restore that has to *start* a backend, and a
+    backend cannot start while the launcher retains the maintenance lease — the
+    child's own lock acquisition is what would have to succeed. So the whole
+    interval runs inside :meth:`~LauncherLifecycleContext.owned_backend_window`,
+    which releases the lease, lets the owned children take and release the lock,
+    waits for the last release, and takes the lease back before anything can
+    continue or roll back. A reacquisition that fails raises from the window, and
+    that failure reaches rollback as a refusal rather than as a replacement.
     """
-    startup = services.startup(context.mode, context.paths)
-    startup_path = Path(getattr(startup, "database_path", context.database_path))
-    if startup_path != context.database_path:
-        raise RestoreEngineError(
-            "Restored startup resolved a different database than the replacement target."
-        )
-    services.verify_backend(context.config, context.paths, context.database_path)
+    with context.owned_backend_window():
+        startup = services.startup(context.mode, context.paths)
+        startup_path = Path(getattr(startup, "database_path", context.database_path))
+        if startup_path != context.database_path:
+            raise RestoreEngineError(
+                "Restored startup resolved a different database than the replacement target."
+            )
+        services.verify_backend(context.config, context.paths, context.database_path)
 
 
 # --------------------------------------------------------------------------
@@ -594,6 +610,23 @@ def _resolve_ambiguous_initial_record(
     authorizes. When even that cannot be published, the actual phase is reported
     with startup blocked, and startup recovery resolves the same real record on
     the next launcher start.
+
+    **Identity is checked before anything is concluded.** The record that is there
+    may not be this attempt's at all — the rename may simply never have landed,
+    leaving the *previous* operation's terminal record untouched:
+
+    ```text
+    operation A ends at `completed`
+    operation B is generated
+    B's `prepared` publication fails ambiguously
+    the record on disk still says A / completed
+    ```
+
+    Reading that as "this attempt completed" would report a Restore that never
+    started as a success, using another operation's identity and another
+    operation's outcome. So the operation ID is compared first, and a record
+    belonging to some other operation is handled as what it is: evidence that this
+    attempt was never published.
     """
     try:
         current = store.read()
@@ -612,12 +645,119 @@ def _resolve_ambiguous_initial_record(
         # The rename did not land after all: no record, nothing to resolve.
         return _refused_before_any_state(operation_id, failure)
 
+    if current.operation_id != operation_id:
+        # Some other operation's record. This attempt was never published, so
+        # nothing about it may be read out of a record it did not write.
+        logger.error(
+            "The Restore record on disk belongs to a previous operation; "
+            "this attempt was never published."
+        )
+        return _resolve_foreign_record(store, workspace, context, current, operation_id)
+
     if current.phase in TERMINAL_PHASES:
         return _terminal_result(store, current, workspace, context, failure)
     if current.phase is RestorePhase.PREPARED:
         return _abort(store, current, workspace, context, failure)
     # Any other live phase belongs to the ordinary matrix, not to this window.
     return _blocked_without_transition(current, failure)
+
+
+def _refuse_over_existing_operation(
+    store: RestoreOperationStateStore,
+    workspace,
+    context: LauncherLifecycleContext,
+    operation_id: str,
+    failure: RestoreFailure,
+) -> RestoreResult:
+    """Report a refusal that definitely published nothing, honestly.
+
+    "Nothing was written" is not the same as "nothing is wrong". `create()`
+    refuses over a `recovery_blocked` record as well as over a live one, and both
+    of those decide whether ordinary startup may proceed. Falling through to the
+    no-record result would set `normal_startup_allowed=True` over a blocked
+    recovery — the one outcome that state exists to prevent.
+    """
+    try:
+        current = store.read()
+    except RestoreStateError:
+        logger.error("The existing Restore record is unreadable.")
+        return _result(
+            RestoreOutcome.RECOVERY_BLOCKED,
+            None,
+            operation_id,
+            failure=RestoreFailure.RECOVERY_BLOCKED,
+            normal_startup_allowed=False,
+        )
+    if current is None:
+        return _refused_before_any_state(operation_id, failure)
+    return _resolve_foreign_record(store, workspace, context, current, operation_id)
+
+
+def _resolve_foreign_record(
+    store: RestoreOperationStateStore,
+    workspace,
+    context: LauncherLifecycleContext,
+    existing: RestoreOperationRecord,
+    operation_id: str,
+) -> RestoreResult:
+    """Report a new attempt that never published, over someone else's record.
+
+    Four rules, and every one of them exists because the alternative is a lie.
+
+    **The previous record is never modified.** No transition, no rewrite, no
+    cleanup of what it names. It is the authoritative record of an operation that
+    is not this one.
+
+    **Its outcome is never inherited.** The result reports `aborted`, always, with
+    a message saying this attempt did not start. A previous `completed` is not
+    this attempt's success, and reporting it as one would mean the caller believed
+    a Restore had happened when the source was never even staged.
+
+    **The identity stays this attempt's.** `operation_id` is the new one, so a
+    caller cannot mistake the result for a report about the previous operation.
+
+    **Only this attempt's own empty directory is cleaned.** It was created moments
+    ago under a freshly generated ID and holds nothing; the previous operation's
+    staged evidence lives under *its* ID and is not touched.
+
+    Whether ordinary startup may then proceed is the previous record's question,
+    not this attempt's, and it is answered by the one shared positive rule: a safe
+    terminal phase whose durability can be re-proved permits startup, and anything
+    else — unsafe, blocked, or safe-but-unprovable — does not.
+    """
+    workspace.clean_owned_staging(operation_id)
+
+    phase = existing.phase
+    if phase is RestorePhase.RECOVERY_BLOCKED:
+        # Blocked stays blocked, and every piece of its evidence stays where it is.
+        logger.error("A previous Restore ended in recovery_blocked; a new attempt is refused.")
+        return _result(
+            RestoreOutcome.RECOVERY_BLOCKED,
+            phase,
+            operation_id,
+            failure=RestoreFailure.RECOVERY_BLOCKED,
+            normal_startup_allowed=False,
+        )
+
+    if phase not in SAFE_TERMINAL_STARTUP_PHASES:
+        # A live phase belonging to another operation. Startup recovery resolves
+        # it through the ordinary matrix on the next start; this attempt does not.
+        return _result(
+            RestoreOutcome.ABORTED,
+            phase,
+            operation_id,
+            failure=RestoreFailure.PREPARATION_NOT_PUBLISHED,
+            normal_startup_allowed=False,
+        )
+
+    confirmed = _confirm_record_durability(store)
+    return _result(
+        RestoreOutcome.ABORTED,
+        phase,
+        operation_id,
+        failure=RestoreFailure.PREPARATION_NOT_PUBLISHED,
+        durability_confirmed=confirmed,
+    )
 
 
 def _confirm_record_durability(store: RestoreOperationStateStore) -> bool:
@@ -677,10 +817,42 @@ def _terminal_result(
         outcome,
         phase,
         record.operation_id,
-        failure=None if confirmed and phase is RestorePhase.COMPLETED else failure,
+        failure=_terminal_failure(phase, confirmed, failure),
         record=record,
         durability_confirmed=confirmed,
     )
+
+
+def _terminal_failure(
+    phase: RestorePhase, confirmed: bool, failure: RestoreFailure | None
+) -> RestoreFailure | None:
+    """Which fixed category describes a terminal record — truthfully.
+
+    The interesting case is a **visible but unconfirmed `completed`**. What is
+    actually true there is narrow and specific:
+
+    ```text
+    the restored data are in place        the replacement committed
+    they were verified                    two full backend cycles passed
+    `completed` is visible on disk        the rename landed
+    its flush could not be proved         and only that
+    nothing was rolled back               there was nothing to roll back from
+    ```
+
+    Carrying the caller's incoming `failure` through here is how that state came
+    to be described with rollback wording — "восстановление не завершилось,
+    возвращены предыдущие данные" — which claims two things that did not happen:
+    a rollback, and a return to the previous data. The restored workspace is
+    authoritative and stays authoritative.
+
+    So this window gets its own fixed category. It is not a phase and not a
+    transition: `phase` remains `completed`, the sole authoritative lifecycle
+    field, and the category only decides which sentence a caller renders while
+    startup waits for the next attempt at confirmation.
+    """
+    if phase is RestorePhase.COMPLETED:
+        return None if confirmed else RestoreFailure.COMPLETION_DURABILITY_UNCONFIRMED
+    return failure
 
 
 def _blocked_without_transition(
@@ -845,10 +1017,15 @@ def perform_rollback(
         return _blocked(store, record)
 
     try:
-        startup = services.startup(context.mode, context.paths)
-        if Path(getattr(startup, "database_path", database_path)) != database_path:
-            raise RestoreEngineError("Rollback startup resolved a different database.")
-        services.verify_backend(context.config, context.paths, database_path)
+        # The same release/handshake/reacquire cycle the forward path uses. The
+        # rollback replacement above happened under the lease; the verification
+        # below needs the lease released so an owned backend can hold the lock,
+        # and the lease back afterwards before any further destructive step.
+        with context.owned_backend_window():
+            startup = services.startup(context.mode, context.paths)
+            if Path(getattr(startup, "database_path", database_path)) != database_path:
+                raise RestoreEngineError("Rollback startup resolved a different database.")
+            services.verify_backend(context.config, context.paths, database_path)
     except Exception as exc:  # noqa: BLE001 - an unverifiable rollback blocks recovery
         logger.error("Rolled-back workspace failed verification: %s", type(exc).__name__)
         return _blocked(store, record)
