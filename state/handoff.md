@@ -1,6 +1,6 @@
 # Handoff
 
-## C4-I implemented on its PR branch — not merged (2026-08-02)
+## C4-I implemented and corrected on its PR branch — not merged (2026-08-02)
 
 > This is the single current authoritative lifecycle conclusion. Every earlier
 > section in this file, including the one immediately below, is a historical
@@ -10,9 +10,12 @@
 CR-010 — ACCEPTED (PR #169, merge commit b89cbaaaf41a56c810847d7c1e593712c5591eb6)
 
 C4-I — Launcher-owned restore safety engine
-— IMPLEMENTED ON PR BRANCH — NOT MERGED
+— IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
+— PR #170, draft
 — branch codex/c4-i-launcher-restore-safety-engine
 — based on origin/main = b89cbaaaf41a56c810847d7c1e593712c5591eb6
+— first published head a66ddd6c34f9790cee4fedad7461cd41f9fdc154 was
+  independently reviewed; five safety blockers were found and closed
 
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -26,8 +29,8 @@ full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-**Next action: review and merge the `C4-I` pull request.** Nothing else is
-authorized until it merges.
+**Next action: an independent audit of the new published head of PR #170.** The
+PR stays draft until that audit clears it. Nothing else is authorized.
 
 ### What the next agent needs to know
 
@@ -54,12 +57,21 @@ authorized until it merges.
   exclusive instance lock and resolves any interrupted Restore *before* startup
   migrations, the backend child and the browser. `recovery_blocked` returns exit
   code `3` and starts nothing.
-- **`scripts/c4_i_restore_smoke.sh` is developer-only.** It refuses to run outside
-  a clean workspace at an expected published SHA and must never be documented as
-  the product workflow.
-- **Evidence on the branch**: baseline `1843` node IDs all preserved, `238` added;
-  `2081 passed` for the complete backend + launcher suite; exact-head isolated
-  Restore smoke `PASS`; repository clean after.
+- **No PR-specific smoke runner is committed.** An earlier revision of the branch
+  had one under `scripts/`; it was removed because the smoke-authoring contract
+  requires a PR-specific exact-head runner to live outside the pull request it
+  verifies. The runner is created outside the repository and drives a detached
+  worktree at the exact published head. `scripts/restore_backup.sh` is unrelated
+  to `C4-I` and is unchanged.
+- **The five closed review findings** are summarized in `state/current-focus.md`
+  and specified in `docs/backup-and-restore.md` § 16. The most load-bearing ones
+  to keep in mind when reading the code: a caller supplies **only** the selected
+  source; the backend is stopped **by owned handle** before anything touches the
+  working database; a publication that may have landed is **re-read**, never
+  assumed; and the parent-directory flush is **mandatory**.
+- **Evidence on the branch**: baseline `1843` node IDs all preserved, `321` added;
+  `2164 passed` for the complete backend + launcher suite; external exact-head
+  Restore smoke against a detached checkout; repository clean before and after.
 
 ---
 

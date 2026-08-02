@@ -2057,7 +2057,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -2115,12 +2115,16 @@ decision.
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
 ```
 
 The **only** runtime slice authorized by `CR-010`. It is implemented on the
 pull-request branch `codex/c4-i-launcher-restore-safety-engine` and is **not
-merged**. It has no user-facing entry point, so **`Restore` remains
+merged**. An independent review of its first published head found five
+safety-critical implementation gaps — original-source sidecar handling,
+backend-stop proof, canonically derived destructive paths, rollback-publication
+failure handling and the durability boundary — and all five are closed on that
+branch. None required a change to the accepted phase machine. It has no user-facing entry point, so **`Restore` remains
 `NOT IMPLEMENTED`** and product release readiness remains **not claimed**.
 
 The implementation is `launcher/restore/` — a focused package covering phase
@@ -2132,8 +2136,8 @@ no migration, no schema change, no AuditLog event, no API endpoint and no
 frontend change. The exact operational detail — state-file location and allowed
 fields, the atomic publication primitive and its durability limits, the
 disk-space formula, the launcher lock, target WAL/SHM/journal handling, the
-verification endpoints and the developer-only smoke command — is recorded in
-`docs/backup-and-restore.md` § 16.
+verification endpoints and the external exact-head smoke procedure — is recorded
+in `docs/backup-and-restore.md` § 16.
 
 Scope:
 
@@ -2251,7 +2255,10 @@ no `C4-II` or `C4-III` work; no release-readiness claim.
 state machine was implemented exactly — same twelve phases, same transition graph,
 same recovery matrix, same `replacement_intent` crash rule — so no amending
 decision was required. Evidence (complete backend and launcher suites, and a
-developer-only isolated exact-head Restore smoke) belongs to that pull request.
+developer-only exact-head Restore smoke run from outside the pull request against
+a detached checkout of the exact published head) belongs to that pull request. No
+PR-specific smoke runner is committed: the smoke-authoring contract requires it to
+live outside the code it verifies.
 
 ### C4-II — User-facing launcher Restore flow
 

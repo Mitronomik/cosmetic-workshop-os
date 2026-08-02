@@ -28,14 +28,13 @@ from launcher.restore.state import (
 from launcher.restore.workspace import RestoreWorkspace
 
 from launcher.tests.restore_fixtures import (
-    DUMMY_CONFIG,
-    DUMMY_PATHS,
     failing_startup,
     failing_verifier,
     make_source_backup,
-    migrating_startup,
     make_workspace,
+    migrating_startup,
     read_marker,
+    request_for,
     stub_services,
 )
 
@@ -55,17 +54,24 @@ def store_for(workspace_fixture) -> RestoreOperationStateStore:
 
 @pytest.fixture
 def scenario(monkeypatch, tmp_path):
-    """Workspace A on disk, backup B selected as the Restore source."""
+    """Workspace A on disk, backup B selected as the Restore source.
+
+    The context is a real one, acquired through the production classmethod, so
+    every test here also exercises canonical path derivation and the held lock.
+    """
     workspace = make_workspace(monkeypatch, tmp_path, marker="workspace-A")
     source = make_source_backup(tmp_path, "workspace-B")
-    return workspace, source
+    context = workspace.context()
+    try:
+        yield workspace, source, context
+    finally:
+        context.release()
 
 
-def run(workspace, source, **service_overrides):
+def run(workspace, source, context, **service_overrides):
     return execute_restore(
-        workspace.request(source),
-        DUMMY_CONFIG,
-        DUMMY_PATHS,
+        request_for(source),
+        context,
         services=stub_services(workspace.database_path, **service_overrides),
     )
 
@@ -87,12 +93,12 @@ def fail_transition_at(monkeypatch, phase: RestorePhase) -> None:
 # --------------------------------------------------------------------------
 
 def test_a_complete_restore_reaches_durable_completed(scenario):
-    workspace, source = scenario
+    workspace, source, context = scenario
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert result.outcome is RestoreOutcome.COMPLETED
-    assert result.phase is RestorePhase.COMPLETED
+    assert result.durable_phase is RestorePhase.COMPLETED
     assert result.restore_succeeded is True
     assert result.failure is None
     assert read_marker(workspace.database_path) == "workspace-B"
@@ -100,9 +106,9 @@ def test_a_complete_restore_reaches_durable_completed(scenario):
 
 
 def test_a_successful_restore_retains_a_verified_safety_copy(scenario):
-    workspace, source = scenario
+    workspace, source, context = scenario
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     copies = workspace.safety_copies()
     assert len(copies) == 1
@@ -112,18 +118,18 @@ def test_a_successful_restore_retains_a_verified_safety_copy(scenario):
 
 
 def test_a_successful_restore_leaves_the_source_byte_identical(scenario):
-    workspace, source = scenario
+    workspace, source, context = scenario
     before = digest(source)
 
-    run(workspace, source)
+    run(workspace, source, context)
 
     assert digest(source) == before
 
 
 def test_a_successful_restore_cleans_only_its_own_staging(scenario):
-    workspace, source = scenario
+    workspace, source, context = scenario
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert not (workspace.restore_dir / result.operation_id).exists()
     assert workspace.safety_copies()
@@ -137,7 +143,11 @@ def test_an_older_supported_schema_is_migrated_on_the_restored_copy(monkeypatch,
     older = make_source_backup(tmp_path, "workspace-B-old", up_to="0018_demo_data_tracking")
     before = digest(older)
 
-    result = run(workspace, older)
+    context = workspace.context()
+    try:
+        result = run(workspace, older, context)
+    finally:
+        context.release()
 
     assert result.outcome is RestoreOutcome.COMPLETED
     connection = sqlite3.connect(f"file:{workspace.database_path}?mode=ro", uri=True)
@@ -158,13 +168,12 @@ def test_an_older_supported_schema_is_migrated_on_the_restored_copy(monkeypatch,
 # --------------------------------------------------------------------------
 
 def test_a_rejected_source_aborts_without_creating_an_operation(scenario, tmp_path):
-    workspace, _source = scenario
+    workspace, _source, context = scenario
     missing = tmp_path / "not-there.sqlite"
 
     result = execute_restore(
-        workspace.request(missing),
-        DUMMY_CONFIG,
-        DUMMY_PATHS,
+        request_for(missing),
+        context,
         services=stub_services(workspace.database_path),
     )
 
@@ -187,7 +196,11 @@ def test_an_invalid_candidate_aborts_and_retains_the_working_database(monkeypatc
         connection.close()
     before = digest(source)
 
-    result = run(workspace, source)
+    context = workspace.context()
+    try:
+        result = run(workspace, source, context)
+    finally:
+        context.release()
 
     assert result.outcome is RestoreOutcome.ABORTED
     assert result.failure is RestoreFailure.CANDIDATE_INVALID
@@ -214,7 +227,11 @@ def test_a_newer_schema_is_rejected_before_the_working_database_changes(monkeypa
         connection.close()
     assert "0021_from_the_future" not in expected_migration_ids()
 
-    result = run(workspace, source)
+    context = workspace.context()
+    try:
+        result = run(workspace, source, context)
+    finally:
+        context.release()
 
     assert result.outcome is RestoreOutcome.ABORTED
     assert result.failure is RestoreFailure.UNSUPPORTED_SCHEMA
@@ -224,12 +241,12 @@ def test_a_newer_schema_is_rejected_before_the_working_database_changes(monkeypa
 def test_insufficient_disk_space_aborts_before_staging(scenario, monkeypatch):
     import shutil
 
-    workspace, source = scenario
+    workspace, source, context = scenario
     monkeypatch.setattr(
         shutil, "disk_usage", lambda _p: shutil._ntuple_diskusage(total=1, used=0, free=1)
     )
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert result.outcome is RestoreOutcome.ABORTED
     assert result.failure is RestoreFailure.INSUFFICIENT_DISK_SPACE
@@ -241,14 +258,14 @@ def test_insufficient_disk_space_aborts_before_staging(scenario, monkeypatch):
 def test_a_failing_safety_copy_aborts_before_replacement_intent(scenario, monkeypatch):
     from app.services import backup as backup_module
 
-    workspace, source = scenario
+    workspace, source, context = scenario
 
     def refuse(**_kwargs):
         raise backup_module.BackupError("engine refused")
 
     monkeypatch.setattr(backup_module, "backup_sqlite_database", refuse)
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert result.outcome is RestoreOutcome.ABORTED
     assert result.failure is RestoreFailure.SAFETY_COPY_FAILED
@@ -260,14 +277,14 @@ def test_unsafe_target_journal_state_stops_before_replacement(scenario, monkeypa
     from launcher.restore import engine as engine_module
     from launcher.restore.replacement import JournalSafetyError
 
-    workspace, source = scenario
+    workspace, source, context = scenario
     monkeypatch.setattr(
         engine_module,
         "quiesce_target_journal",
         lambda _p: (_ for _ in ()).throw(JournalSafetyError("unaccountable sidecar")),
     )
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert result.outcome is RestoreOutcome.ABORTED
     assert result.failure is RestoreFailure.REPLACEMENT_FAILED
@@ -278,10 +295,10 @@ def test_unsafe_target_journal_state_stops_before_replacement(scenario, monkeypa
 
 def test_a_failure_to_publish_replacement_intent_aborts(scenario, monkeypatch):
     """The boundary was never entered, so nothing is ambiguous."""
-    workspace, source = scenario
+    workspace, source, context = scenario
     fail_transition_at(monkeypatch, RestorePhase.REPLACEMENT_INTENT)
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert result.outcome is RestoreOutcome.ABORTED
     assert result.failure is RestoreFailure.REPLACEMENT_FAILED
@@ -295,7 +312,7 @@ def test_a_failure_to_publish_replacement_intent_aborts(scenario, monkeypatch):
 
 def assert_rolled_back(result, workspace, source_digest=None, source=None):
     assert result.outcome is RestoreOutcome.ROLLED_BACK
-    assert result.phase is RestorePhase.ROLLED_BACK
+    assert result.durable_phase is RestorePhase.ROLLED_BACK
     assert result.restore_succeeded is False, "rolled_back is never a successful Restore"
     assert read_marker(workspace.database_path) == "workspace-A"
     assert store_for(workspace).read().phase is RestorePhase.ROLLED_BACK
@@ -309,7 +326,7 @@ def test_a_failing_replacement_call_rolls_back(scenario, monkeypatch):
     from launcher.restore import engine as engine_module
     from launcher.restore.replacement import ReplacementError
 
-    workspace, source = scenario
+    workspace, source, context = scenario
     before = digest(source)
     calls = {"n": 0}
     real = engine_module.commit_replacement
@@ -322,7 +339,7 @@ def test_a_failing_replacement_call_rolls_back(scenario, monkeypatch):
 
     monkeypatch.setattr(engine_module, "commit_replacement", fail_first)
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert result.failure is RestoreFailure.REPLACEMENT_FAILED
     assert_rolled_back(result, workspace, before, source)
@@ -333,27 +350,27 @@ def test_a_failing_replacement_call_rolls_back(scenario, monkeypatch):
     [RestorePhase.REPLACEMENT_COMMITTED, RestorePhase.VERIFICATION_IN_PROGRESS],
 )
 def test_a_failure_to_publish_a_post_replacement_phase_rolls_back(scenario, monkeypatch, phase):
-    workspace, source = scenario
+    workspace, source, context = scenario
     before = digest(source)
     fail_transition_at(monkeypatch, phase)
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert_rolled_back(result, workspace, before, source)
 
 
 def test_a_migration_failure_during_restored_startup_rolls_back(scenario):
-    workspace, source = scenario
+    workspace, source, context = scenario
     before = digest(source)
 
-    result = run(workspace, source, startup=failing_startup(workspace.database_path))
+    result = run(workspace, source, context, startup=failing_startup(workspace.database_path))
 
     assert_rolled_back(result, workspace, before, source)
 
 
 def test_a_startup_resolving_a_different_database_rolls_back(scenario, tmp_path):
     """Database-path continuity is a hard requirement, not a warning."""
-    workspace, source = scenario
+    workspace, source, context = scenario
     calls = {"n": 0}
     healthy = migrating_startup(workspace.database_path)
 
@@ -363,7 +380,7 @@ def test_a_startup_resolving_a_different_database_rolls_back(scenario, tmp_path)
             return SimpleNamespace(database_path=tmp_path / "somewhere-else.sqlite")
         return healthy(mode, paths)
 
-    result = run(workspace, source, startup=wrong_path_startup)
+    result = run(workspace, source, context, startup=wrong_path_startup)
 
     assert_rolled_back(result, workspace)
 
@@ -381,10 +398,10 @@ def test_a_startup_resolving_a_different_database_rolls_back(scenario, tmp_path)
 )
 def test_every_backend_verification_boundary_rolls_back(scenario, boundary):
     """Each named verification boundary ends at the same accepted outcome."""
-    workspace, source = scenario
+    workspace, source, context = scenario
     before = digest(source)
 
-    result = run(workspace, source, verify=failing_verifier(boundary))
+    result = run(workspace, source, context, verify=failing_verifier(boundary))
 
     assert result.failure is RestoreFailure.VERIFICATION_FAILED_ROLLED_BACK
     assert_rolled_back(result, workspace, before, source)
@@ -396,19 +413,19 @@ def test_a_failure_to_publish_completed_rolls_back(scenario, monkeypatch):
     Rolling back now is the same decision the next startup would make from that
     phase, taken while this process is still here to make it cleanly.
     """
-    workspace, source = scenario
+    workspace, source, context = scenario
     fail_transition_at(monkeypatch, RestorePhase.COMPLETED)
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert_rolled_back(result, workspace)
 
 
 def test_after_completed_is_published_nothing_rolls_back(scenario):
     """The last boundary: once `completed` is durable, the restore stands."""
-    workspace, source = scenario
+    workspace, source, context = scenario
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert result.outcome is RestoreOutcome.COMPLETED
     assert read_marker(workspace.database_path) == "workspace-B"
@@ -423,14 +440,14 @@ def test_an_unverifiable_rollback_becomes_recovery_blocked(scenario, monkeypatch
     from launcher.restore import engine as engine_module
     from launcher.restore.safety_copy import SafetyCopyError
 
-    workspace, source = scenario
+    workspace, source, context = scenario
     monkeypatch.setattr(
         engine_module,
         "verify_safety_copy",
         lambda _p: (_ for _ in ()).throw(SafetyCopyError("cannot verify")),
     )
 
-    result = run(workspace, source, verify=failing_verifier("verification"))
+    result = run(workspace, source, context, verify=failing_verifier("verification"))
 
     assert result.outcome is RestoreOutcome.RECOVERY_BLOCKED
     assert result.failure is RestoreFailure.RECOVERY_BLOCKED
@@ -441,14 +458,14 @@ def test_recovery_blocked_preserves_every_piece_of_evidence(scenario, monkeypatc
     from launcher.restore import engine as engine_module
     from launcher.restore.safety_copy import SafetyCopyError
 
-    workspace, source = scenario
+    workspace, source, context = scenario
     monkeypatch.setattr(
         engine_module,
         "verify_safety_copy",
         lambda _p: (_ for _ in ()).throw(SafetyCopyError("cannot verify")),
     )
 
-    result = run(workspace, source, verify=failing_verifier("verification"))
+    result = run(workspace, source, context, verify=failing_verifier("verification"))
 
     assert (workspace.restore_dir / result.operation_id / "candidate.sqlite").exists()
     assert (workspace.restore_dir / "operation.json").exists()
@@ -460,39 +477,49 @@ def test_recovery_blocked_preserves_every_piece_of_evidence(scenario, monkeypatc
 # Locking
 # --------------------------------------------------------------------------
 
-def test_a_competing_launcher_prevents_a_restore_attempt(scenario):
-    from launcher.restore.instance_lock import LauncherInstanceLock
+def test_restore_is_refused_without_a_held_lifecycle_lock(scenario):
+    """A bare engine call cannot bypass the gate.
 
-    workspace, source = scenario
-    holder = LauncherInstanceLock.for_workspace(
-        RestoreWorkspace(
-            restore_dir=workspace.restore_dir, database_path=workspace.database_path
-        )
-    ).acquire()
-    try:
-        import subprocess
-        import sys
+    Releasing the lock leaves a context that still *looks* complete — canonical
+    paths, workspace, backend owner — and the engine still refuses, because
+    authority is the held lock rather than the presence of the object.
+    """
+    workspace, source, context = scenario
+    context.release()
 
-        # A competing *process*, because flock is per open file description.
-        completed = subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                "import fcntl,os,sys\n"
-                "fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)\n"
-                "try:\n"
-                "    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
-                "except OSError:\n"
-                "    print('refused')\n"
-                "else:\n"
-                "    print('acquired')\n",
-                str(workspace.restore_dir / "launcher.lock"),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        assert completed.stdout.strip() == "refused"
-        assert read_marker(workspace.database_path) == "workspace-A"
-    finally:
-        holder.release()
+    result = run(workspace, source, context)
+
+    assert result.outcome is RestoreOutcome.ABORTED
+    assert result.failure is RestoreFailure.LAUNCHER_ALREADY_RUNNING
+    assert result.durable_phase is None
+    assert read_marker(workspace.database_path) == "workspace-A"
+    assert store_for(workspace).read() is None
+
+
+def test_a_competing_launcher_process_cannot_take_the_lock(scenario):
+    """flock is per open file description, so this needs a real second process."""
+    import subprocess
+    import sys
+
+    workspace, _source, _context = scenario
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import fcntl,os,sys\n"
+            "fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT, 0o600)\n"
+            "try:\n"
+            "    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n"
+            "except OSError:\n"
+            "    print('refused')\n"
+            "else:\n"
+            "    print('acquired')\n",
+            str(workspace.restore_dir / "launcher.lock"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert completed.stdout.strip() == "refused"
+    assert read_marker(workspace.database_path) == "workspace-A"

@@ -18,7 +18,7 @@ import json
 
 import pytest
 
-from launcher.restore import state as state_module
+from launcher.restore import durability, state as state_module
 from launcher.restore.phases import PhaseTransitionError, RestorePhase
 from launcher.restore.state import (
     ALLOWED_RECORD_FIELDS,
@@ -207,6 +207,13 @@ def test_recorded_filenames_are_additive_and_cannot_be_blanked(store):
 # --------------------------------------------------------------------------
 # Fault injection at every publication boundary
 # --------------------------------------------------------------------------
+#
+# The boundaries are the named functions in `launcher.restore.durability`, which
+# is why they are named functions at all. Two classes of outcome are proved:
+# a fault *before* the rename must leave the complete old record, and a fault at
+# or after the rename must be reported as possibly-published so the caller
+# re-reads rather than assuming.
+
 
 def _existing_record(store):
     record = store.create(new_operation_id())
@@ -215,57 +222,148 @@ def _existing_record(store):
     )
 
 
-@pytest.mark.parametrize(
-    "boundary",
-    ["_create_owned_scratch", "_write_scratch_record", "_fsync_file", "_publish_scratch"],
-)
-def test_a_fault_at_any_boundary_leaves_the_complete_old_record(store, monkeypatch, boundary):
+def explode(*_args, **_kwargs):
+    raise OSError(5, "injected fault")
+
+
+@pytest.mark.parametrize("boundary", ["_open_scratch_for_write", "flush_file"])
+def test_a_fault_before_the_rename_leaves_the_complete_old_record(
+    store, monkeypatch, boundary
+):
     """Old-or-new, never a partial authoritative record."""
     before = _existing_record(store)
     before_bytes = store.record_path.read_bytes()
+    monkeypatch.setattr(durability, boundary, explode)
 
-    def explode(*_args, **_kwargs):
-        raise OSError(5, "injected fault")
-
-    monkeypatch.setattr(state_module, boundary, explode)
-
-    with pytest.raises(RestoreStateError):
+    with pytest.raises(RestoreStateError) as error:
         store.transition(before, RestorePhase.CANDIDATE_VALIDATED)
 
+    assert error.value.published is False, "nothing was published, so nothing may be assumed"
     assert store.record_path.read_bytes() == before_bytes
     assert store.read().phase is RestorePhase.SOURCE_STAGED
 
 
-def test_a_parent_directory_fsync_failure_does_not_lose_the_new_record(store, monkeypatch):
-    """The atomic boundary already held; only its durability is best-effort.
+def test_a_fault_creating_the_scratch_file_leaves_the_old_record(store, monkeypatch):
+    before = _existing_record(store)
+    before_bytes = store.record_path.read_bytes()
+    monkeypatch.setattr(state_module, "_create_owned_scratch", explode)
 
-    Refusing here would break Restore on a mount that will not fsync a directory,
-    while the old-or-new guarantee the recovery matrix depends on is unaffected.
+    with pytest.raises(RestoreStateError) as error:
+        store.transition(before, RestorePhase.CANDIDATE_VALIDATED)
+
+    assert error.value.published is False
+    assert store.record_path.read_bytes() == before_bytes
+
+
+def test_a_fault_during_the_rename_is_reported_as_possibly_published(store, monkeypatch):
+    """`os.replace` failing is ambiguous by construction, so it is never denied."""
+    before = _existing_record(store)
+    monkeypatch.setattr(durability, "_atomic_rename", explode)
+
+    with pytest.raises(RestoreStateError) as error:
+        store.transition(before, RestorePhase.CANDIDATE_VALIDATED)
+
+    assert error.value.published is True
+    # The rename did not in fact happen here, and re-reading says so honestly —
+    # which is exactly why the caller re-reads instead of assuming either way.
+    assert store.read().phase is RestorePhase.SOURCE_STAGED
+
+
+@pytest.mark.parametrize("boundary", ["flush_path", "flush_directory"])
+def test_a_post_rename_flush_failure_is_reported_as_published(store, monkeypatch, boundary):
+    """The record IS the new one; only its durability is unproven.
+
+    `flush_path` is the published target and `flush_directory` is its parent —
+    the two flushes that happen *after* the rename. This is the case the previous
+    implementation got wrong by treating a parent-directory sync failure as
+    harmless. It is not harmless: the caller must know the new phase may be on
+    disk, or it will act on a phase that is.
     """
-    import os
-    import stat
+    before = _existing_record(store)
+    monkeypatch.setattr(durability, boundary, explode)
 
-    record = _existing_record(store)
-    real_fsync = state_module.os.fsync
+    with pytest.raises(RestoreStateError) as error:
+        store.transition(before, RestorePhase.CANDIDATE_VALIDATED)
 
-    def refuse_directories(fd):
-        if stat.S_ISDIR(os.fstat(fd).st_mode):
-            raise OSError(22, "directory fsync unsupported")
-        return real_fsync(fd)
-
-    monkeypatch.setattr(state_module.os, "fsync", refuse_directories)
-
-    published = store.transition(record, RestorePhase.CANDIDATE_VALIDATED)
-
-    assert published.phase is RestorePhase.CANDIDATE_VALIDATED
+    assert error.value.published is True
     assert store.read().phase is RestorePhase.CANDIDATE_VALIDATED
+
+
+def test_the_file_flush_uses_the_strongest_supported_primitive(tmp_path, monkeypatch):
+    """`F_FULLFSYNC` on macOS, with an honest recorded fallback.
+
+    The returned method is what the documentation may claim, so a filesystem that
+    refuses the full flush downgrades the *claim* as well as the call.
+    """
+    import errno
+    import os
+
+    target = tmp_path / "probe.bin"
+    target.write_bytes(b"content")
+    fd = os.open(target, os.O_RDONLY)
+    try:
+        method = durability.flush_file(fd)
+        if durability.IS_MACOS:
+            assert method is durability.FULL_SYNC
+            assert method.full_device_flush is True
+
+        monkeypatch.setattr(
+            durability,
+            "_full_device_flush",
+            lambda _fd: (_ for _ in ()).throw(OSError(errno.ENOTSUP, "unsupported")),
+        )
+        fallback = durability.flush_file(fd)
+        assert fallback is durability.PLAIN_FSYNC
+        assert fallback.full_device_flush is False, "no stronger guarantee may be claimed"
+    finally:
+        os.close(fd)
+
+
+def test_an_unexpected_full_flush_error_is_not_downgraded(tmp_path, monkeypatch):
+    """Only `ENOTSUP`-class errors fall back; a real I/O failure propagates."""
+    import errno
+    import os
+
+    target = tmp_path / "probe.bin"
+    target.write_bytes(b"content")
+    fd = os.open(target, os.O_RDONLY)
+    try:
+        monkeypatch.setattr(
+            durability,
+            "_full_device_flush",
+            lambda _fd: (_ for _ in ()).throw(OSError(errno.EIO, "device failure")),
+        )
+        if durability.IS_MACOS:
+            with pytest.raises(OSError):
+                durability.flush_file(fd)
+    finally:
+        os.close(fd)
+
+
+def test_a_parent_directory_flush_failure_is_never_silently_ignored(store, monkeypatch):
+    """Mandatory, not best effort.
+
+    A directory flush is what makes the rename survive a host interruption. If it
+    is skipped silently, the working database can come back replaced while this
+    record reverts to a phase saying nothing was replaced.
+    """
+    before = _existing_record(store)
+
+    def refuse(_path):
+        raise OSError(22, "directory fsync unsupported")
+
+    monkeypatch.setattr(durability, "flush_directory", refuse)
+
+    with pytest.raises(RestoreStateError) as error:
+        store.transition(before, RestorePhase.CANDIDATE_VALIDATED)
+
+    # Reported, not swallowed — and reported as possibly-published, because it is.
+    assert error.value.published is True
 
 
 def test_a_failed_publication_leaves_no_scratch_file_behind(store, monkeypatch):
     record = _existing_record(store)
-    monkeypatch.setattr(
-        state_module, "_publish_scratch", lambda *_a: (_ for _ in ()).throw(OSError("no"))
-    )
+    monkeypatch.setattr(durability, "_open_scratch_for_write", explode)
 
     with pytest.raises(RestoreStateError):
         store.transition(record, RestorePhase.CANDIDATE_VALIDATED)
@@ -278,20 +376,20 @@ def test_a_failed_publication_leaves_no_scratch_file_behind(store, monkeypatch):
 
 
 def test_publication_never_rewrites_the_record_in_place(store, monkeypatch):
-    """The authoritative name is only ever reached through `os.replace`."""
+    """The authoritative name is only ever reached through the atomic rename."""
     record = _existing_record(store)
-    replacements: list[tuple[str, str]] = []
-    real_replace = state_module.os.replace
+    renames: list[tuple[str, str]] = []
+    real_rename = durability._atomic_rename
 
-    def record_replace(src, dst):
-        replacements.append((str(src), str(dst)))
-        return real_replace(src, dst)
+    def watched(scratch, target):
+        renames.append((str(scratch), str(target)))
+        return real_rename(scratch, target)
 
-    monkeypatch.setattr(state_module.os, "replace", record_replace)
+    monkeypatch.setattr(durability, "_atomic_rename", watched)
     store.transition(record, RestorePhase.CANDIDATE_VALIDATED)
 
-    assert len(replacements) == 1
-    source, destination = replacements[0]
+    assert len(renames) == 1
+    source, destination = renames[0]
     assert destination == str(store.record_path)
     assert Path(source).name.startswith(OWNED_TEMP_PREFIX)
 
@@ -310,6 +408,23 @@ def test_the_scratch_file_is_created_in_the_publication_directory(store, monkeyp
     store.transition(record, RestorePhase.CANDIDATE_VALIDATED)
 
     assert seen == [store.workspace.restore_dir]
+
+
+def test_read_durable_record_returns_what_is_actually_on_disk(store):
+    """The re-read a caller performs after an unproven publication."""
+    record = _existing_record(store)
+    advanced = store.transition(record, RestorePhase.CANDIDATE_VALIDATED)
+
+    assert store.read_durable_record(record).phase is RestorePhase.CANDIDATE_VALIDATED
+    assert store.read_durable_record(advanced).phase is RestorePhase.CANDIDATE_VALIDATED
+
+
+def test_read_durable_record_falls_back_when_the_record_is_unreadable(store):
+    """The fallback is the caller's last known phase, never a rosier one."""
+    record = _existing_record(store)
+    store.record_path.write_text("{ truncated", encoding="utf-8")
+
+    assert store.read_durable_record(record).phase is RestorePhase.SOURCE_STAGED
 
 
 def test_cleanup_only_removes_launcher_owned_temp_files(store):

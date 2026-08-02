@@ -126,60 +126,40 @@ def terminate_process(process: subprocess.Popen[str], timeout_seconds: float = 5
         process.wait(timeout=timeout_seconds)
 
 
-def resolve_startup_database_path(mode: str, paths: RuntimePaths) -> Path:
-    """The database path startup will prepare, resolved without side effects.
+def acquire_launcher_lifecycle(runtime_config: RuntimeConfig, paths: RuntimePaths):
+    """Take the launcher's authority over one workspace, for the whole run.
 
-    Needed *before* startup runs, because the Restore recovery gate below has to
-    know which workspace it is guarding. `startup_database_config` only computes
-    a path — it creates no directory, database or migration.
+    The lifecycle context resolves every canonical path from the existing startup
+    and backup resolvers and takes the exclusive instance lock. One boundary
+    covers ordinary startup, Restore execution and incomplete-Restore recovery, so
+    a second launcher cannot begin recovery while the first is halfway through a
+    database replacement.
+
+    The existing port check stays where it is and keeps its own message: a free
+    port is not proof that nothing else owns the workspace, least of all during
+    Restore, when the backend is stopped by design.
     """
     ensure_backend_import_path(paths)
-    from app.services.startup import startup_database_config
+    from launcher.restore import LauncherAlreadyRunningError, LauncherLifecycleContext
 
-    return startup_database_config(mode).path
-
-
-def acquire_launcher_lock(database_path: Path, paths: RuntimePaths):
-    """Take the exclusive launcher-instance lock for the whole lifecycle.
-
-    One boundary covers ordinary startup, Restore execution and incomplete-Restore
-    recovery, so a second launcher cannot begin recovery while the first is
-    halfway through a database replacement. The existing port check stays where it
-    is and keeps its own message: a free port is not proof that nothing else owns
-    the workspace, least of all during Restore, when the backend is stopped by
-    design.
-    """
-    ensure_backend_import_path(paths)
-    from launcher.restore import LauncherAlreadyRunningError, LauncherInstanceLock, RestoreWorkspace
-
-    workspace = RestoreWorkspace.for_database(database_path)
     try:
-        return LauncherInstanceLock.for_workspace(workspace).acquire()
+        return LauncherLifecycleContext.acquire(runtime_config, paths)
     except LauncherAlreadyRunningError as exc:
         raise RuntimeLaunchError(
             "Приложение уже запущено. Закройте другое окно приложения и попробуйте снова."
         ) from exc
 
 
-def resolve_restore_recovery(runtime_config: RuntimeConfig, paths: RuntimePaths, database_path: Path):
+def resolve_restore_recovery(context):
     """Resolve any interrupted Restore before ordinary startup may continue.
 
     This is the `CR-010` § 7.5 gate. It runs before startup migrations, before
     the backend child and before the browser, and its verdict is binding: an
     unsafe persisted phase never falls through to the ordinary startup below.
     """
-    ensure_backend_import_path(paths)
-    from app.db.config import DatabaseConfig
-    from app.services.backup import resolve_backup_dir
     from launcher.restore import recover_incomplete_restore
 
-    return recover_incomplete_restore(
-        database_path,
-        resolve_backup_dir(DatabaseConfig(path=database_path)),
-        runtime_config,
-        paths,
-        mode=runtime_config.mode,
-    )
+    return recover_incomplete_restore(context)
 
 
 def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths | None = None) -> int:
@@ -188,18 +168,17 @@ def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths |
     print("Мастерская косметолога: запуск локального режима…")
     assert_port_available(runtime_config.host, runtime_config.backend_port)
     print(f"Данные пользователя будут храниться вне кода приложения (режим: {runtime_config.mode}).")
-    database_path = resolve_startup_database_path(runtime_config.mode, runtime_paths)
-    launcher_lock = acquire_launcher_lock(database_path, runtime_paths)
+    context = acquire_launcher_lifecycle(runtime_config, runtime_paths)
     try:
-        return _run_locked_runtime(runtime_config, runtime_paths, database_path)
+        return _run_locked_runtime(runtime_config, runtime_paths, context)
     finally:
-        launcher_lock.release()
+        context.release()
 
 
 def _run_locked_runtime(
-    runtime_config: RuntimeConfig, runtime_paths: RuntimePaths, database_path: Path
+    runtime_config: RuntimeConfig, runtime_paths: RuntimePaths, context
 ) -> int:
-    recovery = resolve_restore_recovery(runtime_config, runtime_paths, database_path)
+    recovery = resolve_restore_recovery(context)
     if not recovery.normal_startup_allowed:
         # Nothing starts and the browser never opens. The message is the fixed
         # non-technical support-assisted text; every technical detail stayed in
@@ -218,7 +197,13 @@ def _run_locked_runtime(
     # The API child must serve the database that was just backed up, migrated and
     # reconciled — not one it resolves for itself. This applies to development
     # mode as well: whatever `initialize_startup()` chose is what gets served.
+    #
     process = start_backend_process(runtime_config, runtime_paths, startup.database_path)
+    # Handed to the lifecycle context immediately, so the launcher owns the exact
+    # handle rather than merely having spawned it. That ownership is what a later
+    # Restore needs in order to *prove* the backend stopped — a free port proves
+    # nothing, and the backend never takes the launcher lock.
+    context.backend.adopt(process)
     try:
         time.sleep(1)
         if process.poll() is not None:
@@ -231,4 +216,5 @@ def _run_locked_runtime(
         print("Останавливаю локальное приложение…")
         return 0
     finally:
-        terminate_process(process)
+        # Through the owner, so the recorded handle is cleared as well as killed.
+        context.backend.stop()

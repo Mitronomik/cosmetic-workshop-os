@@ -8,6 +8,12 @@ wrong would be least recoverable.
 
 The recognizable marker is one `app_settings` row. It is enough to tell workspace
 A from workspace B after a replacement, and it is fake data by construction.
+
+Contexts built here are **real** `LauncherLifecycleContext` objects, acquired the
+same way the launcher acquires them, so the canonical-path derivation and the
+lock are exercised rather than stubbed. Only the backend child and the startup
+migration call are substituted, and only where a real uvicorn start would cost
+seconds without proving anything the dedicated tests do not already prove.
 """
 
 from __future__ import annotations
@@ -20,6 +26,8 @@ import sqlite3
 from app.db.config import DatabaseConfig
 from app.db.migrations import MIGRATION_MODULES, apply_migrations
 
+from launcher.config import build_runtime_config, resolve_runtime_paths
+from launcher.restore.context import LauncherLifecycleContext
 from launcher.restore.contracts import RestoreRequest
 from launcher.restore.engine import RestoreServices
 
@@ -78,7 +86,15 @@ def read_marker(path: Path) -> str | None:
     return row[0] if row else None
 
 
-@dataclass(frozen=True)
+def free_port() -> int:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+@dataclass
 class Workspace:
     """An isolated user-data layout, wired to the environment overrides."""
 
@@ -87,19 +103,24 @@ class Workspace:
     backup_dir: Path
     restore_dir: Path
 
-    def request(self, selected_source: Path, mode: str = "user") -> RestoreRequest:
-        return RestoreRequest(
-            selected_source=selected_source,
-            database_path=self.database_path,
-            backup_dir=self.backup_dir,
-            restore_dir=self.restore_dir,
-            mode=mode,
-        )
-
     def safety_copies(self) -> list[Path]:
         if not self.backup_dir.is_dir():
             return []
         return sorted(self.backup_dir.glob("*-before_restore*.sqlite"))
+
+    def context(self, **config_overrides) -> LauncherLifecycleContext:
+        """A real lifecycle context over this workspace, lock held.
+
+        Acquired through the production classmethod, so the canonical database,
+        backup and Restore paths are derived by the same resolvers the launcher
+        uses. The caller is responsible for releasing it.
+        """
+        config = build_runtime_config(
+            backend_port=config_overrides.pop("backend_port", free_port()),
+            open_browser=False,
+            **config_overrides,
+        )
+        return LauncherLifecycleContext.acquire(config, resolve_runtime_paths())
 
 
 def make_workspace(monkeypatch, tmp_path: Path, marker: str = "workspace-A") -> Workspace:
@@ -126,14 +147,20 @@ def make_source_backup(tmp_path: Path, marker: str, *, up_to: str | None = None)
     return source
 
 
+def request_for(source: Path) -> RestoreRequest:
+    """The complete caller-supplied input: one selected source, nothing else."""
+    return RestoreRequest(selected_source=source)
+
+
 # --------------------------------------------------------------------------
 # Service stubs
 # --------------------------------------------------------------------------
 #
 # Starting a real uvicorn child in every phase-machine test would make the suite
 # minutes long and would prove nothing those tests are about. The real
-# collaborators are exercised by the dedicated backend-verification tests and by
-# the exact-head smoke runner; everything else substitutes them here.
+# collaborators are exercised by the dedicated backend-verification and
+# real-process lifecycle tests, and by the external exact-head smoke runner;
+# everything else substitutes them here.
 
 
 def migrating_startup(database_path: Path):
@@ -191,7 +218,3 @@ def failing_startup(database_path: Path, message: str = "migration refused"):
         return healthy(mode, paths)
 
     return startup
-
-
-DUMMY_CONFIG = SimpleNamespace(backend_url="http://127.0.0.1:0", host="127.0.0.1", backend_port=0)
-DUMMY_PATHS = SimpleNamespace()

@@ -815,7 +815,7 @@ Product release readiness — NOT CLAIMED
 # 16. C4-I implementation — the launcher-owned safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -823,15 +823,17 @@ Product release readiness — NOT CLAIMED
 This section records **exactly what the branch implements**. It adds no decision:
 every rule above still governs, and `C4-I` implements the accepted state machine
 of § 7 without renaming a phase, omitting `replacement_intent` or substituting an
-equivalent of its own.
+equivalent of its own. An independent review of the first published head found
+five safety gaps; all five are closed, and § 16.11 records what changed.
 
 There is **no** Restore API endpoint, button, dialog, file picker, frontend route
 or product terminal workflow. The engine is internal Python called by a future
-`C4-II`, and the two entry points are:
+`C4-II`:
 
-```text
-launcher.restore.execute_restore(request, config, paths)
-launcher.restore.recover_incomplete_restore(database_path, backup_dir, config, paths)
+```python
+context = LauncherLifecycleContext.acquire(config, paths)   # lock + canonical paths
+execute_restore(RestoreRequest(selected_source), context)   # one attempt
+recover_incomplete_restore(context)                          # before ordinary startup
 ```
 
 ## 16.1. Module boundary
@@ -840,11 +842,13 @@ launcher.restore.recover_incomplete_restore(database_path, backup_dir, config, p
 launcher/restore/
   phases.py         the twelve phases and the complete transition graph
   contracts.py      typed request/result/outcome types and the fixed message set
-  state.py          the durable operation record and its atomic publication
+  durability.py     the one safety-critical filesystem publication primitive
+  state.py          the narrow durable record
   workspace.py      the isolated operation directory and ownership rules
   instance_lock.py  the exclusive launcher-instance lock
+  context.py        the lifecycle authority: canonical paths + backend ownership
   staging.py        source intake and the staged read-only candidate
-  validation.py     the complete candidate-validation contract
+  validation.py     the complete read-only workspace-validation contract
   capacity.py       the disk-space preflight
   safety_copy.py    the mandatory verified `before_restore` copy
   replacement.py    target journal handling and the atomic boundary
@@ -858,7 +862,59 @@ classifies a candidate's migration history **without creating the migration
 table**. The expected chain still comes from `app.db.migrations`; there is no
 second migration registry, no new migration and no schema change.
 
-## 16.2. Operation-state location and ownership
+## 16.2. The launcher lifecycle context, and what a caller may supply
+
+**Exactly one value comes from the future Restore caller: the selected source.**
+`RestoreRequest` has one field. Every destructive or application-owned path is
+derived by `LauncherLifecycleContext.acquire()` from the launcher's own
+resolvers:
+
+```text
+database path     ← app.services.startup.startup_database_config(mode)
+backup directory  ← app.services.backup.resolve_backup_dir(config)
+Restore directory ← RestoreWorkspace.for_database(database path)
+lock path         ← the same workspace
+```
+
+One database identity therefore produces the lock, the operation record, the
+safety copy and the replacement target. A caller that could name the target could
+take the lock for one workspace and replace a database in another while every
+individual check passed, because each was asked about a path the caller chose.
+
+`verify_derived_paths()` re-derives all of them and compares, so a context mutated
+after construction is refused before any staging. The replacement target is
+checked by **re-resolving it from the startup resolver**, not by comparing a
+value with a copy of itself.
+
+Development mode remains supported and isolated: with `COSMETIC_WORKSHOP_DB_PATH`
+set, `restore/` and `backups/` sit beside the configured development database and
+never in the real Documents directory.
+
+## 16.3. Backend-stop proof
+
+Restore may not touch the working database until the ordinary backend is
+**provably** stopped. Three things are not proof, and none is used:
+
+- the launcher instance lock — the backend child never takes it;
+- a free backend port — during Restore the port is free *by design*;
+- having asked a process to exit — asking is not observing.
+
+The proof is process ownership. `run_local_runtime` hands the child it starts to
+`context.backend`, so the launcher holds the exact `Popen`. `stop_backend()`
+sends `SIGTERM`, waits within a bound, escalates to `kill()` **on the same
+handle**, waits again, and returns a `BackendStopProof` only once `poll()` shows
+the process actually exited. `require_backend_stopped()` re-checks liveness
+before journal settlement and before every replacement, including rollback.
+
+Nothing discovers a process by port, name or command-line pattern. `pkill`,
+`lsof`, `pgrep` and `killall` are absent from `context.py`, and a test enforces
+that against the module's executable source.
+
+Backends started for verification are owned by `verify_restored_backend` and
+stopped in a `finally`, on the failure path too. `recovery_blocked` starts
+nothing.
+
+## 16.4. Operation-state location and ownership
 
 ```text
 <user data base>/restore/
@@ -869,12 +925,9 @@ second migration registry, no new migration and no schema change.
     candidate.sqlite             the staged read-only candidate
 ```
 
-Placement mirrors `resolve_backup_dir` exactly: the user-data `restore/`
-directory when the database is the resolved user database or
-`COSMETIC_WORKSHOP_USER_DATA_DIR` is set, otherwise a `restore/` directory beside
-the configured development database. The record is never inside the SQLite
-working database, the repository, the application package, frontend storage or an
-AuditLog table.
+Placement mirrors `resolve_backup_dir` exactly. The record is never inside the
+SQLite working database, the repository, the application package, frontend
+storage or an AuditLog table.
 
 **Allowed persisted fields — the complete closed set:**
 
@@ -887,63 +940,106 @@ staged_candidate_filename
 safety_copy_filename
 ```
 
-Reading rejects any record whose field set differs, so a record this launcher did
-not write is never acted on. There is no `replacement_happened`, no
-`rollback_completed` and no `restore_succeeded`: both facts are derived from
-`phase`. No raw absolute selected-source path is stored — the staged relative
-identity is sufficient.
+Reading rejects any record whose field set differs. There is no
+`replacement_happened`, no `rollback_completed` and no `restore_succeeded`: both
+facts are derived from `phase`. No raw absolute selected-source path is stored.
+
+`operation_id` must be a **canonical launcher-generated UUID4** — the backend's
+own `is_canonical_operation_id` round-trip, plus the version check, plus the safe
+relative-filename rule. An arbitrary safe filename is not enough, because the
+value becomes a directory name; a record carrying one blocks startup.
 
 Cleanup removes only paths that resolve inside the Restore directory and match
-the launcher's own scratch prefix and suffix. Symlinks are never followed out of
-the boundary, and the verified safety copy lives in `backups/`, outside every
-cleanup path.
+the launcher's own scratch prefix and suffix, plus the one deterministically
+named replacement artifact. Symlinks are never followed out of the boundary, and
+the verified safety copy lives in `backups/`, outside every cleanup path.
 
-## 16.3. Atomic state publication and its durability limits
+## 16.5. The durability primitive, and its honest limits
+
+One shared module, `launcher/restore/durability.py`, publishes the operation
+record, the staged candidate, the working-database replacement and the rollback
+replacement:
 
 ```text
-create an exclusively-owned scratch file in the same directory (mkstemp, O_EXCL)
-→ write the complete record
-→ flush the process buffer
-→ os.fsync the file descriptor
-→ os.replace onto operation.json        <- the atomic publication boundary
-→ best-effort os.fsync of the parent directory
-→ remove only the scratch file this call created
+exclusive scratch creation (O_CREAT | O_EXCL)
+→ complete write
+→ flush the userspace buffer
+→ flush the file to durable media       (F_FULLFSYNC on macOS, else fsync)
+→ atomic same-directory os.replace       <- the publication boundary
+→ flush the published target
+→ flush the parent directory             <- MANDATORY
 ```
 
-`os.replace` is POSIX `rename(2)` within one directory: a reader sees the
-complete old record or the complete new one, never a mixture. Interruption before
-it leaves the old record intact plus one orphan scratch file that
-`clean_owned_temp_files` recognizes. An in-place truncate-and-rewrite is not used
-anywhere.
+**The parent-directory flush is not best effort.** `os.replace` makes the new
+content visible atomically but does not make the *rename* survive a host
+interruption. Ignoring that failure is what could leave the working database
+replaced while the operation record reverted to a phase saying nothing was
+replaced — and startup recovery would then take the `aborted` branch over a
+database that is not the one it thinks it is.
 
-**Durability is claimed only as far as the primitive proves it.** `os.fsync`
-pushes the file's data out of the operating-system cache. On macOS it does *not*
-guarantee the drive flushed its own write cache — that would need `F_FULLFSYNC` —
-so **no power-loss durability is claimed**. What is proved, and what the recovery
-matrix depends on, is old-or-new atomicity across process death and OS crash.
+Failures are therefore **classified, never swallowed**:
 
-The parent-directory `fsync` is best-effort: some platforms and mounts refuse an
-`O_RDONLY` directory fsync, and refusing to continue there would break Restore on
-a filesystem whose atomic boundary is perfectly sound. A failure is tolerated and
-does not lose the published record.
+| Stage | Meaning | Required response |
+|---|---|---|
+| `BEFORE_REPLACE` | Nothing was published. | Treat as not having happened. |
+| `DURING_REPLACE` | `os.replace` failed; ambiguous. | Treat as possibly published. |
+| `AFTER_REPLACE` | The rename landed; durability unproven. | Re-read the record; for a database replacement, roll back. |
 
-Supported platforms: macOS and Linux. Windows is not supported and is not
-claimed.
+`RestoreStateError.published` and `ReplacementError.may_have_replaced` carry that
+verdict. After any publication that may have landed, the engine **re-reads the
+authoritative record** and acts on the phase actually there. It never transitions
+to `aborted` over a record that may already say `replacement_intent`.
 
-## 16.4. Exclusive launcher-instance lock
+**What is claimed.** On macOS `F_FULLFSYNC` asks the drive to flush its own write
+cache — the strongest flush the platform offers; plain `fsync` on macOS does not.
+Where the filesystem reports `ENOTSUP`/`EINVAL`/`EOPNOTSUPP` the call falls back
+to `fsync` and **records that it did**, so no stronger guarantee is claimed than
+the call that ran. Any other error propagates rather than being downgraded.
+Directories are flushed with `fsync` only — `F_FULLFSYNC` on a directory
+descriptor is unsupported and is not attempted. Supported platforms: macOS and
+Linux. Windows is not supported and nothing is claimed for it.
+
+## 16.6. Exclusive launcher-instance lock
 
 `fcntl.flock(LOCK_EX | LOCK_NB)` on `<restore dir>/launcher.lock`. One boundary
-covers ordinary startup, Restore execution and incomplete-operation recovery, so
-a second launcher cannot begin recovery while the first is mid-replacement. The
-kernel releases it when the holder dies, so a killed launcher leaves no stale lock
-to clear by hand. The lock file's contents are diagnostic only and are never read
-as authority.
+covers ordinary startup, Restore execution and incomplete-operation recovery. The
+kernel releases it when the holder dies, so a killed launcher leaves no stale
+lock. The lock file's contents are diagnostic only and are never read as
+authority. The existing port-conflict check is unchanged and keeps its own
+message.
 
-The existing port-conflict check is unchanged and keeps its own message. It is
-**not** the Restore lock: the backend is stopped during Restore by design, so a
-free port proves nothing.
+## 16.7. Source intake, sidecars and staging identity
 
-## 16.5. Disk-space preflight formula
+**Sidecars are checked beside the original selected source**, before the copy
+begins and again after it completes, before `candidate.sqlite` is published:
+
+```text
+<source>-wal
+<source>-shm
+<source>-journal
+```
+
+Any of them, present by `lexists` (so a symlinked or dangling sidecar counts),
+rejects the source. Checking beside the *staged* candidate cannot catch this —
+staging copies only the main file, so a live WAL's committed rows would simply
+never be staged and `PRAGMA quick_check` would still return `ok`. The accepted
+`C4-I` source is a self-contained backup artifact; converting a live WAL database
+into one is a different operation and is not authorized here.
+
+Nothing unlinks, checkpoints, migrates, renames or repairs the selected source or
+its sidecars. A hot rollback journal is rejected *before* the file is opened,
+precisely because opening it would roll the journal back — a write to the user's
+selected file.
+
+**The copy reads a held descriptor.** Intake opens the source once with
+`O_RDONLY | O_NOFOLLOW` and keeps that descriptor; `stage_source` reads it with
+`os.pread` and never re-opens the path. Identity is re-proved from the descriptor
+with `fstat` (device, inode, size, type) and from the path with `lstat` (still the
+same file, still not a symlink), and the copied byte count must equal the recorded
+size. A path replaced, a file rewritten, a symlink substituted or a size change
+mid-copy all fail before publication.
+
+## 16.8. Disk-space preflight formula
 
 Charged per artifact to the filesystem that will hold it, then grouped by device
 (`st_dev`) and compared once per device against `shutil.disk_usage(...).free`:
@@ -957,53 +1053,48 @@ before_migration copy   → backup directory             : source_size
                                             per device : + 16 MiB overhead
 ```
 
-Two deliberate conservatisms: the `before_migration` allowance is **always**
-charged, because the preflight must run before staging and therefore before the
-candidate's schema level is known; and the **selected source's filesystem is never
-charged**, because Restore writes nothing there and the user's backup may sit on
-a nearly full removable volume. A destination whose device or free space cannot be
-read counts as unsatisfied. Nothing is deleted to make room — no old user backup
-is ever removed.
+The `before_migration` allowance is always charged, because the preflight must
+run before staging and therefore before the candidate's schema level is known.
+The selected source's filesystem is never charged. A destination whose device or
+free space cannot be read counts as unsatisfied. Nothing is deleted to make room.
 
-## 16.6. Target WAL/SHM/journal handling
+## 16.9. Safety copy
 
-Run after `safety_copy_verified` and before `replacement_intent`, because it is a
-checkpoint against the working database:
+Taken by the existing ADR 0015 SQLite Online Backup engine under the canonical
+reason `before_restore`. No `shutil.copy2`, no second backup implementation, no
+`artifact_audit_operations` row and no AuditLog event.
 
-1. open the target — this alone completes any pending hot-journal rollback;
-2. `PRAGMA journal_mode = WAL` — switching *into* WAL is what removes a rollback
-   journal through SQLite; setting `DELETE` directly leaves a rolled-back hot
-   journal on disk;
-3. `PRAGMA wal_checkpoint(TRUNCATE)` — every committed frame is folded into the
-   main file, which is what makes the round trip lossless;
-4. `PRAGMA journal_mode = DELETE` — leaving WAL removes `-wal` and `-shm`;
-5. close, then **verify** that the three exact owned sidecar paths are gone.
+Verification reuses `validate_workspace_snapshot` — the **same** read-only
+checker the staged candidate passes: regular non-symlink file, non-empty,
+read-only open, structural check, a known ordered migration prefix, recognizable
+workspace identity, the required tables for that prefix, and no external sidecar
+dependency. A safety copy verified more weakly than a candidate would be a
+recovery point that might not be one, and it is the artifact the entire
+destructive boundary rests on.
 
-If any sidecar survives, the launcher **stops** rather than unlinking it.
-Committed WAL data is real user data, and no file the launcher cannot account for
-is ever deleted. Depending on the persisted phase this ends at `aborted` (before
-the boundary) or `recovery_blocked` (during recovery).
+## 16.10. Target journal handling, replacement and verification
 
-## 16.7. Replacement boundary
+**Journal settlement** runs after `safety_copy_verified`, after backend-stop
+proof, and before `replacement_intent`: open the target (completing any hot
+journal rollback) → `journal_mode = WAL` (which is what removes a rollback
+journal through SQLite; setting `DELETE` directly measurably leaves one behind) →
+`wal_checkpoint(TRUNCATE)` (folding committed frames into the main file) →
+`journal_mode = DELETE` (removing `-wal`/`-shm`) → close → **verify** the three
+exact owned sidecar paths are gone. A surviving sidecar stops the operation;
+nothing is blind-unlinked.
 
-The working database is never replaced from the user-selected path, and never
-from the staged candidate — that file is preserved as recovery evidence. A
-launcher-owned replacement artifact is created in the working database's own
-directory, so publication is one atomic same-filesystem `os.replace`. The target
-must equal the exact configured application database path, must exist and must not
-be a symlink; anything else is refused before an artifact is created.
+**Replacement** is never from the selected path and never from the staged
+candidate (preserved as evidence). A launcher-owned artifact with a
+**deterministic** name — `.cwos-restore-<operation-id>.replacement`, exclusively
+created beside the working database — is published with one durable atomic
+rename. The name is derived rather than random so startup recovery can name the
+one artifact it owns and remove exactly that, with no directory globbing beside
+the user's database. `recovery_blocked` preserves it as evidence.
 
-Destructive ordering: durable `replacement_intent` → `os.replace` → durable
-`replacement_committed`. A persisted `replacement_intent` is always treated as
-though replacement may have occurred; no timestamp, size, filename, inode,
-migration version or apparent content is inspected to resolve it.
-
-## 16.8. Backend verification endpoints
-
-Started through the existing `launcher.runtime.start_backend_process` boundary,
-pinned to the exact `COSMETIC_WORKSHOP_DB_PATH`. Readiness is polled within an
-explicit bound (30 s, 0.2 s interval, 10 s per request) rather than slept for, and
-a child that exits is reported immediately instead of waiting out the bound.
+**Verification** starts the child through the existing
+`launcher.runtime.start_backend_process` boundary, pinned to the exact
+`COSMETIC_WORKSHOP_DB_PATH`, with bounded readiness polling (30 s, 0.2 s interval,
+10 s per request) and then:
 
 ```text
 GET /api/health
@@ -1011,31 +1102,48 @@ GET /api/settings/status
 GET /api/settings/workshop-profile
 ```
 
-The whole cycle runs **twice** with a graceful stop in between — that is the
-restartability proof — and the repository fallback database is fingerprinted
-before and after, so a child that resolved its own database fails verification.
-Response bodies are checked and discarded; they never reach user-facing output.
+The whole cycle runs **twice** with a graceful stop between — the restartability
+proof. The repository fallback database is fingerprinted before and after with
+**SHA-256 plus size plus stat identity**; existence, size and mtime alone would
+miss a same-size write inside one timestamp granularity, which is exactly what a
+child quietly migrating the repository database looks like.
 
-## 16.9. Browser gate
+## 16.11. Browser gate and result honesty
 
-`launcher.runtime.run_local_runtime` resolves any persisted Restore operation
-**before** startup migrations, before the backend child and before the browser. An
-unsafe phase never falls through: `recovery_blocked` returns exit code `3`,
-starts nothing and opens nothing, and reports one fixed non-technical Russian
-sentence. A recovered previous workspace reports that Restore failed — never that
-it succeeded.
+`run_local_runtime` resolves any persisted Restore operation **before** startup
+migrations, the backend child and the browser. `recovery_blocked` returns exit
+code `3`, starts nothing and opens nothing, and reports one fixed non-technical
+Russian sentence.
 
-## 16.10. Developer-only verification
+Results distinguish three separate facts, because a failed publication can make
+them disagree:
 
-```bash
-scripts/c4_i_restore_smoke.sh <exact-published-head-sha>
+```text
+outcome                 what the engine concluded it was doing
+durable_phase           the phase actually on disk
+normal_startup_allowed  whether the launcher may continue
 ```
 
-A **developer verification tool**, not a product workflow and never documented as
-one. It refuses to run unless HEAD is exactly the expected published SHA and the
-workspace is clean, verifies cleanliness again afterwards, works only inside a
-temporary directory removed by its trap, and never touches real user data. It
-covers a successful Restore against a real backend (including restartability,
-source immutability, safety-copy retention and browser non-opening) and a crash at
-the destructive boundary recovering through `rollback_in_progress` to
-`rolled_back`. The complete phase and fault matrix lives in the automated tests.
+`restore_succeeded` is keyed off the **durable** phase, so an outcome that was
+never persisted cannot claim success. When a required transition cannot be
+published, **no unauthorized transition is attempted** — only
+`rollback_in_progress → recovery_blocked` exists in the graph — the real durable
+phase is reported, ordinary startup is blocked, and the next launcher start
+retries recovery from that phase.
+
+## 16.12. Verification of this slice
+
+`C4-I` is verified by the automated backend and launcher suites plus a
+**developer-only exact-head smoke runner that lives outside the pull request**.
+The project smoke-authoring contract requires a PR-specific runner to sit outside
+the code it verifies, so no such script is committed here — an earlier revision of
+this branch committed one under `scripts/` and it has been removed. `C4-III` may
+later introduce a reviewed, reusable smoke framework; that is a separate decision
+and a separate pull request.
+
+The external runner checks out the exact published head into a detached worktree
+outside the repository, runs against that checkout, records only PIDs it started
+itself, terminates only those PIDs, classifies its result as
+`PASS — FULL AUTOMATED SMOKE PASSED`, `FAIL — PRODUCT`, `INCONCLUSIVE — RUNNER`
+or `INCONCLUSIVE — ENVIRONMENT`, and retains its evidence outside the repository.
+`scripts/restore_backup.sh` is unrelated to `C4-I` and is unchanged.

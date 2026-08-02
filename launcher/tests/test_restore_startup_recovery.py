@@ -27,8 +27,6 @@ from launcher.restore.state import (
 from launcher.restore.workspace import RestoreWorkspace, new_operation_id
 
 from launcher.tests.restore_fixtures import (
-    DUMMY_CONFIG,
-    DUMMY_PATHS,
     build_workspace_database,
     make_workspace,
     migrating_startup,
@@ -82,7 +80,11 @@ def crashed(monkeypatch, tmp_path):
         restore_dir=workspace.restore_dir, database_path=workspace.database_path
     )
     store = RestoreOperationStateStore(launcher_workspace)
-    return workspace, launcher_workspace, store, safety
+    context = workspace.context()
+    try:
+        yield workspace, context, store, safety
+    finally:
+        context.release()
 
 
 def publish_crash_state(store, phase: RestorePhase, *, safety_copy_filename=None, operation_id=None):
@@ -103,16 +105,9 @@ def publish_crash_state(store, phase: RestorePhase, *, safety_copy_filename=None
     )
 
 
-def recover(workspace, **kwargs):
+def recover(workspace, context, **kwargs):
     services = kwargs.pop("services", None) or stub_services(workspace.database_path)
-    return recover_incomplete_restore(
-        workspace.database_path,
-        workspace.backup_dir,
-        DUMMY_CONFIG,
-        DUMMY_PATHS,
-        services=services,
-        **kwargs,
-    )
+    return recover_incomplete_restore(context, services=services, **kwargs)
 
 
 # --------------------------------------------------------------------------
@@ -121,16 +116,16 @@ def recover(workspace, **kwargs):
 
 @pytest.mark.parametrize("phase_value", list(STARTUP_ALLOWED))
 def test_every_persisted_phase_gets_its_required_startup_behaviour(crashed, phase_value):
-    workspace, _launcher_workspace, store, safety = crashed
+    workspace, context, store, safety = crashed
     phase = RestorePhase(phase_value)
     publish_crash_state(store, phase, safety_copy_filename=safety.filename)
 
-    result = recover(workspace)
+    result = recover(workspace, context)
 
     assert result.normal_startup_allowed is STARTUP_ALLOWED[phase_value], phase_value
 
     if phase_value in BECOMES_ABORTED:
-        assert result.phase is RestorePhase.ABORTED
+        assert result.durable_phase is RestorePhase.ABORTED
         assert store.read().phase is RestorePhase.ABORTED
         # Never replaced, never rolled back: the working database is as the
         # crash left it.
@@ -143,7 +138,7 @@ def test_every_persisted_phase_gets_its_required_startup_behaviour(crashed, phas
         assert result.outcome is RestoreOutcome.RECOVERY_BLOCKED
         assert store.read().phase is RestorePhase.RECOVERY_BLOCKED
     else:
-        assert result.phase is RestorePhase(phase_value)
+        assert result.durable_phase is RestorePhase(phase_value)
 
     # The safety copy is never silently deleted, in any phase.
     assert safety.path.exists()
@@ -160,7 +155,11 @@ def test_no_phase_is_missing_from_the_matrix():
 def test_no_operation_allows_ordinary_startup_untouched(monkeypatch, tmp_path):
     workspace = make_workspace(monkeypatch, tmp_path, marker="workspace-A")
 
-    result = recover(workspace)
+    context = workspace.context()
+    try:
+        result = recover(workspace, context)
+    finally:
+        context.release()
 
     assert result.no_operation is True
     assert result.normal_startup_allowed is True
@@ -168,24 +167,24 @@ def test_no_operation_allows_ordinary_startup_untouched(monkeypatch, tmp_path):
 
 
 def test_an_aborted_phase_cleans_only_owned_staging(crashed):
-    workspace, _lw, store, safety = crashed
+    workspace, context, store, safety = crashed
     record = publish_crash_state(
         store, RestorePhase.SOURCE_STAGED, safety_copy_filename=safety.filename
     )
 
-    recover(workspace)
+    recover(workspace, context)
 
     assert not (workspace.restore_dir / record.operation_id).exists()
     assert safety.path.exists()
 
 
 def test_a_completed_phase_retains_the_safety_copy_and_continues(crashed):
-    workspace, _lw, store, safety = crashed
+    workspace, context, store, safety = crashed
     record = publish_crash_state(
         store, RestorePhase.COMPLETED, safety_copy_filename=safety.filename
     )
 
-    result = recover(workspace)
+    result = recover(workspace, context)
 
     assert result.normal_startup_allowed is True
     assert result.outcome is RestoreOutcome.COMPLETED
@@ -213,19 +212,23 @@ def test_replacement_intent_always_rolls_back_even_when_nothing_changed(monkeypa
         store, RestorePhase.REPLACEMENT_INTENT, safety_copy_filename=safety.filename
     )
 
-    result = recover(workspace)
+    context = workspace.context()
+    try:
+        result = recover(workspace, context)
+    finally:
+        context.release()
 
     assert result.outcome is RestoreOutcome.ROLLED_BACK
     assert read_marker(workspace.database_path) == "workspace-A"
 
 
 def test_a_rolled_back_result_is_never_reported_as_success(crashed):
-    workspace, _lw, store, safety = crashed
+    workspace, context, store, safety = crashed
     publish_crash_state(
         store, RestorePhase.VERIFICATION_IN_PROGRESS, safety_copy_filename=safety.filename
     )
 
-    result = recover(workspace)
+    result = recover(workspace, context)
 
     assert result.outcome is RestoreOutcome.ROLLED_BACK
     assert result.outcome is not RestoreOutcome.COMPLETED
@@ -234,12 +237,12 @@ def test_a_rolled_back_result_is_never_reported_as_success(crashed):
 
 def test_an_interrupted_rollback_safely_repeats(crashed):
     """A crash inside `rollback_in_progress` continues from the same phase."""
-    workspace, _lw, store, safety = crashed
+    workspace, context, store, safety = crashed
     publish_crash_state(
         store, RestorePhase.ROLLBACK_IN_PROGRESS, safety_copy_filename=safety.filename
     )
 
-    first = recover(workspace)
+    first = recover(workspace, context)
     assert first.outcome is RestoreOutcome.ROLLED_BACK
     assert read_marker(workspace.database_path) == "workspace-A"
 
@@ -247,7 +250,7 @@ def test_an_interrupted_rollback_safely_repeats(crashed):
     publish_crash_state(
         store, RestorePhase.ROLLBACK_IN_PROGRESS, safety_copy_filename=safety.filename
     )
-    second = recover(workspace)
+    second = recover(workspace, context)
 
     assert second.outcome is RestoreOutcome.ROLLED_BACK
     assert read_marker(workspace.database_path) == "workspace-A"
@@ -255,10 +258,10 @@ def test_an_interrupted_rollback_safely_repeats(crashed):
 
 def test_a_rollback_without_a_recorded_safety_copy_blocks_recovery(crashed):
     """Nothing provably safe to restore, so nothing is guessed at."""
-    workspace, _lw, store, _safety = crashed
+    workspace, context, store, _safety = crashed
     publish_crash_state(store, RestorePhase.REPLACEMENT_COMMITTED, safety_copy_filename=None)
 
-    result = recover(workspace)
+    result = recover(workspace, context)
 
     assert result.normal_startup_allowed is False
     assert result.outcome is RestoreOutcome.RECOVERY_BLOCKED
@@ -266,7 +269,7 @@ def test_a_rollback_without_a_recorded_safety_copy_blocks_recovery(crashed):
 
 
 def test_a_rollback_that_cannot_be_verified_blocks_recovery(crashed):
-    workspace, _lw, store, safety = crashed
+    workspace, context, store, safety = crashed
     publish_crash_state(
         store, RestorePhase.REPLACEMENT_INTENT, safety_copy_filename=safety.filename
     )
@@ -276,6 +279,7 @@ def test_a_rollback_that_cannot_be_verified_blocks_recovery(crashed):
 
     result = recover(
         workspace,
+        context,
         services=RestoreServices(
             verify_backend=always_fails,
             initialize_startup=migrating_startup(workspace.database_path),
@@ -287,12 +291,12 @@ def test_a_rollback_that_cannot_be_verified_blocks_recovery(crashed):
 
 
 def test_recovery_blocked_preserves_evidence_and_never_starts(crashed):
-    workspace, _lw, store, safety = crashed
+    workspace, context, store, safety = crashed
     record = publish_crash_state(
         store, RestorePhase.RECOVERY_BLOCKED, safety_copy_filename=safety.filename
     )
 
-    result = recover(workspace)
+    result = recover(workspace, context)
 
     assert result.normal_startup_allowed is False
     assert result.blocks_browser is True
@@ -303,18 +307,18 @@ def test_recovery_blocked_preserves_evidence_and_never_starts(crashed):
 
 def test_an_unreadable_record_blocks_startup_rather_than_being_ignored(crashed):
     """"There is no operation" and "I cannot read the operation" are different."""
-    workspace, _lw, store, _safety = crashed
+    workspace, context, store, _safety = crashed
     store.workspace.ensure_restore_dir()
     store.record_path.write_text("{ truncated", encoding="utf-8")
 
-    result = recover(workspace)
+    result = recover(workspace, context)
 
     assert result.normal_startup_allowed is False
     assert result.outcome is RestoreOutcome.RECOVERY_BLOCKED
 
 
 def test_a_failure_to_close_out_an_aborted_operation_blocks_startup(crashed, monkeypatch):
-    workspace, _lw, store, safety = crashed
+    workspace, context, store, safety = crashed
     publish_crash_state(store, RestorePhase.PREPARED, safety_copy_filename=safety.filename)
 
     def refuse(self, record, target, **kwargs):
@@ -322,7 +326,7 @@ def test_a_failure_to_close_out_an_aborted_operation_blocks_startup(crashed, mon
 
     monkeypatch.setattr(RestoreOperationStateStore, "transition", refuse)
 
-    result = recover(workspace)
+    result = recover(workspace, context)
 
     assert result.normal_startup_allowed is False
     assert result.outcome is RestoreOutcome.RECOVERY_BLOCKED
@@ -412,13 +416,8 @@ def test_run_local_runtime_recovers_an_interrupted_replacement_before_startup(
     monkeypatch.setattr(
         runtime,
         "resolve_restore_recovery",
-        lambda config, paths, database_path: recover_incomplete_restore(
-            database_path,
-            workspace.backup_dir,
-            config,
-            paths,
-            mode=config.mode,
-            services=stub_services(database_path),
+        lambda context: recover_incomplete_restore(
+            context, services=stub_services(context.database_path)
         ),
     )
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:

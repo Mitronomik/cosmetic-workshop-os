@@ -14,14 +14,19 @@ file is not a backup — `CR-004` measured it silently omitting every
 committed-but-uncheckpointed WAL row while still returning `quick_check = ok` —
 and it is not reintroduced here. No second backup implementation is created.
 
-**Verification does not reuse `BackupAuditService.verify`.** That method verifies
-an artifact *against a CR-009 ledger operation embedded in it*, and this backup
-has no ledger row by design: the safety copy is launcher recovery infrastructure,
-not a user action. Reusing it would either fail every time or require writing the
-ledger row § 12 forbids. The read-only checks that do apply — safe name, regular
-file, non-empty, read-only open, `quick_check`, migration table present — are
-applied here against the same reasoning, with the ledger-identity step replaced
-by the lineage check the launcher already owns.
+**Verification reuses the Restore candidate contract, not
+`BackupAuditService.verify`.** That method verifies an artifact *against a CR-009
+ledger operation embedded in it*, and this backup has no ledger row by design:
+the safety copy is launcher recovery infrastructure, not a user action. Reusing
+it would either fail every time or require writing the ledger row § 12 forbids.
+
+So verification calls `validate_workspace_snapshot` — the same read-only checker
+the staged candidate passes through. A safety copy verified more weakly than a
+candidate would be a recovery point that might not be one, and it is the artifact
+the entire destructive boundary rests on. It therefore has to prove the same
+things: regular non-symlink file, non-empty, read-only open, structural check, a
+known ordered migration prefix, recognizable workspace identity, the required
+tables for that prefix, and no external sidecar dependency.
 
 Explicitly **not** created for this backup: an `artifact_audit_operations` row, a
 `backup.created` AuditLog event, or any Restore AuditLog event.
@@ -31,11 +36,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import sqlite3
 
 SAFETY_COPY_REASON = "before_restore"
-
-SQLITE_TIMEOUT_SECONDS = 5.0
 
 
 class SafetyCopyError(RuntimeError):
@@ -97,41 +99,20 @@ def create_verified_safety_copy(database_path: Path, backup_dir: Path) -> Safety
 def verify_safety_copy(safety_copy_path: Path) -> None:
     """Prove the safety copy is a usable workspace snapshot, without changing it.
 
-    Read-only throughout. A safety copy that cannot be verified is treated as no
-    safety copy at all, because its whole purpose is to be trustworthy at the one
-    moment nothing else is.
+    Read-only throughout, and held to the **same** contract as a Restore
+    candidate: `quick_check` alone never authorizes anything here either, and a
+    copy that carries a migration history the file itself does not back up is not
+    a recovery point.
+
+    A safety copy that cannot be verified is treated as no safety copy at all,
+    because its whole purpose is to be trustworthy at the one moment nothing else
+    is.
     """
-    path = Path(safety_copy_path)
-    if path.is_symlink() or not path.is_file():
-        raise SafetyCopyError("The pre-restore safety copy is not a regular file.")
-    try:
-        if path.stat().st_size == 0:
-            # A zero-byte file is a valid empty SQLite database and passes
-            # `quick_check`; CR-004 produced exactly that from an aborted copy.
-            raise SafetyCopyError("The pre-restore safety copy is empty.")
-    except OSError as exc:
-        raise SafetyCopyError("The pre-restore safety copy could not be read.") from exc
+    from launcher.restore.validation import CandidateRejectedError, validate_workspace_snapshot
 
     try:
-        connection = sqlite3.connect(
-            f"file:{path}?mode=ro", uri=True, timeout=SQLITE_TIMEOUT_SECONDS
-        )
-    except sqlite3.Error as exc:
-        raise SafetyCopyError("The pre-restore safety copy could not be opened.") from exc
-    try:
-        from app.db.migration_lineage import inspect_migration_lineage
-
-        row = connection.execute("PRAGMA quick_check").fetchone()
-        if not row or row[0] != "ok":
-            raise SafetyCopyError("The pre-restore safety copy failed its structural check.")
-        # `quick_check` alone never authorizes anything here either. The safety
-        # copy is a snapshot of a database this application just had open, so its
-        # lineage must be a known prefix — if it is not, the copy is not of the
-        # workspace it was supposed to protect.
-        lineage = inspect_migration_lineage(connection)
-        if not lineage.is_known_prefix:
-            raise SafetyCopyError("The pre-restore safety copy is not a workshop database.")
-    except sqlite3.Error as exc:
-        raise SafetyCopyError("The pre-restore safety copy could not be verified.") from exc
-    finally:
-        connection.close()
+        validate_workspace_snapshot(Path(safety_copy_path))
+    except CandidateRejectedError as exc:
+        raise SafetyCopyError(
+            f"The pre-restore safety copy did not verify: {exc.rejection}"
+        ) from exc

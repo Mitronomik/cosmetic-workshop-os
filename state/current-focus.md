@@ -27,7 +27,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
 - `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
 - `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED**
-- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — NOT MERGED**
+- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
 - `C4 — ACTIVE`
@@ -42,13 +42,32 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 
 ```text
 C4-I — Launcher-owned restore safety engine
-IMPLEMENTED ON PR BRANCH — NOT MERGED
+IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
 ```
 
-**Next action: review and merge the `C4-I` pull request.** The branch is
-`codex/c4-i-launcher-restore-safety-engine`, started from `origin/main` at
-`b89cbaaaf41a56c810847d7c1e593712c5591eb6` (the PR #169 merge commit). Nothing
-else is authorized until it merges.
+**Next action: an independent audit of the new published head of PR #170.** The
+branch is `codex/c4-i-launcher-restore-safety-engine`, started from `origin/main`
+at `b89cbaaaf41a56c810847d7c1e593712c5591eb6` (the PR #169 merge commit). The PR
+stays **draft** until that audit clears it. Nothing else is authorized.
+
+An independent review of the first published head found five safety-critical
+implementation gaps; all five are closed on the branch:
+
+```text
+P1-1  source WAL/journal sidecars are checked beside the ORIGINAL selected
+      source, before and after the copy, and staging reads a held descriptor
+      whose identity is re-proved
+P1-2  backend shutdown is proved by owning the exact process handle, never by a
+      free port and never by pattern-killing
+P1-3  every destructive path is derived from the launcher's own resolvers; a
+      caller supplies only the selected source
+P1-4  a failed `rollback_in_progress` publication attempts no unauthorized
+      transition and reports the phase actually on disk
+P1-5  parent-directory durability is mandatory, and a post-rename failure is
+      classified rather than swallowed
+```
+
+None of them required a change to the accepted twelve-phase machine.
 
 `C4-I` implements the accepted `CR-010` state machine exactly — the same twelve
 phases, transition graph, recovery matrix and `replacement_intent` crash rule — so
@@ -56,7 +75,10 @@ no amending decision was required. It is internal launcher infrastructure only:
 `launcher/restore/` plus one bounded read-only backend helper
 (`backend/app/db/migration_lineage.py`), with **no** API endpoint, route, button,
 dialog, file picker, product terminal workflow, migration, schema change,
-AuditLog event or frontend change. Implementation detail:
+AuditLog event or frontend change. No PR-specific smoke runner is committed —
+the smoke-authoring contract requires it to live outside the code it verifies, so
+the `C4-I` runner is created outside the repository and drives a detached checkout
+of the exact published head. Implementation detail:
 `docs/backup-and-restore.md` § 16.
 
 `C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED` and must not be started from

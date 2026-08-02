@@ -114,22 +114,37 @@ RECOVERY_BLOCKED_MESSAGE = USER_SAFE_MESSAGES[RestoreFailure.RECOVERY_BLOCKED]
 class RestoreRequest:
     """One Restore attempt, as a future trusted launcher caller supplies it.
 
-    `selected_source` is the only untrusted value and is treated as immutable
-    input throughout. `database_path` is **not** taken from the caller's user
-    input: it is the exact path the launcher's own startup preparation resolved,
-    which is what keeps Restore from ever replacing an unrelated file.
+    **The selected source is the only value a caller may supply.** Every
+    destructive or application-owned path — the database, the backup directory,
+    the Restore directory, the lock — is derived by
+    :class:`~launcher.restore.context.LauncherLifecycleContext` from the
+    launcher's own startup resolvers. A caller that could name the target could
+    take the lock for one workspace and replace a database in another, and every
+    individual check would still pass because each was asked about a path the
+    caller chose.
     """
 
     selected_source: Path
-    database_path: Path
-    backup_dir: Path
-    restore_dir: Path
-    mode: str = "user"
 
 
 @dataclass(frozen=True)
 class RestoreResult:
     """The internal outcome of one Restore attempt.
+
+    Three facts, deliberately kept separate, because a failure to persist a phase
+    can make them disagree:
+
+    `outcome`
+        What the engine concluded it was doing.
+    `durable_phase`
+        The phase actually on disk in the authoritative record. Never inferred;
+        after any publication whose durability was unproven, this is what a
+        re-read returned.
+    `normal_startup_allowed`
+        Whether the launcher may continue into ordinary startup. Not derivable
+        from `outcome` alone: a rollback that could not record its own request
+        leaves an unsafe durable phase behind and must block, even though the
+        outcome describes an intent to recover.
 
     Deliberately carries no absolute path. `safety_copy_filename` and
     `staged_candidate_filename` are safe relative filenames, which is everything
@@ -137,26 +152,32 @@ class RestoreResult:
     """
 
     outcome: RestoreOutcome
-    phase: RestorePhase
+    durable_phase: RestorePhase | None
     operation_id: str
     message: str
+    normal_startup_allowed: bool
     failure: RestoreFailure | None = None
     safety_copy_filename: str | None = None
     staged_candidate_filename: str | None = None
 
     @property
     def restore_succeeded(self) -> bool:
-        """True only for `completed`.
+        """True only when `completed` is the phase actually on disk.
 
         `rolled_back` means the previous workspace was recovered after a failed
-        Restore, and `CR-010` § 10 forbids reporting it as success.
+        Restore, and `CR-010` § 10 forbids reporting it as success. Keyed off the
+        durable phase rather than the outcome, so an outcome that was never
+        persisted cannot claim success.
         """
-        return self.outcome is RestoreOutcome.COMPLETED
+        return (
+            self.outcome is RestoreOutcome.COMPLETED
+            and self.durable_phase is RestorePhase.COMPLETED
+        )
 
     @property
     def working_database_replaced(self) -> bool:
-        """Derived from `phase`, never persisted as an independent fact."""
-        return self.phase is RestorePhase.COMPLETED
+        """Derived from the durable phase, never persisted as an independent fact."""
+        return self.durable_phase is RestorePhase.COMPLETED
 
 
 @dataclass(frozen=True)
@@ -166,10 +187,15 @@ class RecoveryResult:
     `no_operation` is the ordinary case: no Restore was ever attempted, or the
     previous one is already terminal and safe, so the launcher proceeds exactly
     as it did before `C4-I`.
+
+    `durable_phase` is the phase actually on disk. When recovery could not
+    publish its own transition, this reports the phase that really remains — so
+    the next launcher start resumes from reality rather than from what this run
+    intended.
     """
 
     normal_startup_allowed: bool
-    phase: RestorePhase | None = None
+    durable_phase: RestorePhase | None = None
     outcome: RestoreOutcome | None = None
     operation_id: str | None = None
     message: str | None = None

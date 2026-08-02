@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.error import URLError
+import hashlib
 import json
 import time
 import urllib.request
@@ -113,36 +114,59 @@ def _check_representative_reads(base_url: str) -> None:
             raise BackendVerificationError("A representative read returned an unexpected shape.")
 
 
+def fallback_database_fingerprint() -> tuple[bool, int, int, int, str]:
+    """A content fingerprint of the repository fallback database.
+
+    Existence, size and mtime are not enough. A same-size write within one
+    filesystem timestamp granularity leaves all three unchanged, and "the child
+    quietly opened and migrated the repository database" is precisely a
+    same-directory, same-name modification. The SHA-256 makes the claim
+    "neither created nor modified" a statement about content.
+
+    Stat identity is included as well, so a fallback that was replaced by a
+    different file with identical content is still noticed.
+    """
+    from app.db.config import DEFAULT_DATABASE_PATH
+
+    if not DEFAULT_DATABASE_PATH.exists():
+        return (False, 0, 0, 0, "")
+    info = DEFAULT_DATABASE_PATH.stat()
+    digest = hashlib.sha256()
+    with open(DEFAULT_DATABASE_PATH, "rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return (True, info.st_size, info.st_dev, info.st_ino, digest.hexdigest())
+
+
 def verify_restored_backend(config, paths, database_path: Path) -> BackendVerificationReport:
     """Start, check, stop, restart, check and stop again — all bounded.
 
     `database_path` is the exact path the launcher prepared. It is passed to the
-    child explicitly, and the repository default database is watched throughout:
-    if it appears or changes, the child resolved its own database and the
-    continuity this whole slice depends on was not preserved.
+    child explicitly, and the repository default database is fingerprinted
+    throughout: if it appears or changes, the child resolved its own database and
+    the continuity this whole slice depends on was not preserved.
+
+    Every child started here is **owned** by this function and stopped in a
+    `finally`, including on the failure path — so a verification failure can never
+    leave a backend holding the database the caller is about to roll back.
     """
     # Deferred: `launcher.runtime` imports this package for the startup recovery
     # gate, so importing it at module scope would be circular.
-    from app.db.config import DEFAULT_DATABASE_PATH
-    from launcher.runtime import start_backend_process, terminate_process
+    from launcher.restore.context import BackendProcessOwner
 
     target = Path(database_path)
     if not target.is_file():
         raise BackendVerificationError("The restored database file is missing.")
 
-    def fallback_fingerprint() -> tuple[bool, int, int]:
-        if not DEFAULT_DATABASE_PATH.exists():
-            return (False, 0, 0)
-        stat = DEFAULT_DATABASE_PATH.stat()
-        return (True, stat.st_size, stat.st_mtime_ns)
-
-    fallback_before = fallback_fingerprint()
+    fallback_before = fallback_database_fingerprint()
     base_url = config.backend_url
 
     for cycle in range(VERIFICATION_CYCLES):
-        process = None
+        # A fresh owner per cycle: each child is started, recorded, checked and
+        # then stopped by handle. No PID is ever discovered by port or by name.
+        owner = BackendProcessOwner()
         try:
-            process = start_backend_process(config, paths, target)
+            process = owner.start(config, paths, target)
             payload = wait_for_backend_ready(
                 base_url, process, timeout_seconds=READINESS_TIMEOUT_SECONDS
             )
@@ -156,10 +180,13 @@ def verify_restored_backend(config, paths, database_path: Path) -> BackendVerifi
                 f"{type(exc).__name__}"
             ) from exc
         finally:
-            if process is not None:
-                terminate_process(process, timeout_seconds=GRACEFUL_STOP_TIMEOUT_SECONDS)
+            proof = owner.stop(timeout_seconds=GRACEFUL_STOP_TIMEOUT_SECONDS)
+            if not proof.confirmed_stopped:
+                raise BackendVerificationError(
+                    "A verification backend could not be stopped within its bound."
+                )
 
-    if fallback_fingerprint() != fallback_before:
+    if fallback_database_fingerprint() != fallback_before:
         raise BackendVerificationError(
             "The repository fallback database was created or modified during verification."
         )

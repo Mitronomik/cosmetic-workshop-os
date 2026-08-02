@@ -2243,8 +2243,6 @@ scripts/
   start_local.sh
   create_backup.sh
   restore_backup.sh
-  c4_i_restore_smoke.sh
-  c4_i_restore_smoke.py
 ```
 
 > **`restore_backup.sh` is a developer/support script sketch, not the product
@@ -2252,10 +2250,11 @@ scripts/
 > (§ 12.4), and a terminal command must never become the permanent workflow for
 > the product user. Restore is **not implemented**.
 >
-> The same rule covers `c4_i_restore_smoke.sh` / `c4_i_restore_smoke.py`: they are
-> a **developer-only** exact-head verification runner for the internal `C4-I`
-> engine, refuse to run outside a clean workspace at an expected published SHA,
-> work only inside a temporary directory, and are never the user-facing workflow.
+> `C4-I` deliberately adds **no** script here. A PR-specific exact-head smoke
+> runner must live outside the pull request it verifies, so the `C4-I` runner is
+> created outside the repository, drives a detached checkout of the exact published
+> head, and is never committed. A reusable smoke framework would be a separate
+> decision and a separate pull request.
 
 ---
 
@@ -2332,7 +2331,7 @@ Before schema migration:
 > C4 — ACTIVE
 > C4 product decision — COMPLETE
 > CR-010 — ACCEPTED
-> C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+> C4-I — IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
 > C4-II — PLANNED — NOT AUTHORIZED
 > C4-III — PLANNED — NOT AUTHORIZED
 > Restore — NOT IMPLEMENTED
@@ -2342,11 +2341,15 @@ Before schema migration:
 > branch as `launcher/restore/`, with one bounded read-only backend helper
 > (`backend/app/db/migration_lineage.py`). It has **no** API endpoint, route,
 > button, dialog, file picker or product terminal workflow, so it changes no
-> user-visible architecture: the launcher gains a durable operation record under
-> `<user data base>/restore/`, an exclusive `flock` instance lock, and a recovery
-> gate that resolves any interrupted Restore before startup migrations, the backend
-> child and the browser. No migration, no schema change, no AuditLog event, and no
-> frontend production change.
+> user-visible architecture. The launcher gains: a **lifecycle context** that
+> derives every destructive path from the existing startup and backup resolvers
+> and owns the backend child it starts; a durable operation record under
+> `<user data base>/restore/`; an exclusive `flock` instance lock; one shared
+> filesystem durability primitive; and a recovery gate that resolves any
+> interrupted Restore before startup migrations, the backend child and the
+> browser. A future Restore caller supplies **only the selected source** — the
+> database, backup and Restore directories are never caller input. No migration,
+> no schema change, no AuditLog event, and no frontend production change.
 
 ```text
 MVP Restore is launcher-assisted.

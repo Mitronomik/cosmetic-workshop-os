@@ -114,13 +114,23 @@ def _open_read_only(candidate: Path) -> sqlite3.Connection:
         raise CandidateRejectedError("candidate-not-openable") from exc
 
 
-def validate_staged_candidate(candidate_path: Path) -> ValidatedCandidate:
-    """Run the complete accepted validation contract against the staged copy.
+def validate_workspace_snapshot(snapshot_path: Path) -> ValidatedCandidate:
+    """The complete read-only workspace-validation contract for one SQLite file.
+
+    Shared by the staged Restore candidate and by the `before_restore` safety
+    copy, because the two need the *same* proof: that a file on disk is a
+    self-contained, structurally sound, recognizably `cosmetic-workshop-os`
+    workspace whose recorded migration history is a known ordered prefix that the
+    file actually backs up.
+
+    Extracting it rather than writing a second checker is the point. A safety
+    copy verified more weakly than a candidate is a recovery point that might not
+    be one, and that is the artifact the entire destructive boundary rests on.
 
     Ordered cheapest-and-most-fundamental first, so a foreign file is refused
     before this process opens a SQLite connection to it.
     """
-    candidate = Path(candidate_path)
+    candidate = Path(snapshot_path)
 
     # 1-3: it is an owned regular file, not a symlink, and not empty. The size
     # check has to precede every structural one, because a zero-byte file is a
@@ -196,3 +206,15 @@ def validate_staged_candidate(candidate_path: Path) -> ValidatedCandidate:
         )
     finally:
         connection.close()
+
+
+def validate_staged_candidate(candidate_path: Path) -> ValidatedCandidate:
+    """Validate the staged Restore candidate.
+
+    Currently exactly the shared workspace contract. It stays a named entry point
+    because the candidate and the safety copy are validated for different reasons
+    at different moments, and a future candidate-only condition belongs here
+    rather than in the shared checker where it would silently tighten safety-copy
+    verification too.
+    """
+    return validate_workspace_snapshot(candidate_path)

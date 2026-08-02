@@ -25,37 +25,25 @@ this module can never be acted on.
 
 `CR-010` § 7.3 rejects an in-place truncate-and-rewrite of the only authoritative
 record: a crash mid-write leaves a file that is neither the old state nor the new
-one, and the recovery matrix has no entry for "half a phase". The publication
-primitive here is:
+one, and the recovery matrix has no entry for "half a phase". Publication is
+delegated to :mod:`launcher.restore.durability`, the one shared safety-critical
+primitive — exclusive scratch creation, complete write, file flush
+(`F_FULLFSYNC` on macOS where the filesystem supports it), atomic same-directory
+`os.replace`, published-file flush, then a **mandatory** parent-directory flush.
 
-```text
-create an exclusively-owned scratch file in the same directory
-→ write the complete record
-→ flush the Python buffer
-→ os.fsync the file descriptor
-→ os.replace onto the authoritative name        <- atomic publication boundary
-→ best-effort os.fsync of the parent directory
-→ remove only the scratch file this call created
-```
+**The parent-directory flush is not best effort.** `os.replace` makes the new
+record visible atomically but does not make the rename itself survive a host
+interruption. Ignoring that failure is precisely what could leave the working
+database replaced while this record reverted to a phase saying nothing was
+replaced — and startup recovery would then take the `aborted` branch over a
+database that is not the one it thinks it is.
 
-`os.replace` is the boundary. It is POSIX `rename(2)` within one directory, which
-is atomic with respect to other processes: a concurrent reader sees either the
-complete old record or the complete new one, never a mixture. Interruption before
-it leaves the old record intact and one orphan scratch file that
-`clean_owned_temp_files` recognizes.
-
-**Durability is claimed only as far as the primitive proves it.** `os.fsync`
-pushes the file's data out of the operating system's cache. On macOS it does
-*not* guarantee the drive has flushed its own write cache — that needs
-`F_FULLFSYNC` — so no claim of power-loss durability is made here, and none is
-made in the documentation. What is proved, and what the recovery matrix actually
-depends on, is old-or-new atomicity across process death and OS crash.
-
-The parent-directory `fsync` is best-effort by design. It is what makes the
-rename itself durable on ext4/APFS-style filesystems, but some platforms and some
-mounts refuse `O_RDONLY` fsync on a directory. Refusing to continue there would
-break Restore on a filesystem where the atomic boundary is still perfectly sound,
-so the failure is recorded and tolerated rather than fatal.
+So a publication failure is **classified, never swallowed**. `RestoreStateError`
+carries `published`: when the underlying failure happened at or after the rename,
+the new record may already be on disk, and the caller must **re-read the
+authoritative record** rather than assume the transition did not happen. That is
+the difference between "this phase did not persist" and "I do not know which
+phase persisted", and only the second is safe to resolve by reading.
 """
 
 from __future__ import annotations
@@ -68,11 +56,13 @@ import json
 import os
 import tempfile
 
+from launcher.restore.durability import DurabilityError, write_and_publish_bytes
 from launcher.restore.phases import RestorePhase, require_allowed_transition
 from launcher.restore.workspace import (
     OWNED_TEMP_PREFIX,
     OWNED_TEMP_SUFFIX,
     RestoreWorkspace,
+    is_launcher_operation_id,
     is_safe_relative_filename,
 )
 
@@ -103,7 +93,16 @@ class RestoreStateError(RuntimeError):
     is the one case where the launcher knows something happened and cannot tell
     what, and the accepted answer to that is `recovery_blocked`, not ordinary
     startup.
+
+    `published` is what a caller must branch on after a failed transition. When
+    it is true the rename already happened, so the new phase may well be the
+    durable one — assuming otherwise would mean acting on a phase that is not on
+    disk. The caller re-reads instead of guessing.
     """
+
+    def __init__(self, message: str, *, published: bool = False) -> None:
+        super().__init__(message)
+        self.published = published
 
 
 def _now() -> str:
@@ -155,8 +154,11 @@ class RestoreOperationRecord:
             raise RestoreStateError("Restore operation record has an unexpected field set.")
 
         operation_id = payload["operation_id"]
-        if not is_safe_relative_filename(operation_id):
-            raise RestoreStateError("Restore operation record has an unsafe operation identity.")
+        if not is_launcher_operation_id(operation_id):
+            # Stricter than a safe filename on purpose: this value becomes a
+            # directory name, so anything this launcher could not have generated
+            # is refused rather than acted on.
+            raise RestoreStateError("Restore operation record has a non-launcher operation identity.")
 
         raw_phase = payload["phase"]
         try:
@@ -196,66 +198,23 @@ class RestoreOperationRecord:
 # to inject at.
 
 
-def _create_owned_scratch(directory: Path) -> tuple[int, Path]:
+def _create_owned_scratch(directory: Path) -> Path:
     """Create an exclusively-owned scratch file in the publication directory.
 
     `mkstemp` uses `O_CREAT | O_EXCL`, so the returned path is one this process
     definitely created. That is what makes the cleanup below safe, and it is the
     same ownership argument the accepted backup engine uses for its own scratch
     file. Same directory on purpose: `os.replace` must stay within one filesystem.
+
+    The descriptor is closed immediately and the durability primitive reopens the
+    path it was handed. Ownership of the *path* is what matters for cleanup, and
+    keeping the write in one place is what keeps the guarantees in one place.
     """
     handle, path = tempfile.mkstemp(
         dir=directory, prefix=OWNED_TEMP_PREFIX, suffix=OWNED_TEMP_SUFFIX
     )
-    return handle, Path(path)
-
-
-def _write_scratch_record(handle: int, payload: bytes) -> None:
-    """Write the complete record and force it out of the process buffer."""
-    with os.fdopen(handle, "wb", closefd=True) as stream:
-        stream.write(payload)
-        stream.flush()
-        _fsync_file(stream.fileno())
-
-
-def _fsync_file(fileno: int) -> None:
-    """Flush the file's data out of the operating-system cache.
-
-    Separate from `_write_scratch_record` so a test can fail exactly this step.
-    A failure here is fatal to the publication: the record has not been published
-    yet, so refusing costs nothing and continuing would publish bytes that may
-    not be on the device.
-    """
-    os.fsync(fileno)
-
-
-def _publish_scratch(scratch_path: Path, record_path: Path) -> None:
-    """The atomic publication boundary.
-
-    `os.replace`, not `os.link` — unlike the backup engine, this file *must* be
-    overwritten, and it must be overwritten in one step. `os.link` refuses an
-    existing target; `unlink`-then-`link` would open exactly the window this
-    primitive exists to close.
-    """
-    os.replace(scratch_path, record_path)
-
-
-def _fsync_directory(directory: Path) -> None:
-    """Best-effort durability for the rename itself.
-
-    Tolerated on failure: see the module docstring. The atomic boundary holds
-    without it; only the persistence of the rename across a host crash does not.
-    """
-    try:
-        fd = os.open(directory, os.O_RDONLY)
-    except OSError:
-        return
-    try:
-        os.fsync(fd)
-    except OSError:
-        return
-    finally:
-        os.close(fd)
+    os.close(handle)
+    return Path(path)
 
 
 class RestoreOperationStateStore:
@@ -296,17 +255,44 @@ class RestoreOperationStateStore:
             raise RestoreStateError("Restore operation record is not readable JSON.") from exc
         return RestoreOperationRecord.from_json_object(payload)
 
+    def read_durable_record(
+        self, fallback: RestoreOperationRecord
+    ) -> RestoreOperationRecord:
+        """The record actually on disk, or `fallback` when it cannot be read.
+
+        Called after a publication whose durability could not be proved. The
+        rename may already have landed, so neither the old nor the new phase may
+        be assumed — the only honest answer is whatever a complete read returns.
+
+        `fallback` is the caller's last *known* durable record, used when the
+        file itself is now unreadable. That is deliberately the more dangerous of
+        the two values, because the caller's safe response is keyed off the
+        pre-transition phase and re-reading must never make the situation look
+        better than it is.
+        """
+        try:
+            current = self.read()
+        except RestoreStateError:
+            return fallback
+        return current if current is not None else fallback
+
     # ------------------------------------------------------------ publishing
 
     def publish(self, record: RestoreOperationRecord) -> RestoreOperationRecord:
-        """Durably publish one complete record through the atomic boundary."""
+        """Durably publish one complete record through the shared primitive.
+
+        A failure is classified rather than flattened. `RestoreStateError.published`
+        is true when the rename already happened and only its durability is
+        unproven — in that case the record on disk **is** the new one, and a
+        caller that assumed otherwise would act on a phase that is not there.
+        """
         directory = self.workspace.ensure_restore_dir()
         payload = json.dumps(
             record.to_json_object(), ensure_ascii=False, sort_keys=True, indent=2
         ).encode("utf-8")
 
         try:
-            handle, scratch_path = _create_owned_scratch(directory)
+            scratch_path = _create_owned_scratch(directory)
         except OSError as exc:
             # Nothing was created, so there is nothing to clean up and the
             # previously published record is untouched.
@@ -314,23 +300,18 @@ class RestoreOperationStateStore:
                 f"Restore operation state could not be staged: {type(exc).__name__}"
             ) from exc
 
-        published = False
         try:
-            _write_scratch_record(handle, payload)
-            _publish_scratch(scratch_path, self.record_path)
-            published = True
-        except OSError as exc:
-            raise RestoreStateError(
-                f"Restore operation state could not be published: {type(exc).__name__}"
-            ) from exc
-        finally:
-            if not published:
-                # Only ever the scratch file this call created. After a
-                # successful `os.replace` the scratch path no longer exists, so
-                # this cleanup cannot touch the published record.
+            write_and_publish_bytes(payload, self.record_path, scratch_path)
+        except DurabilityError as exc:
+            if not exc.may_have_published:
+                # The rename never ran, so the scratch file is still ours to
+                # remove and the previous record is intact.
                 with contextlib.suppress(OSError):
                     scratch_path.unlink(missing_ok=True)
-        _fsync_directory(directory)
+            raise RestoreStateError(
+                f"Restore operation state could not be published: {exc.stage.value}",
+                published=exc.may_have_published,
+            ) from exc
         return record
 
     def create(
@@ -343,6 +324,10 @@ class RestoreOperationStateStore:
         yet, and starting a second attempt over either would leave two operations
         claiming the same working database.
         """
+        if not is_launcher_operation_id(operation_id):
+            raise RestoreStateError(
+                "A Restore operation identity must be a canonical launcher-generated UUID."
+            )
         existing = self.read()
         if existing is not None and existing.phase not in _TERMINAL:
             raise RestoreStateError(

@@ -50,6 +50,12 @@ class RestoreWorkspaceError(RuntimeError):
     """Raised when the Restore workspace cannot be established or trusted."""
 
 
+# The only UUID version this launcher generates. Pinned so a record carrying a
+# v1 (MAC-address-and-time) or v5 (name-derived) identity is refused: those are
+# derivable rather than random, and an operation ID is also a directory name.
+OPERATION_ID_UUID_VERSION = 4
+
+
 def new_operation_id() -> str:
     """One launcher-generated operation ID per attempt.
 
@@ -58,6 +64,33 @@ def new_operation_id() -> str:
     never reactivated, so identity is what separates attempts.
     """
     return str(uuid.uuid4())
+
+
+def is_launcher_operation_id(value: object) -> bool:
+    """Whether `value` is an identity *this launcher* could have generated.
+
+    Deliberately stricter than "a safe relative filename". An operation ID is
+    joined onto the Restore directory to form a directory name, so accepting any
+    safe filename would let a record name an arbitrary sibling directory as its
+    own — a name that is harmless to store and not harmless to act on.
+
+    Three conditions, and the reuse matters: the canonical-spelling check is the
+    backend's own `is_canonical_operation_id`, which round-trips through
+    `str(uuid.UUID(value))` so exactly one spelling per identity is admitted —
+    no uppercase, no braces, no URN, no unhyphenated form. On top of that the
+    version must be the one this launcher generates, and the value must still be
+    a safe relative filename, because it becomes a path component.
+    """
+    from app.domain.artifact_audit_operations import is_canonical_operation_id
+
+    if not is_canonical_operation_id(value):
+        return False
+    if not is_safe_relative_filename(value):
+        return False
+    try:
+        return uuid.UUID(str(value)).version == OPERATION_ID_UUID_VERSION
+    except (ValueError, AttributeError, TypeError):
+        return False
 
 
 def resolve_restore_dir(database_path: Path) -> Path:
@@ -117,12 +150,16 @@ class RestoreWorkspace:
     def operation_dir(self, operation_id: str) -> Path:
         """The isolated directory for one attempt.
 
-        The operation ID is validated as a safe relative name before it is
-        joined, so a record that somehow carried a traversal spelling cannot
-        reach outside the boundary when it is read back.
+        The operation ID is validated as a canonical launcher-generated UUID
+        before it is joined, so a record that somehow carried a traversal
+        spelling — or merely an arbitrary safe filename naming some other
+        directory — cannot reach outside this attempt's boundary when it is read
+        back.
         """
-        if not is_safe_relative_filename(operation_id):
-            raise RestoreWorkspaceError("Restore operation identity is not a safe directory name.")
+        if not is_launcher_operation_id(operation_id):
+            raise RestoreWorkspaceError(
+                "Restore operation identity is not a canonical launcher-generated UUID."
+            )
         return self.restore_dir / operation_id
 
     def staged_candidate_path(self, operation_id: str) -> Path:

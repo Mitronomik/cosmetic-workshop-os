@@ -22,11 +22,10 @@ from launcher.restore.engine import execute_restore
 from launcher.restore.phases import RestorePhase
 
 from launcher.tests.restore_fixtures import (
-    DUMMY_CONFIG,
-    DUMMY_PATHS,
     failing_verifier,
     make_source_backup,
     make_workspace,
+    request_for,
     stub_services,
 )
 
@@ -92,22 +91,25 @@ def test_the_error_categories_cover_the_accepted_boundary_set():
 def scenario(monkeypatch, tmp_path):
     workspace = make_workspace(monkeypatch, tmp_path, marker="workspace-A")
     source = make_source_backup(tmp_path, "workspace-B")
-    return workspace, source
+    context = workspace.context()
+    try:
+        yield workspace, source, context
+    finally:
+        context.release()
 
 
-def run(workspace, source, **overrides):
+def run(workspace, source, context, **overrides):
     return execute_restore(
-        workspace.request(source),
-        DUMMY_CONFIG,
-        DUMMY_PATHS,
+        request_for(source),
+        context,
         services=stub_services(workspace.database_path, **overrides),
     )
 
 
 def test_a_successful_result_exposes_no_path(scenario, tmp_path):
-    workspace, source = scenario
+    workspace, source, context = scenario
 
-    result = run(workspace, source)
+    result = run(workspace, source, context)
 
     assert_user_safe(result.message)
     assert str(tmp_path) not in repr(result)
@@ -116,13 +118,12 @@ def test_a_successful_result_exposes_no_path(scenario, tmp_path):
 
 
 def test_a_rejected_source_result_never_names_the_selected_path(scenario, tmp_path):
-    workspace, _source = scenario
+    workspace, _source, context = scenario
     secret = tmp_path / "Клиенты" / "личное.sqlite"
 
     result = execute_restore(
-        workspace.request(secret),
-        DUMMY_CONFIG,
-        DUMMY_PATHS,
+        request_for(secret),
+        context,
         services=stub_services(workspace.database_path),
     )
 
@@ -132,9 +133,9 @@ def test_a_rejected_source_result_never_names_the_selected_path(scenario, tmp_pa
 
 
 def test_a_rolled_back_result_carries_no_technical_reason(scenario):
-    workspace, source = scenario
+    workspace, source, context = scenario
 
-    result = run(workspace, source, verify=failing_verifier("uvicorn refused: sqlite3 locked"))
+    result = run(workspace, source, context, verify=failing_verifier("uvicorn refused: sqlite3 locked"))
 
     assert_user_safe(result.message)
     assert "uvicorn" not in result.message
@@ -144,9 +145,10 @@ def test_a_rolled_back_result_carries_no_technical_reason(scenario):
 def test_the_result_type_has_no_field_a_stack_trace_could_ride_in_on():
     assert set(RestoreResult.__dataclass_fields__) == {
         "outcome",
-        "phase",
+        "durable_phase",
         "operation_id",
         "message",
+        "normal_startup_allowed",
         "failure",
         "safety_copy_filename",
         "staged_candidate_filename",
@@ -154,13 +156,13 @@ def test_the_result_type_has_no_field_a_stack_trace_could_ride_in_on():
 
 
 def test_rolled_back_is_never_reported_as_a_successful_restore(scenario):
-    workspace, source = scenario
+    workspace, source, context = scenario
 
-    result = run(workspace, source, verify=failing_verifier())
+    result = run(workspace, source, context, verify=failing_verifier())
 
     assert result.restore_succeeded is False
     assert result.working_database_replaced is False
-    assert result.phase is RestorePhase.ROLLED_BACK
+    assert result.durable_phase is RestorePhase.ROLLED_BACK
     assert result.message != SUCCESS_MESSAGE
 
 
@@ -182,7 +184,11 @@ def test_no_client_recipe_or_order_data_reaches_the_operation_record(monkeypatch
         finally:
             connection.close()
 
-    run(workspace, source)
+    context = workspace.context()
+    try:
+        run(workspace, source, context)
+    finally:
+        context.release()
 
     serialized = (workspace.restore_dir / "operation.json").read_text(encoding="utf-8")
     assert "Демо Клиент" not in serialized

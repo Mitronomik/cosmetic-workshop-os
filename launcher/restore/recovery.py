@@ -9,28 +9,31 @@ The four groups:
 
 | Phases | Behaviour |
 |---|---|
-| `prepared`, `source_staged`, `candidate_validated`, `safety_copy_verified` | Never replaced anything. Transition to `aborted`, clean only owned staging, allow normal startup. A verified safety copy is retained. |
+| `prepared`, `source_staged`, `candidate_validated`, `safety_copy_verified` | Never replaced anything. Transition to `aborted`, clean only owned staging and the one owned replacement artifact, allow normal startup. A verified safety copy is retained. |
 | `replacement_intent`, `replacement_committed`, `verification_in_progress` | Block startup. Durably enter `rollback_in_progress`, restore and verify the safety copy, end at `rolled_back` or `recovery_blocked`. |
 | `rollback_in_progress` | Block startup. Continue or safely repeat the rollback. |
 | `completed`, `aborted`, `rolled_back` | Terminal and safe. Confirm the record is readable, retain the safety copy, clean only owned staging, allow normal startup. |
 | `recovery_blocked` | Nothing starts. All evidence preserved. One fixed non-technical result. |
 
-A record that exists but cannot be read is **not** treated as "no operation".
-That is the one case where the launcher knows something happened and cannot tell
-what, and the accepted answer is `recovery_blocked`, not an optimistic start.
+Two things are never done here. A record that exists but cannot be read is **not**
+treated as "no operation" — that is the one case where the launcher knows
+something happened and cannot tell what, and the accepted answer is
+`recovery_blocked`, not an optimistic start. And no transition outside the
+accepted graph is ever attempted: when a required transition cannot be published,
+the **actual** durable phase is reported and ordinary startup is blocked, so the
+next launcher start resumes from reality.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 import logging
 
+from launcher.restore.context import LauncherLifecycleContext
 from launcher.restore.contracts import (
     RECOVERY_BLOCKED_MESSAGE,
     ROLLED_BACK_MESSAGE,
     RecoveryResult,
     RestoreOutcome,
-    RestoreRequest,
 )
 from launcher.restore.engine import RestoreServices, perform_rollback
 from launcher.restore.phases import (
@@ -38,48 +41,79 @@ from launcher.restore.phases import (
     ROLLBACK_REQUIRED_PHASES,
     RestorePhase,
 )
+from launcher.restore.replacement import discard_owned_replacement_artifact
 from launcher.restore.state import RestoreOperationStateStore, RestoreStateError
-from launcher.restore.workspace import RestoreWorkspace
+from launcher.restore.workspace import RestoreWorkspaceError
 
 logger = logging.getLogger(__name__)
 
 
-def _allowed(phase: RestorePhase, operation_id: str | None, outcome: RestoreOutcome) -> RecoveryResult:
+def _allowed(
+    phase: RestorePhase, operation_id: str | None, outcome: RestoreOutcome
+) -> RecoveryResult:
     return RecoveryResult(
-        normal_startup_allowed=True, phase=phase, outcome=outcome, operation_id=operation_id
+        normal_startup_allowed=True,
+        durable_phase=phase,
+        outcome=outcome,
+        operation_id=operation_id,
     )
 
 
 def _blocked_result(
-    phase: RestorePhase, operation_id: str | None, message: str
+    phase: RestorePhase | None, operation_id: str | None, message: str
 ) -> RecoveryResult:
+    """Block ordinary startup, reporting the phase that is actually on disk.
+
+    `phase` is never the phase this run *wanted* to reach. When a transition
+    could not be published it is the pre-transition phase that really remains, so
+    the next launcher start resolves the same real state through the same matrix.
+    """
     return RecoveryResult(
         normal_startup_allowed=False,
-        phase=phase,
+        durable_phase=phase,
         outcome=RestoreOutcome.RECOVERY_BLOCKED,
         operation_id=operation_id,
         message=message,
     )
 
 
+def _clean_non_destructive_artifacts(workspace, context, operation_id: str) -> None:
+    """Remove only what this operation provably owns.
+
+    The staged candidate lives in this operation's own directory; the replacement
+    artifact has one deterministic name derived from the operation ID. Neither
+    lookup lists a directory looking for things to delete, which is what keeps
+    cleanup from ever reaching a file beside the user's database that the
+    launcher did not create.
+    """
+    try:
+        workspace.clean_owned_staging(operation_id)
+        workspace.clean_owned_temp_files()
+    except RestoreWorkspaceError:
+        return
+    discard_owned_replacement_artifact(context.database_path, operation_id)
+
+
 def recover_incomplete_restore(
-    database_path: Path,
-    backup_dir: Path,
-    config,
-    paths,
+    context: LauncherLifecycleContext,
     *,
-    mode: str = "user",
     services: RestoreServices | None = None,
 ) -> RecoveryResult:
     """Resolve any persisted Restore operation before the backend may start.
 
+    `context` carries the held launcher lock and the canonically derived paths,
+    so recovery guards exactly the workspace ordinary startup is about to use.
     Returns a :class:`RecoveryResult` whose `normal_startup_allowed` is the only
-    thing the launcher needs to branch on. `no_operation` is the ordinary case:
-    no Restore has ever run here, so the launcher proceeds exactly as it did
-    before `C4-I`.
+    thing the launcher needs to branch on; `no_operation` is the ordinary case.
     """
     active_services = services or RestoreServices()
-    workspace = RestoreWorkspace.for_database(Path(database_path))
+    context.require_authority()
+    # Recovery runs *before* ordinary startup, so the launcher has not started a
+    # backend yet — but that has to be established, not assumed. With no owned
+    # handle this records the "never started" proof; if a previous run in this
+    # process did start one, it is stopped here, before any rollback replacement.
+    context.stop_backend()
+    workspace = context.workspace
     store = RestoreOperationStateStore(workspace)
 
     if not store.has_record():
@@ -91,7 +125,7 @@ def recover_incomplete_restore(
         # Present but unreadable. Nothing may be inferred from a record that
         # cannot be parsed, and "there is no operation" is not what this is.
         logger.error("Restore operation record is unreadable: %s", type(exc).__name__)
-        return _blocked_result(RestorePhase.RECOVERY_BLOCKED, None, RECOVERY_BLOCKED_MESSAGE)
+        return _blocked_result(None, None, RECOVERY_BLOCKED_MESSAGE)
     if record is None:
         return RecoveryResult(normal_startup_allowed=True, no_operation=True)
 
@@ -105,27 +139,25 @@ def recover_incomplete_restore(
     # ------------------------------------------------- terminal safe states
     if phase in (RestorePhase.COMPLETED, RestorePhase.ABORTED, RestorePhase.ROLLED_BACK):
         # The record was readable, which is the confirmation the matrix asks for.
-        # Only launcher-owned staging is cleaned; the safety copy is retained.
-        workspace.clean_owned_staging(record.operation_id)
-        workspace.clean_owned_temp_files()
-        outcome = {
-            RestorePhase.COMPLETED: RestoreOutcome.COMPLETED,
-            RestorePhase.ABORTED: RestoreOutcome.ABORTED,
-            RestorePhase.ROLLED_BACK: RestoreOutcome.ROLLED_BACK,
-        }[phase]
-        result = _allowed(phase, record.operation_id, outcome)
+        # Only launcher-owned artifacts are cleaned; the safety copy is retained.
+        _clean_non_destructive_artifacts(workspace, context, record.operation_id)
         if phase is RestorePhase.ROLLED_BACK:
             # Restore remains failed. Startup continues against the recovered
             # previous workspace, and the message says so rather than implying a
             # successful Restore.
             return RecoveryResult(
                 normal_startup_allowed=True,
-                phase=phase,
+                durable_phase=phase,
                 outcome=RestoreOutcome.ROLLED_BACK,
                 operation_id=record.operation_id,
                 message=ROLLED_BACK_MESSAGE,
             )
-        return result
+        outcome = (
+            RestoreOutcome.COMPLETED
+            if phase is RestorePhase.COMPLETED
+            else RestoreOutcome.ABORTED
+        )
+        return _allowed(phase, record.operation_id, outcome)
 
     # ------------------------------------------------- pre-replacement states
     if phase in ABORTABLE_PHASES:
@@ -134,50 +166,58 @@ def recover_incomplete_restore(
         # startup continues against the existing working database.
         try:
             aborted = store.transition(record, RestorePhase.ABORTED)
-        except RestoreStateError:
-            logger.error("An interrupted Restore could not be closed out.")
-            return _blocked_result(
-                RestorePhase.RECOVERY_BLOCKED, record.operation_id, RECOVERY_BLOCKED_MESSAGE
+        except RestoreStateError as exc:
+            actual = store.read_durable_record(record)
+            if actual.phase is not RestorePhase.ABORTED:
+                # The abort did not stick. Nothing destructive happened, but the
+                # operation is still live, so startup is blocked rather than
+                # continuing past an unresolved record — and the next start sees
+                # the same real phase and tries again.
+                logger.error(
+                    "An interrupted Restore could not be closed out; durable phase remains %s.",
+                    actual.phase.value,
+                )
+                return _blocked_result(
+                    actual.phase, actual.operation_id, RECOVERY_BLOCKED_MESSAGE
+                )
+            logger.warning(
+                "Abort publication reported %s but the record is durable.", type(exc).__name__
             )
-        workspace.clean_owned_staging(aborted.operation_id)
-        workspace.clean_owned_temp_files()
+            aborted = actual
+        _clean_non_destructive_artifacts(workspace, context, aborted.operation_id)
         return _allowed(RestorePhase.ABORTED, aborted.operation_id, RestoreOutcome.ABORTED)
 
     # ------------------------------------------------ rollback-required states
-    request = RestoreRequest(
-        # Recovery never touches the selected source, and the durable record
-        # deliberately does not store its path. The staged candidate is preserved
-        # evidence; rollback restores from the safety copy alone.
-        selected_source=Path(database_path),
-        database_path=Path(database_path),
-        backup_dir=Path(backup_dir),
-        restore_dir=workspace.restore_dir,
-        mode=mode,
-    )
-
     if phase in ROLLBACK_REQUIRED_PHASES:
         try:
             record = store.transition(record, RestorePhase.ROLLBACK_IN_PROGRESS)
         except RestoreStateError:
-            logger.error("Rollback could not be durably requested during recovery.")
-            return _blocked_result(
-                RestorePhase.RECOVERY_BLOCKED, record.operation_id, RECOVERY_BLOCKED_MESSAGE
-            )
+            actual = store.read_durable_record(record)
+            if actual.phase is not RestorePhase.ROLLBACK_IN_PROGRESS:
+                # No unauthorized transition is attempted from here. The durable
+                # phase stays what it is, startup is blocked, and the next
+                # launcher start retries recovery from that same real phase.
+                logger.error(
+                    "Rollback could not be durably requested; durable phase remains %s.",
+                    actual.phase.value,
+                )
+                return _blocked_result(
+                    actual.phase, actual.operation_id, RECOVERY_BLOCKED_MESSAGE
+                )
+            record = actual
 
     # `rollback_in_progress` arrives here either from the transition above or
     # from a crash during a previous rollback. Both continue the same way, which
     # is what makes rollback safely repeatable.
-    result = perform_rollback(
-        store, record, workspace, request, config, paths, active_services
-    )
+    result = perform_rollback(store, record, workspace, context, active_services)
     if result.outcome is RestoreOutcome.ROLLED_BACK:
         return RecoveryResult(
             normal_startup_allowed=True,
-            phase=RestorePhase.ROLLED_BACK,
+            durable_phase=RestorePhase.ROLLED_BACK,
             outcome=RestoreOutcome.ROLLED_BACK,
             operation_id=result.operation_id,
             message=ROLLED_BACK_MESSAGE,
         )
     return _blocked_result(
-        RestorePhase.RECOVERY_BLOCKED, result.operation_id, RECOVERY_BLOCKED_MESSAGE
+        result.durable_phase, result.operation_id, RECOVERY_BLOCKED_MESSAGE
     )
