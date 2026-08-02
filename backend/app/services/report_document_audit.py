@@ -71,6 +71,19 @@ TRACKING_UNAVAILABLE_NEXT_ACTION: Final = (
     "Повторите создание документа. Если ошибка повторяется, перезапустите приложение."
 )
 
+# The pair exists but did not pass mandatory verification, so it is not a
+# trustworthy document and must not be presented as one. The wording deliberately
+# does not claim the document was created, and carries no filename, path,
+# operation ID, SQLite message or verifier-internal reason.
+VERIFICATION_FAILED_CODE: Final = "report_document_verification_failed"
+VERIFICATION_FAILED_MESSAGE: Final = (
+    "Не удалось проверить созданный документ отчета, поэтому он не считается надёжным. "
+    "Данные мастерской не изменялись."
+)
+VERIFICATION_FAILED_NEXT_ACTION: Final = (
+    "Повторите создание документа. Если ошибка повторяется, перезапустите приложение."
+)
+
 VerificationOutcome = Literal["valid", "definitely_absent", "ambiguous"]
 
 
@@ -87,6 +100,34 @@ class ReportDocumentAuditTrackingUnavailableError(RuntimeError):
     next_action = TRACKING_UNAVAILABLE_NEXT_ACTION
 
 
+class ReportDocumentArtifactUnverifiedError(RuntimeError):
+    """Raised when the created pair did not pass mandatory verification.
+
+    Distinct from every other failure on the create path, and deliberately so:
+
+    - a *preparation* failure means nothing was written;
+    - a *rendering* failure means the pair did not complete, and its own
+      compensation already removed whatever was written;
+    - **this** means both files exist but could not be proven to be the document
+      this operation created;
+    - an *AuditLog* failure means the pair is verified and only its Journal entry
+      is outstanding — which is a `201 pending` success, not this.
+
+    The pair is left on disk untouched. This operation cannot prove it owns what
+    is there — that is exactly what verification failed to establish — so
+    deleting it could destroy a file belonging to something else. The ledger row
+    stays unresolved and counted for diagnosis and bounded reconciliation.
+
+    Deliberately not a `ReportDocumentError`: that base class is mapped to a bare
+    HTTP 500 string, and this failure carries the structured fixed-text contract
+    instead.
+    """
+
+    code = VERIFICATION_FAILED_CODE
+    message = VERIFICATION_FAILED_MESSAGE
+    next_action = VERIFICATION_FAILED_NEXT_ACTION
+
+
 @dataclass(frozen=True)
 class ReportDocumentVerification:
     outcome: VerificationOutcome
@@ -96,6 +137,47 @@ class ReportDocumentVerification:
     @property
     def is_valid(self) -> bool:
         return self.outcome == "valid"
+
+
+FinalizationOutcome = Literal["recorded", "audit_pending", "artifact_invalid"]
+
+
+@dataclass(frozen=True)
+class ReportDocumentFinalization:
+    """What one finalization attempt concluded, as three distinct answers.
+
+    A single `int | None` cannot carry this. `None` previously meant *both* "the
+    pair did not verify" and "the pair verified but its Journal entry did not
+    commit", and the create path mapped every `None` to `201 pending` — so a
+    document that failed mandatory verification could be reported to the user as
+    created with a merely pending Journal entry. Those are different facts and
+    they need different names.
+
+    `recorded`
+        Verified, and exactly one `report_document.created` event is committed.
+    `audit_pending`
+        **Verified** — the pair is authoritative — but the AuditLog insert or the
+        ledger transition did not commit. The pair is kept and the operation
+        stays unresolved and counted.
+    `artifact_invalid`
+        Verification did not conclude that the pair is valid. That covers an
+        `ambiguous` or `definitely_absent` verdict, a verifier that raised, and a
+        ledger that could not be read to verify against. The pair is **not** an
+        authoritative result and must never be reported as a created document.
+    """
+
+    outcome: FinalizationOutcome
+    audit_log_id: int | None = None
+    verification: ReportDocumentVerification | None = None
+
+    @property
+    def is_recorded(self) -> bool:
+        return self.outcome == "recorded"
+
+    @property
+    def artifact_is_authoritative(self) -> bool:
+        """Whether the pair itself may be reported as a created document."""
+        return self.outcome in ("recorded", "audit_pending")
 
 
 @dataclass(frozen=True)
@@ -301,13 +383,14 @@ class ReportDocumentAuditService:
 
     # --------------------------------------------------------------- finalize
 
-    def finalize(self, operation_id: str, *, reconciled_after_failure: bool) -> int | None:
-        """Idempotently commit this operation's single AuditLog event.
+    def finalize(self, operation_id: str, *, reconciled_after_failure: bool) -> ReportDocumentFinalization:
+        """Verify this operation's pair, then idempotently commit its event.
 
-        Returns the AuditLog row ID when the operation is audited — whether this
-        call inserted it or found it already there — and `None` when it could
-        not be, which the caller must treat as `pending`, never as a failure of
-        the document itself.
+        Returns a `ReportDocumentFinalization` rather than an ID-or-`None`,
+        because the caller has to tell three different things apart: audited,
+        verified but not yet audited, and not verified at all. Collapsing the
+        last two is how an unverified pair would end up presented as a created
+        document.
 
         Verification happens *before* the write transaction opens. Parsing JSON
         and stat-ing files while holding a SQLite write lock would block every
@@ -317,36 +400,56 @@ class ReportDocumentAuditService:
         try:
             operation = self.repository.get_operation(operation_id)
         except (sqlite3.Error, OSError):
-            return None
+            # The ledger could not be read, so nothing was verified. Claiming the
+            # pair is authoritative here would be a guess.
+            return ReportDocumentFinalization("artifact_invalid")
         if operation is None:
-            return None
+            return ReportDocumentFinalization("artifact_invalid")
         if operation.status == STATUS_AUDITED:
-            return operation.audit_log_id
+            # Already audited: the pair was verified when that event was
+            # committed, and the existing ID is returned without inserting again.
+            return ReportDocumentFinalization("recorded", audit_log_id=operation.audit_log_id)
         if operation.status not in UNRESOLVED_STATUSES:
-            return None
-
-        verification = self.verify(operation)
-        if not verification.is_valid:
-            return None
+            return ReportDocumentFinalization("artifact_invalid")
 
         try:
-            return self._commit_finalization(operation, verification, reconciled_after_failure)
+            verification = self.verify(operation)
+        except Exception:
+            # An unexpected verifier defect is not evidence that the pair is
+            # good. It is left unresolved and counted so the operation stays
+            # visible, and the caller refuses rather than reporting a success it
+            # cannot stand behind. The exception itself never reaches the user.
+            self._try_mark_pending(operation_id)
+            return ReportDocumentFinalization("artifact_invalid")
+        if not verification.is_valid:
+            # Deliberately *not* marked abandoned, even for `definitely_absent`:
+            # abandoning here would discard the only record of what happened, and
+            # bounded reconciliation is the place that decision belongs. Left
+            # unresolved, the operation stays counted and diagnosable.
+            self._try_mark_pending(operation_id)
+            return ReportDocumentFinalization("artifact_invalid", verification=verification)
+
+        try:
+            audit_log_id = self._commit_finalization(operation, verification, reconciled_after_failure)
         except (sqlite3.Error, OSError, RuntimeError):
-            # The artifact stays exactly as it is. Only the secondary result
-            # failed, so the operation is merely moved to `pending_audit` — and
-            # that move happens on a fresh connection, after the failed
+            # The pair is verified and stays exactly as it is. Only the secondary
+            # result failed, so the operation is merely moved to `pending_audit`
+            # — and that move happens on a fresh connection, after the failed
             # transaction has already been rolled back and closed.
             #
             # `RuntimeError` is this module's own rollback signal from
             # `_commit_finalization`. Keeping the catch here — rather than
-            # narrowing it — is deliberate: by this point both files exist, and
-            # the accepted contract requires HTTP 201 with `audit_status:
-            # pending`, never a total failure. An unexpected error that escaped
-            # instead would destroy a completed result. Degrading to `pending`
-            # keeps the artifact, the count and the warning, so nothing is lost
-            # and nothing is silently forgotten.
+            # narrowing it — is deliberate: by this point both files exist and
+            # are verified, and the accepted contract requires HTTP 201 with
+            # `audit_status: pending`, never a total failure.
             self._try_mark_pending(operation_id)
-            return None
+            return ReportDocumentFinalization("audit_pending", verification=verification)
+        if audit_log_id is None:
+            # The row moved under us between the pre-read and the write lock. The
+            # pair is still verified, so this is a pending Journal entry.
+            self._try_mark_pending(operation_id)
+            return ReportDocumentFinalization("audit_pending", verification=verification)
+        return ReportDocumentFinalization("recorded", audit_log_id=audit_log_id, verification=verification)
 
     def _commit_finalization(
         self,
@@ -436,10 +539,11 @@ class ReportDocumentAuditService:
                     self.repository.mark_abandoned(operation.operation_id)
                     abandoned += 1
                 elif verification.outcome == "valid":
-                    if self.finalize(operation.operation_id, reconciled_after_failure=True) is None:
-                        unresolved += 1
-                    else:
+                    finalization = self.finalize(operation.operation_id, reconciled_after_failure=True)
+                    if finalization.is_recorded:
                         audited += 1
+                    else:
+                        unresolved += 1
                 else:
                     self._try_mark_pending(operation.operation_id)
                     unresolved += 1

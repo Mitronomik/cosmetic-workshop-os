@@ -40,6 +40,7 @@ from app.services.export import (
 )
 from app.services.export_audit import (
     PENDING_AUDIT_MESSAGE,
+    ExportArtifactUnverifiedError,
     ExportAuditService,
     ExportAuditTrackingUnavailableError,
 )
@@ -82,13 +83,17 @@ def create_audited_json_export(
 ) -> AuditedExportResult:
     """Create one JSON export and record it in the Journal, in that order.
 
-    Raises `ExportSourceMissingError` / `ExportError` exactly as before when the
-    export itself cannot be created, and `ExportAuditTrackingUnavailableError`
-    when the operation could not be durably tracked — the one case where the
-    create is refused outright, before anything is written.
+    The failure modes stay distinct on purpose, because they mean different
+    things to the user and to recovery:
 
-    Once the export file exists it is the authoritative result: no audit outcome
-    below deletes it or turns this into a failure.
+    - `ExportSourceMissingError` / `ExportError` — the export itself could not be
+      produced, so there is no artifact;
+    - `ExportAuditTrackingUnavailableError` — the operation could not be durably
+      tracked, so nothing was written at all;
+    - `ExportArtifactUnverifiedError` — something exists at the reserved path but
+      did not pass mandatory verification, so it is not a trustworthy export;
+    - a returned result with `audit_status="pending"` — the export is **verified**
+      and authoritative, and only its Journal entry is outstanding.
     """
     resolved_config = config or get_database_config()
     audit_service = ExportAuditService(paths.export_dir, resolved_config)
@@ -132,14 +137,24 @@ def create_audited_json_export(
         reserved_export_path=reserved_path,
     )
 
-    # The export is complete and is now the authoritative result. Everything
-    # below is the secondary Journal result, and no outcome of it may delete the
-    # export or turn this into a failure.
-    audit_log_id = audit_service.finalize(operation_id, reconciled_after_failure=False)
+    # Verification decides whether there is an authoritative result at all, and
+    # the Journal entry is a separate, secondary question. Collapsing the two is
+    # how an unverified file would be reported as a created export with a merely
+    # pending Journal entry.
+    finalization = audit_service.finalize(operation_id, reconciled_after_failure=False)
+    if not finalization.artifact_is_authoritative:
+        # Something is at the reserved path, but this operation could not prove it
+        # is the export it just wrote. It is left exactly where it is — deleting a
+        # path whose ownership is precisely what failed to verify could destroy
+        # someone else's file — and the ledger row stays unresolved and counted.
+        raise ExportArtifactUnverifiedError(ExportArtifactUnverifiedError.message)
+
+    # From here the export is verified and is the authoritative result. No audit
+    # outcome below deletes it or turns this into a failure.
     return AuditedExportResult(
         result=result,
         operation_id=operation_id,
-        audit_status="recorded" if audit_log_id is not None else "pending",
+        audit_status="recorded" if finalization.is_recorded else "pending",
     )
 
 

@@ -46,6 +46,18 @@ TRACKING_FAILURE_DETAIL = {
     "next_action": "Повторите создание документа. Если ошибка повторяется, перезапустите приложение.",
 }
 
+# The exact fixed contract for a pair that exists but did not verify. Written out
+# literally rather than imported, so a change to the constant cannot silently
+# change what the user is promised.
+VERIFICATION_FAILED_DETAIL = {
+    "code": "report_document_verification_failed",
+    "message": (
+        "Не удалось проверить созданный документ отчета, поэтому он не считается надёжным. "
+        "Данные мастерской не изменялись."
+    ),
+    "next_action": "Повторите создание документа. Если ошибка повторяется, перезапустите приложение.",
+}
+
 
 def environment(monkeypatch, tmp_path):
     database_path = tmp_path / "report-documents-audit.sqlite"
@@ -758,3 +770,144 @@ def test_startup_reconciliation_does_not_backfill_legacy_documents(monkeypatch, 
     assert result.report_document_audit_reconciliation.examined == 0
     assert audit_actions(config) == []
     assert operations(config) == []
+
+
+# --------------------------------------------------------------------------
+# An unverified document is never a created document
+#
+# The correction this slice makes. `POST /api/report-documents/reports/overview`
+# previously mapped every non-recorded finalization to `201` with `audit_status:
+# pending`, so a document that failed mandatory verification was presented to the
+# user as created with only its Journal entry outstanding. Verification failure
+# and Journal failure are now different answers, and only the second is a
+# success.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("outcome", ["ambiguous", "definitely_absent"])
+def test_a_non_valid_verification_never_returns_201(monkeypatch, tmp_path, outcome):
+    config, documents_dir, client = environment(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        audit_module.ReportDocumentAuditService,
+        "verify",
+        lambda self, operation: audit_module.ReportDocumentVerification(outcome, "injected"),
+    )
+
+    response = client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+
+    assert response.status_code != 201
+    assert response.status_code == 500
+    body = response.json()
+    assert body["detail"] == VERIFICATION_FAILED_DETAIL
+    # Not a success in any form: no create message, and no pending-Journal pair.
+    serialized = json.dumps(body, ensure_ascii=False)
+    assert "Документ отчета создан." not in serialized
+    assert "audit_status" not in body
+    assert PENDING_AUDIT_MESSAGE not in serialized
+    # No event written, and the pair is preserved rather than deleted.
+    assert audit_actions(config) == []
+    assert len(list(documents_dir.glob("*.md"))) == 1
+    assert len(list(documents_dir.glob("*.json"))) == 1
+    # Unresolved and counted.
+    assert [row["status"] for row in operations(config)] in (["prepared"], ["pending_audit"])
+    assert client.get("/api/report-documents/status").json()["pending_audit_count"] == 1
+
+
+def test_a_real_corruption_between_write_and_finalization_never_returns_201(monkeypatch, tmp_path):
+    """A genuine verifier verdict, not an injected outcome, reaches the same result."""
+    config, documents_dir, client = environment(monkeypatch, tmp_path)
+    original = audit_module.ReportDocumentAuditService.finalize
+
+    def corrupt_then_finalize(self, operation_id, *, reconciled_after_failure):
+        # The recorded size no longer matches the bytes on disk.
+        for path in documents_dir.glob("*.md"):
+            path.write_text("truncated", encoding="utf-8")
+        return original(self, operation_id, reconciled_after_failure=reconciled_after_failure)
+
+    monkeypatch.setattr(audit_module.ReportDocumentAuditService, "finalize", corrupt_then_finalize)
+
+    response = client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == VERIFICATION_FAILED_DETAIL
+    assert audit_actions(config) == []
+    assert len(list(documents_dir.glob("*.md"))) == 1
+
+
+def test_the_verification_error_leaks_no_filename_path_reason_or_sqlite_detail(monkeypatch, tmp_path):
+    config, documents_dir, client = environment(monkeypatch, tmp_path)
+    captured = {}
+
+    def leaky_verify(self, operation):
+        captured["primary"] = operation.primary_filename
+        captured["companion"] = operation.companion_filename
+        captured["operation_id"] = operation.operation_id
+        raise sqlite3.OperationalError("database disk image is malformed")
+
+    monkeypatch.setattr(audit_module.ReportDocumentAuditService, "verify", leaky_verify)
+
+    response = client.post(
+        "/api/report-documents/reports/overview",
+        json={"format": "markdown", "reason": "квартальная сводка"},
+    )
+
+    assert response.status_code == 500
+    serialized = json.dumps(response.json(), ensure_ascii=False)
+    for forbidden in [
+        captured["primary"],
+        captured["companion"],
+        captured["operation_id"],
+        str(documents_dir),
+        "workshop-overview",
+        "квартальная сводка",
+        "database disk image is malformed",
+        "sqlite",
+        "Traceback",
+        "size-mismatch",
+    ]:
+        assert forbidden not in serialized
+    assert set(response.json()["detail"]) == {"code", "message", "next_action"}
+
+
+def test_a_transient_verifier_fault_is_finalized_once_by_a_later_reconciliation(monkeypatch, tmp_path):
+    """The refused create leaves a recoverable operation, not a lost document."""
+    config, documents_dir, client = environment(monkeypatch, tmp_path)
+    original_verify = audit_module.ReportDocumentAuditService.verify
+
+    def defective(*_args, **_kwargs):
+        raise TypeError("injected transient verifier fault")
+
+    monkeypatch.setattr(audit_module.ReportDocumentAuditService, "verify", defective)
+    first = client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+    assert first.status_code == 500
+    assert audit_actions(config) == []
+    monkeypatch.setattr(audit_module.ReportDocumentAuditService, "verify", original_verify)
+
+    # The next create runs one bounded pre-create reconciliation pass first.
+    second = client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+
+    assert second.status_code == 201
+    assert audit_actions(config) == ["report_document.created", "report_document.created"]
+    assert client.get("/api/report-documents/status").json()["pending_audit_count"] == 0
+
+
+def test_a_verified_document_with_a_failed_journal_write_is_still_201_pending(monkeypatch, tmp_path):
+    """The other half of the correction: a Journal failure is still a success."""
+    config, documents_dir, client = environment(monkeypatch, tmp_path)
+
+    def failing_create_log(*_args, **_kwargs):
+        raise sqlite3.OperationalError("injected AuditLog failure")
+
+    monkeypatch.setattr(AuditLogRepository, "create_log", failing_create_log)
+
+    response = client.post("/api/report-documents/reports/overview", json={"format": "markdown"})
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["message"] == "Документ отчета создан."
+    assert body["audit_status"] == "pending"
+    assert body["audit_message"] == PENDING_AUDIT_MESSAGE
+    assert audit_actions(config) == []
+    assert client.get("/api/report-documents/status").json()["pending_audit_count"] == 1
+    # The document is listable and downloadable: it is the authoritative result.
+    assert client.get("/api/report-documents").json()["total"] == 1

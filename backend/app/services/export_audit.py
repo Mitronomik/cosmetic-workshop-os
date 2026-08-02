@@ -69,6 +69,20 @@ TRACKING_UNAVAILABLE_NEXT_ACTION: Final = (
     "Повторите создание экспорта. Если ошибка повторяется, перезапустите приложение."
 )
 
+# The export file exists but did not pass mandatory verification, so it is not a
+# trustworthy export and must not be presented as one. The wording deliberately
+# does not claim the export was created, and carries no filename, path, reason,
+# schema version, entity count, operation ID, SQLite message or verifier-internal
+# reason.
+VERIFICATION_FAILED_CODE: Final = "export_verification_failed"
+VERIFICATION_FAILED_MESSAGE: Final = (
+    "Не удалось проверить созданный экспорт, поэтому он не считается надёжным. "
+    "Данные мастерской не изменялись."
+)
+VERIFICATION_FAILED_NEXT_ACTION: Final = (
+    "Повторите создание экспорта. Если ошибка повторяется, перезапустите приложение."
+)
+
 VerificationOutcome = Literal["valid", "definitely_absent", "ambiguous"]
 
 
@@ -85,6 +99,29 @@ class ExportAuditTrackingUnavailableError(RuntimeError):
     next_action = TRACKING_UNAVAILABLE_NEXT_ACTION
 
 
+class ExportArtifactUnverifiedError(RuntimeError):
+    """Raised when the created export did not pass mandatory verification.
+
+    Distinct from every other failure on the create path, and deliberately so:
+
+    - a *source or preparation* failure means nothing was written;
+    - an *export creation* failure means the file did not complete;
+    - **this** means something exists at the reserved path but could not be
+      proven to be the export this operation wrote;
+    - an *AuditLog* failure means the export is verified and only its Journal
+      entry is outstanding — which is a `201 pending` success, not this.
+
+    The file is left on disk untouched. This operation cannot prove it owns what
+    is there — that is exactly what verification failed to establish — so
+    deleting it could destroy a file belonging to something else. The ledger row
+    stays unresolved and counted for diagnosis and bounded reconciliation.
+    """
+
+    code = VERIFICATION_FAILED_CODE
+    message = VERIFICATION_FAILED_MESSAGE
+    next_action = VERIFICATION_FAILED_NEXT_ACTION
+
+
 @dataclass(frozen=True)
 class ExportVerification:
     outcome: VerificationOutcome
@@ -94,6 +131,47 @@ class ExportVerification:
     @property
     def is_valid(self) -> bool:
         return self.outcome == "valid"
+
+
+FinalizationOutcome = Literal["recorded", "audit_pending", "artifact_invalid"]
+
+
+@dataclass(frozen=True)
+class ExportFinalization:
+    """What one finalization attempt concluded, as three distinct answers.
+
+    A single `int | None` cannot carry this. `None` previously meant *both* "the
+    export did not verify" and "the export verified but its Journal entry did not
+    commit", and the create path mapped every `None` to `201 pending` — so an
+    export that failed mandatory verification could be reported to the user as
+    created with a merely pending Journal entry. Those are different facts and
+    they need different names.
+
+    `recorded`
+        Verified, and exactly one `export.created` event is committed.
+    `audit_pending`
+        **Verified** — the export is authoritative — but the AuditLog insert or
+        the ledger transition did not commit. The file is kept and the operation
+        stays unresolved and counted.
+    `artifact_invalid`
+        Verification did not conclude that the export is valid. That covers an
+        `ambiguous` or `definitely_absent` verdict, a verifier that raised, and a
+        ledger that could not be read to verify against. The file is **not** an
+        authoritative result and must never be reported as a created export.
+    """
+
+    outcome: FinalizationOutcome
+    audit_log_id: int | None = None
+    verification: ExportVerification | None = None
+
+    @property
+    def is_recorded(self) -> bool:
+        return self.outcome == "recorded"
+
+    @property
+    def artifact_is_authoritative(self) -> bool:
+        """Whether the export itself may be reported as a created export."""
+        return self.outcome in ("recorded", "audit_pending")
 
 
 @dataclass(frozen=True)
@@ -293,13 +371,13 @@ class ExportAuditService:
 
     # --------------------------------------------------------------- finalize
 
-    def finalize(self, operation_id: str, *, reconciled_after_failure: bool) -> int | None:
-        """Idempotently commit this operation's single AuditLog event.
+    def finalize(self, operation_id: str, *, reconciled_after_failure: bool) -> ExportFinalization:
+        """Verify this operation's export, then idempotently commit its event.
 
-        Returns the AuditLog row ID when the operation is audited — whether this
-        call inserted it or found it already there — and `None` when it could
-        not be, which the caller must treat as `pending`, never as a failure of
-        the export itself.
+        Returns an `ExportFinalization` rather than an ID-or-`None`, because the
+        caller has to tell three different things apart: audited, verified but
+        not yet audited, and not verified at all. Collapsing the last two is how
+        an unverified file would end up presented as a created export.
 
         Verification happens *before* the write transaction opens. Parsing a
         whole export file while holding a SQLite write lock would block every
@@ -308,43 +386,57 @@ class ExportAuditService:
         try:
             operation = self.repository.get_operation(operation_id)
         except (sqlite3.Error, OSError):
-            return None
+            # The ledger could not be read, so nothing was verified. Claiming the
+            # export is authoritative here would be a guess.
+            return ExportFinalization("artifact_invalid")
         if operation is None:
-            return None
+            return ExportFinalization("artifact_invalid")
         if operation.status == STATUS_AUDITED:
-            return operation.audit_log_id
+            # Already audited: the export was verified when that event was
+            # committed, and the existing ID is returned without inserting again.
+            return ExportFinalization("recorded", audit_log_id=operation.audit_log_id)
         if operation.status not in UNRESOLVED_STATUSES:
-            return None
+            return ExportFinalization("artifact_invalid")
 
         try:
             verification = self.verify(operation)
         except Exception:
-            # `finalize` runs on the create path *after* the export is on disk
-            # and is deliberately not wrapped in a `try` there. An unexpected
-            # error escaping the verifier would therefore turn a successfully
-            # created export into an HTTP 500 — the false total failure CR-009
-            # exists to prevent. Degrading to `pending` keeps the export, the
-            # count and the warning, so a defect stays visible rather than
-            # destroying a result.
+            # An unexpected verifier defect is not evidence that the export is
+            # good. It is left unresolved and counted so the operation stays
+            # visible, and the caller refuses rather than reporting a success it
+            # cannot stand behind. The exception itself never reaches the user.
             self._try_mark_pending(operation_id)
-            return None
+            return ExportFinalization("artifact_invalid")
         if not verification.is_valid:
-            return None
+            # Deliberately *not* marked abandoned, even for `definitely_absent`:
+            # abandoning here would discard the only record of what happened, and
+            # bounded reconciliation is the place that decision belongs. Left
+            # unresolved, the operation stays counted and diagnosable.
+            self._try_mark_pending(operation_id)
+            return ExportFinalization("artifact_invalid", verification=verification)
 
         try:
-            return self._commit_finalization(operation, verification, reconciled_after_failure)
+            audit_log_id = self._commit_finalization(operation, verification, reconciled_after_failure)
         except (sqlite3.Error, OSError, RuntimeError):
-            # The export stays exactly as it is. Only the secondary result
-            # failed, so the operation is merely moved to `pending_audit` — and
-            # that move happens on a fresh connection, after the failed
-            # transaction has already been rolled back and closed.
+            # The export is verified and stays exactly as it is. Only the
+            # secondary result failed, so the operation is merely moved to
+            # `pending_audit` — and that move happens on a fresh connection,
+            # after the failed transaction has already been rolled back and
+            # closed.
             #
             # `RuntimeError` is this module's own rollback signal from
             # `_commit_finalization`. Keeping the catch here is deliberate: by
-            # this point the export exists, and the accepted contract requires
-            # HTTP 201 with `audit_status: pending`, never a total failure.
+            # this point the export exists and is verified, and the accepted
+            # contract requires HTTP 201 with `audit_status: pending`, never a
+            # total failure.
             self._try_mark_pending(operation_id)
-            return None
+            return ExportFinalization("audit_pending", verification=verification)
+        if audit_log_id is None:
+            # The row moved under us between the pre-read and the write lock. The
+            # export is still verified, so this is a pending Journal entry.
+            self._try_mark_pending(operation_id)
+            return ExportFinalization("audit_pending", verification=verification)
+        return ExportFinalization("recorded", audit_log_id=audit_log_id, verification=verification)
 
     def _commit_finalization(
         self,
@@ -435,10 +527,11 @@ class ExportAuditService:
                     self.repository.mark_abandoned(operation.operation_id)
                     abandoned += 1
                 elif verification.outcome == "valid":
-                    if self.finalize(operation.operation_id, reconciled_after_failure=True) is None:
-                        unresolved += 1
-                    else:
+                    finalization = self.finalize(operation.operation_id, reconciled_after_failure=True)
+                    if finalization.is_recorded:
                         audited += 1
+                    else:
+                        unresolved += 1
                 else:
                     self._try_mark_pending(operation.operation_id)
                     unresolved += 1

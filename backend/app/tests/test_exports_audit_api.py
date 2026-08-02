@@ -46,6 +46,18 @@ TRACKING_FAILURE_DETAIL = {
     "next_action": "Повторите создание экспорта. Если ошибка повторяется, перезапустите приложение.",
 }
 
+# The exact fixed contract for an export that exists but did not verify. Written
+# out literally rather than imported, so a change to the constant cannot silently
+# change what the user is promised.
+VERIFICATION_FAILED_DETAIL = {
+    "code": "export_verification_failed",
+    "message": (
+        "Не удалось проверить созданный экспорт, поэтому он не считается надёжным. "
+        "Данные мастерской не изменялись."
+    ),
+    "next_action": "Повторите создание экспорта. Если ошибка повторяется, перезапустите приложение.",
+}
+
 
 def environment(monkeypatch, tmp_path):
     database_path = tmp_path / "exports-audit.sqlite"
@@ -334,9 +346,15 @@ def test_a_later_reconciliation_completes_the_pending_event_exactly_once(monkeyp
     assert client.get("/api/exports/status").json()["pending_audit_count"] == 0
 
 
-def test_a_completed_export_survives_an_unexpected_defect_in_finalization(monkeypatch, tmp_path):
-    """A verified export must never become an HTTP 500."""
-    config, _export_dir, client = environment(monkeypatch, tmp_path)
+def test_a_defect_in_finalization_is_a_safe_error_and_never_a_created_export(monkeypatch, tmp_path):
+    """A defect that prevented verification must not be reported as a success.
+
+    The written file is still never deleted and the raw defect never reaches the
+    user — but the export was never verified, so it is not an authoritative
+    result. Returning `201 pending` here would tell the user their export exists
+    and is trustworthy when nothing established that.
+    """
+    config, export_dir, client = environment(monkeypatch, tmp_path)
 
     def defective(*_args, **_kwargs):
         raise TypeError("injected programming defect")
@@ -345,10 +363,14 @@ def test_a_completed_export_survives_an_unexpected_defect_in_finalization(monkey
 
     response = client.post("/api/exports", json={"reason": "manual"})
 
-    assert response.status_code == 201
-    assert response.json()["audit_status"] == "pending"
-    assert Path(response.json()["export"]["path"]).exists()
+    assert response.status_code == 500
+    assert response.json()["detail"] == VERIFICATION_FAILED_DETAIL
+    # The file is preserved: this operation could not prove it owns the path, so
+    # deleting it could destroy a file belonging to something else.
+    assert len(list(export_dir.glob("*.json"))) == 1
     assert audit_rows(config) == []
+    # Unresolved and counted, so the standing warning still surfaces it.
+    assert client.get("/api/exports/status").json()["pending_audit_count"] == 1
 
 
 def test_an_export_is_never_deleted_because_the_journal_write_failed(monkeypatch, tmp_path):
@@ -626,3 +648,133 @@ def test_the_create_orchestration_uses_one_filename_selection_algorithm(monkeypa
     assert reserved == [body["export"]["filename"]]
     operation = ArtifactAuditOperationRepository(_config).list_unresolved("json_export")
     assert operation == []
+
+
+# --------------------------------------------------------------------------
+# An unverified export is never a created export
+#
+# The correction this slice makes. `POST /api/exports` previously mapped every
+# non-recorded finalization to `201` with `audit_status: pending`, so an export
+# that failed mandatory verification was presented to the user as created with
+# only its Journal entry outstanding. Verification failure and Journal failure
+# are now different answers, and only the second is a success.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("outcome", ["ambiguous", "definitely_absent"])
+def test_a_non_valid_verification_never_returns_201(monkeypatch, tmp_path, outcome):
+    config, export_dir, client = environment(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        audit_module.ExportAuditService,
+        "verify",
+        lambda self, operation: audit_module.ExportVerification(outcome, "injected"),
+    )
+
+    response = client.post("/api/exports", json={"reason": "manual"})
+
+    assert response.status_code != 201
+    assert response.status_code == 500
+    body = response.json()
+    assert body["detail"] == VERIFICATION_FAILED_DETAIL
+    # Not a success in any form: no create message, and no pending-Journal pair.
+    serialized = json.dumps(body, ensure_ascii=False)
+    assert "Экспорт создан." not in serialized
+    assert "audit_status" not in body
+    assert PENDING_AUDIT_MESSAGE not in serialized
+    # No event, file preserved, operation unresolved and counted.
+    assert audit_rows(config) == []
+    assert len(list(export_dir.glob("*.json"))) == 1
+    assert client.get("/api/exports/status").json()["pending_audit_count"] == 1
+
+
+def test_a_real_corruption_between_write_and_finalization_never_returns_201(monkeypatch, tmp_path):
+    """A genuine verifier verdict, not an injected outcome, reaches the same result."""
+    config, export_dir, client = environment(monkeypatch, tmp_path)
+    original = audit_module.ExportAuditService.finalize
+
+    def corrupt_then_finalize(self, operation_id, *, reconciled_after_failure):
+        for path in export_dir.glob("*.json"):
+            path.write_text("{not json", encoding="utf-8")
+        return original(self, operation_id, reconciled_after_failure=reconciled_after_failure)
+
+    monkeypatch.setattr(audit_module.ExportAuditService, "finalize", corrupt_then_finalize)
+
+    response = client.post("/api/exports", json={"reason": "manual"})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == VERIFICATION_FAILED_DETAIL
+    assert audit_rows(config) == []
+    assert len(list(export_dir.glob("*.json"))) == 1
+
+
+def test_the_verification_error_leaks_no_filename_path_reason_or_sqlite_detail(monkeypatch, tmp_path):
+    config, export_dir, client = environment(monkeypatch, tmp_path)
+    captured = {}
+
+    def leaky_verify(self, operation):
+        captured["name"] = operation.primary_filename
+        captured["operation_id"] = operation.operation_id
+        raise sqlite3.OperationalError("database disk image is malformed")
+
+    monkeypatch.setattr(audit_module.ExportAuditService, "verify", leaky_verify)
+
+    response = client.post("/api/exports", json={"reason": "квартальная выгрузка"})
+
+    assert response.status_code == 500
+    serialized = json.dumps(response.json(), ensure_ascii=False)
+    for forbidden in [
+        captured["name"],
+        captured["operation_id"],
+        str(export_dir),
+        "cosmetic_workshop",
+        "квартальная выгрузка",
+        "kvartalnaya",
+        "database disk image is malformed",
+        "sqlite",
+        "Traceback",
+        "ingredients",
+        "export_schema_version",
+    ]:
+        assert forbidden not in serialized
+    assert set(response.json()["detail"]) == {"code", "message", "next_action"}
+
+
+def test_a_transient_verifier_fault_is_finalized_once_by_a_later_reconciliation(monkeypatch, tmp_path):
+    """The refused create leaves a recoverable operation, not a lost export."""
+    config, export_dir, client = environment(monkeypatch, tmp_path)
+    original_verify = audit_module.ExportAuditService.verify
+
+    def defective(*_args, **_kwargs):
+        raise TypeError("injected transient verifier fault")
+
+    monkeypatch.setattr(audit_module.ExportAuditService, "verify", defective)
+    assert client.post("/api/exports", json={"reason": "manual"}).status_code == 500
+    assert audit_rows(config) == []
+    monkeypatch.setattr(audit_module.ExportAuditService, "verify", original_verify)
+
+    # The next create runs one bounded pre-create reconciliation pass first.
+    second = client.post("/api/exports", json={"reason": "manual"})
+
+    assert second.status_code == 201
+    rows = audit_rows(config)
+    assert [row["action"] for row in rows] == ["export.created", "export.created"]
+    recovered = [row for row in rows if json.loads(row["metadata_json"])["reconciled_after_failure"] is True]
+    assert len(recovered) == 1
+    assert client.get("/api/exports/status").json()["pending_audit_count"] == 0
+
+
+def test_a_verified_export_with_a_failed_journal_write_is_still_201_pending(monkeypatch, tmp_path):
+    """The other half of the correction: a Journal failure is still a success."""
+    config, export_dir, client = environment(monkeypatch, tmp_path)
+    failing_journal(monkeypatch)
+
+    response = client.post("/api/exports", json={"reason": "manual"})
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["message"] == "Экспорт создан."
+    assert body["audit_status"] == "pending"
+    assert body["audit_message"] == PENDING_AUDIT_MESSAGE
+    assert Path(body["export"]["path"]).exists()
+    assert audit_rows(config) == []
+    assert client.get("/api/exports/status").json()["pending_audit_count"] == 1

@@ -498,7 +498,13 @@ def test_finalization_creates_exactly_one_event_with_the_accepted_contract(tmp_p
     document_path, sidecar_path = write_pair(documents_dir)
     operation_id = prepare(service, document_path, sidecar_path)
 
-    audit_log_id = service.finalize(operation_id, reconciled_after_failure=False)
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "recorded"
+    assert finalization.is_recorded is True
+    assert finalization.artifact_is_authoritative is True
+    assert finalization.verification.is_valid is True
+    audit_log_id = finalization.audit_log_id
 
     rows = audit_rows(config)
     assert len(rows) == 1
@@ -530,7 +536,9 @@ def test_repeated_sequential_finalization_creates_exactly_one_event(tmp_path):
     second = service.finalize(operation_id, reconciled_after_failure=True)
     third = service.finalize(operation_id, reconciled_after_failure=True)
 
-    assert first == second == third
+    assert [f.outcome for f in (first, second, third)] == ["recorded"] * 3
+    # The repeat calls reuse the already committed event rather than inserting.
+    assert first.audit_log_id == second.audit_log_id == third.audit_log_id
     assert len(audit_rows(config)) == 1
 
 
@@ -568,7 +576,7 @@ def test_two_concurrent_finalizers_create_exactly_one_event(tmp_path):
         barrier.wait()
         outcome = worker.finalize(operation_id, reconciled_after_failure=False)
         with lock:
-            results.append(outcome)
+            results.append(outcome.audit_log_id if outcome.is_recorded else None)
 
     threads = [threading.Thread(target=run) for _ in range(2)]
     for thread in threads:
@@ -594,7 +602,14 @@ def test_an_audit_insert_failure_leaves_the_operation_unresolved_and_the_files_i
 
     monkeypatch.setattr(AuditLogRepository, "create_log", failing_create_log)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is None
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    # The pair is verified, so this is a pending Journal entry and never an
+    # invalid artifact: the document itself is still authoritative.
+    assert finalization.outcome == "audit_pending"
+    assert finalization.artifact_is_authoritative is True
+    assert finalization.is_recorded is False
+    assert finalization.audit_log_id is None
 
     assert audit_rows(config) == []
     operation = ArtifactAuditOperationRepository(config).get_operation(operation_id)
@@ -619,7 +634,14 @@ def test_a_ledger_update_failure_rolls_back_the_audit_insert(tmp_path, monkeypat
 
     monkeypatch.setattr(ArtifactAuditOperationRepository, "mark_audited", lambda *_a, **_k: False)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is None
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    # The pair is verified, so this is a pending Journal entry and never an
+    # invalid artifact: the document itself is still authoritative.
+    assert finalization.outcome == "audit_pending"
+    assert finalization.artifact_is_authoritative is True
+    assert finalization.is_recorded is False
+    assert finalization.audit_log_id is None
 
     assert audit_rows(config) == []
     operation = ArtifactAuditOperationRepository(config).get_operation(operation_id)
@@ -661,7 +683,7 @@ def test_no_second_sqlite_connection_participates_in_the_finalizer(tmp_path, mon
 
     monkeypatch.setattr(audit_module.ReportDocumentAuditService, "_commit_finalization", traced)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is not None
+    assert service.finalize(operation_id, reconciled_after_failure=False).is_recorded
     # Exactly the one connection the transaction itself opened.
     assert sum(opened) == 1
 
@@ -872,3 +894,220 @@ def test_create_log_honours_a_caller_owned_connection_and_its_rollback(tmp_path)
         connection.close()
 
     assert audit_rows(config) == []
+
+
+# --------------------------------------------------------------------------
+# Typed finalization: verification failure is not a pending Journal entry
+#
+# The load-bearing distinction of this slice. A single `int | None` could not
+# tell "the pair did not verify" apart from "the pair verified but its Journal
+# entry did not commit", and the create path mapped both to `201 pending` — so a
+# document that failed mandatory verification was reported to the user as
+# created. These pin the three outcomes apart.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("outcome", ["ambiguous", "definitely_absent"])
+def test_a_non_valid_verification_is_artifact_invalid_and_writes_no_event(tmp_path, monkeypatch, outcome):
+    config, documents_dir, service = setup(tmp_path)
+    document_path, sidecar_path = write_pair(documents_dir)
+    before = (document_path.read_bytes(), sidecar_path.read_bytes())
+    operation_id = prepare(service, document_path, sidecar_path)
+
+    monkeypatch.setattr(
+        audit_module.ReportDocumentAuditService,
+        "verify",
+        lambda self, operation: audit_module.ReportDocumentVerification(outcome, "injected"),
+    )
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.artifact_is_authoritative is False
+    assert finalization.is_recorded is False
+    assert finalization.audit_log_id is None
+    assert audit_rows(config) == []
+    # Unresolved and counted — never abandoned on the immediate create path, and
+    # never silently forgotten.
+    operation = ArtifactAuditOperationRepository(config).get_operation(operation_id)
+    assert operation.status in ("prepared", "pending_audit")
+    assert service.pending_count() == 1
+    # The pair is left exactly as it is: this operation could not prove it owns
+    # those files, so deleting them could destroy something else's.
+    assert (document_path.read_bytes(), sidecar_path.read_bytes()) == before
+
+
+def test_a_real_size_mismatch_is_artifact_invalid(tmp_path):
+    """A genuine verifier verdict, not an injected one, reaches the same outcome."""
+    config, documents_dir, service = setup(tmp_path)
+    document_path, sidecar_path = write_pair(documents_dir)
+    operation_id = prepare(service, document_path, sidecar_path)
+    # The recorded size no longer matches the bytes on disk.
+    document_path.write_text("truncated", encoding="utf-8")
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.verification.outcome == "ambiguous"
+    assert finalization.verification.reason == "size-mismatch"
+    assert audit_rows(config) == []
+    assert service.pending_count() == 1
+
+
+def test_a_verifier_that_raises_is_artifact_invalid_and_destroys_nothing(tmp_path, monkeypatch):
+    """A verifier defect proves nothing about the pair, so it cannot be trusted.
+
+    It must still not escape — `finalize` runs after both files exist — but
+    degrading it to `audit_pending` would let an unverified document reach the
+    user as created with a merely pending Journal entry.
+    """
+    config, documents_dir, service = setup(tmp_path)
+    document_path, sidecar_path = write_pair(documents_dir)
+    before = (document_path.read_bytes(), sidecar_path.read_bytes())
+    operation_id = prepare(service, document_path, sidecar_path)
+
+    def defective(*_args, **_kwargs):
+        raise TypeError("injected programming defect")
+
+    monkeypatch.setattr(audit_module.ReportDocumentAuditService, "verify", defective)
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.artifact_is_authoritative is False
+    assert audit_rows(config) == []
+    assert service.pending_count() == 1
+    assert (document_path.read_bytes(), sidecar_path.read_bytes()) == before
+
+
+def test_an_unreadable_ledger_is_artifact_invalid_rather_than_a_guess(tmp_path, monkeypatch):
+    """Authority was never established, so the pair must not be called valid."""
+    config, documents_dir, service = setup(tmp_path)
+    document_path, sidecar_path = write_pair(documents_dir)
+    operation_id = prepare(service, document_path, sidecar_path)
+
+    def failing_get(*_args, **_kwargs):
+        raise sqlite3.OperationalError("injected ledger read failure")
+
+    monkeypatch.setattr(ArtifactAuditOperationRepository, "get_operation", failing_get)
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.artifact_is_authoritative is False
+    assert finalization.verification is None
+    assert document_path.exists() and sidecar_path.exists()
+
+
+def test_a_missing_operation_is_artifact_invalid(tmp_path):
+    config, documents_dir, service = setup(tmp_path)
+    finalization = service.finalize(new_operation_id(), reconciled_after_failure=False)
+    assert finalization.outcome == "artifact_invalid"
+    assert audit_rows(config) == []
+
+
+def test_an_abandoned_operation_is_artifact_invalid(tmp_path):
+    config, documents_dir, service = setup(tmp_path)
+    document_path, sidecar_path = write_pair(documents_dir)
+    operation_id = prepare(service, document_path, sidecar_path)
+    ArtifactAuditOperationRepository(config).mark_abandoned(operation_id)
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert audit_rows(config) == []
+
+
+def test_an_already_audited_operation_is_recorded_with_the_existing_id(tmp_path):
+    config, documents_dir, service = setup(tmp_path)
+    document_path, sidecar_path = write_pair(documents_dir)
+    operation_id = prepare(service, document_path, sidecar_path)
+    first = service.finalize(operation_id, reconciled_after_failure=False)
+
+    again = service.finalize(operation_id, reconciled_after_failure=True)
+
+    assert again.outcome == "recorded"
+    assert again.audit_log_id == first.audit_log_id
+    assert len(audit_rows(config)) == 1
+
+
+def test_a_transient_verifier_fault_still_reconciles_exactly_once_afterwards(tmp_path, monkeypatch):
+    """The unresolved operation is recoverable once the fault is removed."""
+    config, documents_dir, service = setup(tmp_path)
+    document_path, sidecar_path = write_pair(documents_dir)
+    operation_id = prepare(service, document_path, sidecar_path)
+
+    def defective(*_args, **_kwargs):
+        raise TypeError("injected transient verifier fault")
+
+    monkeypatch.setattr(audit_module.ReportDocumentAuditService, "verify", defective)
+    assert service.finalize(operation_id, reconciled_after_failure=False).outcome == "artifact_invalid"
+    assert audit_rows(config) == []
+    monkeypatch.undo()
+
+    first = service.reconcile()
+    second = service.reconcile()
+
+    assert first.audited == 1
+    assert second.examined == 0
+    rows = audit_rows(config)
+    assert len(rows) == 1
+    assert json.loads(rows[0]["metadata_json"])["reconciled_after_failure"] is True
+    assert service.pending_count() == 0
+
+
+# --------------------------------------------------------------------------
+# Mutation protection for the typed outcome vocabulary
+# --------------------------------------------------------------------------
+
+
+def test_only_recorded_and_audit_pending_are_authoritative():
+    """Renaming `artifact_invalid` into a success would defeat the whole slice."""
+    Finalization = audit_module.ReportDocumentFinalization
+    assert Finalization("recorded", audit_log_id=1).artifact_is_authoritative is True
+    assert Finalization("audit_pending").artifact_is_authoritative is True
+    assert Finalization("artifact_invalid").artifact_is_authoritative is False
+    assert Finalization("recorded", audit_log_id=1).is_recorded is True
+    assert Finalization("audit_pending").is_recorded is False
+    assert Finalization("artifact_invalid").is_recorded is False
+
+
+def test_the_create_path_refuses_an_invalid_artifact_and_keeps_the_pair(tmp_path, monkeypatch):
+    """The create service, not just the finalizer, must enforce the boundary."""
+    config, documents_dir, _service = setup(tmp_path)
+    service = ReportDocumentService(config, documents_dir=documents_dir)
+
+    monkeypatch.setattr(
+        audit_module.ReportDocumentAuditService,
+        "finalize",
+        lambda self, operation_id, *, reconciled_after_failure: audit_module.ReportDocumentFinalization(
+            "artifact_invalid"
+        ),
+    )
+
+    with pytest.raises(audit_module.ReportDocumentArtifactUnverifiedError):
+        service.create_overview_document(ReportOverviewDocumentCreateRequest(format=SUPPORTED_FORMAT))
+
+    # The pair survives the refusal: ownership is exactly what failed to verify.
+    assert len(list(documents_dir.glob("*.md"))) == 1
+    assert len(list(documents_dir.glob("*.json"))) == 1
+    assert audit_rows(config) == []
+
+
+def test_the_create_path_still_accepts_a_verified_artifact_with_a_pending_journal(tmp_path, monkeypatch):
+    config, documents_dir, _service = setup(tmp_path)
+    service = ReportDocumentService(config, documents_dir=documents_dir)
+
+    monkeypatch.setattr(
+        audit_module.ReportDocumentAuditService,
+        "finalize",
+        lambda self, operation_id, *, reconciled_after_failure: audit_module.ReportDocumentFinalization(
+            "audit_pending"
+        ),
+    )
+
+    response = service.create_overview_document(ReportOverviewDocumentCreateRequest(format=SUPPORTED_FORMAT))
+
+    assert response.audit_status == "pending"
+    assert response.message == "Документ отчета создан."
+    assert response.audit_message == PENDING_AUDIT_MESSAGE
