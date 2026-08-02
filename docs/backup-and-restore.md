@@ -815,7 +815,7 @@ Product release readiness — NOT CLAIMED
 # 16. C4-I implementation — the launcher-owned safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -823,8 +823,9 @@ Product release readiness — NOT CLAIMED
 This section records **exactly what the branch implements**. It adds no decision:
 every rule above still governs, and `C4-I` implements the accepted state machine
 of § 7 without renaming a phase, omitting `replacement_intent` or substituting an
-equivalent of its own. An independent review of the first published head found
-five safety gaps; all five are closed, and § 16.11 records what changed.
+equivalent of its own. Two independent audits have run against it. The first
+found five safety gaps in the original implementation; the second found five more
+in the correction itself. All ten are closed. § 16.13 records the second round.
 
 There is **no** Restore API endpoint, button, dialog, file picker, frontend route
 or product terminal workflow. The engine is internal Python called by a future
@@ -899,12 +900,42 @@ Restore may not touch the working database until the ordinary backend is
 - a free backend port — during Restore the port is free *by design*;
 - having asked a process to exit — asking is not observing.
 
-The proof is process ownership. `run_local_runtime` hands the child it starts to
+The proof has **two** parts, and the second is not implied by the first.
+
+**Process ownership.** `run_local_runtime` hands the child it starts to
 `context.backend`, so the launcher holds the exact `Popen`. `stop_backend()`
 sends `SIGTERM`, waits within a bound, escalates to `kill()` **on the same
 handle**, waits again, and returns a `BackendStopProof` only once `poll()` shows
-the process actually exited. `require_backend_stopped()` re-checks liveness
-before journal settlement and before every replacement, including rollback.
+the process actually exited.
+
+**The backend-liveness lock.** An in-memory handle dies with the launcher. After
+a *hard* launcher crash — `SIGKILL`, panic, power loss — the uvicorn child keeps
+running and keeps the database open, while the next launcher owns nothing and
+would otherwise conclude that nothing was running.
+
+So the backend process itself holds `<restore dir>/backend-liveness.lock` for its
+whole lifetime, taken in the FastAPI lifespan from the exact path the launcher
+passes in `COSMETIC_WORKSHOP_BACKEND_LIVENESS_LOCK`. The kernel releases an
+`fcntl.flock` when the holder dies, for any reason, with no cleanup code of ours
+involved — so a held lock means a live backend, whoever started it, and a free
+lock means none. That is a fact about the operating system's process table rather
+than about anything this application remembered to write down.
+
+`stop_backend()` therefore stops the owned handle, waits for the lock to be
+released, and then proves the lock is free. `require_backend_stopped()` re-checks
+both before journal settlement and before every replacement, including rollback.
+
+**An orphan is detected, never killed.** This launcher did not start it, so it
+has detection but no authority: Restore and startup recovery refuse, nothing is
+replaced, no second backend starts and the browser stays closed. Killing a
+process discovered by PID file, port, name or pattern is not a safety measure —
+it is a second failure mode — and a future support flow, not `C4-I`, is where a
+user is told to close the other window.
+
+When the environment variable is absent — the ordinary test client, a developer
+importing the app — no lock is taken and nothing is claimed. When it is present
+and the lock cannot be taken, backend startup fails rather than putting a second
+writer on one SQLite database.
 
 Nothing discovers a process by port, name or command-line pattern. `pkill`,
 `lsof`, `pgrep` and `killall` are absent from `context.py`, and a test enforces
@@ -990,14 +1021,39 @@ verdict. After any publication that may have landed, the engine **re-reads the
 authoritative record** and acts on the phase actually there. It never transitions
 to `aborted` over a record that may already say `replacement_intent`.
 
-**What is claimed.** On macOS `F_FULLFSYNC` asks the drive to flush its own write
-cache — the strongest flush the platform offers; plain `fsync` on macOS does not.
-Where the filesystem reports `ENOTSUP`/`EINVAL`/`EOPNOTSUPP` the call falls back
-to `fsync` and **records that it did**, so no stronger guarantee is claimed than
-the call that ran. Any other error propagates rather than being downgraded.
-Directories are flushed with `fsync` only — `F_FULLFSYNC` on a directory
-descriptor is unsupported and is not attempted. Supported platforms: macOS and
-Linux. Windows is not supported and nothing is claimed for it.
+**Confirming an already-published record.** `os.replace` can succeed while the
+flush after it fails: the new phase *is* visible, and only its durability is
+unproven. Rewriting would be wrong — the content is already correct, and a
+rewrite means another scratch file and another rename — so
+`confirm_existing_durability()` re-flushes the existing file and its parent
+directory, changing nothing. It is used after a post-rename failure and again
+before ordinary startup is allowed from any terminal phase. When it fails, the
+actual phase is kept, evidence is kept, startup is blocked, and the next launcher
+start retries.
+
+**What is claimed, and how it is checkable.** On macOS `F_FULLFSYNC` asks the
+drive to flush its own write cache — the strongest flush the platform offers;
+plain `fsync` on macOS does not. Where the filesystem reports
+`ENOTSUP`/`EINVAL`/`EOPNOTSUPP` the call falls back to `fsync`. Any other error
+propagates rather than being downgraded. Directories are flushed with `fsync`
+only — `F_FULLFSYNC` on a directory descriptor is unsupported and is not
+attempted, and it is recorded separately as `directory_fsync` so evidence never
+conflates the two.
+
+**"Records that it did" is literal.** Every safety-critical flush reports its
+publication category, whether the target was a file or a directory, the platform
+and the method that ran, into `DURABILITY_DIAGNOSTICS` and the technical log. A
+claim that the stronger primitive is used "where supported" is only honest if a
+reader can check which one happened on their machine. The categories are
+`operation_record`, `record_durability_confirmation`, `staged_candidate`,
+`replacement_artifact`, `working_database_replacement` and
+`rollback_replacement`. The diagnostics carry **no** path, filename, database
+content or user data, and are deliberately **not** part of the authoritative
+operation record: the flush method is evidence about a write, not a lifecycle
+fact, and has no place in the phase machine.
+
+Supported platforms: macOS and Linux. Windows is not supported and nothing is
+claimed for it. No power-loss guarantee is claimed anywhere.
 
 ## 16.6. Exclusive launcher-instance lock
 
@@ -1031,13 +1087,38 @@ its sidecars. A hot rollback journal is rejected *before* the file is opened,
 precisely because opening it would roll the journal back — a write to the user's
 selected file.
 
-**The copy reads a held descriptor.** Intake opens the source once with
-`O_RDONLY | O_NOFOLLOW` and keeps that descriptor; `stage_source` reads it with
-`os.pread` and never re-opens the path. Identity is re-proved from the descriptor
-with `fstat` (device, inode, size, type) and from the path with `lstat` (still the
-same file, still not a symlink), and the copied byte count must equal the recorded
-size. A path replaced, a file rewritten, a symlink substituted or a size change
-mid-copy all fail before publication.
+**The copy reads a held descriptor, twice.** Intake opens the source once with
+`O_RDONLY | O_NOFOLLOW` and keeps that descriptor; both passes read it with
+`os.pread` and neither re-opens the path.
+
+Stat identity alone is not enough. Device, inode, size and file type describe
+*which file* this is, not **what is in it** — a writer can rewrite bytes in place,
+keeping the same inode and the same total length, and all four stay identical. The
+staged candidate would then hold pages from two different source states, and
+`PRAGMA quick_check` would very likely still call it `ok`, because every page is
+individually well-formed.
+
+Two mechanisms close that. `st_mtime_ns` and `st_ctime_ns` joined the recorded
+identity, which catches the ordinary case cheaply. And the copy is verified by
+**two independent SHA-256 passes**: the first hashes exactly the bytes written into
+the staging scratch file, the second re-reads the same descriptor from offset zero
+and hashes without writing. A digest or byte-count mismatch rejects the source.
+The digest comparison is the load-bearing one, because it does not depend on
+filesystem timestamp resolution.
+
+```text
+pre-copy stat + sidecar check
+→ pass one: pread → staging scratch, hashing what is written
+→ stat + path + sidecar revalidation
+→ pass two: pread the same descriptor, hashing only
+→ compare byte counts and digests
+→ final stat + path + sidecar revalidation
+→ publish candidate.sqlite
+```
+
+A path replaced, a file rewritten in place, a symlink substituted, a size change
+or a sidecar appearing — in any window — all fail before publication, and no
+candidate is left behind.
 
 ## 16.8. Disk-space preflight formula
 
@@ -1124,12 +1205,43 @@ durable_phase           the phase actually on disk
 normal_startup_allowed  whether the launcher may continue
 ```
 
-`restore_succeeded` is keyed off the **durable** phase, so an outcome that was
-never persisted cannot claim success. When a required transition cannot be
-published, **no unauthorized transition is attempted** — only
-`rollback_in_progress → recovery_blocked` exists in the graph — the real durable
-phase is reported, ordinary startup is blocked, and the next launcher start
-retries recovery from that phase.
+`restore_succeeded` requires all three to agree: outcome `completed`, durable
+phase `completed`, **and** startup permitted. Claiming success while refusing to
+start the application is a mixed message a future `C4-II` screen cannot render
+honestly.
+
+**Ordinary startup is permitted positively**, by an allow-list, through one
+shared function used by every caller:
+
+```text
+permits_ordinary_startup(durable_phase, record_exists, durability_confirmed)
+```
+
+- **no record at all** — permitted; no Restore was ever attempted here;
+- `completed`, `aborted`, `rolled_back` — permitted **only** once that record's
+  durability has been confirmed;
+- everything else — blocked. That includes the four *unresolved* pre-replacement
+  phases. `prepared`, `source_staged`, `candidate_validated` and
+  `safety_copy_verified` are safe for the **database**, because replacement never
+  happened, and unsafe for **startup**, because the operation is still live and
+  recovery has not closed it. A negative rule — "not in the unsafe set" — reads as
+  if it means the same thing and silently admitted all four;
+- an unreadable or unparseable record — blocked, because "I cannot tell what
+  happened" is not a state to start from.
+
+**Terminal records are never transitioned again**, not even to themselves. A
+post-rename flush failure at `completed` therefore re-reads the record, confirms
+its durability, and returns — it never reaches the abort path, which would have
+attempted `completed → aborted`, an edge the graph does not contain, and would
+have rolled back a database that had already been restored and verified. The same
+holds for `aborted`, `rolled_back` and `recovery_blocked`.
+
+**The initial `prepared` publication is equally ambiguous.** If `create()`
+renames and then its flush fails, a `prepared` record exists on disk. It is never
+reported as "no record": the engine re-reads, closes it as `aborted` where it
+can — an edge the graph does authorize — and otherwise blocks startup so the next
+launcher start closes it. Ordinary startup never proceeds while `prepared`
+remains persisted.
 
 ## 16.12. Verification of this slice
 
@@ -1147,3 +1259,32 @@ itself, terminates only those PIDs, classifies its result as
 `PASS — FULL AUTOMATED SMOKE PASSED`, `FAIL — PRODUCT`, `INCONCLUSIVE — RUNNER`
 or `INCONCLUSIVE — ENVIRONMENT`, and retains its evidence outside the repository.
 `scripts/restore_backup.sh` is unrelated to `C4-I` and is unchanged.
+
+## 16.13. Second correction — what the second audit found
+
+The first audit found five gaps in the original implementation and they were
+closed. A second audit then ran against that correction and found five more, all
+in code the first round had introduced or left in place. All five are closed on
+the same branch, and **none required a change to the accepted phase machine**.
+
+| Finding | Closed by |
+|---|---|
+| A post-rename failure publishing `completed` fell through to the abort path and attempted `completed → aborted`, an edge the graph does not contain. | Terminal records are never transitioned again (§ 16.11). A dedicated terminal handler re-reads, confirms durability and returns. |
+| Unresolved pre-replacement phases were treated as permitting ordinary startup, because permission was derived negatively. | One positive allow-list, `permits_ordinary_startup(...)`, used by every caller (§ 16.11). |
+| A same-size in-place rewrite of the selected source kept device, inode, size and type identical and escaped the identity checks. | Timestamps joined the identity, and staging now proves content stability with two independent SHA-256 passes over the held descriptor (§ 16.7). |
+| A hard launcher crash lost the in-memory process handle, so an orphaned backend appeared absent. | A backend-liveness lock held by the backend process itself for its whole lifetime (§ 16.3). |
+| The `F_FULLFSYNC` fallback was described as "recorded" but was not. | Every safety-critical flush records its category, target kind, platform and method (§ 16.5). |
+
+Two of these are worth stating as standing rules rather than fixes.
+
+**Detection is not authority.** An orphaned backend blocks Restore and startup
+recovery; it is never killed. This launcher did not start it, and killing a
+process discovered by PID file, port, name or pattern is a second failure mode
+rather than a safety measure. A future support flow — not `C4-I` — is where a
+user is told to close the other window.
+
+**Nothing claims more than it can prove.** `restore_succeeded` requires a durable
+`completed` *and* permission to start. The recorded flush method is the one that
+ran, not the one intended. And no power-loss guarantee is claimed anywhere: what
+is proved is old-or-new atomicity across process death and OS crash, plus the
+strongest flush the platform actually performed.

@@ -1,6 +1,6 @@
 # Handoff
 
-## C4-I implemented and corrected on its PR branch — not merged (2026-08-02)
+## C4-I implemented and twice corrected on its PR branch — not merged (2026-08-02)
 
 > This is the single current authoritative lifecycle conclusion. Every earlier
 > section in this file, including the one immediately below, is a historical
@@ -10,12 +10,12 @@
 CR-010 — ACCEPTED (PR #169, merge commit b89cbaaaf41a56c810847d7c1e593712c5591eb6)
 
 C4-I — Launcher-owned restore safety engine
-— IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
+— IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
 — PR #170, draft
 — branch codex/c4-i-launcher-restore-safety-engine
 — based on origin/main = b89cbaaaf41a56c810847d7c1e593712c5591eb6
-— first published head a66ddd6c34f9790cee4fedad7461cd41f9fdc154 was
-  independently reviewed; five safety blockers were found and closed
+— head a66ddd6 was audited; five safety blockers found and closed by 2bf53e7
+— head 2bf53e7 was audited again; five more found and closed by this correction
 
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -63,12 +63,19 @@ PR stays draft until that audit clears it. Nothing else is authorized.
   verifies. The runner is created outside the repository and drives a detached
   worktree at the exact published head. `scripts/restore_backup.sh` is unrelated
   to `C4-I` and is unchanged.
-- **The five closed review findings** are summarized in `state/current-focus.md`
-  and specified in `docs/backup-and-restore.md` § 16. The most load-bearing ones
-  to keep in mind when reading the code: a caller supplies **only** the selected
-  source; the backend is stopped **by owned handle** before anything touches the
-  working database; a publication that may have landed is **re-read**, never
-  assumed; and the parent-directory flush is **mandatory**.
+- **The ten closed review findings** are summarized in `state/current-focus.md`
+  and specified in `docs/backup-and-restore.md` § 16, with § 16.13 covering the
+  second round. The most load-bearing rules to keep in mind when reading the code:
+  a caller supplies **only** the selected source; the backend is stopped **by
+  owned handle** *and* proved absent through the **backend-liveness lock**, which
+  is what survives a hard launcher crash; a publication that may have landed is
+  **re-read**, never assumed; **terminal records are never transitioned again**;
+  ordinary startup is permitted by a **positive allow-list** plus confirmed record
+  durability; source staging proves content stability with **two SHA-256 passes**
+  over one held descriptor; and the parent-directory flush is **mandatory**.
+- **An orphaned backend is detected, never killed.** Restore and recovery refuse
+  and preserve everything. Do not add PID/port/pattern killing to "fix" this — it
+  is the accepted behaviour, and a future support flow owns the user-facing half.
 - **Evidence on the branch**: baseline `1843` node IDs all preserved, `321` added;
   `2164 passed` for the complete backend + launcher suite; external exact-head
   Restore smoke against a detached checkout; repository clean before and after.

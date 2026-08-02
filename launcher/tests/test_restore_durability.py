@@ -150,9 +150,9 @@ def test_the_parent_directory_flush_actually_runs(published, monkeypatch):
     flushed: list[Path] = []
     real = durability.flush_directory
 
-    def watched(path):
+    def watched(path, **kwargs):
         flushed.append(Path(path))
-        return real(path)
+        return real(path, **kwargs)
 
     monkeypatch.setattr(durability, "flush_directory", watched)
     write_and_publish_bytes(b"NEW", target, scratch)

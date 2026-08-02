@@ -11,7 +11,7 @@ implement Restore** and changes no runtime code.
 | Item | Status |
 |---|---|
 | `CR-010` — launcher-assisted Restore semantics | `ACCEPTED` |
-| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED` |
+| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED` |
 | `C4-II` — user-facing launcher Restore flow | `PLANNED — NOT AUTHORIZED` |
 | `C4-III` — Restore end-to-end verification and lifecycle closure | `PLANNED — NOT AUTHORIZED` |
 | Restore | `NOT IMPLEMENTED` |
@@ -29,7 +29,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 ```
@@ -849,7 +849,7 @@ There is no frontend implementation in this decision:
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
 ```
 
 This is the **only** runtime slice authorized by this decision. Its scope:
@@ -1048,9 +1048,17 @@ run there, and its evidence is recorded on that pull request rather than restate
 in this ADR. An independent review of the first published head found five
 safety-critical gaps in the *implementation* (source sidecar handling, backend-stop
 proof, canonical destructive paths, rollback-publication failure handling and the
-durability boundary). All five are closed. **None of them required a change to
-this decision** — the twelve phases, the transition graph, the recovery matrix and
-the `replacement_intent` rule are exactly as accepted here. Implementing `C4-I` changes nothing above — no phase was renamed, no
+durability boundary). A second audit of that correction found five more (terminal
+`completed` publication handling, positive startup permission and the initial
+`prepared` ambiguity, same-size in-place source modification, orphaned backends
+after a hard launcher crash, and the unrecorded flush method). All ten are closed.
+
+**None of them required a change to this decision** — the twelve phases, the
+transition graph, the recovery matrix and the `replacement_intent` rule are
+exactly as accepted here. In particular no condition discovered by either audit
+justified a new phase: `completed`-but-unconfirmed, `durability_failed` and
+`backend_orphaned` are transient result and diagnostic states, not lifecycle
+facts, and they are reported through the typed result rather than persisted. Implementing `C4-I` changes nothing above — no phase was renamed, no
 transition added or removed, and no recovery behaviour substituted — and it does
 **not** make Restore a shipped product capability. `Restore` stays
 `NOT IMPLEMENTED`, `C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED`, and

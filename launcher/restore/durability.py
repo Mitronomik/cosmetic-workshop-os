@@ -52,8 +52,22 @@ happened at, and the caller decides using the rule that the stage implies.
 On macOS, `F_FULLFSYNC` asks the drive to flush its own write cache, which is
 the strongest flush the platform offers; plain `fsync` on macOS does not. Where
 `F_FULLFSYNC` is unsupported by the filesystem the code falls back to `fsync`
-and **records that it did**, so no stronger guarantee is claimed than the call
-that actually ran. On Linux `fsync` is used directly.
+and **records that it did** — literally, into
+:data:`DURABILITY_DIAGNOSTICS` and the technical log, so no stronger guarantee is
+claimed than the call that actually ran. On Linux `fsync` is used directly.
+
+"Records" is not a figure of speech here. Every safety-critical flush reports the
+category it belonged to, whether the target was a file or a directory, the
+platform, and the method that ran. Documentation that says "F_FULLFSYNC where
+supported" is only honest if a reader can check which one happened on their
+machine, and that is what the diagnostics are for. They carry **no** path, no
+database content and no user data: a category name, a target kind, a platform
+string and a method name.
+
+The diagnostics are deliberately **not** part of the authoritative operation
+record. The flush method is not a lifecycle fact and has no place in the phase
+machine; it is evidence about how a write was made durable, which belongs in
+logs and smoke evidence.
 
 Directories are flushed with `fsync` only — `F_FULLFSYNC` on a directory
 descriptor is not supported and is not attempted.
@@ -69,14 +83,33 @@ from enum import Enum
 from pathlib import Path
 import errno
 import fcntl
+import logging
 import os
 import sys
+
+logger = logging.getLogger(__name__)
 
 # macOS `fcntl.h`: ask the drive to flush its write cache. `fcntl.F_FULLFSYNC`
 # exists on macOS builds of CPython; the literal keeps this importable elsewhere.
 F_FULLFSYNC = getattr(fcntl, "F_FULLFSYNC", 51)
 
 IS_MACOS = sys.platform == "darwin"
+
+
+class PublicationCategory(str, Enum):
+    """Which safety-critical publication a flush belonged to.
+
+    A closed vocabulary rather than free text, so diagnostics stay comparable
+    across runs and can never carry a path or a filename.
+    """
+
+    OPERATION_RECORD = "operation_record"
+    RECORD_DURABILITY_CONFIRMATION = "record_durability_confirmation"
+    STAGED_CANDIDATE = "staged_candidate"
+    REPLACEMENT_ARTIFACT = "replacement_artifact"
+    WORKING_DATABASE_REPLACEMENT = "working_database_replacement"
+    ROLLBACK_REPLACEMENT = "rollback_replacement"
+    UNCATEGORIZED = "uncategorized"
 
 
 class PublicationStage(str, Enum):
@@ -121,6 +154,84 @@ class FlushMethod:
 
 FULL_SYNC = FlushMethod(name="F_FULLFSYNC", full_device_flush=True)
 PLAIN_FSYNC = FlushMethod(name="fsync", full_device_flush=False)
+DIRECTORY_FSYNC = FlushMethod(name="directory_fsync", full_device_flush=False)
+
+
+@dataclass(frozen=True)
+class FlushObservation:
+    """One recorded flush: what it was for, and what actually ran.
+
+    Contains no path, no filename, no database content and no user data — the
+    category is a fixed enum value and the target is `"file"` or `"directory"`.
+    """
+
+    category: str
+    target: str
+    platform: str
+    method: str
+    full_device_flush: bool
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "category": self.category,
+            "target": self.target,
+            "platform": self.platform,
+            "method": self.method,
+            "full_device_flush": self.full_device_flush,
+        }
+
+
+class DurabilityDiagnostics:
+    """A narrow in-memory record of which flush actually ran, and for what.
+
+    Bounded on purpose: it holds observations for the current process and is read
+    by tests and by the external smoke runner. It is not persisted, not part of
+    the operation record, and not a metrics framework.
+    """
+
+    def __init__(self) -> None:
+        self._observations: list[FlushObservation] = []
+
+    def record(
+        self, category: "PublicationCategory | str", target: str, method: FlushMethod
+    ) -> FlushObservation:
+        observation = FlushObservation(
+            category=category.value if isinstance(category, PublicationCategory) else str(category),
+            target=target,
+            platform=sys.platform,
+            method=method.name,
+            full_device_flush=method.full_device_flush,
+        )
+        self._observations.append(observation)
+        logger.debug(
+            "durability flush: category=%s target=%s platform=%s method=%s full_device_flush=%s",
+            observation.category,
+            observation.target,
+            observation.platform,
+            observation.method,
+            observation.full_device_flush,
+        )
+        return observation
+
+    @property
+    def observations(self) -> tuple[FlushObservation, ...]:
+        return tuple(self._observations)
+
+    def snapshot(self) -> list[dict[str, object]]:
+        return [observation.as_dict() for observation in self._observations]
+
+    def methods_for(self, category: "PublicationCategory | str") -> list[str]:
+        wanted = category.value if isinstance(category, PublicationCategory) else str(category)
+        return [o.method for o in self._observations if o.category == wanted]
+
+    def clear(self) -> None:
+        self._observations.clear()
+
+
+# The process-wide recorder. A module-level singleton rather than a parameter
+# threaded through every call site: the alternative would put a diagnostics
+# argument on primitives whose whole job is to be simple and hard to misuse.
+DURABILITY_DIAGNOSTICS = DurabilityDiagnostics()
 
 
 # Each syscall boundary is a named module-level function. That is not
@@ -145,51 +256,73 @@ def _atomic_rename(scratch_path: Path, target_path: Path) -> None:
     os.replace(scratch_path, target_path)
 
 
-def flush_file(fd: int) -> FlushMethod:
+def flush_file(
+    fd: int, *, category: PublicationCategory | str = PublicationCategory.UNCATEGORIZED
+) -> FlushMethod:
     """Flush one open regular file as durably as the platform supports.
 
-    Returns the method that actually ran. On macOS `F_FULLFSYNC` is attempted
-    first; a filesystem that does not implement it reports `ENOTSUP`/`EINVAL`/
-    `EOPNOTSUPP` and the call falls back to `fsync`. Every other error is a real
-    I/O failure and is raised — a flush that failed for an unexpected reason is
-    not a flush that can be quietly downgraded.
+    Returns **and records** the method that actually ran. On macOS `F_FULLFSYNC`
+    is attempted first; a filesystem that does not implement it reports
+    `ENOTSUP`/`EINVAL`/`EOPNOTSUPP` and the call falls back to `fsync`. Every
+    other error is a real I/O failure and is raised — a flush that failed for an
+    unexpected reason is not a flush that can be quietly downgraded.
+
+    The recording is the point of the `category` argument: a claim that
+    `F_FULLFSYNC` is used "where supported" is only checkable if the fallback is
+    visible when it happens.
     """
     if IS_MACOS:
         try:
             _full_device_flush(fd)
+            DURABILITY_DIAGNOSTICS.record(category, "file", FULL_SYNC)
             return FULL_SYNC
         except OSError as exc:
             if exc.errno not in (errno.ENOTSUP, errno.EINVAL, errno.EOPNOTSUPP):
                 raise
     _fsync_fd(fd)
+    DURABILITY_DIAGNOSTICS.record(category, "file", PLAIN_FSYNC)
     return PLAIN_FSYNC
 
 
-def flush_path(path: Path) -> FlushMethod:
+def flush_path(
+    path: Path, *, category: PublicationCategory | str = PublicationCategory.UNCATEGORIZED
+) -> FlushMethod:
     """Flush an already-published regular file by path."""
     fd = _open_for_flush(path)
     try:
-        return flush_file(fd)
+        return flush_file(fd, category=category)
     finally:
         os.close(fd)
 
 
-def flush_directory(path: Path) -> None:
+def flush_directory(
+    path: Path, *, category: PublicationCategory | str = PublicationCategory.UNCATEGORIZED
+) -> FlushMethod:
     """Make a directory's entries durable. Mandatory, and never swallowed.
 
     `fsync` only: `F_FULLFSYNC` is not supported on a directory descriptor and is
-    not attempted. A failure here is raised so the caller can classify it — the
-    previous behaviour of ignoring it as harmless was wrong, because it is
-    exactly what makes a rename survive a host interruption.
+    not attempted. Recorded separately as `directory_fsync`, so evidence never
+    conflates a directory flush with a full-device file flush.
+
+    A failure here is raised so the caller can classify it — treating it as
+    harmless was wrong, because it is exactly what makes a rename survive a host
+    interruption.
     """
     fd = _open_for_flush(path)
     try:
         _fsync_fd(fd)
     finally:
         os.close(fd)
+    DURABILITY_DIAGNOSTICS.record(category, "directory", DIRECTORY_FSYNC)
+    return DIRECTORY_FSYNC
 
 
-def publish_atomically(scratch_path: Path, target_path: Path) -> None:
+def publish_atomically(
+    scratch_path: Path,
+    target_path: Path,
+    *,
+    category: PublicationCategory | str = PublicationCategory.UNCATEGORIZED,
+) -> None:
     """Publish a completed scratch file onto its final name, durably.
 
     The scratch file must already contain the complete content and must live in
@@ -215,14 +348,14 @@ def publish_atomically(scratch_path: Path, target_path: Path) -> None:
     # From here the new content is visible. Any failure below is `AFTER_REPLACE`,
     # and no caller may conclude the publication did not happen.
     try:
-        flush_path(target)
+        flush_path(target, category=category)
     except OSError as exc:
         raise DurabilityError(
             f"The published file could not be flushed: {type(exc).__name__}",
             PublicationStage.AFTER_REPLACE,
         ) from exc
     try:
-        flush_directory(directory)
+        flush_directory(directory, category=category)
     except OSError as exc:
         raise DurabilityError(
             f"The publication directory could not be flushed: {type(exc).__name__}",
@@ -234,7 +367,13 @@ def _open_scratch_for_write(path: Path) -> int:
     return os.open(path, os.O_WRONLY)
 
 
-def write_and_publish_bytes(payload: bytes, target_path: Path, scratch_path: Path) -> None:
+def write_and_publish_bytes(
+    payload: bytes,
+    target_path: Path,
+    scratch_path: Path,
+    *,
+    category: PublicationCategory | str = PublicationCategory.UNCATEGORIZED,
+) -> None:
     """Write `payload` into an existing exclusive scratch file, then publish it.
 
     `scratch_path` must already have been created exclusively by the caller —
@@ -254,10 +393,54 @@ def write_and_publish_bytes(payload: bytes, target_path: Path, scratch_path: Pat
         with os.fdopen(fd, "wb", closefd=True) as stream:
             stream.write(payload)
             stream.flush()
-            flush_file(stream.fileno())
+            flush_file(stream.fileno(), category=category)
     except OSError as exc:
         raise DurabilityError(
             f"The publication scratch file could not be written: {type(exc).__name__}",
             PublicationStage.BEFORE_REPLACE,
         ) from exc
-    publish_atomically(scratch, target_path)
+    publish_atomically(scratch, target_path, category=category)
+
+
+def confirm_existing_durability(
+    target_path: Path,
+    *,
+    category: PublicationCategory | str = PublicationCategory.RECORD_DURABILITY_CONFIRMATION,
+) -> tuple[FlushMethod, FlushMethod]:
+    """Re-flush a file that is **already** published, and its parent directory.
+
+    Changes nothing. It opens the existing file read-only, flushes it, flushes the
+    directory holding it, and returns the two methods that ran.
+
+    This exists for the one window the publication primitive cannot close by
+    itself: `os.replace` succeeded, so the new content is visible, but the flush
+    that follows it failed. The content is correct and must not be rewritten — a
+    rewrite would produce a new scratch file and a second rename for a value that
+    is already there — yet its durability is unproven, so nothing may be allowed
+    to depend on it surviving a host interruption.
+
+    Retrying the flush alone is the proportionate response: it re-proves the
+    thing that failed and touches nothing that succeeded. A failure here is
+    raised, and the caller's answer is always the same — keep the actual phase,
+    keep the evidence, block ordinary startup, and try again on the next start.
+    """
+    resolved = Path(target_path)
+    if not resolved.is_file():
+        raise DurabilityError(
+            "The published file to confirm does not exist.", PublicationStage.AFTER_REPLACE
+        )
+    try:
+        file_method = flush_path(resolved, category=category)
+    except OSError as exc:
+        raise DurabilityError(
+            f"The published file could not be re-flushed: {type(exc).__name__}",
+            PublicationStage.AFTER_REPLACE,
+        ) from exc
+    try:
+        directory_method = flush_directory(resolved.parent, category=category)
+    except OSError as exc:
+        raise DurabilityError(
+            f"The publication directory could not be re-flushed: {type(exc).__name__}",
+            PublicationStage.AFTER_REPLACE,
+        ) from exc
+    return file_method, directory_method

@@ -331,11 +331,11 @@ def test_a_failing_replacement_call_rolls_back(scenario, monkeypatch):
     calls = {"n": 0}
     real = engine_module.commit_replacement
 
-    def fail_first(artifact, target):
+    def fail_first(artifact, target, **kwargs):
         calls["n"] += 1
         if calls["n"] == 1:
             raise ReplacementError("injected replacement failure")
-        return real(artifact, target)
+        return real(artifact, target, **kwargs)
 
     monkeypatch.setattr(engine_module, "commit_replacement", fail_first)
 

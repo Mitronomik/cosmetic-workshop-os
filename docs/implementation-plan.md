@@ -2057,7 +2057,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -2115,7 +2115,7 @@ decision.
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
 ```
 
 The **only** runtime slice authorized by `CR-010`. It is implemented on the
@@ -2123,8 +2123,12 @@ pull-request branch `codex/c4-i-launcher-restore-safety-engine` and is **not
 merged**. An independent review of its first published head found five
 safety-critical implementation gaps — original-source sidecar handling,
 backend-stop proof, canonically derived destructive paths, rollback-publication
-failure handling and the durability boundary — and all five are closed on that
-branch. None required a change to the accepted phase machine. It has no user-facing entry point, so **`Restore` remains
+failure handling and the durability boundary. A second audit of that correction
+found five more: terminal `completed` publication handling, positive startup
+permission plus the initial `prepared` ambiguity, same-size in-place source
+modification, orphaned backends surviving a hard launcher crash, and the
+unrecorded flush method. All ten are closed on that branch, and none required a
+change to the accepted phase machine. It has no user-facing entry point, so **`Restore` remains
 `NOT IMPLEMENTED`** and product release readiness remains **not claimed**.
 
 The implementation is `launcher/restore/` — a focused package covering phase

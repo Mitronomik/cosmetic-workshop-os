@@ -27,7 +27,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
 - `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
 - `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED**
-- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED**
+- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
 - `C4 — ACTIVE`
@@ -42,7 +42,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 
 ```text
 C4-I — Launcher-owned restore safety engine
-IMPLEMENTED ON PR BRANCH — CORRECTIONS APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — SECOND CORRECTION APPLIED — NOT MERGED
 ```
 
 **Next action: an independent audit of the new published head of PR #170.** The
@@ -50,8 +50,8 @@ branch is `codex/c4-i-launcher-restore-safety-engine`, started from `origin/main
 at `b89cbaaaf41a56c810847d7c1e593712c5591eb6` (the PR #169 merge commit). The PR
 stays **draft** until that audit clears it. Nothing else is authorized.
 
-An independent review of the first published head found five safety-critical
-implementation gaps; all five are closed on the branch:
+Two independent audits have run. The first found five safety-critical gaps in the
+original implementation:
 
 ```text
 P1-1  source WAL/journal sidecars are checked beside the ORIGINAL selected
@@ -67,7 +67,23 @@ P1-5  parent-directory durability is mandatory, and a post-rename failure is
       classified rather than swallowed
 ```
 
-None of them required a change to the accepted twelve-phase machine.
+A second audit of that correction found five more, all closed as well:
+
+```text
+P1-1  a post-rename failure publishing `completed` fell through to the abort
+      path and attempted `completed → aborted`, an edge the graph forbids
+P1-2  ordinary startup was permitted by a negative rule, so unresolved
+      pre-replacement phases were treated as safe; the initial `prepared`
+      publication could also be reported as "no record"
+P1-3  a same-size in-place rewrite of the selected source kept device, inode,
+      size and type identical and escaped the identity checks
+P2-1  a hard launcher crash lost the in-memory process handle, so an orphaned
+      backend appeared absent
+P2-2  the `F_FULLFSYNC` fallback was documented as "recorded" but was not
+```
+
+Neither audit required a change to the accepted twelve-phase machine, and no
+condition either of them found justified a new phase.
 
 `C4-I` implements the accepted `CR-010` state machine exactly — the same twelve
 phases, transition graph, recovery matrix and `replacement_intent` crash rule — so

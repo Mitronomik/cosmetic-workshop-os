@@ -61,6 +61,21 @@ def backend_database_path_env(paths: RuntimePaths) -> str:
     return DATABASE_PATH_ENV
 
 
+def backend_liveness_lock_env(paths: RuntimePaths) -> str:
+    """The environment key the backend reads its liveness-lock path from.
+
+    Read from the backend's own constant for the same reason as the database key:
+    the launcher and the backend must not be able to drift apart on the name. A
+    silently ignored variable here would mean the child never takes the lock, and
+    every orphan check would then report "nothing running" — the exact false
+    negative the lock exists to prevent.
+    """
+    ensure_backend_import_path(paths)
+    from app.services.backend_liveness import BACKEND_LIVENESS_LOCK_ENV
+
+    return BACKEND_LIVENESS_LOCK_ENV
+
+
 def start_backend_process(
     config: RuntimeConfig, paths: RuntimePaths, database_path: Path
 ) -> subprocess.Popen[str]:
@@ -92,6 +107,16 @@ def start_backend_process(
         python_path_parts.append(env["PYTHONPATH"])
     env["PYTHONPATH"] = os.pathsep.join(python_path_parts)
     env[backend_database_path_env(paths)] = str(database_path)
+    # The child takes this lock for its whole lifetime, so the kernel releases it
+    # only when the process actually dies. That is what lets a *later* launcher
+    # discover a backend orphaned by a hard crash, which an in-memory process
+    # handle cannot survive to report. Derived from the same canonical workspace
+    # as the database itself.
+    from launcher.restore.workspace import RestoreWorkspace
+
+    env[backend_liveness_lock_env(paths)] = str(
+        RestoreWorkspace.for_database(Path(database_path)).backend_liveness_lock_path
+    )
     command = [
         sys.executable,
         "-m",

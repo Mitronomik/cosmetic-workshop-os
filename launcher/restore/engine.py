@@ -55,18 +55,22 @@ import logging
 
 from launcher.restore.capacity import InsufficientDiskSpaceError, assert_sufficient_disk_space
 from launcher.restore.context import LauncherLifecycleContext, RestoreLifecycleError
+from launcher.restore.durability import PublicationCategory
 from launcher.restore.contracts import (
     RestoreFailure,
     RestoreOutcome,
     RestoreRequest,
     RestoreResult,
     SUCCESS_MESSAGE,
+    TERMINAL_PHASE_OUTCOMES,
     USER_SAFE_MESSAGES,
 )
 from launcher.restore.phases import (
     ROLLBACK_REQUIRED_PHASES,
-    UNSAFE_STARTUP_PHASES,
+    SAFE_TERMINAL_STARTUP_PHASES,
+    TERMINAL_PHASES,
     RestorePhase,
+    permits_ordinary_startup,
 )
 from launcher.restore.replacement import (
     JournalSafetyError,
@@ -151,12 +155,16 @@ def _result(
     record: RestoreOperationRecord | None = None,
     message: str | None = None,
     normal_startup_allowed: bool | None = None,
+    record_exists: bool = True,
+    durability_confirmed: bool = False,
 ) -> RestoreResult:
     if normal_startup_allowed is None:
-        # Derived from the phase actually on disk, never from the intent. An
-        # unknown phase is unsafe by construction.
-        normal_startup_allowed = (
-            durable_phase is not None and durable_phase not in UNSAFE_STARTUP_PHASES
+        # One shared rule, stated positively. Never "not unsafe": an unresolved
+        # `prepared` is safe for the database and *not* safe for startup.
+        normal_startup_allowed = permits_ordinary_startup(
+            durable_phase,
+            record_exists=record_exists,
+            durability_confirmed=durability_confirmed,
         )
     return RestoreResult(
         outcome=outcome,
@@ -183,7 +191,10 @@ def _refused_before_any_state(
         durable_phase=None,
         operation_id=operation_id,
         message=USER_SAFE_MESSAGES[failure],
-        normal_startup_allowed=True,
+        # No record exists, so there is nothing unresolved to block on.
+        normal_startup_allowed=permits_ordinary_startup(
+            None, record_exists=False, durability_confirmed=False
+        ),
         failure=failure,
     )
 
@@ -313,10 +324,24 @@ def _execute_with_source(
     # -------------------------------------------------------------- prepared
     try:
         workspace.create_operation_dir(operation_id)
-        record = store.create(operation_id)
-    except (RestoreWorkspaceError, RestoreStateError) as exc:
+    except RestoreWorkspaceError as exc:
         logger.error("Restore could not be prepared: %s", type(exc).__name__)
         return _refused_before_any_state(operation_id, RestoreFailure.SOURCE_REJECTED)
+
+    try:
+        record = store.create(operation_id)
+    except RestoreStateError as exc:
+        # The initial publication is as ambiguous as any other. If the rename
+        # already landed, a `prepared` record now exists on disk, and reporting
+        # "no record, startup fine" would leave a live operation unresolved while
+        # the launcher carried on. Re-read and act on what is actually there.
+        if not exc.published:
+            logger.error("Restore could not be prepared: %s", type(exc).__name__)
+            return _refused_before_any_state(operation_id, RestoreFailure.SOURCE_REJECTED)
+        logger.error("The initial Restore record may already be published; re-reading.")
+        return _resolve_ambiguous_initial_record(
+            store, workspace, context, operation_id, RestoreFailure.SOURCE_REJECTED
+        )
 
     # --------------------------------------------------------- source_staged
     try:
@@ -456,7 +481,14 @@ def _execute_with_source(
     workspace.clean_owned_temp_files()
     discard_owned_replacement_artifact(database_path, record.operation_id)
     return _result(
-        RestoreOutcome.COMPLETED, RestorePhase.COMPLETED, record.operation_id, record=record
+        RestoreOutcome.COMPLETED,
+        RestorePhase.COMPLETED,
+        record.operation_id,
+        record=record,
+        # The publication that wrote `completed` also flushed it and its parent
+        # directory; a failure there would have been routed to `_terminal_result`
+        # instead of reaching this line.
+        durability_confirmed=True,
     )
 
 
@@ -529,14 +561,126 @@ def _handle_publication_failure(
     actual = store.read_durable_record(published.record)
     phase = actual.phase
 
+    if phase in TERMINAL_PHASES:
+        # **Terminal records are never transitioned again.** This is the branch
+        # that used to fall through to `_abort()`, which would attempt
+        # `completed -> aborted` — an edge the graph does not contain — and let a
+        # `PhaseTransitionError` escape the launcher boundary. The operation is
+        # already over; the only thing left to establish is whether its record is
+        # durable.
+        return _terminal_result(store, actual, workspace, context, failure)
     if phase in ROLLBACK_REQUIRED_PHASES:
         return _enter_rollback(store, actual, workspace, context, services, failure)
     if phase is RestorePhase.ROLLBACK_IN_PROGRESS:
         return perform_rollback(store, actual, workspace, context, services, failure)
-    if phase in UNSAFE_STARTUP_PHASES:
-        # `recovery_blocked` already, or something else nothing may continue from.
-        return _blocked_without_transition(actual, failure)
     return _abort(store, actual, workspace, context, failure)
+
+
+def _resolve_ambiguous_initial_record(
+    store: RestoreOperationStateStore,
+    workspace,
+    context: LauncherLifecycleContext,
+    operation_id: str,
+    failure: RestoreFailure,
+) -> RestoreResult:
+    """Resolve a `prepared` publication whose durability could not be proved.
+
+    Nothing destructive has happened — `prepared` never touches the working
+    database — but a record may now exist, and a live record is not something the
+    launcher may start ordinary operation past. So this never reports
+    `durable_phase=None`: it reads what is on disk and closes it if it can.
+
+    The close is a normal `prepared -> aborted` transition, which the graph
+    authorizes. When even that cannot be published, the actual phase is reported
+    with startup blocked, and startup recovery resolves the same real record on
+    the next launcher start.
+    """
+    try:
+        current = store.read()
+    except RestoreStateError:
+        # A record exists and cannot be parsed. Nothing may be inferred from it.
+        logger.error("The initial Restore record is unreadable.")
+        return _result(
+            RestoreOutcome.RECOVERY_BLOCKED,
+            None,
+            operation_id,
+            failure=RestoreFailure.RECOVERY_BLOCKED,
+            normal_startup_allowed=False,
+        )
+
+    if current is None:
+        # The rename did not land after all: no record, nothing to resolve.
+        return _refused_before_any_state(operation_id, failure)
+
+    if current.phase in TERMINAL_PHASES:
+        return _terminal_result(store, current, workspace, context, failure)
+    if current.phase is RestorePhase.PREPARED:
+        return _abort(store, current, workspace, context, failure)
+    # Any other live phase belongs to the ordinary matrix, not to this window.
+    return _blocked_without_transition(current, failure)
+
+
+def _confirm_record_durability(store: RestoreOperationStateStore) -> bool:
+    """Try to prove the existing record durable, without changing it."""
+    try:
+        store.confirm_record_durability()
+    except RestoreStateError as exc:
+        logger.error("Operation record durability could not be confirmed: %s", exc)
+        return False
+    return True
+
+
+def _terminal_result(
+    store: RestoreOperationStateStore,
+    record: RestoreOperationRecord,
+    workspace,
+    context: LauncherLifecycleContext,
+    failure: RestoreFailure | None = None,
+) -> RestoreResult:
+    """Report an already-terminal operation. Never transitions, never rolls back.
+
+    `completed`, `aborted`, `rolled_back` and `recovery_blocked` are ends. There
+    is no authorized edge out of any of them, so this function contains no
+    transition at all — not even a self-transition, which the accepted graph does
+    not define either.
+
+    `recovery_blocked` blocks unconditionally. The other three are *safe* phases,
+    but safe only once the record carrying them is durable: a `completed` whose
+    publication could not be flushed may revert across a host interruption, and
+    starting on the strength of a value that might disappear is the exact failure
+    this boundary exists to prevent. So durability is confirmed here, and when it
+    cannot be, the actual phase is reported with startup blocked and every
+    artifact preserved — the next launcher start retries the confirmation.
+    """
+    phase = record.phase
+    outcome = TERMINAL_PHASE_OUTCOMES[phase]
+
+    if phase is RestorePhase.RECOVERY_BLOCKED:
+        return _result(
+            outcome,
+            phase,
+            record.operation_id,
+            failure=RestoreFailure.RECOVERY_BLOCKED,
+            record=record,
+            normal_startup_allowed=False,
+        )
+
+    confirmed = _confirm_record_durability(store)
+    if confirmed and phase in SAFE_TERMINAL_STARTUP_PHASES:
+        # The operation is over and its record is durable, so the artifacts it no
+        # longer needs may go. `recovery_blocked` never reaches here.
+        workspace.clean_owned_staging(record.operation_id)
+        workspace.clean_owned_temp_files()
+        discard_owned_replacement_artifact(context.database_path, record.operation_id)
+
+    return _result(
+        outcome,
+        phase,
+        record.operation_id,
+        failure=None if confirmed and phase is RestorePhase.COMPLETED else failure,
+        record=record,
+        durability_confirmed=confirmed,
+    )
 
 
 def _blocked_without_transition(
@@ -578,17 +722,21 @@ def _abort(
     if published.failed:
         actual = store.read_durable_record(record)
         if actual.phase is not RestorePhase.ABORTED:
-            # The abort did not stick. Nothing destructive happened, but the
-            # operation is still live on disk, so it is reported as-is and the
-            # next startup resolves it through the ordinary matrix.
+            # The abort did not stick. Nothing destructive happened, but a live
+            # pre-replacement phase is still persisted, and ordinary startup may
+            # not proceed past an unresolved operation. Startup is blocked and the
+            # next launcher start resolves the same real phase through the matrix.
             return _result(
                 RestoreOutcome.ABORTED,
                 actual.phase,
                 actual.operation_id,
                 failure=failure,
                 record=actual,
+                normal_startup_allowed=False,
             )
-        published = _Publication(record=actual)
+        # The rename landed; only its durability is unproven. `aborted` is
+        # terminal, so it is confirmed rather than transitioned again.
+        return _terminal_result(store, actual, workspace, context, failure)
 
     aborted = published.record
     workspace.clean_owned_staging(aborted.operation_id)
@@ -600,6 +748,9 @@ def _abort(
         aborted.operation_id,
         failure=failure,
         record=aborted,
+        # A successful publication flushed the record and its parent directory on
+        # the way through; a failure there would not have reached this line.
+        durability_confirmed=True,
     )
 
 
@@ -682,7 +833,9 @@ def perform_rollback(
         return _blocked(store, record)
 
     try:
-        commit_replacement(artifact, database_path)
+        commit_replacement(
+            artifact, database_path, category=PublicationCategory.ROLLBACK_REPLACEMENT
+        )
     except ReplacementError as exc:
         if not exc.may_have_replaced:
             discard_replacement_artifact(artifact)
@@ -706,7 +859,8 @@ def perform_rollback(
         if actual.phase is not RestorePhase.ROLLED_BACK:
             logger.error("Rollback succeeded but could not be recorded.")
             return _blocked(store, actual)
-        published = _Publication(record=actual)
+        # `rolled_back` is terminal: confirmed, never transitioned again.
+        return _terminal_result(store, actual, workspace, context, failure)
     record = published.record
 
     # The previous workspace is authoritative again, so this operation's staging
@@ -720,6 +874,7 @@ def perform_rollback(
         record.operation_id,
         failure=failure,
         record=record,
+        durability_confirmed=True,
     )
 
 

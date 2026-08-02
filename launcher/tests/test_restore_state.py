@@ -349,7 +349,7 @@ def test_a_parent_directory_flush_failure_is_never_silently_ignored(store, monke
     """
     before = _existing_record(store)
 
-    def refuse(_path):
+    def refuse(_path, **_kwargs):
         raise OSError(22, "directory fsync unsupported")
 
     monkeypatch.setattr(durability, "flush_directory", refuse)

@@ -56,7 +56,12 @@ import json
 import os
 import tempfile
 
-from launcher.restore.durability import DurabilityError, write_and_publish_bytes
+from launcher.restore.durability import (
+    DurabilityError,
+    PublicationCategory,
+    confirm_existing_durability,
+    write_and_publish_bytes,
+)
 from launcher.restore.phases import RestorePhase, require_allowed_transition
 from launcher.restore.workspace import (
     OWNED_TEMP_PREFIX,
@@ -276,6 +281,37 @@ class RestoreOperationStateStore:
             return fallback
         return current if current is not None else fallback
 
+    def confirm_record_durability(self) -> None:
+        """Re-flush the existing authoritative record. Changes nothing.
+
+        No transition, no content rewrite, no new scratch file — it opens the
+        record that is already published, flushes it, and flushes the directory
+        holding it.
+
+        This exists for the window `publish` cannot close by itself: `os.replace`
+        succeeded, so the new phase *is* visible, but the flush after it failed.
+        Rewriting would be wrong (the content is already correct and a rewrite
+        means another rename) and ignoring it would be worse (the rename can
+        revert across a host interruption). Re-proving the flush is the one
+        proportionate answer.
+
+        Raises :class:`RestoreStateError` when durability still cannot be proved.
+        The caller's response is always the same: keep the actual phase, keep the
+        evidence, block ordinary startup, and retry on the next launcher start.
+        """
+        if not self.record_path.is_file():
+            raise RestoreStateError("There is no authoritative record to confirm.")
+        try:
+            confirm_existing_durability(
+                self.record_path,
+                category=PublicationCategory.RECORD_DURABILITY_CONFIRMATION,
+            )
+        except DurabilityError as exc:
+            raise RestoreStateError(
+                f"Restore operation state durability could not be confirmed: {exc.stage.value}",
+                published=True,
+            ) from exc
+
     # ------------------------------------------------------------ publishing
 
     def publish(self, record: RestoreOperationRecord) -> RestoreOperationRecord:
@@ -301,7 +337,12 @@ class RestoreOperationStateStore:
             ) from exc
 
         try:
-            write_and_publish_bytes(payload, self.record_path, scratch_path)
+            write_and_publish_bytes(
+                payload,
+                self.record_path,
+                scratch_path,
+                category=PublicationCategory.OPERATION_RECORD,
+            )
         except DurabilityError as exc:
             if not exc.may_have_published:
                 # The rename never ran, so the scratch file is still ours to

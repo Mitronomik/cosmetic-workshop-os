@@ -34,6 +34,7 @@ import uuid
 RESTORE_DIRNAME = "restore"
 OPERATION_RECORD_FILENAME = "operation.json"
 INSTANCE_LOCK_FILENAME = "launcher.lock"
+BACKEND_LIVENESS_LOCK_FILENAME = "backend-liveness.lock"
 STAGED_CANDIDATE_FILENAME = "candidate.sqlite"
 
 # The scratch suffix used by every launcher-owned temporary file. Deliberately
@@ -146,6 +147,22 @@ class RestoreWorkspace:
     @property
     def lock_path(self) -> Path:
         return self.restore_dir / INSTANCE_LOCK_FILENAME
+
+    @property
+    def backend_liveness_lock_path(self) -> Path:
+        """The lock the *backend child* holds for its whole lifetime.
+
+        Derived from the same canonical workspace as everything else, so the lock
+        that proves "no backend is alive" is about the same database the
+        replacement would touch.
+
+        Distinct from `lock_path`: that one is held by the launcher and keeps a
+        second launcher out; this one is held by the backend and is what survives
+        a hard launcher crash. A launcher that died still leaves this lock held by
+        its orphaned child, which is exactly the fact an in-memory process handle
+        cannot preserve.
+        """
+        return self.restore_dir / BACKEND_LIVENESS_LOCK_FILENAME
 
     def operation_dir(self, operation_id: str) -> Path:
         """The isolated directory for one attempt.

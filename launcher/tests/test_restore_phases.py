@@ -15,6 +15,7 @@ from launcher.restore.phases import (
     ABORTABLE_PHASES,
     ALLOWED_TRANSITIONS,
     ROLLBACK_REQUIRED_PHASES,
+    SAFE_TERMINAL_STARTUP_PHASES,
     TERMINAL_PHASES,
     UNSAFE_STARTUP_PHASES,
     PhaseTransitionError,
@@ -143,7 +144,7 @@ def test_abortable_phases_are_exactly_the_four_pre_replacement_phases():
     }
 
 
-def test_unsafe_phases_never_permit_ordinary_startup():
+def test_the_unsafe_phase_set_is_unchanged():
     assert {phase.value for phase in UNSAFE_STARTUP_PHASES} == {
         "replacement_intent",
         "replacement_committed",
@@ -151,8 +152,56 @@ def test_unsafe_phases_never_permit_ordinary_startup():
         "rollback_in_progress",
         "recovery_blocked",
     }
-    for phase in RestorePhase:
-        assert permits_ordinary_startup(phase) is (phase not in UNSAFE_STARTUP_PHASES)
+
+
+def test_only_three_terminal_phases_may_permit_ordinary_startup():
+    """Stated positively, as an allow-list.
+
+    The earlier rule was `phase not in UNSAFE_STARTUP_PHASES`, which reads as if
+    it means the same thing and does not: it silently admitted the four
+    *unresolved* pre-replacement phases. Those are safe for the database, because
+    replacement never happened, and unsafe for startup, because the operation is
+    still live and recovery has not closed it.
+    """
+    assert {phase.value for phase in SAFE_TERMINAL_STARTUP_PHASES} == {
+        "completed",
+        "aborted",
+        "rolled_back",
+    }
+
+
+@pytest.mark.parametrize("phase", list(RestorePhase))
+def test_every_phase_gets_its_exact_startup_permission(phase):
+    permitted = permits_ordinary_startup(
+        phase, record_exists=True, durability_confirmed=True
+    )
+
+    assert permitted is (phase in SAFE_TERMINAL_STARTUP_PHASES), phase.value
+
+
+@pytest.mark.parametrize("phase", sorted(SAFE_TERMINAL_STARTUP_PHASES, key=lambda p: p.value))
+def test_a_safe_terminal_phase_still_needs_confirmed_durability(phase):
+    """A terminal record that could not be flushed may revert; startup waits."""
+    assert (
+        permits_ordinary_startup(phase, record_exists=True, durability_confirmed=False)
+        is False
+    )
+
+
+def test_no_record_permits_ordinary_startup():
+    """The ordinary case: no Restore was ever attempted here."""
+    assert (
+        permits_ordinary_startup(None, record_exists=False, durability_confirmed=False)
+        is True
+    )
+
+
+def test_an_unreadable_record_never_permits_startup():
+    """`None` phase with a record present means "I cannot tell what happened"."""
+    assert (
+        permits_ordinary_startup(None, record_exists=True, durability_confirmed=True)
+        is False
+    )
 
 
 def test_the_graph_covers_every_phase_exactly_once():

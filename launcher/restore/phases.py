@@ -149,11 +149,59 @@ def requires_rollback(phase: RestorePhase) -> bool:
     return phase in ROLLBACK_REQUIRED_PHASES
 
 
-def permits_ordinary_startup(phase: RestorePhase) -> bool:
-    """Whether ordinary backend startup may proceed with this phase persisted.
+# The only persisted phases from which ordinary startup may ever proceed. Stated
+# **positively**, as an allow-list.
+#
+# A negative rule — "not in UNSAFE_STARTUP_PHASES" — reads as if it means the
+# same thing and does not. It silently admits every *unresolved* pre-replacement
+# phase: `prepared`, `source_staged`, `candidate_validated` and
+# `safety_copy_verified` are safe for the **database**, because replacement never
+# happened, but they are not safe for **startup**, because the operation is still
+# live. Startup recovery has to close them as `aborted` first. An allow-list
+# cannot make that mistake, and a phase added in future is refused by default
+# rather than admitted by default.
+SAFE_TERMINAL_STARTUP_PHASES: frozenset[RestorePhase] = frozenset(
+    {
+        RestorePhase.COMPLETED,
+        RestorePhase.ABORTED,
+        RestorePhase.ROLLED_BACK,
+    }
+)
 
-    Only meaningful for a phase that has already been resolved by startup
-    recovery: an unresolved `prepared` is safe for the *database* but the
-    operation still has to be moved to `aborted` first, which is recovery's job.
+
+def permits_ordinary_startup(
+    durable_phase: RestorePhase | None,
+    *,
+    record_exists: bool,
+    durability_confirmed: bool,
+) -> bool:
+    """The single authoritative rule for whether ordinary startup may proceed.
+
+    Every caller uses this one function — `RestoreResult`, `RecoveryResult`,
+    execution failure handling, startup recovery and the launcher browser gate —
+    so there is no second, slightly different safe-phase list to drift from.
+
+    Three conditions, all required:
+
+    `record_exists`
+        No operation record at all means no Restore was ever attempted here, and
+        ordinary startup proceeds exactly as it did before `C4-I`.
+
+    `durable_phase in SAFE_TERMINAL_STARTUP_PHASES`
+        Only `completed`, `aborted` and `rolled_back`. A `None` phase — an
+        unreadable or unparseable record — is refused, because "I cannot tell
+        what happened" is not a safe state to start from.
+
+    `durability_confirmed`
+        The record's own durability has been proved. A terminal phase whose
+        publication could not be flushed may revert across a host interruption,
+        and starting on the strength of a value that might disappear is precisely
+        the failure this whole boundary exists to prevent.
     """
-    return phase not in UNSAFE_STARTUP_PHASES
+    if not record_exists:
+        return True
+    if durable_phase is None:
+        return False
+    if durable_phase not in SAFE_TERMINAL_STARTUP_PHASES:
+        return False
+    return bool(durability_confirmed)

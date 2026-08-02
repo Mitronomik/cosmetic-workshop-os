@@ -453,7 +453,7 @@ def test_a_post_rename_durability_failure_is_reported_as_possibly_replaced(
     monkeypatch.setattr(
         durability_module,
         "flush_directory",
-        lambda _p: (_ for _ in ()).throw(OSError(22, "no directory fsync")),
+        lambda _p, **_kw: (_ for _ in ()).throw(OSError(22, "no directory fsync")),
     )
     artifact = prepare_replacement_artifact(candidate, target, new_operation_id())
 

@@ -47,7 +47,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
+import fcntl
 import logging
+import os
+import time
 
 from launcher.restore.instance_lock import LauncherInstanceLock
 from launcher.restore.workspace import RestoreWorkspace, resolve_restore_dir
@@ -59,6 +62,48 @@ logger = logging.getLogger(__name__)
 # hang on a wedged child.
 BACKEND_GRACEFUL_STOP_SECONDS = 10.0
 BACKEND_KILL_WAIT_SECONDS = 5.0
+
+# How long to wait for a stopped child to actually release its liveness lock.
+BACKEND_LIVENESS_WAIT_SECONDS = 10.0
+BACKEND_LIVENESS_POLL_SECONDS = 0.05
+
+
+def backend_liveness_lock_is_free(lock_path: Path) -> bool:
+    """Whether **no** application backend currently holds the liveness lock.
+
+    The proof is a non-blocking exclusive `flock` that is released immediately.
+    Taking it means nobody else had it; failing to take it means a live process
+    does, whichever launcher started that process and whether or not this launcher
+    remembers it.
+
+    That last part is the whole point. After a hard launcher crash the in-memory
+    `Popen` is gone but the orphaned backend is still running and still holding
+    this lock, because the kernel only releases it when the holding process dies.
+    A PID file could not say this — PIDs are reused — and a listening port could
+    not either, since a port describes a socket rather than who holds a database.
+
+    Acquiring and releasing is deliberate: this call proves availability, it does
+    not reserve it. The launcher instance lock is what keeps a second launcher
+    from racing in between, and the backend this launcher starts next needs to be
+    able to take the liveness lock itself.
+    """
+    path = Path(lock_path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError:
+        # An unreadable lock path cannot prove absence, and this function is only
+        # ever consulted for permission to do something destructive.
+        return False
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False
+    else:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return True
+    finally:
+        os.close(fd)
 
 
 class RestoreLifecycleError(RuntimeError):
@@ -130,6 +175,25 @@ class BackendProcessOwner:
         process = start_backend_process(config, paths, Path(database_path))
         self.adopt(process)
         return process
+
+    def wait_until_liveness_lock_released(
+        self, lock_path: Path, *, timeout_seconds: float = BACKEND_LIVENESS_WAIT_SECONDS
+    ) -> bool:
+        """Wait, bounded, for the backend-liveness lock to become free.
+
+        `poll()` reports that *our* child has exited; it does not report that the
+        child has finished releasing its descriptors. On a normal stop those are
+        microseconds apart, but Restore is about to replace a database on the
+        strength of that lock being free, so it waits for the lock itself rather
+        than assuming process exit is instantaneous.
+        """
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            if backend_liveness_lock_is_free(lock_path):
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(BACKEND_LIVENESS_POLL_SECONDS)
 
     def stop(self, timeout_seconds: float = BACKEND_GRACEFUL_STOP_SECONDS) -> BackendStopProof:
         """Stop the owned child, and prove it is gone.
@@ -275,12 +339,28 @@ class LauncherLifecycleContext:
     def backend_stop_proof(self) -> BackendStopProof | None:
         return self._backend_stop_proof
 
-    def stop_backend(self) -> BackendStopProof:
-        """Stop any launcher-owned backend and record the proof.
+    @property
+    def backend_liveness_lock_path(self) -> Path:
+        return self.workspace.backend_liveness_lock_path
 
-        Called once, before anything that could touch the working database. The
-        proof is kept so later stages can assert it rather than re-deriving it —
-        and so `require_backend_stopped()` fails loudly if it was never taken.
+    def no_backend_is_alive(self) -> bool:
+        """Whether the backend-liveness lock is free right now."""
+        return backend_liveness_lock_is_free(self.backend_liveness_lock_path)
+
+    def stop_backend(self) -> BackendStopProof:
+        """Stop any launcher-owned backend, and prove **no** backend is alive.
+
+        Two separate facts, and the second is not implied by the first:
+
+        1. the child *this* launcher owns has exited — proved by its handle;
+        2. no application backend at all holds the liveness lock — proved by the
+           lock, which an orphan from a previously crashed launcher would still
+           be holding even though this process owns nothing.
+
+        Only the second is sufficient to touch the working database. An orphan is
+        never killed: this launcher did not start it, so it has detection but no
+        authority, and the safe response is to refuse rather than to signal a
+        process it cannot account for.
         """
         self.require_authority()
         proof = self.backend.stop()
@@ -289,14 +369,24 @@ class LauncherLifecycleContext:
             raise RestoreLifecycleError(
                 "The launcher-owned backend could not be proved stopped."
             )
+
+        # A child that just exited may still be milliseconds from releasing its
+        # descriptors, so this waits for the lock rather than assuming.
+        if proof.was_running:
+            self.backend.wait_until_liveness_lock_released(self.backend_liveness_lock_path)
+
+        if not self.no_backend_is_alive():
+            raise RestoreLifecycleError(
+                "Another application backend is still running against this workspace."
+            )
         return proof
 
     def require_backend_stopped(self) -> BackendStopProof:
         """Assert the backend-stop proof exists and still holds.
 
-        Re-checks liveness rather than trusting the earlier proof: between the
-        stop and the replacement boundary the only thing that could start a
-        backend is this launcher, and if it somehow did, the proof is stale.
+        Re-checks both facts rather than trusting the earlier proof: a launcher
+        that started a backend since, and any backend at all — including one this
+        launcher never owned — holding the liveness lock.
         """
         proof = self._backend_stop_proof
         if proof is None or not proof.confirmed_stopped:
@@ -306,6 +396,10 @@ class LauncherLifecycleContext:
         if self.backend.is_running:
             raise RestoreLifecycleError(
                 "A launcher-owned backend is running again; Restore cannot continue."
+            )
+        if not self.no_backend_is_alive():
+            raise RestoreLifecycleError(
+                "Another application backend holds the liveness lock; Restore cannot continue."
             )
         return proof
 

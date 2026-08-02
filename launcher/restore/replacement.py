@@ -45,6 +45,7 @@ import sqlite3
 
 from launcher.restore.durability import (
     DurabilityError,
+    PublicationCategory,
     PublicationStage,
     flush_file,
     publish_atomically,
@@ -243,7 +244,7 @@ def prepare_replacement_artifact(
         with open(content_path, "rb") as reader, os.fdopen(handle, "wb", closefd=True) as writer:
             shutil.copyfileobj(reader, writer)
             writer.flush()
-            flush_file(writer.fileno())
+            flush_file(writer.fileno(), category=PublicationCategory.REPLACEMENT_ARTIFACT)
     except OSError as exc:
         discard_replacement_artifact(artifact)
         raise ReplacementError(
@@ -252,7 +253,12 @@ def prepare_replacement_artifact(
     return artifact
 
 
-def commit_replacement(replacement_artifact: Path, target: Path) -> None:
+def commit_replacement(
+    replacement_artifact: Path,
+    target: Path,
+    *,
+    category: PublicationCategory = PublicationCategory.WORKING_DATABASE_REPLACEMENT,
+) -> None:
     """The atomic replacement boundary, made durable.
 
     Nothing between the caller's durable `replacement_intent` and this call, and
@@ -268,7 +274,7 @@ def commit_replacement(replacement_artifact: Path, target: Path) -> None:
     exactly as it would for an ambiguous rename.
     """
     try:
-        publish_atomically(Path(replacement_artifact), Path(target))
+        publish_atomically(Path(replacement_artifact), Path(target), category=category)
     except DurabilityError as exc:
         raise ReplacementError(
             f"The working database replacement could not be completed: {exc.stage.value}",

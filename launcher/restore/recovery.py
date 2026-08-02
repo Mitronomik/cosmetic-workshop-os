@@ -39,7 +39,9 @@ from launcher.restore.engine import RestoreServices, perform_rollback
 from launcher.restore.phases import (
     ABORTABLE_PHASES,
     ROLLBACK_REQUIRED_PHASES,
+    SAFE_TERMINAL_STARTUP_PHASES,
     RestorePhase,
+    permits_ordinary_startup,
 )
 from launcher.restore.replacement import discard_owned_replacement_artifact
 from launcher.restore.state import RestoreOperationStateStore, RestoreStateError
@@ -48,9 +50,36 @@ from launcher.restore.workspace import RestoreWorkspaceError
 logger = logging.getLogger(__name__)
 
 
+def _confirm_record_durability(store: RestoreOperationStateStore) -> bool:
+    """Re-prove the existing record's durability, changing nothing.
+
+    Called before ordinary startup is allowed from any terminal phase. It is the
+    same retry the engine performs after a post-rename flush failure, and the
+    reason both do it is the same: a phase that is visible but unflushed can
+    disappear across a host interruption, and startup must not depend on a value
+    that might not be there afterwards.
+    """
+    try:
+        store.confirm_record_durability()
+    except RestoreStateError as exc:
+        logger.error("Operation record durability could not be confirmed: %s", exc)
+        return False
+    return True
+
+
 def _allowed(
     phase: RestorePhase, operation_id: str | None, outcome: RestoreOutcome
 ) -> RecoveryResult:
+    """Permit ordinary startup, through the one shared positive rule.
+
+    The `assert` is a guard against this function being called from a branch that
+    has not established both conditions. Startup permission is decided in exactly
+    one place, and reaching here with anything else is a programming error rather
+    than a state to report.
+    """
+    assert permits_ordinary_startup(
+        phase, record_exists=True, durability_confirmed=True
+    ), f"ordinary startup is not permitted from {phase.value}"
     return RecoveryResult(
         normal_startup_allowed=True,
         durable_phase=phase,
@@ -137,8 +166,19 @@ def recover_incomplete_restore(
         return _blocked_result(phase, record.operation_id, RECOVERY_BLOCKED_MESSAGE)
 
     # ------------------------------------------------- terminal safe states
-    if phase in (RestorePhase.COMPLETED, RestorePhase.ABORTED, RestorePhase.ROLLED_BACK):
-        # The record was readable, which is the confirmation the matrix asks for.
+    if phase in SAFE_TERMINAL_STARTUP_PHASES:
+        # Terminal: **no transition of any kind**, not even a self-transition.
+        # Readability alone is not enough to start on, though. A terminal record
+        # whose publication could not be flushed may revert across a host
+        # interruption, so its durability is re-proved here — the same retry the
+        # engine performs — and startup waits until that succeeds.
+        if not _confirm_record_durability(store):
+            logger.error(
+                "The terminal Restore record could not be proved durable; "
+                "startup is blocked and the next start retries."
+            )
+            return _blocked_result(phase, record.operation_id, RECOVERY_BLOCKED_MESSAGE)
+
         # Only launcher-owned artifacts are cleaned; the safety copy is retained.
         _clean_non_destructive_artifacts(workspace, context, record.operation_id)
         if phase is RestorePhase.ROLLED_BACK:
@@ -184,6 +224,12 @@ def recover_incomplete_restore(
                 "Abort publication reported %s but the record is durable.", type(exc).__name__
             )
             aborted = actual
+            # The rename landed but its flush did not. Re-prove it before letting
+            # ordinary startup depend on the `aborted` value being there.
+            if not _confirm_record_durability(store):
+                return _blocked_result(
+                    RestorePhase.ABORTED, aborted.operation_id, RECOVERY_BLOCKED_MESSAGE
+                )
         _clean_non_destructive_artifacts(workspace, context, aborted.operation_id)
         return _allowed(RestorePhase.ABORTED, aborted.operation_id, RestoreOutcome.ABORTED)
 
@@ -210,7 +256,11 @@ def recover_incomplete_restore(
     # from a crash during a previous rollback. Both continue the same way, which
     # is what makes rollback safely repeatable.
     result = perform_rollback(store, record, workspace, context, active_services)
-    if result.outcome is RestoreOutcome.ROLLED_BACK:
+    if result.outcome is RestoreOutcome.ROLLED_BACK and result.normal_startup_allowed:
+        # `perform_rollback` already applied the shared startup rule, including
+        # the durability confirmation for the terminal `rolled_back` record. It is
+        # carried through rather than re-derived, so there is one decision and not
+        # two that could disagree.
         return RecoveryResult(
             normal_startup_allowed=True,
             durable_phase=RestorePhase.ROLLED_BACK,

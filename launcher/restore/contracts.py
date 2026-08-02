@@ -162,16 +162,26 @@ class RestoreResult:
 
     @property
     def restore_succeeded(self) -> bool:
-        """True only when `completed` is the phase actually on disk.
+        """True only when `completed` is durably on disk **and** startup may proceed.
 
         `rolled_back` means the previous workspace was recovered after a failed
         Restore, and `CR-010` § 10 forbids reporting it as success. Keyed off the
         durable phase rather than the outcome, so an outcome that was never
         persisted cannot claim success.
+
+        `normal_startup_allowed` is part of the test for a reason that only shows
+        up in one narrow window: the replacement and verification can both have
+        succeeded, and `completed` can be visible on disk, while the flush that
+        would make that record survive a host interruption failed. Reporting
+        success there and then refusing to start the application is a mixed
+        message a future `C4-II` screen cannot render honestly. Success is
+        claimed only when the launcher is actually willing to proceed on it; the
+        next start retries the confirmation and reports success then.
         """
         return (
             self.outcome is RestoreOutcome.COMPLETED
             and self.durable_phase is RestorePhase.COMPLETED
+            and self.normal_startup_allowed
         )
 
     @property

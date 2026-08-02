@@ -52,11 +52,17 @@ from pathlib import Path
 from types import TracebackType
 from typing import Literal
 import contextlib
+import hashlib
 import os
 import stat
 import tempfile
 
-from launcher.restore.durability import DurabilityError, flush_file, publish_atomically
+from launcher.restore.durability import (
+    DurabilityError,
+    PublicationCategory,
+    flush_file,
+    publish_atomically,
+)
 from launcher.restore.workspace import (
     OWNED_TEMP_PREFIX,
     OWNED_TEMP_SUFFIX,
@@ -133,12 +139,27 @@ class StagingError(RuntimeError):
 
 @dataclass(frozen=True)
 class SourceIdentity:
-    """The stat facts that must not change while the source is being staged."""
+    """The stat facts that must not change while the source is being staged.
+
+    Device, inode, size and file type describe *which file* this is. They do not
+    describe **what is in it**: a writer can rewrite bytes in place, keeping the
+    same inode and the same total size, and every one of those four values stays
+    identical.
+
+    The two timestamps close most of that gap cheaply. `st_mtime_ns` changes on
+    any content write and `st_ctime_ns` changes on any inode update, both at
+    nanosecond resolution, so an in-place same-size rewrite is visible here even
+    though nothing else moved. They are necessary rather than sufficient — a
+    filesystem with coarse timestamps could still hide a fast rewrite — which is
+    why `stage_source` also proves content stability with two independent digests.
+    """
 
     st_dev: int
     st_ino: int
     st_size: int
     st_mode: int
+    st_mtime_ns: int
+    st_ctime_ns: int
 
     @classmethod
     def from_stat(cls, info: os.stat_result) -> "SourceIdentity":
@@ -147,6 +168,8 @@ class SourceIdentity:
             st_ino=info.st_ino,
             st_size=info.st_size,
             st_mode=stat.S_IFMT(info.st_mode),
+            st_mtime_ns=info.st_mtime_ns,
+            st_ctime_ns=info.st_ctime_ns,
         )
 
 
@@ -205,6 +228,27 @@ class HeldSource:
             raise SourceRejectedError("source-identity-changed")
         if (on_path.st_dev, on_path.st_ino) != (self.identity.st_dev, self.identity.st_ino):
             raise SourceRejectedError("source-identity-changed")
+
+    def digest(self) -> tuple[str, int]:
+        """SHA-256 of the whole source, read from the held descriptor.
+
+        Never re-opens the path: a swap between passes must not be able to feed
+        different bytes into the comparison that exists to detect exactly that.
+        Returns the digest and the byte count actually read, because a short read
+        is itself a change.
+        """
+        hasher = hashlib.sha256()
+        offset = 0
+        while True:
+            try:
+                chunk = os.pread(self.fd, COPY_CHUNK_BYTES, offset)
+            except OSError as exc:
+                raise SourceRejectedError("source-unreadable") from exc
+            if not chunk:
+                break
+            hasher.update(chunk)
+            offset += len(chunk)
+        return hasher.hexdigest(), offset
 
     def assert_still_self_contained(self) -> None:
         _assert_no_sidecars(self.path)
@@ -318,16 +362,30 @@ def open_selected_source(selected_source: object, database_path: Path) -> HeldSo
 def stage_source(workspace: RestoreWorkspace, operation_id: str, held: HeldSource) -> Path:
     """Copy the held source into this operation's isolated directory.
 
-    Publication, not a plain copy. The bytes go into an exclusively-created
-    scratch file inside the operation directory and are moved onto
-    `candidate.sqlite` through the shared durability primitive only once the copy
-    has completed **and** the source has re-proved its identity and
-    self-containment. An interruption therefore leaves an orphan scratch file
-    that nothing recognizes as a candidate — never a truncated `candidate.sqlite`
-    that later validation might partially accept.
+    Publication, not a plain copy, and **two passes**, not one.
 
-    Reads come from the held descriptor. The path is never re-opened, so a swap
-    between validation and copy cannot substitute different bytes.
+    The first pass reads the held descriptor with `os.pread`, writes the staged
+    scratch file, and hashes exactly the bytes it wrote. The second pass re-reads
+    the same descriptor from offset zero and hashes again without writing. If the
+    two digests differ, the source changed underneath the copy and the staged
+    bytes are a mixture of two source states — a database file containing pages
+    from two different points in time, which `PRAGMA quick_check` would very
+    likely still call `ok`.
+
+    Stat identity alone cannot catch that. An in-place same-size rewrite keeps the
+    device, inode, size and file type identical; the timestamps usually move, but
+    "usually" is not a safety property. The digest comparison is what makes the
+    guarantee independent of filesystem timestamp resolution.
+
+    Around both passes, identity and self-containment are re-proved: `fstat` on
+    the descriptor, `lstat` on the path, and the original-source sidecar check.
+    `candidate.sqlite` is published only when every one of those agrees, so an
+    interruption leaves an orphan scratch file that nothing recognizes as a
+    candidate — never a truncated or mixed candidate that later validation might
+    partially accept.
+
+    Reads come from the held descriptor throughout. The path is never re-opened,
+    so a swap between validation, copy and verification cannot substitute bytes.
     """
     operation_dir = workspace.operation_dir(operation_id)
     if not operation_dir.is_dir():
@@ -339,6 +397,8 @@ def stage_source(workspace: RestoreWorkspace, operation_id: str, held: HeldSourc
     scratch_path = Path(scratch_name)
     published = False
     try:
+        # ---- pass one: copy, hashing exactly what is written ----------------
+        copy_hasher = hashlib.sha256()
         copied = 0
         with os.fdopen(handle, "wb", closefd=True) as writer:
             offset = 0
@@ -347,21 +407,36 @@ def stage_source(workspace: RestoreWorkspace, operation_id: str, held: HeldSourc
                 if not chunk:
                     break
                 writer.write(chunk)
+                copy_hasher.update(chunk)
                 offset += len(chunk)
                 copied += len(chunk)
             writer.flush()
-            flush_file(writer.fileno())
+            flush_file(writer.fileno(), category=PublicationCategory.STAGED_CANDIDATE)
 
         # Everything below runs *before* `candidate.sqlite` exists, so a failure
         # here can never leave a usable staged candidate.
         if copied != held.size_bytes:
             raise SourceRejectedError("source-identity-changed")
         held.revalidate()
-        # The second sidecar check. A `-wal` that appeared during the copy means
-        # the source was being written to, which is not a backup artifact.
         held.assert_still_self_contained()
 
-        publish_atomically(scratch_path, operation_dir / STAGED_CANDIDATE_FILENAME)
+        # ---- pass two: re-read and compare, writing nothing ------------------
+        verify_digest, verify_bytes = held.digest()
+        if verify_bytes != held.size_bytes or verify_digest != copy_hasher.hexdigest():
+            # The source changed while it was being copied. The scratch file may
+            # hold a mixture of two source states and must never be published.
+            raise SourceRejectedError("source-identity-changed")
+
+        # Re-proved after the verification pass too, because the second read is
+        # itself a window in which the source could move.
+        held.revalidate()
+        held.assert_still_self_contained()
+
+        publish_atomically(
+            scratch_path,
+            operation_dir / STAGED_CANDIDATE_FILENAME,
+            category=PublicationCategory.STAGED_CANDIDATE,
+        )
         published = True
     except SourceRejectedError:
         raise
