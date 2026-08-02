@@ -492,3 +492,99 @@ test('desktop and narrow viewports share one warning region with no fixed width'
   assert.match(styles, /\.feedback/);
   assert.doesNotMatch(notice, /style="width:\s*\d+px/);
 });
+
+// ---------------------------------------------------------------------------
+// Verification failure — never a created document
+//
+// The backend now refuses a document pair it could not verify, with a fixed
+// HTTP 500 instead of `201 pending`. The route must present that as an ordinary
+// error: no success text, no pending-Journal warning, one POST, no auto-retry.
+// ---------------------------------------------------------------------------
+
+const verificationFailure = () => {
+  const error = new Error(
+    'Не удалось проверить созданный документ отчета, поэтому он не считается надёжным. Данные мастерской не изменялись.',
+  );
+  error.status = 500;
+  error.payload = {
+    detail: {
+      code: 'report_document_verification_failed',
+      message: 'Не удалось проверить созданный документ отчета, поэтому он не считается надёжным. Данные мастерской не изменялись.',
+      next_action: 'Повторите создание документа. Если ошибка повторяется, перезапустите приложение.',
+    },
+  };
+  return error;
+};
+
+test('a verification failure is a definite error, not an ambiguous result', async () => {
+  const { h, ui, runtime } = makeReportDocumentsRoute();
+  runtime.enter();
+  runtime.load('initial');
+  h.reads[0].resolve({ status: statusResponse(0), list: { items: [], limit: 50, offset: 0, total: 0 } });
+  await flush();
+
+  runtime.create({ format: 'markdown' });
+  assert.equal(h.postCount, 1);
+  h.mutations[0].reject(verificationFailure());
+  await flush();
+
+  const presentation = runtime.presentation();
+  // The existing error region, not the ambiguous-network warning.
+  assert.equal(presentation.feedback.error, messages.mutationError);
+  assert.equal(presentation.feedback.warning, '');
+  assert.equal(presentation.feedback.success, '');
+  // Never presented as a created document.
+  assert.ok(!/Документ отчета создан/.test(presentation.feedback.success));
+  assert.equal(ui.lastCreatedDocument, null);
+  // No pending-Journal warning: this is not a verified artifact.
+  assert.equal(visibleWarning(ui), '');
+  assert.equal(ui.auditWarning, '');
+  // One POST, no automatic retry, and no reconciliation lock.
+  assert.equal(h.postCount, 1);
+  assert.equal(runtime.lifecycle.state.reconciliationRequired, false);
+});
+
+test('a verification failure leaks no filename, path or verifier detail to the screen', async () => {
+  const { h, ui, runtime } = makeReportDocumentsRoute();
+  runtime.enter();
+  runtime.create({ format: 'markdown' });
+  h.mutations[0].reject(verificationFailure());
+  await flush();
+
+  const shown = [
+    runtime.presentation().feedback.error,
+    runtime.presentation().feedback.warning,
+    runtime.presentation().feedback.success,
+    visibleWarning(ui),
+    ...h.polite,
+    ...h.assertive,
+  ].join(' ');
+  for (const forbidden of [
+    'workshop-overview-20260731-101112',
+    '/local/exports/report-documents',
+    '.md',
+    '.json',
+    'operation_id',
+    'sqlite',
+    'size-mismatch',
+  ]) {
+    assert.ok(!shown.includes(forbidden), `leaked: ${forbidden}`);
+  }
+});
+
+test('a later successful create still works after a verification failure', async () => {
+  const { h, ui, runtime } = makeReportDocumentsRoute();
+  runtime.enter();
+  runtime.create({ format: 'markdown' });
+  h.mutations[0].reject(verificationFailure());
+  await flush();
+  assert.equal(runtime.presentation().canCreate, true);
+
+  runtime.create({ format: 'markdown' });
+  assert.equal(h.postCount, 2);
+  h.mutations[1].resolve(mutationResult(recordedResponse()));
+  await flush();
+
+  assert.match(runtime.presentation().feedback.success, /Документ отчета создан\./);
+  assert.equal(visibleWarning(ui), '');
+});

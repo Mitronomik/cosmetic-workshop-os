@@ -576,7 +576,15 @@ def test_finalization_creates_exactly_one_event_with_the_accepted_contract(tmp_p
     path = write_export(export_dir)
     operation_id = prepare(service, path)
 
-    audit_log_id = service.finalize(operation_id, reconciled_after_failure=False)
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "recorded"
+    assert finalization.is_recorded is True
+    assert finalization.artifact_is_authoritative is True
+    assert finalization.verification.is_valid is True
+    # The schema version the event carries comes from the verified artifact.
+    assert finalization.verification.export_schema_version == EXPORT_SCHEMA_VERSION
+    audit_log_id = finalization.audit_log_id
 
     rows = audit_rows(config)
     assert len(rows) == 1
@@ -632,7 +640,8 @@ def test_repeated_sequential_finalization_creates_exactly_one_event(tmp_path):
     first = service.finalize(operation_id, reconciled_after_failure=False)
     second = service.finalize(operation_id, reconciled_after_failure=True)
 
-    assert first == second
+    assert first.outcome == second.outcome == "recorded"
+    assert first.audit_log_id == second.audit_log_id
     assert len(audit_rows(config)) == 1
 
 
@@ -641,8 +650,11 @@ def test_an_already_audited_operation_returns_the_existing_audit_log_id(tmp_path
     operation_id = prepare(service, write_export(export_dir))
     first = service.finalize(operation_id, reconciled_after_failure=False)
 
-    assert service.finalize(operation_id, reconciled_after_failure=True) == first
-    assert audit_rows(config)[0]["id"] == first
+    again = service.finalize(operation_id, reconciled_after_failure=True)
+    # The already-audited branch reuses the committed ID and reports `recorded`.
+    assert again.outcome == "recorded"
+    assert again.audit_log_id == first.audit_log_id
+    assert audit_rows(config)[0]["id"] == first.audit_log_id
 
 
 def test_startup_then_pre_create_reconciliation_creates_exactly_one_event(tmp_path):
@@ -674,7 +686,7 @@ def test_two_concurrent_finalizers_create_exactly_one_event(tmp_path):
         barrier.wait()
         outcome = worker.finalize(operation_id, reconciled_after_failure=False)
         with lock:
-            results.append(outcome)
+            results.append(outcome.audit_log_id if outcome.is_recorded else None)
 
     threads = [threading.Thread(target=run) for _ in range(2)]
     for thread in threads:
@@ -699,7 +711,13 @@ def test_an_audit_insert_failure_leaves_the_operation_unresolved_and_the_export_
 
     monkeypatch.setattr(AuditLogRepository, "create_log", failing_create_log)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is None
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    # The export is verified, so this is a pending Journal entry and never an
+    # invalid artifact: the export itself is still authoritative.
+    assert finalization.outcome == "audit_pending"
+    assert finalization.artifact_is_authoritative is True
+    assert finalization.audit_log_id is None
 
     assert audit_rows(config) == []
     operation = ArtifactAuditOperationRepository(config).get_operation(operation_id)
@@ -717,7 +735,10 @@ def test_a_ledger_update_failure_rolls_back_the_audit_insert(tmp_path, monkeypat
 
     monkeypatch.setattr(ArtifactAuditOperationRepository, "mark_audited", lambda *_a, **_k: False)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is None
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "audit_pending"
+    assert finalization.artifact_is_authoritative is True
 
     # Neither half committed: the event and the transition are one transaction.
     assert audit_rows(config) == []
@@ -751,14 +772,31 @@ def test_no_second_sqlite_connection_participates_in_the_finalizer(tmp_path, mon
 
     monkeypatch.setattr(audit_module.ExportAuditService, "_commit_finalization", traced)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is not None
+    assert service.finalize(operation_id, reconciled_after_failure=False).is_recorded
     assert sum(opened) == 1
 
 
 def test_an_unexpected_verifier_defect_never_destroys_a_created_export(tmp_path, monkeypatch):
-    """`finalize` runs after the export exists, so it must degrade, not raise."""
+    """A verifier defect proves nothing about the export, so it cannot be trusted.
+
+    The name is the merged baseline's and is kept deliberately: what this test
+    protects — a verifier defect must never destroy the written file — is
+    unchanged. What changed is the *conclusion* drawn from that defect. The
+    baseline asserted `finalize(...) is None`, which the create path mapped to
+    `201 pending`; that was the defect. The assertions below now require
+    `artifact_invalid` instead, while every original protective assertion is
+    preserved verbatim.
+
+    `finalize` runs after the export exists, so it must still not raise and must
+    not delete the file. But a defect that prevented verification is not evidence
+    the artifact is good: reporting `audit_pending` here would let an unverified
+    export reach the user as a created export with a merely pending Journal
+    entry. The outcome is `artifact_invalid`, and the file, the unresolved
+    operation and the pending count all survive for bounded reconciliation.
+    """
     config, export_dir, service = setup(tmp_path)
     path = write_export(export_dir)
+    before = path.read_bytes()
     operation_id = prepare(service, path)
 
     def defective(*_args, **_kwargs):
@@ -766,8 +804,14 @@ def test_an_unexpected_verifier_defect_never_destroys_a_created_export(tmp_path,
 
     monkeypatch.setattr(audit_module.ExportAuditService, "verify", defective)
 
-    assert service.finalize(operation_id, reconciled_after_failure=False) is None
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.artifact_is_authoritative is False
+    assert finalization.is_recorded is False
+    assert finalization.audit_log_id is None
     assert path.exists()
+    assert path.read_bytes() == before
     assert audit_rows(config) == []
     assert service.pending_count() == 1
 
@@ -990,3 +1034,264 @@ def test_the_reserved_export_vocabulary_matches_the_accepted_decision():
     # The warning names the two bounded triggers and implies no background retry.
     for forbidden in ["автоматически", "фон", "повторяет каждые"]:
         assert forbidden not in audit_module.PENDING_AUDIT_MESSAGE
+
+
+# --------------------------------------------------------------------------
+# Typed finalization: verification failure is not a pending Journal entry
+#
+# The load-bearing distinction of this slice. A single `int | None` could not
+# tell "the export did not verify" apart from "the export verified but its
+# Journal entry did not commit", and the create path mapped both to `201
+# pending` — so an export that failed mandatory verification was reported to the
+# user as created. These pin the three outcomes apart.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("outcome", ["ambiguous", "definitely_absent"])
+def test_a_non_valid_verification_is_artifact_invalid_and_writes_no_event(tmp_path, monkeypatch, outcome):
+    config, export_dir, service = setup(tmp_path)
+    path = write_export(export_dir)
+    before = path.read_bytes()
+    operation_id = prepare(service, path)
+
+    monkeypatch.setattr(
+        audit_module.ExportAuditService,
+        "verify",
+        lambda self, operation: audit_module.ExportVerification(outcome, "injected"),
+    )
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.artifact_is_authoritative is False
+    assert finalization.is_recorded is False
+    assert finalization.audit_log_id is None
+    assert audit_rows(config) == []
+    # Unresolved and counted — never abandoned on the immediate create path.
+    operation = ArtifactAuditOperationRepository(config).get_operation(operation_id)
+    assert operation.status in ("prepared", "pending_audit")
+    assert service.pending_count() == 1
+    # Left exactly as it is: this operation could not prove it owns that path.
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "corrupt, expected_reason",
+    [
+        (lambda path: path.write_text("{not json", encoding="utf-8"), "export-unreadable"),
+        (
+            lambda path: path.write_text(
+                json.dumps({"manifest": {}, "data": {}}), encoding="utf-8"
+            ),
+            "schema-version-missing",
+        ),
+    ],
+)
+def test_a_real_manifest_defect_is_artifact_invalid(tmp_path, corrupt, expected_reason):
+    """Genuine verifier verdicts, not injected ones, reach the same outcome."""
+    config, export_dir, service = setup(tmp_path)
+    path = write_export(export_dir)
+    operation_id = prepare(service, path)
+    corrupt(path)
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.verification.outcome == "ambiguous"
+    assert finalization.verification.reason == expected_reason
+    assert audit_rows(config) == []
+    assert service.pending_count() == 1
+
+
+def test_a_real_entity_count_mismatch_is_artifact_invalid(tmp_path):
+    config, export_dir, service = setup(tmp_path)
+    path = write_export(export_dir)
+    operation_id = prepare(service, path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["manifest"]["tables"]["ingredients"] = 99
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.verification.reason == "table-counts-mismatch"
+    assert audit_rows(config) == []
+
+
+def test_a_real_unsupported_schema_version_is_artifact_invalid(tmp_path):
+    config, export_dir, service = setup(tmp_path)
+    path = write_export(export_dir, export_schema_version=EXPORT_SCHEMA_VERSION + 999)
+    operation_id = prepare(service, path)
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.verification.reason == "unsupported-schema-version"
+    assert audit_rows(config) == []
+
+
+def test_a_malformed_filename_is_artifact_invalid(tmp_path):
+    config, export_dir, service = setup(tmp_path)
+    path = write_export(export_dir, suffix="not-a-generated-export-name.json")
+    operation_id = prepare(service, path)
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.verification.reason == "filename-grammar-mismatch"
+    assert audit_rows(config) == []
+    assert path.exists()
+
+
+def test_an_unreadable_ledger_is_artifact_invalid_rather_than_a_guess(tmp_path, monkeypatch):
+    """Authority was never established, so the export must not be called valid."""
+    config, export_dir, service = setup(tmp_path)
+    path = write_export(export_dir)
+    operation_id = prepare(service, path)
+
+    def failing_get(*_args, **_kwargs):
+        raise sqlite3.OperationalError("injected ledger read failure")
+
+    monkeypatch.setattr(ArtifactAuditOperationRepository, "get_operation", failing_get)
+
+    finalization = service.finalize(operation_id, reconciled_after_failure=False)
+
+    assert finalization.outcome == "artifact_invalid"
+    assert finalization.artifact_is_authoritative is False
+    assert finalization.verification is None
+    assert path.exists()
+
+
+def test_a_transient_verifier_fault_still_reconciles_exactly_once_afterwards(tmp_path, monkeypatch):
+    config, export_dir, service = setup(tmp_path)
+    path = write_export(export_dir)
+    operation_id = prepare(service, path)
+
+    def defective(*_args, **_kwargs):
+        raise TypeError("injected transient verifier fault")
+
+    monkeypatch.setattr(audit_module.ExportAuditService, "verify", defective)
+    assert service.finalize(operation_id, reconciled_after_failure=False).outcome == "artifact_invalid"
+    assert audit_rows(config) == []
+    monkeypatch.undo()
+
+    first = service.reconcile()
+    second = service.reconcile()
+
+    assert first.audited == 1
+    assert second.examined == 0
+    rows = audit_rows(config)
+    assert len(rows) == 1
+    assert json.loads(rows[0]["metadata_json"])["reconciled_after_failure"] is True
+    assert service.pending_count() == 0
+
+
+def test_reconciliation_leaves_an_ambiguous_operation_unresolved_and_abandons_an_absent_one(tmp_path):
+    """The two reconciliation verdicts stay distinct under typed finalization."""
+    config, export_dir, service = setup(tmp_path)
+    ambiguous_path = write_export(export_dir, reason="ambiguous")
+    ambiguous_id = prepare(service, ambiguous_path)
+    ambiguous_path.write_text("{not json", encoding="utf-8")
+    absent_id = prepare(service, write_export(export_dir, reason="absent"))
+    (export_dir / ArtifactAuditOperationRepository(config).get_operation(absent_id).primary_filename).unlink()
+
+    result = service.reconcile()
+
+    assert result.abandoned == 1
+    assert result.unresolved == 1
+    assert result.audited == 0
+    repository = ArtifactAuditOperationRepository(config)
+    assert repository.get_operation(absent_id).status == "abandoned"
+    assert repository.get_operation(ambiguous_id).status == "pending_audit"
+    assert audit_rows(config) == []
+    # The ambiguous file is never deleted by reconciliation.
+    assert ambiguous_path.exists()
+
+
+# --------------------------------------------------------------------------
+# Mutation protection for the typed outcome vocabulary
+# --------------------------------------------------------------------------
+
+
+def test_only_recorded_and_audit_pending_are_authoritative():
+    """Renaming `artifact_invalid` into a success would defeat the whole slice."""
+    Finalization = audit_module.ExportFinalization
+    assert Finalization("recorded", audit_log_id=1).artifact_is_authoritative is True
+    assert Finalization("audit_pending").artifact_is_authoritative is True
+    assert Finalization("artifact_invalid").artifact_is_authoritative is False
+    assert Finalization("recorded", audit_log_id=1).is_recorded is True
+    assert Finalization("audit_pending").is_recorded is False
+    assert Finalization("artifact_invalid").is_recorded is False
+
+
+def test_the_create_path_refuses_an_invalid_artifact_and_keeps_the_file(tmp_path, monkeypatch):
+    """The create orchestration, not just the finalizer, must enforce the boundary."""
+    from app.services.export import ExportPaths
+    from app.services.export_creation import create_audited_json_export
+
+    config, export_dir, _service = setup(tmp_path)
+    monkeypatch.setattr(
+        audit_module.ExportAuditService,
+        "finalize",
+        lambda self, operation_id, *, reconciled_after_failure: audit_module.ExportFinalization(
+            "artifact_invalid"
+        ),
+    )
+
+    with pytest.raises(audit_module.ExportArtifactUnverifiedError):
+        create_audited_json_export(
+            ExportPaths(database_path=config.path, export_dir=export_dir), "manual", config=config
+        )
+
+    # The file survives the refusal: ownership is exactly what failed to verify.
+    assert len(list(export_dir.glob("*.json"))) == 1
+    assert audit_rows(config) == []
+
+
+def test_the_create_path_still_accepts_a_verified_export_with_a_pending_journal(tmp_path, monkeypatch):
+    from app.services.export import ExportPaths
+    from app.services.export_creation import create_audited_json_export
+
+    config, export_dir, _service = setup(tmp_path)
+    monkeypatch.setattr(
+        audit_module.ExportAuditService,
+        "finalize",
+        lambda self, operation_id, *, reconciled_after_failure: audit_module.ExportFinalization(
+            "audit_pending"
+        ),
+    )
+
+    created = create_audited_json_export(
+        ExportPaths(database_path=config.path, export_dir=export_dir), "manual", config=config
+    )
+
+    assert created.audit_status == "pending"
+    assert created.audit_message == audit_module.PENDING_AUDIT_MESSAGE
+    # CR-006 is untouched: the response still describes the exact ExportResult.
+    assert created.result.export_path.exists()
+    assert created.canonical_reason == "manual"
+
+
+def test_finalization_still_takes_the_immediate_write_lock(tmp_path, monkeypatch):
+    """`BEGIN IMMEDIATE` is what orders two concurrent finalizers.
+
+    The concurrency test above proves the *effect* only when the race actually
+    materialises, which is timing-dependent. This pins the mechanism itself, so
+    quietly downgrading to a deferred `BEGIN` — which would let two readers both
+    reach the insert and deadlock one of them into a spurious `audit_pending` —
+    cannot pass unnoticed.
+    """
+    config, export_dir, service = setup(tmp_path)
+    operation_id = prepare(service, write_export(export_dir))
+
+    original = audit_module.transaction
+    observed: list[bool] = []
+
+    def recording_transaction(config_arg=None, *, immediate=False):
+        observed.append(immediate)
+        return original(config_arg, immediate=immediate)
+
+    monkeypatch.setattr(audit_module, "transaction", recording_transaction)
+
+    assert service.finalize(operation_id, reconciled_after_failure=False).is_recorded
+    assert observed == [True]

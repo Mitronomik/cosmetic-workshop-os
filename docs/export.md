@@ -366,6 +366,33 @@ Create response, implemented on that branch:
 }
 ```
 
+### Verification failure is not a pending Journal entry
+
+*C3 artifact-finalization hardening — implemented on the PR branch, not merged.*
+
+Finalization reports three distinct outcomes — `recorded`, `audit_pending` and
+`artifact_invalid` — instead of an ID-or-nothing. Only the first two make the
+export authoritative.
+
+`artifact_invalid` means mandatory verification did not conclude the export is
+valid: an `ambiguous` verdict, `definitely_absent` on the immediate create path,
+a verifier that raised, or a ledger that could not be read. In that case the
+create does **not** return `201`, does **not** say `Экспорт создан.`, writes no
+`export.created` event, and is never described as merely awaiting a Journal
+entry. It returns HTTP `500` with the fixed structured detail
+`export_verification_failed` and no filename, path, human or canonical reason,
+operation ID, schema version, entity count, verifier reason or SQLite message.
+
+The file is left on disk untouched — the create cannot prove it owns that path,
+which is exactly what verification failed to establish — and its operation stays
+unresolved and counted, so a later bounded reconciliation pass finalizes it
+exactly once if the artifact turns out to be valid.
+
+`audit_pending` is unchanged and remains a success: the export is verified and
+authoritative, and only its Journal entry is outstanding. `CR-006` is untouched:
+a successful response is still built from the exact `ExportResult`, never from a
+re-read of the export directory.
+
 Every existing export metadata field stays present, and the response `reason`
 stays the canonical final-filename-derived reason. In the pending case the
 export remains available, listable and byte-identical, and the user must **not**

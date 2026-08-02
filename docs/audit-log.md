@@ -1511,17 +1511,62 @@ C3-II-B2 merged as PR #166 (merge commit
 `844526ae4057a454312f790abcaf21be518cdbd9`, final reviewed head
 `530b3a112b937f8955dd5768741f0ec403809b5a`).
 
-C3-II-B3 is implemented on `claude/cr-004-c3-ii-b3-manual-backup` and is **not
-merged**. It reuses the existing ledger with **no new migration**, and it also
-carries the `CR-004` backup-engine correction: the raw file copy is replaced by
-the SQLite Online Backup API with bounded busy behaviour, and the create
-response is built from the engine's exact `BackupResult` instead of a directory
-re-list.
+C3-II-B3 merged as PR #167 (merge commit
+`7af53a3305fa9fdb984d4c478e1186685fbb6727`, final reviewed head
+`259697805660fd4dc37e6ac5f50567d48037be94`). It reuses the existing ledger with
+**no new migration**, and it also carries the `CR-004` backup-engine correction:
+the raw file copy is replaced by the SQLite Online Backup API with bounded busy
+behaviour, and the create response is built from the engine's exact
+`BackupResult` instead of a directory re-list. With it, `C3` is complete on
+merged `main`.
 
 For B3, verification and AuditLog persistence are separate results and are never
 collapsed: finalization reports `recorded`, `audit_pending` or `artifact_invalid`
 rather than an ID-or-nothing, so an artifact that failed verification can never be
 reported as a created backup with a merely pending Journal entry.
+
+### C3 artifact-finalization hardening — implemented on the PR branch, not merged
+
+B1 and B2 shipped before B3 established the three-outcome finalization rule, and
+both collapsed two different facts into one `int | None`. `None` meant *either*
+"the artifact failed mandatory verification" *or* "the artifact verified but its
+AuditLog event did not commit", and both create paths mapped every `None` to
+HTTP `201` with `audit_status: pending`. A report document or JSON export that
+failed mandatory verification was therefore presented to the user as
+successfully created with only its Journal entry outstanding.
+
+This hardening applies the B3 rule to both merged slices. Finalization now
+returns an artifact-specific typed result — `ReportDocumentFinalization` and
+`ExportFinalization` — with the same three outcomes:
+
+| Outcome | Meaning | Create result |
+|---|---|---|
+| `recorded` | verified, and exactly one event is committed | `201` `audit_status: recorded` |
+| `audit_pending` | **verified** and authoritative, but the AuditLog insert or ledger transition did not commit | `201` `audit_status: pending` |
+| `artifact_invalid` | verification did not conclude the artifact is valid | `500`, fixed structured error |
+
+`artifact_invalid` covers an `ambiguous` verdict, `definitely_absent` on the
+immediate create path, a verifier that raised, and a ledger that could not be
+read. Only `recorded` and `audit_pending` make the artifact authoritative, which
+is what `artifact_is_authoritative` expresses on both result types.
+
+An `artifact_invalid` finalization writes no `report_document.created` or
+`export.created` event, never deletes the artifact — the create cannot prove it
+owns those files, which is exactly what verification failed to establish — and
+leaves the ledger row unresolved and counted so bounded reconciliation can
+finalize it exactly once after a transient fault clears.
+
+The AuditLog contract is unchanged: same actions, same entity types, same
+`entity_id = operation_id`, same permitted metadata keys, same exactly-once
+behaviour, and the same single `BEGIN IMMEDIATE` transaction covering both the
+event insert and the ledger transition. No migration, no second ledger, no
+outbox, no worker. Backup finalization is untouched.
+
+The types are deliberately artifact-specific rather than a shared artifact
+framework: the three kinds carry genuinely different verification metadata —
+`ReportDocumentVerification.metadata` and
+`ExportVerification.export_schema_version` — and a common base class would hide
+exactly the field each finalizer needs.
 
 `pending_audit_count` counts exactly `manual_backup` operations in
 `prepared` or `pending_audit`. Its verification is stricter than B1's and B2's

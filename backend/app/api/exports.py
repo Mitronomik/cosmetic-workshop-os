@@ -16,7 +16,10 @@ from app.services.export import (
     list_export_files,
     resolve_export_paths,
 )
-from app.services.export_audit import ExportAuditTrackingUnavailableError
+from app.services.export_audit import (
+    ExportArtifactUnverifiedError,
+    ExportAuditTrackingUnavailableError,
+)
 from app.services.export_creation import (
     AuditedExportResult,
     create_audited_json_export,
@@ -127,6 +130,19 @@ def create_export(request: ExportCreateRequest | None = Body(default=None)) -> E
                 "code": ExportAuditTrackingUnavailableError.code,
                 "message": ExportAuditTrackingUnavailableError.message,
                 "next_action": ExportAuditTrackingUnavailableError.next_action,
+            },
+        ) from exc
+    except ExportArtifactUnverifiedError as exc:
+        # Something exists at the reserved path but did not pass mandatory
+        # verification, so it is not a trustworthy export. This is deliberately
+        # *not* a `201` with a pending Journal entry: that would report an
+        # unverified artifact as a created export.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": ExportArtifactUnverifiedError.code,
+                "message": ExportArtifactUnverifiedError.message,
+                "next_action": ExportArtifactUnverifiedError.next_action,
             },
         ) from exc
     except ExportError as exc:

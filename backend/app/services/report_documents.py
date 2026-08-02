@@ -21,6 +21,7 @@ from app.schemas.reports import FinanceReportResponse, OverviewReportResponse, R
 from app.schemas.settings import WorkshopProfile
 from app.services.report_document_audit import (
     PENDING_AUDIT_MESSAGE,
+    ReportDocumentArtifactUnverifiedError,
     ReportDocumentAuditService,
     ReportDocumentAuditTrackingUnavailableError,
 )
@@ -228,11 +229,22 @@ class ReportDocumentService:
             message = "Не удалось создать PDF-документ отчета. Данные мастерской не изменялись." if request.format == PDF_FORMAT else "Не удалось создать документ отчета. Данные мастерской не изменялись."
             raise ReportDocumentError(message) from exc
 
-        # The pair is complete and is now the authoritative result. Everything
-        # below is the secondary Journal result, and no outcome of it may delete
-        # the document or turn this into a failure.
-        audit_log_id = self.audit_service.finalize(operation_id, reconciled_after_failure=False)
-        if audit_log_id is None:
+        # Verification decides whether there is an authoritative result at all,
+        # and the Journal entry is a separate, secondary question. Collapsing the
+        # two is how an unverified pair would be reported as a created document
+        # with a merely pending Journal entry.
+        finalization = self.audit_service.finalize(operation_id, reconciled_after_failure=False)
+        if not finalization.artifact_is_authoritative:
+            # Both files are on disk, but this operation could not prove they are
+            # the document it just wrote. They are left exactly where they are —
+            # deleting a pair whose ownership is precisely what failed to verify
+            # could destroy someone else's files — and the ledger row stays
+            # unresolved and counted.
+            raise ReportDocumentArtifactUnverifiedError(ReportDocumentArtifactUnverifiedError.message)
+
+        # From here the pair is verified and is the authoritative result. No
+        # audit outcome below deletes it or turns this into a failure.
+        if not finalization.is_recorded:
             return ReportDocumentCreateResponse(
                 document=metadata,
                 message="Документ отчета создан.",

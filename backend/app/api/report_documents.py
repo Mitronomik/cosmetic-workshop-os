@@ -7,7 +7,10 @@ from app.schemas.report_documents import (
     ReportDocumentStatusResponse,
     ReportOverviewDocumentCreateRequest,
 )
-from app.services.report_document_audit import ReportDocumentAuditTrackingUnavailableError
+from app.services.report_document_audit import (
+    ReportDocumentArtifactUnverifiedError,
+    ReportDocumentAuditTrackingUnavailableError,
+)
 from app.services.report_documents import (
     ReportDocumentError,
     ReportDocumentFileMissingError,
@@ -83,6 +86,19 @@ def create_overview_report_document(
                 "code": ReportDocumentAuditTrackingUnavailableError.code,
                 "message": ReportDocumentAuditTrackingUnavailableError.message,
                 "next_action": ReportDocumentAuditTrackingUnavailableError.next_action,
+            },
+        ) from exc
+    except ReportDocumentArtifactUnverifiedError as exc:
+        # Both files exist but did not pass mandatory verification, so the pair is
+        # not a trustworthy document. This is deliberately *not* a `201` with a
+        # pending Journal entry: that would report an unverified artifact as a
+        # created document.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": ReportDocumentArtifactUnverifiedError.code,
+                "message": ReportDocumentArtifactUnverifiedError.message,
+                "next_action": ReportDocumentArtifactUnverifiedError.next_action,
             },
         ) from exc
     except ReportDocumentError as exc:

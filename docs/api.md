@@ -826,6 +826,44 @@ authoritative. That status GET stays read-only, reconciles nothing, and raises a
 safe HTTP `500` rather than reporting a fabricated `0` when the ledger cannot be
 read. No other export response field is added, renamed or removed.
 
+#### The export create failure modes are distinct
+
+*C3 artifact-finalization hardening — implemented on the PR branch, not merged.*
+
+| Condition | Result |
+|---|---|
+| source database missing | `404`, fixed Russian text |
+| audit tracking could not be prepared | `500` `artifact_audit_tracking_unavailable` — nothing written |
+| the export could not be written | `409`, fixed Russian text |
+| artifact did not pass verification | `500` `export_verification_failed` |
+| verified, AuditLog write failed | `201` `audit_status: pending` |
+| verified and audited | `201` `audit_status: recorded` |
+
+An artifact that did not verify is **not** a created export. It never returns
+`201`, never reports `Экспорт создан.`, never writes an `export.created` event,
+and is never described as merely awaiting a Journal entry:
+
+```json
+{
+  "detail": {
+    "code": "export_verification_failed",
+    "message": "Не удалось проверить созданный экспорт, поэтому он не считается надёжным. Данные мастерской не изменялись.",
+    "next_action": "Повторите создание экспорта. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
+
+Verification failure covers an `ambiguous` verdict, `definitely_absent` on the
+immediate create path, a verifier that raised, and a ledger that could not be
+read to verify against. The file is left on disk untouched — the create cannot
+prove it owns that path, which is exactly what verification failed to establish
+— and the ledger row stays unresolved and counted for bounded reconciliation.
+The detail carries no filename, path, human or canonical reason, operation ID,
+schema version, entity count, verifier reason or SQLite message.
+
+`CR-006` is untouched by this: a successful create response is still built from
+the exact `ExportResult` and never from a re-read of the export directory.
+
 ## Import drafts API (PR77)
 
 CSV/XLSX import uses safe drafts first: upload → parse → preview → validation → explicit confirmation → apply for supported safe targets. Upload/preview still does not mutate domain tables; applying requires the dedicated apply endpoint and confirmation flags.
@@ -1177,6 +1215,42 @@ or ledger row is created, and the endpoint returns HTTP `500`:
 
 Existing request-validation errors are unchanged and still take precedence: an
 unsupported `format` is still rejected with `422` before anything is prepared.
+
+#### The report-document create failure modes are distinct
+
+*C3 artifact-finalization hardening — implemented on the PR branch, not merged.*
+
+| Condition | Result |
+|---|---|
+| unsupported `format` | `422`, fixed Russian text |
+| audit tracking could not be prepared | `500` `artifact_audit_tracking_unavailable` — nothing written |
+| the pair could not be rendered | `500`, fixed Russian text — the pair is removed and the operation abandoned |
+| artifact did not pass verification | `500` `report_document_verification_failed` |
+| verified, AuditLog write failed | `201` `audit_status: pending` |
+| verified and audited | `201` `audit_status: recorded` |
+
+An artifact that did not verify is **not** a created document. It never returns
+`201`, never reports `Документ отчета создан.`, never writes a
+`report_document.created` event, and is never described as merely awaiting a
+Journal entry:
+
+```json
+{
+  "detail": {
+    "code": "report_document_verification_failed",
+    "message": "Не удалось проверить созданный документ отчета, поэтому он не считается надёжным. Данные мастерской не изменялись.",
+    "next_action": "Повторите создание документа. Если ошибка повторяется, перезапустите приложение."
+  }
+}
+```
+
+Verification failure covers an `ambiguous` verdict, `definitely_absent` on the
+immediate create path, a verifier that raised, and a ledger that could not be
+read to verify against. The pair is left on disk untouched — the create cannot
+prove it owns those files, which is exactly what verification failed to
+establish — and the ledger row stays unresolved and counted for bounded
+reconciliation. The detail carries no filename, path, operation ID, verifier
+reason, SQLite message or user-supplied reason.
 
 ### CR-009 create-result contract — B1 merged; B2 and B3 not authorized
 

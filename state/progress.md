@@ -2,14 +2,23 @@
 
 ## Current phase
 
-`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-006 — ACCEPTED`. `C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #166). `CR-004 — ACCEPTED — PRODUCT DEFECT — BACKUP CONSISTENCY (HIGH)`. `C3-II-B3 — IMPLEMENTED ON PR BRANCH — NOT MERGED`. B3 is the last remaining C3 slice, so the broader C3 obligation is incomplete on merged `main` and complete on that branch.
+`C1 — COMPLETED`. `C2 — COMPLETED`. `C3-I — DONE — MERGED AND EXACT-HEAD VERIFIED`. `C3-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-009 — ACCEPTED`. `C3-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED`. `CR-006 — ACCEPTED`. `C3-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #166). `CR-004 — ACCEPTED AND IMPLEMENTED`. `C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED` (PR #167). `C3 — COMPLETED — MERGED AND EXACT-HEAD VERIFIED`. `C3 artifact-finalization hardening — IMPLEMENTED ON PR BRANCH — NOT MERGED`. `C4 — INACTIVE`.
 
 ## Current next step
 
-- Review the open `C3-II-B3 — Manual backup AuditLog coverage` pull request. It is implemented on `claude/cr-004-c3-ii-b3-manual-backup`, reuses the existing `artifact_audit_operations` ledger with **no new migration**, and carries the `CR-004` backup-engine correction. It is **not merged**, so manual backup creation is still not audited on merged `main` and merged `main` still copies the database file raw. Scope: `docs/implementation-plan.md` § *C3-II-B3*.
+- Review the open `C3 artifact-finalization hardening` pull request. It is implemented on `claude/c3-hardening-artifact-finalization`, reuses the existing `artifact_audit_operations` ledger with **no new migration**, and separates artifact verification failure from AuditLog persistence failure for report documents and JSON exports. It is **not merged**, so merged `main` can still report an unverified document or export as successfully created.
 - `CR-004` is resolved and accepted; no change request remains in `needs evidence`.
-- **C3 hardening follow-up (required, not cosmetic):** separate artifact verification failure from AuditLog persistence failure for report documents and JSON exports. `C3-II-B3` fixed this for manual backups through a typed `BackupFinalization`; `report_document_audit.py` and `export_audit.py` still return `int | None` and still map every `None` to `201 pending`, so a document or export that fails verification can be reported as successfully created. One bounded slice, immediately after `C3-II-B3` merges. **C4 must not be activated until it is resolved or explicitly accepted as a release blocker.**
+- **C3 artifact-finalization hardening (required, not cosmetic) — implemented, not merged.** `C3-II-B3` fixed this for manual backups through a typed `BackupFinalization`; `report_document_audit.py` and `export_audit.py` returned `int | None` and mapped every `None` to `201 pending`, so a document or export that failed verification was reported as successfully created. Both now return typed results with `recorded`, `audit_pending` and `artifact_invalid`. **C4 must not be activated until it merges or is explicitly accepted as a release blocker.**
 - Keep C4, Restore, packaging, installation, update and release-candidate work inactive.
+
+## 2026-08-02 — C3 complete on merged `main`; artifact-finalization hardening implemented on its PR branch
+
+- **Predecessor:** PR #167 (`C3-II-B3`) merged as `7af53a3305fa9fdb984d4c478e1186685fbb6727`, final reviewed head `259697805660fd4dc37e6ac5f50567d48037be94`. With it, **C3 is `COMPLETED` on merged `main`** and `CR-004` is `ACCEPTED AND IMPLEMENTED`.
+- **Slice:** `C3 artifact-finalization hardening`, one bounded implementation pull request from merged `main` (`7af53a3305fa9fdb984d4c478e1186685fbb6727`).
+- **Defect reproduced first.** Against merged `main`, ten cases across both artifact kinds — including two genuine verifier verdicts (a report-document size mismatch and an unreadable export) — all returned `201` with `audit_status: pending` and wrote no AuditLog event.
+- **Delivered:** typed `ReportDocumentFinalization` and `ExportFinalization` with `recorded` / `audit_pending` / `artifact_invalid`; create-path authority boundary in both services; dedicated `report_document_verification_failed` and `export_verification_failed` structured HTTP `500` errors; reconciliation adapted to typed outcomes. No migration, no second ledger, no outbox, no generic framework, no worker. Backup finalization untouched; `CR-006` untouched.
+- **Frontend:** no production change. `apiSend` throws on any non-ok response and the route runtime classifies an error carrying a `status` as definite, so it lands in the existing error region. Proven by new tests in both contract suites. `main.ts` stays at 6399 lines.
+- **Not merged.** C4 remains inactive; Restore remains unimplemented; product release readiness is not claimed.
 
 ## 2026-08-02 — CR-004 resolved; C3-II-B3 implemented on its PR branch; open and unmerged
 
