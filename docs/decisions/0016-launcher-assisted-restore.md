@@ -361,7 +361,7 @@ It is **not**:
 The durable state may contain only the minimum required for deterministic
 recovery:
 
-- a backend-generated operation ID;
+- a launcher-generated operation ID;
 - safe relative launcher-owned filenames;
 - **the authoritative `phase`** (§ 7.1);
 - timestamps.

@@ -470,7 +470,7 @@ engine, job queue, outbox, cloud state store or application-wide transaction
 framework, and it is not a business-domain entity.
 
 It may contain only the minimum required for deterministic recovery: a
-backend-generated operation ID; safe relative launcher-owned filenames; **the
+launcher-generated operation ID; safe relative launcher-owned filenames; **the
 authoritative `phase`**; timestamps.
 
 It must not persist database contents, client information, arbitrary
