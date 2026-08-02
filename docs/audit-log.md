@@ -42,7 +42,9 @@ C3-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3 artifact-finalization hardening — DONE — MERGED AND EXACT-HEAD VERIFIED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED — NOT IMPLEMENTED
-C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED
+C4 — ACTIVE
+C4 product decision — COMPLETE
+C4 implementation — NOT STARTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -1205,7 +1207,7 @@ was executed on `2848880f2009158749398aec7d504c0364336ba9`. The final head is ba
 - The detail endpoint remains superseded; there is no metadata or raw JSON viewer.
 - Historical rows are shown, never repaired.
 - Restore implementation, packaging, installation verification, the update flow and full release-candidate smoke remain open. *(The Restore **product decision** has since been made as `CR-010`; Restore itself remains `NOT IMPLEMENTED`.)*
-- C4 has an accepted product decision and no implementation; product release readiness is not claimed.
+- `C4 — ACTIVE`; `C4 product decision — COMPLETE`; `C4 implementation — NOT STARTED`; product release readiness is not claimed.
 
 ---
 

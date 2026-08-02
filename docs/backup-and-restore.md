@@ -337,8 +337,29 @@ workflow; direct database replacement while Uvicorn still has the database open.
 
 ## 3. Backup validation
 
-Before **any** mutation of the current workspace, the selected backup is
-validated from a **staged read-only copy**. Validation must include at least:
+```text
+The staged candidate must pass the complete Restore validation contract
+before any mutation, replacement, deletion or migration of the current
+working database.
+```
+
+The selected backup is validated from a **staged read-only copy**. Staging is
+Restore infrastructure, not a mutation of the business workspace:
+
+```text
+Before candidate validation completes, the launcher may create only:
+- the isolated launcher-owned restore-operation directory;
+- the narrow durable operation record;
+- launcher-owned staging files inside that directory;
+- local technical logs that follow the accepted privacy contract.
+
+Those writes are Restore infrastructure and do not mutate the current
+working database or business data.
+```
+
+The user-selected source remains immutable throughout.
+
+Validation must include at least:
 
 - the selected path resolves to a regular local file;
 - no symlink or path-escape behaviour;
@@ -415,17 +436,21 @@ The working database is never replaced directly from the user-selected path.
 
 ```text
 validate request and source path
-→ create an isolated restore-operation directory
-→ copy the selected source into a launcher-owned staging file
-→ validate the staged candidate
-→ create and verify the pre-restore safety copy
-→ persist the restore-operation phase
-→ atomically replace the working database from a file staged in the same
-  filesystem/directory boundary
+→ create an isolated restore-operation directory        [phase prepared]
+→ copy the selected source into a launcher-owned
+  staging file                                          [phase source_staged]
+→ validate the staged candidate                         [phase candidate_validated]
+→ create and verify the pre-restore safety copy         [phase safety_copy_verified]
+→ durably persist the replacement intent                [phase replacement_intent]
+→ atomically replace the working database from a file
+  staged in the same filesystem/directory boundary
+→ durably persist that the boundary completed           [phase replacement_committed]
+→ durably persist that verification is starting         [phase verification_in_progress]
 → start the application against the exact restored database path
 → run migrations when required
 → verify startup and basic reads
-→ mark Restore completed
+→ durably persist completion                            [phase completed]
+→ open the ordinary browser
 → clean only launcher-owned temporary staging files
 ```
 
@@ -434,35 +459,188 @@ The implementation may use a same-directory atomic replacement primitive, but it
 must be proved by tests and isolated smoke.
 
 **Filesystem replacement and SQLite are not one database transaction, and no
-document may claim they are.**
+document may claim they are.** That gap is exactly why the durable phase machine
+of § 7 is mandatory.
 
 ## 7. Durable Restore operation state
 
 Exactly one narrowly scoped, launcher-owned Restore operation record is
 authorized, stored **outside the working database**. It is not a generic workflow
 engine, job queue, outbox, cloud state store or application-wide transaction
-framework.
+framework, and it is not a business-domain entity.
 
 It may contain only the minimum required for deterministic recovery: a
-backend-generated operation ID; safe relative launcher-owned filenames; the
-current Restore phase; timestamps; whether database replacement occurred; whether
-rollback completed.
+backend-generated operation ID; safe relative launcher-owned filenames; **the
+authoritative `phase`**; timestamps.
 
 It must not persist database contents, client information, arbitrary
 user-authored text, credentials, raw absolute source paths when a staged relative
 identity is sufficient, or SQL errors and stack traces.
 
-On launcher startup, an incomplete Restore operation must be detected **before
-the normal backend starts**. If replacement occurred but successful completion
-was not durably recorded, the safe default is to restore the pre-restore safety
-copy before exposing the ordinary application UI, unless the implementation can
-prove an equivalent deterministic and tested recovery result. **An interrupted
-Restore may never be ignored.**
+**`phase` is the sole authoritative lifecycle field, and it is mutually
+exclusive.** Facts such as *whether database replacement occurred* and *whether
+rollback completed* are **derived from `phase`** and must never be persisted as
+independent authoritative fields that could contradict it.
 
-If rollback cannot be completed safely: do not start the ordinary application;
-preserve the safety copy, staged candidate and operation evidence; show a fixed
-non-technical recovery message; direct the user to support-assisted recovery; and
-delete no evidence automatically.
+The complete authoritative definitions, transition graph, persistence ordering
+and rationale live in `docs/decisions/0016-launcher-assisted-restore.md` § 7. The
+vocabulary, transitions and recovery matrix below are the operational contract
+and must stay synchronized with that ADR; where they ever disagree, the ADR
+governs.
+
+### 7.1. Phase vocabulary
+
+Exactly twelve phases exist, as internal lowercase-ASCII machine values. No
+alias, no prose-only synonym and no additional phase is authorized.
+
+```text
+prepared
+source_staged
+candidate_validated
+safety_copy_verified
+replacement_intent
+replacement_committed
+verification_in_progress
+completed
+aborted
+rollback_in_progress
+rolled_back
+recovery_blocked
+```
+
+| Phase | Meaning |
+|---|---|
+| `prepared` | Operation ID generated, isolated operation directory created, initial record durably written. No complete staged candidate yet; the working database is unchanged. |
+| `source_staged` | The launcher-owned staged candidate is copied and durably published inside the operation directory. Source and working database unchanged; the candidate has not yet passed validation. |
+| `candidate_validated` | The staged candidate passed the complete validation contract of § 3. The working database remains unchanged. |
+| `safety_copy_verified` | The mandatory pre-restore safety gate completed: a transactionally consistent safety copy exists and passed verification. The working database has not entered the replacement boundary. |
+| `replacement_intent` | Durably persisted immediately **before** the atomic replacement boundary. Replacement may not yet have happened, may be in progress, or may already have happened — a deliberately ambiguous crash window. |
+| `replacement_committed` | The atomic replacement call returned successfully and that fact was durably recorded. The restored database is still unverified and not authoritative; the browser stays blocked. |
+| `verification_in_progress` | Durably recorded **before** starting the backend, migrations or post-restore verification. The restored database is provisional; any crash or failure here requires rollback. |
+| `completed` | All accepted post-restore checks passed and completion was durably recorded. **Only this phase makes the restored database authoritative, and the browser may open only after it.** |
+| `aborted` | The operation ended **before** `replacement_intent`. The working database was never replaced and remains authoritative. Only launcher-owned staging may be cleaned; an existing verified safety copy is not silently deleted. **Terminal, non-destructive.** |
+| `rollback_in_progress` | Rollback durably requested **before** entering the rollback replacement boundary. Must be idempotent or safely repeatable after a crash. Backend and browser remain blocked. |
+| `rolled_back` | The safety copy was restored to the exact working database path and passed rollback verification. **Restore failed**; the previous workspace is authoritative again. **Terminal failed-Restore**, never success. |
+| `recovery_blocked` | The launcher cannot prove the working database or rollback result is safe. Nothing starts, all evidence is preserved, and only a fixed non-technical support-assisted result is shown. **Terminal for automatic recovery.** |
+
+If the application does not support Restore without an existing working
+database, that case is rejected **before** `safety_copy_verified` rather than
+silently weakening the safety-copy requirement.
+
+### 7.2. Transition overview
+
+Normal path:
+
+```text
+prepared
+→ source_staged
+→ candidate_validated
+→ safety_copy_verified
+→ replacement_intent
+→ replacement_committed
+→ verification_in_progress
+→ completed
+```
+
+Failure before the replacement boundary:
+
+```text
+prepared → aborted
+source_staged → aborted
+candidate_validated → aborted
+safety_copy_verified → aborted
+```
+
+Rollback:
+
+```text
+replacement_intent → rollback_in_progress
+replacement_committed → rollback_in_progress
+verification_in_progress → rollback_in_progress
+rollback_in_progress → rolled_back
+rollback_in_progress → recovery_blocked
+```
+
+Terminal phases: `completed`, `aborted`, `rolled_back`, `recovery_blocked`.
+
+**No other transition is authorized.** In particular these are prohibited:
+
+```text
+replacement_intent → completed
+replacement_committed → completed
+verification_in_progress → ordinary startup without completed
+rollback_in_progress → completed
+rolled_back → completed
+recovery_blocked → ordinary startup
+aborted → replacement_intent
+```
+
+A new Restore attempt is a new operation with a new operation ID; a terminal
+operation record is never reactivated.
+
+### 7.3. Crash-safe persistence ordering
+
+Every phase transition is persisted through one documented and tested crash-safe
+launcher-owned write boundary **before** the launcher begins the next action
+whose recovery behaviour depends on that phase. **An in-place
+truncate-and-rewrite of the only operation record is not sufficient.** The
+primitive chosen in `C4-I` must give a complete old record or a complete new
+record after interruption, never a partially written authoritative record, with
+an atomic publication boundary, documented file and parent-directory durability
+handling, and tests injecting faults at every publication boundary. No document
+may claim stronger durability than the chosen platform primitive can prove.
+
+Destructive ordering: durably record `replacement_intent` → enter the atomic
+replacement boundary → on success durably record `replacement_committed` →
+durably record `verification_in_progress` → start backend, migrations and
+post-restore checks → durably record `completed` only after all pass → open the
+browser only after durable `completed`.
+
+Rollback ordering: stop any partially started backend → durably record
+`rollback_in_progress` → enter the rollback replacement boundary → verify the
+restored previous workspace → durably record `rolled_back` → only then permit
+ordinary startup of the recovered workspace.
+
+If a required transition cannot be durably persisted, the launcher must not
+continue to the next destructive step. Any failure after replacement and before
+`completed` must enter or recover through rollback.
+
+**The `replacement_intent` crash rule is mandatory:**
+
+```text
+A persisted replacement_intent is treated as though replacement may have
+occurred, even when the current working file appears unchanged.
+```
+
+The launcher must not resolve that ambiguity from modification timestamps, file
+size alone, filenames, inode identity alone, migration version alone, or the
+apparent business contents of the working database. The safe outcome is rollback
+from the verified safety copy.
+
+### 7.4. Startup recovery matrix
+
+An incomplete Restore operation is detected and resolved **before the normal
+backend starts**. Every persisted phase has exactly one required startup
+behaviour. **An interrupted Restore may never be ignored.**
+
+| Persisted phase | Working-database authority | Required startup behaviour |
+|---|---|---|
+| `prepared` | Existing working database | Do not replace or roll back. Mark or recover the operation as `aborted`; clean only verified launcher-owned temporary files; then use normal startup. |
+| `source_staged` | Existing working database | Do not replace or roll back. Treat the staged candidate as incomplete for execution; transition to `aborted`; preserve the selected source; clean only owned staging; then use normal startup. |
+| `candidate_validated` | Existing working database | Do not replace or roll back. Transition to `aborted`; do not execute replacement automatically; then use normal startup. |
+| `safety_copy_verified` | Existing working database | Replacement was not authorized yet. Do not infer replacement. Transition to `aborted`; retain the verified safety copy; then use normal startup. |
+| `replacement_intent` | Ambiguous — replacement may or may not have occurred | Block ordinary startup. Durably enter `rollback_in_progress`; restore the verified safety copy; verify it; then record `rolled_back`, otherwise `recovery_blocked`. |
+| `replacement_committed` | Restored database is provisional and unverified | Block ordinary startup. Durably enter `rollback_in_progress`; restore and verify the safety copy; record `rolled_back`, otherwise `recovery_blocked`. |
+| `verification_in_progress` | Restored database is provisional and unverified | Stop any partial backend. Block ordinary startup. Durably enter `rollback_in_progress`; restore and verify the safety copy; record `rolled_back`, otherwise `recovery_blocked`. |
+| `completed` | Restored working database | Do not roll back. Confirm the completed record is readable, retain the safety copy, clean only verified launcher-owned temporary staging, and continue normal startup against the exact restored path. |
+| `aborted` | Existing working database | Do not replace or roll back. Clean only verified launcher-owned temporary staging and continue normal startup. |
+| `rollback_in_progress` | No working database may be trusted yet | Block ordinary startup. Continue or safely repeat rollback from the verified safety copy. Record `rolled_back` only after verification; otherwise record `recovery_blocked`. |
+| `rolled_back` | Recovered previous working database | Confirm rollback verification and continue against the recovered previous workspace. Restore remains failed. Future UI must report that the previous workspace was recovered. |
+| `recovery_blocked` | None | Do not start the ordinary backend or browser. Preserve all recovery evidence and expose only the fixed support-assisted recovery result. |
+
+`C4-I` implements this matrix exactly. It is the accepted MVP recovery
+behaviour, not a default an implementation may replace with an equivalent of its
+own choosing.
 
 ## 8. Schema migration boundary
 
@@ -491,8 +669,12 @@ Restore is successful only after all required verification passes:
 - the selected source backup remains byte-identical;
 - the pre-restore safety backup remains available.
 
-**The browser UI is not opened into the normal workspace before this gate
-passes.**
+These checks run under phase `verification_in_progress` and may use the existing
+backend health and read-only endpoints. Passing them all is what authorizes the
+durable transition to `completed`.
+
+**The browser UI is not opened into the normal workspace until `completed` has
+been durably recorded.**
 
 ## 10. Rollback
 
@@ -501,15 +683,20 @@ completion, the launcher must:
 
 1. stop the partially started backend;
 2. preserve diagnostic evidence without exposing it to the user;
-3. restore the pre-restore safety copy through the same launcher-owned safe
+3. durably record `rollback_in_progress`;
+4. restore the pre-restore safety copy through the same launcher-owned safe
    replacement boundary;
-4. verify the rolled-back database can start;
-5. report that Restore did not complete and that the previous workspace was
+5. verify the rolled-back database can start;
+6. durably record `rolled_back`, or `recovery_blocked` when the rollback result
+   cannot be proved safe;
+7. report that Restore did not complete and that the previous workspace was
    recovered.
 
-Rollback is not optional. If rollback succeeds, the user must not be told that
-Restore succeeded. If rollback fails, the product must not continue with an
-uncertain database.
+Rollback is not optional, and it is entered from `replacement_intent`,
+`replacement_committed` or `verification_in_progress` only. If rollback
+succeeds, the user must not be told that Restore succeeded — `rolled_back` is a
+failed Restore. If rollback fails, the product must not continue with an
+uncertain database; it enters `recovery_blocked` and stops.
 
 ## 11. AuditLog boundary
 
@@ -552,12 +739,25 @@ AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED
 The only runtime slice authorized by `CR-010`. Future scope: launcher-owned
 restore operation domain vocabulary; source and staged-candidate validation;
 schema-lineage compatibility validation; pre-restore safety-copy orchestration
-using the existing safe backup engine; isolated restore operation directory;
-durable narrow Restore operation state; same-filesystem staging; atomic
-working-database replacement; automatic rollback; incomplete-operation recovery
-before backend startup; backend/database-path continuity; backend startup and
-bounded health verification; focused backend/launcher tests; isolated exact-head
-launcher smoke.
+using the existing safe backup engine; isolated restore operation directory; **the
+exact twelve-phase durable operation state of § 7.1 with `phase` as the sole
+authoritative lifecycle field**; **the exact transition graph of § 7.2**; **the
+crash-safe persistence ordering of § 7.3, with a publication boundary proved by
+fault-injection tests**; same-filesystem staging; atomic working-database
+replacement preceded by durable `replacement_intent`; automatic rollback through
+`rollback_in_progress`; **the complete startup recovery matrix of § 7.4**,
+resolved before backend startup; backend/database-path continuity; backend
+startup and bounded health verification; focused backend/launcher tests; isolated
+exact-head launcher smoke.
+
+`C4-I` implements the accepted state machine **exactly**. It must not rename
+phases; omit `replacement_intent`; infer replacement from filesystem appearance;
+start the ordinary backend from an unsafe phase; expose the ordinary browser
+before durable `completed`; treat `rolled_back` as successful Restore; recover
+`recovery_blocked` automatically by guessing; use independent contradictory
+replacement/rollback booleans; or use an in-place rewrite as the sole
+authoritative operation-state persistence mechanism. Any proposed deviation
+requires a new explicit documentation decision before runtime implementation.
 
 `C4-I` must not expose a final user-facing Restore entry point yet and must
 provide no terminal workflow to the product user. It must not modify frontend
@@ -593,7 +793,9 @@ lifecycle closure.
 ```text
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED — NOT IMPLEMENTED
-C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED
+C4 — ACTIVE
+C4 product decision — COMPLETE
+C4 implementation — NOT STARTED
 Restore — NOT IMPLEMENTED
 macOS packaging — NOT COMPLETED
 safe packaged update flow — NOT COMPLETED

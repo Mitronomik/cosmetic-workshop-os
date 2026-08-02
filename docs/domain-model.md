@@ -2041,7 +2041,8 @@ Restore has an accepted product contract and **no implementation**. It is
 launcher-assisted: the ordinary backend is stopped while the working database is
 replaced, so no backend Restore mutation and no SPA-owned replacement exists or
 is authorized. The selected backup is immutable read-only input, Restore is
-whole-database only, validation happens before any current-workspace mutation, a
+whole-database only, validation completes before any mutation, replacement,
+deletion or migration of the current working database, a
 verified `before_restore` safety copy is mandatory, and any post-replacement
 failure rolls back. Contract: `docs/backup-and-restore.md`; decision:
 `docs/decisions/0016-launcher-assisted-restore.md`.

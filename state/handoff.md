@@ -36,7 +36,9 @@ C4-I — Launcher-owned restore safety engine
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 
-C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED
+C4 — ACTIVE
+C4 product decision — COMPLETE
+C4 implementation — NOT STARTED
 Restore — NOT IMPLEMENTED
 macOS packaging — NOT COMPLETED
 safe packaged update flow — NOT COMPLETED
@@ -108,8 +110,12 @@ Load-bearing points for the next session:
 - Restore is **whole-database only**, from one locally selected SQLite backup;
   the selected file is read-only input and is never modified, renamed, migrated,
   deleted or rewritten;
-- validation runs from a **staged read-only copy before any current-workspace
-  mutation**, and `PRAGMA quick_check = ok` alone is never sufficient proof;
+- validation runs from a **staged read-only copy** and must complete **before any
+  mutation, replacement, deletion or migration of the current working
+  database**; the isolated operation directory, the durable operation record,
+  launcher-owned staging files and local technical logs are Restore
+  infrastructure, not such a mutation. `PRAGMA quick_check = ok` alone is never
+  sufficient proof;
 - a newer-than-current schema is **rejected before replacement**; an older known
   schema is migrated by the normal startup migration system on the **restored
   working copy only**;
@@ -123,14 +129,82 @@ Load-bearing points for the next session:
   starts; an interrupted Restore is never ignored;
 - any failure after replacement triggers **automatic rollback**, and a successful
   rollback is never reported as a successful Restore;
-- the browser UI is **not** opened into the workspace until post-restore
-  verification passes;
+- the browser UI is **not** opened into the workspace until `completed` has been
+  durably recorded;
 - **no Restore AuditLog event is authorized**, and `restore.completed` is not
   implicitly authorized — it needs a separately explicit C4 decision.
 
-Durable decision: `docs/decisions/0016-launcher-assisted-restore.md`. Complete
-contract: `docs/backup-and-restore.md`. Architecture boundaries:
-`docs/architecture.md` § 12.4.
+### The accepted Restore phase machine
+
+`CR-010` fixes the durable crash-recovery state machine, so `C4-I` implements it
+rather than inventing one. The operation record carries **exactly one
+authoritative field, `phase`**, mutually exclusive. Whether replacement occurred
+and whether rollback completed are **derived** from it and must never be
+persisted as independent authoritative fields.
+
+```text
+prepared
+source_staged
+candidate_validated
+safety_copy_verified
+replacement_intent
+replacement_committed
+verification_in_progress
+completed
+aborted
+rollback_in_progress
+rolled_back
+recovery_blocked
+```
+
+No alias, no prose-only synonym, no thirteenth phase. Allowed transitions:
+
+```text
+prepared → source_staged → candidate_validated → safety_copy_verified
+→ replacement_intent → replacement_committed → verification_in_progress
+→ completed
+
+prepared | source_staged | candidate_validated | safety_copy_verified
+→ aborted
+
+replacement_intent | replacement_committed | verification_in_progress
+→ rollback_in_progress
+
+rollback_in_progress → rolled_back
+rollback_in_progress → recovery_blocked
+```
+
+Terminal: `completed`, `aborted`, `rolled_back`, `recovery_blocked`. A new
+attempt is a new operation with a new operation ID; a terminal record is never
+reactivated.
+
+`replacement_intent` is durably recorded **immediately before** the atomic
+replacement boundary and deliberately marks an ambiguous crash window:
+
+```text
+A persisted replacement_intent is treated as though replacement may have
+occurred, even when the current working file appears unchanged.
+```
+
+The launcher must never guess from timestamps, size, filenames, inode identity,
+migration version or the apparent contents of the working database. The safe
+outcome is rollback from the verified safety copy. `replacement_committed` and
+`verification_in_progress` behave the same way: both leave the restored database
+provisional, both block ordinary startup, both recover through rollback. Only a
+durably recorded `completed` makes the restored database authoritative, and only
+then may the browser open. `rolled_back` is a **failed** Restore;
+`recovery_blocked` never permits ordinary startup.
+
+Every transition is persisted through one documented, tested, atomic publication
+boundary before the next dependent action; an in-place truncate-and-rewrite of
+the only record is insufficient. Every persisted phase has exactly one required
+startup behaviour, fixed by the recovery matrix.
+
+Durable decision and complete matrix:
+`docs/decisions/0016-launcher-assisted-restore.md` § 7. Complete operational
+contract: `docs/backup-and-restore.md` § 7. Architecture boundaries:
+`docs/architecture.md` § 12.4. `C4-I` implementation obligation:
+`docs/implementation-plan.md` § C4-I.
 
 ### Next steps
 
@@ -139,6 +213,15 @@ After this documentation pull request merges, implement only:
 ```text
 C4-I — Launcher-owned restore safety engine
 ```
+
+`C4-I` must implement the accepted phase machine and recovery matrix **exactly**.
+It must not rename phases, omit `replacement_intent`, infer replacement from
+filesystem appearance, start the ordinary backend from an unsafe phase, expose
+the browser before durable `completed`, treat `rolled_back` as successful
+Restore, recover `recovery_blocked` by guessing, use independent contradictory
+replacement/rollback booleans, or use an in-place rewrite as the sole
+authoritative operation-state persistence mechanism. Any deviation needs a new
+explicit documentation decision first.
 
 Do not implement `C4-II`, `C4-III`, packaging, the updater or release smoke
 through `C4-I`. Do not start `C4-I` from this unmerged documentation branch, and

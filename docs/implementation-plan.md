@@ -2055,7 +2055,9 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 
 ```text
 CR-010 — ACCEPTED — NOT IMPLEMENTED
-C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED
+C4 — ACTIVE
+C4 product decision — COMPLETE
+C4 implementation — NOT STARTED
 Restore — NOT IMPLEMENTED
 ```
 
@@ -2084,9 +2086,13 @@ than merely listed:
 - lock/close database — the launcher stops the backend, prevents a second
   instance and confirms the database is out of active application use before it
   touches anything;
-- валидация backup — from a **staged read-only copy before any current-workspace
-  mutation**, including migration-lineage checks; `PRAGMA quick_check = ok` alone
-  is never sufficient;
+- валидация backup — from a **staged read-only copy**, complete **before any
+  mutation, replacement, deletion or migration of the current working
+  database**, including migration-lineage checks; `PRAGMA quick_check = ok`
+  alone is never sufficient. Creating the isolated operation directory, the
+  narrow durable operation record, launcher-owned staging files and local
+  technical logs is Restore infrastructure and is **not** a mutation of the
+  working database or business data;
 - pre-restore safety copy — **mandatory and verified**, through the ADR 0015
   SQLite Online Backup engine, under the canonical reason `before_restore`;
 - schema compatibility — a newer-than-current schema is **rejected before
@@ -2117,15 +2123,98 @@ not be started from the unmerged decision branch. Scope:
 - schema-lineage compatibility validation;
 - pre-restore safety-copy orchestration using the existing safe backup engine;
 - isolated restore operation directory;
-- durable narrow Restore operation state;
+- **the exact twelve-phase durable Restore operation state**, with `phase` as the
+  sole authoritative lifecycle field;
+- **the exact allowed transition graph**;
+- **the crash-safe persistence ordering**, with a publication boundary proved by
+  fault-injection tests at every transition;
 - same-filesystem staging;
-- atomic working-database replacement;
-- automatic rollback;
-- incomplete-operation recovery before backend startup;
+- atomic working-database replacement, preceded by durable `replacement_intent`;
+- automatic rollback through `rollback_in_progress`;
+- **the complete startup recovery matrix**, resolved before backend startup;
 - backend/database-path continuity;
 - backend startup and bounded health verification;
 - focused backend/launcher tests;
 - isolated exact-head launcher smoke.
+
+#### The accepted phase machine `C4-I` must implement
+
+`C4-I` implements an **already decided** safety-critical state machine. It does
+not design one. The exact vocabulary is twelve lowercase-ASCII values, and no
+alias, prose-only synonym or additional phase is authorized:
+
+```text
+prepared
+source_staged
+candidate_validated
+safety_copy_verified
+replacement_intent
+replacement_committed
+verification_in_progress
+completed
+aborted
+rollback_in_progress
+rolled_back
+recovery_blocked
+```
+
+`phase` is the **sole authoritative lifecycle field** and is mutually exclusive.
+Whether replacement occurred and whether rollback completed are **derived** from
+it, never stored as independent authoritative fields that could contradict it.
+
+Normal path, failure path and rollback path:
+
+```text
+prepared → source_staged → candidate_validated → safety_copy_verified
+→ replacement_intent → replacement_committed → verification_in_progress
+→ completed
+
+prepared | source_staged | candidate_validated | safety_copy_verified
+→ aborted
+
+replacement_intent | replacement_committed | verification_in_progress
+→ rollback_in_progress
+
+rollback_in_progress → rolled_back
+rollback_in_progress → recovery_blocked
+```
+
+Terminal phases: `completed`, `aborted`, `rolled_back`, `recovery_blocked`. No
+other transition is authorized; a new attempt is a new operation with a new
+operation ID, and a terminal record is never reactivated.
+
+Mandatory ordering — durably record `replacement_intent` **before** the atomic
+replacement boundary, `replacement_committed` after the call succeeds,
+`verification_in_progress` before starting the backend/migrations/checks, and
+`completed` only after every check passes. The browser opens only after durable
+`completed`. For rollback: stop any partial backend, durably record
+`rollback_in_progress` **before** the rollback replacement boundary, verify, then
+record `rolled_back` — or `recovery_blocked`.
+
+The `replacement_intent` crash rule is mandatory:
+
+```text
+A persisted replacement_intent is treated as though replacement may have
+occurred, even when the current working file appears unchanged.
+```
+
+**Acceptance requirement.** `C4-I` is acceptable only if it demonstrates the
+exact phase vocabulary, the exact transition graph, the crash-safe publication
+boundary under injected faults at every transition, and the complete startup
+recovery matrix — one required behaviour per persisted phase, resolved before
+the ordinary backend starts. The authoritative definitions and the full matrix
+are `docs/decisions/0016-launcher-assisted-restore.md` § 7 and
+`docs/backup-and-restore.md` § 7. **Substituting an alternative state machine is
+not authorized.**
+
+`C4-I` must not rename phases; omit `replacement_intent`; infer replacement from
+filesystem appearance; start the ordinary backend from an unsafe phase; expose
+the ordinary browser before durable `completed`; treat `rolled_back` as
+successful Restore; recover `recovery_blocked` automatically by guessing; use
+independent contradictory replacement/rollback booleans; or use an in-place
+rewrite as the sole authoritative operation-state persistence mechanism. Any
+proposed deviation requires a new explicit documentation decision **before**
+runtime implementation.
 
 `C4-I` must not expose a final user-facing Restore entry point yet and must
 provide **no terminal workflow** to the product user; its surface is internal

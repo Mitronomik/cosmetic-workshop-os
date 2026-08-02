@@ -30,7 +30,9 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `C4-I — Launcher-owned restore safety engine`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
-- `C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED`
+- `C4 — ACTIVE`
+- `C4 product decision — COMPLETE`
+- `C4 implementation — NOT STARTED`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
 - **PR #168 is merged.** The artifact-finalization hardening is on merged `main`, not on a branch, so C3 is complete **and hardened**.
@@ -68,7 +70,9 @@ CR-010 — ACCEPTED — NOT IMPLEMENTED
 C4-I — AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
-C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED
+C4 — ACTIVE
+C4 product decision — COMPLETE
+C4 implementation — NOT STARTED
 Restore — NOT IMPLEMENTED
 macOS packaging — NOT COMPLETED
 safe packaged update flow — NOT COMPLETED
@@ -128,6 +132,87 @@ failures that cannot be resolved automatically. The user never needs Git,
 Python, Node.js, Docker, SQLite tools, GitHub or a terminal. Durable decision:
 `docs/decisions/0016-launcher-assisted-restore.md`; complete contract:
 `docs/backup-and-restore.md`.
+
+### The accepted Restore phase machine — C4-I must implement it exactly
+
+`CR-010` decides the durable crash-recovery state machine so that `C4-I` does not
+invent a safety-critical one as an undocumented implementation decision. The
+launcher-owned operation record carries **exactly one authoritative field,
+`phase`**, and it is mutually exclusive. Whether replacement occurred and whether
+rollback completed are **derived** from it, never persisted as independent
+authoritative fields that could contradict it.
+
+```text
+prepared
+source_staged
+candidate_validated
+safety_copy_verified
+replacement_intent
+replacement_committed
+verification_in_progress
+completed
+aborted
+rollback_in_progress
+rolled_back
+recovery_blocked
+```
+
+No alias, no prose-only synonym, no thirteenth phase. Allowed transitions:
+
+```text
+prepared → source_staged → candidate_validated → safety_copy_verified
+→ replacement_intent → replacement_committed → verification_in_progress
+→ completed
+
+prepared | source_staged | candidate_validated | safety_copy_verified
+→ aborted
+
+replacement_intent | replacement_committed | verification_in_progress
+→ rollback_in_progress
+
+rollback_in_progress → rolled_back
+rollback_in_progress → recovery_blocked
+```
+
+Terminal phases are `completed`, `aborted`, `rolled_back` and
+`recovery_blocked`. A new attempt is a new operation with a new operation ID; a
+terminal record is never reactivated.
+
+**Why `replacement_intent` exists.** Filesystem replacement and SQLite are not
+one transaction, so the window `persist intent → atomic replacement → persist
+committed` cannot be observed from outside after a crash. The launcher durably
+records `replacement_intent` immediately **before** the replacement boundary,
+and:
+
+```text
+A persisted replacement_intent is treated as though replacement may have
+occurred, even when the current working file appears unchanged.
+```
+
+No timestamp, size, filename, inode, migration version or content check may be
+used to guess otherwise — the staged candidate is by construction a valid
+workspace database. The safe outcome is rollback from the verified safety copy.
+
+**Ordering and gates.** Every transition is persisted through one documented,
+tested, atomic publication boundary before the next action that depends on it;
+an in-place truncate-and-rewrite of the only record is insufficient.
+`replacement_intent`, `replacement_committed` and `verification_in_progress` all
+block ordinary startup and all recover through rollback. `rolled_back` is a
+**failed** Restore, never success. `recovery_blocked` never permits ordinary
+startup. **The ordinary browser opens only after `completed` has been durably
+recorded.**
+
+Every persisted phase has exactly one required startup behaviour, fixed by the
+recovery matrix in `docs/decisions/0016-launcher-assisted-restore.md` § 7.5 and
+`docs/backup-and-restore.md` § 7.4. `C4-I` implements that matrix exactly and may
+not substitute an alternative state machine.
+
+**Working-database mutation boundary.** The staged candidate must pass the
+complete validation contract before any mutation, replacement, deletion or
+migration of the current **working database**. Creating the isolated operation
+directory, the narrow durable operation record, launcher-owned staging files and
+local technical logs is Restore infrastructure and is not such a mutation. The
+user-selected source stays immutable.
 
 All four accepted backend baseline gate failures are closed on `main`. The accepted `CR-007` decision (PR #148, merge commit `80b83de3e838cf676669a1b627770300590c99c0`, final reviewed head `577e0fd0b5c3e6fc82e2399fd17f023b6e221b83`) authorized exactly one bounded implementation slice, and that slice is now merged.
 

@@ -2319,6 +2319,17 @@ Before schema migration:
 > architecture, not shipped behaviour. Durable decision:
 > `docs/decisions/0016-launcher-assisted-restore.md`; complete product contract:
 > `docs/backup-and-restore.md`.
+>
+> ```text
+> C4 — ACTIVE
+> C4 product decision — COMPLETE
+> C4 implementation — NOT STARTED
+> CR-010 — ACCEPTED — NOT IMPLEMENTED
+> C4-I — AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+> C4-II — PLANNED — NOT AUTHORIZED
+> C4-III — PLANNED — NOT AUTHORIZED
+> Restore — NOT IMPLEMENTED
+> ```
 
 ```text
 MVP Restore is launcher-assisted.
@@ -2356,10 +2367,22 @@ Architecturally excluded:
 - a hidden terminal command as the user workflow;
 - direct database replacement while Uvicorn still has the database open.
 
-## Validation before mutation
+## Validation before working-database mutation
 
-The selected backup is validated from a **staged read-only copy before any
-mutation of the current workspace**. Validation covers regular-file resolution,
+```text
+The staged candidate must pass the complete Restore validation contract
+before any mutation, replacement, deletion or migration of the current
+working database.
+```
+
+Before candidate validation completes, the launcher may create only the isolated
+launcher-owned restore-operation directory, the narrow durable operation record,
+launcher-owned staging files inside that directory, and local technical logs that
+follow the accepted privacy contract. Those writes are **Restore infrastructure**
+and do not mutate the current working database or business data.
+
+The selected backup is validated from a **staged read-only copy**. Validation
+covers regular-file resolution,
 symlink and path-escape refusal, a read-only SQLite open, non-emptiness,
 structural checks, the migration-history table, a known ordered migration-ID
 prefix with no unknown, duplicated, reordered or skipped IDs, rejection of a
@@ -2414,36 +2437,102 @@ working database**, because the working database is what is being replaced. It i
 not a workflow engine, job queue, outbox, cloud state store or application-wide
 transaction framework.
 
-It holds only an operation ID, safe relative launcher-owned filenames, the
-current phase, timestamps, whether replacement occurred and whether rollback
-completed — never database contents, client information, arbitrary user text,
-credentials, raw absolute source paths where a staged relative identity suffices,
-or SQL errors and stack traces.
+It holds only an operation ID, safe relative launcher-owned filenames, **the
+authoritative `phase`** and timestamps — never database contents, client
+information, arbitrary user text, credentials, raw absolute source paths where a
+staged relative identity suffices, or SQL errors and stack traces.
 
-An incomplete operation is detected **before the ordinary backend starts**. If
-replacement occurred without a durably recorded completion, the safe default is
-to restore the safety copy before exposing the ordinary UI, unless an equivalent
-deterministic and tested recovery result is proved. An interrupted Restore is
-never ignored.
+**`phase` is the sole authoritative lifecycle field, and it is mutually
+exclusive.** Whether replacement occurred and whether rollback completed are
+**derived from `phase`**, never persisted as independent authoritative fields
+that could contradict it. The accepted vocabulary is exactly twelve
+lowercase-ASCII values:
+
+```text
+prepared
+source_staged
+candidate_validated
+safety_copy_verified
+replacement_intent
+replacement_committed
+verification_in_progress
+completed
+aborted
+rollback_in_progress
+rolled_back
+recovery_blocked
+```
+
+Terminal phases are `completed`, `aborted`, `rolled_back` and
+`recovery_blocked`. Complete definitions, the transition graph, the crash-safe
+persistence ordering and the startup recovery matrix are in
+`docs/decisions/0016-launcher-assisted-restore.md` § 7 and
+`docs/backup-and-restore.md` § 7; this section states only the architectural
+boundaries.
+
+## The `replacement_intent` crash boundary
+
+Because filesystem replacement and SQLite are not one transaction, the window
+
+```text
+persist replacement intent
+→ atomic replacement
+→ persist replacement committed
+```
+
+cannot be observed from the outside after a crash. The launcher therefore
+durably records `replacement_intent` **immediately before** entering the atomic
+replacement boundary, and:
+
+```text
+A persisted replacement_intent is treated as though replacement may have
+occurred, even when the current working file appears unchanged.
+```
+
+The launcher must **never** resolve that ambiguity from modification timestamps,
+file size alone, filenames, inode identity alone, migration version alone, or the
+apparent business contents of the working database. Every such heuristic is
+unsound, because the staged candidate is by construction a valid workspace
+database. **The conservative outcome is rollback from the verified safety copy.**
+
+The same conservative rule governs `replacement_committed` and
+`verification_in_progress`: both leave the restored database **provisional**,
+both block ordinary startup, and both recover through rollback. Only a durably
+recorded `completed` makes the restored database authoritative, and only then may
+the ordinary browser open.
+
+An incomplete operation is detected and resolved **before the ordinary backend
+starts**. Every persisted phase has exactly one required startup behaviour, fixed
+by the recovery matrix; an interrupted Restore is never ignored, and no
+implementation may substitute an alternative state machine.
 
 ## Rollback and post-restore verification
 
 Any failure after replacement and before successful completion stops the
 partially started backend, preserves diagnostic evidence without exposing it,
-restores the safety copy through the same safe replacement boundary, verifies the
-rolled-back database starts, and reports that Restore did **not** complete. A
-successful rollback is never reported as a successful Restore, and a failed
-rollback never continues with an uncertain database — the ordinary application
-does not start, evidence is preserved, and the user is directed to
-support-assisted recovery through a fixed non-technical message.
+durably records `rollback_in_progress` **before** entering the rollback
+replacement boundary, restores the safety copy through the same safe replacement
+boundary, verifies the rolled-back database starts, durably records `rolled_back`
+— or `recovery_blocked` when the result cannot be proved safe — and reports that
+Restore did **not** complete.
+
+`rolled_back` is a **failed Restore**: a successful rollback is never reported as
+a successful Restore. A failed rollback never continues with an uncertain
+database — `recovery_blocked` means the ordinary application does not start,
+evidence is preserved, and the user is directed to support-assisted recovery
+through a fixed non-technical message. `recovery_blocked` never permits ordinary
+startup, and only a separately defined support procedure may leave it.
 
 Restore succeeds only after the backend starts, backend and launcher use the
 exact same restored database path, required migrations complete, the database
 opens normally, health succeeds, a bounded set of representative read-only
 endpoints succeeds, no unexpected fallback database exists, the application can
 be restarted against the restored data, the selected source is byte-identical and
-the safety backup is available. **The browser UI is not opened into the normal
-workspace before that gate passes.**
+the safety backup is available. Those checks run under
+`verification_in_progress` and may use the existing backend health and read-only
+endpoints; passing them all is what authorizes the durable transition to
+`completed`. **The browser UI is not opened into the normal workspace until
+`completed` has been durably recorded.**
 
 ## Boundaries
 

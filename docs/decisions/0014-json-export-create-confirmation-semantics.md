@@ -30,7 +30,7 @@ Product release readiness — NOT CLAIMED
 **HISTORICAL — the block above records 2026-08-01 and is superseded.** Current
 lifecycle: `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`;
 `CR-010 — ACCEPTED — NOT IMPLEMENTED`;
-`C4 — ACTIVE DECISION COMPLETED / IMPLEMENTATION NOT STARTED`;
+`C4 — ACTIVE`; `C4 product decision — COMPLETE`; `C4 implementation — NOT STARTED`;
 `Restore — NOT IMPLEMENTED`; product release readiness — `NOT CLAIMED`.
 
 This ADR changes **no production code**, adds **no migration**, changes **no
