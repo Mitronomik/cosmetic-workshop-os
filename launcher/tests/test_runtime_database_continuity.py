@@ -28,15 +28,41 @@ USER_DATA_ENV = "COSMETIC_WORKSHOP_USER_DATA_DIR"
 
 
 class RecordedPopen:
-    """A stand-in for the uvicorn child that captures what it was launched with."""
+    """A stand-in for the backend child that captures what it was launched with.
+
+    It also completes the launcher's lock-acquisition handshake. The real child
+    takes the backend-liveness lock before importing anything and reports that
+    over the inherited pipe; a stand-in that stayed silent would not be a
+    simplified child, it would be a child the launcher is right to refuse — and
+    every test here would fail on a bounded timeout that proves nothing.
+    """
 
     instances: list["RecordedPopen"] = []
 
-    def __init__(self, command, cwd=None, env=None, text=None):
+    def __init__(self, command, cwd=None, env=None, text=None, pass_fds=()):
         self.command = command
         self.cwd = cwd
         self.env = dict(env or {})
+        self.pass_fds = tuple(pass_fds)
+        self.handshake_written = self._complete_handshake()
         RecordedPopen.instances.append(self)
+
+    def _complete_handshake(self) -> bool:
+        """Report the liveness lock exactly as the real entrypoint does."""
+        import os
+
+        from app.launcher_backend_entrypoint import (
+            HANDSHAKE_READY_PREFIX,
+            HANDSHAKE_FD_ENV,
+            HANDSHAKE_TOKEN_ENV,
+        )
+
+        raw_fd = self.env.get(HANDSHAKE_FD_ENV)
+        token = self.env.get(HANDSHAKE_TOKEN_ENV)
+        if not raw_fd or not token:
+            return False
+        os.write(int(raw_fd), f"{HANDSHAKE_READY_PREFIX}{token}\n".encode("utf-8"))
+        return True
 
     def poll(self):
         return None
@@ -150,7 +176,16 @@ def test_the_child_keeps_its_existing_pythonpath_host_port_and_cwd(monkeypatch, 
     assert child.cwd == paths.backend_dir
     assert str(paths.backend_dir) in child.env["PYTHONPATH"]
     assert "/existing/entry" in child.env["PYTHONPATH"]
-    assert child.command[:4] == [runtime.sys.executable, "-m", "uvicorn", runtime.BACKEND_MODULE]
+    # The launcher-managed entrypoint, not `uvicorn` directly: it takes the
+    # backend-liveness lock before importing `app.main`, so a launcher-managed
+    # child is never invisible to the check that authorizes replacing the
+    # database it is about to open.
+    assert child.command[:3] == [
+        runtime.sys.executable,
+        "-m",
+        runtime.BACKEND_ENTRYPOINT_MODULE,
+    ]
+    assert "uvicorn" not in child.command
     assert "--host" in child.command and "127.0.0.1" in child.command
 
 
@@ -193,15 +228,34 @@ def test_start_backend_process_pins_the_database_environment_unconditionally(mon
 
 
 def test_no_production_call_site_starts_the_api_without_a_database_path():
-    """Every real caller supplies the startup-selected path."""
+    """Every real caller supplies the startup-selected path.
+
+    Both spawning functions are checked. `start_owned_backend_process` is the one
+    production startup uses — it adds the lock-acquisition handshake — and it
+    forwards to `start_backend_process`, so a call site that named no database
+    would be just as silent a defect through either name.
+    """
+    import ast
     import inspect
 
-    source = inspect.getsource(runtime)
-    calls = [line.strip() for line in source.splitlines() if "start_backend_process(" in line and "def " not in line]
+    # Parsed rather than grepped: the call spans several lines now, and a textual
+    # check would have quietly stopped covering it.
+    tree = ast.parse(inspect.getsource(runtime))
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in ("start_backend_process", "start_owned_backend_process")
+    ]
 
     assert calls, "expected at least one production call site"
     for call in calls:
-        assert "startup.database_path" in call, call
+        supplied = [ast.unparse(argument) for argument in call.args]
+        assert any("database_path" in argument for argument in supplied), ast.unparse(call)
+
+    launcher_source = inspect.getsource(runtime._run_locked_runtime)
+    assert "startup.database_path" in launcher_source
 
 
 def test_the_launcher_reads_the_database_environment_key_from_the_backend(monkeypatch, tmp_path):

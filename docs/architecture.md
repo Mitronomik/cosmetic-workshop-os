@@ -270,6 +270,8 @@ Packaged Local App
 Local App Launcher
   - first start check
   - data directory check
+  - launcher lifecycle lock
+  - incomplete-Restore recovery
   - port check
   - migration runner
   - pre-update backup
@@ -2249,6 +2251,12 @@ scripts/
 > Restore workflow.** `CR-010` decided that MVP Restore is **launcher-assisted**
 > (§ 12.4), and a terminal command must never become the permanent workflow for
 > the product user. Restore is **not implemented**.
+>
+> `C4-I` deliberately adds **no** script here. A PR-specific exact-head smoke
+> runner must live outside the pull request it verifies, so the `C4-I` runner is
+> created outside the repository, drives a detached checkout of the exact published
+> head, and is never committed. A reusable smoke framework would be a separate
+> decision and a separate pull request.
 
 ---
 
@@ -2315,21 +2323,88 @@ Before schema migration:
 
 # 12.4. Restore — launcher-assisted (CR-010, decided 2026-08-02)
 
-> **Status: decided, `NOT IMPLEMENTED`.** This section describes accepted
-> architecture, not shipped behaviour. Durable decision:
-> `docs/decisions/0016-launcher-assisted-restore.md`; complete product contract:
-> `docs/backup-and-restore.md`.
+> **Status: decided; product Restore `NOT IMPLEMENTED`.** This section describes
+> accepted architecture. Durable decision:
+> `docs/decisions/0016-launcher-assisted-restore.md`; complete product contract
+> and the implementation detail of the internal engine:
+> `docs/backup-and-restore.md` (§ 16 for `C4-I`).
 >
 > ```text
 > C4 — ACTIVE
 > C4 product decision — COMPLETE
-> C4 implementation — NOT STARTED
-> CR-010 — ACCEPTED — NOT IMPLEMENTED
-> C4-I — AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+> CR-010 — ACCEPTED
+> C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 > C4-II — PLANNED — NOT AUTHORIZED
 > C4-III — PLANNED — NOT AUTHORIZED
 > Restore — NOT IMPLEMENTED
 > ```
+>
+> The internal launcher-owned safety engine exists on an **unmerged** pull-request
+> branch as `launcher/restore/`, with one bounded read-only backend helper
+> (`backend/app/db/migration_lineage.py`). It has **no** API endpoint, route,
+> button, dialog, file picker or product terminal workflow, so it changes no
+> user-visible architecture. The launcher gains: a **lifecycle context** that
+> derives every destructive path from the existing startup and backup resolvers
+> and owns the backend child it starts; a durable operation record under
+> `<user data base>/restore/`; an exclusive `flock` instance lock; one shared
+> filesystem durability primitive; and a recovery gate that resolves any
+> interrupted Restore before startup migrations, the backend child and the
+> browser. A future Restore caller supplies **only the selected source** — the
+> database, backup and Restore directories are never caller input.
+>
+> The backend gains exactly one thing: it holds a **backend-liveness lock** for
+> its process lifetime, from a path the launcher assigns. The kernel releases that
+> lock when the process dies, so a launcher that crashed hard leaves an orphaned
+> backend that the *next* launcher can still detect — a fact an in-memory process
+> handle cannot survive to report. An orphan blocks Restore and startup recovery,
+> as a **typed blocked result rather than an exception**; it is never killed,
+> because this launcher did not start it. No migration, no schema change, no
+> AuditLog event, no Restore route, and no frontend production change.
+>
+> Launcher-managed backends take that lock **before importing the application**,
+> through the narrow `backend/app/launcher_backend_entrypoint.py`, and report the
+> acquisition to the launcher over a bounded one-run handshake. Acquiring it in the
+> FastAPI lifespan — which remains, as an idempotent defence — would leave the whole
+> application import as a window in which a launcher-managed child holds nothing.
+>
+> The launcher, in turn, does not merely *check* that lock before destructive work;
+> it **holds** it. A retained maintenance lease over the same canonical lock covers
+> the safety copy, journal settlement, replacement, rollback replacement,
+> post-replacement verification **and startup migrations** — which need no backend
+> at all. The lease is released only for **one exact owned-backend lifetime** at a
+> time, and taken back at the end of it, so two verification cycles are two
+> releases and two reacquisitions rather than one release spanning both. The
+> invariant is about **database access**, not continuous lock ownership: no
+> operation that reads, migrates, verifies or replaces the working database may
+> run unless the launcher holds the lease, or the exact owned child holds the
+> canonical lock and has completed the handshake. A bounded no-owner interval does
+> exist while a released lease is being picked up by the child it was released
+> for, and nothing touches the database inside it. A lock that was checked and
+> released proves availability at an instant and reserves nothing.
+>
+> Ownership is also resolved **before** the port is checked. A real orphan is a
+> running backend, so it holds the canonical lock *and* the configured port;
+> checking the port first turned that into an exception about a busy port and
+> bypassed the typed blocked result. But the port is checked **before any Restore
+> state is written**: the gate is split into a non-mutating preflight that
+> establishes exclusion and reads the record, then the port check, then the
+> state-mutating recovery matrix. An unrelated program on the port therefore
+> refuses with the unchanged port message and cannot alter a single byte of
+> Restore history, and a collision that appears after that check is classified as
+> retryable rather than ending the operation at `recovery_blocked`. Neither case
+> starts a backend or opens the browser.
+>
+> The last gap was that the launcher-managed child reported a successful start
+> while holding only the lock; uvicorn bound the port afterwards, so a program
+> that took it in between produced a child that started and then died — which
+> reads as a verification failure. The child now **binds the exact configured
+> socket itself, before reporting readiness**, and uvicorn serves that same socket
+> rather than binding again. A successful readiness report therefore means the
+> conjunction — this exact child owns the canonical liveness lock *and* the actual
+> listening socket — and `EADDRINUSE` is reported through the structured one-run
+> handshake, before any application module is imported and before the database is
+> opened. The early port probe remains a fast, friendly refusal for the common
+> case; it is not the ownership proof.
 
 ```text
 MVP Restore is launcher-assisted.

@@ -26,28 +26,222 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `CR-004 — SQLite backup transaction consistency`: **ACCEPTED AND IMPLEMENTED**
 - `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
 - `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
-- `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED — NOT IMPLEMENTED**
-- `C4-I — Launcher-owned restore safety engine`: **AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED**
+- `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED**
+- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
 - `C4 — ACTIVE`
 - `C4 product decision — COMPLETE`
-- `C4 implementation — NOT STARTED`
+- `Restore — NOT IMPLEMENTED`
+- `Product release readiness — NOT CLAIMED`
 - Backend baseline correction gate: **DONE**
 - Merged `main` backend baseline: **GREEN**
 - **PR #168 is merged.** The artifact-finalization hardening is on merged `main`, not on a branch, so C3 is complete **and hardened**.
 
-## What is authorized next
+## Current next action
 
 ```text
 C4-I — Launcher-owned restore safety engine
-AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 ```
 
-`C4-I` is the **only** runtime slice authorized by the `CR-010` decision. It is
-**not in progress** and must not be started from this unmerged documentation
-branch. `C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED`. Restore remains
-**not implemented**; macOS packaging, the safe packaged update flow and the full
+**Next action: an independent audit of the new published head of PR #170.** The
+branch is `codex/c4-i-launcher-restore-safety-engine`, started from `origin/main`
+at `b89cbaaaf41a56c810847d7c1e593712c5591eb6` (the PR #169 merge commit). The PR
+stays **draft** until that audit clears it. Nothing else is authorized.
+
+**Six independent audits have run, finding twenty-four findings in total —
+5 + 5 + 7 + 3 + 2 + 2 — each round against the correction the previous round
+produced. All twenty-four are closed.** The first found five safety-critical gaps in the original
+implementation:
+
+```text
+P1-1  source WAL/journal sidecars are checked beside the ORIGINAL selected
+      source, before and after the copy, and staging reads a held descriptor
+      whose identity is re-proved
+P1-2  backend shutdown is proved by owning the exact process handle, never by a
+      free port and never by pattern-killing
+P1-3  every destructive path is derived from the launcher's own resolvers; a
+      caller supplies only the selected source
+P1-4  a failed `rollback_in_progress` publication attempts no unauthorized
+      transition and reports the phase actually on disk
+P1-5  parent-directory durability is mandatory, and a post-rename failure is
+      classified rather than swallowed
+```
+
+A second audit of that correction found five more, all closed as well:
+
+```text
+P1-1  a post-rename failure publishing `completed` fell through to the abort
+      path and attempted `completed → aborted`, an edge the graph forbids
+P1-2  ordinary startup was permitted by a negative rule, so unresolved
+      pre-replacement phases were treated as safe; the initial `prepared`
+      publication could also be reported as "no record"
+P1-3  a same-size in-place rewrite of the selected source kept device, inode,
+      size and type identical and escaped the identity checks
+P2-1  a hard launcher crash lost the in-memory process handle, so an orphaned
+      backend appeared absent
+P2-2  the `F_FULLFSYNC` fallback was documented as "recorded" but was not
+```
+
+A third audit of that second correction found seven more, all closed as well:
+
+```text
+P1-1  the backend-liveness lock was checked momentarily and released, which
+      proves availability at an instant and reserves nothing — a backend could
+      start during journal settlement or the replacement itself. It is now a
+      retained launcher maintenance lease, required by
+      `require_backend_stopped()`, held through the safety copy, journal
+      settlement, replacement, rollback replacement and post-replacement
+      verification, and released only for an owned backend that must run.
+      The lock was also taken too late: a launcher-managed child now acquires
+      it in `app.launcher_backend_entrypoint` **before importing any
+      application module** and proves that acquisition to the launcher over a
+      bounded one-run pipe-and-token handshake.
+P1-2  an orphaned backend made `RestoreLifecycleError` escape startup
+      recovery, where `run_local_runtime` expects a `RecoveryResult`. Startup
+      recovery now returns a typed blocked result — nothing starts, the browser
+      stays closed, nothing on disk changes, and the user sees one sentence
+      rather than a traceback.
+P1-3  an ambiguous initial `prepared` publication re-read `operation.json`
+      without checking whose record it is, so a previous operation's terminal
+      record could be reported as this attempt's outcome and identity. The
+      operation ID is compared first; a foreign record is never inherited and
+      never modified.
+P1-4  `RestoreOperationStateStore.create()` treated all four terminal phases as
+      replaceable, including `recovery_blocked` — the authoritative pointer to
+      an unresolved operation and the evidence it names. Only the positive
+      `SAFE_TERMINAL_STARTUP_PHASES` vocabulary is replaceable now.
+P2-1  a visible-but-unconfirmed `completed` used the rollback sentence,
+      claiming a rollback that did not happen and a return to previous data
+      that are not authoritative. One fixed
+      `COMPLETION_DURABILITY_UNCONFIRMED` category says only what is known.
+P2-2  the PR body still described the previous head, test counts and smoke.
+P2-3  one pre-correction test node ID had been renamed rather than preserved.
+```
+
+A fourth audit of that third correction found three more, all closed as well:
+
+```text
+P1-1  the maintenance lease was released around the entire startup-plus-
+      two-cycle verification block rather than around each exact owned-backend
+      lifetime. That left two windows with nothing holding the canonical lock:
+      startup migrations, which need no backend at all, and the gap between the
+      two verification cycles, where cycle 1's child had exited and the launcher
+      had not taken the lease back. Startup and migrations now run under the
+      retained lease, and each cycle is its own release/handshake/stop/reacquire
+      window, so the lease is held before cycle 1, between the cycles and after
+      cycle 2. `owned_backend_window()` refuses to open without the lease, and
+      the verifier is given `run_backend_cycle` as a required keyword-only
+      parameter, so "release once, start twice" cannot be expressed.
+P1-2  `run_local_runtime()` checked the port before Restore recovery. A real
+      orphan is a running backend and holds the canonical liveness lock *and*
+      the configured port, so the port check fired first and raised
+      `RuntimeLaunchError` about a busy port — a traceback and the wrong story —
+      while the typed blocked `RecoveryResult` never ran. Recovery and backend
+      liveness are now resolved first; the port check keeps its own unchanged
+      message for the ordinary collision, and an occupied port is never
+      reinterpreted as a Restore problem.
+P2-1  the PR body carried inconsistent finding counts and did not describe this
+      correction. That round set the accounting to twenty findings across four
+      independent audits, 5 + 5 + 7 + 3; the fifth round below carries it to
+      twenty-two across five.
+```
+
+A fifth audit of that fourth correction found two more, both closed as well:
+
+```text
+P1-1  an unrelated temporary port collision could occur before or during
+      rollback recovery and turn a retryable environment problem into terminal
+      `recovery_blocked`. The fourth correction put recovery ahead of the port
+      check for a good reason — a real orphan holds the lock *and* the port —
+      but recovery *writes*: it aborts pre-replacement operations, enters
+      `rollback_in_progress`, replaces the working database from the safety copy
+      and runs migrations. The gate is now two halves.
+      `prepare_restore_startup_recovery()` establishes exclusion, takes the
+      retained lease, detects an orphan and reads the record, and changes
+      nothing. The port is checked between the halves, so an unrelated collision
+      refuses with the existing Russian port message and the Restore history
+      byte-identical — the durable phase, the record, the staged candidate and
+      the safety copy all exactly as the interruption left them — and the next
+      launch resumes the same operation. There is still one recovery matrix: the
+      full recovery runs the same preflight when it is not handed one. The port
+      can also be taken *after* that check, which no momentary probe can prevent,
+      so the late collision is classified: `assert_port_available` raises the
+      narrower `BackendPortUnavailableError`, the verifier turns it into
+      `RetryableBackendStartError`, and neither the engine nor recovery treats it
+      as a verification failure. The durable phase stays where it is, evidence is
+      retained, the lease is back, no child is leaked, `recovery_blocked` is
+      never published, and the fixed `backend_port_unavailable` sentence tells
+      the user to close the other program and reopen. Every real failure — health,
+      representative reads, imports, migrations, the handshake, an early child
+      exit, a refused liveness lock, safety-copy verification, rollback
+      replacement — keeps its existing non-retryable behaviour.
+P2-1  the documented handoff invariant claimed continuous lock ownership at
+      every instant, which the implementation cannot guarantee: a released lease
+      is picked up by a child that has to be scheduled first, so a bounded
+      no-owner interval necessarily exists. The invariant is now stated in terms
+      of database access — no operation that reads, migrates, verifies or
+      replaces the working database runs unless the launcher holds the lease or
+      the exact owned child holds the canonical lock and has completed the
+      handshake — and the bounded gap is documented explicitly, together with why
+      nothing touches the database inside it. A documentation correction only;
+      the handshake was not redesigned to make an overstated sentence true.
+```
+
+A sixth audit of that fifth correction found two more, both closed as well:
+
+```text
+P1-1  the real socket race was still open. `assert_port_available()` binds a
+      probe, closes it and returns; the launcher-managed child then took the
+      canonical liveness lock and reported a successful start, and only *after*
+      that did uvicorn perform the real bind. A program taking the port in
+      between produced a child that had reported success and then exited, which
+      `wait_for_backend_ready()` classifies as a `BackendVerificationError` — so
+      during rollback recovery a temporary socket conflict could still publish
+      terminal `recovery_blocked`. The child now binds the exact configured
+      socket **itself**, before reporting anything, and uvicorn serves that
+      already-bound socket via `Server.run(sockets=[...])`; there is no second
+      bind. A successful readiness report means the conjunction: this exact child
+      owns the canonical lock *and* the actual listening socket. The handshake
+      carries two structured, tokened results — `ready:` and `port-unavailable:`
+      — and `EADDRINUSE` is the only refusal reported as a collision, before any
+      application module is imported and before the database is opened. The
+      parent maps it to the existing `BackendPortUnavailableError` with the
+      existing Russian message, which Restore already turns into
+      `RetryableBackendStartError`. No uvicorn output is parsed; exit codes are
+      secondary evidence only. The early probe stays as a fast, friendly refusal
+      and is no longer treated as the ownership proof.
+P2-1  the test that appeared to cover that race intercepted
+      `BackendProcessOwner.start` and raised `BackendPortUnavailableError`
+      directly, so it proved exception routing and nothing about the real child,
+      handshake or bind — and it passed on every head, including the ones where
+      the product could not reach the routing at all.
+      `launcher/tests/test_restore_real_port_bind_race.py` is the regression
+      proof: real parent, real child entrypoint, real one-run handshake, the real
+      configured port, a real competing listener and a real bind refusal. The
+      synthetic tests are kept and relabelled as exception-routing unit tests.
+      One says the routing is right; the other says the routing is reachable.
+```
+
+No audit required a change to the accepted twelve-phase machine, and no
+condition any of them found justified a new phase.
+
+`C4-I` implements the accepted `CR-010` state machine exactly — the same twelve
+phases, transition graph, recovery matrix and `replacement_intent` crash rule — so
+no amending decision was required. It is internal launcher infrastructure only:
+`launcher/restore/` plus one bounded read-only backend helper
+(`backend/app/db/migration_lineage.py`), with **no** API endpoint, route, button,
+dialog, file picker, product terminal workflow, migration, schema change,
+AuditLog event or frontend change. No PR-specific smoke runner is committed —
+the smoke-authoring contract requires it to live outside the code it verifies, so
+the `C4-I` runner is created outside the repository and drives a detached checkout
+of the exact published head. Implementation detail:
+`docs/backup-and-restore.md` § 16.
+
+`C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED` and must not be started from
+this branch. **Restore remains `NOT IMPLEMENTED`** — the engine has no user-facing
+entry point. macOS packaging, the safe packaged update flow and the full
 release-candidate smoke remain **not completed**; product release readiness is
 **not claimed**.
 

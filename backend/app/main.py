@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
@@ -34,6 +36,7 @@ from app.api.reports import router as reports_router
 from app.api.settings import router as settings_router
 from app.api.stock_movements import router as stock_movements_router
 from app.api.tax_rate_settings import router as tax_rate_settings_router
+from app.services.backend_liveness import acquire_backend_liveness_lock
 from app.domain.production_tax_context import (
     EXPECTED_EFFECTIVE_AT_FIELD,
     EXPECTED_PERCENT_FIELD,
@@ -74,11 +77,30 @@ async def _validation_error_response(request: Request, exc: RequestValidationErr
     )
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """Hold the backend-liveness lock for this process's whole serving lifetime.
+
+    The launcher assigns the lock path; when it is absent — the ordinary test
+    client, a developer importing the app — nothing is taken and nothing is
+    claimed. When it is present and the lock cannot be taken, another application
+    backend is already alive against this workspace, and startup fails rather
+    than putting a second writer on one SQLite database.
+
+    Nothing releases the lock on shutdown on purpose: process exit releases it,
+    and that is precisely the property a launcher needs after a *hard* crash,
+    when no cleanup code of ours runs at all.
+    """
+    acquire_backend_liveness_lock()
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title=PRODUCT_NAME,
         version=APP_VERSION,
         description="Local-first API for the cosmetic workshop app shell.",
+        lifespan=_lifespan,
     )
     app.add_middleware(
         CORSMiddleware,

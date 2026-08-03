@@ -87,6 +87,19 @@ def test_launcher_startup_creates_backup_before_migration(monkeypatch, tmp_path)
 
 
 def test_run_local_runtime_checks_port_before_user_data_startup(monkeypatch, tmp_path):
+    """An occupied port still stops the run before any startup or migration.
+
+    The port check now runs *after* Restore recovery rather than first, because
+    an orphaned backend holds the port as well as the canonical lock and the
+    ordering used to turn that case into a traceback. What the check protects is
+    unchanged: no startup, no migration, no database, no backend, no browser.
+
+    Recovery does take the launcher's lifecycle authority on the way, so the
+    Restore directory and its lock file exist afterwards. Those are the
+    launcher's own coordination files, created before any verdict and carrying no
+    user data; the user database is the thing that must not appear, and it does
+    not.
+    """
     user_data_dir = tmp_path / "user-data"
     fake_home = tmp_path / "home"
     startup_called = False
@@ -110,5 +123,6 @@ def test_run_local_runtime_checks_port_before_user_data_startup(monkeypatch, tmp
             runtime.run_local_runtime(config, resolve_runtime_paths())
 
     assert startup_called is False
-    assert not user_data_dir.exists()
+    assert not (user_data_dir / "data").exists(), "no user database was created"
+    assert not (user_data_dir / "backups").exists(), "no backup was taken"
     assert not (fake_home / "Documents" / "Мастерская косметолога").exists()

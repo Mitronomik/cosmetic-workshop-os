@@ -1,9 +1,158 @@
 # Handoff
 
-## C3 closed and hardened; C4 Restore decided as launcher-assisted (2026-08-02)
+## C4-I implemented and corrected six times on its PR branch — not merged (2026-08-03)
 
 > This is the single current authoritative lifecycle conclusion. Every earlier
-> section in this file is a historical record of its own date.
+> section in this file, including the one immediately below, is a historical
+> record of its own date.
+
+```text
+CR-010 — ACCEPTED (PR #169, merge commit b89cbaaaf41a56c810847d7c1e593712c5591eb6)
+
+C4-I — Launcher-owned restore safety engine
+— IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
+— PR #170, draft
+— branch codex/c4-i-launcher-restore-safety-engine
+— based on origin/main = b89cbaaaf41a56c810847d7c1e593712c5591eb6
+— head a66ddd6 was audited; five safety blockers found and closed by 2bf53e7
+— head 2bf53e7 was audited again; five more found and closed by 606b219
+— head 606b219 was audited a third time; seven more found and closed by 5adc215
+— head 5adc215 was audited a fourth time; three more found and closed by this
+  correction
+— head 3223592 was audited a fifth time; two more found and closed by this
+  correction
+— head da2ffc9 was audited a sixth time; two more found and closed by this
+  correction
+— twenty-four findings across six independent audits: 5 + 5 + 7 + 3 + 2 + 2
+
+C4-II — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
+
+C4 — ACTIVE
+C4 product decision — COMPLETE
+Restore — NOT IMPLEMENTED
+macOS packaging — NOT COMPLETED
+safe packaged update flow — NOT COMPLETED
+full release-candidate smoke — NOT COMPLETED
+Product release readiness — NOT CLAIMED
+```
+
+**Next action: an independent audit of the new published head of PR #170.** The
+PR stays draft until that audit clears it. Nothing else is authorized.
+
+### What the next agent needs to know
+
+- **`C4-I` is internal only.** `launcher/restore/` exposes `execute_restore(...)`
+  and `recover_incomplete_restore(...)` for a future `C4-II`. There is no Restore
+  endpoint, route, button, dialog, file picker or product terminal workflow, so
+  **Restore is still `NOT IMPLEMENTED` as a product capability**. Do not describe
+  the branch as shipping Restore.
+- **The accepted state machine was implemented exactly**, so ADR 0016 needed no
+  amendment. If future work appears to need a different phase, transition or
+  recovery behaviour, that is a **new documentation decision first**, not a code
+  change.
+- **Where the detail lives.** ADR 0016 § 7 remains the authoritative decision;
+  `docs/backup-and-restore.md` § 16 records the implementation's operational
+  contract — state-file location and the closed field set, the atomic publication
+  primitive and its honest durability limits, the disk-space formula, the
+  `fcntl.flock` instance lock, target WAL/SHM/journal handling, the verification
+  endpoints and the developer-only smoke command.
+- **One bounded backend change**: `backend/app/db/migration_lineage.py`, read-only,
+  never creates the migration table. `app.db.migrations.applied_migration_ids`
+  could not be reused because it issues `CREATE TABLE IF NOT EXISTS` on a file the
+  Restore contract requires to stay untouched.
+- **The launcher startup path changed, and its order is load-bearing in both
+  directions.** `run_local_runtime` takes an exclusive instance lock and then runs
+  a **two-half** Restore gate:
+
+  ```text
+  non-mutating preflight   exclusion, orphan detection, read the record
+  port check               ordinary RuntimeLaunchError, nothing written yet
+  state-mutating recovery  the § 7.5 matrix: abort, roll back, replace, migrate
+  ```
+
+  Do not collapse these. Exclusion must come **before** the port, because a real
+  orphan holds the canonical liveness lock *and* the configured port, and asking
+  the port first reported that as a busy port rather than as the blocked startup
+  it is. The port must come **before** the mutating half, because that half
+  writes, and an unrelated program holding a socket must not be able to abort an
+  operation, enter `rollback_in_progress` or replace the database. Both halves
+  live in `launcher/restore/recovery.py`; the full recovery calls the preflight
+  itself when it is not handed one, so there is only ever one recovery matrix.
+  `recovery_blocked` returns exit code `3` and starts nothing, and the port check
+  keeps its own unchanged message for the ordinary collision.
+- **Readiness means the lock AND the listening socket.** The child binds the
+  exact configured socket itself, before it reports anything, and uvicorn serves
+  that same socket via `Server.run(sockets=[...])`. Do not switch back to
+  `uvicorn.run(host=..., port=...)`: it binds again, *after* readiness has been
+  reported, which is the race the sixth correction closed. Do not reserve a socket
+  and close it before serving either — that leaves the same window. `EADDRINUSE`
+  is reported through the structured `port-unavailable:<token>` handshake before
+  any application import; no uvicorn output is parsed, and exit codes are
+  secondary evidence only.
+- **A busy port is never a verdict on the data.** `assert_port_available` raises
+  `BackendPortUnavailableError` (a `RuntimeLaunchError`, so every existing
+  `except` is unchanged); the verifier turns that into
+  `RetryableBackendStartError`, which is deliberately **not** a
+  `BackendVerificationError`. A late collision therefore leaves the durable phase
+  alone, retains every artifact, reacquires the lease, publishes no
+  `recovery_blocked` and shows the fixed `backend_port_unavailable` sentence — the
+  next launch resumes. Do not widen that branch to "anything that went wrong
+  while starting a backend": health failures, failed reads, import failures,
+  migration failures, handshake failures, early child exits and refused liveness
+  locks are all evidence *about the workspace* and must stay non-retryable.
+- **No PR-specific smoke runner is committed.** An earlier revision of the branch
+  had one under `scripts/`; it was removed because the smoke-authoring contract
+  requires a PR-specific exact-head runner to live outside the pull request it
+  verifies. The runner is created outside the repository and drives a detached
+  worktree at the exact published head. `scripts/restore_backup.sh` is unrelated
+  to `C4-I` and is unchanged.
+- **The twenty-four closed review findings** — 5 + 5 + 7 + 3 + 2 + 2 across six
+  independent audits — are summarized in `state/current-focus.md` and specified in
+  `docs/backup-and-restore.md` § 16, with § 16.13 covering the second round,
+  § 16.14 the third, § 16.15 the fourth, § 16.16 the fifth and § 16.17 the sixth.
+  The most
+  load-bearing rules to keep in mind when reading the code: a caller supplies
+  **only** the selected source; the backend is stopped **by owned handle** *and*
+  excluded by a **retained maintenance lease** over the backend-liveness lock,
+  held for the whole destructive interval **including startup migrations** — a
+  lock that is checked and released proves availability at an instant and reserves
+  nothing; the lease is released for **one exact owned-backend lifetime** at a
+  time and taken back at the end of it, so two verification cycles are two
+  releases and two reacquisitions and no separate backend can take the lock
+  between them — the guarantee is about **database access**, not about the lock
+  being owned at literally every instant, since a bounded no-owner gap exists
+  while a released lease is being picked up by the child it was released for;
+  a launcher-managed child
+  takes that lock **before importing the application** and proves it through a
+  bounded one-run handshake; a publication that may have landed is **re-read**,
+  never assumed, and the record it finds is only this attempt's when it carries
+  this attempt's **operation ID**; **terminal records are never transitioned
+  again** and `recovery_blocked` is never replaced; ordinary startup is permitted
+  by a **positive allow-list** plus confirmed record durability; source staging
+  proves content stability with **two SHA-256 passes** over one held descriptor;
+  and the parent-directory flush is **mandatory**.
+- **An orphaned backend is detected, never killed — and refused as a result, not
+  an exception.** Restore and recovery return a typed blocked `RecoveryResult`,
+  preserve everything, and the launcher prints one fixed sentence and returns
+  `RESTORE_BLOCKED_EXIT_CODE`. Do not add PID/port/pattern killing to "fix" this —
+  it is the accepted behaviour, and a future support flow owns the user-facing
+  half. Do not let a lifecycle error escape the public launcher boundary again.
+- **Evidence on the branch**: baseline `1843` pre-`C4-I` node IDs all preserved;
+  the named `2bf53e7` node restored and still present; all `2378` node IDs of
+  `da2ffc9` preserved with `0` lost; `2398 passed` for the complete backend +
+  launcher suite and `531 passed` for the launcher suite; `21/21` frontend
+  `test:*` scripts plus the production build; an `11/11` ordinary product
+  regression gate against isolated temporary user data; external exact-head
+  Restore smoke against a detached checkout; repository clean before and after.
+  **No GitHub CI workflow exists on this branch, so no CI run is claimed.**
+
+---
+
+## HISTORICAL — 2026-08-02 — C3 closed and hardened; C4 Restore decided as launcher-assisted
+
+> Superseded by the section above as the current conclusion. Its C3 and `CR-010`
+> facts remain accurate; its `C4-I — NOT IMPLEMENTED` status does not.
 
 ```text
 C1 — COMPLETED

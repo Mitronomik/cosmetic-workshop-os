@@ -10,8 +10,8 @@ implement Restore** and changes no runtime code.
 
 | Item | Status |
 |---|---|
-| `CR-010` — launcher-assisted Restore semantics | `ACCEPTED — NOT IMPLEMENTED` |
-| `C4-I` — launcher-owned restore safety engine | `AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED` |
+| `CR-010` — launcher-assisted Restore semantics | `ACCEPTED` |
+| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED` |
 | `C4-II` — user-facing launcher Restore flow | `PLANNED — NOT AUTHORIZED` |
 | `C4-III` — Restore end-to-end verification and lifecycle closure | `PLANNED — NOT AUTHORIZED` |
 | Restore | `NOT IMPLEMENTED` |
@@ -20,17 +20,27 @@ implement Restore** and changes no runtime code.
 | Full release-candidate smoke | `NOT COMPLETED` |
 | Product release readiness | `NOT CLAIMED` |
 
-Surrounding lifecycle at acceptance:
+Surrounding lifecycle:
 
 ```text
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
-CR-010 — ACCEPTED — NOT IMPLEMENTED
+CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4 implementation — NOT STARTED
+C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
+C4-II — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 ```
+
+**This decision itself is unchanged.** `C4-I` implements the state machine below
+exactly — same twelve phases, same transition graph, same recovery matrix, same
+`replacement_intent` rule — and required no deviation, so no amending decision was
+needed. The implementation's own operational detail (state-file location, the
+publication primitive and its durability limits, the disk-space formula, target
+journal handling and the verification endpoints) is recorded in
+`docs/backup-and-restore.md` § 16, not restated here.
 
 This ADR does not reopen `CR-004`, `CR-005`, `CR-006`, `CR-007`, `CR-008` or
 `CR-009`, and it does not reopen ADR 0011, 0012, 0013, 0014 or 0015. It adds no
@@ -839,10 +849,10 @@ There is no frontend implementation in this decision:
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-AUTHORIZED AFTER THIS DOCUMENTATION PR MERGES — NOT IMPLEMENTED
+IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 ```
 
-This is the **only** runtime slice authorized by this decision. Its future scope:
+This is the **only** runtime slice authorized by this decision. Its scope:
 
 - launcher-owned restore operation domain vocabulary;
 - source and staged-candidate validation;
@@ -1029,3 +1039,87 @@ frontend or launcher suite was executed for it, no build was run, no smoke was
 run and no runtime artifact was created. The accepted PR #168 evidence recorded
 alongside this decision belongs to that merged pull request and was **not**
 re-executed here.
+
+**`C4-I` verification is separate and belongs to its own pull request.** That
+slice implements this decision on an **unmerged branch**: the complete backend and
+launcher suites and a developer-only exact-head Restore smoke — run from **outside**
+the pull request, against a detached checkout of the exact published head — were
+run there, and its evidence is recorded on that pull request rather than restated
+in this ADR. An independent review of the first published head found five
+safety-critical gaps in the *implementation* (source sidecar handling, backend-stop
+proof, canonical destructive paths, rollback-publication failure handling and the
+durability boundary). A second audit of that correction found five more (terminal
+`completed` publication handling, positive startup permission and the initial
+`prepared` ambiguity, same-size in-place source modification, orphaned backends
+after a hard launcher crash, and the unrecorded flush method). A third audit of
+that second correction found seven more:
+
+- the backend-liveness lock was **checked momentarily and released**, which proves
+  availability at an instant and reserves nothing, leaving the whole destructive
+  interval open to a backend starting;
+- the lock was acquired only in the FastAPI lifespan, so the entire application
+  import was a window in which a launcher-managed child held nothing;
+- an orphaned backend made `RestoreLifecycleError` escape startup recovery, where
+  the launcher expects a `RecoveryResult`, turning a designed refusal into an
+  unhandled exception;
+- an ambiguous initial `prepared` publication could read a **previous**
+  operation's terminal record as this attempt's outcome and identity;
+- `recovery_blocked` was grouped with the completed terminal phases and could be
+  overwritten by an ordinary new attempt;
+- a visible-but-unconfirmed `completed` was reported with the rollback sentence,
+  claiming a rollback that did not happen;
+- one pre-correction test node ID had been renamed rather than preserved.
+
+A fourth audit of that third correction found three more:
+
+- the maintenance lease was released around the **entire** startup-plus-two-cycle
+  verification block rather than around each exact owned-backend lifetime, so the
+  canonical lock was held by nobody during startup migrations and again between
+  the two verification cycles;
+- `run_local_runtime()` checked the configured port **before** Restore recovery,
+  so a real orphan — which holds the canonical liveness lock *and* the port —
+  raised a busy-port exception instead of producing the typed blocked result;
+- the pull-request body carried inconsistent finding counts.
+
+A fifth audit of that fourth correction found two more:
+
+- an unrelated **temporary port collision** could occur before or during rollback
+  recovery and turn a retryable environment problem into terminal
+  `recovery_blocked`, because the state-mutating recovery ran before the port was
+  ever checked;
+- the documented handoff invariant claimed **continuous lock ownership at every
+  instant**, although a bounded release-to-child scheduling gap necessarily exists.
+
+A sixth audit of that fifth correction found two more:
+
+- a real port collision could occur **after** `assert_port_available()` succeeded
+  and **before** uvicorn's actual bind: the child reported a successful start
+  while holding only the liveness lock, so the collision arrived as a
+  started-then-died child, was classified as a verification failure, and could
+  still end a rollback at terminal `recovery_blocked`;
+- the test that appeared to cover that race injected the exception at the
+  owned-backend start, so it demonstrated exception routing rather than the real
+  child, handshake or bind.
+
+All twenty-four are closed: 5 + 5 + 7 + 3 + 2 + 2 across six independent audits.
+
+**None of them required a change to this decision** — the twelve phases, the
+transition graph, the recovery matrix and the `replacement_intent` rule are
+exactly as accepted here. In particular no condition discovered by any audit
+justified a new phase: `completed`-but-unconfirmed, `durability_failed`,
+`backend_orphaned` and the newly named `preparation_not_published` and
+`completion_durability_unconfirmed` are transient result and diagnostic
+categories, not lifecycle facts, and they are reported through the typed result
+rather than persisted.
+
+The third correction adds three implementation-level rules that this decision's
+§ 2 launcher-ownership requirement already implies and which are now stated
+explicitly: the launcher **retains** exclusive backend exclusion for the whole
+destructive interval rather than sampling it; a launcher-managed backend acquires
+that exclusion **before importing the application** and proves it to the launcher
+through a bounded exact-child handshake; and an operation record is only this
+attempt's record when it carries this attempt's operation ID. Implementing `C4-I` changes nothing above — no phase was renamed, no
+transition added or removed, and no recovery behaviour substituted — and it does
+**not** make Restore a shipped product capability. `Restore` stays
+`NOT IMPLEMENTED`, `C4-II` and `C4-III` stay `PLANNED — NOT AUTHORIZED`, and
+product release readiness stays `NOT CLAIMED`.
