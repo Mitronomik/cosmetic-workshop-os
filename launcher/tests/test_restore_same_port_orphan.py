@@ -250,22 +250,42 @@ def test_no_exception_escapes_the_public_boundary_for_a_same_port_orphan(
 def test_recovery_is_resolved_before_the_port_is_ever_checked(
     same_port_orphan, monkeypatch
 ):
-    """The ordering itself, observed rather than inferred from the outcome."""
+    """The ordering itself, observed rather than inferred from the outcome.
+
+    Three steps, and a same-port orphan must be answered at the first of them:
+
+    ```text
+    preflight   exclusion and the record, changing nothing   ← the verdict
+    port        an ordinary socket bind
+    recovery    the state-mutating matrix
+    ```
+
+    The orphan holds the canonical lock, so the preflight already refuses. The
+    port is never consulted — asking it would have produced a busy-port message
+    about the very backend that *is* the problem — and the state-mutating half
+    never runs at all, so nothing on disk is touched on the way to saying so.
+    """
     workspace, port, _orphan_pid = same_port_orphan
     unsafe_record(workspace)
 
     order: list[str] = []
+    real_preflight = runtime.resolve_restore_startup_preflight
     real_recovery = runtime.resolve_restore_recovery
     real_port_check = runtime.assert_port_available
 
-    def watched_recovery(context):
+    def watched_preflight(context):
+        order.append("preflight")
+        return real_preflight(context)
+
+    def watched_recovery(context, preflight=None):
         order.append("recovery")
-        return real_recovery(context)
+        return real_recovery(context, preflight)
 
     def watched_port_check(host, port_number):
         order.append("port")
         return real_port_check(host, port_number)
 
+    monkeypatch.setattr(runtime, "resolve_restore_startup_preflight", watched_preflight)
     monkeypatch.setattr(runtime, "resolve_restore_recovery", watched_recovery)
     monkeypatch.setattr(runtime, "assert_port_available", watched_port_check)
     guard_against_starting_a_backend(monkeypatch)
@@ -276,8 +296,57 @@ def test_recovery_is_resolved_before_the_port_is_ever_checked(
     )
 
     assert exit_code == runtime.RESTORE_BLOCKED_EXIT_CODE
-    # The port was never even looked at: the verdict was already binding.
-    assert order == ["recovery"]
+    # The port was never even looked at, and nothing that writes ever ran.
+    assert order == ["preflight"]
+
+
+def test_the_port_is_checked_between_the_two_halves_of_the_gate(monkeypatch, tmp_path):
+    """With no orphan, the order is preflight → port → state-mutating recovery.
+
+    The port sits between them on purpose. Before it, only exclusion has been
+    established and the record has been read; after it, the matrix is allowed to
+    abort, roll back, replace and migrate. An unrelated program on the port
+    therefore stops the run while the Restore history is still untouched.
+    """
+    workspace = make_workspace(monkeypatch, tmp_path, marker="workspace-A")
+
+    order: list[str] = []
+    real_preflight = runtime.resolve_restore_startup_preflight
+    real_recovery = runtime.resolve_restore_recovery
+    real_port_check = runtime.assert_port_available
+
+    def watched_preflight(context):
+        order.append("preflight")
+        return real_preflight(context)
+
+    def watched_recovery(context, preflight=None):
+        order.append("recovery")
+        return real_recovery(context, preflight)
+
+    def watched_port_check(host, port_number):
+        order.append("port")
+        return real_port_check(host, port_number)
+
+    monkeypatch.setattr(runtime, "resolve_restore_startup_preflight", watched_preflight)
+    monkeypatch.setattr(runtime, "resolve_restore_recovery", watched_recovery)
+    monkeypatch.setattr(runtime, "assert_port_available", watched_port_check)
+    guard_against_starting_a_backend(monkeypatch)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
+        occupied.bind(("127.0.0.1", 0))
+        occupied.listen(1)
+        with pytest.raises(runtime.RuntimeLaunchError, match="Порт .* уже занят"):
+            runtime.run_local_runtime(
+                build_runtime_config(
+                    backend_port=occupied.getsockname()[1], open_browser=False
+                ),
+                resolve_runtime_paths(),
+            )
+
+    assert order == ["preflight", "port"], (
+        "the state-mutating half ran despite an occupied port"
+    )
+    assert read_marker(workspace.database_path) == "workspace-A"
 
 
 # --------------------------------------------------------------------------
@@ -318,12 +387,16 @@ def test_an_unrelated_process_on_the_port_is_still_an_ordinary_collision(
 
 
 def test_an_occupied_port_does_not_prevent_recovery_from_running(monkeypatch, tmp_path):
-    """Recovery still resolves an interrupted Restore, then the port check fails.
+    """Recovery is deferred by an occupied port, not performed and not cancelled.
 
-    The two are independent, and in this order. A safe terminal record is closed
-    out normally even though the run cannot continue, so the next start with a
-    free port begins from a resolved workspace rather than replaying the same
-    interrupted operation.
+    An earlier revision closed a `prepared` operation out to `aborted` on the way
+    to reporting the port collision. That is a write, and it means an unrelated
+    program holding a socket could change Restore history — a decision the user
+    never made, taken during a run that could not start anyway.
+
+    So the interrupted operation is left exactly as it is, and the *next* launch
+    with a free port performs the real recovery. The two are independent; what
+    changed is which one is allowed to go first.
     """
     workspace = make_workspace(monkeypatch, tmp_path, marker="workspace-A")
     launcher_workspace = RestoreWorkspace.for_database(workspace.database_path)
@@ -338,6 +411,7 @@ def test_an_occupied_port_does_not_prevent_recovery_from_running(monkeypatch, tm
             updated_at="2026-08-03T00:00:00+00:00",
         )
     )
+    record_before = store.record_path.read_bytes()
     guard_against_starting_a_backend(monkeypatch)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied:
@@ -350,10 +424,26 @@ def test_an_occupied_port_does_not_prevent_recovery_from_running(monkeypatch, tm
         with pytest.raises(runtime.RuntimeLaunchError, match="Порт .* уже занят"):
             runtime.run_local_runtime(config, resolve_runtime_paths())
 
-    # `prepared` replaced nothing, so recovery closed it out and left the working
-    # database alone — the accepted behaviour, reached before the port check.
-    assert store.read().phase is RestorePhase.ABORTED
+    # Byte-identical: the operation was neither closed out nor advanced.
+    assert store.record_path.read_bytes() == record_before
+    assert store.read().phase is RestorePhase.PREPARED
     assert read_marker(workspace.database_path) == "workspace-A"
+
+    # And with the port free, the same launcher performs the real recovery.
+    from launcher.restore.context import LauncherLifecycleContext
+    from launcher.restore.recovery import recover_incomplete_restore
+
+    context = LauncherLifecycleContext.acquire(
+        build_runtime_config(backend_port=free_port(), open_browser=False),
+        resolve_runtime_paths(),
+    )
+    try:
+        result = recover_incomplete_restore(context)
+    finally:
+        context.release()
+
+    assert result.normal_startup_allowed is True
+    assert store.read().phase is RestorePhase.ABORTED
 
 
 def test_the_orphan_is_detected_but_never_signalled(same_port_orphan, monkeypatch):

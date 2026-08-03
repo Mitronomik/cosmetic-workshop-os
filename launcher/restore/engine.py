@@ -96,7 +96,7 @@ from launcher.restore.state import (
     RestoreStateError,
 )
 from launcher.restore.validation import CandidateRejectedError, validate_staged_candidate
-from launcher.restore.verification import verify_restored_backend
+from launcher.restore.verification import RetryableBackendStartError, verify_restored_backend
 from launcher.restore.workspace import RestoreWorkspaceError, new_operation_id
 
 logger = logging.getLogger(__name__)
@@ -255,6 +255,13 @@ def execute_restore(
     canonically derived database, backup and Restore paths, and ownership of any
     backend child. There is no code path that reaches the replacement boundary
     without one, so a bare internal call cannot bypass the gate.
+
+    Returns a :class:`RestoreResult` for every *outcome* of the operation. The one
+    thing it raises instead is :class:`RetryableBackendStartError`: the configured
+    local port is occupied, so verification could not run, and that is not an
+    outcome of the Restore at all — it is a refusal to continue right now, with
+    the durable phase and every artifact left exactly as they were. A caller shows
+    the fixed retry sentence and the next launch resumes from the same phase.
     """
     active_services = services or RestoreServices()
     operation_id = new_operation_id()
@@ -485,7 +492,16 @@ def _execute_with_source(
     # ------------------------------------------------ verification_in_progress
     try:
         _verify_restored_workspace(context, services)
-    except Exception as exc:  # noqa: BLE001 - every failure here rolls back
+    except RetryableBackendStartError:
+        # The configured port was occupied, so no check ever ran and nothing was
+        # observed about the restored database. Rolling back here would undo a
+        # restore that may be perfectly good, over another program holding a
+        # socket. The durable phase stays `verification_in_progress`, every
+        # artifact is preserved, and the caller is told to close that program and
+        # reopen — at which point the accepted matrix resolves this phase.
+        logger.warning("Restore verification deferred: the configured port is occupied.")
+        raise
+    except Exception as exc:  # noqa: BLE001 - every real failure here rolls back
         logger.warning("Restored workspace failed verification: %s", type(exc).__name__)
         return _enter_rollback(
             store, record, workspace, context, services,
@@ -1061,6 +1077,19 @@ def perform_rollback(
         if Path(getattr(startup, "database_path", database_path)) != database_path:
             raise RestoreEngineError("Rollback startup resolved a different database.")
         services.verify(context)
+    except RetryableBackendStartError:
+        # The rollback replacement above already succeeded under the lease, so the
+        # previous workspace is back on disk; only its *verification* could not
+        # run, because another program holds the port. `rollback_in_progress` is
+        # safely repeatable by design, so the honest thing is to leave it exactly
+        # where it is: no `recovery_blocked`, no claim of success, no claim of
+        # loss, every artifact retained. The next launch repeats this same
+        # rollback from the same durable phase and finishes it.
+        #
+        # The maintenance lease is already back: the owned-backend window
+        # reacquires it in its own `finally` before this exception arrives here.
+        logger.warning("Rollback verification deferred: the configured port is occupied.")
+        raise
     except Exception as exc:  # noqa: BLE001 - an unverifiable rollback blocks recovery
         logger.error("Rolled-back workspace failed verification: %s", type(exc).__name__)
         return _blocked(store, record)

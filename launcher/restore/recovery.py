@@ -26,10 +26,12 @@ next launcher start resumes from reality.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 
 from launcher.restore.context import LauncherLifecycleContext, RestoreLifecycleError
 from launcher.restore.contracts import (
+    BACKEND_PORT_UNAVAILABLE_MESSAGE,
     COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE,
     RECOVERY_BLOCKED_MESSAGE,
     ROLLED_BACK_MESSAGE,
@@ -45,7 +47,12 @@ from launcher.restore.phases import (
     permits_ordinary_startup,
 )
 from launcher.restore.replacement import discard_owned_replacement_artifact
-from launcher.restore.state import RestoreOperationStateStore, RestoreStateError
+from launcher.restore.state import (
+    RestoreOperationRecord,
+    RestoreOperationStateStore,
+    RestoreStateError,
+)
+from launcher.restore.verification import RetryableBackendStartError
 from launcher.restore.workspace import RestoreWorkspaceError
 
 logger = logging.getLogger(__name__)
@@ -128,6 +135,38 @@ def _blocked_by_backend_liveness(store: RestoreOperationStateStore) -> RecoveryR
     return _blocked_result(phase, operation_id, RECOVERY_BLOCKED_MESSAGE)
 
 
+def _deferred_by_port(
+    store: RestoreOperationStateStore, record: RestoreOperationRecord
+) -> RecoveryResult:
+    """Refuse this run only, reporting the phase that really — and still — remains.
+
+    Startup is blocked, so the browser stays closed and no backend starts. What
+    makes this different from every other blocked result is that **nothing was
+    written to reach it**: no transition, no cleanup, no replacement. The record
+    on disk is byte-identical to what the interrupted operation left, and the
+    phase reported here is that phase.
+
+    The record is re-read rather than trusted, for the same reason every other
+    reporting path re-reads: what is on disk is the only authority, and if it has
+    somehow become unreadable that is a genuinely blocked recovery rather than a
+    busy port.
+    """
+    try:
+        actual = store.read()
+    except RestoreStateError:
+        logger.error("The operation record became unreadable while recovery was deferred.")
+        return _blocked_result(None, None, RECOVERY_BLOCKED_MESSAGE)
+    live = actual if actual is not None else record
+    return RecoveryResult(
+        normal_startup_allowed=False,
+        durable_phase=live.phase,
+        # No `outcome`: the operation did not reach one. It is exactly where it
+        # was, waiting for the next launch.
+        operation_id=live.operation_id,
+        message=BACKEND_PORT_UNAVAILABLE_MESSAGE,
+    )
+
+
 def _clean_non_destructive_artifacts(workspace, context, operation_id: str) -> None:
     """Remove only what this operation provably owns.
 
@@ -145,22 +184,67 @@ def _clean_non_destructive_artifacts(workspace, context, operation_id: str) -> N
     discard_owned_replacement_artifact(context.database_path, operation_id)
 
 
-def recover_incomplete_restore(
-    context: LauncherLifecycleContext,
-    *,
-    services: RestoreServices | None = None,
-) -> RecoveryResult:
-    """Resolve any persisted Restore operation before the backend may start.
+@dataclass(frozen=True)
+class RestoreStartupPreflight:
+    """Everything startup recovery can establish **without changing anything**.
 
-    `context` carries the held launcher lock and the canonically derived paths,
-    so recovery guards exactly the workspace ordinary startup is about to use.
-    Returns a :class:`RecoveryResult` whose `normal_startup_allowed` is the only
-    thing the launcher needs to branch on; `no_operation` is the ordinary case.
+    The fifth-audit finding this exists for: the launcher had to resolve Restore
+    before the port check, because a real orphan holds the canonical lock *and*
+    the configured port. But full recovery *mutates* — it aborts pre-replacement
+    operations, enters `rollback_in_progress`, replaces the working database from
+    the safety copy and runs migrations. Doing all of that and only then
+    discovering that an unrelated program owns the port meant a temporary
+    environment problem could end a recoverable operation at terminal
+    `recovery_blocked`.
+
+    So the two halves are separated. This half establishes **exclusion and facts**:
+
+    ```text
+    the launcher's authority is held
+    any launcher-owned child is stopped
+    the retained maintenance lease is taken   ← exclusion, from here on
+    a foreign/orphan backend is detected
+    the authoritative record is read          ← read only
+    ```
+
+    and nothing else. No phase is transitioned, no operation is created, no
+    rollback is entered, no database is replaced, no staging is cleaned, no
+    migration runs and no verification backend starts. The launcher can therefore
+    check the port between this and full recovery, and refuse an ordinary
+    collision with the Restore history byte-identical.
+
+    `blocked_result` is non-`None` when startup is already refused on grounds the
+    port cannot change: an orphan holding the canonical lock, an unreadable
+    authoritative record, or a durable `recovery_blocked`. Those are answered
+    before the port is ever consulted, so a same-port orphan still gets the typed
+    blocked result rather than a port-collision message.
     """
-    active_services = services or RestoreServices()
+
+    blocked_result: RecoveryResult | None
+    record: RestoreOperationRecord | None
+    has_record: bool
+
+    @property
+    def startup_already_refused(self) -> bool:
+        return self.blocked_result is not None
+
+    @property
+    def durable_phase(self) -> RestorePhase | None:
+        return self.record.phase if self.record is not None else None
+
+
+def prepare_restore_startup_recovery(
+    context: LauncherLifecycleContext,
+) -> RestoreStartupPreflight:
+    """Establish backend exclusion and read the record. Change nothing.
+
+    Safe to call twice: `stop_backend()` re-proves an already-proved stop and the
+    maintenance lease is idempotent to acquire, so `recover_incomplete_restore`
+    calls this itself when it is not handed a result. That is what keeps one
+    implementation of the recovery matrix rather than two that could disagree.
+    """
     context.require_authority()
-    workspace = context.workspace
-    store = RestoreOperationStateStore(workspace)
+    store = RestoreOperationStateStore(context.workspace)
 
     # Recovery runs *before* ordinary startup, so the launcher has not started a
     # backend yet — but that has to be established, not assumed. With no owned
@@ -179,28 +263,85 @@ def recover_incomplete_restore(
         # a designed refusal into an unhandled exception and a stack trace on a
         # user's screen. Nothing is started, nothing is transitioned, the working
         # database is untouched, and the technical detail stays in the local log.
+        #
+        # This is decided here, before any port check, so a real orphan — which
+        # holds the port as well as the lock — is reported as blocked recovery and
+        # never as an ordinary port collision.
         logger.error("Startup recovery is blocked: %s", exc)
-        return _blocked_by_backend_liveness(store)
+        return RestoreStartupPreflight(
+            blocked_result=_blocked_by_backend_liveness(store),
+            record=None,
+            has_record=store.has_record(),
+        )
 
     if not store.has_record():
-        return RecoveryResult(normal_startup_allowed=True, no_operation=True)
+        return RestoreStartupPreflight(blocked_result=None, record=None, has_record=False)
 
     try:
         record = store.read()
     except RestoreStateError as exc:
         # Present but unreadable. Nothing may be inferred from a record that
-        # cannot be parsed, and "there is no operation" is not what this is.
+        # cannot be parsed, and "there is no operation" is not what this is. No
+        # port is free enough to make this startable, so it is answered here.
         logger.error("Restore operation record is unreadable: %s", type(exc).__name__)
-        return _blocked_result(None, None, RECOVERY_BLOCKED_MESSAGE)
+        return RestoreStartupPreflight(
+            blocked_result=_blocked_result(None, None, RECOVERY_BLOCKED_MESSAGE),
+            record=None,
+            has_record=True,
+        )
+    if record is None:
+        return RestoreStartupPreflight(blocked_result=None, record=None, has_record=False)
+
+    if record.phase is RestorePhase.RECOVERY_BLOCKED:
+        # Terminal and already blocked. Answered before the port for the same
+        # reason: freeing the port would not make this startable, and the fixed
+        # support sentence is the accepted result.
+        logger.error("Startup blocked: a previous Restore ended in recovery_blocked.")
+        return RestoreStartupPreflight(
+            blocked_result=_blocked_result(
+                record.phase, record.operation_id, RECOVERY_BLOCKED_MESSAGE
+            ),
+            record=record,
+            has_record=True,
+        )
+
+    return RestoreStartupPreflight(blocked_result=None, record=record, has_record=True)
+
+
+def recover_incomplete_restore(
+    context: LauncherLifecycleContext,
+    *,
+    services: RestoreServices | None = None,
+    preflight: RestoreStartupPreflight | None = None,
+) -> RecoveryResult:
+    """Resolve any persisted Restore operation before the backend may start.
+
+    `context` carries the held launcher lock and the canonically derived paths,
+    so recovery guards exactly the workspace ordinary startup is about to use.
+    Returns a :class:`RecoveryResult` whose `normal_startup_allowed` is the only
+    thing the launcher needs to branch on; `no_operation` is the ordinary case.
+
+    **This is the state-mutating half.** `preflight` is the non-mutating half,
+    already run by the launcher so the configured port could be checked in
+    between; when it is not supplied this runs it, so a direct caller still gets
+    the complete gate and there is only ever one recovery matrix.
+    """
+    active_services = services or RestoreServices()
+    ready = preflight if preflight is not None else prepare_restore_startup_recovery(context)
+    if ready.blocked_result is not None:
+        return ready.blocked_result
+
+    workspace = context.workspace
+    store = RestoreOperationStateStore(workspace)
+
+    # The lease is held from the preflight onwards, so the record read there is
+    # still the record on disk: no backend could have started against this
+    # workspace in between, and this launcher holds the instance lock.
+    record = ready.record
     if record is None:
         return RecoveryResult(normal_startup_allowed=True, no_operation=True)
 
     phase = record.phase
-
-    # ------------------------------------------------ terminal blocked state
-    if phase is RestorePhase.RECOVERY_BLOCKED:
-        logger.error("Startup blocked: a previous Restore ended in recovery_blocked.")
-        return _blocked_result(phase, record.operation_id, RECOVERY_BLOCKED_MESSAGE)
 
     # ------------------------------------------------- terminal safe states
     if phase in SAFE_TERMINAL_STARTUP_PHASES:
@@ -304,7 +445,23 @@ def recover_incomplete_restore(
     # `rollback_in_progress` arrives here either from the transition above or
     # from a crash during a previous rollback. Both continue the same way, which
     # is what makes rollback safely repeatable.
-    result = perform_rollback(store, record, workspace, context, active_services)
+    try:
+        result = perform_rollback(store, record, workspace, context, active_services)
+    except RetryableBackendStartError:
+        # The port was free at the preflight and was taken before the verification
+        # child could bind it. No momentary probe can close that race, so it is
+        # *classified* instead: the durable phase stays exactly where it is,
+        # nothing is published, the safety copy and staging are retained, and the
+        # user is told to close the other program and reopen. `rollback_in_progress`
+        # is safely repeatable, so the next launch finishes what this one could not
+        # start — which is the whole difference between a busy port and a
+        # workspace nothing can prove safe.
+        logger.warning(
+            "Startup recovery deferred: the configured port is occupied; "
+            "the durable phase is unchanged and the next start resumes it."
+        )
+        return _deferred_by_port(store, record)
+
     if result.outcome is RestoreOutcome.ROLLED_BACK and result.normal_startup_allowed:
         # `perform_rollback` already applied the shared startup rule, including
         # the durability confirmation for the terminal `rolled_back` record. It is

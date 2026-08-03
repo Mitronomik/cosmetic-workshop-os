@@ -417,8 +417,8 @@ def test_run_local_runtime_recovers_an_interrupted_replacement_before_startup(
     monkeypatch.setattr(
         runtime,
         "resolve_restore_recovery",
-        lambda context: recover_incomplete_restore(
-            context, services=stub_services(context.database_path)
+        lambda context, preflight=None: recover_incomplete_restore(
+            context, services=stub_services(context.database_path), preflight=preflight
         ),
     )
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:

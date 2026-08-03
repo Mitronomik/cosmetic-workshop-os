@@ -31,6 +31,21 @@ class RuntimeLaunchError(RuntimeError):
     """Raised when local runtime cannot start safely."""
 
 
+class BackendPortUnavailableError(RuntimeLaunchError):
+    """The configured port is occupied by something else, right now.
+
+    A **subclass**, so every existing `except RuntimeLaunchError`, every existing
+    test and the ordinary user-facing port message are unchanged. What it adds is
+    the one distinction Restore recovery cannot make without it: "the environment
+    is temporarily busy" is not "the restored database is bad".
+
+    That distinction is load-bearing. A verification backend that cannot bind a
+    port has proved nothing about the database, so treating it as a verification
+    failure would convert a problem the user fixes by closing another program into
+    a terminal `recovery_blocked` that only a support procedure can clear.
+    """
+
+
 def ensure_backend_import_path(paths: RuntimePaths) -> None:
     backend_path = str(paths.backend_dir)
     if backend_path not in sys.path:
@@ -45,12 +60,23 @@ def initialize_backend_startup(mode: str, paths: RuntimePaths):
 
 
 def assert_port_available(host: str, port: int) -> None:
+    """Refuse a port that is already in use, with the message that has always said so.
+
+    The raised type is the narrower :class:`BackendPortUnavailableError`, which is
+    a `RuntimeLaunchError`. Callers that only ever wanted "the launcher cannot
+    start" are unaffected; the single caller that must tell an occupied port apart
+    from a bad database — Restore verification — now can.
+
+    This is a probe, not a reservation: the port can be taken between this call
+    and the child's own bind. That race is not closable by any momentary check,
+    which is precisely why the late collision is classified rather than prevented.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             probe.bind((host, port))
         except OSError as exc:
-            raise RuntimeLaunchError(
+            raise BackendPortUnavailableError(
                 f"Порт {port} уже занят. Закройте другое окно приложения или выберите свободный порт."
             ) from exc
 
@@ -251,34 +277,63 @@ def acquire_launcher_lifecycle(runtime_config: RuntimeConfig, paths: RuntimePath
         ) from exc
 
 
-def resolve_restore_recovery(context):
+def resolve_restore_startup_preflight(context):
+    """Establish backend exclusion and read the Restore record, changing nothing.
+
+    The non-mutating half of the `CR-010` § 7.5 gate. It answers the questions the
+    port cannot influence — is a foreign backend holding this workspace, is the
+    authoritative record unreadable, is a previous recovery already blocked — and
+    it takes the retained maintenance lease, so nothing can move between here and
+    the state-mutating half below.
+    """
+    from launcher.restore.recovery import prepare_restore_startup_recovery
+
+    return prepare_restore_startup_recovery(context)
+
+
+def resolve_restore_recovery(context, preflight=None):
     """Resolve any interrupted Restore before ordinary startup may continue.
 
-    This is the `CR-010` § 7.5 gate. It runs before startup migrations, before
-    the backend child and before the browser, and its verdict is binding: an
-    unsafe persisted phase never falls through to the ordinary startup below.
+    This is the state-mutating half of the `CR-010` § 7.5 gate. It runs before
+    startup migrations, before the backend child and before the browser, and its
+    verdict is binding: an unsafe persisted phase never falls through to the
+    ordinary startup below.
     """
     from launcher.restore import recover_incomplete_restore
 
-    return recover_incomplete_restore(context)
+    return recover_incomplete_restore(context, preflight=preflight)
 
 
 def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths | None = None) -> int:
     """Start the local runtime, or refuse — in that order of authority.
 
-    Restore recovery runs **before** the port check, and that ordering is the
-    whole point of it. A backend orphaned by a hard launcher crash normally holds
-    both the canonical backend-liveness lock *and* the configured port, because
-    it is a real running backend. Checking the port first turned the most likely
-    real orphan into a `RuntimeLaunchError` about a busy port — an exception and a
-    traceback — and the typed blocked `RecoveryResult` that exists for exactly
-    this case never ran.
+    Three questions, and the order between them is the whole design:
 
-    So the launcher takes its lifecycle authority, resolves Restore and backend
-    liveness, and only then asks whether the port is free. The port check keeps
-    its own message and its own meaning: an unrelated process sitting on the
-    configured port while the canonical lock is free is an ordinary collision,
-    not a Restore problem, and it is still reported as one.
+    ```text
+    1. does anything else own this workspace?   the canonical liveness lock
+    2. is the configured port usable?           an ordinary socket bind
+    3. what does the interrupted Restore need?  the state-mutating recovery matrix
+    ```
+
+    **Ownership first.** A backend orphaned by a hard launcher crash holds the
+    canonical backend-liveness lock *and* the configured port, because it is a
+    real running backend. Asking about the port first turned the most likely real
+    orphan into a `RuntimeLaunchError` about a busy port — an exception and a
+    traceback — and the typed blocked `RecoveryResult` built for exactly that case
+    never ran.
+
+    **The port before anything is written.** But full recovery *mutates*: it
+    aborts pre-replacement operations, enters `rollback_in_progress`, replaces the
+    working database from the safety copy and runs migrations. Doing all of that
+    and only then finding an unrelated program on the port meant a temporary
+    environment problem could end a recoverable operation at terminal
+    `recovery_blocked`. So the gate is split. The non-mutating preflight
+    establishes exclusion and reads the record; the port is checked next; the
+    state-mutating recovery runs only after that.
+
+    An unrelated collision therefore refuses with the message it has always used,
+    with the Restore history byte-identical, and the next launch — after the user
+    closes that program — resumes the same operation from the same phase.
     """
     runtime_config = config or build_runtime_config()
     runtime_paths = paths or resolve_runtime_paths()
@@ -294,24 +349,36 @@ def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths |
 def _run_locked_runtime(
     runtime_config: RuntimeConfig, runtime_paths: RuntimePaths, context
 ) -> int:
-    recovery = resolve_restore_recovery(context)
+    preflight = resolve_restore_startup_preflight(context)
+    if preflight.blocked_result is not None:
+        # An orphan holding the canonical lock, an unreadable authoritative record
+        # or an already-blocked recovery. None of them is a port problem and none
+        # of them becomes startable if the port is freed, so they are answered
+        # here — before the port is consulted at all. Nothing starts and the
+        # browser never opens. The message is the fixed non-technical
+        # support-assisted text; every technical detail stayed in the local log.
+        print(preflight.blocked_result.message)
+        return RESTORE_BLOCKED_EXIT_CODE
+    # Exclusion is established and the maintenance lease is held, so nothing can
+    # take this workspace from here on. What remains is the ordinary collision:
+    # some other program is using the configured port. The message and the failure
+    # mode are unchanged, and no backend or browser follows.
+    #
+    # This sits *before* `resolve_restore_recovery` on purpose. Everything below
+    # writes — an abort, a rollback request, a database replacement, migrations —
+    # and an unrelated program holding a socket must not be able to change a
+    # single byte of Restore history. Refusing here leaves the durable phase, the
+    # operation record, the staged candidate and the safety copy exactly as the
+    # interrupted operation left them, and the next launch resumes from there.
+    assert_port_available(runtime_config.host, runtime_config.backend_port)
+    recovery = resolve_restore_recovery(context, preflight)
     if not recovery.normal_startup_allowed:
-        # Nothing starts and the browser never opens. The message is the fixed
-        # non-technical support-assisted text; every technical detail stayed in
-        # the local log.
         print(recovery.message)
         return RESTORE_BLOCKED_EXIT_CODE
     if recovery.message:
         # A recovered previous workspace. Restore failed, and saying so here is
         # the honest result — never "restore succeeded".
         print(recovery.message)
-    # Recovery said this workspace is safe to start against, which is a stronger
-    # statement than "the port is free" and had to come first. What remains is the
-    # ordinary collision: some other program is using the configured port. The
-    # message and the failure mode are unchanged, and no backend or browser
-    # follows. The maintenance lease is held throughout, so nothing can take the
-    # workspace between the verdict and the startup below.
-    assert_port_available(runtime_config.host, runtime_config.backend_port)
     startup = initialize_backend_startup(runtime_config.mode, runtime_paths)
     print(f"База данных готова: {startup.database_path}")
     if startup.backup is not None:

@@ -40,6 +40,7 @@ from launcher.restore.context import (
     RestoreLifecycleError,
 )
 from launcher.restore.contracts import (
+    BACKEND_PORT_UNAVAILABLE_MESSAGE,
     COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE,
     RECOVERY_BLOCKED_MESSAGE,
     ROLLED_BACK_MESSAGE,
@@ -63,11 +64,17 @@ from launcher.restore.phases import (
     PhaseTransitionError,
     RestorePhase,
 )
-from launcher.restore.recovery import recover_incomplete_restore
+from launcher.restore.recovery import (
+    RestoreStartupPreflight,
+    prepare_restore_startup_recovery,
+    recover_incomplete_restore,
+)
+from launcher.restore.verification import RetryableBackendStartError
 from launcher.restore.workspace import RestoreWorkspace, resolve_restore_dir
 
 __all__ = [
     "ALLOWED_TRANSITIONS",
+    "BACKEND_PORT_UNAVAILABLE_MESSAGE",
     "BackendMaintenanceLease",
     "BackendProcessOwner",
     "BackendStopProof",
@@ -87,11 +94,14 @@ __all__ = [
     "RestoreRequest",
     "RestoreResult",
     "RestoreServices",
+    "RestoreStartupPreflight",
     "RestoreWorkspace",
+    "RetryableBackendStartError",
     "SUCCESS_MESSAGE",
     "TERMINAL_PHASES",
     "USER_SAFE_MESSAGES",
     "execute_restore",
+    "prepare_restore_startup_recovery",
     "recover_incomplete_restore",
     "resolve_restore_dir",
 ]

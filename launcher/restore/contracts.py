@@ -70,6 +70,14 @@ class RestoreFailure(str, Enum):
     # and only the flush that would make that record survive a host interruption
     # could not be proved. Nothing was rolled back and nothing was lost.
     COMPLETION_DURABILITY_UNCONFIRMED = "completion_durability_unconfirmed"
+    # Not a failure of the Restore at all: the configured local port is occupied
+    # by an unrelated program, so the verification backend could not bind. The
+    # database was not touched, the durable phase is exactly what it was, and the
+    # next launch continues from there. Kept apart from every category above
+    # because an environment problem that resolves itself when the user closes
+    # another program must never be reported with the vocabulary of a Restore
+    # that could not be recovered.
+    BACKEND_PORT_UNAVAILABLE = "backend_port_unavailable"
 
 
 # The complete user-safe vocabulary. Russian, concise, non-technical: these are
@@ -123,6 +131,16 @@ USER_SAFE_MESSAGES: dict[RestoreFailure, str] = {
         "проверка повторится. Все данные сохранены. "
         "Если сообщение повторится, обратитесь в поддержку."
     ),
+    # A retry instruction, not a support instruction. Nothing failed and nothing
+    # is stuck: another program is using the port, and the work resumes by itself
+    # once it is closed. Saying "обратитесь в поддержку" here would send a user to
+    # support over something they can fix in ten seconds, and would imply a
+    # damaged Restore that does not exist.
+    RestoreFailure.BACKEND_PORT_UNAVAILABLE: (
+        "Локальный порт приложения сейчас занят другой программой. "
+        "Закройте её и снова откройте приложение. "
+        "Данные сохранены, восстановление продолжится автоматически."
+    ),
 }
 
 SUCCESS_MESSAGE = "Восстановление завершено. Приложение работает с восстановленными данными."
@@ -137,6 +155,13 @@ RECOVERY_BLOCKED_MESSAGE = USER_SAFE_MESSAGES[RestoreFailure.RECOVERY_BLOCKED]
 # is never described with the vocabulary of a Restore that did not finish.
 COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE = USER_SAFE_MESSAGES[
     RestoreFailure.COMPLETION_DURABILITY_UNCONFIRMED
+]
+
+# Startup is blocked for this run only, by something outside the application. The
+# durable phase is untouched, every artifact is preserved, and the next launch
+# resumes the same operation from the same phase.
+BACKEND_PORT_UNAVAILABLE_MESSAGE = USER_SAFE_MESSAGES[
+    RestoreFailure.BACKEND_PORT_UNAVAILABLE
 ]
 
 

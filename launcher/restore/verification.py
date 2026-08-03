@@ -65,6 +65,32 @@ class BackendVerificationError(RuntimeError):
     """
 
 
+class RetryableBackendStartError(RuntimeError):
+    """The verification backend could not bind, so nothing was verified at all.
+
+    Deliberately **not** a `BackendVerificationError`. This says the check never
+    ran, and the accepted consequences of a failed check — rollback, and
+    ultimately `recovery_blocked` — must not follow from it. A user closes the
+    other program and reopens the application, and recovery continues from the
+    same durable phase.
+
+    It represents exactly one condition: the configured local port was occupied
+    when the owned child tried to take it. Everything else stays a real failure:
+
+    ```text
+    the backend starts but health fails            verification failure
+    a representative read fails                    verification failure
+    the application cannot import                  verification failure
+    the database cannot be opened or migrated      verification failure
+    the handshake token is invalid or times out    verification failure
+    the owned child exits unexpectedly             verification failure
+    the child cannot take the liveness lock        verification failure
+    ```
+
+    Each of those is evidence *about the workspace*. An occupied port is not.
+    """
+
+
 @dataclass(frozen=True)
 class BackendVerificationReport:
     """What verification actually proved, for local logging and tests."""
@@ -160,10 +186,16 @@ def _run_one_verification_cycle(config, paths, target: Path, base_url: str, cycl
     caller is about to roll back. The caller's `run_backend_cycle` then waits for
     the lock to be released and takes the maintenance lease back, which is why
     this function returning is enough for the next cycle to be safe.
+
+    An occupied port is separated out before the generic failure branch. The port
+    is checked before the child is spawned, so nothing was started and nothing was
+    learned about the database; folding that into `BackendVerificationError` is
+    what turned a temporary environment problem into terminal `recovery_blocked`.
     """
     # Deferred: `launcher.runtime` imports this package for the startup recovery
     # gate, so importing it at module scope would be circular.
     from launcher.restore.context import BackendProcessOwner
+    from launcher.runtime import BackendPortUnavailableError
 
     owner = BackendProcessOwner()
     try:
@@ -175,6 +207,13 @@ def _run_one_verification_cycle(config, paths, target: Path, base_url: str, cycl
         _check_representative_reads(base_url)
     except BackendVerificationError:
         raise
+    except BackendPortUnavailableError as exc:
+        # No child exists: the port is asserted before the spawn. So there is
+        # nothing to stop, nothing to roll back, and nothing that could have been
+        # observed about the restored database.
+        raise RetryableBackendStartError(
+            f"The configured port was occupied at verification cycle {cycle + 1}."
+        ) from exc
     except Exception as exc:
         raise BackendVerificationError(
             f"The restored backend failed verification cycle {cycle + 1}: "
