@@ -11,7 +11,7 @@ implement Restore** and changes no runtime code.
 | Item | Status |
 |---|---|
 | `CR-010` — launcher-assisted Restore semantics | `ACCEPTED` |
-| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED` |
+| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED` |
 | `C4-II` — user-facing launcher Restore flow | `PLANNED — NOT AUTHORIZED` |
 | `C4-III` — Restore end-to-end verification and lifecycle closure | `PLANNED — NOT AUTHORIZED` |
 | Restore | `NOT IMPLEMENTED` |
@@ -29,7 +29,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 ```
@@ -849,7 +849,7 @@ There is no frontend implementation in this decision:
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
 ```
 
 This is the **only** runtime slice authorized by this decision. Its scope:
@@ -1052,7 +1052,7 @@ durability boundary). A second audit of that correction found five more (termina
 `completed` publication handling, positive startup permission and the initial
 `prepared` ambiguity, same-size in-place source modification, orphaned backends
 after a hard launcher crash, and the unrecorded flush method). A third audit of
-that second correction found six more:
+that second correction found seven more:
 
 - the backend-liveness lock was **checked momentarily and released**, which proves
   availability at an instant and reserves nothing, leaving the whole destructive
@@ -1067,9 +1067,21 @@ that second correction found six more:
 - `recovery_blocked` was grouped with the completed terminal phases and could be
   overwritten by an ordinary new attempt;
 - a visible-but-unconfirmed `completed` was reported with the rollback sentence,
-  claiming a rollback that did not happen.
+  claiming a rollback that did not happen;
+- one pre-correction test node ID had been renamed rather than preserved.
 
-All sixteen are closed.
+A fourth audit of that third correction found three more:
+
+- the maintenance lease was released around the **entire** startup-plus-two-cycle
+  verification block rather than around each exact owned-backend lifetime, so the
+  canonical lock was held by nobody during startup migrations and again between
+  the two verification cycles;
+- `run_local_runtime()` checked the configured port **before** Restore recovery,
+  so a real orphan — which holds the canonical liveness lock *and* the port —
+  raised a busy-port exception instead of producing the typed blocked result;
+- the pull-request body carried inconsistent finding counts.
+
+All twenty are closed: 5 + 5 + 7 + 3 across four independent audits.
 
 **None of them required a change to this decision** — the twelve phases, the
 transition graph, the recovery matrix and the `replacement_intent` rule are

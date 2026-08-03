@@ -27,7 +27,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
 - `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
 - `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED**
-- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED**
+- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
 - `C4 — ACTIVE`
@@ -42,7 +42,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 
 ```text
 C4-I — Launcher-owned restore safety engine
-IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
 ```
 
 **Next action: an independent audit of the new published head of PR #170.** The
@@ -50,8 +50,10 @@ branch is `codex/c4-i-launcher-restore-safety-engine`, started from `origin/main
 at `b89cbaaaf41a56c810847d7c1e593712c5591eb6` (the PR #169 merge commit). The PR
 stays **draft** until that audit clears it. Nothing else is authorized.
 
-Two independent audits have run. The first found five safety-critical gaps in the
-original implementation:
+**Four independent audits have run, finding twenty findings in total — 5 + 5 + 7
++ 3 — each round against the correction the previous round produced. All twenty
+are closed.** The first found five safety-critical gaps in the original
+implementation:
 
 ```text
 P1-1  source WAL/journal sidecars are checked beside the ORIGINAL selected
@@ -82,7 +84,7 @@ P2-1  a hard launcher crash lost the in-memory process handle, so an orphaned
 P2-2  the `F_FULLFSYNC` fallback was documented as "recorded" but was not
 ```
 
-A third audit of that second correction found six more, all closed as well:
+A third audit of that second correction found seven more, all closed as well:
 
 ```text
 P1-1  the backend-liveness lock was checked momentarily and released, which
@@ -116,6 +118,33 @@ P2-1  a visible-but-unconfirmed `completed` used the rollback sentence,
       `COMPLETION_DURABILITY_UNCONFIRMED` category says only what is known.
 P2-2  the PR body still described the previous head, test counts and smoke.
 P2-3  one pre-correction test node ID had been renamed rather than preserved.
+```
+
+A fourth audit of that third correction found three more, all closed as well:
+
+```text
+P1-1  the maintenance lease was released around the entire startup-plus-
+      two-cycle verification block rather than around each exact owned-backend
+      lifetime. That left two windows with nothing holding the canonical lock:
+      startup migrations, which need no backend at all, and the gap between the
+      two verification cycles, where cycle 1's child had exited and the launcher
+      had not taken the lease back. Startup and migrations now run under the
+      retained lease, and each cycle is its own release/handshake/stop/reacquire
+      window, so the lease is held before cycle 1, between the cycles and after
+      cycle 2. `owned_backend_window()` refuses to open without the lease, and
+      the verifier is given `run_backend_cycle` as a required keyword-only
+      parameter, so "release once, start twice" cannot be expressed.
+P1-2  `run_local_runtime()` checked the port before Restore recovery. A real
+      orphan is a running backend and holds the canonical liveness lock *and*
+      the configured port, so the port check fired first and raised
+      `RuntimeLaunchError` about a busy port — a traceback and the wrong story —
+      while the typed blocked `RecoveryResult` never ran. Recovery and backend
+      liveness are now resolved first; the port check keeps its own unchanged
+      message for the ordinary collision, and an occupied port is never
+      reinterpreted as a Restore problem.
+P2-1  the PR body carried inconsistent finding counts and did not describe this
+      correction. The accounting is now twenty findings across four independent
+      audits, 5 + 5 + 7 + 3.
 ```
 
 No audit required a change to the accepted twelve-phase machine, and no

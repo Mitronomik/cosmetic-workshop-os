@@ -815,7 +815,7 @@ Product release readiness — NOT CLAIMED
 # 16. C4-I implementation — the launcher-owned safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -823,9 +823,11 @@ Product release readiness — NOT CLAIMED
 This section records **exactly what the branch implements**. It adds no decision:
 every rule above still governs, and `C4-I` implements the accepted state machine
 of § 7 without renaming a phase, omitting `replacement_intent` or substituting an
-equivalent of its own. Two independent audits have run against it. The first
-found five safety gaps in the original implementation; the second found five more
-in the correction itself. All ten are closed. § 16.13 records the second round.
+equivalent of its own. **Four independent audits** have run against it, finding
+**twenty findings in total — 5 + 5 + 7 + 3**, each round against the correction
+the previous round produced. All twenty are closed, and none required a change to
+the accepted phase machine. § 16.13 records the second round, § 16.14 the third
+and § 16.15 the fourth.
 
 There is **no** Restore API endpoint, button, dialog, file picker, frontend route
 or product terminal workflow. The engine is internal Python called by a future
@@ -977,8 +979,8 @@ instead — it answers after the import this mechanism exists to gate. No PID fi
 no port, no process-name discovery.
 
 **The verification cycle.** Verification is the one part of Restore that must
-start a backend, so the lease is released for exactly that interval and taken
-back before anything continues:
+start a backend, so the lease is released for exactly **one owned-backend
+lifetime** at a time and taken back at the end of it:
 
 ```text
 release the maintenance lease
@@ -991,9 +993,35 @@ release the maintenance lease
 → only then continue, replace or roll back
 ```
 
+The scope of that release is one backend lifetime and nothing more. Startup
+initialization and migrations run **under the retained lease**: they open and
+rewrite the working database with no backend involved, so there is nobody to hand
+the lock to, and releasing it there would simply leave the database unreserved
+while it was being written. And because verification is two cycles, it is two
+releases and two reacquisitions — never one release spanning both. Between the
+two children the lock is free, and an unleased launcher would be letting a
+separate backend into the workspace it is about to replace.
+
+```text
+startup / migrations                       lease held
+cycle 1  release → child → stop → reacquire
+                                           lease held   ← the between-cycle moment
+cycle 2  release → child → stop → reacquire
+continue, replace or roll back             lease held
+```
+
+At every moment one of two things is true: the launcher holds the maintenance
+lease, or one exact launcher-owned child holds the canonical lock and has
+completed the exact-child handshake. Never neither.
+
 The lease is reacquired on the failure path too, because the failure path leads to
 rollback and rollback replaces the working database. A reacquisition that fails
-blocks recovery; it never proceeds to a replacement without the lease.
+blocks recovery; it never proceeds to a replacement without the lease. The
+handoff is implemented in exactly one place —
+`LauncherLifecycleContext.owned_backend_window()`, which refuses to open unless
+the lease is held — and the verifier is given it as a required `run_backend_cycle`
+parameter, so "release once, start twice" cannot be expressed without going around
+the launcher entirely.
 
 **An orphan is detected, never killed.** This launcher did not start it, so it
 has detection but no authority: Restore and startup recovery refuse, nothing is
@@ -1014,6 +1042,30 @@ holds both with an interrupted Restore record present and with no record at all:
 with no Restore ever attempted, the orphan alone is still reason to refuse,
 because ordinary startup would put a second writer on one SQLite database.
 
+**Recovery is resolved before the port is checked.** A real orphan is a running
+backend, so it holds the canonical liveness lock **and** it is still listening on
+the configured port. Checking the port first therefore turned the most likely
+real orphan into a `RuntimeLaunchError` about a busy port — an exception, a
+traceback, and a message telling the user to close another window — while the
+typed blocked result built for exactly this case never ran. The launcher order is:
+
+```text
+build runtime config and paths
+→ acquire the launcher lifecycle
+→ resolve Restore recovery and canonical backend liveness
+→ if blocked: fixed message, RESTORE_BLOCKED_EXIT_CODE, no backend, no browser
+→ assert the configured port is available
+→ ordinary startup and migrations, under the maintenance lease
+→ release the lease for the exact owned backend child
+→ open the browser only after a safe start
+```
+
+The port check is not weakened by moving: an unrelated program on the configured
+port with the canonical lock free is an ordinary collision, recovery runs
+normally, and the same `RuntimeLaunchError` and the same user-facing port message
+follow. No backend starts and no browser opens in either case. An occupied port
+is never reinterpreted as a Restore problem.
+
 When the environment variable is absent — the ordinary test client, a developer
 importing the app — no lock is taken and nothing is claimed. When it is present
 and the lock cannot be taken, backend startup fails rather than putting a second
@@ -1024,9 +1076,9 @@ Nothing discovers a process by port, name or command-line pattern. `pkill`,
 and `backend_handshake.py`, and tests enforce that against each module's
 executable source.
 
-Backends started for verification are owned by `verify_restored_backend` and
-stopped in a `finally`, on the failure path too. `recovery_blocked` starts
-nothing.
+Backends started for verification are owned by `verify_restored_backend` — one
+per cycle, each inside its own owned-backend window — and stopped in a `finally`,
+on the failure path too. `recovery_blocked` starts nothing.
 
 ## 16.4. Operation-state location and ownership
 
@@ -1424,11 +1476,12 @@ strongest flush the platform actually performed.
 
 ## 16.14. Third correction — what the third audit found
 
-A third independent audit ran against the second correction and found four safety
-gaps and two reporting gaps, all in code the earlier rounds had introduced or left
-in place. All are closed on the same branch, and **none required a change to the
-accepted phase machine**: the twelve phases, the transition graph and `phase` as
-the sole authoritative lifecycle field are unchanged.
+A third independent audit ran against the second correction and found seven
+findings — four safety gaps and three reporting gaps — all in code the earlier
+rounds had introduced or left in place. All are closed on the same branch, and
+**none required a change to the accepted phase machine**: the twelve phases, the
+transition graph and `phase` as the sole authoritative lifecycle field are
+unchanged.
 
 | Finding | Closed by |
 |---|---|
@@ -1438,6 +1491,7 @@ the sole authoritative lifecycle field are unchanged.
 | An ambiguous initial `prepared` publication could report a *previous* operation's terminal record as this attempt's outcome. | The operation ID is compared before anything is concluded; a foreign record is never inherited and never modified (§ 16.11). |
 | `RestoreOperationStateStore.create()` treated `recovery_blocked` as replaceable, letting a new attempt overwrite the pointer to an unresolved operation. | Only the positive `SAFE_TERMINAL_STARTUP_PHASES` vocabulary is replaceable (§ 16.4). |
 | A visible-but-unconfirmed `completed` was reported with the rollback sentence, claiming a rollback that did not happen. | One fixed `COMPLETION_DURABILITY_UNCONFIRMED` category saying only what is known (§ 16.11). |
+| One pre-correction test node ID had been renamed rather than preserved, so a historical guarantee could not be tracked across the correction. | The historical node `test_unsafe_phases_never_permit_ordinary_startup` is restored; corrections are additive to the node set. |
 
 Three standing rules come out of this round.
 
@@ -1456,3 +1510,37 @@ import the handshake exists to gate.
 attempt's record if it carries this attempt's operation ID. A previous
 operation's `completed` is not a new attempt's success, and a `recovery_blocked`
 record is a pointer to be preserved rather than a terminal state to be replaced.
+
+## 16.15. Fourth correction — what the fourth audit found
+
+A fourth independent audit ran against the third correction and found two safety
+gaps and one reporting gap. Both safety gaps are in the *boundaries* of
+mechanisms the earlier rounds got right — where the lease is released, and where
+recovery sits in the startup order — rather than in the mechanisms themselves.
+All are closed on the same branch, and **none required a change to the accepted
+phase machine**: the twelve phases, the transition graph and `phase` as the sole
+authoritative lifecycle field are unchanged.
+
+| Finding | Closed by |
+|---|---|
+| The maintenance lease was released around the entire startup-plus-two-cycle verification block, rather than around each exact owned-backend lifetime. | Startup and migrations run under the retained lease; each verification cycle is its own release/handshake/stop/reacquire window (§ 16.3). |
+| `run_local_runtime()` checked the port before Restore recovery, so a real orphan holding both the canonical liveness lock and the configured port bypassed the typed blocked `RecoveryResult`. | Recovery and backend liveness are resolved before the port check; the port check keeps its own message for the ordinary collision (§ 16.3). |
+| The pull-request body carried inconsistent finding counts and did not describe this correction. | One consistent accounting: twenty findings across four independent audits, 5 + 5 + 7 + 3. |
+
+Two standing rules come out of this round, and both are about scope rather than
+about mechanism.
+
+**A correct primitive can still be held over the wrong interval.** The retained
+lease, the pre-import lock acquisition and the exact-child handshake were all
+right; what was wrong was how much they were asked to cover at once. A release
+wide enough to span two backend lifetimes leaves the lock free in the middle, and
+a release that covers migrations hands the workspace to nobody at all. The
+invariant is now stated positively: at every moment either the launcher holds the
+lease, or one exact owned child holds the canonical lock having completed the
+handshake — never neither.
+
+**Order the checks by what they actually prove.** A free port is not proof that
+nothing owns the workspace, and an occupied port is not proof that the owner is
+something to refuse for. The canonical lock answers ownership, so it is consulted
+first; the port answers "is this address usable", so it is consulted after, and it
+keeps its own unchanged message for the ordinary collision it really describes.

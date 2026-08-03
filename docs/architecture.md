@@ -270,6 +270,8 @@ Packaged Local App
 Local App Launcher
   - first start check
   - data directory check
+  - launcher lifecycle lock
+  - incomplete-Restore recovery
   - port check
   - migration runner
   - pre-update backup
@@ -2331,7 +2333,7 @@ Before schema migration:
 > C4 — ACTIVE
 > C4 product decision — COMPLETE
 > CR-010 — ACCEPTED
-> C4-I — IMPLEMENTED ON PR BRANCH — THIRD CORRECTION APPLIED — NOT MERGED
+> C4-I — IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
 > C4-II — PLANNED — NOT AUTHORIZED
 > C4-III — PLANNED — NOT AUTHORIZED
 > Restore — NOT IMPLEMENTED
@@ -2367,11 +2369,21 @@ Before schema migration:
 >
 > The launcher, in turn, does not merely *check* that lock before destructive work;
 > it **holds** it. A retained maintenance lease over the same canonical lock covers
-> the safety copy, journal settlement, replacement, rollback replacement and
-> post-replacement verification, and is released only for the one owned backend a
-> verification cycle has to start — then reacquired before anything continues. A
-> lock that was checked and released proves availability at an instant and reserves
-> nothing.
+> the safety copy, journal settlement, replacement, rollback replacement,
+> post-replacement verification **and startup migrations** — which need no backend
+> at all. The lease is released only for **one exact owned-backend lifetime** at a
+> time, and taken back at the end of it, so two verification cycles are two
+> releases and two reacquisitions rather than one release spanning both. At every
+> moment either the launcher holds the lease or one exact owned child holds the
+> canonical lock, never neither. A lock that was checked and released proves
+> availability at an instant and reserves nothing.
+>
+> Ownership is also resolved **before** the port is checked. A real orphan is a
+> running backend, so it holds the canonical lock *and* the configured port;
+> checking the port first turned that into an exception about a busy port and
+> bypassed the typed blocked result. The port check keeps its own unchanged message
+> for the ordinary collision — an unrelated program on the port with the canonical
+> lock free — and neither case starts a backend or opens the browser.
 
 ```text
 MVP Restore is launcher-assisted.
