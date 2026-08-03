@@ -1,6 +1,6 @@
 # Handoff
 
-## C4-I implemented and corrected five times on its PR branch — not merged (2026-08-03)
+## C4-I implemented and corrected six times on its PR branch — not merged (2026-08-03)
 
 > This is the single current authoritative lifecycle conclusion. Every earlier
 > section in this file, including the one immediately below, is a historical
@@ -10,7 +10,7 @@
 CR-010 — ACCEPTED (PR #169, merge commit b89cbaaaf41a56c810847d7c1e593712c5591eb6)
 
 C4-I — Launcher-owned restore safety engine
-— IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
+— IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 — PR #170, draft
 — branch codex/c4-i-launcher-restore-safety-engine
 — based on origin/main = b89cbaaaf41a56c810847d7c1e593712c5591eb6
@@ -21,7 +21,9 @@ C4-I — Launcher-owned restore safety engine
   correction
 — head 3223592 was audited a fifth time; two more found and closed by this
   correction
-— twenty-two findings across five independent audits: 5 + 5 + 7 + 3 + 2
+— head da2ffc9 was audited a sixth time; two more found and closed by this
+  correction
+— twenty-four findings across six independent audits: 5 + 5 + 7 + 3 + 2 + 2
 
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -79,6 +81,15 @@ PR stays draft until that audit clears it. Nothing else is authorized.
   itself when it is not handed one, so there is only ever one recovery matrix.
   `recovery_blocked` returns exit code `3` and starts nothing, and the port check
   keeps its own unchanged message for the ordinary collision.
+- **Readiness means the lock AND the listening socket.** The child binds the
+  exact configured socket itself, before it reports anything, and uvicorn serves
+  that same socket via `Server.run(sockets=[...])`. Do not switch back to
+  `uvicorn.run(host=..., port=...)`: it binds again, *after* readiness has been
+  reported, which is the race the sixth correction closed. Do not reserve a socket
+  and close it before serving either — that leaves the same window. `EADDRINUSE`
+  is reported through the structured `port-unavailable:<token>` handshake before
+  any application import; no uvicorn output is parsed, and exit codes are
+  secondary evidence only.
 - **A busy port is never a verdict on the data.** `assert_port_available` raises
   `BackendPortUnavailableError` (a `RuntimeLaunchError`, so every existing
   `except` is unchanged); the verifier turns that into
@@ -96,10 +107,11 @@ PR stays draft until that audit clears it. Nothing else is authorized.
   verifies. The runner is created outside the repository and drives a detached
   worktree at the exact published head. `scripts/restore_backup.sh` is unrelated
   to `C4-I` and is unchanged.
-- **The twenty-two closed review findings** — 5 + 5 + 7 + 3 + 2 across five
+- **The twenty-four closed review findings** — 5 + 5 + 7 + 3 + 2 + 2 across six
   independent audits — are summarized in `state/current-focus.md` and specified in
   `docs/backup-and-restore.md` § 16, with § 16.13 covering the second round,
-  § 16.14 the third, § 16.15 the fourth and § 16.16 the fifth. The most
+  § 16.14 the third, § 16.15 the fourth, § 16.16 the fifth and § 16.17 the sixth.
+  The most
   load-bearing rules to keep in mind when reading the code: a caller supplies
   **only** the selected source; the backend is stopped **by owned handle** *and*
   excluded by a **retained maintenance lease** over the backend-liveness lock,
@@ -127,10 +139,13 @@ PR stays draft until that audit clears it. Nothing else is authorized.
   it is the accepted behaviour, and a future support flow owns the user-facing
   half. Do not let a lifecycle error escape the public launcher boundary again.
 - **Evidence on the branch**: baseline `1843` pre-`C4-I` node IDs all preserved;
-  the named `2bf53e7` node restored and still present; all `2351` node IDs of
-  `3223592` preserved with `0` lost; `2378 passed` for the complete backend +
-  launcher suite and `513 passed` for the launcher suite; external exact-head
+  the named `2bf53e7` node restored and still present; all `2378` node IDs of
+  `da2ffc9` preserved with `0` lost; `2398 passed` for the complete backend +
+  launcher suite and `531 passed` for the launcher suite; `21/21` frontend
+  `test:*` scripts plus the production build; an `11/11` ordinary product
+  regression gate against isolated temporary user data; external exact-head
   Restore smoke against a detached checkout; repository clean before and after.
+  **No GitHub CI workflow exists on this branch, so no CI run is claimed.**
 
 ---
 

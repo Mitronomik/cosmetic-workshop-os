@@ -2333,7 +2333,7 @@ Before schema migration:
 > C4 — ACTIVE
 > C4 product decision — COMPLETE
 > CR-010 — ACCEPTED
-> C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
+> C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 > C4-II — PLANNED — NOT AUTHORIZED
 > C4-III — PLANNED — NOT AUTHORIZED
 > Restore — NOT IMPLEMENTED
@@ -2393,6 +2393,18 @@ Before schema migration:
 > Restore history, and a collision that appears after that check is classified as
 > retryable rather than ending the operation at `recovery_blocked`. Neither case
 > starts a backend or opens the browser.
+>
+> The last gap was that the launcher-managed child reported a successful start
+> while holding only the lock; uvicorn bound the port afterwards, so a program
+> that took it in between produced a child that started and then died — which
+> reads as a verification failure. The child now **binds the exact configured
+> socket itself, before reporting readiness**, and uvicorn serves that same socket
+> rather than binding again. A successful readiness report therefore means the
+> conjunction — this exact child owns the canonical liveness lock *and* the actual
+> listening socket — and `EADDRINUSE` is reported through the structured one-run
+> handshake, before any application module is imported and before the database is
+> opened. The early port probe remains a fast, friendly refusal for the common
+> case; it is not the ownership proof.
 
 ```text
 MVP Restore is launcher-assisted.

@@ -815,7 +815,7 @@ Product release readiness — NOT CLAIMED
 # 16. C4-I implementation — the launcher-owned safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -824,10 +824,11 @@ This section records **exactly what the branch implements**. It adds no decision
 every rule above still governs, and `C4-I` implements the accepted state machine
 of § 7 without renaming a phase, omitting `replacement_intent` or substituting an
 equivalent of its own. **Four independent audits** have run against it, finding
-**twenty-two findings in total — 5 + 5 + 7 + 3 + 2**, each round against the
-correction the previous round produced. All twenty-two are closed, and none
+**twenty-four findings in total — 5 + 5 + 7 + 3 + 2 + 2**, each round against
+the correction the previous round produced. All twenty-four are closed, and none
 required a change to the accepted phase machine. § 16.13 records the second
-round, § 16.14 the third, § 16.15 the fourth and § 16.16 the fifth.
+round, § 16.14 the third, § 16.15 the fourth, § 16.16 the fifth and § 16.17 the
+sixth.
 
 There is **no** Restore API endpoint, button, dialog, file picker, frontend route
 or product terminal workflow. The engine is internal Python called by a future
@@ -968,15 +969,71 @@ without ever reaching `app.main` when it cannot. The lifespan acquisition remain
 as an idempotent defence; it is simply no longer the first acquisition point.
 
 **The exact-child handshake.** Owning a `Popen` says the launcher started a
-process; it does not say the process took the lock. The entrypoint reports its
-acquisition over a pipe the launcher created for that one spawn, carrying a token
-generated for that one spawn, and `start_owned_backend_process` returns only once
-that report arrives. Both halves are one-run values, so stale evidence cannot
-satisfy a later start and a replayed token is refused. Timeout, EOF, an early
-child exit and a foreign token are the same answer: the child is stopped, no
-browser opens and Restore does not proceed. Health is checked as well, never
-instead — it answers after the import this mechanism exists to gate. No PID file,
-no port, no process-name discovery.
+process; it does not say the process took the lock, and it does not say the
+process can actually serve. The entrypoint reports over a pipe the launcher
+created for that one spawn, carrying a token generated for that one spawn, and
+`start_owned_backend_process` returns only once that report arrives. Both halves
+are one-run values, so stale evidence cannot satisfy a later start and a replayed
+token is refused. Timeout, EOF, an early child exit and a foreign token are the
+same answer: the child is stopped, no browser opens and Restore does not proceed.
+Health is checked as well, never instead — it answers after the import this
+mechanism exists to gate. No PID file, no port scan, no process-name discovery,
+and no reading of uvicorn's output.
+
+**What a successful report means: the lock *and* the listening socket.** The
+launcher probes the configured port before spawning, but a probe binds, closes and
+returns — availability at an instant, reserving nothing. Uvicorn used to perform
+the real bind *after* the child had already reported success:
+
+```text
+parent probes the port          ← free
+parent spawns the child
+child takes the liveness lock
+child reports "started"         ← the launcher believes the backend is up
+another program takes the port  ← the real race
+child imports uvicorn
+uvicorn tries to bind           ← EADDRINUSE, far too late to classify
+child exits
+```
+
+The launcher then saw a child that started and then died, which
+`wait_for_backend_ready()` classifies as a verification failure — and during
+rollback recovery a verification failure ends the operation at terminal
+`recovery_blocked`. A busy socket must never be able to do that.
+
+So the child binds the exact configured socket **itself**, before reporting
+anything, and uvicorn serves that same socket through
+`Server.run(sockets=[...])`. There is no second bind, and therefore no window
+between the proof and the serving. A successful report now means, and can only
+mean:
+
+```text
+this exact child owns the canonical backend-liveness lock
+AND
+this exact child owns the actual configured listening socket
+```
+
+The handshake carries two structured results, each with the one-run token:
+
+```text
+ready:<token>              both facts established
+port-unavailable:<token>   EADDRINUSE; nothing bound, nothing imported,
+                           no database opened
+```
+
+`EADDRINUSE` is the **only** refusal reported as a collision. An invalid host, an
+unusable address family, a permission failure or any other socket error keeps its
+ordinary meaning as a child that could not start — classifying every socket
+problem as "somebody else has the port" would hide real misconfiguration behind a
+retry instruction. The parent maps `port-unavailable` to the existing
+`BackendPortUnavailableError`, with the existing user-facing port message, which
+Restore verification already turns into a retryable refusal. Exit codes exist as
+secondary evidence only; the tokened handshake is the authority, because an exit
+code cannot say which start it belonged to.
+
+The early `assert_port_available()` probe stays, as a fast and friendly refusal
+for the common case where the port is already busy before anything starts. It is
+**not** the ownership proof and is not treated as one.
 
 **The verification cycle.** Verification is the one part of Restore that must
 start a backend, so the lease is released for exactly **one owned-backend
@@ -1679,3 +1736,39 @@ database runs without one of the two ownership proofs — which is the property
 every destructive step actually depends on. The fix was to the wording, not to the
 handshake: redesigning a correct mechanism to make an overstated sentence literally
 true would have been the wrong repair.
+
+## 16.17. Sixth correction — what the sixth audit found
+
+A sixth independent audit ran against the fifth correction and found one safety
+blocker and one evidence-accuracy issue. The blocker is the *real* socket race the
+fifth correction had reasoned about but not closed; the evidence issue is that the
+test which appeared to cover it could not have. Both are closed on the same
+branch, and **neither required a change to the accepted phase machine**: the
+twelve phases, the transition graph and `phase` as the sole authoritative
+lifecycle field are unchanged, and no new phase, persisted flag or second lock
+file was added.
+
+| Finding | Closed by |
+|---|---|
+| A real port collision could occur after `assert_port_available()` succeeded but before uvicorn's actual bind. The child reported a successful start while holding only the lock, so a collision arrived as a started-then-died child and was classified as a verification failure — which during rollback recovery still published terminal `recovery_blocked`. | The child binds the exact configured socket before reporting readiness, and uvicorn serves that already-bound socket; `EADDRINUSE` is reported through the structured one-run handshake (§ 16.3). |
+| The late-collision test monkeypatched `BackendProcessOwner.start` and raised `BackendPortUnavailableError` directly, so it proved exception routing and nothing about the real child, handshake or bind. | A real-process regression module — real parent, real child entrypoint, real handshake, real configured port, real bind refusal — with the synthetic tests kept and relabelled as exception-routing unit tests. |
+
+Two standing rules come out of this round.
+
+**A proof must be established before it is reported, not after.** Every earlier
+round moved an ownership check *earlier*: the lock before the application import,
+the lease before the destructive interval, recovery before the port. This one is
+the same rule applied to the last remaining gap — the readiness report was sent
+before the last thing it implicitly promised had actually happened. The fix is not
+a retry, a sleep or a second probe; it is making the report come after the fact it
+asserts. A reservation that is closed before it is used is not a reservation, which
+is why the socket is bound once and kept.
+
+**A test that cannot fail against the defect is not evidence of its absence.** The
+synthetic late-collision test passed on every head, including the ones where the
+product could not reach the routing it exercised. It was not wrong — it proves the
+engine defers when handed the condition — it was *mislabelled*, and the label was
+doing the work of a proof. The two are now separate and named as such: one says
+the routing is right, the other says the routing is reachable. When a test injects
+the condition it is meant to demonstrate, that has to be stated where the test is
+described, not inferred by a reader.

@@ -11,7 +11,7 @@ implement Restore** and changes no runtime code.
 | Item | Status |
 |---|---|
 | `CR-010` — launcher-assisted Restore semantics | `ACCEPTED` |
-| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED` |
+| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED` |
 | `C4-II` — user-facing launcher Restore flow | `PLANNED — NOT AUTHORIZED` |
 | `C4-III` — Restore end-to-end verification and lifecycle closure | `PLANNED — NOT AUTHORIZED` |
 | Restore | `NOT IMPLEMENTED` |
@@ -29,7 +29,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 ```
@@ -849,7 +849,7 @@ There is no frontend implementation in this decision:
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 ```
 
 This is the **only** runtime slice authorized by this decision. Its scope:
@@ -1090,7 +1090,18 @@ A fifth audit of that fourth correction found two more:
 - the documented handoff invariant claimed **continuous lock ownership at every
   instant**, although a bounded release-to-child scheduling gap necessarily exists.
 
-All twenty-two are closed: 5 + 5 + 7 + 3 + 2 across five independent audits.
+A sixth audit of that fifth correction found two more:
+
+- a real port collision could occur **after** `assert_port_available()` succeeded
+  and **before** uvicorn's actual bind: the child reported a successful start
+  while holding only the liveness lock, so the collision arrived as a
+  started-then-died child, was classified as a verification failure, and could
+  still end a rollback at terminal `recovery_blocked`;
+- the test that appeared to cover that race injected the exception at the
+  owned-backend start, so it demonstrated exception routing rather than the real
+  child, handshake or bind.
+
+All twenty-four are closed: 5 + 5 + 7 + 3 + 2 + 2 across six independent audits.
 
 **None of them required a change to this decision** — the twelve phases, the
 transition graph, the recovery matrix and the `replacement_intent` rule are

@@ -27,7 +27,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
 - `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
 - `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED**
-- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED**
+- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
 - `C4 — ACTIVE`
@@ -42,7 +42,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 
 ```text
 C4-I — Launcher-owned restore safety engine
-IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 ```
 
 **Next action: an independent audit of the new published head of PR #170.** The
@@ -50,9 +50,9 @@ branch is `codex/c4-i-launcher-restore-safety-engine`, started from `origin/main
 at `b89cbaaaf41a56c810847d7c1e593712c5591eb6` (the PR #169 merge commit). The PR
 stays **draft** until that audit clears it. Nothing else is authorized.
 
-**Five independent audits have run, finding twenty-two findings in total —
-5 + 5 + 7 + 3 + 2 — each round against the correction the previous round
-produced. All twenty-two are closed.** The first found five safety-critical gaps in the original
+**Six independent audits have run, finding twenty-four findings in total —
+5 + 5 + 7 + 3 + 2 + 2 — each round against the correction the previous round
+produced. All twenty-four are closed.** The first found five safety-critical gaps in the original
 implementation:
 
 ```text
@@ -187,6 +187,41 @@ P2-1  the documented handoff invariant claimed continuous lock ownership at
       handshake — and the bounded gap is documented explicitly, together with why
       nothing touches the database inside it. A documentation correction only;
       the handshake was not redesigned to make an overstated sentence true.
+```
+
+A sixth audit of that fifth correction found two more, both closed as well:
+
+```text
+P1-1  the real socket race was still open. `assert_port_available()` binds a
+      probe, closes it and returns; the launcher-managed child then took the
+      canonical liveness lock and reported a successful start, and only *after*
+      that did uvicorn perform the real bind. A program taking the port in
+      between produced a child that had reported success and then exited, which
+      `wait_for_backend_ready()` classifies as a `BackendVerificationError` — so
+      during rollback recovery a temporary socket conflict could still publish
+      terminal `recovery_blocked`. The child now binds the exact configured
+      socket **itself**, before reporting anything, and uvicorn serves that
+      already-bound socket via `Server.run(sockets=[...])`; there is no second
+      bind. A successful readiness report means the conjunction: this exact child
+      owns the canonical lock *and* the actual listening socket. The handshake
+      carries two structured, tokened results — `ready:` and `port-unavailable:`
+      — and `EADDRINUSE` is the only refusal reported as a collision, before any
+      application module is imported and before the database is opened. The
+      parent maps it to the existing `BackendPortUnavailableError` with the
+      existing Russian message, which Restore already turns into
+      `RetryableBackendStartError`. No uvicorn output is parsed; exit codes are
+      secondary evidence only. The early probe stays as a fast, friendly refusal
+      and is no longer treated as the ownership proof.
+P2-1  the test that appeared to cover that race intercepted
+      `BackendProcessOwner.start` and raised `BackendPortUnavailableError`
+      directly, so it proved exception routing and nothing about the real child,
+      handshake or bind — and it passed on every head, including the ones where
+      the product could not reach the routing at all.
+      `launcher/tests/test_restore_real_port_bind_race.py` is the regression
+      proof: real parent, real child entrypoint, real one-run handshake, the real
+      configured port, a real competing listener and a real bind refusal. The
+      synthetic tests are kept and relabelled as exception-routing unit tests.
+      One says the routing is right; the other says the routing is reachable.
 ```
 
 No audit required a change to the accepted twelve-phase machine, and no

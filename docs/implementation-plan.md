@@ -2057,7 +2057,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -2115,7 +2115,7 @@ decision.
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 ```
 
 The **only** runtime slice authorized by `CR-010`. It is implemented on the
@@ -2148,9 +2148,14 @@ temporary port collision could occur before or during rollback recovery and turn
 a retryable environment problem into terminal `recovery_blocked`, because the
 state-mutating recovery ran before the port was ever checked; and the documented
 handoff invariant overstated continuous lock ownership at every instant, although
-a bounded release-to-child scheduling gap necessarily exists. **All twenty-two are
-closed on that branch — 5 + 5 + 7 + 3 + 2 across five independent audits — and
-none required a change to the accepted phase machine.**
+a bounded release-to-child scheduling gap necessarily exists. A sixth audit of
+that fifth correction found two more: a real port collision could still occur
+after the parent's probe and before uvicorn's actual bind, because the child
+reported a successful start while holding only the liveness lock; and the test
+that appeared to cover that race injected the exception at the owned-backend
+start rather than exercising the real child and bind. **All twenty-four are closed
+on that branch — 5 + 5 + 7 + 3 + 2 + 2 across six independent audits — and none
+required a change to the accepted phase machine.**
 It has no user-facing entry point, so **`Restore` remains `NOT IMPLEMENTED`** and
 product release readiness remains **not claimed**.
 
