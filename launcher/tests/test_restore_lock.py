@@ -164,6 +164,11 @@ def test_the_port_check_still_runs_and_keeps_its_own_message(monkeypatch, tmp_pa
         with pytest.raises(runtime.RuntimeLaunchError, match="Порт .* уже занят"):
             runtime.run_local_runtime(config, resolve_runtime_paths())
 
-    # The port check comes first, so nothing under the user-data boundary was
-    # created — including the Restore directory.
-    assert not user_data_dir.exists()
+    # The Restore lock and the port check answer different questions, and the
+    # answers must not be swapped. The port check runs after recovery — an
+    # orphaned backend holds the port as well as the canonical lock, and checking
+    # the port first reported that as a busy port rather than as the blocked
+    # startup it is. So the Restore directory exists by now, holding only the
+    # launcher's own lock file, while the user database was never created.
+    assert not (user_data_dir / "data").exists()
+    assert not (user_data_dir / "backups").exists()

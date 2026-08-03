@@ -233,9 +233,12 @@ def acquire_launcher_lifecycle(runtime_config: RuntimeConfig, paths: RuntimePath
     a second launcher cannot begin recovery while the first is halfway through a
     database replacement.
 
-    The existing port check stays where it is and keeps its own message: a free
-    port is not proof that nothing else owns the workspace, least of all during
-    Restore, when the backend is stopped by design.
+    This runs **before** the port check. A free port is not proof that nothing
+    else owns the workspace — least of all during Restore, when the backend is
+    stopped by design — and an occupied port is not proof that the owner is
+    something this launcher should refuse for. Ownership is resolved first,
+    through the canonical lock; the port check then keeps its own message for the
+    ordinary collision it actually describes.
     """
     ensure_backend_import_path(paths)
     from launcher.restore import LauncherAlreadyRunningError, LauncherLifecycleContext
@@ -261,10 +264,25 @@ def resolve_restore_recovery(context):
 
 
 def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths | None = None) -> int:
+    """Start the local runtime, or refuse — in that order of authority.
+
+    Restore recovery runs **before** the port check, and that ordering is the
+    whole point of it. A backend orphaned by a hard launcher crash normally holds
+    both the canonical backend-liveness lock *and* the configured port, because
+    it is a real running backend. Checking the port first turned the most likely
+    real orphan into a `RuntimeLaunchError` about a busy port — an exception and a
+    traceback — and the typed blocked `RecoveryResult` that exists for exactly
+    this case never ran.
+
+    So the launcher takes its lifecycle authority, resolves Restore and backend
+    liveness, and only then asks whether the port is free. The port check keeps
+    its own message and its own meaning: an unrelated process sitting on the
+    configured port while the canonical lock is free is an ordinary collision,
+    not a Restore problem, and it is still reported as one.
+    """
     runtime_config = config or build_runtime_config()
     runtime_paths = paths or resolve_runtime_paths()
     print("Мастерская косметолога: запуск локального режима…")
-    assert_port_available(runtime_config.host, runtime_config.backend_port)
     print(f"Данные пользователя будут храниться вне кода приложения (режим: {runtime_config.mode}).")
     context = acquire_launcher_lifecycle(runtime_config, runtime_paths)
     try:
@@ -287,6 +305,13 @@ def _run_locked_runtime(
         # A recovered previous workspace. Restore failed, and saying so here is
         # the honest result — never "restore succeeded".
         print(recovery.message)
+    # Recovery said this workspace is safe to start against, which is a stronger
+    # statement than "the port is free" and had to come first. What remains is the
+    # ordinary collision: some other program is using the configured port. The
+    # message and the failure mode are unchanged, and no backend or browser
+    # follows. The maintenance lease is held throughout, so nothing can take the
+    # workspace between the verdict and the startup below.
+    assert_port_available(runtime_config.host, runtime_config.backend_port)
     startup = initialize_backend_startup(runtime_config.mode, runtime_paths)
     print(f"База данных готова: {startup.database_path}")
     if startup.backup is not None:
