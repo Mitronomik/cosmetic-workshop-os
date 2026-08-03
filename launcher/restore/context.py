@@ -53,6 +53,14 @@ letting a separate backend into the workspace it is about to replace. Startup
 migrations need no backend at all and therefore run with the lease still held.
 A reacquisition that fails blocks rather than continues.
 
+The guarantee that follows is about **database access**: no step that reads,
+migrates, verifies or replaces the working database runs unless the launcher
+holds the lease or the exact owned child holds the canonical lock and has
+completed the handshake. It is deliberately not the stronger claim that the lock
+is owned at every instant — a bounded no-owner interval exists while a released
+lease is being picked up by the child it was released for, and nothing touches
+the database inside it.
+
 `BackendProcessOwner` is that handle. It terminates **only** the process it
 recorded, escalating to `kill()` on the same handle after a bounded wait, and
 confirms `poll()` is no longer `None` before returning a proof. Nothing here
@@ -482,6 +490,16 @@ class LauncherLifecycleContext:
         lease back, a separate backend may acquire it and open the working
         database. So the entry precondition is checked rather than assumed, and
         the reacquisition happens per cycle rather than once at the end.
+
+        What this guarantees is stated in terms of *database access*, not of
+        uninterrupted lock ownership. A bounded no-owner interval necessarily
+        exists between the release here and the child's own acquisition — the
+        child has to be scheduled before it can take anything — and nothing
+        touches the database inside it: the launcher does nothing between the
+        release and the handshake, and the child takes the lock before importing
+        any application module. If a foreign backend wins that window, the exact
+        child fails to acquire, exits before the import, the handshake never
+        succeeds, and the destructive work that follows is refused.
 
         The lease is reacquired on the failure path too, because the failure path
         leads to rollback and rollback replaces the working database. When the

@@ -27,7 +27,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 - `C3 artifact-finalization hardening`: **DONE — MERGED AND EXACT-HEAD VERIFIED** (PR #168, final reviewed head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z`)
 - `C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`
 - `CR-010 — Launcher-assisted Restore semantics`: **ACCEPTED**
-- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED**
+- `C4-I — Launcher-owned restore safety engine`: **IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED**
 - `C4-II — User-facing launcher Restore flow`: **PLANNED — NOT AUTHORIZED**
 - `C4-III — Restore end-to-end verification and lifecycle closure`: **PLANNED — NOT AUTHORIZED**
 - `C4 — ACTIVE`
@@ -42,7 +42,7 @@ Active phase: **Roadmap completion window — C1 complete; C2 complete; C3 `COMP
 
 ```text
 C4-I — Launcher-owned restore safety engine
-IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
 ```
 
 **Next action: an independent audit of the new published head of PR #170.** The
@@ -50,9 +50,9 @@ branch is `codex/c4-i-launcher-restore-safety-engine`, started from `origin/main
 at `b89cbaaaf41a56c810847d7c1e593712c5591eb6` (the PR #169 merge commit). The PR
 stays **draft** until that audit clears it. Nothing else is authorized.
 
-**Four independent audits have run, finding twenty findings in total — 5 + 5 + 7
-+ 3 — each round against the correction the previous round produced. All twenty
-are closed.** The first found five safety-critical gaps in the original
+**Five independent audits have run, finding twenty-two findings in total —
+5 + 5 + 7 + 3 + 2 — each round against the correction the previous round
+produced. All twenty-two are closed.** The first found five safety-critical gaps in the original
 implementation:
 
 ```text
@@ -143,8 +143,50 @@ P1-2  `run_local_runtime()` checked the port before Restore recovery. A real
       message for the ordinary collision, and an occupied port is never
       reinterpreted as a Restore problem.
 P2-1  the PR body carried inconsistent finding counts and did not describe this
-      correction. The accounting is now twenty findings across four independent
-      audits, 5 + 5 + 7 + 3.
+      correction. That round set the accounting to twenty findings across four
+      independent audits, 5 + 5 + 7 + 3; the fifth round below carries it to
+      twenty-two across five.
+```
+
+A fifth audit of that fourth correction found two more, both closed as well:
+
+```text
+P1-1  an unrelated temporary port collision could occur before or during
+      rollback recovery and turn a retryable environment problem into terminal
+      `recovery_blocked`. The fourth correction put recovery ahead of the port
+      check for a good reason — a real orphan holds the lock *and* the port —
+      but recovery *writes*: it aborts pre-replacement operations, enters
+      `rollback_in_progress`, replaces the working database from the safety copy
+      and runs migrations. The gate is now two halves.
+      `prepare_restore_startup_recovery()` establishes exclusion, takes the
+      retained lease, detects an orphan and reads the record, and changes
+      nothing. The port is checked between the halves, so an unrelated collision
+      refuses with the existing Russian port message and the Restore history
+      byte-identical — the durable phase, the record, the staged candidate and
+      the safety copy all exactly as the interruption left them — and the next
+      launch resumes the same operation. There is still one recovery matrix: the
+      full recovery runs the same preflight when it is not handed one. The port
+      can also be taken *after* that check, which no momentary probe can prevent,
+      so the late collision is classified: `assert_port_available` raises the
+      narrower `BackendPortUnavailableError`, the verifier turns it into
+      `RetryableBackendStartError`, and neither the engine nor recovery treats it
+      as a verification failure. The durable phase stays where it is, evidence is
+      retained, the lease is back, no child is leaked, `recovery_blocked` is
+      never published, and the fixed `backend_port_unavailable` sentence tells
+      the user to close the other program and reopen. Every real failure — health,
+      representative reads, imports, migrations, the handshake, an early child
+      exit, a refused liveness lock, safety-copy verification, rollback
+      replacement — keeps its existing non-retryable behaviour.
+P2-1  the documented handoff invariant claimed continuous lock ownership at
+      every instant, which the implementation cannot guarantee: a released lease
+      is picked up by a child that has to be scheduled first, so a bounded
+      no-owner interval necessarily exists. The invariant is now stated in terms
+      of database access — no operation that reads, migrates, verifies or
+      replaces the working database runs unless the launcher holds the lease or
+      the exact owned child holds the canonical lock and has completed the
+      handshake — and the bounded gap is documented explicitly, together with why
+      nothing touches the database inside it. A documentation correction only;
+      the handshake was not redesigned to make an overstated sentence true.
 ```
 
 No audit required a change to the accepted twelve-phase machine, and no

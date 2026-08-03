@@ -1,6 +1,6 @@
 # Handoff
 
-## C4-I implemented and corrected four times on its PR branch — not merged (2026-08-03)
+## C4-I implemented and corrected five times on its PR branch — not merged (2026-08-03)
 
 > This is the single current authoritative lifecycle conclusion. Every earlier
 > section in this file, including the one immediately below, is a historical
@@ -10,7 +10,7 @@
 CR-010 — ACCEPTED (PR #169, merge commit b89cbaaaf41a56c810847d7c1e593712c5591eb6)
 
 C4-I — Launcher-owned restore safety engine
-— IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
+— IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
 — PR #170, draft
 — branch codex/c4-i-launcher-restore-safety-engine
 — based on origin/main = b89cbaaaf41a56c810847d7c1e593712c5591eb6
@@ -19,7 +19,9 @@ C4-I — Launcher-owned restore safety engine
 — head 606b219 was audited a third time; seven more found and closed by 5adc215
 — head 5adc215 was audited a fourth time; three more found and closed by this
   correction
-— twenty findings across four independent audits: 5 + 5 + 7 + 3
+— head 3223592 was audited a fifth time; two more found and closed by this
+  correction
+— twenty-two findings across five independent audits: 5 + 5 + 7 + 3 + 2
 
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -57,25 +59,47 @@ PR stays draft until that audit clears it. Nothing else is authorized.
   never creates the migration table. `app.db.migrations.applied_migration_ids`
   could not be reused because it issues `CREATE TABLE IF NOT EXISTS` on a file the
   Restore contract requires to stay untouched.
-- **The launcher startup path changed.** `run_local_runtime` now takes an
-  exclusive instance lock and resolves any interrupted Restore *before* the port
-  check, startup migrations, the backend child and the browser.
-  `recovery_blocked` returns exit code `3` and starts nothing. The port check
-  runs **after** recovery on purpose: a real orphan holds the canonical liveness
-  lock *and* the configured port, and checking the port first reported that as a
-  busy port rather than as the blocked startup it is. Do not move the port check
-  back to the front. It keeps its own unchanged message for the ordinary
-  collision — an unrelated program on the port with the canonical lock free.
+- **The launcher startup path changed, and its order is load-bearing in both
+  directions.** `run_local_runtime` takes an exclusive instance lock and then runs
+  a **two-half** Restore gate:
+
+  ```text
+  non-mutating preflight   exclusion, orphan detection, read the record
+  port check               ordinary RuntimeLaunchError, nothing written yet
+  state-mutating recovery  the § 7.5 matrix: abort, roll back, replace, migrate
+  ```
+
+  Do not collapse these. Exclusion must come **before** the port, because a real
+  orphan holds the canonical liveness lock *and* the configured port, and asking
+  the port first reported that as a busy port rather than as the blocked startup
+  it is. The port must come **before** the mutating half, because that half
+  writes, and an unrelated program holding a socket must not be able to abort an
+  operation, enter `rollback_in_progress` or replace the database. Both halves
+  live in `launcher/restore/recovery.py`; the full recovery calls the preflight
+  itself when it is not handed one, so there is only ever one recovery matrix.
+  `recovery_blocked` returns exit code `3` and starts nothing, and the port check
+  keeps its own unchanged message for the ordinary collision.
+- **A busy port is never a verdict on the data.** `assert_port_available` raises
+  `BackendPortUnavailableError` (a `RuntimeLaunchError`, so every existing
+  `except` is unchanged); the verifier turns that into
+  `RetryableBackendStartError`, which is deliberately **not** a
+  `BackendVerificationError`. A late collision therefore leaves the durable phase
+  alone, retains every artifact, reacquires the lease, publishes no
+  `recovery_blocked` and shows the fixed `backend_port_unavailable` sentence — the
+  next launch resumes. Do not widen that branch to "anything that went wrong
+  while starting a backend": health failures, failed reads, import failures,
+  migration failures, handshake failures, early child exits and refused liveness
+  locks are all evidence *about the workspace* and must stay non-retryable.
 - **No PR-specific smoke runner is committed.** An earlier revision of the branch
   had one under `scripts/`; it was removed because the smoke-authoring contract
   requires a PR-specific exact-head runner to live outside the pull request it
   verifies. The runner is created outside the repository and drives a detached
   worktree at the exact published head. `scripts/restore_backup.sh` is unrelated
   to `C4-I` and is unchanged.
-- **The twenty closed review findings** — 5 + 5 + 7 + 3 across four independent
-  audits — are summarized in `state/current-focus.md` and specified in
+- **The twenty-two closed review findings** — 5 + 5 + 7 + 3 + 2 across five
+  independent audits — are summarized in `state/current-focus.md` and specified in
   `docs/backup-and-restore.md` § 16, with § 16.13 covering the second round,
-  § 16.14 the third and § 16.15 the fourth. The most
+  § 16.14 the third, § 16.15 the fourth and § 16.16 the fifth. The most
   load-bearing rules to keep in mind when reading the code: a caller supplies
   **only** the selected source; the backend is stopped **by owned handle** *and*
   excluded by a **retained maintenance lease** over the backend-liveness lock,
@@ -84,7 +108,10 @@ PR stays draft until that audit clears it. Nothing else is authorized.
   nothing; the lease is released for **one exact owned-backend lifetime** at a
   time and taken back at the end of it, so two verification cycles are two
   releases and two reacquisitions and no separate backend can take the lock
-  between them; a launcher-managed child
+  between them — the guarantee is about **database access**, not about the lock
+  being owned at literally every instant, since a bounded no-owner gap exists
+  while a released lease is being picked up by the child it was released for;
+  a launcher-managed child
   takes that lock **before importing the application** and proves it through a
   bounded one-run handshake; a publication that may have landed is **re-read**,
   never assumed, and the record it finds is only this attempt's when it carries
@@ -100,10 +127,10 @@ PR stays draft until that audit clears it. Nothing else is authorized.
   it is the accepted behaviour, and a future support flow owns the user-facing
   half. Do not let a lifecycle error escape the public launcher boundary again.
 - **Evidence on the branch**: baseline `1843` pre-`C4-I` node IDs all preserved;
-  all `2254` node IDs of `606b219` preserved with the named `2bf53e7` node
-  restored; `2327 passed` for the complete backend + launcher suite; external
-  exact-head Restore smoke against a detached checkout; repository clean before
-  and after.
+  the named `2bf53e7` node restored and still present; all `2351` node IDs of
+  `3223592` preserved with `0` lost; `2378 passed` for the complete backend +
+  launcher suite and `513 passed` for the launcher suite; external exact-head
+  Restore smoke against a detached checkout; repository clean before and after.
 
 ---
 

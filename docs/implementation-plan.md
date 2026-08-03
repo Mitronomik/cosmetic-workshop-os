@@ -2057,7 +2057,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -2115,7 +2115,7 @@ decision.
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
 ```
 
 The **only** runtime slice authorized by `CR-010`. It is implemented on the
@@ -2143,8 +2143,14 @@ the canonical lock unheld during migrations and between the two verification
 cycles; `run_local_runtime()` checked the port before Restore recovery, so a real
 orphan holding both the canonical liveness lock and the configured port bypassed
 the typed blocked result; and the pull-request body carried inconsistent finding
-counts. **All twenty are closed on that branch — 5 + 5 + 7 + 3 across four
-independent audits — and none required a change to the accepted phase machine.**
+counts. A fifth audit of that fourth correction found two more: an unrelated
+temporary port collision could occur before or during rollback recovery and turn
+a retryable environment problem into terminal `recovery_blocked`, because the
+state-mutating recovery ran before the port was ever checked; and the documented
+handoff invariant overstated continuous lock ownership at every instant, although
+a bounded release-to-child scheduling gap necessarily exists. **All twenty-two are
+closed on that branch — 5 + 5 + 7 + 3 + 2 across five independent audits — and
+none required a change to the accepted phase machine.**
 It has no user-facing entry point, so **`Restore` remains `NOT IMPLEMENTED`** and
 product release readiness remains **not claimed**.
 

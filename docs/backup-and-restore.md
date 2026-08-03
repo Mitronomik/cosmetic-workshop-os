@@ -815,7 +815,7 @@ Product release readiness — NOT CLAIMED
 # 16. C4-I implementation — the launcher-owned safety engine
 
 ```text
-C4-I — IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -824,10 +824,10 @@ This section records **exactly what the branch implements**. It adds no decision
 every rule above still governs, and `C4-I` implements the accepted state machine
 of § 7 without renaming a phase, omitting `replacement_intent` or substituting an
 equivalent of its own. **Four independent audits** have run against it, finding
-**twenty findings in total — 5 + 5 + 7 + 3**, each round against the correction
-the previous round produced. All twenty are closed, and none required a change to
-the accepted phase machine. § 16.13 records the second round, § 16.14 the third
-and § 16.15 the fourth.
+**twenty-two findings in total — 5 + 5 + 7 + 3 + 2**, each round against the
+correction the previous round produced. All twenty-two are closed, and none
+required a change to the accepted phase machine. § 16.13 records the second
+round, § 16.14 the third, § 16.15 the fourth and § 16.16 the fifth.
 
 There is **no** Restore API endpoint, button, dialog, file picker, frontend route
 or product terminal workflow. The engine is internal Python called by a future
@@ -1010,9 +1010,39 @@ cycle 2  release → child → stop → reacquire
 continue, replace or roll back             lease held
 ```
 
-At every moment one of two things is true: the launcher holds the maintenance
-lease, or one exact launcher-owned child holds the canonical lock and has
-completed the exact-child handshake. Never neither.
+**The invariant, stated as it actually holds.** It is about *database access*,
+not about the lock being continuously owned:
+
+```text
+No operation that reads, migrates, verifies or replaces the working database
+may run unless either:
+
+1. the launcher holds the retained maintenance lease; or
+2. the exact launcher-owned child holds the canonical liveness lock and has
+   completed the exact-child handshake.
+```
+
+A **bounded no-owner interval necessarily exists** during the release-to-child
+handoff, and no wording should pretend otherwise:
+
+```text
+the launcher releases the lease
+→ the child process is spawned                 ← neither side holds the lock
+→ the child acquires the canonical lock before importing the application
+→ the child reports the exact-child handshake
+```
+
+That interval is safe because **nothing touches the database inside it**. The
+launcher does not read, migrate or replace anything between the release and the
+handshake; the child does not import the application or open the database before
+it has the lock. And if a foreign backend wins the lock in that window, the exact
+child fails to take it and exits *before* the application import, the handshake
+never succeeds, the child is stopped, and destructive continuation is refused —
+the rollback replacement cannot run without the lease being reacquired first.
+
+So the guarantee is not "the lock is never free". It is "the database is never
+open to anyone who has not proved ownership", which is the property every
+destructive step actually depends on.
 
 The lease is reacquired on the failure path too, because the failure path leads to
 rollback and rollback replaces the working database. A reacquisition that fails
@@ -1047,24 +1077,77 @@ backend, so it holds the canonical liveness lock **and** it is still listening o
 the configured port. Checking the port first therefore turned the most likely
 real orphan into a `RuntimeLaunchError` about a busy port — an exception, a
 traceback, and a message telling the user to close another window — while the
-typed blocked result built for exactly this case never ran. The launcher order is:
+typed blocked result built for exactly this case never ran.
+
+But recovery **writes**. It closes pre-replacement operations out to `aborted`,
+enters `rollback_in_progress`, replaces the working database from the safety copy
+and runs migrations. Resolving all of that first and only then discovering an
+unrelated program on the port meant a temporary environment problem could end a
+recoverable operation at terminal `recovery_blocked`.
+
+So the gate is **two halves**, with the port between them:
 
 ```text
 build runtime config and paths
 → acquire the launcher lifecycle
-→ resolve Restore recovery and canonical backend liveness
-→ if blocked: fixed message, RESTORE_BLOCKED_EXIT_CODE, no backend, no browser
-→ assert the configured port is available
+→ non-mutating preflight:
+      stop any launcher-owned child
+      take and retain the canonical maintenance lease   ← exclusion established
+      detect a foreign / orphan backend
+      read the authoritative record
+→ if already refused (orphan, unreadable record, durable recovery_blocked):
+      fixed message, RESTORE_BLOCKED_EXIT_CODE, no backend, no browser
+      the port is never consulted
+→ assert the configured port is available                ← nothing written yet
+→ state-mutating Restore recovery (the § 7.5 matrix)
 → ordinary startup and migrations, under the maintenance lease
 → release the lease for the exact owned backend child
 → open the browser only after a safe start
 ```
 
-The port check is not weakened by moving: an unrelated program on the configured
-port with the canonical lock free is an ordinary collision, recovery runs
-normally, and the same `RuntimeLaunchError` and the same user-facing port message
-follow. No backend starts and no browser opens in either case. An occupied port
-is never reinterpreted as a Restore problem.
+The preflight changes nothing: no transition, no new operation, no rollback, no
+replacement, no staging cleanup, no migration, no verification backend. There is
+still exactly one recovery matrix — the full recovery runs the same preflight
+itself when it is not handed one.
+
+The port check is not weakened by any of this. An unrelated program on the
+configured port with the canonical lock free is an ordinary collision: the same
+`RuntimeLaunchError` and the same user-facing port message follow, no backend
+starts, no browser opens, and **the Restore history is byte-identical** — the
+durable phase, the operation record, the staged candidate and the safety copy are
+all exactly as the interrupted operation left them. The next launch, after the
+user closes that program, resumes the same operation from the same phase. An
+occupied port is never reinterpreted as a Restore problem, and a Restore problem
+is never reported as an occupied port.
+
+**A late collision is retryable, not a verification failure.** The port can be
+taken between the launcher's probe and the child's own bind, and no momentary
+check can close that race. So it is classified rather than prevented:
+`assert_port_available` raises the narrower `BackendPortUnavailableError`, the
+verifier turns that into `RetryableBackendStartError`, and neither the engine nor
+startup recovery treats it as evidence about the database — because nothing was
+started, so nothing was observed. The consequences are:
+
+```text
+the exact owned child is stopped (there is none: the port precedes the spawn)
+the maintenance lease is reacquired by the owned-backend window
+the durable phase is left exactly where it is
+the safety copy, staged candidate and operation record are retained
+startup is blocked for this run only
+the fixed `backend_port_unavailable` sentence is shown
+`recovery_blocked` is never published
+no rollback success and no data loss is claimed
+```
+
+`rollback_in_progress` is safely repeatable by design, so the next launch reads
+the same phase, repeats the rollback, verifies it and reaches `rolled_back`.
+
+Everything that *is* evidence about the workspace keeps its existing
+non-retryable behaviour: a backend that starts but fails health, a failed
+representative read, an application import failure, a database that cannot be
+opened, a failed migration, an invalid handshake token, an owned child that exits
+unexpectedly, a child that cannot take the canonical lock, a safety copy that
+does not verify, and a failed rollback replacement.
 
 When the environment variable is absent — the ordinary test client, a developer
 importing the app — no lock is taken and nothing is claimed. When it is present
@@ -1527,6 +1610,13 @@ authoritative lifecycle field are unchanged.
 | `run_local_runtime()` checked the port before Restore recovery, so a real orphan holding both the canonical liveness lock and the configured port bypassed the typed blocked `RecoveryResult`. | Recovery and backend liveness are resolved before the port check; the port check keeps its own message for the ordinary collision (§ 16.3). |
 | The pull-request body carried inconsistent finding counts and did not describe this correction. | One consistent accounting: twenty findings across four independent audits, 5 + 5 + 7 + 3. |
 
+> **Refined in § 16.16.** This round put recovery *entirely* ahead of the port
+> check, which was right about ownership and wrong about writes: the
+> state-mutating half of recovery then ran before an unrelated port collision
+> could refuse the launch. The fifth correction splits the gate and puts the port
+> between the halves. It also narrows this round's "never neither" invariant to a
+> statement about database access.
+
 Two standing rules come out of this round, and both are about scope rather than
 about mechanism.
 
@@ -1535,12 +1625,57 @@ lease, the pre-import lock acquisition and the exact-child handshake were all
 right; what was wrong was how much they were asked to cover at once. A release
 wide enough to span two backend lifetimes leaves the lock free in the middle, and
 a release that covers migrations hands the workspace to nobody at all. The
-invariant is now stated positively: at every moment either the launcher holds the
-lease, or one exact owned child holds the canonical lock having completed the
-handshake — never neither.
+invariant is now stated positively, in terms of database access: no operation that
+reads, migrates, verifies or replaces the working database may run unless the
+launcher holds the lease, or the exact owned child holds the canonical lock and
+has completed the handshake. (The fifth correction narrowed this wording — see
+§ 16.16 — because a bounded no-owner interval exists during the release-to-child
+handoff, and nothing touches the database inside it.)
 
 **Order the checks by what they actually prove.** A free port is not proof that
 nothing owns the workspace, and an occupied port is not proof that the owner is
 something to refuse for. The canonical lock answers ownership, so it is consulted
 first; the port answers "is this address usable", so it is consulted after, and it
 keeps its own unchanged message for the ordinary collision it really describes.
+
+## 16.16. Fifth correction — what the fifth audit found
+
+A fifth independent audit ran against the fourth correction and found one safety
+blocker and one documentation-accuracy issue. Both were introduced or exposed by
+the fourth correction's startup ordering. Both are closed on the same branch, and
+**neither required a change to the accepted phase machine**: the twelve phases,
+the transition graph and `phase` as the sole authoritative lifecycle field are
+unchanged, and no new phase, no persisted flag and no second lock file was added.
+
+| Finding | Closed by |
+|---|---|
+| An unrelated temporary port collision could occur before or during rollback recovery and turn a retryable environment problem into terminal `recovery_blocked`. | A non-mutating exclusion preflight, the port checked before any state-mutating recovery, and a typed retryable classification for a late collision (§ 16.3). |
+| Documentation overstated the handoff invariant as continuous lock ownership at every instant, although a bounded release-to-child gap necessarily exists. | The invariant is restated in terms of **database access**, with the bounded no-owner interval documented explicitly (§ 16.3). |
+
+Two standing rules come out of this round.
+
+**Order a check by what it can destroy, not only by what it can prove.** The
+fourth correction put ownership before the port because ownership is the stronger
+fact, and that was right. What it missed is that the *answer* to the ownership
+question is itself a destructive procedure: resolving an interrupted Restore
+aborts, rolls back, replaces and migrates. A cheap, non-destructive question that
+can refuse the whole run belongs **between** the establishing of exclusion and the
+first write — not after it. So the gate splits into a half that only reads and a
+half that writes, and the port sits in the gap.
+
+**An environment refusal is not a verdict on the data.** A backend that could not
+bind a port has proved nothing about the database it never opened. Folding that
+into "verification failed" gave a busy socket the authority to end an operation
+that only a support procedure could then clear. The retryable category exists to
+keep those two apart, and it is deliberately narrow: exactly one condition, and
+every other way a verification cycle can fail stays a real failure. It is a fixed
+message category, never written into the durable record.
+
+**And a documented invariant must be one the implementation can actually hold.**
+"The lock is owned at every instant" was stronger than the handoff can guarantee:
+a released lease is picked up by a child that has to be scheduled first. The
+honest and equally sufficient statement is that no operation touching the working
+database runs without one of the two ownership proofs — which is the property
+every destructive step actually depends on. The fix was to the wording, not to the
+handshake: redesigning a correct mechanism to make an overstated sentence literally
+true would have been the wrong repair.

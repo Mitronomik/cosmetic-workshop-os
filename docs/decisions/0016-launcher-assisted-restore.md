@@ -11,7 +11,7 @@ implement Restore** and changes no runtime code.
 | Item | Status |
 |---|---|
 | `CR-010` — launcher-assisted Restore semantics | `ACCEPTED` |
-| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED` |
+| `C4-I` — launcher-owned restore safety engine | `IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED` |
 | `C4-II` — user-facing launcher Restore flow | `PLANNED — NOT AUTHORIZED` |
 | `C4-III` — Restore end-to-end verification and lifecycle closure | `PLANNED — NOT AUTHORIZED` |
 | Restore | `NOT IMPLEMENTED` |
@@ -29,7 +29,7 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4 — ACTIVE
 C4 product decision — COMPLETE
-C4-I — IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
 C4-II — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 ```
@@ -849,7 +849,7 @@ There is no frontend implementation in this decision:
 ### C4-I — Launcher-owned restore safety engine
 
 ```text
-IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
+IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
 ```
 
 This is the **only** runtime slice authorized by this decision. Its scope:
@@ -1081,7 +1081,16 @@ A fourth audit of that third correction found three more:
   raised a busy-port exception instead of producing the typed blocked result;
 - the pull-request body carried inconsistent finding counts.
 
-All twenty are closed: 5 + 5 + 7 + 3 across four independent audits.
+A fifth audit of that fourth correction found two more:
+
+- an unrelated **temporary port collision** could occur before or during rollback
+  recovery and turn a retryable environment problem into terminal
+  `recovery_blocked`, because the state-mutating recovery ran before the port was
+  ever checked;
+- the documented handoff invariant claimed **continuous lock ownership at every
+  instant**, although a bounded release-to-child scheduling gap necessarily exists.
+
+All twenty-two are closed: 5 + 5 + 7 + 3 + 2 across five independent audits.
 
 **None of them required a change to this decision** — the twelve phases, the
 transition graph, the recovery matrix and the `replacement_intent` rule are

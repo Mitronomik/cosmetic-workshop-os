@@ -2333,7 +2333,7 @@ Before schema migration:
 > C4 — ACTIVE
 > C4 product decision — COMPLETE
 > CR-010 — ACCEPTED
-> C4-I — IMPLEMENTED ON PR BRANCH — FOURTH CORRECTION APPLIED — NOT MERGED
+> C4-I — IMPLEMENTED ON PR BRANCH — FIFTH CORRECTION APPLIED — NOT MERGED
 > C4-II — PLANNED — NOT AUTHORIZED
 > C4-III — PLANNED — NOT AUTHORIZED
 > Restore — NOT IMPLEMENTED
@@ -2373,17 +2373,26 @@ Before schema migration:
 > post-replacement verification **and startup migrations** — which need no backend
 > at all. The lease is released only for **one exact owned-backend lifetime** at a
 > time, and taken back at the end of it, so two verification cycles are two
-> releases and two reacquisitions rather than one release spanning both. At every
-> moment either the launcher holds the lease or one exact owned child holds the
-> canonical lock, never neither. A lock that was checked and released proves
-> availability at an instant and reserves nothing.
+> releases and two reacquisitions rather than one release spanning both. The
+> invariant is about **database access**, not continuous lock ownership: no
+> operation that reads, migrates, verifies or replaces the working database may
+> run unless the launcher holds the lease, or the exact owned child holds the
+> canonical lock and has completed the handshake. A bounded no-owner interval does
+> exist while a released lease is being picked up by the child it was released
+> for, and nothing touches the database inside it. A lock that was checked and
+> released proves availability at an instant and reserves nothing.
 >
 > Ownership is also resolved **before** the port is checked. A real orphan is a
 > running backend, so it holds the canonical lock *and* the configured port;
 > checking the port first turned that into an exception about a busy port and
-> bypassed the typed blocked result. The port check keeps its own unchanged message
-> for the ordinary collision — an unrelated program on the port with the canonical
-> lock free — and neither case starts a backend or opens the browser.
+> bypassed the typed blocked result. But the port is checked **before any Restore
+> state is written**: the gate is split into a non-mutating preflight that
+> establishes exclusion and reads the record, then the port check, then the
+> state-mutating recovery matrix. An unrelated program on the port therefore
+> refuses with the unchanged port message and cannot alter a single byte of
+> Restore history, and a collision that appears after that check is classified as
+> retryable rather than ending the operation at `recovery_blocked`. Neither case
+> starts a backend or opens the browser.
 
 ```text
 MVP Restore is launcher-assisted.

@@ -17,9 +17,21 @@ maintenance lease held
 → reacquire maintenance lease
 ```
 
-The invariant these tests hold the implementation to is that at every moment
-either the launcher holds the lease, or one exact launcher-owned child holds the
-lock and has completed the handshake. Never neither.
+The invariant these tests hold the implementation to is about **database
+access**, not about the lock being owned at literally every instant:
+
+```text
+No operation that reads, migrates, verifies or replaces the working database
+may run unless either the launcher holds the retained maintenance lease, or the
+exact launcher-owned child holds the canonical lock and has completed the
+exact-child handshake.
+```
+
+A bounded no-owner interval necessarily exists between the release and the
+child's acquisition — the child has to be scheduled before it can take anything —
+and nothing touches the database inside it. The observations below are therefore
+taken at the boundaries that matter: before a cycle, while the child is serving,
+and after the cycle, never at an instant inside the handoff itself.
 
 Every exclusion claim here is made by a **separate process** attempting the same
 non-blocking exclusive acquisition a real backend makes at startup. `flock` is
@@ -312,7 +324,9 @@ def test_the_owned_child_holds_the_lock_while_a_cycle_runs(monkeypatch, tmp_path
         context.release()
 
     # The lease is gone, and the workspace is still excluded — by the child, not
-    # by the launcher. Never neither.
+    # by the launcher. Observed while the child is *serving*, which is the point
+    # at which database access actually happens; the brief interval between the
+    # release and the child's acquisition touches nothing.
     assert while_serving == [(False, True), (False, True)]
 
 
