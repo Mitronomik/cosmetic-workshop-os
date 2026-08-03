@@ -52,7 +52,7 @@ class RecordedPopen:
         import os
 
         from app.launcher_backend_entrypoint import (
-            HANDSHAKE_ACQUIRED_PREFIX,
+            HANDSHAKE_READY_PREFIX,
             HANDSHAKE_FD_ENV,
             HANDSHAKE_TOKEN_ENV,
         )
@@ -61,7 +61,7 @@ class RecordedPopen:
         token = self.env.get(HANDSHAKE_TOKEN_ENV)
         if not raw_fd or not token:
             return False
-        os.write(int(raw_fd), f"{HANDSHAKE_ACQUIRED_PREFIX}{token}\n".encode("utf-8"))
+        os.write(int(raw_fd), f"{HANDSHAKE_READY_PREFIX}{token}\n".encode("utf-8"))
         return True
 
     def poll(self):

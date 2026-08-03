@@ -16,6 +16,25 @@ be the *first* acquisition point for a launcher-managed child.
 from pathlib import Path
 import ast
 import inspect
+
+
+def executable_source(target) -> str:
+    """One callable's source with comments and string literals removed.
+
+    The entrypoint *documents* why `uvicorn.run()` is not used, so a plain
+    substring check would trip on the explanation of its own absence.
+    """
+    import io
+    import textwrap
+    import tokenize
+
+    kept: list[str] = []
+    stream = io.StringIO(textwrap.dedent(inspect.getsource(target))).readline
+    for token in tokenize.generate_tokens(stream):
+        if token.type in (tokenize.COMMENT, tokenize.STRING):
+            continue
+        kept.append(token.string)
+    return " ".join(kept)
 import os
 import subprocess
 import sys
@@ -67,12 +86,45 @@ def test_the_application_is_named_only_where_it_is_served():
     assert "app.main:app" in serving
 
 
-def test_main_acquires_reports_and_only_then_serves():
-    """The three steps, in order, in the one function that sequences them."""
+def test_the_socket_is_served_rather_than_bound_a_second_time():
+    """uvicorn is handed the socket the child already owns.
+
+    `uvicorn.run(host=..., port=...)` would bind again, *after* readiness had been
+    reported — which is the exact window the sixth correction closes. The
+    low-level `Server.run(sockets=[...])` path hands the existing socket to
+    `loop.create_server(sock=...)` and never binds.
+    """
+    serving = executable_source(entrypoint.run_backend)
+
+    assert "server . run ( sockets = [ server_socket ] )" in serving
+    assert "uvicorn . run (" not in serving, (
+        "uvicorn.run() binds again, after readiness has already been reported"
+    )
+
+
+def test_main_acquires_binds_reports_and_only_then_serves():
+    """The four steps, in order, in the one function that sequences them."""
     source = inspect.getsource(entrypoint.main)
 
     acquire = source.index("acquire_lock_before_import()")
-    signal = source.index("signal_lock_acquired()")
+    bind = source.index("bind_configured_socket(")
+    signal = source.index("signal_ready()")
+    serve = source.index("run_backend(")
+
+    assert acquire < bind < signal < serve
+
+
+def test_main_acquires_reports_and_only_then_serves():
+    """Readiness is reported after the lock **and** the socket, never before.
+
+    Kept under its original name because it guards the original rule; what
+    changed is that "reports" now means "reports ownership of both", so the bind
+    is part of the ordering it asserts.
+    """
+    source = inspect.getsource(entrypoint.main)
+
+    acquire = source.index("acquire_lock_before_import()")
+    signal = source.index("signal_ready()")
     serve = source.index("run_backend(")
 
     assert acquire < signal < serve
@@ -194,7 +246,7 @@ def test_no_handshake_is_written_when_none_was_requested(monkeypatch):
     monkeypatch.delenv(entrypoint.HANDSHAKE_FD_ENV, raising=False)
     monkeypatch.delenv(entrypoint.HANDSHAKE_TOKEN_ENV, raising=False)
 
-    assert entrypoint.signal_lock_acquired() is False
+    assert entrypoint.signal_ready() is False
 
 
 def test_the_handshake_reports_the_token_it_was_given(monkeypatch):
@@ -202,9 +254,9 @@ def test_the_handshake_reports_the_token_it_was_given(monkeypatch):
     monkeypatch.setenv(entrypoint.HANDSHAKE_FD_ENV, str(write_fd))
     monkeypatch.setenv(entrypoint.HANDSHAKE_TOKEN_ENV, "abc123")
     try:
-        assert entrypoint.signal_lock_acquired() is True
+        assert entrypoint.signal_ready() is True
         # The child closes its end, so the launcher sees EOF if it later dies.
-        assert os.read(read_fd, 512) == b"lock-acquired:abc123\n"
+        assert os.read(read_fd, 512) == b"ready:abc123\n"
         assert os.read(read_fd, 512) == b""
     finally:
         os.close(read_fd)

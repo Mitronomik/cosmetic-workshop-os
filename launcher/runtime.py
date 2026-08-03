@@ -67,9 +67,11 @@ def assert_port_available(host: str, port: int) -> None:
     start" are unaffected; the single caller that must tell an occupied port apart
     from a bad database — Restore verification — now can.
 
-    This is a probe, not a reservation: the port can be taken between this call
-    and the child's own bind. That race is not closable by any momentary check,
-    which is precisely why the late collision is classified rather than prevented.
+    This is a probe, not a reservation, and it is **not** the ownership proof. It
+    binds, closes and returns, so the port can be taken between this call and the
+    child's own bind. That is a fast, friendly refusal for the common case; the
+    authoritative answer is the child's own `bind()`, reported through the
+    structured one-run handshake in :func:`start_owned_backend_process`.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -186,29 +188,47 @@ def start_backend_process(
 def start_owned_backend_process(
     config: RuntimeConfig, paths: RuntimePaths, database_path: Path
 ) -> subprocess.Popen[str]:
-    """Start a backend child and return only once it **proved** it holds the lock.
+    """Start a backend child and return only once it **proved** lock and socket.
 
     Owning a `Popen` says the launcher started a process. It does not say the
-    process took the backend-liveness lock, and between those two facts lies a
-    window in which a launcher-managed backend is invisible to the check that
-    authorizes replacing the database. This closes it:
+    process took the backend-liveness lock, nor that it can actually serve on the
+    configured port, and between those facts lie two windows. This closes both:
 
     ```text
     create a one-run pipe and token
     → spawn the pre-import entrypoint with that pipe inherited
     → the child acquires the lock before importing any application module
-    → the child writes the token and closes its end
+    → the child binds and listens on the exact configured socket
+    → the child writes `ready:<token>` and closes its end
     → this returns
     ```
+
+    The socket half is what the sixth audit required. `assert_port_available`
+    above binds a probe, closes it and returns, which establishes availability at
+    an instant and reserves nothing; uvicorn used to perform the real bind *after*
+    the child had already reported success, so a program that took the port in
+    between produced a child that started and then died. During Restore recovery
+    that reads as a verification failure, and a verification failure ends a
+    rollback at terminal `recovery_blocked` — over a socket. Now the child owns
+    the real listening socket before it reports anything, and uvicorn serves that
+    same socket rather than binding a second time.
 
     Timeout, EOF, an early child exit and a token from some other start are all
     the same answer, and all of them stop the child before returning. A backend
     that cannot be accounted for is never left running: that is how an orphan is
     made, and orphans are the failure this whole mechanism exists to prevent.
+
+    A `port-unavailable:` report is the one refusal that is *not* a handshake
+    failure. The handshake worked; what it carried was "somebody else has this
+    port". The child bound nothing, imported nothing and opened no database, so it
+    is raised as the ordinary :class:`BackendPortUnavailableError` — the same type
+    and the same message the early probe uses — and Restore turns that into a
+    retryable refusal rather than a verdict about the restored database.
     """
     ensure_backend_import_path(paths)
     from launcher.restore.backend_handshake import (
         BackendHandshakeError,
+        BackendSocketUnavailableError,
         new_backend_handshake,
     )
 
@@ -226,6 +246,15 @@ def start_owned_backend_process(
     handshake.close_child_end()
     try:
         handshake.await_acquisition(process)
+    except BackendSocketUnavailableError as exc:
+        # The child is already on its way out — it reported this before importing
+        # anything — but it is still stopped through the owned handle and waited
+        # for, so no descriptor and no process is left behind.
+        terminate_process(process)
+        raise BackendPortUnavailableError(
+            f"Порт {config.backend_port} уже занят. "
+            "Закройте другое окно приложения или выберите свободный порт."
+        ) from exc
     except BackendHandshakeError:
         terminate_process(process)
         raise

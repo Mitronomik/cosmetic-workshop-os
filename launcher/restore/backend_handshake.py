@@ -1,10 +1,10 @@
-"""The bounded proof that *this exact child* acquired the backend liveness lock.
+"""The bounded proof that *this exact child* owns the lock and the listening socket.
 
 Owning a `Popen` proves the launcher started a process. It does not prove that
-the process took the liveness lock, and the gap between those two facts is a real
-window: a child exists for some time before it holds anything, and during that
-window every liveness check reports "no backend is alive" about a backend that is
-very much on its way.
+the process took the liveness lock, nor that it can serve on the configured port,
+and the gap between those facts is a real window: a child exists for some time
+before it holds anything, and during that window every liveness check reports "no
+backend is alive" about a backend that is very much on its way.
 
 What is deliberately **not** used to close that gap:
 
@@ -20,6 +20,9 @@ What is deliberately **not** used to close that gap:
 `the health endpoint`
     Health proves the application is serving, which happens *after* the import
     this handshake exists to gate. It is checked as well, never instead.
+`uvicorn's own output`
+    Reading stderr for `EADDRINUSE` would be inferring a structured fact from a
+    log line that no contract pins down. The child reports the refusal itself.
 
 What is used is an ordinary anonymous pipe, created by the launcher for exactly
 one spawn and inherited by exactly one child, carrying a token generated for that
@@ -33,8 +36,27 @@ same spawn. Both halves are one-run values:
   the launcher EOF rather than a hang.
 
 Every wait is bounded. Timeout, EOF, a mismatched token and an early child exit
-are all the same answer: this child is not proved to hold the lock, so it is
-stopped, no browser opens and Restore does not proceed.
+are all the same answer: this child is not proved ready, so it is stopped, no
+browser opens and Restore does not proceed.
+
+## What "ready" means
+
+The child reports one of two structured results, each carrying this start's
+token:
+
+```text
+ready:<token>              the child owns the canonical liveness lock AND the
+                           actual configured listening socket
+port-unavailable:<token>   the exact configured port was already taken; the
+                           child bound nothing, imported nothing, opened nothing
+```
+
+The conjunction matters. When `ready:` meant only "the lock is held", uvicorn
+still had to bind afterwards, so a program that took the port in between produced
+a child that had reported success and then died — indistinguishable, to the
+launcher, from a backend that could not serve the restored database. It is now
+one fact, established before the report, and the socket the child proved it owns
+is the socket uvicorn goes on to serve.
 """
 
 from __future__ import annotations
@@ -71,7 +93,24 @@ _MAX_HANDSHAKE_BYTES = 512
 
 
 class BackendHandshakeError(RuntimeError):
-    """Raised when a started child could not be proved to hold the liveness lock."""
+    """Raised when a started child could not be proved ready.
+
+    "Ready" is the conjunction: the child holds the canonical liveness lock *and*
+    owns the actual configured listening socket. Anything short of a complete,
+    correctly-tokened `ready:` report lands here.
+    """
+
+
+class BackendSocketUnavailableError(RuntimeError):
+    """The child reported, structurally, that the configured port was taken.
+
+    Deliberately **not** a `BackendHandshakeError`. The handshake did not fail —
+    it succeeded, and what it carried was a refusal. The child bound nothing,
+    imported nothing and opened no database, so this says something about the
+    environment and nothing whatsoever about the workspace. The launcher maps it
+    to its ordinary port-collision error; Restore maps that to a retryable
+    refusal rather than to a verification failure.
+    """
 
 
 @dataclass
@@ -122,7 +161,13 @@ class PendingBackendHandshake:
     def await_acquisition(
         self, process, *, timeout_seconds: float = HANDSHAKE_TIMEOUT_SECONDS
     ) -> str:
-        """Block, bounded, until this child reports the lock — or fail.
+        """Block, bounded, until this child reports readiness — or fail.
+
+        Returns the token on `ready:`, which means the child owns the canonical
+        liveness lock **and** the actual configured listening socket. Raises
+        :class:`BackendSocketUnavailableError` on `port-unavailable:`, which is a
+        successful handshake carrying a refusal: the child never bound, never
+        imported the application and never opened the database.
 
         Four distinct failures, one answer. The child exited before reporting;
         the pipe reached EOF without a complete line; the payload did not carry
@@ -176,25 +221,43 @@ class PendingBackendHandshake:
                 )
 
     def _accept(self, payload: bytes) -> str:
-        prefix = _entrypoint().HANDSHAKE_ACQUIRED_PREFIX
+        """Classify one complete structured line, token first.
+
+        Two results are defined, and the token is checked for **both** before
+        either is acted on. A `port-unavailable:` line carrying some other start's
+        token is not this start's refusal any more than a stale `ready:` would be
+        this start's success, and treating it as one would let a previous run's
+        message decide a later run's classification.
+        """
+        entrypoint = _entrypoint()
+        ready_prefix = entrypoint.HANDSHAKE_READY_PREFIX
+        refused_prefix = entrypoint.HANDSHAKE_PORT_UNAVAILABLE_PREFIX
         try:
             line = payload.decode("utf-8").splitlines()[0]
         except (UnicodeDecodeError, IndexError) as exc:
             raise BackendHandshakeError(
                 "The backend child wrote an unreadable handshake payload."
             ) from exc
-        if not line.startswith(prefix):
-            raise BackendHandshakeError(
-                "The backend child wrote an unrecognized handshake payload."
-            )
-        reported = line[len(prefix) :]
-        if not secrets.compare_digest(reported, self.token):
-            # A token from some other start. Stale or replayed evidence is exactly
-            # what this value exists to refuse.
-            raise BackendHandshakeError(
-                "The backend handshake carried a token from a different start."
-            )
-        return reported
+
+        for prefix in (ready_prefix, refused_prefix):
+            if not line.startswith(prefix):
+                continue
+            reported = line[len(prefix) :]
+            if not secrets.compare_digest(reported, self.token):
+                # A token from some other start. Stale or replayed evidence is
+                # exactly what this value exists to refuse.
+                raise BackendHandshakeError(
+                    "The backend handshake carried a token from a different start."
+                )
+            if prefix is refused_prefix:
+                raise BackendSocketUnavailableError(
+                    "The backend child could not bind the configured port."
+                )
+            return reported
+
+        raise BackendHandshakeError(
+            "The backend child wrote an unrecognized handshake payload."
+        )
 
     def close(self) -> None:
         """Release both descriptors. Safe to call more than once."""

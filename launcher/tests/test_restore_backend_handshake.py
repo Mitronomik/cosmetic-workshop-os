@@ -119,11 +119,11 @@ class _FakeChild:
 def test_the_handshake_accepts_this_start_s_own_report():
     handshake = new_backend_handshake()
     try:
-        from app.launcher_backend_entrypoint import HANDSHAKE_ACQUIRED_PREFIX
+        from app.launcher_backend_entrypoint import HANDSHAKE_READY_PREFIX
 
         os.write(
             handshake.write_fd,
-            f"{HANDSHAKE_ACQUIRED_PREFIX}{handshake.token}\n".encode("utf-8"),
+            f"{HANDSHAKE_READY_PREFIX}{handshake.token}\n".encode("utf-8"),
         )
         handshake.close_child_end()
 
@@ -134,7 +134,7 @@ def test_the_handshake_accepts_this_start_s_own_report():
 
 def test_a_token_from_a_different_start_is_refused():
     """Stale or replayed evidence cannot satisfy a new child start."""
-    from app.launcher_backend_entrypoint import HANDSHAKE_ACQUIRED_PREFIX
+    from app.launcher_backend_entrypoint import HANDSHAKE_READY_PREFIX
 
     previous = new_backend_handshake()
     current = new_backend_handshake()
@@ -144,7 +144,7 @@ def test_a_token_from_a_different_start_is_refused():
         # this run's pipe.
         os.write(
             current.write_fd,
-            f"{HANDSHAKE_ACQUIRED_PREFIX}{previous.token}\n".encode("utf-8"),
+            f"{HANDSHAKE_READY_PREFIX}{previous.token}\n".encode("utf-8"),
         )
         current.close_child_end()
 
