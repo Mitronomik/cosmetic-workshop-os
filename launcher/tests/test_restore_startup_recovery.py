@@ -28,6 +28,7 @@ from launcher.restore.workspace import RestoreWorkspace, new_operation_id
 
 from launcher.tests.restore_fixtures import (
     build_workspace_database,
+    cycle_shaped_verifier,
     make_workspace,
     migrating_startup,
     read_marker,
@@ -281,7 +282,7 @@ def test_a_rollback_that_cannot_be_verified_blocks_recovery(crashed):
         workspace,
         context,
         services=RestoreServices(
-            verify_backend=always_fails,
+            verify_backend=cycle_shaped_verifier(always_fails),
             initialize_startup=migrating_startup(workspace.database_path),
         ),
     )

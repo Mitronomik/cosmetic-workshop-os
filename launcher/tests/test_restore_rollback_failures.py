@@ -41,6 +41,7 @@ from launcher.restore.workspace import RestoreWorkspace, new_operation_id
 
 from launcher.tests.restore_fixtures import (
     build_workspace_database,
+    cycle_shaped_verifier,
     failing_verifier,
     make_source_backup,
     make_workspace,
@@ -208,7 +209,7 @@ def test_a_failed_rollback_request_never_starts_a_backend_or_browser(
     result = recover_incomplete_restore(
         context,
         services=RestoreServices(
-            verify_backend=lambda *_a: started.append(_a),
+            verify_backend=lambda *_a, **_k: started.append(_a),
             initialize_startup=migrating_startup(workspace.database_path),
         ),
     )
@@ -286,7 +287,9 @@ def test_a_failed_recovery_blocked_publication_keeps_rollback_in_progress(
     result = recover_incomplete_restore(
         context,
         services=RestoreServices(
-            verify_backend=failing_verifier("always fails", only_first=False),
+            verify_backend=cycle_shaped_verifier(
+                failing_verifier("always fails", only_first=False)
+            ),
             initialize_startup=migrating_startup(workspace.database_path),
         ),
     )

@@ -44,9 +44,14 @@ can start against this workspace, because the child's own lock acquisition is th
 thing that would have to succeed.
 
 The lease is released for exactly one reason: an owned backend genuinely has to
-run, for ordinary startup or for a verification cycle. It is reacquired before
-anything destructive resumes, and a reacquisition that fails blocks rather than
-continues.
+run, for ordinary startup or for a verification cycle. The release covers **one
+exact backend lifetime** — a single start, handshake, check and stop — and the
+lease is taken back before the next one begins. Two verification cycles are two
+releases and two reacquisitions, never one release spanning both, because
+between the two children the lock is free and an unleased launcher would be
+letting a separate backend into the workspace it is about to replace. Startup
+migrations need no backend at all and therefore run with the lease still held.
+A reacquisition that fails blocks rather than continues.
 
 `BackendProcessOwner` is that handle. It terminates **only** the process it
 recorded, escalating to `kill()` on the same handle after a bounded wait, and
@@ -453,27 +458,47 @@ class LauncherLifecycleContext:
 
     @contextmanager
     def owned_backend_window(self):
-        """Release the lease for one owned-backend interval, then take it back.
+        """Release the lease for **one exact owned-backend lifetime**, then take it back.
 
         The exact accepted cycle, in one place so no call site can implement half
         of it:
 
         ```text
-        release the maintenance lease
-        → start the owned child through the pre-import lock entrypoint
+        require the maintenance lease to be held right now
+        → release the maintenance lease
+        → start one owned child through the pre-import lock entrypoint
         → wait for that exact child's lock-acquired handshake
-        → verify
-        → stop the child by its owned handle
+        → run the checks
+        → stop that child by its owned handle
         → wait for the lock to be released
         → reacquire the maintenance lease
-        → only then continue, replace or roll back
+        → only then leave the window
         ```
+
+        The scope is one backend lifetime and nothing more. Widening it to cover
+        several starts — or to cover startup migrations, which need no backend at
+        all — reintroduces exactly what the lease exists to prevent: between two
+        owned children the lock is free, and if the launcher has not taken the
+        lease back, a separate backend may acquire it and open the working
+        database. So the entry precondition is checked rather than assumed, and
+        the reacquisition happens per cycle rather than once at the end.
 
         The lease is reacquired on the failure path too, because the failure path
         leads to rollback and rollback replaces the working database. When the
         reacquisition itself fails, that is raised — a rollback without the lease
         is precisely the destructive work this object exists to gate.
         """
+        try:
+            self.maintenance_lease.require_held(
+                "Handing the workspace to an owned backend"
+            )
+        except MaintenanceLeaseError as exc:
+            # Releasing a lease that is not held would be a silent no-op, and the
+            # window would then "hand over" a workspace nobody was reserving.
+            raise RestoreLifecycleError(
+                "An owned-backend window may only be opened while the launcher "
+                "holds the retained backend maintenance lease."
+            ) from exc
         self.release_maintenance_lease()
         try:
             yield self
@@ -482,6 +507,21 @@ class LauncherLifecycleContext:
                 self.backend_liveness_lock_path
             )
             self.acquire_maintenance_lease()
+
+    def run_owned_backend_cycle(self, cycle):
+        """Run `cycle()` inside exactly one owned-backend window.
+
+        The callable form of :meth:`owned_backend_window`, and the seam the
+        verification service is given so that *it* decides how many owned-backend
+        lifetimes it needs while *this* object stays the only implementation of
+        what one lifetime costs. A verifier that runs two cycles calls this twice
+        and therefore reacquires the lease in between; it cannot express "release
+        once, start twice" without going around the launcher entirely.
+
+        Returns whatever the cycle returned, and only with the lease held again.
+        """
+        with self.owned_backend_window():
+            return cycle()
 
     def require_backend_stopped(self) -> BackendStopProof:
         """Assert the backend is stopped **and still excluded**, right now.

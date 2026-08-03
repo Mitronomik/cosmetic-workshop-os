@@ -42,6 +42,7 @@ from launcher.restore.phases import RestorePhase
 from launcher.restore.recovery import recover_incomplete_restore
 from launcher.restore.safety_copy import create_verified_safety_copy
 from launcher.restore.state import RestoreOperationRecord, RestoreOperationStateStore
+from launcher.restore.verification import VERIFICATION_CYCLES
 from launcher.restore.workspace import RestoreWorkspace, new_operation_id
 
 from launcher.tests.restore_fixtures import (
@@ -296,6 +297,11 @@ def test_verification_releases_the_lease_and_takes_it_back(monkeypatch, tmp_path
     backend cannot start while the launcher retains the lease. So the lease is
     released for exactly that interval and taken back before anything may
     continue or roll back.
+
+    Once per cycle, not once for the whole verification: each of the two cycles
+    is its own release and its own reacquisition. The between-cycle moment is
+    proved separately, against real backend children, in
+    `launcher/tests/test_restore_verification_lease_boundaries.py`.
     """
     workspace = make_workspace(monkeypatch, tmp_path, marker="workspace-A")
     source = make_source_backup(tmp_path, "workspace-B")
@@ -323,8 +329,8 @@ def test_verification_releases_the_lease_and_takes_it_back(monkeypatch, tmp_path
         context.release()
 
     assert result.outcome is RestoreOutcome.COMPLETED
-    assert during_verification == [False, True], (
-        "the lease must be released for the owned verification backend"
+    assert during_verification == [False, True] * VERIFICATION_CYCLES, (
+        "the lease must be released for each owned verification backend"
     )
     assert lease_after is True, "the lease must be back before anything continues"
 

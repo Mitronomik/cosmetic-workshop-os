@@ -15,6 +15,16 @@ Restartability is proved, not assumed: the whole cycle runs twice against the
 exact same path, with a graceful stop in between. A database that serves one
 start and fails the next is not a restored workspace.
 
+Each of those cycles is one **exact owned-backend lifetime**, and the launcher's
+maintenance lease is handed over for that lifetime and taken back at the end of
+it. This module does not implement the handover: it is given a
+`run_backend_cycle` callable — in production
+:meth:`LauncherLifecycleContext.run_owned_backend_cycle` — and calls it once per
+cycle. That is what makes "the lease is reacquired between cycle 1 and cycle 2"
+true by construction rather than by convention, and it is why the parameter has
+no default: a caller that cannot name who owns the lease has no business starting
+a backend against a database mid-Restore.
+
 Response bodies never reach ordinary user output. They are checked here and
 discarded; only the fixed category vocabulary is reported outward.
 """
@@ -22,6 +32,7 @@ discarded; only the fixed category vocabulary is reported outward.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from urllib.error import URLError
 import hashlib
@@ -138,7 +149,48 @@ def fallback_database_fingerprint() -> tuple[bool, int, int, int, str]:
     return (True, info.st_size, info.st_dev, info.st_ino, digest.hexdigest())
 
 
-def verify_restored_backend(config, paths, database_path: Path) -> BackendVerificationReport:
+def _run_one_verification_cycle(config, paths, target: Path, base_url: str, cycle: int) -> None:
+    """One exact owned-backend lifetime: start, check, stop, prove stopped.
+
+    A fresh owner per cycle: the child is started, recorded, checked and then
+    stopped by handle. No PID is ever discovered by port or by name.
+
+    The stop runs in a `finally`, including on the failure path — so a
+    verification failure can never leave a backend holding the database the
+    caller is about to roll back. The caller's `run_backend_cycle` then waits for
+    the lock to be released and takes the maintenance lease back, which is why
+    this function returning is enough for the next cycle to be safe.
+    """
+    # Deferred: `launcher.runtime` imports this package for the startup recovery
+    # gate, so importing it at module scope would be circular.
+    from launcher.restore.context import BackendProcessOwner
+
+    owner = BackendProcessOwner()
+    try:
+        process = owner.start(config, paths, target)
+        payload = wait_for_backend_ready(
+            base_url, process, timeout_seconds=READINESS_TIMEOUT_SECONDS
+        )
+        _assert_health_payload(payload)
+        _check_representative_reads(base_url)
+    except BackendVerificationError:
+        raise
+    except Exception as exc:
+        raise BackendVerificationError(
+            f"The restored backend failed verification cycle {cycle + 1}: "
+            f"{type(exc).__name__}"
+        ) from exc
+    finally:
+        proof = owner.stop(timeout_seconds=GRACEFUL_STOP_TIMEOUT_SECONDS)
+        if not proof.confirmed_stopped:
+            raise BackendVerificationError(
+                "A verification backend could not be stopped within its bound."
+            )
+
+
+def verify_restored_backend(
+    config, paths, database_path: Path, *, run_backend_cycle
+) -> BackendVerificationReport:
     """Start, check, stop, restart, check and stop again — all bounded.
 
     `database_path` is the exact path the launcher prepared. It is passed to the
@@ -146,14 +198,13 @@ def verify_restored_backend(config, paths, database_path: Path) -> BackendVerifi
     throughout: if it appears or changes, the child resolved its own database and
     the continuity this whole slice depends on was not preserved.
 
-    Every child started here is **owned** by this function and stopped in a
-    `finally`, including on the failure path — so a verification failure can never
-    leave a backend holding the database the caller is about to roll back.
+    `run_backend_cycle` is the launcher's owned-backend window, invoked **once
+    per cycle**. Each invocation releases the maintenance lease, runs the one
+    child, and takes the lease back before returning — so between cycle 1 and
+    cycle 2 the launcher holds the lock again and no separate backend can slip
+    into the gap. It is keyword-only and has no default: a lease handed over for
+    two starts at once is the defect this shape exists to make unrepresentable.
     """
-    # Deferred: `launcher.runtime` imports this package for the startup recovery
-    # gate, so importing it at module scope would be circular.
-    from launcher.restore.context import BackendProcessOwner
-
     target = Path(database_path)
     if not target.is_file():
         raise BackendVerificationError("The restored database file is missing.")
@@ -162,29 +213,9 @@ def verify_restored_backend(config, paths, database_path: Path) -> BackendVerifi
     base_url = config.backend_url
 
     for cycle in range(VERIFICATION_CYCLES):
-        # A fresh owner per cycle: each child is started, recorded, checked and
-        # then stopped by handle. No PID is ever discovered by port or by name.
-        owner = BackendProcessOwner()
-        try:
-            process = owner.start(config, paths, target)
-            payload = wait_for_backend_ready(
-                base_url, process, timeout_seconds=READINESS_TIMEOUT_SECONDS
-            )
-            _assert_health_payload(payload)
-            _check_representative_reads(base_url)
-        except BackendVerificationError:
-            raise
-        except Exception as exc:
-            raise BackendVerificationError(
-                f"The restored backend failed verification cycle {cycle + 1}: "
-                f"{type(exc).__name__}"
-            ) from exc
-        finally:
-            proof = owner.stop(timeout_seconds=GRACEFUL_STOP_TIMEOUT_SECONDS)
-            if not proof.confirmed_stopped:
-                raise BackendVerificationError(
-                    "A verification backend could not be stopped within its bound."
-                )
+        run_backend_cycle(
+            partial(_run_one_verification_cycle, config, paths, target, base_url, cycle)
+        )
 
     if fallback_database_fingerprint() != fallback_before:
         raise BackendVerificationError(

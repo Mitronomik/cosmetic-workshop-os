@@ -104,7 +104,10 @@ logger = logging.getLogger(__name__)
 # Injection seams. Both default to the real implementations; tests substitute
 # them to reach failure boundaries that cannot be produced any other way, and to
 # avoid starting a real uvicorn child in every unit test.
-BackendVerifier = Callable[[object, object, Path], object]
+# `(config, paths, database_path, *, run_backend_cycle) -> object`. Spelled as
+# `...` because `Callable` cannot express a keyword-only parameter, and that
+# parameter is the one that carries the per-cycle lease handoff.
+BackendVerifier = Callable[..., object]
 StartupInitializer = Callable[[str, object], object]
 
 
@@ -122,6 +125,26 @@ class RestoreServices:
 
             initializer = initialize_backend_startup
         return initializer(mode, paths)
+
+    def verify(self, context: LauncherLifecycleContext):
+        """Verify the working database, one owned-backend lifetime at a time.
+
+        The single call site for the verifier, so the per-cycle lease handoff is
+        wired in exactly once. `run_backend_cycle` is the context's own
+        owned-backend window: the verifier decides *how many* backend lifetimes
+        it needs, and the launcher decides what each one costs — release the
+        lease, run the child, stop it, wait for the lock, take the lease back.
+
+        The engine never opens a window of its own around this call. A window
+        wide enough to hold two cycles would leave the lock free between them
+        with nothing holding the workspace, which is the whole finding.
+        """
+        return self.verify_backend(
+            context.config,
+            context.paths,
+            context.database_path,
+            run_backend_cycle=context.run_owned_backend_cycle,
+        )
 
 
 class RestoreEngineError(RuntimeError):
@@ -506,23 +529,35 @@ def _verify_restored_workspace(context: LauncherLifecycleContext, services: Rest
     `before_migration` backup on the way. The selected source and the preserved
     staged candidate are never migrated: neither is this path.
 
+    The two halves have opposite lease requirements, and conflating them is what
+    the fourth audit found:
+
+    ```text
+    startup and migrations   no backend runs → the lease stays held
+    each verification cycle  one owned backend runs → the lease is handed over
+                             for that child's lifetime and taken straight back
+    ```
+
+    Migrations open and rewrite the restored database with no backend involved,
+    so releasing the lease around them would leave the working database
+    unreserved while it was being written — a separate backend could take the
+    lock and open it mid-migration. They run here with the lease still held.
+
     Verification is the one part of Restore that has to *start* a backend, and a
-    backend cannot start while the launcher retains the maintenance lease — the
-    child's own lock acquisition is what would have to succeed. So the whole
-    interval runs inside :meth:`~LauncherLifecycleContext.owned_backend_window`,
-    which releases the lease, lets the owned children take and release the lock,
-    waits for the last release, and takes the lease back before anything can
-    continue or roll back. A reacquisition that fails raises from the window, and
-    that failure reaches rollback as a refusal rather than as a replacement.
+    backend cannot start while the launcher retains the lease — the child's own
+    lock acquisition is what would have to succeed. So the handover happens
+    inside :meth:`~LauncherLifecycleContext.owned_backend_window`, once per
+    cycle, through the `run_backend_cycle` seam `services.verify` supplies. A
+    reacquisition that fails raises from the window, and that failure reaches
+    rollback as a refusal rather than as a replacement.
     """
-    with context.owned_backend_window():
-        startup = services.startup(context.mode, context.paths)
-        startup_path = Path(getattr(startup, "database_path", context.database_path))
-        if startup_path != context.database_path:
-            raise RestoreEngineError(
-                "Restored startup resolved a different database than the replacement target."
-            )
-        services.verify_backend(context.config, context.paths, context.database_path)
+    startup = services.startup(context.mode, context.paths)
+    startup_path = Path(getattr(startup, "database_path", context.database_path))
+    if startup_path != context.database_path:
+        raise RestoreEngineError(
+            "Restored startup resolved a different database than the replacement target."
+        )
+    services.verify(context)
 
 
 # --------------------------------------------------------------------------
@@ -1017,15 +1052,15 @@ def perform_rollback(
         return _blocked(store, record)
 
     try:
-        # The same release/handshake/reacquire cycle the forward path uses. The
-        # rollback replacement above happened under the lease; the verification
-        # below needs the lease released so an owned backend can hold the lock,
-        # and the lease back afterwards before any further destructive step.
-        with context.owned_backend_window():
-            startup = services.startup(context.mode, context.paths)
-            if Path(getattr(startup, "database_path", database_path)) != database_path:
-                raise RestoreEngineError("Rollback startup resolved a different database.")
-            services.verify_backend(context.config, context.paths, database_path)
+        # The same split the forward path uses. The rollback replacement above
+        # happened under the lease, and so do these migrations — no backend is
+        # involved in either. Only the verification cycles hand the lease over,
+        # one exact owned-backend lifetime at a time, and the lease is back
+        # before any further destructive step.
+        startup = services.startup(context.mode, context.paths)
+        if Path(getattr(startup, "database_path", database_path)) != database_path:
+            raise RestoreEngineError("Rollback startup resolved a different database.")
+        services.verify(context)
     except Exception as exc:  # noqa: BLE001 - an unverifiable rollback blocks recovery
         logger.error("Rolled-back workspace failed verification: %s", type(exc).__name__)
         return _blocked(store, record)

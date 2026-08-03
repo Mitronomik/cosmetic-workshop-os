@@ -30,6 +30,7 @@ from launcher.config import build_runtime_config, resolve_runtime_paths
 from launcher.restore.context import LauncherLifecycleContext
 from launcher.restore.contracts import RestoreRequest
 from launcher.restore.engine import RestoreServices
+from launcher.restore.verification import VERIFICATION_CYCLES
 
 MARKER_KEY = "test.workspace_marker"
 
@@ -173,6 +174,35 @@ def migrating_startup(database_path: Path):
     return startup
 
 
+def cycle_shaped_verifier(check):
+    """Wrap a bodiless check in the real verifier's owned-backend cycle shape.
+
+    The production verifier runs `VERIFICATION_CYCLES` **separate** owned-backend
+    lifetimes and does each cycle's work inside `run_backend_cycle`, which is the
+    launcher's own window: lease released, one child, lease taken back. A stub
+    that ignored that seam would be testing the phase machine against a lease
+    protocol nothing else uses, and the between-cycle reacquisition — the fourth
+    audit's `P1-1` — would go unexercised in every test but the few that start a
+    real uvicorn.
+
+    So the stub starts no process but goes through the production runner the
+    production number of times. The handoff under test stays the real one; only
+    the child is absent.
+    """
+
+    def verify_backend(config, paths, database_path, *, run_backend_cycle=None):
+        if run_backend_cycle is None:
+            # A caller with no launcher context and therefore no lease to hand
+            # over. Only the standalone verification tests are in that position.
+            return check(config, paths, database_path)
+        result = None
+        for _ in range(VERIFICATION_CYCLES):
+            result = run_backend_cycle(lambda: check(config, paths, database_path))
+        return result
+
+    return verify_backend
+
+
 def stub_services(
     database_path: Path,
     *,
@@ -181,7 +211,9 @@ def stub_services(
 ) -> RestoreServices:
     """Services that migrate for real but verify without a backend process."""
     return RestoreServices(
-        verify_backend=verify if verify is not None else (lambda _c, _p, _db: None),
+        verify_backend=cycle_shaped_verifier(
+            verify if verify is not None else (lambda _c, _p, _db: None)
+        ),
         initialize_startup=startup if startup is not None else migrating_startup(database_path),
     )
 

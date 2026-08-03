@@ -36,6 +36,23 @@ def free_port() -> int:
         return probe.getsockname()[1]
 
 
+def unleased_cycle(cycle):
+    """Run one verification cycle where there is no maintenance lease to hand over.
+
+    These tests are about the *checks* — the exact database reaching the child,
+    the health payload, the representative reads, the graceful stop, the second
+    start. They construct no `LauncherLifecycleContext`, so there is no lease
+    held and nothing to release: a pass-through is the truthful runner here, not
+    a weakened one.
+
+    The lease handoff itself is not stubbed anywhere. It is proved against the
+    real launcher window in
+    `launcher/tests/test_restore_verification_lease_boundaries.py`, with a
+    separate process probing the canonical lock at each boundary.
+    """
+    return cycle()
+
+
 @pytest.fixture
 def restored(monkeypatch, tmp_path):
     base = tmp_path / "user-data"
@@ -51,7 +68,9 @@ def test_the_bounded_verification_starts_checks_and_restarts_the_backend(restore
     """The complete accepted check set, twice, against the exact restored path."""
     config = build_runtime_config(backend_port=free_port(), open_browser=False)
 
-    report = verify_restored_backend(config, resolve_runtime_paths(), restored)
+    report = verify_restored_backend(
+        config, resolve_runtime_paths(), restored, run_backend_cycle=unleased_cycle
+    )
 
     assert report.database_path == restored
     assert report.cycles_completed == VERIFICATION_CYCLES == 2
@@ -76,7 +95,9 @@ def test_no_repository_fallback_database_is_created_or_modified(restored):
     before = DEFAULT_DATABASE_PATH.stat().st_mtime_ns if existed else None
     config = build_runtime_config(backend_port=free_port(), open_browser=False)
 
-    verify_restored_backend(config, resolve_runtime_paths(), restored)
+    verify_restored_backend(
+        config, resolve_runtime_paths(), restored, run_backend_cycle=unleased_cycle
+    )
 
     if existed:
         assert DEFAULT_DATABASE_PATH.stat().st_mtime_ns == before
@@ -88,7 +109,9 @@ def test_the_backend_serves_the_exact_restored_database(restored):
     """Observable in the database itself, not merely in an environment key."""
     config = build_runtime_config(backend_port=free_port(), open_browser=False)
 
-    verify_restored_backend(config, resolve_runtime_paths(), restored)
+    verify_restored_backend(
+        config, resolve_runtime_paths(), restored, run_backend_cycle=unleased_cycle
+    )
 
     connection = sqlite3.connect(f"file:{restored}?mode=ro", uri=True)
     try:
@@ -105,7 +128,9 @@ def test_no_backend_process_survives_verification(restored):
     port = free_port()
     config = build_runtime_config(backend_port=port, open_browser=False)
 
-    verify_restored_backend(config, resolve_runtime_paths(), restored)
+    verify_restored_backend(
+        config, resolve_runtime_paths(), restored, run_backend_cycle=unleased_cycle
+    )
 
     # A successful bind proves the child released it.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
@@ -117,7 +142,12 @@ def test_a_missing_restored_database_fails_before_any_process_starts(tmp_path):
     config = build_runtime_config(backend_port=free_port(), open_browser=False)
 
     with pytest.raises(BackendVerificationError):
-        verify_restored_backend(config, resolve_runtime_paths(), tmp_path / "absent.sqlite")
+        verify_restored_backend(
+            config,
+            resolve_runtime_paths(),
+            tmp_path / "absent.sqlite",
+            run_backend_cycle=unleased_cycle,
+        )
 
 
 def test_readiness_polling_is_bounded_rather_than_a_fixed_sleep(monkeypatch, restored):
