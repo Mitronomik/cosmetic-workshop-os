@@ -40,6 +40,28 @@ Every port holder here is a real socket bound by this test, and the canonical
 lock is deliberately left free — that is what makes these collisions *unrelated*.
 The same-port orphan, which holds both, is covered in
 `launcher/tests/test_restore_same_port_orphan.py` and must keep its own answer.
+
+## What this module does and does not prove
+
+The "before any write" half above is proved here end to end, through the real
+launcher boundary.
+
+The **late**-collision tests in this module are, deliberately, *exception-routing
+unit tests*. They intercept the owned-backend start and hand the engine a
+`BackendPortUnavailableError`, which proves one narrow and useful thing: given
+that condition, the engine defers instead of publishing `recovery_blocked`.
+
+They do **not** prove that the product can produce that condition from a real
+socket. The sixth audit found that it could not: the child reported success
+before uvicorn bound, so a genuine post-probe collision arrived as a
+started-then-died child and was classified as a verification failure. That gap is
+closed by the child owning the real listening socket before it reports readiness,
+and the regression proof for it — real parent, real child entrypoint, real
+handshake, real bind, real process exit — lives in
+`launcher/tests/test_restore_real_port_bind_race.py`.
+
+Keep both. One says the routing is right; the other says the routing is
+reachable.
 """
 
 from pathlib import Path
@@ -400,12 +422,22 @@ def real_verification_services(database_path):
 
 
 class StolenPort:
-    """Takes the configured port at the moment the verification child binds it.
+    """A **synthetic** stand-in for the late collision, at the owned-backend start.
 
-    The real race, reproduced deterministically. The launcher's probe passed;
-    between that probe and the child's own bind, another program took the port.
-    No momentary check can prevent that, which is why the product classifies the
-    late collision instead of pretending it cannot happen.
+    This intercepts `BackendProcessOwner.start` and raises the condition a real
+    bind refusal produces. It is an exception-routing fixture, not a reproduction
+    of the race: no child is spawned, no socket is bound and nothing about the
+    production startup path is exercised.
+
+    That distinction is the sixth audit's `P2-1`. Described as proof of the real
+    race, this fixture was overstating what it demonstrates — and it kept
+    demonstrating it while the product could not actually reach the routing,
+    because uvicorn bound only after the child had already reported success. The
+    real regression proof is
+    `launcher/tests/test_restore_real_port_bind_race.py`.
+
+    What it *does* prove, and what it is kept for: given the condition, the engine
+    and startup recovery defer instead of publishing `recovery_blocked`.
 
     `disarm()` is the user closing the other program: the next child starts for
     real, through the ordinary owned-backend path.
@@ -444,12 +476,19 @@ class StolenPort:
 
 
 def test_a_late_port_collision_is_retryable_and_publishes_nothing(monkeypatch, tmp_path):
-    """The race, and the classification that keeps it from ending the operation.
+    """The classification that keeps a busy socket from ending the operation.
 
-    The rollback replacement has already run under the lease, so the previous
-    workspace is back on disk; only its *verification* could not start. The
-    durable phase stays `rollback_in_progress`, which is safely repeatable, and
-    the next launch finishes it.
+    An **exception-routing** test: the condition is injected at the owned-backend
+    start rather than produced by a real bind. What it establishes is that the
+    engine, given that condition, defers — the rollback replacement has already
+    run under the lease, so the previous workspace is back on disk; only its
+    *verification* could not start; the durable phase stays
+    `rollback_in_progress`, which is safely repeatable, and the next launch
+    finishes it.
+
+    That the product can actually *reach* this routing from a real socket is the
+    separate question the sixth audit raised, and it is proved against real
+    processes in `launcher/tests/test_restore_real_port_bind_race.py`.
     """
     workspace = make_workspace(monkeypatch, tmp_path, marker="workspace-A")
     store, operation_id, candidate = publish_phase(
