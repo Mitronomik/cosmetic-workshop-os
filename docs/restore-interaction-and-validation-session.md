@@ -1,6 +1,6 @@
 # Restore interaction and non-destructive validation-session profile
 
-Status: **NORMATIVE PROFILE — CR-011 DECISION GATE**  
+Status: **NORMATIVE PROFILE — CR-011 DECISION GATE**
 Updated: `2026-08-06`
 
 This profile extends the Restore architecture described by:
