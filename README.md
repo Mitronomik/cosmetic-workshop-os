@@ -45,6 +45,8 @@ C4-II-A remains planned, blocked by CR-011, and not authorized.
 
 - Current lifecycle and architecture gate:
   [`docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`](docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md)
+- Normative Restore interaction and non-destructive validation-session profile:
+  [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
 - Accepted launcher-assisted Restore safety contract:
   [`docs/decisions/0016-launcher-assisted-restore.md`](docs/decisions/0016-launcher-assisted-restore.md)
 - Concise implementation and six-round audit history:
@@ -69,6 +71,8 @@ work begins.
 - [`AGENTS.md`](AGENTS.md) — main Codex contract
 - [`docs/product-spec.md`](docs/product-spec.md) — product specification
 - [`docs/architecture.md`](docs/architecture.md) — architecture contract
+- [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
+  — current normative C4 interaction/validation-session profile
 - [`docs/domain-model.md`](docs/domain-model.md) — domain model
 - [`docs/roadmap.md`](docs/roadmap.md) — strategic roadmap
 - [`docs/implementation-plan.md`](docs/implementation-plan.md) — active
