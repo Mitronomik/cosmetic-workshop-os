@@ -1,0 +1,295 @@
+name: One-shot C4 documentation synchronization
+
+on:
+  push:
+    branches:
+      - docs/c4-i-lifecycle-closure-c4-ii-a
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-docs:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: docs/c4-i-lifecycle-closure-c4-ii-a
+
+      - name: Patch active C4 documentation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          ROOT = Path('.')
+          OLD_ADR = 'docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-a-authorization.md'
+          NEW_ADR = 'docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md'
+          HISTORY_PATHS = {
+              Path('docs/history/implementation-plan-before-cr-011.md'),
+              Path('docs/history/c4-i-implementation-and-audit-history.md'),
+          }
+
+          lifecycle = '''```text
+          CR-010 — ACCEPTED
+          C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+          CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+          C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+          C4-II-B — PLANNED — NOT AUTHORIZED
+          C4-II-C — PLANNED — NOT AUTHORIZED
+          C4-III — PLANNED — NOT AUTHORIZED
+          Restore — NOT IMPLEMENTED
+          Product release readiness — NOT CLAIMED
+          ```'''
+
+          architecture_block = f'''## 12.1. Current C4 interaction decision gate
+
+          The C4-I launcher-owned Restore safety engine is merged and exact-head
+          verified. It remains internal infrastructure; user-facing Restore is not
+          implemented.
+
+          The launcher currently opens an ordinary system browser through
+          `webbrowser.open(...)`. The ordinary browser UI has no accepted command
+          channel that can invoke a launcher-owned native macOS file picker. The
+          public C4-I package exposes destructive execution and startup recovery,
+          but no dedicated public non-destructive candidate-preparation session.
+
+          Therefore the current lifecycle is:
+
+          {lifecycle}
+
+          [`CR-011`](decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md)
+          is the only authorized next task. It is decision-only and must select one
+          concrete architecture for the UI-owning process, native picker owner,
+          browser-to-launcher command path, exact-run authentication, path privacy,
+          backend lifecycle, allowed dependencies, packaging implications, cleanup,
+          and exact-head smoke.
+
+          No runtime implementation may assume an ordinary FastAPI Restore endpoint,
+          SPA-owned filesystem access, browser upload as the authoritative source, a
+          generic unauthenticated localhost endpoint, wildcard CORS, an undocumented
+          WebSocket or IPC channel, or a native-shell technology that has not been
+          selected by an accepted decision.
+
+          Future C4-II-A must use one launcher-owned non-destructive application
+          boundary conceptually equivalent to `prepare_restore_candidate(...)`.
+          It must not call `execute_restore(...)`, create a durable Restore operation
+          record, enter any Restore phase, create a `before_restore` safety copy,
+          mutate or migrate the working database, perform rollback or recovery
+          mutation, write a Restore AuditLog event, or expose an absolute selected
+          source path as browser authority.
+
+          The boundary must reuse the accepted C4-I source intake, staging,
+          stability, and validation rules; use isolated temporary staging; return
+          typed safe presentation results; reject stale selection results; clean up
+          after cancellation, reselection, failure, shutdown, and interrupted
+          validation; and keep technical details in local logs.
+
+          An opaque session token is only a reference to launcher-owned state. Future
+          C4-II-B must re-prove the source or retained-candidate identity before any
+          destructive execution.
+
+          ---
+
+          '''
+
+          backup_block = f'''## 17. CR-011 interaction and non-destructive validation-session gate
+
+          C4-I is `DONE — MERGED AND EXACT-HEAD VERIFIED`, but user-facing Restore
+          remains `NOT IMPLEMENTED`.
+
+          {lifecycle}
+
+          The current launcher opens an ordinary system browser. No accepted channel
+          currently allows that page to command the launcher to open a native file
+          picker, and the public C4-I package has no dedicated non-destructive
+          candidate-preparation entry point. C4-II-A is therefore blocked until the
+          decision-only CR-011 selects one concrete architecture.
+
+          CR-011 must decide:
+
+          1. where the user-facing screen lives and which process owns it;
+          2. which process opens the native macOS file picker;
+          3. how any browser action reaches the launcher;
+          4. whether an absolute source path leaves launcher-owned state;
+          5. whether the ordinary backend stays running during selection and validation;
+          6. exact-run origin, token, replay, stale-session, and duplicate-action protection;
+          7. allowed dependencies and packaging changes;
+          8. non-technical packaged user entry;
+          9. cancellation, reselection, shutdown, and interrupted-session cleanup;
+          10. isolated exact-head smoke for the selected architecture.
+
+          Before CR-011 is accepted, no ordinary FastAPI Restore endpoint, SPA-owned
+          filesystem access, browser upload/blob authoritative source, generic
+          unauthenticated localhost endpoint, wildcard CORS, undocumented WebSocket
+          or IPC channel, hidden native-shell dependency, or absolute source path in
+          ordinary browser state is authorized.
+
+          ### 17.1. Mandatory future candidate-preparation boundary
+
+          Future C4-II-A must use a launcher-owned service conceptually equivalent to:
+
+          ```text
+          prepare_restore_candidate(...)
+          ```
+
+          The exact code name is not fixed, but the service must:
+
+          - never call `execute_restore(...)`;
+          - create no durable Restore operation record;
+          - enter none of the twelve durable Restore phases;
+          - create no `before_restore` safety copy;
+          - replace or migrate no working database;
+          - perform no rollback or startup-recovery mutation;
+          - write no Restore AuditLog event;
+          - leave the selected source immutable and byte-identical;
+          - use isolated temporary staging distinct from a durable Restore operation workspace;
+          - reuse C4-I source intake, staging, source-stability, and candidate-validation rules;
+          - return typed human-safe presentation results;
+          - confine raw SQLite errors, stack traces, migration IDs, absolute paths,
+            and verifier detail to local technical logs;
+          - use opaque launcher-owned session identity and stale-selection protection;
+          - invalidate earlier results on cancellation and reselection;
+          - protect duplicate actions;
+          - clean temporary state after cancellation, reselection, rejection,
+            technical failure, and launcher shutdown;
+          - provide bounded cleanup after interrupted validation;
+          - give the browser no authority over the source path;
+          - forbid compatibility inference from filename or extension;
+          - never claim that Restore completed.
+
+          An opaque validation-session token is not proof that the source remains
+          valid. C4-II-B must re-prove the immutable source or retained-candidate
+          identity through launcher-owned state and C4-I safety rules before
+          destructive execution.
+
+          ### 17.2. Current status
+
+          C4-II-A, C4-II-B, C4-II-C, and C4-III remain not authorized. Packaging,
+          safe packaged updates, release-candidate smoke, and product release
+          readiness remain open and are not claimed by this decision gate.
+          '''
+
+          roadmap_block = f'''## Current C4 lifecycle — 2026-08-06
+
+          This block is the current execution status. Older status statements below
+          are historical for their date and do not authorize work.
+
+          {lifecycle}
+
+          Only CR-011 is authorized, and it is decision-only. No C4-II runtime
+          implementation may begin until that decision is accepted.
+
+          Detailed C4-I history:
+          [`docs/history/c4-i-implementation-and-audit-history.md`](history/c4-i-implementation-and-audit-history.md).
+
+          Current decision:
+          [`docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`](decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md).
+
+          ---
+
+          '''
+
+          adr16_block = f'''## Current lifecycle note — 2026-08-06
+
+          ADR 0016 remains the normative Restore safety contract and is not amended.
+          PR #170 implemented C4-I and merged at
+          `e6997281d2e0268ce54184d988c114bac71c35e2` from final reviewed head
+          `ac95e2990efa979b3ded6cb48f91ddd0750aa7c8`.
+
+          {lifecycle}
+
+          The interaction and non-destructive validation-session boundary is gated
+          by [`ADR 0017`](0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md).
+          Older lifecycle statements in this file are retained as historical evidence
+          and do not authorize C4-II runtime work.
+
+          ---
+
+          '''
+
+          def read(path: str) -> str:
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path: str, text: str) -> None:
+              Path(path).write_text(text, encoding='utf-8')
+
+          architecture = read('docs/architecture.md')
+          if '## 12.1. Current C4 interaction decision gate' not in architecture:
+              marker = '## 13. Import/OCR architecture'
+              if marker not in architecture:
+                  raise SystemExit(f'architecture marker not found: {marker}')
+              architecture = architecture.replace(marker, architecture_block + marker, 1)
+              write('docs/architecture.md', architecture)
+
+          backup = read('docs/backup-and-restore.md')
+          if '## 17. CR-011 interaction and non-destructive validation-session gate' not in backup:
+              backup = backup.rstrip() + '\n\n---\n\n' + backup_block.rstrip() + '\n'
+              write('docs/backup-and-restore.md', backup)
+
+          roadmap = read('docs/roadmap.md')
+          if '## Current C4 lifecycle — 2026-08-06' not in roadmap:
+              first_rule = '\n---\n'
+              index = roadmap.find(first_rule)
+              if index < 0:
+                  raise SystemExit('roadmap first separator not found')
+              index += len(first_rule)
+              roadmap = roadmap[:index] + '\n' + roadmap_block + roadmap[index:]
+              write('docs/roadmap.md', roadmap)
+
+          adr16 = read('docs/decisions/0016-launcher-assisted-restore.md')
+          if '## Current lifecycle note — 2026-08-06' not in adr16:
+              first_rule = '\n---\n'
+              index = adr16.find(first_rule)
+              if index < 0:
+                  raise SystemExit('ADR 0016 first separator not found')
+              index += len(first_rule)
+              adr16 = adr16[:index] + '\n' + adr16_block + adr16[index:]
+              write('docs/decisions/0016-launcher-assisted-restore.md', adr16)
+
+          # Update references in active Markdown only. Historical snapshots remain
+          # byte-identical evidence of their date.
+          for path in ROOT.rglob('*.md'):
+              if path in HISTORY_PATHS:
+                  continue
+              text = path.read_text(encoding='utf-8')
+              updated = text.replace(OLD_ADR, NEW_ADR)
+              if updated != text:
+                  path.write_text(updated, encoding='utf-8')
+
+          old_adr = Path(OLD_ADR)
+          if old_adr.exists():
+              old_adr.unlink()
+          PY
+
+      - name: Docs-only integrity checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only HEAD~1...HEAD || true
+          printf '\nActive stale lifecycle search:\n'
+          grep -RInE 'C4-I.*NOT MERGED|C4-II-A.*AUTHORIZED|audit PR #170|merge PR #170' \
+            README.md docs state \
+            --exclude='implementation-plan-before-cr-011.md' \
+            --exclude='c4-i-implementation-and-audit-history.md' || true
+          printf '\nRuntime path guard:\n'
+          if git diff --name-only HEAD | grep -E '^(backend|frontend|launcher|migrations|tests)/'; then
+            echo 'Unexpected runtime path changed' >&2
+            exit 1
+          fi
+
+      - name: Commit synchronized documentation and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/c4-docs-patch.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md docs state .github/workflows/c4-docs-patch.yml
+          git diff --cached --check
+          git commit -m 'docs: synchronize C4 lifecycle and architecture gate'
+          git push origin HEAD:docs/c4-i-lifecycle-closure-c4-ii-a
