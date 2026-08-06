@@ -4,11 +4,20 @@ Updated: `2026-08-06`
 
 This file is the compact current short-horizon source of truth.
 
-Detailed C4-I implementation and audit history:
-[`docs/history/c4-i-implementation-and-audit-history.md`](../docs/history/c4-i-implementation-and-audit-history.md).
+Current lifecycle authority:
+[`docs/current-lifecycle.md`](../docs/current-lifecycle.md).
 
 Current decision:
 [`docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`](../docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md).
+
+Current change-request ledger:
+[`state/change-requests.md`](change-requests.md).
+
+Searchable project history and exact pre-compaction snapshots:
+[`docs/history/README.md`](../docs/history/README.md).
+
+Detailed C4-I implementation and audit history:
+[`docs/history/c4-i-implementation-and-audit-history.md`](../docs/history/c4-i-implementation-and-audit-history.md).
 
 ## Current lifecycle
 
@@ -42,6 +51,7 @@ C4 — ACTIVE
 Restore — NOT IMPLEMENTED
 macOS packaging — NOT COMPLETED
 safe packaged update flow — NOT COMPLETED
+installation verification — NOT COMPLETED
 full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
@@ -97,6 +107,13 @@ No agent may implement:
 The ordinary browser UI currently has no accepted launcher command channel.
 Implementation by assumption is prohibited.
 
+## Superseded status rule
+
+Dated C4 status paragraphs in `docs/architecture.md`, `docs/roadmap.md`, and
+`docs/backup-and-restore.md` do not override the current lifecycle profile.
+Their product and safety contracts remain relevant; lifecycle labels such as
+`NOT MERGED` or `NOT IMPLEMENTED` for C4-I are historical.
+
 ## Preserved Restore invariants
 
 - exactly twelve durable phases;
@@ -109,3 +126,13 @@ Implementation by assumption is prohibited.
 - no Restore AuditLog event;
 - browser opens into the ordinary workspace only after durable `completed`;
 - user-facing Restore remains `NOT IMPLEMENTED`.
+
+## Documentation verification
+
+Before PR #171 can merge, run:
+
+```bash
+python3 scripts/check_documentation_lifecycle.py
+```
+
+This is a documentation consistency check, not product smoke.

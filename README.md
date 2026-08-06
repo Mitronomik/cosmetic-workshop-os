@@ -19,18 +19,23 @@ or a terminal.
 - CR-010 — launcher-assisted Restore semantics accepted.
 - C4-I — launcher-owned Restore safety infrastructure merged and exact-head
   verified in PR #170.
+- CR-011 — **authorized as a decision-only task and not yet decided**.
+- C4-II-A — planned, blocked by CR-011, and not authorized.
 - User-facing Restore — **not implemented**.
 - Product release readiness — **not claimed**.
 
 The repository intentionally does not embed a permanently changing current
 baseline SHA in this README.
 
-For the current implementation state and next authorized task, read:
+For the current implementation state and next authorized task, read in this
+order:
 
-1. [`docs/implementation-plan.md`](docs/implementation-plan.md)
-2. [`state/current-focus.md`](state/current-focus.md)
-3. [`state/progress.md`](state/progress.md)
-4. [`state/handoff.md`](state/handoff.md)
+1. [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
+2. [`docs/implementation-plan.md`](docs/implementation-plan.md)
+3. [`state/current-focus.md`](state/current-focus.md)
+4. [`state/progress.md`](state/progress.md)
+5. [`state/handoff.md`](state/handoff.md)
+6. [`state/change-requests.md`](state/change-requests.md)
 
 The only authorized next task is the decision-only CR-011:
 
@@ -41,8 +46,25 @@ Decision-only. No runtime implementation is authorized.
 
 C4-II-A remains planned, blocked by CR-011, and not authorized.
 
+## Lifecycle consistency note
+
+`docs/architecture.md`, `docs/roadmap.md`, and `docs/backup-and-restore.md`
+contain valuable product, safety, and architecture detail, but also retain some
+dated branch-era C4 status paragraphs written before PR #170 merged. Their
+contracts remain valid; their stale lifecycle labels are explicitly superseded
+by:
+
+- [`docs/current-lifecycle.md`](docs/current-lifecycle.md);
+- ADR 0017;
+- the active implementation plan.
+
+No agent may reopen C4-I or authorize C4-II runtime work from a historical status
+sentence.
+
 ## C4-I history and current Restore decision
 
+- Current lifecycle authority:
+  [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
 - Current lifecycle and architecture gate:
   [`docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`](docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md)
 - Normative Restore interaction and non-destructive validation-session profile:
@@ -51,6 +73,8 @@ C4-II-A remains planned, blocked by CR-011, and not authorized.
   [`docs/decisions/0016-launcher-assisted-restore.md`](docs/decisions/0016-launcher-assisted-restore.md)
 - Concise implementation and six-round audit history:
   [`docs/history/c4-i-implementation-and-audit-history.md`](docs/history/c4-i-implementation-and-audit-history.md)
+- Project timeline and exact pre-compaction snapshots:
+  [`docs/history/README.md`](docs/history/README.md)
 - Backup and Restore product/safety contract:
   [`docs/backup-and-restore.md`](docs/backup-and-restore.md)
 
@@ -69,6 +93,8 @@ work begins.
 ### Product and architecture
 
 - [`AGENTS.md`](AGENTS.md) — main Codex contract
+- [`docs/current-lifecycle.md`](docs/current-lifecycle.md) — current lifecycle
+  authority and explicit supersession map
 - [`docs/product-spec.md`](docs/product-spec.md) — product specification
 - [`docs/architecture.md`](docs/architecture.md) — architecture contract
 - [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
@@ -104,7 +130,10 @@ work begins.
 - [`state/current-focus.md`](state/current-focus.md) — current task
 - [`state/progress.md`](state/progress.md) — current progress
 - [`state/handoff.md`](state/handoff.md) — cross-session handoff
-- [`docs/history/`](docs/history/) — curated non-authoritative historical records
+- [`state/change-requests.md`](state/change-requests.md) — compact current CR
+  ledger with durable decision links
+- [`docs/history/README.md`](docs/history/README.md) — searchable historical
+  index and exact pre-compaction snapshots
 
 ## Architectural invariants
 
@@ -142,3 +171,13 @@ No agent may add, by assumption:
 The next accepted decision must select one concrete interaction architecture and
 define the launcher-owned non-destructive validation-session boundary before
 C4-II-A can be authorized.
+
+## Documentation check
+
+After lifecycle documentation changes, run:
+
+```bash
+python3 scripts/check_documentation_lifecycle.py
+```
+
+This is a documentation consistency check, not product smoke.

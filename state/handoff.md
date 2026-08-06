@@ -2,14 +2,27 @@
 
 Updated: `2026-08-06`
 
-This is the compact current handoff. Historical C4-I implementation and audit
-detail is retained in:
+This is the compact current handoff.
 
-`docs/history/c4-i-implementation-and-audit-history.md`
+Current lifecycle authority:
 
-The current lifecycle decision is:
+`docs/current-lifecycle.md`
+
+Current lifecycle decision:
 
 `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`
+
+Current change-request ledger:
+
+`state/change-requests.md`
+
+Searchable project history and exact pre-compaction snapshots:
+
+`docs/history/README.md`
+
+Detailed C4-I implementation and audit history:
+
+`docs/history/c4-i-implementation-and-audit-history.md`
 
 ## Repository lifecycle
 
@@ -28,6 +41,26 @@ C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
+
+## Documentation state
+
+PR #171 now preserves:
+
+- the full pre-compaction implementation plan byte-for-byte;
+- the full pre-compaction current-focus, progress, and handoff snapshots
+  byte-for-byte;
+- the full pre-compaction change-request ledger byte-for-byte;
+- a broad project timeline through PR #170;
+- the six-round C4-I audit history;
+- a compact current lifecycle authority profile;
+- a compact current CR ledger containing CR-011;
+- a repeatable lifecycle consistency script.
+
+The large `docs/architecture.md`, `docs/roadmap.md`, and
+`docs/backup-and-restore.md` still contain dated branch-era C4 status paragraphs.
+Their product and safety contracts remain active, but those status labels are
+explicitly superseded by `docs/current-lifecycle.md` and ADR 0017. They may not
+be used to reopen C4-I or authorize C4-II runtime work.
 
 ## Next action
 
@@ -122,6 +155,20 @@ Do not add any of the following without an accepted CR-011 decision:
 
 ## Review gate for PR #171
 
-PR #171 must remain draft and unmerged until an independent read-only
-documentation and architecture consistency audit confirms that all active
-lifecycle documents agree and that C4-II-A is not authorized.
+Before merge, independently verify the exact head and run:
+
+```bash
+python3 scripts/check_documentation_lifecycle.py
+```
+
+The PR must remain draft and unmerged until the audit confirms:
+
+- exact history snapshots are present and searchable;
+- compact active lifecycle documents agree;
+- CR-011 is the only authorized next task;
+- C4-II-A is not authorized;
+- large legacy status paragraphs are explicitly superseded rather than treated
+  as current instructions;
+- no runtime, test, migration, dependency, packaging, updater, or workflow file
+  changed;
+- product release readiness is not claimed.

@@ -4,6 +4,7 @@ Status: **HISTORICAL INDEX — NON-NORMATIVE**
 
 This directory preserves searchable project history without allowing dated
 branch-era instructions to override current architecture or lifecycle decisions.
+Current lifecycle authority is `docs/current-lifecycle.md`.
 
 ## Authority rule
 
@@ -11,9 +12,10 @@ Historical records are evidence and context only. They never override:
 
 1. `AGENTS.md` and nested `AGENTS.md` files;
 2. accepted ADRs;
-3. current normative architecture/profile documents;
-4. `docs/implementation-plan.md`;
-5. active `state/` files.
+3. `docs/current-lifecycle.md`;
+4. current normative architecture/profile documents;
+5. `docs/implementation-plan.md`;
+6. active `state/` files.
 
 Every historical snapshot must be read in the context of its date. Status lines
 such as `NOT MERGED`, `IN PROGRESS`, or `NEXT ACTION` describe that historical
@@ -39,8 +41,14 @@ The following files are preserved byte-for-byte from merge commit
 - [`state-snapshots/2026-08-06-c4-i-closure/progress.md`](state-snapshots/2026-08-06-c4-i-closure/progress.md)
 - [`state-snapshots/2026-08-06-c4-i-closure/handoff.md`](state-snapshots/2026-08-06-c4-i-closure/handoff.md)
 
-They contain valuable implementation contracts, evidence, audit detail, known
-limitations, historical next actions, and superseded lifecycle statements.
+The detailed change-request ledger that existed immediately before its active
+compaction in PR #171 is preserved byte-for-byte at:
+
+- [`change-requests/2026-08-06-pre-compaction.md`](change-requests/2026-08-06-pre-compaction.md)
+
+These snapshots contain valuable implementation contracts, evidence, audit
+detail, known limitations, accepted decisions, historical next actions, and
+superseded lifecycle statements.
 
 ## Safe Git archaeology
 
@@ -68,8 +76,10 @@ When an active document becomes too large:
 4. create or update a curated timeline when the removed detail contains
    decisions, known limitations, test evidence, audit findings, or rationale;
 5. synchronize every active document that carries the affected lifecycle status;
-6. verify that current repository search does not return contradictory active
-   instructions.
+6. update `docs/current-lifecycle.md` and its explicit supersession map when a
+   large document cannot be safely rewritten in the same bounded PR;
+7. verify that current repository search does not return contradictory compact
+   active instructions.
 
 Git history alone is a technical recovery mechanism. It is not a substitute for
 searchable project memory in an agent-driven repository.

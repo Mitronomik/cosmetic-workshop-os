@@ -2,6 +2,8 @@
 
 Updated: `2026-08-06`
 
+Current lifecycle authority: `docs/current-lifecycle.md`.
+
 ## Completed
 
 - C1 — completed.
@@ -17,6 +19,17 @@ Updated: `2026-08-06`
 - Six independent C4-I audit rounds closed twenty-four findings.
 - Curated C4-I history is retained in
   `docs/history/c4-i-implementation-and-audit-history.md`.
+- A broader project timeline is retained in
+  `docs/history/project-timeline-through-pr170.md`.
+- The complete pre-compaction implementation plan and state snapshots are
+  preserved byte-for-byte under `docs/history/`.
+- The detailed pre-compaction change-request ledger is preserved byte-for-byte
+  at `docs/history/change-requests/2026-08-06-pre-compaction.md`.
+- The active change-request ledger now includes CR-011 explicitly.
+- `docs/current-lifecycle.md` records the current authority order and the
+  explicit supersession map for dated C4 status prose.
+- `scripts/check_documentation_lifecycle.py` provides a repeatable documentation
+  consistency check.
 
 ## Current authorized work
 
@@ -44,7 +57,13 @@ C4-III  — PLANNED — NOT AUTHORIZED
 - safe packaged update flow;
 - installation verification;
 - full release-candidate smoke;
-- continuing documentation accuracy.
+- continuing documentation accuracy;
+- focused synchronization of dated lifecycle paragraphs in
+  `docs/architecture.md`, `docs/roadmap.md`, and `docs/backup-and-restore.md`
+  when those large documents next receive a bounded maintenance pass.
+
+Until that focused pass, their stale lifecycle labels are explicitly superseded
+by `docs/current-lifecycle.md`; their product and safety contracts remain valid.
 
 ## Current product truth
 
@@ -77,3 +96,11 @@ No native picker, launcher IPC, loopback control plane, WebSocket, frontend
 Restore UI, FastAPI Restore endpoint, browser-upload Restore path,
 validation-session service, packaging change, or destructive execution is
 implemented or authorized.
+
+## Required documentation check
+
+```bash
+python3 scripts/check_documentation_lifecycle.py
+```
+
+This check is documentation-only and is not product smoke.

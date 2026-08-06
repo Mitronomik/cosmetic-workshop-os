@@ -6,17 +6,22 @@ Document: `docs/implementation-plan.md`
 Status: **active current implementation sequence**  
 Updated: `2026-08-06`
 
-The complete pre-compaction implementation plan remains available in the PR #170
-merge baseline:
+The complete pre-compaction implementation plan is preserved byte-for-byte in
+the current repository tree:
+
+[`docs/history/implementation-plan/2026-08-06-pre-compaction.md`](history/implementation-plan/2026-08-06-pre-compaction.md)
+
+The same source is also recoverable from the PR #170 merge baseline:
 
 ```bash
 git show e6997281d2e0268ce54184d988c114bac71c35e2:docs/implementation-plan.md
 ```
 
-It contains lifecycle statements that were true before PR #170 merged and must
-not be used as current instructions. The searchable, load-bearing C4-I history
-is retained separately in
-`docs/history/c4-i-implementation-and-audit-history.md`.
+The snapshot contains valuable slice contracts, evidence, known limitations, and
+branch-era lifecycle statements. It is historical and must not be used as current
+implementation authorization. The searchable C4-I history is retained separately
+in `docs/history/c4-i-implementation-and-audit-history.md`, and the broader
+project timeline is `docs/history/project-timeline-through-pr170.md`.
 
 ## 1. Purpose
 
@@ -27,6 +32,7 @@ contract.
 Use it together with:
 
 - `AGENTS.md` and nested `AGENTS.md` files;
+- `docs/current-lifecycle.md`;
 - `docs/architecture.md`;
 - `docs/product-spec.md`;
 - `docs/domain-model.md`;
@@ -38,7 +44,8 @@ Use it together with:
 - `docs/pr-testing-and-smoke-rules.md`;
 - `state/current-focus.md`;
 - `state/progress.md`;
-- `state/handoff.md`.
+- `state/handoff.md`;
+- `state/change-requests.md`.
 
 ## 2. Source-of-truth order
 
@@ -46,16 +53,22 @@ When documents conflict, use this priority:
 
 1. `AGENTS.md` and nested `AGENTS.md` files;
 2. accepted architecture decision records, including ADR 0016 and ADR 0017;
-3. `docs/architecture.md` and accepted normative profile documents;
-4. `docs/product-spec.md` and `docs/domain-model.md`;
-5. `docs/roadmap.md`;
-6. this active implementation plan;
-7. active `state/` files for the exact current branch and handoff.
+3. `docs/current-lifecycle.md` for current lifecycle and authorization;
+4. `docs/architecture.md` and accepted normative profile documents;
+5. `docs/product-spec.md` and `docs/domain-model.md`;
+6. `docs/roadmap.md`;
+7. this active implementation plan;
+8. active `state/` files for the exact current branch and handoff.
 
 For the unresolved C4 interaction boundary,
 `docs/restore-interaction-and-validation-session.md` is the current normative
-profile. Older branch-era lifecycle statements in large architecture or Restore
-documents remain historical evidence and do not authorize runtime work.
+profile.
+
+`docs/architecture.md`, `docs/roadmap.md`, and `docs/backup-and-restore.md`
+retain valuable product and safety contracts but contain dated branch-era C4
+status paragraphs. Their stale lifecycle labels are explicitly superseded by
+`docs/current-lifecycle.md` and ADR 0017. They do not reopen C4-I and do not
+authorize C4-II runtime work.
 
 Historical files under `docs/history/` are evidence and context only. They never
 override an active lifecycle or accepted decision.
@@ -89,7 +102,9 @@ Detailed historical evidence and all six audit rounds are retained in:
 
 [`docs/history/c4-i-implementation-and-audit-history.md`](history/c4-i-implementation-and-audit-history.md)
 
-Current lifecycle:
+The current lifecycle is also recorded in:
+
+[`docs/current-lifecycle.md`](current-lifecycle.md)
 
 ```text
 C1 — COMPLETED
@@ -118,6 +133,7 @@ C4 — ACTIVE
 Restore — NOT IMPLEMENTED
 macOS packaging — NOT COMPLETED
 safe packaged update flow — NOT COMPLETED
+installation verification — NOT COMPLETED
 full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
@@ -308,11 +324,13 @@ The CR-011 task must be a small decision-only pull request.
 ### Tests and checks
 
 - `git diff --check`;
+- `python3 scripts/check_documentation_lifecycle.py`;
 - Markdown/link check if the repository defines one;
 - search for conflicting active lifecycle statements;
-- verify only documentation/state paths changed;
+- verify only documentation/state/script paths changed;
 - independent read-only architecture audit.
 
+The lifecycle script is a documentation consistency check, not product smoke.
 Product smoke is not applicable to a decision-only documentation change.
 
 ## 9. Release gates after CR-011
@@ -345,10 +363,13 @@ PR #171 itself must remain draft and unmerged until an independent read-only
 documentation and architecture consistency audit confirms that:
 
 - C4-I closure is accurate;
-- the C4-I history is discoverable;
-- all active lifecycle documents agree;
-- CR-011 is the only authorized next task;
+- the broad project history and exact pre-compaction snapshots are discoverable;
+- `docs/current-lifecycle.md` explicitly governs stale lifecycle prose;
+- all compact active lifecycle documents agree;
+- CR-011 is present in the active change-request ledger and is the only
+  authorized next task;
 - C4-II-A is blocked and not authorized;
 - the validation-session boundary is documented;
 - no runtime, test, migration, dependency, or packaging file changed;
+- `python3 scripts/check_documentation_lifecycle.py` passes;
 - product release readiness is not claimed.
