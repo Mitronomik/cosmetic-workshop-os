@@ -2,9 +2,9 @@
 
 Updated: `2026-08-06`
 
-> This is the current progress summary. The detailed pre-closure journal is
-> preserved unchanged at
-> `state/history/2026-08-06-c4-i-closure/progress.md`.
+> This is the current progress summary. The detailed pre-closure journal remains
+> available in Git history at parent commit
+> `e6997281d2e0268ce54184d988c114bac71c35e2`.
 
 ## Current phase
 

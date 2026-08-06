@@ -2,9 +2,9 @@
 
 Updated: `2026-08-06`
 
-> This is the single current authoritative handoff. The complete pre-closure
-> handoff is preserved unchanged at
-> `state/history/2026-08-06-c4-i-closure/handoff.md`.
+> This is the single current authoritative handoff. The complete branch-era
+> handoff remains available in Git history at parent commit
+> `e6997281d2e0268ce54184d988c114bac71c35e2`.
 
 ## Repository lifecycle
 

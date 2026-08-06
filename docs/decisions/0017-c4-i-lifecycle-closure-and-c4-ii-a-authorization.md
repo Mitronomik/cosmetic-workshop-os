@@ -4,21 +4,18 @@
 
 `ACCEPTED` — 2026-08-06.
 
-This record closes the lifecycle of the merged `C4-I` implementation and
-authorizes exactly one next bounded runtime slice, `C4-II-A`.
+This record closes the lifecycle of merged `C4-I` and authorizes exactly one
+next bounded runtime slice: `C4-II-A`.
 
-It does **not** amend the Restore safety decision in
-`0016-launcher-assisted-restore.md`. The accepted twelve phases, transition
-graph, recovery matrix, `replacement_intent` crash rule, launcher ownership and
-AuditLog boundary remain unchanged.
+It does **not** amend `CR-010` or
+`docs/decisions/0016-launcher-assisted-restore.md`. The accepted twelve phases,
+transition graph, recovery matrix, `replacement_intent` crash rule, launcher
+ownership and AuditLog boundary remain unchanged.
 
-Any earlier lifecycle sentence that says PR #170 is open, draft, unmerged or
-awaiting another audit is retained only as a historical statement of its date and
-is superseded by this record. This applies to lifecycle/status prose in
-`docs/roadmap.md`, `docs/implementation-plan.md`,
-`docs/decisions/0016-launcher-assisted-restore.md` and the archived pre-closure
-`state/` records. Their product contracts and historical evidence are not
-rewritten or reopened.
+Earlier branch-era lifecycle statements that describe PR #170 as open, draft,
+unmerged or awaiting another audit are historical for their date and are
+superseded by this record. Their product contracts and evidence remain intact in
+Git history.
 
 ## Verified merge facts
 
@@ -67,16 +64,15 @@ Product release readiness — NOT CLAIMED
 
 ## Why C4-I closure does not mean Restore is implemented
 
-C4-I is internal launcher infrastructure. It implements source staging,
-validation, the durable Restore operation state, safety-copy orchestration,
-replacement, rollback, verification and startup recovery boundaries for later
-use. It deliberately exposes no final user-facing entry point.
+C4-I is internal launcher infrastructure. It implements staging, validation,
+durable Restore operation state, safety-copy orchestration, replacement,
+rollback, verification and startup recovery boundaries for later use.
 
-The merged slice contains no user-facing file picker, selected-backup screen,
+It deliberately exposes no user-facing file picker, selected-backup screen,
 validation presentation, destructive confirmation, Restore action, progress
 screen, completion screen, rollback-completed screen or support-assisted outcome
 screen. It adds no running-backend Restore endpoint and no ordinary SPA Restore
-mutation. Therefore the product capability remains `Restore — NOT IMPLEMENTED`.
+mutation. Therefore user-facing Restore remains `NOT IMPLEMENTED`.
 
 ## Unchanged CR-010 / ADR 0016 invariants
 
@@ -135,7 +131,7 @@ No current workshop data is replaced or migrated in this slice.
 - launcher-owned native/local file selection;
 - selection of exactly one local regular SQLite backup source;
 - safe cancellation with no state mutation;
-- invocation of the existing C4-I source-staging and candidate-validation
+- invocation of existing C4-I source-staging and candidate-validation
   boundaries rather than a second validation implementation;
 - human-readable selected-backup information that can be established safely;
 - human-readable validation progress;
@@ -146,7 +142,7 @@ No current workshop data is replaced or migrated in this slice.
   symlink and path-escape inputs;
 - fixed non-technical messages with technical detail confined to local logs;
 - safe replacement of a previous selection;
-- stale-result rejection when a later selection supersedes an earlier validation;
+- stale-result rejection when a later selection supersedes earlier validation;
 - duplicate-action protection;
 - visible keyboard focus, accessible naming and understandable navigation;
 - supported narrow-viewport presentation where applicable;
@@ -165,13 +161,12 @@ No current workshop data is replaced or migrated in this slice.
   deleted or rewritten.
 - Validation failure must never make a destructive confirmation or execution
   action available.
-- No source path becomes authority merely because its filename matches the backup
-  grammar.
+- A filename or extension is never sufficient validation authority.
 - Local-first operation requires no network service or upload.
 
 #### Backend requirements
 
-No new ordinary FastAPI Restore endpoint is expected or authorized. Existing
+No ordinary FastAPI Restore endpoint is expected or authorized. Existing
 read-only backend helpers may be reused only through the launcher-owned C4-I
 boundary. No business repository write, schema change, migration or AuditLog event
 is authorized.
@@ -179,12 +174,9 @@ is authorized.
 #### Frontend/application-shell requirements
 
 - show only human-readable source information that can be proved safely;
-- keep validation progress and result ownership tied to the exact current
-  selection;
+- tie validation progress and result ownership to the exact current selection;
 - do not reconstruct validation from filenames or file extensions;
 - do not calculate or infer schema compatibility;
-- preserve the current accepted selection after a presentation-only refresh
-  failure where safe;
 - distinguish cancellation, validation rejection and technical presentation
   failure;
 - never imply that Restore has executed;
@@ -200,8 +192,7 @@ At minimum, prove:
 3. a valid older supported backup is accepted for later execution;
 4. a newer unsupported schema is rejected;
 5. a foreign healthy SQLite database is rejected;
-6. an empty file is rejected even if SQLite `quick_check` would not be
-   sufficient evidence;
+6. an empty file is rejected;
 7. a corrupt database is rejected;
 8. a directory is rejected;
 9. a symlink or path escape is rejected;
@@ -234,8 +225,7 @@ At minimum, prove:
 - no ordinary SPA mutation;
 - no Restore AuditLog event;
 - no state-machine, phase, transition or recovery-matrix change;
-- no generic file browser;
-- no arbitrary filesystem access;
+- no generic file browser or arbitrary filesystem access;
 - no cloud source, upload, sync or scheduler;
 - no packaging, updater or release-readiness claim;
 - no C4-II-B, C4-II-C or C4-III implementation.
@@ -298,8 +288,6 @@ relabeling of PR #170 evidence; no product release-readiness claim.
 ## Historical state preservation
 
 The previous long-form `state/current-focus.md`, `state/progress.md` and
-`state/handoff.md` are preserved byte-for-byte under
-`state/history/2026-08-06-c4-i-closure/`. The active state files contain only the
-current lifecycle, the next authorized slice and the directly relevant
-constraints. Git history and the archived files retain the earlier audit and
-branch-era detail without allowing it to masquerade as the current conclusion.
+`state/handoff.md` remain available in ordinary Git history at the parent of this
+closure. They are not duplicated into new archive files, because doing so would
+inflate a narrowly scoped documentation PR without adding information or safety.
