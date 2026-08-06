@@ -2,140 +2,126 @@
 
 Updated: `2026-08-06`
 
-> This is the single current authoritative handoff. The complete branch-era
-> handoff remains available in Git history at parent commit
-> `e6997281d2e0268ce54184d988c114bac71c35e2`.
+This is the compact current handoff. Historical C4-I implementation and audit
+detail is retained in:
+
+`docs/history/c4-i-implementation-and-audit-history.md`
+
+The current lifecycle decision is:
+
+`docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`
 
 ## Repository lifecycle
 
 ```text
-CR-010 — ACCEPTED
+C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+PR #170
+final reviewed head ac95e2990efa979b3ded6cb48f91ddd0750aa7c8
+merge commit e6997281d2e0268ce54184d988c114bac71c35e2
 
-C4-I — Launcher-owned restore safety engine
-— DONE — MERGED AND EXACT-HEAD VERIFIED
-— PR #170
-— final reviewed head ac95e2990efa979b3ded6cb48f91ddd0750aa7c8
-— merge commit e6997281d2e0268ce54184d988c114bac71c35e2
+CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 
-C4-II-A — Launcher Restore source selection and validation presentation
-— AUTHORIZED — NOT IMPLEMENTED
-
-C4-II-B — Explicit confirmation and Restore execution
-— PLANNED — NOT AUTHORIZED
-
-C4-II-C — Completion, rollback and support-assisted outcome UX
-— PLANNED — NOT AUTHORIZED
-
-C4-III — Restore end-to-end verification and lifecycle closure
-— PLANNED — NOT AUTHORIZED
-
-C4 — ACTIVE
 Restore — NOT IMPLEMENTED
-macOS packaging — NOT COMPLETED
-safe packaged update flow — NOT COMPLETED
-full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-## What merged in PR #170
+## Next action
 
-PR #170 merged the internal launcher-owned Restore safety engine. The final
-independently reviewed and exact-head-tested implementation head is
-`ac95e2990efa979b3ded6cb48f91ddd0750aa7c8`; merge commit
-`e6997281d2e0268ce54184d988c114bac71c35e2` contains it without additional file
-changes.
+Perform one documentation and architecture decision task only:
 
-The engine implements the accepted CR-010 / ADR 0016 contract exactly. The
-following remain load-bearing and must not be reinterpreted by later slices:
+```text
+CR-011 — Decide the launcher Restore interaction and validation-session boundary.
+```
+
+No runtime implementation may begin until that decision is accepted.
+
+The decision must select one concrete architecture. It must answer where the UI
+lives, which process owns it, which process opens the native picker, how any
+browser command reaches the launcher, how the exact local run is authenticated,
+whether a source path leaves the launcher, whether the backend stays running,
+which dependencies and packaging changes are allowed, how stale sessions and
+replay are rejected, and how cleanup and exact-head smoke work.
+
+## Current implementation facts
+
+The launcher currently opens an ordinary system browser through
+`webbrowser.open(...)`.
+
+The current public C4-I package exposes destructive execution and startup
+recovery. It does not expose a dedicated public non-destructive candidate
+preparation session.
+
+Therefore no accepted browser-to-launcher command channel or validation-session
+application service exists yet.
+
+## Mandatory future validation-session semantics
+
+The future C4-II-A boundary may be named differently, but must be equivalent to:
+
+```text
+prepare_restore_candidate(...)
+```
+
+It must be launcher-owned and must:
+
+- reuse C4-I source intake, staging, stability, and candidate validation rules;
+- use temporary isolated staging outside the durable Restore operation workspace;
+- create no durable Restore operation record and enter no Restore phase;
+- call no `execute_restore(...)`;
+- create no `before_restore` safety copy;
+- mutate no selected source or working database;
+- perform no migration, rollback, recovery mutation, or Restore AuditLog write;
+- return typed safe presentation results;
+- keep raw SQLite, migration, stack-trace, and absolute-path detail in local logs;
+- use opaque session identity and stale-selection protection;
+- invalidate prior results on cancellation or reselection;
+- clean temporary state after cancellation, failure, reselection, and shutdown;
+- support bounded cleanup after interrupted validation.
+
+An opaque token is not proof that a source is still valid. C4-II-B must re-prove
+source or retained-candidate identity through launcher-owned state and accepted
+C4-I rules before destructive execution.
+
+## Prohibited assumptions
+
+Do not add any of the following without an accepted CR-011 decision:
+
+- ordinary FastAPI Restore endpoint;
+- generic unauthenticated localhost endpoint;
+- wildcard CORS;
+- WebSocket or IPC invented in runtime code;
+- SPA-owned filesystem access;
+- browser upload/blob as the authoritative source;
+- `<input type="file">` as a source of an absolute local path;
+- pywebview, Electron, Tauri, PyObjC, tkinter, AppleScript, or custom URL scheme;
+- hidden packaging changes;
+- absolute selected-source path in ordinary browser state;
+- terminal workflow for the user.
+
+## Preserved load-bearing C4-I contract
 
 - exactly twelve durable phases;
 - `phase` is the sole authoritative lifecycle field;
-- unchanged transition graph and startup recovery matrix;
-- durable `replacement_intent` before the replacement boundary;
-- terminal phases are never reactivated;
-- the selected source is immutable read-only input;
-- the current database is protected by the canonical maintenance lease or the
-  exact owned child lock/handshake boundary whenever it is accessed;
-- a busy port is retryable environment evidence, not a verdict on database
-  safety;
-- Restore is launcher-assisted, not a running FastAPI mutation and not an
-  ordinary SPA mutation;
-- no Restore AuditLog event is authorized;
-- the ordinary browser opens only after durable `completed`.
+- accepted transition graph and startup recovery matrix unchanged;
+- immutable selected source;
+- canonical launcher-owned paths and locks;
+- retained backend exclusion around database access;
+- exact-child lock-and-socket readiness proof;
+- mandatory verified `before_restore` safety copy before replacement;
+- conservative `replacement_intent` recovery;
+- retryable port refusal never becomes durable Restore state;
+- `rolled_back` is failed Restore;
+- `recovery_blocked` blocks ordinary startup;
+- browser opens into the normal workspace only after durable `completed`;
+- no ordinary backend or SPA Restore mutation;
+- no Restore AuditLog event.
 
-C4-I has no user-facing entry point. Do not describe it as shipped Restore.
+## Review gate for PR #171
 
-## Next task: C4-II-A only
-
-### Product goal
-
-Give a non-technical user a safe first half of the Restore workflow:
-
-```text
-select one local SQLite backup
-→ stage and validate through the existing C4-I contracts
-→ show understandable backup information or a rejection
-```
-
-Nothing destructive happens in this slice.
-
-### Required ownership
-
-- The launcher/application shell owns local file selection.
-- C4-I remains the sole owner of staging and candidate validation.
-- Presentation consumes typed results and never parses SQLite or migration
-  history itself.
-- Technical detail remains in local logs.
-- The selected file stays byte-identical and is never renamed, migrated,
-  deleted or rewritten.
-
-### Authorized user-facing states
-
-- no source selected;
-- native selection cancelled;
-- selection accepted and validation pending;
-- valid current-schema backup;
-- valid older supported backup, clearly described as requiring migration during
-  a later execution slice;
-- invalid/corrupt file;
-- foreign SQLite database;
-- newer unsupported schema;
-- path/type/symlink rejection;
-- safe replacement of a previous selection;
-- retry after a validation failure.
-
-### Explicit non-goals
-
-- no destructive confirmation;
-- no `execute_restore(...)` call;
-- no `before_restore` safety copy;
-- no working-database replacement or migration;
-- no rollback or recovery mutation;
-- no completion, rollback-completed or support-assisted terminal screen;
-- no FastAPI Restore endpoint;
-- no SPA-owned filesystem access or Restore mutation;
-- no state-machine or operation-record change;
-- no Restore AuditLog event;
-- no packaging or updater work;
-- no C4-II-B, C4-II-C or C4-III implementation.
-
-### Minimum verification
-
-- focused launcher/service tests for selection and typed presentation mapping;
-- real C4-I validation coverage remains collected and green;
-- source immutability proved for success and rejection paths;
-- no working-database, safety-copy, operation-record or AuditLog mutation;
-- cancellation, reselection, stale-result rejection and duplicate-action
-  protection;
-- keyboard focus and accessible naming;
-- desktop and supported narrow-width presentation;
-- exact-head smoke with isolated temporary user data;
-- no claim of successful Restore or release readiness.
-
-## Later slices — not authorized
-
-`C4-II-B` will own explicit destructive confirmation and execution only after
-C4-II-A is reviewed, exact-head verified and merged. `C4-II-C` will own truthful
-completion, rollback and support-assisted outcomes only after its predecessor is
-closed. `C4-III` remains the isolated end-to-end verification and lifecycle
-closure gate.
+PR #171 must remain draft and unmerged until an independent read-only
+documentation and architecture consistency audit confirms that all active
+lifecycle documents agree and that C4-II-A is not authorized.
