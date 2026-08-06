@@ -6,14 +6,17 @@ Document: `docs/implementation-plan.md`
 Status: **active current implementation sequence**  
 Updated: `2026-08-06`
 
-The previous long-form implementation plan, including completed historical
-windows, is preserved unchanged at:
+The complete pre-compaction implementation plan remains available in the PR #170
+merge baseline:
 
-[`docs/history/implementation-plan-before-cr-011.md`](history/implementation-plan-before-cr-011.md)
+```bash
+git show e6997281d2e0268ce54184d988c114bac71c35e2:docs/implementation-plan.md
+```
 
-That snapshot is historical and non-authoritative. It contains lifecycle
-statements that were true before PR #170 merged and must not be used as current
-instructions.
+It contains lifecycle statements that were true before PR #170 merged and must
+not be used as current instructions. The searchable, load-bearing C4-I history
+is retained separately in
+`docs/history/c4-i-implementation-and-audit-history.md`.
 
 ## 1. Purpose
 
