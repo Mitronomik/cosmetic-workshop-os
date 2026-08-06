@@ -1,7 +1,7 @@
 # C4-I implementation and audit history
 
-Status: **HISTORICAL — NON-NORMATIVE**  
-Retained for traceability and repository search.  
+Status: **HISTORICAL — NON-NORMATIVE**
+Retained for traceability and repository search.
 Current lifecycle authority lives in:
 
 - `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`;
