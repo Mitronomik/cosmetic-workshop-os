@@ -2,84 +2,78 @@
 
 Updated: `2026-08-06`
 
-> This is the current progress summary. The detailed pre-closure journal remains
-> available in Git history at parent commit
-> `e6997281d2e0268ce54184d988c114bac71c35e2`.
+## Completed
 
-## Current phase
+- C1 — completed.
+- C2 — completed.
+- C3 — completed, merged, exact-head verified, and hardened.
+- CR-010 — launcher-assisted Restore semantics accepted.
+- C4-I — launcher-owned Restore safety engine:
+  `DONE — MERGED AND EXACT-HEAD VERIFIED`.
+- PR #170 final reviewed head:
+  `ac95e2990efa979b3ded6cb48f91ddd0750aa7c8`.
+- PR #170 merge commit:
+  `e6997281d2e0268ce54184d988c114bac71c35e2`.
+- Six independent C4-I audit rounds closed twenty-four findings.
+- Curated C4-I history is retained in
+  `docs/history/c4-i-implementation-and-audit-history.md`.
+
+## Current authorized work
 
 ```text
-C1 — COMPLETED
-C2 — COMPLETED
-C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
-CR-010 — ACCEPTED
-C4 — ACTIVE
+CR-011 — Launcher Restore interaction and validation-session boundary
+AUTHORIZED — DECISION ONLY — NOT DECIDED
+```
 
-C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A — AUTHORIZED — NOT IMPLEMENTED
+CR-011 must select one concrete, testable interaction architecture. No runtime
+implementation is authorized by the current documentation PR.
+
+## Planned but blocked
+
+```text
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
-C4-III — PLANNED — NOT AUTHORIZED
+C4-III  — PLANNED — NOT AUTHORIZED
+```
 
+## Open product obligations
+
+- user-facing Restore;
+- macOS packaging;
+- safe packaged update flow;
+- installation verification;
+- full release-candidate smoke;
+- continuing documentation accuracy.
+
+## Current product truth
+
+```text
+C4 — ACTIVE
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## C4-I merge closure
+## Validation-session boundary required before C4-II-A
 
-- Pull request: **#170 — `C4-I — Implement launcher-owned Restore safety engine`**
-- State: **MERGED**
-- Final independently reviewed and exact-head-tested implementation head:
-  `ac95e2990efa979b3ded6cb48f91ddd0750aa7c8`
-- Merge commit on `main`:
-  `e6997281d2e0268ce54184d988c114bac71c35e2`
-- The reviewed head is a parent of the merge commit.
-- The merge commit adds no file change beyond the reviewed head.
-- Accepted exact-head evidence belongs to PR #170 and is not re-executed by this
-  documentation-only lifecycle closure.
+Future source selection and validation presentation must be launcher-owned and
+non-destructive. It must not:
 
-C4-I delivered only internal launcher infrastructure. It did not deliver a
-user-facing Restore workflow, so Restore remains `NOT IMPLEMENTED`.
+- call `execute_restore(...)`;
+- create a durable Restore operation record;
+- enter any Restore phase;
+- create a `before_restore` safety copy;
+- replace or migrate the working database;
+- perform rollback or recovery mutation;
+- write a Restore AuditLog event;
+- expose the absolute selected-source path as browser authority.
 
-The accepted CR-010 / ADR 0016 safety contract remains unchanged: twelve phases,
-unchanged transition graph, unchanged recovery matrix, unchanged
-`replacement_intent` crash rule, no Restore AuditLog event and no running-backend
-Restore endpoint.
+C4-II-B must later re-prove source or retained-candidate identity. An opaque
+session token is a reference to launcher-owned state, not validation authority.
 
-## Documentation-only closure work
+## Not started
 
-This lifecycle closure changes documentation and state only. It:
-
-- records PR #170 as merged and exact-head verified;
-- removes the obsolete current instruction to audit or merge PR #170;
-- makes `C4-II-A` the only authorized next runtime slice;
-- divides the remaining user-facing work into `C4-II-B` and `C4-II-C` without
-  authorizing either;
-- keeps `C4-III` planned and not authorized;
-- keeps packaging, safe packaged updates, release smoke and release readiness
-  open;
-- changes no runtime, migration, dependency or test file.
-
-## Next ready slice
-
-```text
-C4-II-A — Launcher Restore source selection and validation presentation
-AUTHORIZED — NOT IMPLEMENTED
-```
-
-C4-II-A is non-destructive. It may select one local SQLite backup, invoke the
-existing C4-I staging and validation contracts, and present human-readable
-information and rejection outcomes. It must not execute Restore, create the
-`before_restore` safety copy, replace or migrate the working database, run
-rollback, add a FastAPI Restore endpoint, add an ordinary SPA mutation, add a
-Restore AuditLog event, or change the accepted state machine.
-
-## Known open obligations
-
-- user-facing Restore execution and confirmation — not implemented;
-- completion, rollback and support-assisted outcome UX — not implemented;
-- complete Restore end-to-end verification and C4 closure — not completed;
-- macOS package — not completed;
-- safe packaged update flow — not completed;
-- user/remote installation verification — not completed;
-- full release-candidate smoke — not completed.
+No native picker, launcher IPC, loopback control plane, WebSocket, frontend
+Restore UI, FastAPI Restore endpoint, browser-upload Restore path,
+validation-session service, packaging change, or destructive execution is
+implemented or authorized.
