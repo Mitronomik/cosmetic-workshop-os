@@ -29,6 +29,9 @@ Use it together with:
 - `docs/domain-model.md`;
 - `docs/roadmap.md`;
 - `docs/backup-and-restore.md`;
+- `docs/decisions/0016-launcher-assisted-restore.md`;
+- `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`;
+- `docs/restore-interaction-and-validation-session.md`;
 - `docs/pr-testing-and-smoke-rules.md`;
 - `state/current-focus.md`;
 - `state/progress.md`;
@@ -39,12 +42,17 @@ Use it together with:
 When documents conflict, use this priority:
 
 1. `AGENTS.md` and nested `AGENTS.md` files;
-2. `docs/architecture.md`;
-3. `docs/product-spec.md` and `docs/domain-model.md`;
-4. `docs/roadmap.md`;
-5. accepted decision records and profile documents;
+2. accepted architecture decision records, including ADR 0016 and ADR 0017;
+3. `docs/architecture.md` and accepted normative profile documents;
+4. `docs/product-spec.md` and `docs/domain-model.md`;
+5. `docs/roadmap.md`;
 6. this active implementation plan;
 7. active `state/` files for the exact current branch and handoff.
+
+For the unresolved C4 interaction boundary,
+`docs/restore-interaction-and-validation-session.md` is the current normative
+profile. Older branch-era lifecycle statements in large architecture or Restore
+documents remain historical evidence and do not authorize runtime work.
 
 Historical files under `docs/history/` are evidence and context only. They never
 override an active lifecycle or accepted decision.
@@ -181,6 +189,10 @@ Therefore a C4-II-A implementation would otherwise have to invent both:
 Those are architecture and security decisions and must be resolved by CR-011.
 
 ## 6. Mandatory future validation-session contract
+
+The complete normative profile is:
+
+[`docs/restore-interaction-and-validation-session.md`](restore-interaction-and-validation-session.md)
 
 Future C4-II-A must use one launcher-owned application boundary conceptually
 represented as:
