@@ -11,6 +11,7 @@ does not override current lifecycle or authorization.
 
 ```text
 PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
+PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
@@ -19,8 +20,8 @@ C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
-C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
+C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -66,29 +67,36 @@ reviewed head — e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5
 merge commit — 504e776508c940554b3ee8659a201af21db8303c
 ```
 
-Accepted exact-head evidence:
+Accepted exact-head evidence: lifecycle checker PASS, A1 smoke PASS, 17 targeted
+A1 tests, 514 C4-I Restore tests, 2415 backend+launcher tests and independent
+audit P0=0 / P1=0 / P2=0.
 
-- lifecycle checker PASS;
-- real A1 service smoke PASS;
-- 17 targeted A1 tests passed;
-- 514 existing C4-I Restore regression tests passed;
-- 2415 backend + launcher tests passed;
-- independent audit P0=0 / P1=0 / P2=0.
+A1 is **DONE — MERGED AND EXACT-HEAD VERIFIED** and remains the single
+non-destructive candidate-preparation authority.
 
-A1 is **DONE — MERGED AND EXACT-HEAD VERIFIED**. It remains non-destructive and
-reuses existing C4-I intake/staging/validation.
+## A2 lifecycle authorization and current implementation
 
-## A2 successor authorization
+This post-A1 closure is not a new CR and does not change ADR 0018.
 
-This post-A1 closure is not a new CR and does not change ADR 0018. It opens only
-the already-decided A2 slice after the closure changeset merges to `main`.
+PR #175:
 
-A2 is **AUTHORIZED NEXT — NOT IMPLEMENTED** and is limited to exact-run launcher
-control/session protocol. Production A2 must keep typed `picker_unavailable`, must
-not accept browser filesystem authority and must not append the bootstrap fragment
-to real product browser navigation.
+```text
+reviewed head — b1a48d8f668fa984e3032f85c226f77e30d92e4e
+merge commit — 636645ece744752f6a753ae5a25a05297fd34e10
+```
 
-A3/A4 remain predecessor-gated.
+A2 is now **IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED**. The current
+runtime changeset is limited to the already-decided exact-run launcher
+control/session protocol: loopback bind, Host/Origin, one-use bootstrap, run token,
+no-store/CORS boundary, 15s/60s liveness, `command_seq`, concurrent worker
+coordination, A1 invalidation and launcher lifetime wiring.
+
+Production A2 uses typed `picker_unavailable` and obtains no filesystem path.
+Browser/control request schema carries no path/file authority. Production browser
+navigation remains unchanged and receives no bootstrap/session material before A4.
+
+A2 still requires exact-head tests/smoke/audit and merge + post-merge lifecycle
+closure before A3 can open.
 
 ## C4-II-B boundary
 
