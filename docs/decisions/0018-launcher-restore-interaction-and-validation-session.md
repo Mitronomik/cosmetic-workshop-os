@@ -102,7 +102,7 @@ acquire launcher lifecycle / instance authority
 → start and prove ordinary backend ready
 → bind launcher control plane on 127.0.0.1:<ephemeral>
 → create exact-run bootstrap capability
-→ open /backups/restore or ordinary app entry with bootstrap fragment available to SPA
+→ open ordinary browser with bootstrap fragment available to SPA
 → keep browser UI + backend + control plane under the same launcher lifetime
 ```
 
@@ -175,7 +175,7 @@ Successful bootstrap returns a second run-scoped token with at least 256 bits of
 For browser reload, SPA stores only these run-scoped control descriptors in `sessionStorage`:
 
 - `control_origin`, exactly `http://127.0.0.1:<ephemeral-port>`;
-- opaque `run_id` if needed for presentation/session matching;
+- opaque `run_id` if needed for session matching;
 - run-scoped session token.
 
 `control_origin` is routing metadata, not authority. Token possession plus exact Origin/Host/run checks is still required.
@@ -255,14 +255,21 @@ Launcher retains bounded command authority state:
 - request ID for that sequence;
 - safe in-progress/final result needed for idempotent retry.
 
-Rules:
+Sequence consumption is load-bearing:
 
-- next new mutation must use exactly next sequence;
+- Origin/Host/auth/token/JSON/schema/sequence validation happens before sequence consumption;
+- an unauthenticated, malformed, wrong-Origin, wrong-Host, stale-sequence or future/skipped-sequence request does **not** consume a command sequence;
+- once an authenticated, syntactically valid request presents exactly the expected next `command_seq`, the launcher **atomically consumes that sequence before evaluating business preconditions**;
+- the sequence remains consumed and its safe result is recorded even when the business result is a rejection such as `action_in_progress` or another typed no-op refusal;
+- therefore a business rejection consumes its command sequence and cannot be replayed later when conditions change.
+
+Retry/order rules:
+
 - `command_seq < highest_command_seq` is permanently stale/replay and rejected;
-- `command_seq == highest_command_seq` retries only with the same request ID and never re-executes;
+- `command_seq == highest_command_seq` retries only with the recorded request ID and returns the recorded in-progress/final safe result without re-execution;
 - same sequence + different request ID is conflict/rejected;
 - skipped/future sequence is rejected;
-- new select while picker/validation owns session is `action_in_progress`;
+- new select while picker/validation owns session returns `action_in_progress` and consumes its otherwise-valid next sequence;
 - accepted select/cancel/reselect advances separate selection generation;
 - validation result publishes only if captured generation remains current;
 - cancel/reselect clears proof for invalidated generation before new source authority;
@@ -302,7 +309,7 @@ If `stage_source(...)` is too coupled to `RestoreWorkspace`, C4-II-A may extract
 Conceptual root:
 
 ```text
-<system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<session-id>/
+<system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<validation-session-id>/
 ```
 
 Requirements:
@@ -381,11 +388,11 @@ C4-II-A is non-destructive and operates on source + isolated staged copy. Existi
 
 | Event | Required behavior |
 |---|---|
-| Picker cancel | invalidate generation/proof immediately; terminate picker; clean scratch after owner quiescence |
-| Reselect | invalidate old generation/proof first; quiesce old owner; clean scratch; then new generation |
-| Rejection/technical failure | safe browser category; technical detail local; clear proof; clean scratch |
+| Picker cancel | invalidate generation/proof immediately; terminate picker; clean scratch after quiescence |
+| Reselect | invalidate old generation/proof; quiesce owner; clean scratch; then next generation |
+| Rejection/failure | safe browser category; technical detail local; clear proof; clean scratch |
 | Browser reload | use sessionStorage `control_origin` + token to recover typed launcher state |
-| Browser/tab close | heartbeat expiry invalidates authority/proof, cancels active ownership, then cleans scratch |
+| Browser/tab close | heartbeat expiry invalidates authority/proof, cancels owner, then cleans scratch |
 | Launcher normal exit | invalidate tokens/generation/proof, terminate picker, quiesce workers, clean scratch, stop control plane |
 | Launcher crash/interruption | no token/proof survives; next run cleans only recognized owned scratch |
 
@@ -433,22 +440,23 @@ At minimum prove:
 7. state/session responses use `Cache-Control: no-store`;
 8. heartbeat/state/cancel remain serviceable while picker/validation is in flight;
 9. cancellation prevents late worker publication and cleanup waits for worker quiescence;
-10. `command_seq` rejects replay/out-of-order after older result detail is discarded;
-11. same current sequence + same request ID is idempotent;
-12. same sequence + different request ID rejected;
-13. duplicate concurrent select rejected;
-14. stale generation cannot publish;
-15. cancel/reselect/session-expiry clears retained proof;
-16. browser payload contains no absolute path;
-17. picker cancellation typed/non-destructive;
-18. source remains byte-identical;
-19. no durable Restore operation/phase/safety copy/AuditLog event;
-20. no working DB replacement/migration;
-21. backend usable during validation;
-22. scratch uses restrictive user-only permissions;
-23. cleanup removes only proved owned scratch;
-24. next-run cleanup ignores foreign/unproved paths;
-25. exact `/backups/restore` screen fails closed when launcher session unavailable.
+10. malformed/auth/Origin/sequence-invalid requests do not consume `command_seq`;
+11. typed business rejection consumes its valid next `command_seq` and cannot become successful on later replay;
+12. same current sequence + same request ID is idempotent;
+13. same sequence + different request ID rejected;
+14. duplicate concurrent select rejected;
+15. stale generation cannot publish;
+16. cancel/reselect/session-expiry clears retained proof;
+17. browser payload contains no absolute path;
+18. picker cancellation typed/non-destructive;
+19. source remains byte-identical;
+20. no durable Restore operation/phase/safety copy/AuditLog event;
+21. no working DB replacement/migration;
+22. backend usable during validation;
+23. scratch uses restrictive user-only permissions;
+24. cleanup removes only proved owned scratch;
+25. next-run cleanup ignores foreign/unproved paths;
+26. exact `/backups/restore` screen fails closed when launcher session unavailable.
 
 ## Required future exact-head macOS smoke
 
@@ -460,8 +468,8 @@ real launcher run
 → select prepared temporary workshop backup
 → real candidate preparation/validation
 → typed browser result
-→ prove heartbeat/state/cancel responsiveness while picker/validation is in flight
-→ cancel/reselect exercise
+→ prove heartbeat/state/cancel responsive while work is in flight
+→ exercise rejected/retried command ordering plus cancel/reselect
 → prove source bytes unchanged
 → prove no durable Restore operation/safety copy/working-DB change
 → prove retained proof cleared after cancel/session expiry
