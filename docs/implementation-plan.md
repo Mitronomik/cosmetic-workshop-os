@@ -4,7 +4,7 @@ Project: `cosmetic-workshop-os`
 Client-facing name: **Мастерская косметолога**  
 Document: `docs/implementation-plan.md`  
 Status: **active current implementation sequence**  
-Updated: `2026-08-06`
+Updated: `2026-08-07`
 
 The complete pre-compaction implementation plan is preserved byte-for-byte in
 the current repository tree:
@@ -49,32 +49,35 @@ Use it together with:
 
 ## 2. Source-of-truth order
 
-When documents conflict, use this priority:
+Use `docs/current-lifecycle.md` for the exact current lifecycle, authorization,
+and PR sequencing.
 
-1. `AGENTS.md` and nested `AGENTS.md` files;
-2. accepted architecture decision records, including ADR 0016 and ADR 0017;
+For ADR conflicts, apply scope and recency:
+
+1. applicable `AGENTS.md` files;
+2. the newest accepted ADR that explicitly supersedes or amends the exact topic;
 3. `docs/current-lifecycle.md` for current lifecycle and authorization;
-4. `docs/architecture.md` and accepted normative profile documents;
-5. `docs/product-spec.md` and `docs/domain-model.md`;
-6. `docs/roadmap.md`;
-7. this active implementation plan;
-8. active `state/` files for the exact current branch and handoff.
+4. older accepted ADRs for durable product/safety/architecture semantics that
+   have not been superseded;
+5. current normative architecture/profile documents;
+6. product/domain documents;
+7. strategic roadmap;
+8. this implementation plan;
+9. active `state/` files.
 
-For the unresolved C4 interaction boundary,
-`docs/restore-interaction-and-validation-session.md` is the current normative
-profile.
+For Restore, ADR 0017 supersedes only dated C4 lifecycle/status wording in ADR
+0016. ADR 0016 remains authoritative for the accepted launcher-assisted Restore
+product and safety contract, twelve phases, transition graph, recovery matrix,
+`replacement_intent`, launcher ownership, immutable source, safety-copy rule,
+and AuditLog boundary.
 
-`docs/architecture.md`, `docs/roadmap.md`, and `docs/backup-and-restore.md`
-retain valuable product and safety contracts but contain dated branch-era C4
-status paragraphs. Their stale lifecycle labels are explicitly superseded by
-`docs/current-lifecycle.md` and ADR 0017. They do not reopen C4-I and do not
-authorize C4-II runtime work.
+`docs/architecture.md`, `docs/roadmap.md`, `docs/backup-and-restore.md`, and the
+dated implementation-status blocks in ADR 0016 retain valuable context but may
+contain pre-merge lifecycle labels. Those labels do not reopen C4-I or authorize
+C4-II runtime work.
 
 Historical files under `docs/history/` are evidence and context only. They never
-override an active lifecycle or accepted decision.
-
-An audit may identify evidence and defects but does not authorize architecture or
-runtime scope by itself.
+override an active lifecycle or accepted newer decision.
 
 ## 3. Current baseline and lifecycle
 
@@ -98,20 +101,15 @@ Accepted PR #170 evidence, not re-executed by PR #171:
 - PR-specific Restore smoke: `28 / 28 PASS`;
 - final independent merge gate: no P0, P1, or P2 findings.
 
-Detailed historical evidence and all six audit rounds are retained in:
+Detailed evidence and all six audit rounds are retained in:
 
 [`docs/history/c4-i-implementation-and-audit-history.md`](history/c4-i-implementation-and-audit-history.md)
-
-The current lifecycle is also recorded in:
-
-[`docs/current-lifecycle.md`](current-lifecycle.md)
 
 ```text
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
-
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 
 CR-011 — Launcher Restore interaction and validation-session boundary
@@ -119,17 +117,10 @@ CR-011 — Launcher Restore interaction and validation-session boundary
 
 C4-II-A — Launcher Restore source selection and validation presentation
 — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 
-C4-II-B — Explicit confirmation and Restore execution
-— PLANNED — NOT AUTHORIZED
-
-C4-II-C — Completion, rollback and support-assisted outcome UX
-— PLANNED — NOT AUTHORIZED
-
-C4-III — Restore end-to-end verification and lifecycle closure
-— PLANNED — NOT AUTHORIZED
-
-C4 — ACTIVE
 Restore — NOT IMPLEMENTED
 macOS packaging — NOT COMPLETED
 safe packaged update flow — NOT COMPLETED
@@ -138,9 +129,38 @@ full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-## 4. Current implementation window
+## 4. Current implementation window — close PR #171
 
-### Do now
+While PR #171 is open and unmerged, the only active task is the documentation
+closure gate itself:
+
+```text
+finish independent documentation/architecture audit
+→ correct every finding
+→ run required documentation checks in a real checkout
+→ repeat exact-head read-only audit
+→ merge PR #171
+```
+
+Do not start CR-011 from the unmerged PR #171 branch.
+Do not create a dependent CR-011 branch from the PR #171 head.
+Do not add runtime work to PR #171.
+
+Required PR #171 checks:
+
+- `git diff --check`;
+- `python3 scripts/check_documentation_lifecycle.py`;
+- Markdown/link check if the repository defines one;
+- verify only documentation/state/documentation-check paths changed;
+- independent exact-head read-only documentation and architecture audit.
+
+Product smoke is not applicable because PR #171 changes no product runtime
+behavior.
+
+## 5. Authorized successor after PR #171 merges
+
+After PR #171 merges, update local `main` and create a new branch from that merged
+`main`. Only then begin:
 
 ```text
 CR-011 — Decide the launcher Restore interaction and validation-session boundary.
@@ -170,7 +190,7 @@ The decision may compare a launcher-native pre-start flow and a narrowly
 authenticated launcher-owned loopback control plane. It must not leave multiple
 incompatible architectures equally authorized.
 
-### Explicitly not authorized now
+### Explicitly not authorized before CR-011 is accepted
 
 No agent may implement:
 
@@ -186,28 +206,28 @@ No agent may implement:
 - Restore packaging changes;
 - destructive Restore execution.
 
-## 5. Why C4-II-A is blocked
+## 6. Why C4-II-A is blocked
 
 The current launcher opens an ordinary system browser through
 `webbrowser.open(...)`.
 
 The ordinary browser page cannot call a launcher-owned native picker without a
 separately designed command channel. It also cannot receive an authoritative
-absolute local path from `<input type="file">`; using the selected bytes would be
-a browser upload/blob architecture, which is not currently authorized.
+absolute local path from `<input type="file">`; using selected bytes would be a
+browser-upload/blob architecture, which is not currently authorized.
 
 The current public C4-I package exposes destructive execution and startup
 recovery entry points. It does not expose a dedicated public non-destructive
 candidate-preparation session.
 
-Therefore a C4-II-A implementation would otherwise have to invent both:
+Therefore C4-II-A would otherwise have to invent both:
 
 - the browser/application-shell-to-launcher interaction boundary; and
 - the non-destructive validation-session application boundary.
 
 Those are architecture and security decisions and must be resolved by CR-011.
 
-## 6. Mandatory future validation-session contract
+## 7. Mandatory future validation-session contract
 
 The complete normative profile is:
 
@@ -235,19 +255,16 @@ The future boundary must:
 - leave the selected source byte-identical;
 - use isolated temporary staging distinct from a durable Restore operation
   workspace;
-- reuse the accepted C4-I source intake, staging, stability, and candidate
-  validation rules;
+- reuse accepted C4-I source intake, staging, stability, and validation rules;
 - return typed presentation results;
-- map rejections to fixed non-technical categories;
-- keep raw SQLite errors, stack traces, migration IDs, absolute paths, and
-  verifier detail in local logs;
+- keep raw technical detail in local logs;
 - use opaque launcher-owned session identity;
-- reject stale results through a selection generation or equivalent mechanism;
+- reject stale results;
 - invalidate old results on cancellation and reselection;
 - protect duplicate actions;
-- clean temporary state after cancellation, reselection, failure, and launcher
-  shutdown;
-- provide bounded cleanup recovery after an interrupted session;
+- clean owned temporary state after cancellation, reselection, failure, and
+  launcher shutdown;
+- provide bounded cleanup recovery after interruption;
 - give the browser no authority over the selected-source path;
 - forbid compatibility inference from filename or extension;
 - never claim that Restore completed.
@@ -259,7 +276,7 @@ Future C4-II-B must re-prove the immutable source or explicitly retained candida
 identity through launcher-owned state and accepted C4-I safety rules before
 destructive execution.
 
-## 7. Preserved architecture constraints
+## 8. Preserved architecture constraints
 
 Every future slice must preserve:
 
@@ -295,9 +312,10 @@ Restore-specific invariants remain:
 - `recovery_blocked` blocks ordinary startup;
 - ordinary browser opening only after durable `completed`.
 
-## 8. Required shape of the CR-011 pull request
+## 9. Required shape of the CR-011 pull request
 
-The CR-011 task must be a small decision-only pull request.
+The CR-011 task must be a small decision-only pull request created **after PR
+#171 has merged and from updated `main`**.
 
 ### Scope
 
@@ -307,7 +325,7 @@ The CR-011 task must be a small decision-only pull request.
 - define the security and process-lifecycle contract;
 - define the non-destructive validation-session ownership contract;
 - update architecture and Restore documentation;
-- define the future C4-II-A tests and exact-head smoke boundary.
+- define future C4-II-A tests and exact-head smoke boundary.
 
 ### Non-goals
 
@@ -324,16 +342,13 @@ The CR-011 task must be a small decision-only pull request.
 ### Tests and checks
 
 - `git diff --check`;
-- `python3 scripts/check_documentation_lifecycle.py`;
-- Markdown/link check if the repository defines one;
+- `python3 scripts/check_documentation_lifecycle.py` if lifecycle docs change;
+- Markdown/link check if defined;
 - search for conflicting active lifecycle statements;
-- verify only documentation/state/script paths changed;
+- verify only documentation/state paths changed;
 - independent read-only architecture audit.
 
-The lifecycle script is a documentation consistency check, not product smoke.
-Product smoke is not applicable to a decision-only documentation change.
-
-## 9. Release gates after CR-011
+## 10. Release gates after CR-011
 
 CR-011 acceptance alone does not implement Restore.
 
@@ -352,24 +367,10 @@ It is not a place to hide broad runtime implementation.
 Packaging, safe packaged updates, installation verification, and full
 release-candidate smoke remain separate open obligations.
 
-## 10. Current next action
+## 11. Current next action
 
 ```text
-Create and independently audit one CR-011 decision-only pull request.
-Do not begin C4-II runtime implementation.
+Close PR #171 safely.
+Do not begin CR-011 until PR #171 is merged and a new branch is created from
+updated main.
 ```
-
-PR #171 itself must remain draft and unmerged until an independent read-only
-documentation and architecture consistency audit confirms that:
-
-- C4-I closure is accurate;
-- the broad project history and exact pre-compaction snapshots are discoverable;
-- `docs/current-lifecycle.md` explicitly governs stale lifecycle prose;
-- all compact active lifecycle documents agree;
-- CR-011 is present in the active change-request ledger and is the only
-  authorized next task;
-- C4-II-A is blocked and not authorized;
-- the validation-session boundary is documented;
-- no runtime, test, migration, dependency, or packaging file changed;
-- `python3 scripts/check_documentation_lifecycle.py` passes;
-- product release readiness is not claimed.
