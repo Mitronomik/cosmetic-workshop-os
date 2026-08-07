@@ -1,9 +1,9 @@
 # cosmetic-workshop-os — Active implementation plan
 
-Project: `cosmetic-workshop-os`  
-Client-facing name: **Мастерская косметолога**  
-Document: `docs/implementation-plan.md`  
-Status: **active current implementation sequence**  
+Project: `cosmetic-workshop-os`
+Client-facing name: **Мастерская косметолога**
+Document: `docs/implementation-plan.md`
+Status: **active current implementation sequence**
 Updated: `2026-08-07`
 
 The complete pre-compaction implementation plan is preserved byte-for-byte in
@@ -112,11 +112,11 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 
-CR-011 — Launcher Restore interaction and validation-session boundary
-— AUTHORIZED — DECISION ONLY — NOT DECIDED
+CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+CR-011 scope — Launcher Restore interaction and validation-session boundary
 
-C4-II-A — Launcher Restore source selection and validation presentation
-— PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-A scope — Launcher Restore source selection and validation presentation
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
