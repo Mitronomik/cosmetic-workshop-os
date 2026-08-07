@@ -162,7 +162,6 @@ class _ControlRequestHandler(BaseHTTPRequestHandler):
         return self.server.control_plane  # type: ignore[attr-defined]
 
     def log_message(self, _format: str, *_args: object) -> None:
-        # Do not let bootstrap/session material leak through access logging.
         return
 
     def do_OPTIONS(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler contract
@@ -171,12 +170,21 @@ class _ControlRequestHandler(BaseHTTPRequestHandler):
             self._require_host()
             self._require_origin()
             expected_method, allowed_headers = _PATH_METHODS[path]
-            requested_method = self.headers.get("Access-Control-Request-Method", "")
+            requested_method = self._single_header(
+                "Access-Control-Request-Method",
+                status=403,
+                code="preflight_method_rejected",
+            )
             if requested_method != expected_method:
                 raise ControlSessionError(403, "preflight_method_rejected")
+            request_header_values = self.headers.get_all(
+                "Access-Control-Request-Headers", failobj=[]
+            )
+            if len(request_header_values) > 1:
+                raise ControlSessionError(403, "preflight_headers_rejected")
             requested_headers = {
                 item.strip().lower()
-                for item in self.headers.get("Access-Control-Request-Headers", "").split(",")
+                for item in (request_header_values[0] if request_header_values else "").split(",")
                 if item.strip()
             }
             if not requested_headers.issubset(set(allowed_headers)):
@@ -216,7 +224,7 @@ class _ControlRequestHandler(BaseHTTPRequestHandler):
             self._require_host()
             self._require_origin()
             cors = True
-            if self.headers.get("Cookie"):
+            if self.headers.get_all("Cookie", failobj=[]):
                 raise ControlSessionError(400, "cookies_not_allowed")
             expected_method, _allowed_headers = _PATH_METHODS[path]
             if method != expected_method:
@@ -282,32 +290,44 @@ class _ControlRequestHandler(BaseHTTPRequestHandler):
             raise ControlSessionError(404, "not_found")
         return parsed.path
 
+    def _single_header(self, name: str, *, status: int, code: str) -> str:
+        values = self.headers.get_all(name, failobj=[])
+        if len(values) != 1:
+            raise ControlSessionError(status, code)
+        return values[0]
+
     def _require_host(self) -> None:
-        if self.headers.get("Host") != self.plane.expected_host:
+        host = self._single_header("Host", status=421, code="host_rejected")
+        if host != self.plane.expected_host:
             raise ControlSessionError(421, "host_rejected")
 
     def _require_origin(self) -> None:
-        if self.headers.get("Origin") != self.plane.allowed_origin:
+        origin = self._single_header("Origin", status=403, code="origin_rejected")
+        if origin != self.plane.allowed_origin:
             raise ControlSessionError(403, "origin_rejected")
 
     def _bearer_token(self) -> str:
-        value = self.headers.get("Authorization", "")
+        value = self._single_header("Authorization", status=401, code="invalid_session")
         prefix = "Bearer "
         if not value.startswith(prefix) or len(value) <= len(prefix):
             raise ControlSessionError(401, "invalid_session")
         return value[len(prefix) :]
 
     def _read_json_body(self) -> dict[str, object]:
-        if self.headers.get("Transfer-Encoding"):
+        if self.headers.get_all("Transfer-Encoding", failobj=[]):
             raise ControlSessionError(400, "invalid_body")
-        content_type = self.headers.get("Content-Type", "")
+        content_type = self._single_header(
+            "Content-Type", status=415, code="content_type_required"
+        )
         if content_type.split(";", 1)[0].strip().lower() != "application/json":
             raise ControlSessionError(415, "content_type_required")
-        length_text = self.headers.get("Content-Length")
-        if length_text is None:
+        length_values = self.headers.get_all("Content-Length", failobj=[])
+        if not length_values:
             raise ControlSessionError(411, "content_length_required")
+        if len(length_values) != 1:
+            raise ControlSessionError(400, "invalid_body")
         try:
-            length = int(length_text)
+            length = int(length_values[0])
         except ValueError as exc:
             raise ControlSessionError(400, "invalid_body") from exc
         if length < 0 or length > MAX_REQUEST_BYTES:
@@ -346,10 +366,16 @@ def _resolve_allowed_origin(frontend_url: str) -> str:
     if not isinstance(frontend_url, str) or not frontend_url:
         raise RestoreControlPlaneError("Restore control plane requires a local frontend origin.")
     parsed = urlsplit(frontend_url)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise RestoreControlPlaneError(
+            "Restore control plane requires frontend_url to be an exact local HTTP origin."
+        ) from exc
     if (
         parsed.scheme != "http"
         or parsed.hostname != CONTROL_HOST
-        or parsed.port is None
+        or port is None
         or parsed.username is not None
         or parsed.password is not None
         or parsed.query
@@ -359,7 +385,7 @@ def _resolve_allowed_origin(frontend_url: str) -> str:
         raise RestoreControlPlaneError(
             "Restore control plane requires frontend_url to be an exact local HTTP origin."
         )
-    return f"http://{CONTROL_HOST}:{parsed.port}"
+    return f"http://{CONTROL_HOST}:{port}"
 
 
 def _canonical_header_name(name: str) -> str:
