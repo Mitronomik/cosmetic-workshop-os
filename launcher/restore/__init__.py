@@ -1,36 +1,26 @@
-"""The launcher-owned Restore safety engine (`C4-I`).
+"""Launcher-owned Restore infrastructure.
 
-Internal infrastructure only. This package implements the accepted `CR-010`
-Restore state machine — see ``docs/decisions/0016-launcher-assisted-restore.md``
-and ``docs/backup-and-restore.md`` — for a future user-facing launcher flow
-(`C4-II`, not authorized). It exposes **no** product Restore button, route,
-dialog, CLI command, shell workflow or API endpoint, and the product-level status
-of Restore remains `NOT IMPLEMENTED`.
+C4-I implements the accepted destructive Restore safety state machine from ADR
+0016.  C4-II-A1 adds only the separately authorized, non-destructive candidate
+preparation core from the post-CR-011 slice plan.  Product Restore remains
+``NOT IMPLEMENTED``: there is still no Restore browser screen, control-plane
+HTTP surface, native picker integration or destructive confirmation flow.
 
-The two entry points a caller needs, both requiring the launcher's authority:
+Destructive entry points still require launcher lifecycle authority::
 
-```python
-context = LauncherLifecycleContext.acquire(config, paths)
-execute_restore(RestoreRequest(selected_source), context)   # one attempt
-recover_incomplete_restore(context)                          # before startup
-```
+    context = LauncherLifecycleContext.acquire(config, paths)
+    execute_restore(RestoreRequest(selected_source), context)
+    recover_incomplete_restore(context)
 
-`LauncherLifecycleContext` is the gate. It holds the exclusive instance lock,
-derives every destructive path from the launcher's own resolvers — the caller
-supplies only the selected source — and owns any backend child, which is what
-makes "the backend is stopped" provable rather than assumed.
+The A1 validation service is intentionally separate::
 
-Everything else is a focused collaborator: `phases` owns the twelve-phase graph,
-`state` the durable record, `durability` the one safety-critical publication
-primitive, `workspace` the isolated operation directory, `instance_lock` the
-exclusive launcher boundary, `maintenance_lease` the retained exclusion that
-keeps a backend from appearing during destructive work, `backend_handshake` the
-bounded proof that an owned child took the liveness lock before importing the
-application, `context` the lifecycle authority, `staging` and
-`validation` the immutable source and its read-only checks, `capacity` the
-disk-space preflight, `safety_copy` the mandatory `before_restore` gate,
-`replacement` the journal handling and the atomic boundary, `verification` the
-bounded backend checks, `engine` the ordering and `recovery` the startup matrix.
+    service = RestoreCandidatePreparationService(database_path)
+    result = service.prepare_restore_candidate(selected_source)
+
+That service creates no durable Restore operation/phase, no ``before_restore``
+safety copy, no working-database mutation and no Restore AuditLog event.  It
+reuses C4-I source intake/staging/validation and retains only launcher-private
+in-memory source proof after successful validation.
 """
 
 from launcher.restore.context import (
@@ -69,6 +59,16 @@ from launcher.restore.recovery import (
     prepare_restore_startup_recovery,
     recover_incomplete_restore,
 )
+from launcher.restore.validation_session import (
+    CANCELLED_MESSAGE,
+    TECHNICAL_FAILURE_MESSAGE,
+    CandidateCompatibility,
+    CandidatePreparationFailure,
+    CandidatePreparationResult,
+    CandidatePreparationState,
+    RestoreCandidatePreparationService,
+    RetainedSourceProof,
+)
 from launcher.restore.verification import RetryableBackendStartError
 from launcher.restore.workspace import RestoreWorkspace, resolve_restore_dir
 
@@ -78,17 +78,23 @@ __all__ = [
     "BackendMaintenanceLease",
     "BackendProcessOwner",
     "BackendStopProof",
+    "CANCELLED_MESSAGE",
     "COMPLETION_DURABILITY_UNCONFIRMED_MESSAGE",
+    "CandidateCompatibility",
+    "CandidatePreparationFailure",
+    "CandidatePreparationResult",
+    "CandidatePreparationState",
     "LauncherAlreadyRunningError",
     "LauncherInstanceLock",
     "LauncherLifecycleContext",
     "MaintenanceLeaseError",
     "PhaseTransitionError",
-    "RestoreLifecycleError",
     "RECOVERY_BLOCKED_MESSAGE",
     "ROLLED_BACK_MESSAGE",
     "RecoveryResult",
+    "RestoreCandidatePreparationService",
     "RestoreFailure",
+    "RestoreLifecycleError",
     "RestoreOutcome",
     "RestorePhase",
     "RestoreRequest",
@@ -96,8 +102,10 @@ __all__ = [
     "RestoreServices",
     "RestoreStartupPreflight",
     "RestoreWorkspace",
+    "RetainedSourceProof",
     "RetryableBackendStartError",
     "SUCCESS_MESSAGE",
+    "TECHNICAL_FAILURE_MESSAGE",
     "TERMINAL_PHASES",
     "USER_SAFE_MESSAGES",
     "execute_restore",

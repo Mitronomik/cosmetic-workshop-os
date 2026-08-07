@@ -5,74 +5,48 @@ Docker.
 
 ## Current status
 
-- launcher MVP foundation exists under `launcher/`;
-- launcher initializes user-mode backend startup and starts local FastAPI on
-  `127.0.0.1`;
-- user data remains outside repository/package and can be redirected with
-  `COSMETIC_WORKSHOP_USER_DATA_DIR` for isolated tests/developer smoke;
-- backup-before-migration remains part of explicit user-mode startup;
-- launcher opens the ordinary system browser for the product UI;
+- launcher local runtime foundation exists;
+- local FastAPI remains bound to `127.0.0.1`;
+- user data remains outside repository/package;
+- backup-before-migration remains part of startup;
+- ordinary browser remains the product UI;
 - final macOS `.app`/`.dmg` packaging is not implemented.
 
-Developer-only runtime command:
+## Restore topology
 
-```bash
-python3 -m launcher.main --no-browser
-```
-
-This command is not the final user workflow.
-
-## CR-011 selected Restore control topology
-
-ADR 0018 selects a separate launcher-owned local control boundary for Restore
-source selection/validation:
+ADR 0018 remains:
 
 ```text
 browser presentation
   ├── ordinary business API → FastAPI backend
-  └── Restore control → launcher-owned 127.0.0.1:<ephemeral>
-                         → launcher-owned native picker
+  └── Restore control → launcher-owned local control boundary
+                         127.0.0.1:<ephemeral>
+                         → launcher-owned /usr/bin/osascript picker
                          → non-destructive candidate validation
 ```
 
-The Restore control plane is not an ordinary FastAPI route and may never bind to
-LAN/remote interfaces.
-
-The accepted C4-II-A architecture requires:
-
-- exact `127.0.0.1` loopback binding;
-- OS-assigned ephemeral port;
-- exact configured local frontend Origin;
-- one-use browser bootstrap capability in URL fragment;
-- run-scoped session token only;
-- no wildcard CORS;
-- no durable/reusable control token;
-- launcher-owned `/usr/bin/osascript` + Standard Additions `choose file` picker;
-- no absolute selected-source path in browser or ordinary backend state.
-
-The ordinary backend remains running during non-destructive source selection and
-validation. Destructive backend exclusion/stop remains part of future C4-II-B /
-existing C4-I execution semantics.
-
-CR-011 does not implement the control plane, picker, validation session,
-packaging, updater, service daemon, Electron/Tauri shell, cloud sync or remote
-access.
-
-## C4-II-A authorization state
-
-Implementation is authorized only through
-`docs/c4-ii-a-implementation-slices.md`:
+## C4-II-A status
 
 ```text
-C4-II-A — AUTHORIZED AS SLICED — NOT IMPLEMENTED
-C4-II-A1 — AUTHORIZED NEXT — validation-session core only
-C4-II-A2 — BLOCKED BY A1 MERGE + EXACT-HEAD GATE
+C4-II-A — IN PROGRESS — SLICED
+C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-II-A2 — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
 C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+C4-II-B — PLANNED — NOT AUTHORIZED
 ```
 
-A1 may not implement the control plane, picker or frontend UI. Those remain
-separately gated A2/A3/A4 slices.
+A1 implements only launcher-owned non-destructive validation. Its scratch is
+system-temp state, not durable application Restore state. The ordinary backend
+remains running during A1 validation.
+
+A1 may not implement the control plane, picker or frontend UI. In particular it
+contains no loopback HTTP listener, browser bootstrap/session token, `command_seq`,
+`/usr/bin/osascript` invocation or `/backups/restore` route.
+
+A2 later owns exact `127.0.0.1` control binding and session/security protocol. A3
+later owns the real `/usr/bin/osascript` + Standard Additions `choose file`
+picker. A4 later owns production browser bootstrap handoff and UI.
 
 No A1–A4 slice may add destructive Restore authority. C4-II-B remains separately
 not authorized.

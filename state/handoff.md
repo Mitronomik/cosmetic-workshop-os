@@ -3,21 +3,18 @@
 Updated: `2026-08-07`
 
 Current lifecycle authority: `docs/current-lifecycle.md`.
-Accepted CR-011 decision: `docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`.
-Current Restore profile: `docs/restore-interaction-and-validation-session.md`.
+Accepted CR-011 architecture: `docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`.
 C4-II-A slice plan: `docs/c4-ii-a-implementation-slices.md`.
-Current ledger: `state/change-requests.md`.
-Searchable history: `docs/history/README.md`.
 
 ## Current lifecycle
 
 ```text
-PR #172 — MERGED — CR-011 ACCEPTED
+PR #173 — MERGED — C4-II-A SLICED AUTHORIZATION
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — AUTHORIZED AS SLICED — NOT IMPLEMENTED
-C4-II-A1 — AUTHORIZED NEXT — NOT IMPLEMENTED
-C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE
+C4-II-A — IN PROGRESS — SLICED
+C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
@@ -27,93 +24,74 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-This authorization becomes normative only after PR #173 merges.
+## Last merged authorization
 
-## Last merged work — PR #172
-
-CR-011 is accepted on `main`.
+PR #173:
 
 ```text
-reviewed head — c51d5baa07e4cd8912b1973649c22b20f581e3d2
-merge commit — 998596560db6780a677bdec363d1fd19db30c1b6
+reviewed head — 9f5722c5dec695588596d45daa5588092ce7f080
+merge commit — aaedf2735660fb92eb627f7eeab327437d459b56
 ```
 
-ADR 0018 selects the launcher-owned authenticated loopback control plane,
-launcher-owned `/usr/bin/osascript` picker, exact-run browser control session and
-launcher-owned non-destructive validation boundary.
+The current A1 branch starts from that exact merge.
 
-## Current work — PR #173
+## Current work — A1 validation-session core
 
-PR #173 is a documentation/lifecycle authorization task. It does not implement
-runtime behavior.
+Implemented:
 
-It authorizes C4-II-A only as:
+- `RestoreCandidatePreparationService.prepare_restore_candidate(...)`;
+- private system-temp validation run/session scratch;
+- launcher UUID4 ownership/version markers and restrictive permissions;
+- C4-I source intake + held descriptor + sidecar checks;
+- C4-I two-pass stable staging;
+- read-only C4-I candidate validation;
+- source identity/digest re-proof before retained proof;
+- typed presentation-safe state;
+- generation/cancel/reselection invalidation;
+- launcher-private source path + `SourceIdentity` + full SHA-256 proof;
+- cleanup after success/rejection/cancel/failure and recognized prior-run scratch;
+- targeted tests and exact-head service smoke runner.
+
+Successful A1 validation deletes the staged temporary candidate. The retained
+proof is memory-only and is not destructive authority. Future C4-II-B must still
+reopen/re-prove/restage/revalidate.
+
+## Safety boundary
+
+A1 creates no durable Restore operation or phase, no `before_restore` safety copy,
+no working-DB replacement/migration, no rollback/recovery mutation and no Restore
+AuditLog event. It does not call `execute_restore(...)` and does not stop the
+ordinary backend.
+
+A1 also contains no A2/A3/A4 scope:
+
+- no HTTP control plane / Host / Origin / CORS / bootstrap / token / `command_seq`;
+- no `/usr/bin/osascript` picker;
+- no browser source-path/file authority;
+- no `/backups/restore` frontend route;
+- no production browser bootstrap fragment.
+
+## Required exact-head verification
+
+Still pending on the final published A1 head:
 
 ```text
-A1 validation-session core
-→ A2 exact-run launcher control plane
-→ A3 native macOS picker integration
-→ A4 browser /backups/restore + end-to-end non-destructive flow
+git status --short
+→ git diff --check
+→ python3 scripts/check_documentation_lifecycle.py
+→ python3 -m pytest launcher/tests/test_restore_validation_session.py
+→ existing C4-I Restore regression tests
+→ python3 -m pytest backend/app/tests launcher/tests
+→ python3 scripts/smoke_restore_validation_session.py --expected-head <HEAD>
+→ clean status after smoke
+→ independent exact-head audit
 ```
 
-Only A1 may begin after PR #173 merges. Each later slice requires its predecessor
-to be independently reviewed, exact-head tested and merged first.
+Do not claim PASS unless actually run. Merge only with P0=0 / P1=0 / P2=0.
 
-## A1 immediate scope after merge
+## Next after A1 merge
 
-A1 owns only:
-
-- `prepare_restore_candidate(...)`-equivalent launcher service;
-- isolated user-only validation scratch;
-- reuse/shared-safe refactor of C4-I source intake/staging/validation;
-- selection generation / stale / cancel / invalidation semantics;
-- typed safe result;
-- launcher-private source path + C4-I `SourceIdentity` + full SHA-256 proof;
-- owned-only cleanup and recognized interrupted-scratch cleanup;
-- tests and launcher/service-level exact-head smoke.
-
-A1 explicitly excludes control-plane HTTP, browser tokens/bootstrap, `command_seq`,
-native picker, frontend Restore UI, destructive confirmation/execution,
-`before_restore` safety copy, working-DB replacement/migration, rollback/recovery,
-Restore AuditLog, new dependencies and packaging implementation.
-
-## A2/A3/A4 gates
-
-- A2: blocked until A1 is merged and exact-head verified.
-- A3: blocked until A2 is merged and exact-head verified.
-- A4: blocked until A3 is merged and exact-head verified.
-
-Every later slice starts from updated `main`, never from an unmerged predecessor
-branch.
-
-## C4-II-B boundary
-
-C4-II-B remains not authorized.
-
-No C4-II-A slice may call `execute_restore(...)` or create destructive authority.
-Future C4-II-B must re-prove source identity + SHA-256, re-check sidecars,
-re-stage/revalidate, prove backend exclusion, create mandatory `before_restore`
-safety copy, and only then enter the existing C4-I destructive execution path.
-
-## PR #173 restrictions
-
-Do not modify runtime/tests/dependencies/migrations/workflows in PR #173.
-Do not implement A1 on the unmerged authorization branch.
-
-## Required PR #173 checks
-
-```bash
-git diff --check
-python3 scripts/check_documentation_lifecycle.py
-```
-
-Also verify docs/state/checker-only diff, run any repository-defined docs/link
-checker, and perform fresh exact-head read-only authorization audit. Merge only at
-P0=0, P1=0, P2=0.
-
-Product smoke is not applicable to PR #173.
-
-## Next after PR #173 merge
-
-Update `main`, create a fresh A1 branch from merged `main`, and implement only
-C4-II-A1. Do not begin A2 or C4-II-B.
+Do not start A2 immediately from this branch. Update `main`, close A1 lifecycle
+with reviewed head/merge evidence, then create a fresh A2 branch only after its
+gate is explicitly opened. A3/A4 remain blocked and C4-II-B remains not
+authorized.
