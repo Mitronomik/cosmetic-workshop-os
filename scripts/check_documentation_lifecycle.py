@@ -265,8 +265,11 @@ def main() -> int:
         if not has_marker(profile, marker):
             fail(f"current lifecycle profile is missing marker: {marker!r}")
 
+    # Verify the PR #173 baseline by its semantic section and exact merge SHA,
+    # rather than requiring one artificial prose phrase that Markdown wrapping or
+    # list formatting can legitimately split.
     for marker in (
-        "PR #173 merge commit",
+        "C4-II-A authorization / PR #173",
         "aaedf2735660fb92eb627f7eeab327437d459b56",
         "validation_session.py",
         "validation_scratch.py",
