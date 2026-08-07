@@ -61,20 +61,19 @@ def _directory_is_private(path: Path) -> bool:
     return stat.S_IMODE(info.st_mode) & 0o077 == 0
 
 
-def _ensure_private_root(path: Path) -> Path:
-    """Create/tighten the exact validation root and refuse a symlinked root."""
+def _protect_private_directory(path: Path) -> Path:
+    """Prove one existing directory is real/user-owned, then tighten its mode."""
 
     try:
-        path.mkdir(parents=True, mode=PRIVATE_DIRECTORY_MODE, exist_ok=True)
         info = os.lstat(path)
     except OSError as exc:
         raise ValidationScratchError(
-            f"Could not establish validation scratch: {type(exc).__name__}"
+            f"Could not inspect validation scratch: {type(exc).__name__}"
         ) from exc
     if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
-        raise ValidationScratchError("Validation scratch root is not a private directory.")
+        raise ValidationScratchError("Validation scratch path contains a symlink or non-directory.")
     if hasattr(os, "getuid") and info.st_uid != os.getuid():
-        raise ValidationScratchError("Validation scratch root is not owned by this user.")
+        raise ValidationScratchError("Validation scratch directory is not owned by this user.")
     try:
         os.chmod(path, PRIVATE_DIRECTORY_MODE)
     except OSError as exc:
@@ -83,7 +82,81 @@ def _ensure_private_root(path: Path) -> Path:
         ) from exc
     if not _directory_is_private(path):
         raise ValidationScratchError("Validation scratch permissions are not user-only.")
-    return path.resolve()
+    return path
+
+
+def _ensure_default_private_root() -> Path:
+    """Create the fixed app subtree without following a planted child symlink.
+
+    ``tempfile.gettempdir()`` can itself have platform-level aliases (macOS often
+    exposes ``/var`` via ``/private/var``), so the operating-system temp base is
+    canonicalized first.  From that trusted base onward, however, each app-owned
+    path component is inspected with ``lstat`` and created one level at a time.
+    A pre-existing symlink at ``cosmetic-workshop-os`` or ``restore-validation``
+    is therefore refused before this launcher can create/chmod anything through
+    it outside the canonical temp subtree.
+    """
+
+    try:
+        temp_base = Path(tempfile.gettempdir()).resolve(strict=True)
+        base_info = os.lstat(temp_base)
+    except OSError as exc:
+        raise ValidationScratchError(
+            f"Could not resolve system temporary directory: {type(exc).__name__}"
+        ) from exc
+    if stat.S_ISLNK(base_info.st_mode) or not stat.S_ISDIR(base_info.st_mode):
+        raise ValidationScratchError("System temporary path is not a directory.")
+
+    current = temp_base
+    for component in (VALIDATION_APP_DIRNAME, VALIDATION_DIRNAME):
+        candidate = current / component
+        try:
+            if os.path.lexists(candidate):
+                info = os.lstat(candidate)
+                if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                    raise ValidationScratchError(
+                        "Validation scratch path contains a symlink or non-directory."
+                    )
+            else:
+                candidate.mkdir(
+                    mode=PRIVATE_DIRECTORY_MODE,
+                    parents=False,
+                    exist_ok=False,
+                )
+        except ValidationScratchError:
+            raise
+        except OSError as exc:
+            raise ValidationScratchError(
+                f"Could not establish validation scratch: {type(exc).__name__}"
+            ) from exc
+        current = _protect_private_directory(candidate)
+
+    try:
+        resolved = current.resolve(strict=True)
+        resolved.relative_to(temp_base)
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise ValidationScratchError(
+            "Validation scratch escaped the canonical system temporary root."
+        ) from exc
+    return resolved
+
+
+def _ensure_private_root(path: Path) -> Path:
+    """Test/integration injection seam; refuse a symlinked final root."""
+
+    try:
+        path.mkdir(parents=True, mode=PRIVATE_DIRECTORY_MODE, exist_ok=True)
+    except OSError as exc:
+        raise ValidationScratchError(
+            f"Could not establish validation scratch: {type(exc).__name__}"
+        ) from exc
+    _protect_private_directory(path)
+    try:
+        return path.resolve(strict=True)
+    except OSError as exc:
+        raise ValidationScratchError(
+            f"Could not resolve validation scratch: {type(exc).__name__}"
+        ) from exc
 
 
 def _create_private_directory(path: Path) -> Path:
@@ -156,12 +229,11 @@ class ValidationScratchManager:
         run_id: str | None = None,
     ) -> None:
         self.database_path = Path(database_path)
-        requested_root = (
-            Path(root)
+        self.root = (
+            _ensure_private_root(Path(root))
             if root is not None
-            else Path(tempfile.gettempdir()) / VALIDATION_APP_DIRNAME / VALIDATION_DIRNAME
+            else _ensure_default_private_root()
         )
-        self.root = _ensure_private_root(requested_root)
         self.run_id = run_id or _new_id()
         if not _is_uuid4(self.run_id):
             raise ValidationScratchError("Validation run identity is not a canonical UUID4.")
