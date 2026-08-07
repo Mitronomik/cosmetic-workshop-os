@@ -22,7 +22,7 @@ ordinary browser
 → launcher-owned validation session
 ```
 
-Future C4-II-A, when separately authorized, must package the launcher so it can:
+The accepted future runtime boundary requires the launcher to be able to:
 
 - remain alive for the browser/product session;
 - own an HTTP control listener bound only to `127.0.0.1` on an ephemeral port;
@@ -39,9 +39,24 @@ The current expected picker mechanism uses the macOS-provided
 
 This decision does not implement packaging and does not claim Mac App Store
 sandbox compatibility. A future App Store/sandbox decision may need a different
-native picker adapter (for example an `NSOpenPanel`-based adapter) and
+native picker adapter, for example an `NSOpenPanel`-based adapter with
 security-scoped file access, but it must preserve launcher ownership and path
 privacy unless a later ADR explicitly changes those semantics.
 
-C4-II-A remains `PLANNED — NOT AUTHORIZED` until a separate post-CR-011 task
-explicitly authorizes runtime implementation.
+## C4-II-A authorization state
+
+C4-II-A is authorized only through the bounded slice plan in
+`docs/c4-ii-a-implementation-slices.md`.
+
+```text
+C4-II-A1 — AUTHORIZED NEXT — validation-session core only
+C4-II-A2 — BLOCKED BY A1 MERGE + EXACT-HEAD GATE
+C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
+C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+```
+
+This authorization does **not** complete packaging and does not authorize hidden
+packaging changes inside A1–A4. Any required packaging implementation remains a
+separate bounded obligation.
+
+C4-II-B destructive Restore remains not authorized.
