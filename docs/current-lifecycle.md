@@ -97,6 +97,7 @@ branch.
 | Merge commit | `998596560db6780a677bdec363d1fd19db30c1b6` |
 | Merged at | `2026-08-07T12:57:28Z` |
 
+PR #172 merge commit — `998596560db6780a677bdec363d1fd19db30c1b6`.
 PR #172 changed documentation/state plus the documentation lifecycle checker
 only. Its exact-head architecture gate closed with P0=0, P1=0, P2=0.
 
@@ -196,6 +197,24 @@ No A1–A4 slice may add destructive authority.
 C4-II-B remains responsible for later explicit confirmation and mandatory source
 identity/digest re-proof, re-staging/revalidation, backend exclusion, safety-copy
 creation and entry into the existing C4-I destructive execution boundary.
+
+## Bounded supersession map
+
+These older documents remain authoritative for durable architecture/safety
+semantics but may contain pre-PR-173 lifecycle labels. Only those bounded status
+labels are superseded by this file and the slice plan:
+
+- `docs/decisions/0016-launcher-assisted-restore.md` — dated C4-I status only;
+- `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md` — dated
+  CR-011 decision-gate status only;
+- `docs/architecture.md` — dated C4 lifecycle status only;
+- `docs/roadmap.md` — dated C4 lifecycle status only;
+- `docs/backup-and-restore.md` — dated C4 lifecycle status only.
+
+ADR 0018 remains authoritative for the selected interaction architecture. Its
+statement that ADR 0018 itself does not authorize runtime remains true: runtime
+authorization comes from this separate PR #173 lifecycle changeset and
+`docs/c4-ii-a-implementation-slices.md`.
 
 ## Superseded lifecycle wording
 
