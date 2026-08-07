@@ -153,11 +153,6 @@ def start_backend_process(
         python_path_parts.append(env["PYTHONPATH"])
     env["PYTHONPATH"] = os.pathsep.join(python_path_parts)
     env[backend_database_path_env(paths)] = str(database_path)
-    # The child takes this lock for its whole lifetime, so the kernel releases it
-    # only when the process actually dies. That is what lets a *later* launcher
-    # discover a backend orphaned by a hard crash, which an in-memory process
-    # handle cannot survive to report. Derived from the same canonical workspace
-    # as the database itself.
     from launcher.restore.workspace import RestoreWorkspace
 
     env[backend_liveness_lock_env(paths)] = str(
@@ -234,22 +229,14 @@ def start_owned_backend_process(
 
     handshake = new_backend_handshake()
     try:
-        process = start_backend_process(
-            config, paths, database_path, handshake=handshake
-        )
+        process = start_backend_process(config, paths, database_path, handshake=handshake)
     except BaseException:
         handshake.close()
         raise
-
-    # Closed immediately so the pipe reaches EOF if the child dies without
-    # writing; while this end stays open the read below could never see that.
     handshake.close_child_end()
     try:
         handshake.await_acquisition(process)
     except BackendSocketUnavailableError as exc:
-        # The child is already on its way out — it reported this before importing
-        # anything — but it is still stopped through the owned handle and waited
-        # for, so no descriptor and no process is left behind.
         terminate_process(process)
         raise BackendPortUnavailableError(
             f"Порт {config.backend_port} уже занят. "
@@ -280,21 +267,6 @@ def terminate_process(process: subprocess.Popen[str], timeout_seconds: float = 5
 
 
 def acquire_launcher_lifecycle(runtime_config: RuntimeConfig, paths: RuntimePaths):
-    """Take the launcher's authority over one workspace, for the whole run.
-
-    The lifecycle context resolves every canonical path from the existing startup
-    and backup resolvers and takes the exclusive instance lock. One boundary
-    covers ordinary startup, Restore execution and incomplete-Restore recovery, so
-    a second launcher cannot begin recovery while the first is halfway through a
-    database replacement.
-
-    This runs **before** the port check. A free port is not proof that nothing
-    else owns the workspace — least of all during Restore, when the backend is
-    stopped by design — and an occupied port is not proof that the owner is
-    something this launcher should refuse for. Ownership is resolved first,
-    through the canonical lock; the port check then keeps its own message for the
-    ordinary collision it actually describes.
-    """
     ensure_backend_import_path(paths)
     from launcher.restore import LauncherAlreadyRunningError, LauncherLifecycleContext
 
@@ -307,27 +279,12 @@ def acquire_launcher_lifecycle(runtime_config: RuntimeConfig, paths: RuntimePath
 
 
 def resolve_restore_startup_preflight(context):
-    """Establish backend exclusion and read the Restore record, changing nothing.
-
-    The non-mutating half of the `CR-010` § 7.5 gate. It answers the questions the
-    port cannot influence — is a foreign backend holding this workspace, is the
-    authoritative record unreadable, is a previous recovery already blocked — and
-    it takes the retained maintenance lease, so nothing can move between here and
-    the state-mutating half below.
-    """
     from launcher.restore.recovery import prepare_restore_startup_recovery
 
     return prepare_restore_startup_recovery(context)
 
 
 def resolve_restore_recovery(context, preflight=None):
-    """Resolve any interrupted Restore before ordinary startup may continue.
-
-    This is the state-mutating half of the `CR-010` § 7.5 gate. It runs before
-    startup migrations, before the backend child and before the browser, and its
-    verdict is binding: an unsafe persisted phase never falls through to the
-    ordinary startup below.
-    """
     from launcher.restore import recover_incomplete_restore
 
     return recover_incomplete_restore(context, preflight=preflight)
@@ -336,22 +293,18 @@ def resolve_restore_recovery(context, preflight=None):
 def start_restore_control_plane(config: RuntimeConfig, database_path: Path):
     """Start A2 control after launcher authority and proved backend startup.
 
-    ADR 0018 allows ordinary product operation to continue if this exact-run
-    control boundary cannot be established safely. No alternate Restore transport,
-    picker or browser filesystem fallback is created.
+    The allowed Origin is the same URL the ordinary runtime would open:
+    `frontend_url` when configured, otherwise the local `backend_url` fallback.
+    No alternate Restore transport, picker or browser filesystem fallback exists.
     """
     from launcher.restore.control_plane import RestoreControlPlane, RestoreControlPlaneError
 
-    if config.frontend_url is None:
-        raise RestoreControlPlaneError(
-            "Restore control plane requires the configured local frontend origin."
-        )
-
     plane = None
     try:
-        plane = RestoreControlPlane(Path(database_path), frontend_url=config.frontend_url)
-        # run_local_runtime already holds canonical launcher single-instance
-        # authority here, which is the required gate for interrupted scratch cleanup.
+        plane = RestoreControlPlane(
+            Path(database_path),
+            frontend_url=config.frontend_url or config.backend_url,
+        )
         plane.cleanup_interrupted_validation_scratch()
         return plane.start()
     except RestoreControlPlaneError:
@@ -367,36 +320,6 @@ def start_restore_control_plane(config: RuntimeConfig, database_path: Path):
 
 
 def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths | None = None) -> int:
-    """Start the local runtime, or refuse — in that order of authority.
-
-    Three questions, and the order between them is the whole design:
-
-    ```text
-    1. does anything else own this workspace?   the canonical liveness lock
-    2. is the configured port usable?           an ordinary socket bind
-    3. what does the interrupted Restore need?  the state-mutating recovery matrix
-    ```
-
-    **Ownership first.** A backend orphaned by a hard launcher crash holds the
-    canonical backend-liveness lock *and* the configured port, because it is a
-    real running backend. Asking about the port first turned the most likely real
-    orphan into a `RuntimeLaunchError` about a busy port — an exception and a
-    traceback — and the typed blocked `RecoveryResult` built for exactly that case
-    never ran.
-
-    **The port before anything is written.** But full recovery *mutates*: it
-    aborts pre-replacement operations, enters `rollback_in_progress`, replaces the
-    working database from the safety copy and runs migrations. Doing all of that
-    and only then finding an unrelated program on the port meant a temporary
-    environment problem could end a recoverable operation at terminal
-    `recovery_blocked`. So the gate is split. The non-mutating preflight
-    establishes exclusion and reads the record; the port is checked next; the
-    state-mutating recovery runs only after that.
-
-    An unrelated collision therefore refuses with the message it has always used,
-    with the Restore history byte-identical, and the next launch — after the user
-    closes that program — resumes the same operation from the same phase.
-    """
     runtime_config = config or build_runtime_config()
     runtime_paths = paths or resolve_runtime_paths()
     print("Мастерская косметолога: запуск локального режима…")
@@ -413,58 +336,24 @@ def _run_locked_runtime(
 ) -> int:
     preflight = resolve_restore_startup_preflight(context)
     if preflight.blocked_result is not None:
-        # An orphan holding the canonical lock, an unreadable authoritative record
-        # or an already-blocked recovery. None of them is a port problem and none
-        # of them becomes startable if the port is freed, so they are answered
-        # here — before the port is consulted at all. Nothing starts and the
-        # browser never opens. The message is the fixed non-technical
-        # support-assisted text; every technical detail stayed in the local log.
         print(preflight.blocked_result.message)
         return RESTORE_BLOCKED_EXIT_CODE
-    # Exclusion is established and the maintenance lease is held, so nothing can
-    # take this workspace from here on. What remains is the ordinary collision:
-    # some other program is using the configured port. The message and the failure
-    # mode are unchanged, and no backend or browser follows.
-    #
-    # This sits *before* `resolve_restore_recovery` on purpose. Everything below
-    # writes — an abort, a rollback request, a database replacement, migrations —
-    # and an unrelated program holding a socket must not be able to change a
-    # single byte of Restore history. Refusing here leaves the durable phase, the
-    # operation record, the staged candidate and the safety copy exactly as the
-    # interrupted operation left them, and the next launch resumes from there.
     assert_port_available(runtime_config.host, runtime_config.backend_port)
     recovery = resolve_restore_recovery(context, preflight)
     if not recovery.normal_startup_allowed:
         print(recovery.message)
         return RESTORE_BLOCKED_EXIT_CODE
     if recovery.message:
-        # A recovered previous workspace. Restore failed, and saying so here is
-        # the honest result — never "restore succeeded".
         print(recovery.message)
     startup = initialize_backend_startup(runtime_config.mode, runtime_paths)
     print(f"База данных готова: {startup.database_path}")
     if startup.backup is not None:
         print(f"Перед миграцией создана резервная копия: {startup.backup.backup_path}")
     print(f"Запускаю локальный API: {runtime_config.backend_url}")
-    # Startup recovery took the retained maintenance lease and ordinary startup
-    # migrated the database underneath it. The backend child has to hold that same
-    # canonical lock for its own lifetime, so the lease is handed over here — one
-    # deliberate release, immediately before the one process allowed to take it.
     context.release_maintenance_lease()
-    # The API child must serve the database that was just backed up, migrated and
-    # reconciled — not one it resolves for itself. This applies to development
-    # mode as well: whatever `initialize_startup()` chose is what gets served.
-    #
-    # Started *through the owner*, so the launcher holds the exact handle rather
-    # than merely having spawned it, and so the child's own lock acquisition is
-    # proved before anything treats it as running. Ownership is what a later
-    # Restore needs in order to *prove* the backend stopped — a free port proves
-    # nothing, and the backend never takes the launcher lock.
     process = context.backend.start(runtime_config, runtime_paths, startup.database_path)
     control_plane = None
     try:
-        # The owned backend has already proved lock + listening socket here. A2
-        # begins only after that exact point and remains under this launcher run.
         try:
             control_plane = start_restore_control_plane(runtime_config, startup.database_path)
         except Exception as exc:  # noqa: BLE001 - ordinary product may continue safely
@@ -490,9 +379,6 @@ def _run_locked_runtime(
         print("Останавливаю локальное приложение…")
         return 0
     finally:
-        # Invalidate/quiesce control + A1 validation before the owned backend and
-        # launcher lifecycle are released.
         if control_plane is not None:
             control_plane.close()
-        # Through the owner, so the recorded handle is cleared as well as killed.
         context.backend.stop()
