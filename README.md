@@ -9,12 +9,12 @@ Node.js, Docker or a terminal.
 ## Current product status
 
 ```text
-PR #173 — MERGED — C4-II-A SLICED AUTHORIZATION
+PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
-C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
+C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
@@ -24,87 +24,74 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-PR #173 reviewed head `9f5722c5dec695588596d45daa5588092ce7f080`
-merged as `aaedf2735660fb92eb627f7eeab327437d459b56`.
+PR #174 reviewed head
+`e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5` merged as
+`504e776508c940554b3ee8659a201af21db8303c` after exact-head lifecycle/smoke,
+17 targeted A1 tests, 514 existing C4-I Restore tests, 2415 full backend+launcher
+tests and P0=0 / P1=0 / P2=0 audit.
 
-The current A1 changeset starts from that merged baseline and implements only the
-launcher-owned **non-destructive validation-session core**. It does not implement
-HTTP control, browser session/bootstrap, native picker, frontend Restore UI or
-destructive Restore.
+## Closed A1 boundary
 
-## Current A1 boundary
-
-Implemented in the current changeset:
+A1 now provides the launcher-owned non-destructive candidate-validation core:
 
 - `RestoreCandidatePreparationService` / `prepare_restore_candidate(...)`;
-- system-temp validation scratch under
-  `<system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<session-id>/`;
-- user-only scratch permissions and ownership-marker cleanup;
-- direct reuse of C4-I `open_selected_source(...)`, held-descriptor staging and
-  `validate_staged_candidate(...)`;
-- typed presentation-safe accepted/rejected/cancelled/technical-failure results;
+- private system-temp validation scratch;
+- C4-I intake/staging/validation reuse;
+- source identity + SHA-256 re-proof;
 - generation/cancel/reselection invalidation;
-- launcher-private retained source path + `SourceIdentity` + full SHA-256 proof;
-- removal of staged validation scratch before accepted proof publication;
-- automated A1 tests and an exact-head service-level smoke runner.
+- bounded presentation-safe result;
+- launcher-private retained source proof;
+- owned-only scratch cleanup.
 
-Explicitly absent:
+A1 contains no control-plane HTTP, native picker, frontend Restore UI or
+destructive Restore authority.
 
-- no `execute_restore(...)` call;
-- no durable Restore operation or phase;
-- no `before_restore` safety copy;
-- no working-database replacement/migration;
-- no rollback/startup-recovery mutation;
-- no Restore AuditLog write;
-- no HTTP control plane / `command_seq`;
-- no `/usr/bin/osascript` picker integration;
-- no `/backups/restore` frontend route or browser bootstrap handoff;
-- no new runtime dependency or packaging implementation.
+## Current A2 boundary
 
-A2 remains blocked until A1 is independently reviewed, exact-head tested and
-smoked, merged, and lifecycle/project memory is closed from updated `main`.
+After this post-A1 lifecycle closure merges, A2 is the only authorized runtime
+successor. It owns the exact-run launcher control/session protocol:
+
+- exact `127.0.0.1` + ephemeral port;
+- exact Host/Origin checks;
+- one-use >=256-bit bootstrap capability;
+- separate >=256-bit run session token;
+- `Cache-Control: no-store`;
+- 15s heartbeat / 60s authenticated inactivity expiry;
+- concurrent heartbeat/state/cancel servicing;
+- >=128-bit request ID + strict monotonic `command_seq`;
+- idempotent retries and stale replay rejection;
+- A1 generation/cancel integration.
+
+Production A2 still returns typed `picker_unavailable`; it must not obtain a
+filesystem path. The browser may never send `path`, `source_path`, file bytes,
+upload/blob or other filesystem authority.
+
+The actual product-browser launch URL remains unchanged in A2. A4 owns the first
+production bootstrap-fragment handoff and `/backups/restore` browser consumer.
 
 ## Restore authority
 
 Authority remains intentionally split:
 
-- ADR 0016 — durable destructive Restore safety/state machine;
+- ADR 0016 — destructive Restore safety/state machine;
 - ADR 0017 — C4-I lifecycle closure/history;
 - ADR 0018 — interaction/control/picker/validation-session architecture;
 - `docs/c4-ii-a-implementation-slices.md` — bounded A1→A4 implementation plan;
 - `docs/current-lifecycle.md` — current implementation authorization/status.
 
-A1 does not amend ADR 0016 or ADR 0018. C4-II-B destructive confirmation and
-execution remains **NOT AUTHORIZED**.
+C4-II-B destructive confirmation/execution remains **NOT AUTHORIZED**.
 
 ## C4-II-A sequence
 
 ```text
-A1 — validation-session core                     ← current changeset
-→ A2 — exact-run launcher control plane          ← blocked
+A1 — validation-session core                     ← DONE / merged
+→ A2 — exact-run launcher control plane          ← authorized next after closure merge
 → A3 — native macOS picker integration           ← blocked
 → A4 — browser /backups/restore + E2E UX         ← blocked
 ```
 
 Each later slice starts from updated `main` only after its predecessor merge,
 exact-head gate and lifecycle update.
-
-## Current verification gate
-
-Before the A1 changeset can be considered complete:
-
-```text
-git diff --check
-→ documentation lifecycle checker
-→ targeted A1 tests
-→ existing C4-I Restore regression tests
-→ full backend + launcher regression suite
-→ exact-head A1 service-level smoke
-→ independent exact-head code/architecture audit
-→ P0=0 / P1=0 / P2=0
-```
-
-Do not claim A1 `DONE` or start A2 before that gate closes.
 
 ## Current authority map
 
