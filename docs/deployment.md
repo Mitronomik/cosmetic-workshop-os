@@ -21,8 +21,8 @@ browser presentation
   ├── ordinary business API → FastAPI backend
   └── Restore control → launcher-owned local control boundary
                          127.0.0.1:<ephemeral>
-                         → launcher-owned /usr/bin/osascript picker
-                         → non-destructive candidate validation
+                         → launcher-owned picker adapter
+                         → non-destructive A1 candidate validation
 ```
 
 ## C4-II-A status
@@ -30,30 +30,38 @@ browser presentation
 ```text
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
-C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
+C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 ```
 
-A1 is merged and provides only launcher-owned non-destructive validation. Its
-scratch is system-temp state, not durable application Restore state. The ordinary
-backend remains running during validation.
+A1 remains the merged launcher-owned non-destructive validation boundary. A2 now
+adds the separate exact-run launcher control listener with:
 
-After this lifecycle closure merges, A2 may add a separate launcher-owned local
-control listener with exact `127.0.0.1`, OS-assigned ephemeral port, exact
-Host/Origin checks, one-use bootstrap/session tokens, no-store state, heartbeat /
-inactivity expiry, request sequencing and A1 cancel/invalidation integration.
+- exact `127.0.0.1` + OS-assigned ephemeral port;
+- exact Host and configured local frontend Origin;
+- one-use bootstrap and run-scoped session token;
+- no wildcard CORS/cookie authority and no-store responses;
+- 15-second heartbeat / 60-second authenticated inactivity expiry;
+- concurrent state/heartbeat/cancel servicing;
+- strict monotonic `command_seq` and idempotent retry semantics;
+- A1 generation/proof invalidation.
 
-Production A2 must keep the source-selection adapter at typed
-`picker_unavailable`; it obtains no source path. Browser/control requests may not
-supply a path or file payload.
+Launcher runtime starts this control plane only after the owned backend has proved
+its liveness lock and listening socket. Control authority is closed/quiesced
+before the backend is stopped and before launcher lifecycle release.
 
-A2 does not change the production browser launch URL. The first real browser
-bootstrap-fragment handoff remains A4 scope.
+If control startup is unsafe, ordinary workshop operation continues with Restore
+control unavailable. No alternate transport is invented.
 
-A3 later owns the real `/usr/bin/osascript` + Standard Additions `choose file`
-picker. A4 later owns `/backups/restore` and production browser session UX.
+Production A2 uses typed `picker_unavailable` and obtains no source path. Browser
+requests may not supply `path`, `source_path`, file bytes or equivalent filesystem
+authority. The real `/usr/bin/osascript` picker remains A3.
+
+A2 does not change the production browser launch URL: no `#cw-control`, bootstrap
+capability, control port or session token is appended. `/backups/restore` and the
+first production browser handoff remain A4.
 
 No A1–A4 slice may add destructive Restore authority. C4-II-B remains separately
 not authorized.
