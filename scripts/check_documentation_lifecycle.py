@@ -90,17 +90,20 @@ PROFILE_ONLY_MARKERS = (
 DECISION_REQUIRED_MARKERS = (
     "Option B",
     "Selected: Option B",
+    "/backups/restore",
     "127.0.0.1",
     "ephemeral",
     "Startup and process order",
     "/usr/bin/osascript",
     "Standard Additions `choose file`",
     "sessionStorage",
+    "control_origin",
     "URL fragment",
     "no wildcard origin",
     "atomic compare-and-consume",
     "Cache-Control: no-store",
     "Mandatory concurrency model",
+    "worker quiescence",
     "heartbeat interval: 15 seconds",
     "control-session expiry: 60 seconds",
     "at least 128 bits of entropy",
@@ -118,13 +121,16 @@ DECISION_REQUIRED_MARKERS = (
 
 RESTORE_PROFILE_REQUIRED_MARKERS = (
     "launcher-owned loopback control",
+    "/backups/restore",
     "127.0.0.1",
     "Startup order",
     "/usr/bin/osascript",
     "sessionStorage",
+    "control_origin",
     "atomic compare-and-consume",
     "Cache-Control: no-store",
     "Mandatory control-plane concurrency",
+    "worker quiescence",
     "heartbeat interval: 15 seconds",
     "control-session expiry: 60 seconds",
     "at least 128 bits of entropy",
@@ -310,7 +316,7 @@ def main() -> int:
     print(f"Verified {len(EXPECTED_HISTORY_BLOBS)} exact historical Git blob identities.")
     print("Verified ADR 0016 / ADR 0017 / ADR 0018 scope-and-recency authority.")
     print("Verified bounded ADR 0017 pre-decision CR-011 supersession.")
-    print("Verified CR-011 loopback/picker/security/concurrency/ordering/validation architecture.")
+    print("Verified CR-011 route/reload/security/concurrency/ordering/validation architecture.")
     print("Verified C4-II-A remains separately not authorized.")
     print("Verified maintained historical guidance contains no executable old-commit restore recipe.")
     return 0
