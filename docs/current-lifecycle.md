@@ -1,25 +1,42 @@
 # Current project lifecycle and documentation authority
 
 Status: **CURRENT — NORMATIVE LIFECYCLE PROFILE**
-Updated: `2026-08-06`
+Updated: `2026-08-07`
 
 This document is the single compact authority for current implementation
 lifecycle statements while older large documents are being incrementally
-synchronized. It does not replace their product, domain, API, or architecture
-contracts.
+synchronized. It does not replace their product, domain, API, safety, or
+architecture contracts.
 
 ## Authority order
+
+Authority is evaluated by **scope and recency**, not by treating every accepted
+ADR as globally newer than every lifecycle document.
 
 When lifecycle or authorization wording conflicts, use this order:
 
 1. `AGENTS.md` and applicable nested `AGENTS.md` files;
-2. accepted ADRs;
-3. this current lifecycle profile;
-4. current normative architecture/profile documents;
-5. `docs/implementation-plan.md`;
-6. active `state/` files;
-7. strategic or large reference documents;
-8. `docs/history/` evidence.
+2. the newest accepted ADR that explicitly supersedes or amends an older
+   decision for the exact topic in conflict;
+3. this current lifecycle profile for current implementation status,
+   authorization, and PR sequencing;
+4. accepted ADRs for their durable product, safety, state-machine, and
+   architecture decisions when those decisions have not been superseded;
+5. current normative architecture/profile documents;
+6. `docs/implementation-plan.md`;
+7. active `state/` files;
+8. strategic or large reference documents;
+9. `docs/history/` evidence.
+
+For Restore specifically:
+
+- ADR 0016 remains authoritative for the accepted launcher-assisted Restore
+  product and safety contract;
+- ADR 0017 is the newer accepted lifecycle-closure decision and supersedes only
+  dated C4 implementation-status / authorization wording in ADR 0016;
+- ADR 0017 does **not** amend the twelve phases, transition graph, startup
+  recovery matrix, `replacement_intent` rule, launcher ownership, immutable
+  source rule, mandatory safety copy, or AuditLog boundary accepted by ADR 0016.
 
 Historical evidence never authorizes runtime work.
 
@@ -72,7 +89,26 @@ picker, validation screen, destructive confirmation, Restore execution UX,
 terminal outcome UX, ordinary FastAPI Restore endpoint, or ordinary SPA Restore
 mutation.
 
-## Only authorized next task
+## PR #171 closure gate
+
+While PR #171 is still open and unmerged, the current action is **not CR-011**.
+The only permitted work on the PR #171 branch is to close PR #171 itself:
+
+```text
+finish the independent documentation/architecture audit
+→ correct every finding
+→ run the required documentation checks in a real checkout
+→ repeat the exact-head read-only gate
+→ merge PR #171
+```
+
+Do not start CR-011 from the unmerged PR #171 branch.
+Do not create a dependent CR-011 branch from the PR #171 head.
+
+## Only authorized successor after PR #171 merges
+
+After PR #171 is merged, update local `main` and create a new branch from that
+merged `main`. Only then begin:
 
 ```text
 CR-011 — Decide the launcher Restore interaction and validation-session boundary.
@@ -102,27 +138,29 @@ Current normative C4 references:
 
 ## Superseded lifecycle locations
 
-The following large documents retain valuable product and architecture content,
-but contain dated branch-era C4 status paragraphs written before PR #170 merged:
+The following documents retain valuable product, safety, architecture, and
+historical context but contain dated branch-era C4 lifecycle/status wording:
 
+- `docs/decisions/0016-launcher-assisted-restore.md`;
 - `docs/architecture.md`;
 - `docs/roadmap.md`;
 - `docs/backup-and-restore.md`.
 
 Within those files, statements equivalent to any of the following are
-**historical and superseded**:
+**historical and superseded by ADR 0017 and this lifecycle profile**:
 
 ```text
 C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
+C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 C4 implementation — NOT STARTED
 C4-I — AUTHORIZED — NOT IMPLEMENTED
 C4-I is implemented on a pull-request branch and not merged
 ```
 
-Their product contracts, safety rules, accepted decisions, detailed C4-I engine
-description, and historical evidence remain valuable and are not revoked.
-Only their lifecycle labels are superseded by this document, ADR 0017, and the
-active implementation plan.
+For ADR 0016 this supersession applies **only** to dated implementation lifecycle
+and authorization labels. Its accepted Restore product, safety, state-machine,
+and recovery semantics remain authoritative unless a later accepted ADR changes
+them explicitly.
 
 No agent may use a superseded status sentence to reopen C4-I, repeat PR #170,
 or authorize C4-II runtime work.
@@ -142,6 +180,10 @@ These files are non-normative evidence. They preserve the reasons, audit rounds,
 known limitations, exact test evidence, slice contracts, and branch-era state
 without polluting the active short-horizon documents.
 
+Historical commands are not automatically safe operational instructions. For
+read-only Git archaeology, use the safe guidance in `docs/history/README.md` and
+`docs/history/AGENTS.md`.
+
 ## Documentation consistency check
 
 Run from the repository root:
@@ -150,10 +192,15 @@ Run from the repository root:
 python3 scripts/check_documentation_lifecycle.py
 ```
 
-The check verifies the current lifecycle markers, CR-011 ledger entry, preserved
-history paths, and absence of stale C4-I status phrases from compact active
-control documents. Large legacy documents are permitted to retain dated status
-prose only because they are explicitly listed in this profile.
+The check must verify:
+
+- current lifecycle markers across compact active control files;
+- explicit PR #171 → merged `main` → CR-011 sequencing;
+- CR-011 ledger state;
+- preserved history paths and expected Git blob identities;
+- explicit supersession of dated C4 lifecycle wording, including ADR 0016;
+- absence of unsafe `git restore --source=` guidance from maintained historical
+  guidance files.
 
 ## Maintenance rule
 
@@ -166,7 +213,7 @@ A future lifecycle change must update, in the same documentation PR:
 - `state/progress.md`;
 - `state/handoff.md`;
 - `state/change-requests.md` when a CR changes;
-- every large active document whose current-status section would otherwise
+- every active status surface whose current-status section would otherwise
   contradict the new lifecycle, or this explicit supersession map until that
   focused synchronization is completed.
 
