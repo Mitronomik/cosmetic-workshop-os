@@ -124,15 +124,28 @@ Implement the launcher-owned loopback control/session boundary without native pi
 - selection-generation integration with A1;
 - safe typed state endpoint;
 - cancellation/invalidation plumbing into A1;
-- launcher startup/shutdown ownership of the control plane.
+- launcher startup/shutdown ownership of the control plane;
+- a launcher-owned source-selection port/interface (`PickerPort`-equivalent) used by the select coordinator.
+
+### Mandatory A2-to-A3 seam
+
+A2 has **no real picker yet**. Therefore production A2 must use a launcher-owned unavailable picker adapter that returns a fixed typed `picker_unavailable` result and never obtains a source path.
+
+Tests may inject a fake launcher-owned picker adapter to exercise coordinator/security behavior, but that test adapter is not production authority and must not create a production endpoint for supplying paths.
+
+The browser may never provide the source path, file bytes or a filesystem handle to make A2 tests/implementation work. No temporary query/body field such as `path`, `source_path`, upload/blob or test-only production route is allowed.
+
+A2 may start/stop the control plane under launcher ownership, but **the production browser launch URL remains unchanged until A4**. A2 must not append the bootstrap capability to `open_runtime_browser(...)` or equivalent user-facing browser navigation yet. This prevents a sensitive bootstrap fragment from remaining visible before the frontend consumer/removal logic exists.
+
+A2 exact-head tests/smoke may exercise bootstrap and control requests through a direct local authenticated HTTP harness. Ordinary product UI must still expose no Restore control path after A2 alone.
 
 ### Explicit non-goals
 
-A2 must not implement real native picker, final `/backups/restore` UI, destructive execute/confirm command, ordinary FastAPI Restore endpoint, generic filesystem/shell/SQL/launcher command surface, WebSocket, new dependency unless separately authorized, or C4-II-B.
+A2 must not implement real native picker, production browser bootstrap-fragment handoff, final `/backups/restore` UI, destructive execute/confirm command, ordinary FastAPI Restore endpoint, generic filesystem/shell/SQL/launcher command surface, WebSocket, new dependency unless separately authorized, or C4-II-B.
 
 ### Required tests
 
-At minimum prove loopback-only bind, exact Host/Origin, bootstrap atomicity, old-run/token rejection, no-store behavior, heartbeat/expiry, concurrent state/cancel servicing, command ordering, non-replayable typed rejection, idempotent retry, generation gating, cleanup/invalidation and absence of any destructive command.
+At minimum prove loopback-only bind, exact Host/Origin, bootstrap atomicity, old-run/token rejection, no-store behavior, heartbeat/expiry, concurrent state/cancel servicing, command ordering, non-replayable typed rejection, idempotent retry, generation gating, cleanup/invalidation, typed `picker_unavailable`, rejection/absence of browser-provided source path authority, unchanged ordinary browser launch URL, and absence of any destructive command.
 
 ## C4-II-A3 — Native macOS picker integration
 
@@ -142,7 +155,7 @@ A2 must be merged and exact-head verified first.
 
 ### Goal
 
-Connect the accepted launcher control path to the real launcher-owned native file picker and A1 candidate preparation.
+Replace the A2 unavailable source-selection adapter with the real launcher-owned native file picker and connect it to A1 candidate preparation.
 
 ### Authorized scope
 
@@ -154,19 +167,23 @@ Connect the accepted launcher control path to the real launcher-owned native fil
 - typed picker cancellation;
 - absolute POSIX path returned only to launcher memory;
 - picker worker ownership/termination;
-- select command → picker → A1 candidate preparation;
+- select command → real picker adapter → A1 candidate preparation;
 - cancel/session-expiry invalidation while picker/validation work is in flight;
 - worker-quiescence cleanup and stale-result blocking.
 
+A3 replaces the A2 `picker_unavailable` production adapter; it must not add any browser-supplied path fallback.
+
+The production browser launch URL still remains unchanged in A3. Exact-head smoke may use a direct authenticated local control-plane client to invoke the real picker. The user-facing fragment handoff and frontend consumer are A4 scope.
+
 ### Explicit non-goals
 
-A3 must not implement final browser Restore workspace, destructive confirmation/execution, browser-owned absolute path, browser file upload as Restore authority, PyObjC/Electron/Tauri/pywebview/tkinter dependency, App Store sandbox redesign or packaging implementation.
+A3 must not implement final browser Restore workspace, production browser bootstrap-fragment handoff, destructive confirmation/execution, browser-owned absolute path, browser file upload as Restore authority, PyObjC/Electron/Tauri/pywebview/tkinter dependency, App Store sandbox redesign or packaging implementation.
 
 ### Required tests and macOS smoke
 
 Automated tests must cover picker result mapping, cancellation, child lifecycle, path privacy, in-flight cancel/expiry and late-worker rejection.
 
-Exact-head macOS smoke must invoke the real `/usr/bin/osascript` picker boundary and reach real A1 candidate preparation. Mocking the final picker result is not a sufficient smoke gate.
+Exact-head macOS smoke must invoke the real `/usr/bin/osascript` picker boundary through launcher-owned code and reach real A1 candidate preparation. Mocking the final picker result is not a sufficient smoke gate.
 
 ## C4-II-A4 — Browser Restore screen and end-to-end non-destructive flow
 
@@ -182,6 +199,7 @@ Deliver the user-facing source-selection and validation presentation while remai
 
 - exact browser-SPA route `/backups/restore`;
 - human-readable entry action from `/backups`;
+- production launcher browser handoff that appends the one-use bootstrap capability in the URL fragment only after the A4 frontend consumer exists;
 - bootstrap URL-fragment consumption and immediate removal;
 - `sessionStorage` run-scoped token and non-secret `control_origin` reload metadata;
 - fail-closed invalid/missing launcher-session presentation;
@@ -222,6 +240,7 @@ Every A1–A4 implementation must preserve:
 - ADR 0016 twelve-phase destructive Restore state machine unchanged;
 - ADR 0018 selected launcher-owned loopback/picker/session architecture;
 - browser remains presentation, never absolute-path authority;
+- browser may never provide a source path or file payload as a substitute for the launcher-owned picker boundary;
 - ordinary FastAPI remains business API, not Restore mutation authority;
 - C4-II-A remains strictly non-destructive;
 - source remains byte-identical;
@@ -229,6 +248,7 @@ Every A1–A4 implementation must preserve:
 - ordinary backend may remain running throughout C4-II-A validation;
 - no destructive authority is added until separately authorized C4-II-B;
 - no hidden packaging/dependency decision;
+- no hidden production-only test bypass or generic path-injection endpoint;
 - local-first operation without required internet;
 - non-technical user workflow.
 
