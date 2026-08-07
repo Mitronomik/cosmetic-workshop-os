@@ -30,7 +30,12 @@ For Restore:
   mandatory `before_restore` safety copy and AuditLog boundary;
 - ADR 0017 closes C4-I lifecycle and supersedes only dated C4 implementation
   status/authorization wording in ADR 0016;
-- ADR 0018 decides CR-011 interaction architecture: a narrowly authenticated
+- ADR 0018 is newer for the exact CR-011 interaction/validation-session topic and
+  supersedes ADR 0017 only where ADR 0017 says CR-011 is still undecided or that
+  C4-II-A is still blocked by the undecided CR-011 gate;
+- ADR 0017 remains authoritative for PR #170/C4-I lifecycle closure and for the
+  rule that CR-011 was decision-only rather than runtime authorization;
+- ADR 0018 decides the interaction architecture: a narrowly authenticated
   launcher-owned loopback control plane, launcher-owned macOS picker, exact-run
   browser session and non-destructive validation-session boundary;
 - ADR 0018 does not amend ADR 0016 safety semantics and does not authorize
@@ -167,13 +172,17 @@ The next task must explicitly authorize a bounded C4-II-A implementation scope.
 
 ## Superseded lifecycle locations
 
-These files retain valuable durable context but may contain older branch-era C4
-status wording:
+These files retain valuable durable context but contain older lifecycle/status
+wording that is superseded only for the bounded topic described here:
 
-- `docs/decisions/0016-launcher-assisted-restore.md`;
-- `docs/architecture.md`;
-- `docs/roadmap.md`;
-- `docs/backup-and-restore.md`.
+- `docs/decisions/0016-launcher-assisted-restore.md` — old C4-I branch status
+  only; durable Restore safety/state-machine semantics remain authoritative;
+- `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md` — old
+  `CR-011 NOT DECIDED` / `C4-II-A BLOCKED BY CR-011` status only; C4-I closure and
+  decision-only gate semantics remain authoritative;
+- `docs/architecture.md` — dated C4 implementation status only;
+- `docs/roadmap.md` — dated C4 implementation status only;
+- `docs/backup-and-restore.md` — dated C4 implementation status only.
 
 Statements equivalent to these are historical/superseded as current lifecycle:
 
@@ -190,8 +199,10 @@ C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
 ADR 0016 supersession remains bounded to lifecycle metadata only. Its durable
 Restore safety/state-machine contract remains authoritative.
 
-ADR 0017 remains authoritative for C4-I lifecycle closure, but ADR 0018 is newer
-for the exact CR-011 interaction/validation-session topic.
+ADR 0017 supersession is likewise bounded: ADR 0018 replaces only the undecided
+CR-011 interaction-gate status and selected interaction architecture. ADR 0017's
+C4-I closure facts and its prohibition on implicit runtime implementation remain
+valid.
 
 ## Project history
 
@@ -223,6 +234,7 @@ The checker must verify at least:
 
 - post-PR-171 / CR-011 lifecycle markers across compact active files;
 - ADR 0016 / 0017 / 0018 scope-and-recency authority;
+- explicit bounded supersession of ADR 0017's pre-decision CR-011 status;
 - ADR 0018 selected architecture markers;
 - C4-II-A remains not authorized;
 - required history paths and five exact historical Git blob identities;
