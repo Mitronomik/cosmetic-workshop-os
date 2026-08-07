@@ -2,25 +2,25 @@
 
 Client-facing product name: **Мастерская косметолога**.
 
-A local-first working system for a cosmetic workshop: recipes and recipe
-versions, individual client formulas, clients and feedback, ingredients and
-lots, packaging, orders, production, stock movements, alerts, purchase
-suggestions, imports, exports, backups, onboarding, and help.
+A local-first working system for a cosmetic workshop: recipes and versions,
+individual client formulas, clients/feedback, ingredients/lots, packaging,
+orders, production, stock movements, alerts, purchases, imports, exports,
+backups, onboarding and help.
 
 The product goal is a packaged local application that a non-technical user can
-open, understand, update, and use without GitHub, Git, Python, Node.js, Docker,
-or a terminal.
+open and use without GitHub, Git, Python, Node.js, Docker or a terminal.
 
 ## Current product status
 
 ```text
+PR #171 — MERGED
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
-C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+CR-011 — DECIDED — ADR 0018 ACCEPTED — NORMATIVE ON MAIN
+C4-II-A — PLANNED — NOT AUTHORIZED
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -28,180 +28,167 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-The repository intentionally does not embed a permanently changing current
-baseline SHA in this README.
+On a CR-011 pull-request branch, ADR 0018 is not project authority until that
+changeset is merged to `main`. C4-II-A is not authorized by this decision PR.
 
-For lifecycle and authorization, read in this order:
+For current lifecycle/authorization read:
 
 1. [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
-2. [`docs/implementation-plan.md`](docs/implementation-plan.md)
-3. [`state/current-focus.md`](state/current-focus.md)
-4. [`state/progress.md`](state/progress.md)
-5. [`state/handoff.md`](state/handoff.md)
-6. [`state/change-requests.md`](state/change-requests.md)
+2. newest applicable ADR
+3. [`docs/implementation-plan.md`](docs/implementation-plan.md)
+4. [`state/current-focus.md`](state/current-focus.md)
+5. [`state/progress.md`](state/progress.md)
+6. [`state/handoff.md`](state/handoff.md)
+7. [`state/change-requests.md`](state/change-requests.md)
 
-## Current action while PR #171 is open
+## CR-011 decision
 
-PR #171 is the current documentation closure gate.
-
-```text
-finish independent audit
-→ correct every finding
-→ run documentation checks in a real checkout
-→ repeat exact-head read-only audit
-→ merge PR #171
-```
-
-Do not start CR-011 from the unmerged PR #171 branch.
-Do not create a dependent CR-011 branch from the PR #171 head.
-
-## Authorized successor after PR #171 merges
-
-After PR #171 is merged, update `main` and create a new branch from the merged
-`main`. Only then begin:
+ADR 0018 selects one concrete interaction architecture:
 
 ```text
-CR-011 — Decide the launcher Restore interaction and validation-session boundary.
-Decision-only. No runtime implementation is authorized.
+ordinary browser presentation
+→ launcher-owned HTTP control plane on 127.0.0.1:<ephemeral>
+→ launcher-owned native macOS picker
+→ launcher-owned non-destructive validation session
+→ existing C4-I intake/staging/validation semantics
 ```
 
-C4-II-A remains planned, blocked by CR-011, and not authorized.
+Key decisions:
 
-## Lifecycle consistency note
+- control plane is separate from ordinary FastAPI business API;
+- exact configured local frontend Origin only; no wildcard CORS;
+- one-use 256-bit bootstrap capability enters through URL fragment;
+- run-scoped browser token lives only in `sessionStorage`;
+- absolute selected-source path never enters browser/ordinary backend state;
+- native picker is an owned `/usr/bin/osascript` child using Standard Additions
+  `choose file`;
+- no new application dependency is authorized;
+- ordinary backend remains running during non-destructive validation;
+- candidate preparation must reuse C4-I held-descriptor, sidecar, two-pass digest
+  staging and read-only candidate validation semantics;
+- future C4-II-B must reopen/re-prove source identity + SHA-256, restage and
+  revalidate before destructive Restore.
 
-`docs/architecture.md`, `docs/roadmap.md`, `docs/backup-and-restore.md`, and the
-dated implementation-status blocks in ADR 0016 retain valuable product,
-safety, and architecture context but contain branch-era C4 lifecycle wording.
+Normative decision:
 
-Current lifecycle and authorization are governed by:
+- [`docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`](docs/decisions/0018-launcher-restore-interaction-and-validation-session.md)
 
-- [`docs/current-lifecycle.md`](docs/current-lifecycle.md);
-- ADR 0017;
-- the active implementation plan.
+Normative working profile:
 
-ADR 0016 remains authoritative for the launcher-assisted Restore product and
-safety decision, including its twelve-phase state machine and recovery contract.
-Only its dated implementation-status / authorization wording is superseded by
-ADR 0017 after PR #170 merged.
+- [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
 
-No agent may reopen C4-I or authorize C4-II runtime work from a historical status
-sentence.
+## Current action
 
-## C4-I history and current Restore decision
+This CR-011 changeset is documentation/architecture only.
 
-- Current lifecycle authority:
-  [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
-- Current lifecycle and architecture gate:
-  [`docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`](docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md)
-- Normative Restore interaction and non-destructive validation-session profile:
-  [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
-- Accepted launcher-assisted Restore safety contract:
-  [`docs/decisions/0016-launcher-assisted-restore.md`](docs/decisions/0016-launcher-assisted-restore.md)
-- C4-I implementation and six-round audit history:
-  [`docs/history/c4-i-implementation-and-audit-history.md`](docs/history/c4-i-implementation-and-audit-history.md)
-- Project timeline and exact pre-compaction snapshots:
-  [`docs/history/README.md`](docs/history/README.md)
-- Backup and Restore product/safety contract:
-  [`docs/backup-and-restore.md`](docs/backup-and-restore.md)
+Before merge:
 
-C4-I is internal safety infrastructure. It does not provide a user-facing file
-picker, validation screen, destructive confirmation, Restore action, terminal
-outcome screen, ordinary FastAPI Restore endpoint, or ordinary SPA Restore
-mutation.
+```text
+finish documentation synchronization
+→ git diff --check
+→ python3 scripts/check_documentation_lifecycle.py
+→ run repository-defined docs/link checker if present
+→ verify no backend/frontend/launcher runtime path changed
+→ fresh independent exact-head architecture audit
+→ resolve every P0/P1/P2 finding
+→ merge CR-011 decision PR
+```
 
-The launcher currently opens an ordinary system browser. There is not yet an
-accepted browser-to-launcher command channel or a public non-destructive
-validation-session service. CR-011 must choose those boundaries before runtime
-work begins.
+Do not implement C4-II-A on this branch.
+
+After CR-011 is merged to `main`, prepare a separate bounded task that explicitly
+authorizes C4-II-A. Do not treat ADR acceptance as implicit runtime authorization.
+
+## Restore authority
+
+Authority is intentionally split:
+
+- ADR 0016 — durable launcher-assisted Restore safety/state machine;
+- ADR 0017 — C4-I lifecycle closure and CR-011 gate;
+- ADR 0018 — interaction/control/picker/validation-session architecture;
+- `docs/current-lifecycle.md` — current implementation authorization.
+
+ADR 0018 does not change the twelve phases, transition graph, startup recovery
+matrix, `replacement_intent`, mandatory safety-copy rule, immutable-source rule,
+or Restore AuditLog boundary accepted by ADR 0016.
+
+## Project history
+
+Searchable history is retained under [`docs/history/`](docs/history/README.md).
+Exact pre-compaction snapshots remain byte-identical and are protected by
+`scripts/check_documentation_lifecycle.py`.
+
+History is non-normative evidence and cannot authorize current work.
 
 ## Documentation map
 
 ### Product and architecture
 
-- [`AGENTS.md`](AGENTS.md) — main Codex contract
+- [`AGENTS.md`](AGENTS.md) — main agent contract
 - [`docs/current-lifecycle.md`](docs/current-lifecycle.md) — lifecycle authority
-  and supersession map
 - [`docs/product-spec.md`](docs/product-spec.md) — product specification
-- [`docs/architecture.md`](docs/architecture.md) — architecture contract
-- [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
-  — current C4 interaction/validation-session profile
+- [`docs/architecture.md`](docs/architecture.md) — durable architecture
 - [`docs/domain-model.md`](docs/domain-model.md) — domain model
 - [`docs/roadmap.md`](docs/roadmap.md) — strategic roadmap
-- [`docs/implementation-plan.md`](docs/implementation-plan.md) — active
-  implementation sequence and release gates
+- [`docs/implementation-plan.md`](docs/implementation-plan.md) — active sequence
+- [`docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`](docs/decisions/0018-launcher-restore-interaction-and-validation-session.md)
+  — CR-011 decision
+- [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
+  — Restore interaction profile
 
-### UI and product language
+### UI/product language
 
-- [`docs/ui-ux-contract.md`](docs/ui-ux-contract.md) — human-friendly UI rules
-- [`docs/frontend-concept.md`](docs/frontend-concept.md) — frontend concept
-- [`docs/user-guide.md`](docs/user-guide.md) — user guidance
+- [`docs/ui-ux-contract.md`](docs/ui-ux-contract.md)
+- [`docs/frontend-concept.md`](docs/frontend-concept.md)
+- [`docs/user-guide.md`](docs/user-guide.md)
 
-### Data safety and operations
+### Data safety/operations
 
-- [`docs/backup-and-restore.md`](docs/backup-and-restore.md) — backup and Restore
-  contract
-- [`docs/local-install.md`](docs/local-install.md) — local installation
-- [`docs/update-guide.md`](docs/update-guide.md) — safe update contract
-- [`docs/pr-testing-and-smoke-rules.md`](docs/pr-testing-and-smoke-rules.md) — PR
-  test and smoke requirements
-- [`docs/smoke-script-authoring-rules.md`](docs/smoke-script-authoring-rules.md) —
-  external smoke-runner rules
+- [`docs/backup-and-restore.md`](docs/backup-and-restore.md)
+- [`docs/deployment.md`](docs/deployment.md)
+- [`docs/packaging.md`](docs/packaging.md)
+- [`docs/local-install.md`](docs/local-install.md)
+- [`docs/update-guide.md`](docs/update-guide.md)
+- [`docs/pr-testing-and-smoke-rules.md`](docs/pr-testing-and-smoke-rules.md)
 
-### Development memory
+### Project memory
 
-- [`docs/codex-project-structure.md`](docs/codex-project-structure.md) — project
-  memory structure
-- [`docs/codex-prompting-rules.md`](docs/codex-prompting-rules.md) — Codex task
-  rules
-- [`state/current-focus.md`](state/current-focus.md) — current task
-- [`state/progress.md`](state/progress.md) — current progress
-- [`state/handoff.md`](state/handoff.md) — cross-session handoff
-- [`state/change-requests.md`](state/change-requests.md) — compact current CR ledger
-- [`docs/history/README.md`](docs/history/README.md) — searchable history index
+- [`docs/codex-project-structure.md`](docs/codex-project-structure.md)
+- [`docs/codex-prompting-rules.md`](docs/codex-prompting-rules.md)
+- [`state/current-focus.md`](state/current-focus.md)
+- [`state/progress.md`](state/progress.md)
+- [`state/handoff.md`](state/handoff.md)
+- [`state/change-requests.md`](state/change-requests.md)
+- [`docs/history/README.md`](docs/history/README.md)
 
 ## Architectural invariants
 
 Every change must preserve:
 
 - local-first work without required internet;
-- user data stored separately from application code and package contents;
-- a deliverable product rather than a repository-based user workflow;
-- API-first backend architecture;
-- backend-owned business calculations and critical mutations;
-- immutable historical production data;
+- user data separate from code/package;
+- deliverable product rather than repository workflow;
+- API-first backend business architecture;
+- backend-owned business calculations/critical mutations;
+- immutable historical production meaning;
 - versioned recipes and first-class individual client formulas;
-- inventory through lots and movements;
+- inventory through lots/movements;
 - transactional production;
-- import through draft, preview, validation, confirmation, and apply;
-- backup before migration;
-- understandable non-technical UI and error language;
-- no silent expansion into cloud sync, OCR, full accounting, roles,
-  multi-user operation, or advanced analytics in the MVP.
+- import through draft/preview/validation/confirmation/apply;
+- backup before migrations;
+- understandable non-technical UI;
+- no silent MVP expansion into cloud, OCR, full accounting, roles or advanced
+  analytics.
 
-## Restore boundary until CR-011 is accepted
-
-No agent may add, by assumption:
-
-- a FastAPI Restore endpoint;
-- SPA-owned filesystem access;
-- browser upload as the authoritative Restore source;
-- a generic unauthenticated localhost endpoint;
-- wildcard CORS;
-- an undocumented WebSocket or IPC channel;
-- a native shell technology or dependency not selected by an accepted decision;
-- an absolute selected-source path in ordinary browser state;
-- hidden Restore packaging work.
-
-The later CR-011 decision must select one concrete interaction architecture and
-define the launcher-owned non-destructive validation-session boundary before
-C4-II-A can be authorized.
+Restore additionally preserves launcher ownership of filesystem/destructive
+authority and never uses the ordinary browser as absolute-path authority.
 
 ## Documentation check
 
-After lifecycle documentation changes, run:
+After lifecycle documentation changes run:
 
 ```bash
 python3 scripts/check_documentation_lifecycle.py
 ```
 
-This is a documentation consistency check, not product smoke.
+This is documentation consistency validation, not product smoke.
