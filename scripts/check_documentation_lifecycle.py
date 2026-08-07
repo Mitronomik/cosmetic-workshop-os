@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check post-A1 lifecycle closure and C4-II-A2 authorization consistency."""
+"""Check C4-II-A2 implementation lifecycle and architecture boundaries."""
 
 from __future__ import annotations
 
@@ -26,6 +26,17 @@ A1_SESSION = ROOT / "launcher/restore/validation_session.py"
 A1_SCRATCH = ROOT / "launcher/restore/validation_scratch.py"
 A1_TESTS = ROOT / "launcher/tests/test_restore_validation_session.py"
 A1_SMOKE = ROOT / "scripts/smoke_restore_validation_session.py"
+
+A2_PROTOCOL = ROOT / "launcher/restore/control_protocol.py"
+A2_SESSION = ROOT / "launcher/restore/control_session.py"
+A2_PLANE = ROOT / "launcher/restore/control_plane.py"
+A2_RUNTIME = ROOT / "launcher/runtime.py"
+A2_SESSION_TESTS = ROOT / "launcher/tests/test_restore_control_session.py"
+A2_PLANE_TESTS = ROOT / "launcher/tests/test_restore_control_plane.py"
+A2_BOOTSTRAP_TESTS = ROOT / "launcher/tests/test_restore_control_bootstrap_concurrency.py"
+A2_REJECTION_TESTS = ROOT / "launcher/tests/test_restore_control_rejection_order.py"
+A2_RUNTIME_TESTS = ROOT / "launcher/tests/test_restore_control_runtime.py"
+A2_SMOKE = ROOT / "scripts/smoke_restore_control_plane.py"
 
 COMPACT_ACTIVE_FILES = (
     ROOT / "README.md",
@@ -63,12 +74,13 @@ EXPECTED_HISTORY_BLOBS = {
 
 CORE_CURRENT_MARKERS = (
     "PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED",
+    "PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED",
     "C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN",
     "C4-II-A — IN PROGRESS — SLICED",
     "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE",
+    "C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+    "C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE",
     "C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE",
     "C4-II-B — PLANNED — NOT AUTHORIZED",
     "Restore — NOT IMPLEMENTED",
@@ -76,13 +88,30 @@ CORE_CURRENT_MARKERS = (
 )
 
 STALE_ACTIVE_PHRASES = (
-    "C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE",
-    "A2 remains blocked",
-    "Finish A1 implementation review",
-    "Verification still required",
-    "Current work — A1 validation-session core",
+    "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE\n",
+    "A2 runtime implementation begins only after",
+    "merge post-A1 lifecycle closure",
+    "Next runtime slice — A2",
 )
+
+FORBIDDEN_DESTRUCTIVE_MODULES = {
+    "launcher.restore.engine",
+    "launcher.restore.state",
+    "launcher.restore.safety_copy",
+    "launcher.restore.replacement",
+    "launcher.restore.recovery",
+    "launcher.restore.phases",
+}
+FORBIDDEN_DESTRUCTIVE_CALLS = {
+    "execute_restore",
+    "create_verified_safety_copy",
+    "commit_replacement",
+    "prepare_replacement_artifact",
+    "quiesce_target_journal",
+    "recover_incomplete_restore",
+    "perform_rollback",
+}
 
 ERRORS: list[str] = []
 
@@ -153,45 +182,36 @@ def called_names(tree: ast.AST) -> set[str]:
     return names
 
 
+def function_unparse(tree: ast.AST, name: str) -> str:
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+            return ast.unparse(node)
+    fail(f"missing function {name!r}")
+    return ""
+
+
+def check_no_destructive_calls(path: Path, *, extra_forbidden_modules: set[str] | None = None) -> None:
+    tree = parse_python(path)
+    if tree is None:
+        return
+    modules = imported_modules(tree)
+    calls = called_names(tree)
+    forbidden_modules = set(FORBIDDEN_DESTRUCTIVE_MODULES)
+    forbidden_modules.update(extra_forbidden_modules or set())
+    for module in sorted(forbidden_modules & modules):
+        fail(f"{path.relative_to(ROOT)} imports forbidden scope: {module}")
+    for name in sorted(FORBIDDEN_DESTRUCTIVE_CALLS & calls):
+        fail(f"{path.relative_to(ROOT)} calls destructive boundary: {name}")
+
+
 def check_closed_a1_boundary() -> None:
     """Merged A1 must remain non-destructive and free of later-slice control scope."""
 
     for path in (A1_SESSION, A1_SCRATCH):
-        tree = parse_python(path)
-        if tree is None:
-            continue
-        modules = imported_modules(tree)
-        calls = called_names(tree)
-
-        forbidden_modules = {
-            "http.server",
-            "socket",
-            "subprocess",
-            "webbrowser",
-            "launcher.restore.engine",
-            "launcher.restore.state",
-            "launcher.restore.safety_copy",
-            "launcher.restore.replacement",
-            "launcher.restore.recovery",
-            "launcher.restore.phases",
-        }
-        for module in sorted(forbidden_modules & modules):
-            fail(
-                f"closed A1 module {path.relative_to(ROOT)} imports later/destructive scope: {module}"
-            )
-
-        forbidden_calls = {
-            "execute_restore",
-            "create_verified_safety_copy",
-            "commit_replacement",
-            "prepare_replacement_artifact",
-            "quiesce_target_journal",
-            "recover_incomplete_restore",
-        }
-        for name in sorted(forbidden_calls & calls):
-            fail(
-                f"closed A1 module {path.relative_to(ROOT)} calls destructive boundary: {name}"
-            )
+        check_no_destructive_calls(
+            path,
+            extra_forbidden_modules={"http.server", "socket", "subprocess", "webbrowser"},
+        )
 
     session_text = read(A1_SESSION)
     require_markers(
@@ -233,7 +253,6 @@ def check_closed_a1_boundary() -> None:
             "cleanup_session",
         ),
     )
-
     require_markers(
         A1_TESTS,
         (
@@ -244,152 +263,169 @@ def check_closed_a1_boundary() -> None:
             "test_display_filename_is_bounded_and_removes_control_formatting",
         ),
     )
-
     require_markers(
         A1_SMOKE,
         (
             "--expected-head",
             "RestoreCandidatePreparationService",
             "PASS — C4-II-A1 VALIDATION-SESSION SMOKE PASSED",
+        ),
+    )
+
+
+def check_a2_control_boundary() -> None:
+    """A2 may own control/session transport, but no A3/A4/destructive authority."""
+
+    for path in (A2_PROTOCOL, A2_SESSION, A2_PLANE):
+        check_no_destructive_calls(
+            path,
+            extra_forbidden_modules={"subprocess", "webbrowser"},
+        )
+        text = read(path)
+        for forbidden in (
+            "/usr/bin/osascript",
+            "shell=True",
+            "/backups/restore",
+            "sessionStorage",
+            "execute_restore(",
+        ):
+            if forbidden in text:
+                fail(f"A2 production module {path.relative_to(ROOT)} contains later/destructive marker: {forbidden!r}")
+
+    require_markers(
+        A2_PROTOCOL,
+        (
+            "SourceSelectionAdapter",
+            "UnavailableSourceSelectionAdapter",
+            "picker_unavailable" if False else "UNAVAILABLE",
+            "ControlStateSnapshot",
+            "CommandReply",
+            "ControlSessionError",
+        ),
+    )
+    require_markers(
+        A2_SESSION,
+        (
+            "BOOTSTRAP_RANDOM_BYTES = 32",
+            "SESSION_RANDOM_BYTES = 32",
+            "HEARTBEAT_INTERVAL_SECONDS = 15",
+            "SESSION_EXPIRY_SECONDS = 60",
+            "hmac.compare_digest",
+            "secrets.token_urlsafe",
+            "_bootstrap_capability = \"\"",
+            "_consume_command_locked",
+            "action_in_progress",
+            "picker_unavailable",
+            "command_sequence_stale",
+            "command_sequence_future",
+            "command_sequence_conflict",
+            "self._candidate_service.cancel()",
+            "worker.join()",
+        ),
+    )
+    require_markers(
+        A2_PLANE,
+        (
+            "ThreadingHTTPServer",
+            "CONTROL_HOST = \"127.0.0.1\"",
+            "_ControlHTTPServer((CONTROL_HOST, 0)",
+            "/v1/bootstrap",
+            "/v1/state",
+            "/v1/heartbeat",
+            "/v1/restore/select",
+            "/v1/restore/cancel",
+            "Cache-Control",
+            "no-store",
+            "Access-Control-Allow-Origin",
+            "cookies_not_allowed",
+            "REQUEST_ID_PATTERN",
+            "command_seq",
+            "invalid_request_schema",
+        ),
+    )
+    plane_text = read(A2_PLANE)
+    for browser_authority in (
+        "source_path",
+        "file_bytes",
+        "upload_blob",
+        "filesystem_handle",
+    ):
+        if browser_authority in plane_text:
+            fail(f"A2 HTTP boundary contains browser filesystem authority marker: {browser_authority!r}")
+
+    runtime_tree = parse_python(A2_RUNTIME)
+    if runtime_tree is not None:
+        runtime_flow = function_unparse(runtime_tree, "_run_locked_runtime")
+        ordered = (
+            "context.backend.start",
+            "start_restore_control_plane",
+            "open_runtime_browser",
+            "control_plane.close",
+            "context.backend.stop",
+        )
+        positions = [runtime_flow.find(marker) for marker in ordered]
+        if any(position < 0 for position in positions) or positions != sorted(positions):
+            fail("launcher runtime does not preserve backend→control→browser / control→backend ordering")
+
+        browser_flow = function_unparse(runtime_tree, "open_runtime_browser")
+        for forbidden in ("cw-control", "bootstrap", "session_token", "control_origin"):
+            if forbidden in browser_flow:
+                fail(f"production open_runtime_browser contains premature A4 handoff marker: {forbidden!r}")
+        for required in ("config.frontend_url", "config.backend_url", "webbrowser.open(target_url)"):
+            if required not in browser_flow:
+                fail(f"production open_runtime_browser drifted from ordinary URL contract: {required!r}")
+
+    require_markers(
+        A2_SESSION_TESTS,
+        (
+            "test_bootstrap_is_one_use",
+            "test_action_in_progress_consumes_its_valid_sequence",
+            "test_heartbeat_and_state_remain_serviceable_while_worker_blocks",
+            "test_cancel_prevents_late_selected_path_publication",
+            "test_expiry_invalidates_token_generation_and_retained_proof",
+        ),
+    )
+    require_markers(
+        A2_PLANE_TESTS,
+        (
+            "test_binds_exact_loopback_on_ephemeral_port_and_uses_no_store",
+            "test_wrong_host_and_origin_do_not_consume_bootstrap",
+            "test_preflight_is_narrow_and_never_wildcard",
+            "test_malformed_path_bearing_select_does_not_consume_sequence",
+            "test_http_heartbeat_state_and_cancel_remain_responsive_while_worker_blocks",
+        ),
+    )
+    require_markers(
+        A2_BOOTSTRAP_TESTS,
+        ("test_exact_same_bootstrap_capability_has_one_concurrent_winner", "threading.Barrier(2)"),
+    )
+    require_markers(
+        A2_REJECTION_TESTS,
+        ("test_wrong_host_origin_and_schema_do_not_consume_expected_command", "source_path"),
+    )
+    require_markers(
+        A2_RUNTIME_TESTS,
+        (
+            "test_control_plane_starts_after_owned_backend_and_closes_before_backend",
+            "test_control_plane_failure_keeps_ordinary_product_available",
+            "#cw-control",
+        ),
+    )
+    require_markers(
+        A2_SMOKE,
+        (
+            "--expected-head",
+            "RestoreControlPlane",
+            "/v1/bootstrap",
+            "/v1/restore/select",
+            "PASS — C4-II-A2 RESTORE CONTROL-PLANE SMOKE PASSED",
             "INCONCLUSIVE — ENVIRONMENT",
             "FAIL — PRODUCT",
         ),
     )
 
 
-def main() -> int:
-    profile = read(CURRENT_PROFILE)
-
-    for marker in CORE_CURRENT_MARKERS:
-        if not has_marker(profile, marker):
-            fail(f"current lifecycle profile is missing marker: {marker!r}")
-
-    for marker in (
-        "C4-II-A1 / PR #174",
-        "e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5",
-        "504e776508c940554b3ee8659a201af21db8303c",
-        "targeted A1 tests: 17 passed",
-        "full backend + launcher regression: 2415 passed",
-        "independent exact-head audit: P0=0 / P1=0 / P2=0",
-        "A2 authorized boundary — exact-run launcher control plane",
-        "picker_unavailable",
-        "production product-browser launch URL remains unchanged in A2",
-        "C4-II-B remains separately",
-    ):
-        if not has_marker(profile, marker):
-            fail(f"current lifecycle profile is missing post-A1/A2 marker: {marker!r}")
-
-    for path in COMPACT_ACTIVE_FILES:
-        text = read(path)
-        require_markers(path, CORE_CURRENT_MARKERS)
-        for phrase in STALE_ACTIVE_PHRASES:
-            if has_marker(text, phrase):
-                fail(
-                    f"stale pre-closure phrase remains in compact active file "
-                    f"{path.relative_to(ROOT)}: {phrase!r}"
-                )
-
-    decisions_agents = read(DECISIONS_AGENTS)
-    for marker in (
-        "scope and recency",
-        "ADR 0016 remains authoritative",
-        "ADR 0018 is newer for the exact CR-011 interaction/validation-session topic",
-        "does **not** amend ADR 0016",
-        "does **not** authorize C4-II-A runtime implementation",
-    ):
-        if not has_marker(decisions_agents, marker):
-            fail(f"docs/decisions/AGENTS.md is missing ADR authority marker: {marker!r}")
-
-    for path in (
-        ADR_0016,
-        ADR_0017,
-        ROOT / "docs/architecture.md",
-        ROOT / "docs/roadmap.md",
-        ROOT / "docs/backup-and-restore.md",
-    ):
-        relative = path.relative_to(ROOT).as_posix()
-        if relative not in profile:
-            fail(f"bounded superseded-status file is not mapped in current lifecycle: {relative}")
-
-    require_markers(
-        ADR_0018,
-        (
-            "Selected: Option B",
-            "/backups/restore",
-            "127.0.0.1",
-            "/usr/bin/osascript",
-            "sessionStorage",
-            "control_origin",
-            "atomic compare-and-consume",
-            "Mandatory concurrency model",
-            "worker quiescence",
-            "command_seq",
-            "consumes its command sequence",
-            "0700",
-            "prepare_restore_candidate",
-            "SourceIdentity",
-            "SHA-256",
-            "ordinary backend remains running",
-        ),
-    )
-
-    require_markers(
-        SLICE_PLAN,
-        (
-            "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-            "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-            "picker_unavailable",
-            "The browser may never provide source path",
-            "production product-browser launch URL remains unchanged in A2",
-            "A3 replaces the production `picker_unavailable` adapter",
-            "/backups/restore",
-            "C4-II-B — PLANNED — NOT AUTHORIZED",
-        ),
-    )
-
-    require_markers(
-        RESTORE_PROFILE,
-        (
-            "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-            "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-            "Restore control → launcher-owned 127.0.0.1:<ephemeral>",
-            "restore-validation",
-            "15-second heartbeat",
-            "60 seconds",
-            "command_seq",
-            "picker_unavailable",
-            "/usr/bin/osascript",
-            "/backups/restore",
-            "production product-browser launch URL remains unchanged",
-        ),
-    )
-
-    require_markers(
-        DEPLOYMENT,
-        (
-            "launcher-owned local control boundary",
-            "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-            "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-            "picker_unavailable",
-            "/usr/bin/osascript",
-            "C4-II-B — PLANNED — NOT AUTHORIZED",
-        ),
-    )
-
-    require_markers(
-        PACKAGING,
-        (
-            "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-            "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-            "picker_unavailable",
-            "/usr/bin/osascript",
-            "Mac App Store sandbox compatibility",
-            "C4-II-B destructive Restore remains not authorized",
-        ),
-    )
-
-    check_closed_a1_boundary()
-
+def check_history() -> None:
     for path in REQUIRED_HISTORY:
         if not path.is_file():
             fail(f"missing preserved history: {path.relative_to(ROOT)}")
@@ -420,9 +456,134 @@ def main() -> int:
         ):
             if unsafe in text:
                 fail(
-                    f"maintained historical guidance contains unsafe active-checkout restore recipe: "
-                    f"{path.relative_to(ROOT)}"
+                    "maintained historical guidance contains unsafe active-checkout "
+                    f"restore recipe: {path.relative_to(ROOT)}"
                 )
+
+
+def main() -> int:
+    profile = read(CURRENT_PROFILE)
+    for marker in CORE_CURRENT_MARKERS:
+        if not has_marker(profile, marker):
+            fail(f"current lifecycle profile is missing marker: {marker!r}")
+
+    for marker in (
+        "C4-II-A1 / PR #174",
+        "e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5",
+        "504e776508c940554b3ee8659a201af21db8303c",
+        "A1 closure / A2 authorization / PR #175",
+        "b1a48d8f668fa984e3032f85c226f77e30d92e4e",
+        "636645ece744752f6a753ae5a25a05297fd34e10",
+        "A2 implemented boundary — exact-run launcher control plane",
+        "UnavailableSourceSelectionAdapter",
+        "picker_unavailable",
+        "#cw-control",
+        "C4-II-B remains",
+    ):
+        if not has_marker(profile, marker):
+            fail(f"current lifecycle profile is missing A1/A2 marker: {marker!r}")
+
+    for path in COMPACT_ACTIVE_FILES:
+        text = read(path)
+        require_markers(path, CORE_CURRENT_MARKERS)
+        for phrase in STALE_ACTIVE_PHRASES:
+            if has_marker(text, phrase):
+                fail(f"stale pre-A2 phrase remains in {path.relative_to(ROOT)}: {phrase!r}")
+
+    decisions_agents = read(DECISIONS_AGENTS)
+    for marker in (
+        "scope and recency",
+        "ADR 0016 remains authoritative",
+        "ADR 0018 is newer for the exact CR-011 interaction/validation-session topic",
+        "does **not** amend ADR 0016",
+    ):
+        if not has_marker(decisions_agents, marker):
+            fail(f"docs/decisions/AGENTS.md is missing ADR authority marker: {marker!r}")
+
+    for path in (
+        ADR_0016,
+        ADR_0017,
+        ROOT / "docs/architecture.md",
+        ROOT / "docs/roadmap.md",
+        ROOT / "docs/backup-and-restore.md",
+    ):
+        relative = path.relative_to(ROOT).as_posix()
+        if relative not in profile:
+            fail(f"bounded superseded-status file is not mapped in current lifecycle: {relative}")
+
+    require_markers(
+        ADR_0018,
+        (
+            "Selected: Option B",
+            "127.0.0.1",
+            "atomic compare-and-consume",
+            "Mandatory concurrency model",
+            "worker quiescence",
+            "command_seq",
+            "consumes its command sequence",
+            "prepare_restore_candidate",
+            "/usr/bin/osascript",
+            "/backups/restore",
+            "sessionStorage",
+            "ordinary backend remains running",
+        ),
+    )
+    require_markers(
+        SLICE_PLAN,
+        (
+            "C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+            "ThreadingHTTPServer",
+            "picker_unavailable",
+            "request_id",
+            "command_seq",
+            "production product-browser launch URL remains unchanged in A2",
+            "A3 replaces the production `picker_unavailable` adapter",
+            "/backups/restore",
+            "C4-II-B — PLANNED — NOT AUTHORIZED",
+        ),
+    )
+    require_markers(
+        RESTORE_PROFILE,
+        (
+            "C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+            "ThreadingHTTPServer",
+            "Restore control → launcher-owned 127.0.0.1:<ephemeral>",
+            "15 seconds",
+            "60 seconds",
+            "command_seq",
+            "UnavailableSourceSelectionAdapter",
+            "picker_unavailable",
+            "/usr/bin/osascript",
+            "/backups/restore",
+            "production product-browser launch URL remains unchanged",
+        ),
+    )
+    require_markers(
+        DEPLOYMENT,
+        (
+            "C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+            "launcher-owned local control boundary",
+            "picker_unavailable",
+            "/usr/bin/osascript",
+            "#cw-control",
+            "C4-II-B — PLANNED — NOT AUTHORIZED",
+        ),
+    )
+    require_markers(
+        PACKAGING,
+        (
+            "C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+            "picker_unavailable",
+            "/usr/bin/osascript",
+            "#cw-control",
+            "Mac App Store sandbox compatibility",
+            "C4-II-B destructive Restore remains not authorized",
+        ),
+    )
+
+    check_closed_a1_boundary()
+    check_a2_control_boundary()
+    check_history()
 
     cr_text = read(CHANGE_REQUESTS)
     if "| CR-011 |" not in cr_text:
@@ -432,7 +593,7 @@ def main() -> int:
         "PR #173 is **not** a new architecture/change request",
         "A1 is **DONE — MERGED AND EXACT-HEAD VERIFIED**",
         "This post-A1 closure is not a new CR",
-        "A2 is **AUTHORIZED NEXT — NOT IMPLEMENTED**",
+        "A2 is now **IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED**",
         "C4-II-B remains **PLANNED — NOT AUTHORIZED**",
     ):
         if not has_marker(cr_text, marker):
@@ -448,12 +609,14 @@ def main() -> int:
     print(f"Checked {len(COMPACT_ACTIVE_FILES)} compact active files.")
     print(f"Verified {len(REQUIRED_HISTORY)} required history paths.")
     print(f"Verified {len(EXPECTED_HISTORY_BLOBS)} exact historical Git blob identities.")
-    print("Verified PR #174 merged / C4-II-A1 exact-head closure evidence.")
-    print("Verified C4-II-A1 is DONE and A2 is the only authorized next runtime slice.")
+    print("Verified PR #174 A1 closure and PR #175 A2 authorization baselines.")
+    print("Verified C4-II-A2 current-changeset status and A3/A4 successor gates.")
+    print("Verified A2 exact loopback/bootstrap/session/command-sequence boundary.")
     print("Verified A2 keeps picker_unavailable and no browser filesystem authority.")
-    print("Verified A2 does not perform production browser fragment handoff before A4.")
-    print("Verified A3/A4 predecessor gates and C4-II-B prohibition remain intact.")
-    print("Verified merged A1 production boundary remains non-destructive.")
+    print("Verified production browser navigation remains unchanged until A4.")
+    print("Verified launcher runtime owns control after backend proof and before backend stop.")
+    print("Verified merged A1 boundary remains non-destructive and reusable by A2.")
+    print("Verified C4-II-B remains separately not authorized.")
     print("Verified ADR 0016 / ADR 0018 durable authority remains unchanged.")
     print("Verified maintained historical guidance and exact snapshots remain protected.")
     return 0
