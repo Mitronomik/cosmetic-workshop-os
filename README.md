@@ -13,22 +13,25 @@ or a terminal.
 
 ## Current product status
 
-- C1 — completed.
-- C2 — completed.
-- C3 — completed, merged, exact-head verified, and hardened.
-- CR-010 — launcher-assisted Restore semantics accepted.
-- C4-I — launcher-owned Restore safety infrastructure merged and exact-head
-  verified in PR #170.
-- CR-011 — **authorized as a decision-only task and not yet decided**.
-- C4-II-A — planned, blocked by CR-011, and not authorized.
-- User-facing Restore — **not implemented**.
-- Product release readiness — **not claimed**.
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
+CR-010 — ACCEPTED
+C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
+Restore — NOT IMPLEMENTED
+Product release readiness — NOT CLAIMED
+```
 
 The repository intentionally does not embed a permanently changing current
 baseline SHA in this README.
 
-For the current implementation state and next authorized task, read in this
-order:
+For lifecycle and authorization, read in this order:
 
 1. [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
 2. [`docs/implementation-plan.md`](docs/implementation-plan.md)
@@ -37,7 +40,25 @@ order:
 5. [`state/handoff.md`](state/handoff.md)
 6. [`state/change-requests.md`](state/change-requests.md)
 
-The only authorized next task is the decision-only CR-011:
+## Current action while PR #171 is open
+
+PR #171 is the current documentation closure gate.
+
+```text
+finish independent audit
+→ correct every finding
+→ run documentation checks in a real checkout
+→ repeat exact-head read-only audit
+→ merge PR #171
+```
+
+Do not start CR-011 from the unmerged PR #171 branch.
+Do not create a dependent CR-011 branch from the PR #171 head.
+
+## Authorized successor after PR #171 merges
+
+After PR #171 is merged, update `main` and create a new branch from the merged
+`main`. Only then begin:
 
 ```text
 CR-011 — Decide the launcher Restore interaction and validation-session boundary.
@@ -48,15 +69,20 @@ C4-II-A remains planned, blocked by CR-011, and not authorized.
 
 ## Lifecycle consistency note
 
-`docs/architecture.md`, `docs/roadmap.md`, and `docs/backup-and-restore.md`
-contain valuable product, safety, and architecture detail, but also retain some
-dated branch-era C4 status paragraphs written before PR #170 merged. Their
-contracts remain valid; their stale lifecycle labels are explicitly superseded
-by:
+`docs/architecture.md`, `docs/roadmap.md`, `docs/backup-and-restore.md`, and the
+dated implementation-status blocks in ADR 0016 retain valuable product,
+safety, and architecture context but contain branch-era C4 lifecycle wording.
+
+Current lifecycle and authorization are governed by:
 
 - [`docs/current-lifecycle.md`](docs/current-lifecycle.md);
 - ADR 0017;
 - the active implementation plan.
+
+ADR 0016 remains authoritative for the launcher-assisted Restore product and
+safety decision, including its twelve-phase state machine and recovery contract.
+Only its dated implementation-status / authorization wording is superseded by
+ADR 0017 after PR #170 merged.
 
 No agent may reopen C4-I or authorize C4-II runtime work from a historical status
 sentence.
@@ -71,7 +97,7 @@ sentence.
   [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
 - Accepted launcher-assisted Restore safety contract:
   [`docs/decisions/0016-launcher-assisted-restore.md`](docs/decisions/0016-launcher-assisted-restore.md)
-- Concise implementation and six-round audit history:
+- C4-I implementation and six-round audit history:
   [`docs/history/c4-i-implementation-and-audit-history.md`](docs/history/c4-i-implementation-and-audit-history.md)
 - Project timeline and exact pre-compaction snapshots:
   [`docs/history/README.md`](docs/history/README.md)
@@ -93,12 +119,12 @@ work begins.
 ### Product and architecture
 
 - [`AGENTS.md`](AGENTS.md) — main Codex contract
-- [`docs/current-lifecycle.md`](docs/current-lifecycle.md) — current lifecycle
-  authority and explicit supersession map
+- [`docs/current-lifecycle.md`](docs/current-lifecycle.md) — lifecycle authority
+  and supersession map
 - [`docs/product-spec.md`](docs/product-spec.md) — product specification
 - [`docs/architecture.md`](docs/architecture.md) — architecture contract
 - [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
-  — current normative C4 interaction/validation-session profile
+  — current C4 interaction/validation-session profile
 - [`docs/domain-model.md`](docs/domain-model.md) — domain model
 - [`docs/roadmap.md`](docs/roadmap.md) — strategic roadmap
 - [`docs/implementation-plan.md`](docs/implementation-plan.md) — active
@@ -130,10 +156,8 @@ work begins.
 - [`state/current-focus.md`](state/current-focus.md) — current task
 - [`state/progress.md`](state/progress.md) — current progress
 - [`state/handoff.md`](state/handoff.md) — cross-session handoff
-- [`state/change-requests.md`](state/change-requests.md) — compact current CR
-  ledger with durable decision links
-- [`docs/history/README.md`](docs/history/README.md) — searchable historical
-  index and exact pre-compaction snapshots
+- [`state/change-requests.md`](state/change-requests.md) — compact current CR ledger
+- [`docs/history/README.md`](docs/history/README.md) — searchable history index
 
 ## Architectural invariants
 
@@ -154,7 +178,7 @@ Every change must preserve:
 - no silent expansion into cloud sync, OCR, full accounting, roles,
   multi-user operation, or advanced analytics in the MVP.
 
-## Restore boundary until CR-011
+## Restore boundary until CR-011 is accepted
 
 No agent may add, by assumption:
 
@@ -168,7 +192,7 @@ No agent may add, by assumption:
 - an absolute selected-source path in ordinary browser state;
 - hidden Restore packaging work.
 
-The next accepted decision must select one concrete interaction architecture and
+The later CR-011 decision must select one concrete interaction architecture and
 define the launcher-owned non-destructive validation-session boundary before
 C4-II-A can be authorized.
 
