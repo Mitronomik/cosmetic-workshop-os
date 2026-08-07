@@ -17,6 +17,7 @@ CURRENT_PROFILE = ROOT / "docs/current-lifecycle.md"
 DECISIONS_AGENTS = ROOT / "docs/decisions/AGENTS.md"
 HISTORY_AGENTS = ROOT / "docs/history/AGENTS.md"
 ADR_0016 = ROOT / "docs/decisions/0016-launcher-assisted-restore.md"
+ADR_0017 = ROOT / "docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md"
 ADR_0018 = ROOT / "docs/decisions/0018-launcher-restore-interaction-and-validation-session.md"
 RESTORE_PROFILE = ROOT / "docs/restore-interaction-and-validation-session.md"
 CHANGE_REQUESTS = ROOT / "state/change-requests.md"
@@ -34,6 +35,7 @@ COMPACT_ACTIVE_FILES = (
 
 SUPERSEDED_STATUS_FILES = (
     ADR_0016,
+    ADR_0017,
     ROOT / "docs/architecture.md",
     ROOT / "docs/roadmap.md",
     ROOT / "docs/backup-and-restore.md",
@@ -75,8 +77,10 @@ CORE_CURRENT_MARKERS = (
 
 PROFILE_ONLY_MARKERS = (
     "docs/decisions/0016-launcher-assisted-restore.md",
+    "docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md",
     "ADR 0017",
     "ADR 0018",
+    "supersedes ADR 0017 only where ADR 0017 says CR-011 is still undecided",
     "launcher-owned loopback control plane",
     "/usr/bin/osascript",
     "Do not implement C4-II-A on this branch.",
@@ -212,6 +216,17 @@ def main() -> int:
         if "supersession remains bounded to lifecycle metadata only" not in profile_folded:
             fail("ADR 0016 lifecycle supersession is not explicitly bounded")
 
+    # ADR 0017 intentionally remains accepted history for C4-I closure but its
+    # pre-decision CR-011 status must now be explicitly bounded below ADR 0018.
+    adr_0017_text = read(ADR_0017)
+    if "CR-011" in adr_0017_text and "NOT DECIDED" in adr_0017_text:
+        if "docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md" not in profile:
+            fail("ADR 0017 has pre-decision CR-011 status but is absent from supersession map")
+        if "ADR 0017 supersession is likewise bounded" not in profile:
+            fail("ADR 0017 CR-011 supersession is not explicitly bounded")
+        if "ADR 0017's C4-I closure facts" not in profile:
+            fail("current lifecycle does not preserve ADR 0017 C4-I closure authority")
+
     for path in SUPERSEDED_STATUS_FILES:
         relative = path.relative_to(ROOT).as_posix()
         if relative not in profile:
@@ -297,6 +312,7 @@ def main() -> int:
     print(f"Verified {len(REQUIRED_HISTORY)} required history paths.")
     print(f"Verified {len(EXPECTED_HISTORY_BLOBS)} exact historical Git blob identities.")
     print("Verified ADR 0016 / ADR 0017 / ADR 0018 scope-and-recency authority.")
+    print("Verified bounded ADR 0017 pre-decision CR-011 supersession.")
     print("Verified CR-011 selected loopback-control/picker/validation architecture.")
     print("Verified C4-II-A remains separately not authorized.")
     print("Verified maintained historical guidance contains no executable old-commit restore recipe.")
