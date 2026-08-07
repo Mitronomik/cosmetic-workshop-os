@@ -3,68 +3,55 @@
 Status: **CURRENT — NORMATIVE LIFECYCLE PROFILE**
 Updated: `2026-08-07`
 
-This document is the single compact authority for current implementation
-lifecycle statements while older large documents are being incrementally
-synchronized. It does not replace their product, domain, API, safety, or
-architecture contracts.
+This document is the compact authority for current implementation lifecycle,
+authorization and PR sequencing. It does not replace durable product, domain,
+API, safety or architecture contracts.
 
 ## Authority order
 
-Authority is evaluated by **scope and recency**, not by treating every accepted
-ADR as globally newer than every lifecycle document.
-
-When lifecycle or authorization wording conflicts, use this order:
+Resolve conflicts by **scope and recency**:
 
 1. `AGENTS.md` and applicable nested `AGENTS.md` files;
-2. the newest accepted ADR that explicitly supersedes or amends an older
-   decision for the exact topic in conflict;
-3. this current lifecycle profile for current implementation status,
-   authorization, and PR sequencing;
-4. accepted ADRs for their durable product, safety, state-machine, and
-   architecture decisions when those decisions have not been superseded;
+2. the newest accepted ADR that explicitly supersedes or amends the exact topic;
+3. this file for current lifecycle, authorization and PR sequencing;
+4. accepted ADRs for durable product/safety/state-machine/architecture semantics
+   that have not been superseded;
 5. current normative architecture/profile documents;
 6. `docs/implementation-plan.md`;
 7. active `state/` files;
-8. strategic or large reference documents;
+8. strategic/large reference documents;
 9. `docs/history/` evidence.
 
-For Restore specifically:
+For Restore:
 
-- ADR 0016 remains authoritative for the accepted launcher-assisted Restore
-  product and safety contract;
-- ADR 0017 is the newer accepted lifecycle-closure decision and supersedes only
-  dated C4 implementation-status / authorization wording in ADR 0016;
-- ADR 0017 does **not** amend the twelve phases, transition graph, startup
-  recovery matrix, `replacement_intent` rule, launcher ownership, immutable
-  source rule, mandatory safety copy, or AuditLog boundary accepted by ADR 0016.
+- ADR 0016 remains authoritative for the launcher-assisted Restore product and
+  safety contract, twelve phases, transition graph, startup recovery matrix,
+  `replacement_intent`, destructive launcher ownership, immutable source,
+  mandatory `before_restore` safety copy and AuditLog boundary;
+- ADR 0017 closes C4-I lifecycle and supersedes only dated C4 implementation
+  status/authorization wording in ADR 0016;
+- ADR 0018 decides CR-011 interaction architecture: a narrowly authenticated
+  launcher-owned loopback control plane, launcher-owned macOS picker, exact-run
+  browser session and non-destructive validation-session boundary;
+- ADR 0018 does not amend ADR 0016 safety semantics and does not authorize
+  C4-II-A runtime work by itself.
 
 Historical evidence never authorizes runtime work.
 
 ## Current lifecycle
 
 ```text
+PR #171 — MERGED
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
-
 CR-010 — ACCEPTED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-
-CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
-CR-011 scope — Launcher Restore interaction and validation-session boundary
-
-C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
-C4-II-A scope — Launcher Restore source selection and validation presentation
-
+CR-011 — DECIDED — ADR 0018 ACCEPTED — NORMATIVE ON MAIN
+C4-II-A — PLANNED — NOT AUTHORIZED
 C4-II-B — PLANNED — NOT AUTHORIZED
-C4-II-B scope — Explicit confirmation and Restore execution
-
 C4-II-C — PLANNED — NOT AUTHORIZED
-C4-II-C scope — Completion, rollback and support-assisted outcome UX
-
 C4-III — PLANNED — NOT AUTHORIZED
-C4-III scope — Restore end-to-end verification and lifecycle closure
-
 C4 — ACTIVE
 Restore — NOT IMPLEMENTED
 macOS packaging — NOT COMPLETED
@@ -74,80 +61,121 @@ full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-## Verified C4-I merge facts
+On a CR-011 pull-request branch, ADR 0018 is the decided changeset but becomes
+normative only when that changeset is present on `main`. No successor runtime
+work may be based on the unmerged decision branch.
+
+## Verified merge baselines
+
+### C4-I / PR #170
 
 | Item | Value |
 |---|---|
-| Pull request | `#170 — C4-I — Implement launcher-owned Restore safety engine` |
-| Final independently reviewed and exact-head-tested head | `ac95e2990efa979b3ded6cb48f91ddd0750aa7c8` |
-| Merge commit on `main` | `e6997281d2e0268ce54184d988c114bac71c35e2` |
+| Final independently reviewed head | `ac95e2990efa979b3ded6cb48f91ddd0750aa7c8` |
+| Merge commit | `e6997281d2e0268ce54184d988c114bac71c35e2` |
 | Merged at | `2026-08-03T16:12:23Z` |
-| Additional file changes introduced by merge commit | none |
 
-C4-I is internal launcher infrastructure. It does not provide the product file
-picker, validation screen, destructive confirmation, Restore execution UX,
-terminal outcome UX, ordinary FastAPI Restore endpoint, or ordinary SPA Restore
-mutation.
+### Project-memory closure / PR #171
 
-## PR #171 closure gate
+| Item | Value |
+|---|---|
+| Final reviewed head | `4978aa9a7c05117011eae1bc00276d5f98378d9b` |
+| Merge commit | `76ab59216047222714a32f2793a789b3dc8df19a` |
+| Merged at | `2026-08-07T11:23:42Z` |
 
-While PR #171 is still open and unmerged, the current action is **not CR-011**.
-The only permitted work on the PR #171 branch is to close PR #171 itself:
+PR #171 preserved searchable project memory, exact historical snapshots and the
+CR-011 decision gate. It changed no runtime path.
 
-```text
-finish the independent documentation/architecture audit
-→ correct every finding
-→ run the required documentation checks in a real checkout
-→ repeat the exact-head read-only gate
-→ merge PR #171
-```
+## CR-011 decision
 
-Do not start CR-011 from the unmerged PR #171 branch.
-Do not create a dependent CR-011 branch from the PR #171 head.
-
-## Only authorized successor after PR #171 merges
-
-After PR #171 is merged, update local `main` and create a new branch from that
-merged `main`. Only then begin:
+ADR 0018 selects one architecture:
 
 ```text
-CR-011 — Decide the launcher Restore interaction and validation-session boundary.
-Decision-only. No runtime implementation is authorized.
+ordinary browser presentation
+→ authenticated launcher-owned HTTP control plane on 127.0.0.1:<ephemeral>
+→ launcher-owned macOS picker
+→ launcher-owned non-destructive validation session
+→ existing C4-I intake/staging/validation semantics
 ```
 
-CR-011 must choose one concrete architecture for:
+Key constraints:
 
-- screen location and owning process;
-- native macOS picker ownership;
-- any browser-to-launcher command path;
-- exact-run authentication, origin, replay, stale-session, and duplicate-action
-  protection;
-- absolute-path privacy;
-- backend lifecycle during selection and validation;
-- dependencies and packaging consequences;
-- cancellation, reselection, shutdown, interrupted-session cleanup, and
-  exact-head smoke;
-- the launcher-owned non-destructive candidate-preparation boundary.
+- control plane is separate from the ordinary FastAPI business API;
+- no WebSocket or generic localhost command server;
+- one exact frontend Origin; no wildcard CORS;
+- one-use bootstrap capability enters through URL fragment, then is removed;
+- run-scoped browser token is session-only and never durable;
+- absolute selected-source path remains launcher-private;
+- native picker is an owned `/usr/bin/osascript` child using Standard Additions
+  `choose file`; no new application dependency is authorized;
+- ordinary backend remains running during non-destructive C4-II-A validation;
+- validation must reuse C4-I source intake, held-descriptor stability proof,
+  staging and candidate validation;
+- successful validation retains launcher-private source identity + SHA-256 proof,
+  not a browser authority token;
+- future C4-II-B must reopen, re-prove, restage and revalidate before destructive
+  execution;
+- temporary validation scratch is not a Restore operation and may never enter a
+  durable Restore phase.
 
-Current normative C4 references:
+Normative decision:
 
-- `docs/decisions/0016-launcher-assisted-restore.md`;
-- `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`;
-- `docs/restore-interaction-and-validation-session.md`;
-- `docs/implementation-plan.md`.
+- `docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`.
+
+Normative profile:
+
+- `docs/restore-interaction-and-validation-session.md`.
+
+## Current task and successor gate
+
+The current CR-011 changeset is documentation/architecture only.
+
+Before it may merge:
+
+```text
+finish documentation synchronization
+→ run git diff --check
+→ run scripts/check_documentation_lifecycle.py
+→ run any repository-defined docs/link checker
+→ verify no backend/frontend/launcher runtime path changed
+→ perform a fresh independent exact-head architecture audit
+→ resolve every P0/P1/P2 finding
+→ merge the CR-011 decision PR
+```
+
+Do not implement C4-II-A on this branch.
+
+After the CR-011 decision is merged to `main`, prepare a **separate bounded
+lifecycle/implementation task** to authorize C4-II-A. ADR 0018 itself does not
+authorize runtime implementation.
+
+## C4-II-A remains not authorized
+
+No agent may yet implement:
+
+- Restore frontend controls or route behavior;
+- launcher control-plane runtime code;
+- native picker runtime code;
+- `prepare_restore_candidate(...)` runtime service;
+- validation scratch cleanup runtime code;
+- C4-II-B destructive confirmation/execution;
+- C4-II-C result UX;
+- C4-III end-to-end closure;
+- a new dependency or packaging implementation for Restore.
+
+The next task must explicitly authorize a bounded C4-II-A implementation scope.
 
 ## Superseded lifecycle locations
 
-The following documents retain valuable product, safety, architecture, and
-historical context but contain dated branch-era C4 lifecycle/status wording:
+These files retain valuable durable context but may contain older branch-era C4
+status wording:
 
 - `docs/decisions/0016-launcher-assisted-restore.md`;
 - `docs/architecture.md`;
 - `docs/roadmap.md`;
 - `docs/backup-and-restore.md`.
 
-Within those files, statements equivalent to any of the following are
-**historical and superseded by ADR 0017 and this lifecycle profile**:
+Statements equivalent to these are historical/superseded as current lifecycle:
 
 ```text
 C4-I — IMPLEMENTED ON PR BRANCH — NOT MERGED
@@ -155,19 +183,19 @@ C4-I — IMPLEMENTED ON PR BRANCH — SIXTH CORRECTION APPLIED — NOT MERGED
 C4 implementation — NOT STARTED
 C4-I — AUTHORIZED — NOT IMPLEMENTED
 C4-I is implemented on a pull-request branch and not merged
+CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
 ```
 
-For ADR 0016 this supersession applies **only** to dated implementation lifecycle
-and authorization labels. Its accepted Restore product, safety, state-machine,
-and recovery semantics remain authoritative unless a later accepted ADR changes
-them explicitly.
+ADR 0016 supersession remains bounded to lifecycle metadata only. Its durable
+Restore safety/state-machine contract remains authoritative.
 
-No agent may use a superseded status sentence to reopen C4-I, repeat PR #170,
-or authorize C4-II runtime work.
+ADR 0017 remains authoritative for C4-I lifecycle closure, but ADR 0018 is newer
+for the exact CR-011 interaction/validation-session topic.
 
 ## Project history
 
-Searchable history is retained in the current repository tree:
+Searchable history remains in the repository tree:
 
 - `docs/history/README.md`;
 - `docs/history/project-timeline-through-pr170.md`;
@@ -176,35 +204,34 @@ Searchable history is retained in the current repository tree:
 - `docs/history/state-snapshots/2026-08-06-c4-i-closure/`;
 - `docs/history/change-requests/2026-08-06-pre-compaction.md`.
 
-These files are non-normative evidence. They preserve the reasons, audit rounds,
-known limitations, exact test evidence, slice contracts, and branch-era state
-without polluting the active short-horizon documents.
+These records are non-normative evidence. Exact pre-compaction snapshots must
+remain byte-identical.
 
-Historical commands are not automatically safe operational instructions. For
-read-only Git archaeology, use the safe guidance in `docs/history/README.md` and
+Historical commands are not automatically safe operational instructions. Use the
+read-only archaeology guidance in `docs/history/README.md` and
 `docs/history/AGENTS.md`.
 
 ## Documentation consistency check
 
-Run from the repository root:
+Run from repository root:
 
 ```bash
 python3 scripts/check_documentation_lifecycle.py
 ```
 
-The check must verify:
+The checker must verify at least:
 
-- current lifecycle markers across compact active control files;
-- explicit PR #171 → merged `main` → CR-011 sequencing;
-- CR-011 ledger state;
-- preserved history paths and expected Git blob identities;
-- explicit supersession of dated C4 lifecycle wording, including ADR 0016;
-- absence of unsafe `git restore --source=` guidance from maintained historical
-  guidance files.
+- post-PR-171 / CR-011 lifecycle markers across compact active files;
+- ADR 0016 / 0017 / 0018 scope-and-recency authority;
+- ADR 0018 selected architecture markers;
+- C4-II-A remains not authorized;
+- required history paths and five exact historical Git blob identities;
+- no stale pre-merge PR #171 action remains in compact active files;
+- no unsafe executable historical `git restore --source=<old-commit>` guidance.
 
 ## Maintenance rule
 
-A future lifecycle change must update, in the same documentation PR:
+A future lifecycle change must update, in the same bounded PR:
 
 - this file;
 - `README.md`;
@@ -213,9 +240,8 @@ A future lifecycle change must update, in the same documentation PR:
 - `state/progress.md`;
 - `state/handoff.md`;
 - `state/change-requests.md` when a CR changes;
-- every active status surface whose current-status section would otherwise
-  contradict the new lifecycle, or this explicit supersession map until that
-  focused synchronization is completed.
+- every active status surface that would otherwise contradict the new lifecycle,
+  or an explicit bounded supersession map.
 
 Do not delete searchable historical records merely because Git can recover an
 old commit.
