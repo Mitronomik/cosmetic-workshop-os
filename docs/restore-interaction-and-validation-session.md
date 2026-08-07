@@ -1,248 +1,371 @@
 # Restore interaction and non-destructive validation-session profile
 
-Status: **NORMATIVE PROFILE — CR-011 DECISION GATE**
-Updated: `2026-08-06`
+Status: **NORMATIVE PROFILE — ADR 0018 / CR-011**
+Updated: `2026-08-07`
 
-This profile extends the Restore architecture described by:
+Normative sources:
 
-- `docs/architecture.md`;
-- `docs/backup-and-restore.md`;
-- `docs/decisions/0016-launcher-assisted-restore.md`;
-- `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`.
+- `docs/decisions/0016-launcher-assisted-restore.md` — durable Restore safety and
+  twelve-phase state machine;
+- `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md` — C4-I
+  lifecycle closure and CR-011 authorization;
+- `docs/decisions/0018-launcher-restore-interaction-and-validation-session.md` —
+  selected CR-011 interaction architecture;
+- `docs/current-lifecycle.md` — current authorization and sequencing.
 
-Where an older branch-era lifecycle statement in `docs/architecture.md` or
-`docs/backup-and-restore.md` describes C4-I as unmerged or C4-II as one undivided
-slice, the current lifecycle in ADR 0017 and this profile governs. The twelve
-phases, transition graph, recovery matrix, immutable-source rule, mandatory
-safety copy, launcher ownership, and AuditLog boundary remain governed by ADR
-0016 and are not changed here.
+ADR 0018 does not amend ADR 0016 safety semantics.
 
 ## Current lifecycle
 
 ```text
-CR-010 — ACCEPTED
+PR #171 — MERGED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-
-CR-011 — Launcher Restore interaction and validation-session boundary
-— AUTHORIZED — DECISION ONLY — NOT DECIDED
-
-C4-II-A — Launcher Restore source selection and validation presentation
-— PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
-
-C4-II-B — Explicit confirmation and Restore execution
-— PLANNED — NOT AUTHORIZED
-
-C4-II-C — Completion, rollback and support-assisted outcome UX
-— PLANNED — NOT AUTHORIZED
-
-C4-III — Restore end-to-end verification and lifecycle closure
-— PLANNED — NOT AUTHORIZED
-
+CR-011 — DECIDED — ADR 0018 ACCEPTED — NORMATIVE ON MAIN
+C4-II-A — PLANNED — NOT AUTHORIZED
+C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Existing implementation boundary
+On a CR-011 PR branch the decision is a changeset proposal; it becomes normative
+only when present on `main`. C4-II-A is not authorized by this profile.
 
-The launcher currently opens the ordinary system browser through
-`webbrowser.open(...)`.
+## Selected interaction architecture
 
-The ordinary browser UI currently has no accepted command channel through which
-it can ask the launcher to open a native macOS file picker or begin
-launcher-owned source validation.
+CR-011 selects a **narrowly authenticated launcher-owned loopback control
+plane**.
 
-The public C4-I package currently exposes destructive Restore execution and
-startup recovery entry points. It does not expose a dedicated public
-non-destructive candidate-preparation session.
+```text
+ordinary browser / SPA
+  ├── business API ──→ ordinary FastAPI backend
+  └── Restore control ──→ launcher control plane
+                           127.0.0.1:<ephemeral>
+                                  ↓
+                           launcher-owned picker
+                                  ↓
+                      launcher validation session
+                                  ↓
+                    C4-I intake/staging/validation
+```
 
-These are architecture and security decisions. They are not implementation
-details that C4-II-A may choose implicitly.
+The control plane is not an ordinary backend route and is not a generic local
+command server.
 
-## CR-011 decision requirements
+No WebSocket is selected. No new application dependency is authorized.
 
-Before any C4-II runtime work is authorized, CR-011 must select one concrete
-architecture and decide:
+## Browser bootstrap contract
 
-1. where the user-facing C4-II-A screen lives;
-2. which process owns the screen;
-3. which process opens the native macOS file picker;
-4. how a browser action, if any, reaches the launcher;
-5. whether an absolute source path ever leaves launcher-owned state;
-6. whether the ordinary backend remains running during selection and validation;
-7. how the channel is bound to the exact local launcher run;
-8. origin, token, replay, stale-session, and duplicate-action protection;
-9. allowed dependencies;
-10. required packaging changes and explicitly deferred packaging work;
-11. the non-technical packaged user entry path;
-12. cancellation, reselection, launcher-exit, and interrupted-session cleanup;
-13. isolated exact-head smoke for the selected architecture.
+Future C4-II-A must implement these properties:
 
-The decision may compare a launcher-native pre-start Restore flow and a narrowly
-authenticated launcher-owned loopback control plane. It must choose one; it may
-not leave incompatible alternatives equally authorized.
+1. launcher binds control plane to exactly `127.0.0.1` on an OS-assigned
+   ephemeral port;
+2. launcher creates one opaque run ID and a one-use random bootstrap token with
+   at least 256 bits of entropy;
+3. launcher opens the browser with the control port + bootstrap token in the URL
+   **fragment**, never query parameters;
+4. the frontend exchanges that capability with `POST /v1/bootstrap`;
+5. the control plane accepts only the exact configured local frontend Origin;
+6. bootstrap token is invalidated after the first successful exchange;
+7. frontend removes the bootstrap fragment immediately;
+8. control plane returns a second random run-scoped session token;
+9. frontend stores that session token only in `sessionStorage`, never
+   `localStorage`;
+10. session token is sent only in an explicit authorization header;
+11. all tokens are invalidated on launcher exit/restart and are never persisted or
+    logged.
 
-## Prohibited implementation by assumption
+CORS must use one exact origin. Wildcard CORS and credentialed cookie sessions are
+forbidden.
 
-Before CR-011 is accepted, the following are not authorized:
+For user mode, the frontend origin must be local HTTP on `127.0.0.1` with the
+configured frontend port. A different origin is refused instead of being added
+dynamically.
 
-- an ordinary FastAPI Restore endpoint;
-- SPA-owned filesystem access;
-- browser upload or blob transfer as the authoritative Restore source;
-- reliance on `<input type="file">` for an absolute local path;
-- a generic unauthenticated localhost endpoint;
-- wildcard CORS;
-- a WebSocket or IPC channel invented only in runtime code;
-- pywebview, Electron, Tauri, PyObjC, tkinter, AppleScript, a custom URL scheme,
-  or another native-shell technology;
-- a dependency not named by the accepted decision;
-- packaging changes hidden inside C4-II-A;
-- an absolute selected-source path in ordinary browser presentation state;
-- a user workflow that falls back to GitHub, Git, Python, Node.js, Docker,
-  SQLite tools, or a terminal.
+## Browser liveness
+
+While a Restore control session is active:
+
+- browser heartbeat interval: 15 seconds;
+- session expires after 60 seconds without an authenticated heartbeat or other
+  authenticated control request.
+
+Expiry must:
+
+- invalidate the run-scoped browser token;
+- invalidate the active selection generation;
+- prevent stale result publication;
+- terminate an owned picker child when needed;
+- clean only owned validation scratch;
+- leave ordinary backend/workshop data unchanged.
+
+A browser reload may recover through `sessionStorage` + `GET /v1/state`.
+Closing the browser/tab must never authorize any destructive action.
+
+## Narrow control vocabulary
+
+C4-II-A may expose only an equivalent of:
+
+```text
+POST /v1/bootstrap
+GET  /v1/state
+POST /v1/heartbeat
+POST /v1/restore/select
+POST /v1/restore/cancel
+```
+
+No destructive execute/confirm endpoint belongs in C4-II-A.
+
+No arbitrary filesystem, shell, SQL, proxy or generic launcher command endpoint
+is allowed.
+
+## Request replay and duplicate protection
+
+Every authenticated non-read command carries a cryptographically strong request
+ID.
+
+The launcher keeps a bounded per-run replay/idempotency ledger:
+
+- same request ID never performs the action twice;
+- duplicate completed request yields the same safe result/reference;
+- duplicate in-progress request does not create second ownership;
+- a new `select` while another picker/validation action owns the session is
+  rejected as action-in-progress;
+- accepted select/cancel/reselect increments a monotonically increasing selection
+  generation;
+- a result may publish only if its captured generation is still current;
+- cancellation/reselection invalidates older generations before cleanup.
+
+## Native macOS picker
+
+The launcher owns picker authority.
+
+Future adapter:
+
+```text
+launcher
+→ owned short-lived /usr/bin/osascript child
+→ macOS Standard Additions `choose file`
+→ POSIX selected path returned only to launcher
+```
+
+Requirements:
+
+- no `shell=True`;
+- no user-controlled text interpolated into executable AppleScript;
+- no `System Events` automation of another application;
+- cancellation is a typed ordinary cancel result;
+- no absolute path is returned to browser or ordinary backend;
+- filename/type filters are presentation hints only and never acceptance proof.
+
+CR-011 authorizes no PyObjC, Electron, Tauri, pywebview, tkinter or other new
+runtime dependency.
+
+Mac App Store sandbox compatibility is not claimed. A future sandboxed packaging
+decision may replace the picker adapter while preserving launcher ownership and
+path privacy.
 
 ## Mandatory non-destructive application boundary
 
-Future C4-II-A must use one launcher-owned application service conceptually
-represented as:
+Future C4-II-A must implement one launcher-owned service conceptually equivalent
+to:
 
 ```text
 prepare_restore_candidate(...)
 ```
 
-The exact code name is not fixed by this profile. The semantics are mandatory.
+It must:
 
-The service must:
-
-- be owned by the launcher/application shell;
 - never call `execute_restore(...)`;
 - create no durable Restore operation record;
 - enter none of the twelve durable Restore phases;
 - create no `before_restore` safety copy;
 - replace no working database;
 - migrate no working database;
-- perform no rollback or startup-recovery mutation;
+- perform no rollback/startup-recovery mutation;
 - write no Restore AuditLog event;
-- leave the selected source immutable and byte-identical;
-- use isolated temporary staging distinct from a durable Restore operation
-  workspace;
-- reuse the accepted C4-I source intake, sidecar checks, held-descriptor staging,
-  stability proof, schema-lineage checks, and candidate-validation rules;
-- return typed presentation results;
-- map rejection to fixed non-technical user-facing categories;
-- keep raw SQLite errors, stack traces, migration IDs, internal absolute paths,
-  and verifier details in local technical logs only;
-- expose only an opaque validation-session identity outside launcher-owned state;
-- use a monotonically changing selection generation or equivalent stale-result
-  protection;
-- invalidate earlier results on cancellation and reselection;
-- reject duplicate ownership/actions;
-- clean temporary artifacts after cancellation, reselection, rejection,
-  technical failure, and launcher shutdown;
-- provide bounded cleanup after an interrupted validation session;
-- give the browser no authority over the selected-source path;
-- forbid UI compatibility inference from filename or extension;
-- never produce a durable result or message equivalent to Restore completion.
+- leave the original selected source byte-identical;
+- use isolated temporary validation scratch outside durable Restore operation
+  workspaces;
+- reuse accepted C4-I source intake, sidecar checks, held-descriptor identity,
+  full digest stability proof, staging and candidate validation;
+- return typed presentation-safe results only;
+- keep raw SQLite errors, stack traces, migration IDs and internal paths in local
+  technical logs only;
+- expose opaque run/session/generation identities only;
+- clean owned scratch on cancel/reselect/rejection/failure/shutdown;
+- provide bounded next-run cleanup after interruption;
+- never claim Restore completed.
 
-## Typed presentation result
+If `stage_source(...)` is too coupled to `RestoreWorkspace`, C4-II-A may make a
+bounded shared-primitive refactor, but must preserve the existing C4-I algorithm
+and tests. A second weaker staging/validation implementation is forbidden.
 
-The future result may expose only human-safe information that the launcher can
-prove, such as:
+## Validation scratch
 
-- an opaque session identifier;
-- current selection generation;
-- safe display label without an authoritative absolute path;
-- validation state;
-- current-schema compatibility;
-- older-supported-schema compatibility for later execution;
+Use a canonical launcher-owned root under the current user's system temp area,
+conceptually:
+
+```text
+<system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<session-id>/
+```
+
+Rules:
+
+- no user-provided path component;
+- opaque random run/session identifiers;
+- no symlink traversal;
+- ownership/version marker sufficient to prove cleanup ownership;
+- cleanup refuses paths outside the canonical root;
+- scratch never appears as a durable Restore operation;
+- next-run cleanup removes only recognized owned session directories.
+
+## Typed browser-visible result
+
+Allowed presentation facts include:
+
+- opaque run/session identity;
+- selection generation;
+- safe display filename/label;
+- state: idle/selecting/validating/accepted/rejected/cancelled/technical failure;
+- current-schema or older-supported-schema compatibility;
 - fixed rejection category;
-- fixed user guidance;
-- whether the current result is stale or cancelled.
+- fixed human guidance;
+- stale/cancelled flag.
 
-It must not expose raw SQL, migration IDs, operation-record contents, stack
-traces, SQLite errors, arbitrary absolute paths, or database contents.
+Forbidden browser-visible data:
 
-## Session identity is not authority
+- absolute source path;
+- staged candidate path;
+- raw SQLite/SQL text;
+- migration IDs;
+- operation-record contents;
+- stack traces;
+- arbitrary database contents.
 
-An opaque validation-session token is only a reference to launcher-owned state.
-It is not proof that the original source or retained candidate remains valid.
+A displayed filename is not compatibility proof.
 
-Future C4-II-B must not trust an old browser result. Before any destructive
-execution, it must re-prove either:
+## Retained launcher-private proof
 
-- the immutable original selected source; or
-- an explicitly retained launcher-owned staged candidate.
+After successful validation, delete the temporary staged candidate.
 
-The accepted CR-011 architecture must decide which identity is retained and how
-it is re-proved. Filename, extension, browser state, and token possession are not
-sufficient authority.
+For the current launcher run, retain in launcher memory only:
 
-## Source, staging, and cleanup ownership
+- canonical absolute source path;
+- C4-I `SourceIdentity` facts;
+- full SHA-256 digest from the held descriptor;
+- successful selection generation;
+- typed compatibility result.
 
-The selected source remains read-only input and must never be renamed, migrated,
-deleted, rewritten, checkpointed, or repaired.
+The browser session token references this state but is not authority.
 
-Validation staging is temporary and is not a durable Restore operation. It must
-use a launcher-owned directory with ownership rules that prevent path escape,
-symlink traversal, accidental cleanup of foreign files, and reuse of stale state.
+Future C4-II-B must, before destructive execution:
 
-Cancellation or reselection must invalidate the prior generation before a later
-result can become current. Cleanup must remove only artifacts whose ownership can
-be proved.
+```text
+reopen original launcher-private path through C4-I intake
+→ compare descriptor/path identity
+→ recompute and compare full SHA-256
+→ re-check sidecars/self-containment
+→ stage again through C4-I semantics
+→ validate again
+→ only then enter existing C4-I destructive execution boundary
+```
 
-After a hard interruption, the next launcher run may perform bounded cleanup of
-recognized validation-session scratch state. It must not treat that scratch as a
-Restore operation, enter a Restore phase, alter the working database, or infer
-that destructive Restore began.
+Any mismatch invalidates the prior validation and returns to source selection.
+Filename, extension, browser state or token possession cannot bypass re-proof.
 
-## Backend and browser boundaries
+## Backend lifecycle
 
-No ordinary FastAPI Restore mutation endpoint is authorized.
+The ordinary backend remains running during:
 
-If CR-011 later selects a launcher-owned loopback control plane, it must be a
-separate local control boundary, not an ordinary business API route. The decision
-must define binding address, exact-run token creation and lifetime, allowed
-origin, request vocabulary, replay protection, cancellation semantics, process
-ownership, shutdown, and tests. A generic localhost endpoint is not acceptable.
+- native file selection;
+- source intake;
+- temporary staging;
+- candidate validation;
+- validation-result presentation.
 
-The browser is a presentation client only. It may display typed launcher-owned
-results and issue only commands authorized by the selected control architecture.
-It does not own source paths, SQLite validation, staging, migration analysis,
-working-database replacement, locks, safety-copy creation, rollback, or recovery.
+This is intentional because C4-II-A is non-destructive and works only on the
+selected source + isolated staged copy. It must not acquire destructive authority
+merely because validation is occurring.
 
-## Future C4-II-A minimum tests
+Future C4-II-B remains responsible for the existing C4-I backend stop/exclusion
+proof before destructive replacement.
 
-The eventual runtime slice must prove at least:
+## Cleanup matrix
 
-1. cancellation creates no durable Restore operation and changes no data;
-2. a valid current-schema application backup is accepted;
-3. a valid older supported backup is accepted for later execution;
-4. newer, foreign, empty, corrupt, directory, symlink, and path-escape inputs are
-   rejected;
-5. the original selected source remains byte-identical on every path;
-6. no `before_restore` safety copy is created;
-7. no working-database replacement or migration occurs;
-8. no Restore phase or AuditLog event is written;
-9. stale earlier validation cannot overwrite a later selection;
-10. cancellation and reselection clean only owned temporary files;
-11. launcher shutdown and interrupted validation have bounded cleanup;
-12. duplicate actions do not create duplicate authority;
-13. the ordinary browser never becomes authoritative for an absolute source path;
-14. raw technical details do not reach user-facing presentation;
-15. the selected interaction channel is confined to the exact launcher run;
-16. exact-head smoke exercises the real picker/control/session boundary rather
-    than injecting the final result synthetically.
+| Event | Required behavior |
+|---|---|
+| Picker cancel | advance/invalidate generation, no durable operation, clean owned scratch |
+| Reselect | invalidate old generation first, clean old ownership, then start new generation |
+| Validation rejection | keep safe rejection category only, clean staged scratch |
+| Technical failure | technical detail local only, safe browser message, clean owned scratch |
+| Browser reload | recover typed state through current run-scoped session |
+| Browser/tab close | heartbeat timeout invalidates control authority and cleans active validation ownership |
+| Launcher normal exit | invalidate tokens, cancel active generation, stop picker helper/control plane, clean scratch |
+| Launcher crash/machine interruption | no token survives; next run performs bounded recognized-scratch cleanup only |
 
-## Relationship to future execution
+Validation scratch must never trigger a Restore phase, startup recovery or working
+database mutation.
 
-C4-II-A remains non-destructive and not authorized until CR-011 is accepted.
+## Future C4-II-A minimum automated tests
 
-C4-II-B remains separately planned. It will own explicit destructive
-confirmation, identity re-proof, mandatory `before_restore` safety copy, and the
-existing C4-I execution boundary.
+At minimum prove:
 
-C4-II-C remains separately planned for truthful completion, rollback,
-retryable-environment, restart-required, and support-assisted outcomes.
+1. loopback-only ephemeral binding;
+2. exact Origin enforcement and no wildcard CORS;
+3. one-use bootstrap capability;
+4. old-run/wrong session token rejection;
+5. replay/idempotency behavior;
+6. duplicate select rejection;
+7. stale generation cannot publish;
+8. browser payload contains no absolute path;
+9. picker cancellation is typed and non-destructive;
+10. valid current and supported older backup acceptance;
+11. newer/foreign/empty/corrupt/directory/symlink/path-escape rejection;
+12. original selected source remains byte-identical;
+13. no durable Restore operation, phase, safety copy or AuditLog event;
+14. no working database replacement/migration;
+15. backend remains usable during validation;
+16. cleanup removes only proved owned scratch;
+17. browser reload recovers safe state;
+18. heartbeat expiry invalidates stale control authority.
 
-C4-III remains the end-to-end package verification and lifecycle closure gate.
+## Future exact-head macOS smoke
 
-None of those slices is authorized by this profile.
+Smoke must use the real selected architecture:
+
+```text
+real launcher run
+→ real browser Restore screen
+→ real authenticated launcher-control request
+→ real /usr/bin/osascript native picker
+→ select prepared temporary workshop backup
+→ real candidate preparation/validation
+→ typed browser result
+→ cancel/reselect exercise
+→ prove source bytes unchanged
+→ prove no durable Restore operation/safety copy/working-DB change
+→ prove owned processes/control plane/scratch cleaned
+```
+
+Injecting the final validation result or bypassing the picker/control/session
+boundary is not sufficient.
+
+## Not authorized yet
+
+This profile does not authorize:
+
+- C4-II-A runtime implementation;
+- C4-II-B/C4-II-C/C4-III;
+- frontend Restore controls;
+- launcher control-plane code;
+- picker code;
+- validation-session code;
+- destructive Restore confirmation/execution;
+- new dependencies;
+- packaging implementation;
+- changes to ADR 0016 state-machine/recovery semantics.
+
+A separate post-CR-011 task must explicitly authorize bounded C4-II-A runtime
+work.
