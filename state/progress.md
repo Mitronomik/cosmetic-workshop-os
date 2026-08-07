@@ -1,6 +1,6 @@
 # Progress
 
-Updated: `2026-08-07`
+Updated: `2026-08-08`
 
 Current lifecycle authority: `docs/current-lifecycle.md`.
 
@@ -14,22 +14,29 @@ Current lifecycle authority: `docs/current-lifecycle.md`.
 - PR #170 merge: `e6997281d2e0268ce54184d988c114bac71c35e2`.
 - PR #171 merge: `76ab59216047222714a32f2793a789b3dc8df19a`.
 - PR #172 / CR-011 merge: `998596560db6780a677bdec363d1fd19db30c1b6`.
-- PR #173 / C4-II-A sliced authorization:
-  - reviewed head `9f5722c5dec695588596d45daa5588092ce7f080`;
-  - merge `aaedf2735660fb92eb627f7eeab327437d459b56`;
-  - documentation gate PASS;
-  - authorization audit P0=0 / P1=0 / P2=0.
+- PR #173 / C4-II-A sliced authorization merge:
+  `aaedf2735660fb92eb627f7eeab327437d459b56`.
+- PR #174 / C4-II-A1:
+  - reviewed head `e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5`;
+  - merge `504e776508c940554b3ee8659a201af21db8303c`;
+  - `git diff --check` PASS;
+  - lifecycle checker PASS;
+  - exact-head real-service smoke PASS;
+  - targeted A1 tests 17 passed;
+  - existing C4-I Restore regression 514 passed, 34 deselected;
+  - full backend + launcher regression 2415 passed;
+  - exact-head audit P0=0 / P1=0 / P2=0.
 - Searchable history and five exact pre-compaction snapshots remain protected.
 
 ## Current lifecycle
 
 ```text
-PR #173 — MERGED — C4-II-A SLICED AUTHORIZATION
+PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
-C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
+C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
@@ -39,59 +46,49 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## A1 implemented in current changeset
+## A1 closed
 
-Runtime:
+Merged A1 runtime remains intentionally non-destructive:
 
-- `launcher/restore/validation_scratch.py` — private system-temp validation
-  namespace and owned-only cleanup;
-- `launcher/restore/validation_session.py` — non-destructive candidate preparation,
-  generation/cancel/reselection, typed results and retained launcher-private proof;
-- `launcher/restore/__init__.py` — exposes the A1 typed internal service surface.
+- private system-temp validation scratch;
+- A1 candidate-preparation service;
+- direct C4-I intake/staging/validation reuse;
+- retained launcher-private path + `SourceIdentity` + SHA-256 proof;
+- generation/cancel/reselection invalidation;
+- no durable Restore operation/safety copy/AuditLog/working-DB mutation.
 
-Verification assets:
+## A2 authorized next
 
-- `launcher/tests/test_restore_validation_session.py` — current/older/newer,
-  invalid source classes, immutability, no durable Restore/safety-copy/AuditLog/DB
-  mutation, stale/cancel/reselection, cleanup and safe failure coverage;
-- `scripts/smoke_restore_validation_session.py` — exact-head real-service smoke on
-  temporary SQLite sources.
+After this lifecycle closure merges, A2 may implement only the exact-run
+launcher-owned loopback control/session layer. Production A2 still uses typed
+`picker_unavailable`; no real picker and no production browser fragment handoff.
 
-A1 reuses existing C4-I `open_selected_source(...)`, held-descriptor identity and
-digest, `stage_source(...)` two-pass staging and `validate_staged_candidate(...)`.
-No duplicate staging algorithm was introduced.
+A2 must preserve:
 
-## Not implemented / still blocked
+- exact loopback-only ephemeral bind;
+- exact Host/Origin;
+- one-use bootstrap/session security;
+- no-store responses;
+- 15s heartbeat / 60s inactivity expiry;
+- concurrent serviceability;
+- request-ID/`command_seq` replay discipline;
+- A1 generation/cancel integration;
+- no browser path/file authority.
 
-A1 contains no HTTP control plane, `command_seq`, browser bootstrap/session,
-`/usr/bin/osascript`, frontend Restore UI or destructive action.
+## Still blocked
 
 ```text
-A2 — blocked
-A3 — blocked
-A4 — blocked
+A3 — blocked by A2 merge + exact-head gate
+A4 — blocked by A3 merge + exact-head gate
 C4-II-B — not authorized
 ```
 
-## Verification status
-
-Implementation exists, but exact-head verification is still pending. Do not mark
-A1 `DONE` until these are actually run on the published head:
-
-- `git diff --check`;
-- documentation lifecycle checker;
-- targeted A1 tests;
-- C4-I Restore regression tests;
-- full backend + launcher tests;
-- exact-head A1 smoke;
-- independent exact-head code/architecture audit;
-- P0=0 / P1=0 / P2=0.
-
 ## Open product obligations
 
-- close A1 exact-head gate and merge;
-- post-merge A1 lifecycle closure;
-- then A2, A3 and A4 sequentially;
+- merge post-A1 lifecycle closure;
+- implement/review/exact-head verify/merge A2;
+- then A3;
+- then A4 + non-destructive browser E2E smoke;
 - separately authorize C4-II-B;
 - C4-II-C outcome/restart/support UX;
 - C4-III end-to-end Restore closure;
