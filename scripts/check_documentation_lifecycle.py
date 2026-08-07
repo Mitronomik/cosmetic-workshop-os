@@ -121,7 +121,7 @@ DECISION_REQUIRED_MARKERS = (
 )
 
 RESTORE_PROFILE_REQUIRED_MARKERS = (
-    "launcher-owned loopback control",
+    "Restore control → launcher-owned 127.0.0.1:<ephemeral>",
     "/backups/restore",
     "127.0.0.1",
     "Startup order",
@@ -181,6 +181,22 @@ def read(path: Path) -> str:
         return ""
 
 
+def normalized(text: str) -> str:
+    """Normalize presentation-only wrapping without weakening marker meaning.
+
+    Markdown prose is routinely hard-wrapped. A required semantic phrase must not
+    fail merely because a newline was inserted between two words. We intentionally
+    normalize whitespace only: punctuation, Markdown tokens, paths, status labels
+    and command text remain significant.
+    """
+
+    return " ".join(text.split()).casefold()
+
+
+def has_marker(text: str, marker: str) -> bool:
+    return normalized(marker) in normalized(text)
+
+
 def git_blob_sha(path: Path) -> str:
     data = path.read_bytes()
     header = f"blob {len(data)}\0".encode("ascii")
@@ -189,25 +205,23 @@ def git_blob_sha(path: Path) -> str:
 
 def require_markers(path: Path, markers: tuple[str, ...]) -> None:
     text = read(path)
-    folded = text.casefold()
     for marker in markers:
-        if marker.casefold() not in folded:
+        if not has_marker(text, marker):
             fail(f"{path.relative_to(ROOT)} is missing marker: {marker!r}")
 
 
 def main() -> int:
     profile = read(CURRENT_PROFILE)
-    profile_folded = profile.casefold()
 
     for marker in CORE_CURRENT_MARKERS + PROFILE_ONLY_MARKERS:
-        if marker.casefold() not in profile_folded:
+        if not has_marker(profile, marker):
             fail(f"current lifecycle profile is missing marker: {marker!r}")
 
     for path in COMPACT_ACTIVE_FILES:
+        text = read(path)
         require_markers(path, CORE_CURRENT_MARKERS)
-        folded = read(path).casefold()
         for phrase in STALE_COMPACT_ACTIVE_PHRASES:
-            if phrase.casefold() in folded:
+            if has_marker(text, phrase):
                 fail(
                     f"stale pre-CR-011 lifecycle phrase remains in compact active file "
                     f"{path.relative_to(ROOT)}: {phrase!r}"
@@ -222,23 +236,23 @@ def main() -> int:
         "does **not** amend ADR 0016",
         "does **not** authorize C4-II-A runtime implementation",
     ):
-        if marker.casefold() not in decisions_agents.casefold():
+        if not has_marker(decisions_agents, marker):
             fail(f"docs/decisions/AGENTS.md is missing ADR authority marker: {marker!r}")
 
     adr_0016_text = read(ADR_0016)
     if "C4-I — IMPLEMENTED ON PR BRANCH" in adr_0016_text:
         if "docs/decisions/0016-launcher-assisted-restore.md" not in profile:
             fail("ADR 0016 has dated lifecycle prose but is absent from the supersession map")
-        if "supersession remains bounded to lifecycle metadata only" not in profile_folded:
+        if not has_marker(profile, "supersession remains bounded to lifecycle metadata only"):
             fail("ADR 0016 lifecycle supersession is not explicitly bounded")
 
     adr_0017_text = read(ADR_0017)
     if "CR-011" in adr_0017_text and "NOT DECIDED" in adr_0017_text:
         if "docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md" not in profile:
             fail("ADR 0017 has pre-decision CR-011 status but is absent from supersession map")
-        if "ADR 0017 supersession is likewise bounded" not in profile:
+        if not has_marker(profile, "ADR 0017 supersession is likewise bounded"):
             fail("ADR 0017 CR-011 supersession is not explicitly bounded")
-        if "ADR 0017's C4-I closure facts" not in profile:
+        if not has_marker(profile, "ADR 0017's C4-I closure facts"):
             fail("current lifecycle does not preserve ADR 0017 C4-I closure authority")
 
     for path in SUPERSEDED_STATUS_FILES:
@@ -296,14 +310,13 @@ def main() -> int:
         fail("docs/history/AGENTS.md does not prohibit active-checkout historical restore")
 
     cr_text = read(CHANGE_REQUESTS)
-    cr_folded = cr_text.casefold()
     if "| CR-011 |" not in cr_text:
         fail("state/change-requests.md does not contain the CR-011 ledger row")
-    if "decided — adr 0018 accepted" not in cr_folded:
+    if not has_marker(cr_text, "decided — adr 0018 accepted"):
         fail("CR-011 is not recorded as decided by ADR 0018")
-    if "c4-ii-a remains not authorized" not in cr_folded:
+    if not has_marker(cr_text, "c4-ii-a remains not authorized"):
         fail("CR-011 ledger does not keep C4-II-A explicitly unauthorized")
-    if "separate bounded lifecycle/implementation task" not in profile_folded:
+    if not has_marker(profile, "separate bounded lifecycle/implementation task"):
         fail("current lifecycle does not require a separate C4-II-A authorization task")
 
     if ERRORS:
