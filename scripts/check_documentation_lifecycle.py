@@ -95,9 +95,12 @@ MAINTAINED_HISTORY_GUIDANCE = (
     ROOT / "docs/history/c4-i-implementation-and-audit-history.md",
 )
 
+# The unsafe historical recipe used the PR #170 merge SHA as a --source value.
+# Mentions such as `git restore --source=<old-commit>` are allowed only as an
+# explicit prohibition; an executable recipe with the real old SHA is not.
 UNSAFE_EXECUTABLE_HISTORY_PATTERNS = (
-    "git restore \\\n  --source=",
-    "git restore --source=e699",
+    "--source=e6997281d2e0268ce54184d988c114bac71c35e2",
+    "git restore --source=e699728",
 )
 
 ERRORS: list[str] = []
