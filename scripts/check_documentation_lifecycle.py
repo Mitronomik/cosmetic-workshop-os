@@ -35,6 +35,8 @@ A2_SESSION_TESTS = ROOT / "launcher/tests/test_restore_control_session.py"
 A2_PLANE_TESTS = ROOT / "launcher/tests/test_restore_control_plane.py"
 A2_BOOTSTRAP_TESTS = ROOT / "launcher/tests/test_restore_control_bootstrap_concurrency.py"
 A2_REJECTION_TESTS = ROOT / "launcher/tests/test_restore_control_rejection_order.py"
+A2_HEADER_TESTS = ROOT / "launcher/tests/test_restore_control_header_cardinality.py"
+A2_TOKEN_TESTS = ROOT / "launcher/tests/test_restore_control_tokens.py"
 A2_RUNTIME_TESTS = ROOT / "launcher/tests/test_restore_control_runtime.py"
 A2_SMOKE = ROOT / "scripts/smoke_restore_control_plane.py"
 
@@ -89,7 +91,6 @@ CORE_CURRENT_MARKERS = (
 
 STALE_ACTIVE_PHRASES = (
     "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE\n",
     "A2 runtime implementation begins only after",
     "merge post-A1 lifecycle closure",
     "Next runtime slice — A2",
@@ -205,8 +206,6 @@ def check_no_destructive_calls(path: Path, *, extra_forbidden_modules: set[str] 
 
 
 def check_closed_a1_boundary() -> None:
-    """Merged A1 must remain non-destructive and free of later-slice control scope."""
-
     for path in (A1_SESSION, A1_SCRATCH):
         check_no_destructive_calls(
             path,
@@ -274,8 +273,6 @@ def check_closed_a1_boundary() -> None:
 
 
 def check_a2_control_boundary() -> None:
-    """A2 may own control/session transport, but no A3/A4/destructive authority."""
-
     for path in (A2_PROTOCOL, A2_SESSION, A2_PLANE):
         check_no_destructive_calls(
             path,
@@ -297,7 +294,7 @@ def check_a2_control_boundary() -> None:
         (
             "SourceSelectionAdapter",
             "UnavailableSourceSelectionAdapter",
-            "picker_unavailable" if False else "UNAVAILABLE",
+            "UNAVAILABLE",
             "ControlStateSnapshot",
             "CommandReply",
             "ControlSessionError",
@@ -402,6 +399,18 @@ def check_a2_control_boundary() -> None:
     require_markers(
         A2_REJECTION_TESTS,
         ("test_wrong_host_origin_and_schema_do_not_consume_expected_command", "source_path"),
+    )
+    require_markers(
+        A2_HEADER_TESTS,
+        ("test_missing_or_duplicate_host_origin_fail_before_bootstrap_consumption", "putheader"),
+    )
+    require_markers(
+        A2_TOKEN_TESTS,
+        (
+            "test_bootstrap_and_session_tokens_are_at_least_256_bit_and_run_scoped",
+            "BOOTSTRAP_RANDOM_BYTES >= 32",
+            "SESSION_RANDOM_BYTES >= 32",
+        ),
     )
     require_markers(
         A2_RUNTIME_TESTS,
@@ -612,6 +621,7 @@ def main() -> int:
     print("Verified PR #174 A1 closure and PR #175 A2 authorization baselines.")
     print("Verified C4-II-A2 current-changeset status and A3/A4 successor gates.")
     print("Verified A2 exact loopback/bootstrap/session/command-sequence boundary.")
+    print("Verified A2 exact Host/Origin cardinality and token-size test contracts.")
     print("Verified A2 keeps picker_unavailable and no browser filesystem authority.")
     print("Verified production browser navigation remains unchanged until A4.")
     print("Verified launcher runtime owns control after backend proof and before backend stop.")
