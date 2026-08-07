@@ -17,7 +17,12 @@ CURRENT_PROFILE = ROOT / "docs/current-lifecycle.md"
 DECISIONS_AGENTS = ROOT / "docs/decisions/AGENTS.md"
 HISTORY_AGENTS = ROOT / "docs/history/AGENTS.md"
 ADR_0016 = ROOT / "docs/decisions/0016-launcher-assisted-restore.md"
+ADR_0017 = ROOT / "docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md"
+ADR_0018 = ROOT / "docs/decisions/0018-launcher-restore-interaction-and-validation-session.md"
+RESTORE_PROFILE = ROOT / "docs/restore-interaction-and-validation-session.md"
 CHANGE_REQUESTS = ROOT / "state/change-requests.md"
+PACKAGING = ROOT / "docs/packaging.md"
+DEPLOYMENT = ROOT / "docs/deployment.md"
 
 COMPACT_ACTIVE_FILES = (
     ROOT / "README.md",
@@ -30,6 +35,7 @@ COMPACT_ACTIVE_FILES = (
 
 SUPERSEDED_STATUS_FILES = (
     ADR_0016,
+    ADR_0017,
     ROOT / "docs/architecture.md",
     ROOT / "docs/roadmap.md",
     ROOT / "docs/backup-and-restore.md",
@@ -61,32 +67,92 @@ EXPECTED_HISTORY_BLOBS = {
 }
 
 CORE_CURRENT_MARKERS = (
+    "PR #171 — MERGED",
     "C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED",
-    "C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED",
+    "CR-011 — DECIDED — ADR 0018 ACCEPTED — NORMATIVE ON MAIN",
+    "C4-II-A — PLANNED — NOT AUTHORIZED",
     "Restore — NOT IMPLEMENTED",
     "Product release readiness — NOT CLAIMED",
 )
 
 PROFILE_ONLY_MARKERS = (
     "docs/decisions/0016-launcher-assisted-restore.md",
+    "docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md",
     "ADR 0017",
-    "supersedes only",
-    "Do not start CR-011 from the unmerged PR #171 branch.",
-    "After PR #171 is merged",
+    "ADR 0018",
+    "supersedes ADR 0017 only where ADR 0017 says CR-011 is still undecided",
+    "launcher-owned loopback control plane",
+    "/usr/bin/osascript",
+    "Do not implement C4-II-A on this branch.",
+    "separate bounded lifecycle/implementation task",
 )
 
-SEQUENCING_MARKERS = (
-    "Do not start CR-011 from the unmerged PR #171 branch.",
-    "PR #171",
+DECISION_REQUIRED_MARKERS = (
+    "Option B",
+    "Selected: Option B",
+    "/backups/restore",
+    "127.0.0.1",
+    "ephemeral",
+    "Startup and process order",
+    "/usr/bin/osascript",
+    "Standard Additions `choose file`",
+    "sessionStorage",
+    "control_origin",
+    "URL fragment",
+    "no wildcard origin",
+    "atomic compare-and-consume",
+    "Cache-Control: no-store",
+    "Mandatory concurrency model",
+    "worker quiescence",
+    "heartbeat interval: 15 seconds",
+    "control-session expiry: 60 seconds",
+    "at least 128 bits of entropy",
+    "command_seq",
+    "highest_command_seq",
+    "consumes its command sequence",
+    "0700",
+    "clear launcher-private retained source proof/path",
+    "prepare_restore_candidate",
+    "SourceIdentity",
+    "SHA-256",
+    "ordinary backend remains running",
+    "C4-II-A — PLANNED — NOT AUTHORIZED",
+    "C4-II-A runtime implementation",
 )
 
-STALE_ACTIVE_PHRASES = (
-    "C4-I — IMPLEMENTED ON PR BRANCH",
-    "C4-I — AUTHORIZED AFTER THE CR-010 DOCUMENTATION PR MERGES — NOT IMPLEMENTED",
-    "C4 implementation — NOT STARTED",
-    "implemented on a pull-request branch and not merged",
-    "implemented on a pull-request branch and is not merged",
+RESTORE_PROFILE_REQUIRED_MARKERS = (
+    "Restore control → launcher-owned 127.0.0.1:<ephemeral>",
+    "/backups/restore",
+    "127.0.0.1",
+    "Startup order",
+    "/usr/bin/osascript",
+    "sessionStorage",
+    "control_origin",
+    "atomic compare-and-consume",
+    "Cache-Control: no-store",
+    "Mandatory control-plane concurrency",
+    "worker quiescence",
+    "heartbeat interval: 15 seconds",
+    "control-session expiry: 60 seconds",
+    "at least 128 bits of entropy",
+    "command_seq",
+    "consumes its command sequence",
+    "0700",
+    "clear launcher-private retained source proof/path",
+    "prepare_restore_candidate",
+    "SourceIdentity",
+    "SHA-256",
+    "C4-II-A — PLANNED — NOT AUTHORIZED",
+)
+
+STALE_COMPACT_ACTIVE_PHRASES = (
+    "CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED",
+    "C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED",
+    "While PR #171 is open",
+    "PR #171 is the current task",
+    "Do not start CR-011 from the unmerged PR #171 branch",
+    "Close PR #171 safely",
+    "Current implementation window — close PR #171",
 )
 
 MAINTAINED_HISTORY_GUIDANCE = (
@@ -95,9 +161,6 @@ MAINTAINED_HISTORY_GUIDANCE = (
     ROOT / "docs/history/c4-i-implementation-and-audit-history.md",
 )
 
-# The unsafe historical recipe used the PR #170 merge SHA as a --source value.
-# Mentions such as `git restore --source=<old-commit>` are allowed only as an
-# explicit prohibition; an executable recipe with the real old SHA is not.
 UNSAFE_EXECUTABLE_HISTORY_PATTERNS = (
     "--source=e6997281d2e0268ce54184d988c114bac71c35e2",
     "git restore --source=e699728",
@@ -118,6 +181,22 @@ def read(path: Path) -> str:
         return ""
 
 
+def normalized(text: str) -> str:
+    """Normalize presentation-only wrapping without weakening marker meaning.
+
+    Markdown prose is routinely hard-wrapped. A required semantic phrase must not
+    fail merely because a newline was inserted between two words. We intentionally
+    normalize whitespace only: punctuation, Markdown tokens, paths, status labels
+    and command text remain significant.
+    """
+
+    return " ".join(text.split()).casefold()
+
+
+def has_marker(text: str, marker: str) -> bool:
+    return normalized(marker) in normalized(text)
+
+
 def git_blob_sha(path: Path) -> str:
     data = path.read_bytes()
     header = f"blob {len(data)}\0".encode("ascii")
@@ -126,64 +205,87 @@ def git_blob_sha(path: Path) -> str:
 
 def require_markers(path: Path, markers: tuple[str, ...]) -> None:
     text = read(path)
-    folded = text.casefold()
     for marker in markers:
-        if marker.casefold() not in folded:
+        if not has_marker(text, marker):
             fail(f"{path.relative_to(ROOT)} is missing marker: {marker!r}")
 
 
 def main() -> int:
     profile = read(CURRENT_PROFILE)
-    profile_folded = profile.casefold()
 
     for marker in CORE_CURRENT_MARKERS + PROFILE_ONLY_MARKERS:
-        if marker.casefold() not in profile_folded:
+        if not has_marker(profile, marker):
             fail(f"current lifecycle profile is missing marker: {marker!r}")
 
-    # Every compact current control file must carry the same core lifecycle and
-    # must make PR #171 closure precede CR-011 work.
     for path in COMPACT_ACTIVE_FILES:
-        require_markers(path, CORE_CURRENT_MARKERS)
-        require_markers(path, SEQUENCING_MARKERS)
-
         text = read(path)
-        for phrase in STALE_ACTIVE_PHRASES:
-            if phrase.casefold() in text.casefold():
+        require_markers(path, CORE_CURRENT_MARKERS)
+        for phrase in STALE_COMPACT_ACTIVE_PHRASES:
+            if has_marker(text, phrase):
                 fail(
-                    f"stale lifecycle phrase remains in compact active file "
+                    f"stale pre-CR-011 lifecycle phrase remains in compact active file "
                     f"{path.relative_to(ROOT)}: {phrase!r}"
                 )
 
-    # ADR 0016 intentionally retains its original historical status table, but
-    # current authority must explicitly scope that table below ADR 0017 without
-    # revoking ADR 0016's durable Restore semantics.
     decisions_agents = read(DECISIONS_AGENTS)
     for marker in (
-        "ADR 0017 supersedes the dated C4 implementation-status and authorization wording in ADR 0016",
-        "ADR 0016 remains authoritative",
         "scope and recency",
+        "ADR 0016 remains authoritative",
+        "ADR 0017 supersedes the dated C4 implementation-status and authorization wording in ADR 0016",
+        "ADR 0018 is newer for the exact CR-011 interaction/validation-session topic",
+        "does **not** amend ADR 0016",
+        "does **not** authorize C4-II-A runtime implementation",
     ):
-        if marker.casefold() not in decisions_agents.casefold():
+        if not has_marker(decisions_agents, marker):
             fail(f"docs/decisions/AGENTS.md is missing ADR authority marker: {marker!r}")
 
     adr_0016_text = read(ADR_0016)
     if "C4-I — IMPLEMENTED ON PR BRANCH" in adr_0016_text:
         if "docs/decisions/0016-launcher-assisted-restore.md" not in profile:
             fail("ADR 0016 has dated lifecycle prose but is absent from the supersession map")
-        if "supersedes only" not in profile_folded:
+        if not has_marker(profile, "supersession remains bounded to lifecycle metadata only"):
             fail("ADR 0016 lifecycle supersession is not explicitly bounded")
+
+    adr_0017_text = read(ADR_0017)
+    if "CR-011" in adr_0017_text and "NOT DECIDED" in adr_0017_text:
+        if "docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md" not in profile:
+            fail("ADR 0017 has pre-decision CR-011 status but is absent from supersession map")
+        if not has_marker(profile, "ADR 0017 supersession is likewise bounded"):
+            fail("ADR 0017 CR-011 supersession is not explicitly bounded")
+        if not has_marker(profile, "ADR 0017's C4-I closure facts"):
+            fail("current lifecycle does not preserve ADR 0017 C4-I closure authority")
 
     for path in SUPERSEDED_STATUS_FILES:
         relative = path.relative_to(ROOT).as_posix()
         if relative not in profile:
             fail(f"superseded status file is not declared in current lifecycle: {relative}")
 
+    require_markers(ADR_0018, DECISION_REQUIRED_MARKERS)
+    require_markers(RESTORE_PROFILE, RESTORE_PROFILE_REQUIRED_MARKERS)
+
+    require_markers(
+        PACKAGING,
+        (
+            "/usr/bin/osascript",
+            "127.0.0.1",
+            "C4-II-A remains `PLANNED — NOT AUTHORIZED`",
+            "Mac App Store sandbox compatibility",
+        ),
+    )
+    require_markers(
+        DEPLOYMENT,
+        (
+            "launcher-owned local control boundary",
+            "127.0.0.1",
+            "/usr/bin/osascript",
+            "C4-II-A remains `PLANNED — NOT AUTHORIZED`",
+        ),
+    )
+
     for path in REQUIRED_HISTORY:
         if not path.is_file():
             fail(f"missing preserved history: {path.relative_to(ROOT)}")
 
-    # Exact pre-compaction snapshots must remain byte-for-byte identical to the
-    # original Git blobs even if the active docs are later compacted again.
     for path, expected_sha in EXPECTED_HISTORY_BLOBS.items():
         if not path.is_file():
             continue
@@ -194,8 +296,6 @@ def main() -> int:
                 f"expected blob {expected_sha}, got {actual_sha}"
             )
 
-    # Maintained history guidance may mention git restore only as a prohibition;
-    # it must not contain an executable old-commit restore recipe.
     for path in MAINTAINED_HISTORY_GUIDANCE:
         text = read(path)
         for pattern in UNSAFE_EXECUTABLE_HISTORY_PATTERNS:
@@ -212,10 +312,12 @@ def main() -> int:
     cr_text = read(CHANGE_REQUESTS)
     if "| CR-011 |" not in cr_text:
         fail("state/change-requests.md does not contain the CR-011 ledger row")
-    if "authorized — decision only — not decided" not in cr_text.casefold():
-        fail("CR-011 is not recorded as an undecided decision-only authorization")
-    if "successor after pr #171 merge" not in cr_text.casefold():
-        fail("CR-011 ledger row does not state that it is a successor after PR #171 merge")
+    if not has_marker(cr_text, "decided — adr 0018 accepted"):
+        fail("CR-011 is not recorded as decided by ADR 0018")
+    if not has_marker(cr_text, "c4-ii-a remains not authorized"):
+        fail("CR-011 ledger does not keep C4-II-A explicitly unauthorized")
+    if not has_marker(profile, "separate bounded lifecycle/implementation task"):
+        fail("current lifecycle does not require a separate C4-II-A authorization task")
 
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL", file=sys.stderr)
@@ -227,8 +329,11 @@ def main() -> int:
     print(f"Checked {len(COMPACT_ACTIVE_FILES)} compact active files.")
     print(f"Verified {len(REQUIRED_HISTORY)} required history paths.")
     print(f"Verified {len(EXPECTED_HISTORY_BLOBS)} exact historical Git blob identities.")
-    print("Verified ADR 0016 / ADR 0017 scope-and-recency authority.")
-    print("Verified PR #171 closure precedes CR-011 branch creation.")
+    print("Verified ADR 0016 / ADR 0017 / ADR 0018 scope-and-recency authority.")
+    print("Verified bounded ADR 0017 pre-decision CR-011 supersession.")
+    print("Verified CR-011 route/reload/security/concurrency/ordering/validation architecture.")
+    print("Verified non-replayable typed business rejections.")
+    print("Verified C4-II-A remains separately not authorized.")
     print("Verified maintained historical guidance contains no executable old-commit restore recipe.")
     return 0
 
