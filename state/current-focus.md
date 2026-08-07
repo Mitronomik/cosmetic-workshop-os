@@ -1,29 +1,30 @@
-# Current focus — PR #171 documentation closure gate
+# Current Focus — CR-011 Restore interaction decision
 
 Updated: `2026-08-07`
 
-Current lifecycle authority:
-[`docs/current-lifecycle.md`](../docs/current-lifecycle.md).
+Current lifecycle authority: `docs/current-lifecycle.md`.
+Current CR-011 decision: `docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`.
+Current Restore profile: `docs/restore-interaction-and-validation-session.md`.
+Current ledger: `state/change-requests.md`.
+Searchable history: `docs/history/README.md`.
 
-Current decision:
-[`docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`](../docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md).
+## Baseline
 
-Current change-request ledger:
-[`state/change-requests.md`](change-requests.md).
+PR #171 is merged.
 
-Searchable project history:
-[`docs/history/README.md`](../docs/history/README.md).
+```text
+PR #171 merge commit — 76ab59216047222714a32f2793a789b3dc8df19a
+```
+
+This CR-011 branch was created from that merged `main`.
 
 ## Current lifecycle
 
 ```text
-C1 — COMPLETED
-C2 — COMPLETED
-C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
-CR-010 — ACCEPTED
+PR #171 — MERGED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
-C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+CR-011 — DECIDED — ADR 0018 ACCEPTED — NORMATIVE ON MAIN
+C4-II-A — PLANNED — NOT AUTHORIZED
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -31,73 +32,113 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Current action while PR #171 is open
+On this PR branch, ADR 0018 becomes project authority only after the changeset is
+merged to `main`.
 
-PR #171 is the current task.
+## Current task
+
+Finish and validate the **decision-only CR-011 pull request**.
+
+Selected architecture:
 
 ```text
-finish independent documentation/architecture audit
-→ correct every finding
-→ run documentation checks in a real checkout
-→ repeat exact-head read-only gate
-→ merge PR #171
+ordinary browser presentation
+→ exact-run authenticated launcher-owned loopback control plane
+→ launcher-owned /usr/bin/osascript native picker
+→ launcher-owned non-destructive validation session
+→ existing C4-I intake/staging/validation semantics
 ```
 
-Do not start CR-011 from the unmerged PR #171 branch.
-Do not create a dependent CR-011 branch from the PR #171 head.
+The decision fixes screen/process ownership, picker mechanism, exact-run browser
+bootstrap, Origin/CORS rules, path privacy, replay/stale/duplicate protection,
+backend lifecycle, scratch cleanup, C4-II-B source re-proof and future exact-head
+smoke.
+
+## Allowed scope
+
+- ADR 0018;
+- `docs/current-lifecycle.md`;
+- `docs/implementation-plan.md`;
+- `docs/restore-interaction-and-validation-session.md`;
+- bounded deployment/packaging consequences;
+- README and active `state/` synchronization;
+- `docs/decisions/AGENTS.md` authority synchronization;
+- strict documentation lifecycle checker changes.
+
+## Do not touch
+
 No runtime implementation is authorized in this branch.
 
-## Authorized successor after PR #171 merges
+Do not modify:
 
-After PR #171 merges, update `main` and create a fresh branch from merged `main`.
-Only then begin:
+- `backend/`;
+- `frontend/`;
+- `launcher/`;
+- runtime tests;
+- dependency/lock files;
+- migrations;
+- workflows;
+- packaging implementation;
+- updater implementation.
 
-```text
-CR-011 — Decide the launcher Restore interaction and validation-session boundary.
-Decision-only. No runtime implementation is authorized.
-```
+Do not implement:
 
-CR-011 must select one concrete architecture for screen ownership, native picker
-ownership, browser-to-launcher command path if any, exact-run authentication,
-origin/replay/stale-session protection, path privacy, backend lifecycle,
-dependencies, packaging consequences, cleanup, and exact-head smoke.
+- native picker;
+- launcher control server;
+- frontend Restore UI;
+- `prepare_restore_candidate(...)` runtime service;
+- C4-II-B confirmation/execution;
+- C4-II-C/C4-III.
 
-## Blocked until CR-011 is accepted
+## Selected security boundary
 
-No agent may implement:
+Future C4-II-A, when separately authorized, must preserve:
 
-- a native picker;
-- launcher IPC or WebSocket communication;
-- a loopback control endpoint;
-- a FastAPI Restore endpoint;
-- SPA-owned filesystem access;
-- browser upload as the authoritative Restore source;
-- frontend Restore controls;
-- a validation-session Python service;
-- packaging changes for Restore;
-- C4-II-A, C4-II-B, C4-II-C, or C4-III runtime work.
+- control bind `127.0.0.1` + ephemeral port;
+- exact configured local frontend Origin only;
+- no wildcard CORS;
+- one-use >=256-bit bootstrap token in URL fragment;
+- fragment removed after bootstrap;
+- second >=256-bit run-scoped session token in `sessionStorage` only;
+- no durable/reusable token;
+- 15s heartbeat / 60s inactive control-session expiry;
+- request replay/idempotency ledger;
+- selection-generation stale-result protection;
+- browser never receives authoritative absolute source path.
 
-## Mandatory future validation-session semantics
+## Validation boundary
 
-Future C4-II-A must use a launcher-owned non-destructive boundary conceptually
-represented as `prepare_restore_candidate(...)`.
+Future candidate preparation is non-destructive and launcher-owned.
 
-It must not call `execute_restore(...)`, create a durable Restore operation,
-enter a Restore phase, create a `before_restore` safety copy, mutate or migrate
-the working database, perform rollback/recovery mutation, write a Restore
-AuditLog event, or give the browser authority over the selected-source path.
+It must reuse C4-I source intake, sidecar checks, held-descriptor identity/digest,
+two-pass stable staging and read-only candidate validation. It creates no durable
+Restore operation, phase, safety copy, working-DB mutation or Restore AuditLog
+event.
 
-C4-II-B must later re-prove source or retained-candidate identity through
-launcher-owned state and accepted C4-I rules before destructive execution.
+After successful validation, temporary staged scratch is deleted. Launcher memory
+retains source path + `SourceIdentity` + SHA-256 proof. Future C4-II-B must reopen,
+re-prove, restage and revalidate before destructive execution.
 
-## Documentation verification
-
-Before PR #171 can merge, run in a real checkout:
+## Required checks before merge
 
 ```bash
 git diff --check
 python3 scripts/check_documentation_lifecycle.py
 ```
 
-Also run the repository Markdown/link check if one is defined, then repeat the
-independent exact-head read-only audit.
+Also:
+
+- run a project-defined Markdown/link checker if one exists;
+- verify no `backend/`, `frontend/` or `launcher/` path changed;
+- perform fresh independent exact-head read-only architecture audit;
+- resolve every P0/P1/P2 finding.
+
+Product smoke is not applicable because this is a documentation/architecture
+changeset only.
+
+## After this PR merges
+
+Do **not** begin C4-II-A by assumption.
+
+Create a separate bounded task/PR that explicitly authorizes C4-II-A against the
+merged ADR 0018 architecture.
