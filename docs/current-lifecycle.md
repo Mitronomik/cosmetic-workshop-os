@@ -50,20 +50,20 @@ C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 
-CR-011 — Launcher Restore interaction and validation-session boundary
-— AUTHORIZED — DECISION ONLY — NOT DECIDED
+CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+CR-011 scope — Launcher Restore interaction and validation-session boundary
 
-C4-II-A — Launcher Restore source selection and validation presentation
-— PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-A scope — Launcher Restore source selection and validation presentation
 
-C4-II-B — Explicit confirmation and Restore execution
-— PLANNED — NOT AUTHORIZED
+C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-B scope — Explicit confirmation and Restore execution
 
-C4-II-C — Completion, rollback and support-assisted outcome UX
-— PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-II-C scope — Completion, rollback and support-assisted outcome UX
 
-C4-III — Restore end-to-end verification and lifecycle closure
-— PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
+C4-III scope — Restore end-to-end verification and lifecycle closure
 
 C4 — ACTIVE
 Restore — NOT IMPLEMENTED
