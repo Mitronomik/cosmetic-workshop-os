@@ -1,6 +1,6 @@
 # Progress
 
-Updated: `2026-08-06`
+Updated: `2026-08-07`
 
 Current lifecycle authority: `docs/current-lifecycle.md`.
 
@@ -17,29 +17,56 @@ Current lifecycle authority: `docs/current-lifecycle.md`.
 - PR #170 merge commit:
   `e6997281d2e0268ce54184d988c114bac71c35e2`.
 - Six independent C4-I audit rounds closed twenty-four findings.
-- Curated C4-I history is retained in
-  `docs/history/c4-i-implementation-and-audit-history.md`.
-- A broader project timeline is retained in
-  `docs/history/project-timeline-through-pr170.md`.
-- The complete pre-compaction implementation plan and state snapshots are
-  preserved byte-for-byte under `docs/history/`.
-- The detailed pre-compaction change-request ledger is preserved byte-for-byte
-  at `docs/history/change-requests/2026-08-06-pre-compaction.md`.
-- The active change-request ledger now includes CR-011 explicitly.
-- `docs/current-lifecycle.md` records the current authority order and the
-  explicit supersession map for dated C4 status prose.
-- `scripts/check_documentation_lifecycle.py` provides a repeatable documentation
-  consistency check.
+- Searchable project history and exact pre-compaction snapshots are preserved
+  under `docs/history/`.
+- The compact active change-request ledger includes CR-011.
+- `docs/current-lifecycle.md` defines scope-and-recency authority and explicitly
+  supersedes dated lifecycle wording in ADR 0016, architecture, roadmap, and
+  backup/restore docs without revoking their durable contracts.
+- Historical Git guidance now uses read-only `git show` / separate worktree
+  patterns rather than replacing active files.
 
-## Current authorized work
+## Current lifecycle
+
+```text
+C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
+Restore — NOT IMPLEMENTED
+Product release readiness — NOT CLAIMED
+```
+
+## Current work — PR #171 closure
+
+PR #171 remains the current task until it is independently verified and merged.
+
+Required sequence:
+
+```text
+correct audit findings
+→ run documentation checks in a real checkout
+→ repeat exact-head read-only gate
+→ merge PR #171
+```
+
+Do not start CR-011 from the unmerged PR #171 branch.
+Do not create a dependent CR-011 branch from the PR #171 head.
+
+## Authorized successor after PR #171 merges
+
+Only after PR #171 merges, update `main`, create a new branch from merged `main`,
+and begin:
 
 ```text
 CR-011 — Launcher Restore interaction and validation-session boundary
 AUTHORIZED — DECISION ONLY — NOT DECIDED
 ```
 
-CR-011 must select one concrete, testable interaction architecture. No runtime
-implementation is authorized by the current documentation PR.
+CR-011 must select one concrete, testable interaction architecture. It does not
+authorize runtime implementation.
 
 ## Planned but blocked
 
@@ -58,20 +85,8 @@ C4-III  — PLANNED — NOT AUTHORIZED
 - installation verification;
 - full release-candidate smoke;
 - continuing documentation accuracy;
-- focused synchronization of dated lifecycle paragraphs in
-  `docs/architecture.md`, `docs/roadmap.md`, and `docs/backup-and-restore.md`
-  when those large documents next receive a bounded maintenance pass.
-
-Until that focused pass, their stale lifecycle labels are explicitly superseded
-by `docs/current-lifecycle.md`; their product and safety contracts remain valid.
-
-## Current product truth
-
-```text
-C4 — ACTIVE
-Restore — NOT IMPLEMENTED
-Product release readiness — NOT CLAIMED
-```
+- focused synchronization of dated lifecycle paragraphs in large reference
+  documents when those files next receive bounded maintenance.
 
 ## Validation-session boundary required before C4-II-A
 
@@ -90,17 +105,12 @@ non-destructive. It must not:
 C4-II-B must later re-prove source or retained-candidate identity. An opaque
 session token is a reference to launcher-owned state, not validation authority.
 
-## Not started
-
-No native picker, launcher IPC, loopback control plane, WebSocket, frontend
-Restore UI, FastAPI Restore endpoint, browser-upload Restore path,
-validation-session service, packaging change, or destructive execution is
-implemented or authorized.
-
-## Required documentation check
+## Required documentation checks before PR #171 merge
 
 ```bash
+git diff --check
 python3 scripts/check_documentation_lifecycle.py
 ```
 
-This check is documentation-only and is not product smoke.
+Also run the project Markdown/link check if defined. These checks are
+Level 0 documentation verification and are not product smoke.
