@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check current lifecycle and C4-II-A1 architecture-boundary consistency."""
+"""Check post-A1 lifecycle closure and C4-II-A2 authorization consistency."""
 
 from __future__ import annotations
 
@@ -62,12 +62,12 @@ EXPECTED_HISTORY_BLOBS = {
 }
 
 CORE_CURRENT_MARKERS = (
-    "PR #173 — MERGED — C4-II-A SLICED AUTHORIZATION",
+    "PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED",
     "C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN",
     "C4-II-A — IN PROGRESS — SLICED",
-    "C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE",
+    "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
+    "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE",
     "C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE",
     "C4-II-B — PLANNED — NOT AUTHORIZED",
@@ -76,12 +76,12 @@ CORE_CURRENT_MARKERS = (
 )
 
 STALE_ACTIVE_PHRASES = (
-    "C4-II-A — AUTHORIZED AS SLICED — NOT IMPLEMENTED",
-    "C4-II-A1 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "Current action — PR #173",
-    "Current task — PR #173",
-    "Do not implement A1 on the unmerged PR #173 branch",
-    "After PR #173 merges, update `main`, create a fresh A1 branch",
+    "C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+    "C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE",
+    "A2 remains blocked",
+    "Finish A1 implementation review",
+    "Verification still required",
+    "Current work — A1 validation-session core",
 )
 
 ERRORS: list[str] = []
@@ -153,7 +153,9 @@ def called_names(tree: ast.AST) -> set[str]:
     return names
 
 
-def check_a1_production_boundary() -> None:
+def check_closed_a1_boundary() -> None:
+    """Merged A1 must remain non-destructive and free of later-slice control scope."""
+
     for path in (A1_SESSION, A1_SCRATCH):
         tree = parse_python(path)
         if tree is None:
@@ -175,7 +177,7 @@ def check_a1_production_boundary() -> None:
         }
         for module in sorted(forbidden_modules & modules):
             fail(
-                f"A1 production module {path.relative_to(ROOT)} imports future/destructive scope: {module}"
+                f"closed A1 module {path.relative_to(ROOT)} imports later/destructive scope: {module}"
             )
 
         forbidden_calls = {
@@ -188,7 +190,7 @@ def check_a1_production_boundary() -> None:
         }
         for name in sorted(forbidden_calls & calls):
             fail(
-                f"A1 production module {path.relative_to(ROOT)} calls destructive/future boundary: {name}"
+                f"closed A1 module {path.relative_to(ROOT)} calls destructive boundary: {name}"
             )
 
     session_text = read(A1_SESSION)
@@ -202,11 +204,10 @@ def check_a1_production_boundary() -> None:
             "validate_staged_candidate",
             "SourceIdentity",
             "sha256",
-            "CandidatePreparationState",
             "retained_proof",
             "generation",
             "cancel",
-            "cleanup_session",
+            "MAX_DISPLAY_FILENAME_CHARS = 160",
         ),
     )
     for forbidden in (
@@ -218,7 +219,7 @@ def check_a1_production_boundary() -> None:
         "picker_unavailable",
     ):
         if forbidden in session_text:
-            fail(f"A1 validation service contains later-slice marker: {forbidden!r}")
+            fail(f"closed A1 validation service contains later-slice marker: {forbidden!r}")
 
     require_markers(
         A1_SCRATCH,
@@ -226,7 +227,8 @@ def check_a1_production_boundary() -> None:
             "restore-validation",
             "VALIDATION_MARKER_VERSION",
             "PRIVATE_DIRECTORY_MODE = 0o700",
-            "UUID4",
+            "_ensure_default_private_root",
+            "contains a symlink or non-directory",
             "cleanup_interrupted_runs",
             "cleanup_session",
         ),
@@ -236,11 +238,10 @@ def check_a1_production_boundary() -> None:
         A1_TESTS,
         (
             "test_current_schema_is_accepted",
-            "test_known_older_schema_is_accepted",
-            "test_newer_schema_is_typed_unsupported",
             "test_candidate_preparation_creates_no_restore_operation_safety_copy_audit_or_db_change",
             "test_cancel_during_validation_blocks_late_proof_publication",
-            "test_validation_scratch_is_private_and_interrupted_cleanup_is_owned_only",
+            "test_default_scratch_refuses_symlinked_app_ancestry",
+            "test_display_filename_is_bounded_and_removes_control_formatting",
         ),
     )
 
@@ -248,8 +249,6 @@ def check_a1_production_boundary() -> None:
         A1_SMOKE,
         (
             "--expected-head",
-            "git workspace is not clean",
-            "TemporaryDirectory",
             "RestoreCandidatePreparationService",
             "PASS — C4-II-A1 VALIDATION-SESSION SMOKE PASSED",
             "INCONCLUSIVE — ENVIRONMENT",
@@ -265,20 +264,20 @@ def main() -> int:
         if not has_marker(profile, marker):
             fail(f"current lifecycle profile is missing marker: {marker!r}")
 
-    # Verify the PR #173 baseline by its semantic section and exact merge SHA,
-    # rather than requiring one artificial prose phrase that Markdown wrapping or
-    # list formatting can legitimately split.
     for marker in (
-        "C4-II-A authorization / PR #173",
-        "aaedf2735660fb92eb627f7eeab327437d459b56",
-        "validation_session.py",
-        "validation_scratch.py",
-        "scripts/smoke_restore_validation_session.py",
-        "A2 remains blocked",
-        "C4-II-B remains separately not authorized",
+        "C4-II-A1 / PR #174",
+        "e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5",
+        "504e776508c940554b3ee8659a201af21db8303c",
+        "targeted A1 tests: 17 passed",
+        "full backend + launcher regression: 2415 passed",
+        "independent exact-head audit: P0=0 / P1=0 / P2=0",
+        "A2 authorized boundary — exact-run launcher control plane",
+        "picker_unavailable",
+        "production product-browser launch URL remains unchanged in A2",
+        "C4-II-B remains separately",
     ):
         if not has_marker(profile, marker):
-            fail(f"current lifecycle profile is missing A1 marker: {marker!r}")
+            fail(f"current lifecycle profile is missing post-A1/A2 marker: {marker!r}")
 
     for path in COMPACT_ACTIVE_FILES:
         text = read(path)
@@ -286,11 +285,10 @@ def main() -> int:
         for phrase in STALE_ACTIVE_PHRASES:
             if has_marker(text, phrase):
                 fail(
-                    f"stale pre-A1 lifecycle phrase remains in compact active file "
+                    f"stale pre-closure phrase remains in compact active file "
                     f"{path.relative_to(ROOT)}: {phrase!r}"
                 )
 
-    # ADR authority is unchanged by A1.
     decisions_agents = read(DECISIONS_AGENTS)
     for marker in (
         "scope and recency",
@@ -338,12 +336,12 @@ def main() -> int:
     require_markers(
         SLICE_PLAN,
         (
-            "C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-            "C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE",
+            "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
+            "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
             "picker_unavailable",
-            "The browser may never",
-            "production browser launch URL remains unchanged until A4",
-            "A3 replaces A2 `picker_unavailable`",
+            "The browser may never provide source path",
+            "production product-browser launch URL remains unchanged in A2",
+            "A3 replaces the production `picker_unavailable` adapter",
             "/backups/restore",
             "C4-II-B — PLANNED — NOT AUTHORIZED",
         ),
@@ -352,19 +350,17 @@ def main() -> int:
     require_markers(
         RESTORE_PROFILE,
         (
-            "C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+            "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
+            "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
             "Restore control → launcher-owned 127.0.0.1:<ephemeral>",
             "restore-validation",
-            "0700",
-            "SourceIdentity",
-            "SHA-256",
-            "heartbeat interval: 15 seconds",
-            "control-session expiry: 60 seconds",
+            "15-second heartbeat",
+            "60 seconds",
             "command_seq",
             "picker_unavailable",
             "/usr/bin/osascript",
             "/backups/restore",
-            "ordinary backend remains running",
+            "production product-browser launch URL remains unchanged",
         ),
     )
 
@@ -372,24 +368,28 @@ def main() -> int:
         DEPLOYMENT,
         (
             "launcher-owned local control boundary",
-            "C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+            "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
+            "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+            "picker_unavailable",
             "/usr/bin/osascript",
             "C4-II-B — PLANNED — NOT AUTHORIZED",
         ),
     )
+
     require_markers(
         PACKAGING,
         (
-            "C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+            "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
+            "C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+            "picker_unavailable",
             "/usr/bin/osascript",
             "Mac App Store sandbox compatibility",
             "C4-II-B destructive Restore remains not authorized",
         ),
     )
 
-    check_a1_production_boundary()
+    check_closed_a1_boundary()
 
-    # Preserve searchable project memory byte-for-byte.
     for path in REQUIRED_HISTORY:
         if not path.is_file():
             fail(f"missing preserved history: {path.relative_to(ROOT)}")
@@ -430,7 +430,9 @@ def main() -> int:
     for marker in (
         "accepted — ADR 0018 normative on main",
         "PR #173 is **not** a new architecture/change request",
-        "A1 is implemented in the current changeset but is not yet closed",
+        "A1 is **DONE — MERGED AND EXACT-HEAD VERIFIED**",
+        "This post-A1 closure is not a new CR",
+        "A2 is **AUTHORIZED NEXT — NOT IMPLEMENTED**",
         "C4-II-B remains **PLANNED — NOT AUTHORIZED**",
     ):
         if not has_marker(cr_text, marker):
@@ -446,12 +448,12 @@ def main() -> int:
     print(f"Checked {len(COMPACT_ACTIVE_FILES)} compact active files.")
     print(f"Verified {len(REQUIRED_HISTORY)} required history paths.")
     print(f"Verified {len(EXPECTED_HISTORY_BLOBS)} exact historical Git blob identities.")
-    print("Verified PR #173 merged / C4-II-A sliced authorization baseline.")
-    print("Verified C4-II-A1 current-changeset status and A2/A3/A4 gates.")
-    print("Verified A1 production AST excludes control/picker/destructive imports and calls.")
-    print("Verified A1 reuses C4-I staging/validation and owns private validation scratch.")
-    print("Verified A1 targeted tests and exact-head service smoke contract are present.")
-    print("Verified C4-II-B remains separately not authorized.")
+    print("Verified PR #174 merged / C4-II-A1 exact-head closure evidence.")
+    print("Verified C4-II-A1 is DONE and A2 is the only authorized next runtime slice.")
+    print("Verified A2 keeps picker_unavailable and no browser filesystem authority.")
+    print("Verified A2 does not perform production browser fragment handoff before A4.")
+    print("Verified A3/A4 predecessor gates and C4-II-B prohibition remain intact.")
+    print("Verified merged A1 production boundary remains non-destructive.")
     print("Verified ADR 0016 / ADR 0018 durable authority remains unchanged.")
     print("Verified maintained historical guidance and exact snapshots remain protected.")
     return 0
