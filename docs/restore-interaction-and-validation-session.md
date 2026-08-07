@@ -1,7 +1,7 @@
 # Restore interaction and non-destructive validation-session profile
 
 Status: **NORMATIVE PROFILE — ADR 0018 / CR-011**
-Updated: `2026-08-07`
+Updated: `2026-08-08`
 
 Normative sources:
 
@@ -10,17 +10,17 @@ Normative sources:
 - `docs/c4-ii-a-implementation-slices.md` — bounded A1→A4 implementation plan;
 - `docs/current-lifecycle.md` — current lifecycle authorization.
 
-ADR 0018 architecture is unchanged by A1.
+ADR 0018 architecture is unchanged by A1 closure or A2 authorization.
 
 ## Current lifecycle
 
 ```text
-PR #173 — MERGED — C4-II-A SLICED AUTHORIZATION
+PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
-C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
+C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
@@ -29,6 +29,9 @@ C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
+
+A2 implementation begins only after this post-A1 lifecycle closure is merged to
+`main`.
 
 ## Selected architecture
 
@@ -47,10 +50,13 @@ source path, validation-session authority and all future destructive authority.
 No WebSocket, generic localhost command server, browser filesystem authority or
 ordinary FastAPI Restore mutation is selected.
 
-## A1 implemented boundary
+## A1 merged validation boundary
 
-The current A1 changeset implements the launcher-owned **non-destructive
-validation core only**:
+PR #174 merged exact-head verified A1 at
+`e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5` as
+`504e776508c940554b3ee8659a201af21db8303c`.
+
+A1 implements only:
 
 ```text
 new selection generation
@@ -65,105 +71,98 @@ new selection generation
 → return typed presentation-safe result
 ```
 
-A1 creates no durable Restore operation/phase, no `before_restore` safety copy,
-no working-DB mutation/migration, no rollback/recovery mutation and no Restore
-AuditLog. It does not call `execute_restore(...)` and does not stop the ordinary
-backend merely to validate an isolated copy.
-
-Validation scratch:
+Validation scratch remains:
 
 ```text
 <system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<session-id>/
 ```
 
-Run/session names are launcher-generated UUID4 values. Directories use `0700` or
-platform-equivalent restrictive permissions; ownership/version markers are
-required for cleanup. User path components are never used in scratch names.
-Unknown directories/files and symlinks are not recursively deleted.
+Default scratch ancestry is canonicalized from system temp and app-owned path
+components refuse symlink traversal. Run/session names are UUID4, directories are
+user-only, and cleanup requires ownership/version proof.
 
-A1 typed result may contain only opaque run/session identity, generation, safe
-display filename, state, current/older-supported compatibility and fixed safe
-guidance. Absolute source/staged paths, raw SQL/SQLite, migration IDs, stack
-traces and database contents are forbidden from presentation state.
+A1 creates no durable Restore operation/phase, no `before_restore` safety copy,
+no working-DB mutation/migration, no rollback/recovery mutation and no Restore
+AuditLog. It does not call `execute_restore(...)` and does not stop the ordinary
+backend merely to validate an isolated copy.
 
-Launcher-private retained proof contains source path, C4-I `SourceIdentity`, full
-SHA-256, successful generation and compatibility only. It clears on cancel,
-reselection, rejection/failure, invalidation or service close.
+## A2 exact-run control plane — authorized next
 
-## Future startup order — A2/A4
+A2 owns the local control/session protocol only.
 
-ADR 0018 future production order remains:
+### Bind and request authority
 
-```text
-launcher lifecycle / instance authority
-→ interrupted C4-I recovery gate
-→ ordinary startup / migrations / backup-before-migration
-→ ordinary backend ready
-→ control plane bind on 127.0.0.1:<ephemeral>
-→ exact-run bootstrap capability
-→ browser handoff only once A4 consumer/removal exists
-```
+- exact `127.0.0.1` bind;
+- OS-assigned ephemeral port;
+- exact Host validation;
+- exact configured local frontend Origin where required;
+- no wildcard CORS;
+- no credentialed cookie authority;
+- only bounded control methods/headers;
+- `Cache-Control: no-store` for control/session state.
 
-A1 does not implement or modify this startup path.
+### Bootstrap and session
 
-## Future bind / Origin / bootstrap — A2
+- one-use bootstrap capability with >=256 bits entropy;
+- atomic compare-and-consume under concurrent attempts;
+- separate >=256-bit run-scoped session token;
+- no durable/reusable token;
+- 15-second heartbeat;
+- control-session expiry after 60 seconds without authenticated activity.
 
-A2 must enforce exact `127.0.0.1` bind, OS-assigned ephemeral port, exact Host,
-exact configured local frontend Origin, no wildcard origin, no credentialed cookie
-authority and only required methods/headers.
+Expiry invalidates session authority, A1 generation and retained proof. Scratch
+cleanup waits for the owning worker to quiesce.
 
-Bootstrap remains one-use >=256-bit capability transported only in URL fragment,
-with atomic compare-and-consume and `Cache-Control: no-store`. Successful
-bootstrap returns a second >=256-bit run-scoped token. Browser reload metadata is
-`sessionStorage` only and includes non-secret
-`control_origin = http://127.0.0.1:<ephemeral-port>` plus run/session identity.
+### Concurrency
 
-A2 production still has no browser fragment handoff: production browser URL stays
-unchanged until A4 supplies the consumer/removal logic.
+The HTTP servicing loop must remain responsive while long selection/validation
+work is in flight. Heartbeat/state/cancel cannot wait for the long worker to
+finish.
 
-## Future concurrency / liveness — A2
+### Request ordering
 
-Mandatory control-plane concurrency remains: picker/validation must never block
-the only heartbeat/state/cancel request loop. Worker publication is generation
-gated and cleanup waits for **worker quiescence**.
+Every mutating command carries a request ID with >=128 bits entropy and strict
+monotonic `command_seq`.
 
-- heartbeat interval: 15 seconds;
-- control-session expiry: 60 seconds without authenticated activity.
+Auth/Host/Origin/syntax-invalid requests do not consume sequence. Once an
+authenticated syntactically valid expected-next command is accepted, its sequence
+is atomically consumed **before business precondition evaluation**. A typed
+business rejection therefore cannot become success on later replay.
 
-Expiry invalidates token/generation/proof, prevents stale publication and cleans
-owned scratch only after worker quiescence.
+Same current sequence + same request ID may return cached idempotent result. Same
+sequence + different request ID, stale sequence or future sequence fails closed.
 
-Every mutating control command carries request ID with at least 128 bits entropy
-and strict monotonic `command_seq`. An authenticated syntactically valid expected
-next command consumes its command sequence **before business precondition
-evaluation**, so a typed business rejection also consumes the sequence and cannot
-become success on delayed replay.
+## A2→A3 source-selection seam
 
-## Future A2→A3 picker seam
+A2 has no real picker. Production A2 uses a launcher-owned source-selection
+adapter returning typed `picker_unavailable` and obtains **no source path**.
 
-A2 has no real picker. Production A2 uses launcher-owned typed
-`picker_unavailable` and obtains no source path. Tests may inject a launcher-owned
-fake adapter. Browser `path`, `source_path`, upload/blob/file payload or generic
-filesystem route is forbidden.
+Tests may inject a launcher-owned fake adapter directly. Browser/control request
+must never contain `path`, `source_path`, upload/blob/file bytes, bookmark/handle
+or equivalent filesystem authority. No test-only HTTP bypass and no generic
+filesystem/shell/SQL route.
 
-A3 replaces that adapter with launcher-owned:
+A3 later replaces `picker_unavailable` with launcher-owned:
 
 ```text
 /usr/bin/osascript
 → macOS Standard Additions `choose file`
-→ absolute POSIX path returned only to launcher
+→ absolute POSIX path returned only to launcher memory
 ```
 
 No `shell=True`, no `System Events`, no user text interpolated into executable
 AppleScript and no hidden PyObjC/Electron/Tauri/pywebview/tkinter dependency.
 
-## Future A4 browser screen
+## A2→A4 browser seam
+
+The production product-browser launch URL remains unchanged during A2 and A3.
+A2 does not append the bootstrap fragment to actual browser navigation.
 
 A4 owns exact `/backups/restore`, entry from `/backups`, first production browser
-bootstrap-fragment handoff, immediate fragment removal, `sessionStorage`, typed
-select/cancel/reselect/reload UX and real non-destructive E2E macOS smoke.
+bootstrap-fragment handoff, immediate fragment removal, `sessionStorage` token,
+non-secret `control_origin`, typed UX and real non-destructive E2E macOS smoke.
 
-A4 still has no destructive execute/confirm command.
+A2 exact-head smoke uses a direct authenticated local HTTP harness instead.
 
 ## Future C4-II-B re-proof
 
@@ -186,16 +185,11 @@ destructive authority.
 
 ## Backend lifecycle
 
-The **ordinary backend remains running** during A1 non-destructive source intake,
-staging and validation. Backend exclusion/stop remains a future destructive
+The ordinary backend remains running during non-destructive A1 validation and A2
+control/session work. Backend exclusion/stop remains a future destructive
 C4-II-B/C4-I boundary.
 
-## A1 verification
+## Successor gates
 
-A1 must prove current/older acceptance, invalid/newer rejection, source and
-working-DB safety, no durable Restore/safety-copy/AuditLog mutation, generation
-invalidation, owned-only scratch cleanup, existing C4-I regression safety and
-exact-head real-service smoke before A1 can be closed.
-
-A2/A3/A4 and C4-II-B remain blocked exactly as recorded in
-`docs/current-lifecycle.md`.
+A3 remains blocked until A2 is exact-head verified, merged and lifecycle-closed.
+A4 remains blocked by A3. C4-II-B remains separately not authorized.

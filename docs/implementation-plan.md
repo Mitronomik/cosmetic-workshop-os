@@ -3,7 +3,7 @@
 Project: `cosmetic-workshop-os`
 Client-facing name: **Мастерская косметолога**
 Status: **active current implementation sequence**
-Updated: `2026-08-07`
+Updated: `2026-08-08`
 
 Historical pre-compaction plan remains byte-identical at
 `docs/history/implementation-plan/2026-08-06-pre-compaction.md`.
@@ -27,22 +27,25 @@ PR #170 / C4-I merge — e6997281d2e0268ce54184d988c114bac71c35e2
 PR #171 merge — 76ab59216047222714a32f2793a789b3dc8df19a
 PR #172 / CR-011 merge — 998596560db6780a677bdec363d1fd19db30c1b6
 PR #173 / sliced authorization merge — aaedf2735660fb92eb627f7eeab327437d459b56
+PR #174 / A1 merge — 504e776508c940554b3ee8659a201af21db8303c
 ```
 
-PR #173 final reviewed head:
-`9f5722c5dec695588596d45daa5588092ce7f080`.
+A1 reviewed head:
+`e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5`.
 
-The current A1 branch was created from exact merged PR #173 main.
+A1 exact-head evidence: lifecycle PASS, real-service smoke PASS, 17 targeted tests
+passed, 514 existing C4-I Restore tests passed, 2415 backend+launcher tests passed,
+P0=0 / P1=0 / P2=0.
 
 ## 3. Current lifecycle
 
 ```text
-PR #173 — MERGED — C4-II-A SLICED AUTHORIZATION
+PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
-C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
+C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
@@ -52,137 +55,147 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## 4. Current implementation window — C4-II-A1
+A2 runtime implementation may start only after this post-A1 closure changeset is
+merged to `main`.
 
-Goal: implement the launcher-owned non-destructive candidate-preparation boundary
-without any A2/A3/A4 or C4-II-B scope.
+## 4. Current implementation window — C4-II-A2
 
-Implemented in the current changeset:
+Goal: implement the exact-run launcher-owned loopback control/session protocol
+around the merged A1 service, without real picker, browser Restore workspace or
+destructive Restore.
 
-- `launcher/restore/validation_session.py`:
-  - `RestoreCandidatePreparationService`;
-  - `prepare_restore_candidate(...)`;
-  - typed accepted/rejected/cancelled/technical-failure result;
-  - generation/cancel/reselection invalidation;
-  - launcher-private retained `SourceIdentity` + SHA-256 proof.
-- `launcher/restore/validation_scratch.py`:
-  - system-temp run/session namespace;
-  - UUID4-only launcher names;
-  - user-only permissions;
-  - ownership/version markers;
-  - owned-only current/interrupted cleanup.
-- direct reuse of existing C4-I:
-  - `open_selected_source(...)`;
-  - `HeldSource.revalidate()` / `digest()` / sidecar proof;
-  - `stage_source(...)` two-pass stable staging;
-  - `validate_staged_candidate(...)` read-only validation.
-- targeted A1 tests in `launcher/tests/test_restore_validation_session.py`.
-- exact-head service smoke in `scripts/smoke_restore_validation_session.py`.
+A2 owns:
 
-The implementation deliberately uses the existing C4-I staging algorithm instead
-of creating a second weaker copy/validation path.
+- exact `127.0.0.1` + OS-assigned ephemeral port;
+- exact Host and configured local frontend Origin enforcement;
+- one-use >=256-bit bootstrap capability with atomic consume;
+- separate >=256-bit run-scoped session token;
+- `Cache-Control: no-store`;
+- 15-second heartbeat / 60-second authenticated inactivity expiry;
+- concurrent HTTP servicing;
+- >=128-bit request ID + strict monotonic `command_seq`;
+- sequence consumption before business preconditions;
+- idempotent retry and stale/future replay rejection;
+- A1 generation/cancel/invalidation integration;
+- launcher-owned control-plane start/stop lifecycle;
+- source-selection adapter boundary.
 
-## 5. A1 non-goals / forbidden scope
+## 5. Mandatory transitional seams
 
-A1 does not authorize and must not contain:
+### A2→A3
 
-- HTTP control plane, Host/Origin/CORS/bootstrap/session protocol;
-- `command_seq` or control-plane replay ledger;
-- real native picker or `/usr/bin/osascript` invocation;
-- frontend Restore route/UI or production browser bootstrap fragment;
-- ordinary FastAPI Restore endpoint;
-- `execute_restore(...)` invocation;
-- durable Restore operation/phase creation;
-- `before_restore` safety copy;
-- working database replacement/migration;
-- rollback/startup-recovery mutation;
-- Restore AuditLog write;
-- new application dependency;
-- packaging implementation.
+Production A2 must use a launcher-owned adapter that returns typed
+`picker_unavailable`. It obtains no filesystem path.
 
-The ordinary backend is not stopped by A1 candidate validation.
+Tests may inject a launcher-owned fake adapter directly in launcher/control code.
+The browser may never supply `path`, `source_path`, upload/blob, file bytes,
+file handle/bookmark or other filesystem authority. No production test-bypass or
+generic filesystem/shell/SQL route is allowed.
 
-## 6. A1 safety contract
+### A2→A4
 
-For one source selection A1 must:
+Production browser navigation remains unchanged. A2 must not append the bootstrap
+fragment to the real product browser URL. The first production browser handoff is
+A4 scope, together with fragment consumption/removal and `sessionStorage`.
+
+A2 smoke therefore uses a direct authenticated local HTTP client.
+
+## 6. Command sequencing contract
+
+For mutating commands:
 
 ```text
-new generation + clear old proof
-→ create private validation scratch session
-→ C4-I open_selected_source / held descriptor
-→ C4-I stable two-pass staging into temporary candidate
-→ re-prove source identity/self-containment/digest
-→ C4-I read-only validate_staged_candidate
-→ re-prove source again
-→ delete temporary candidate/session scratch
-→ if generation is still current, retain launcher-private path + SourceIdentity + SHA-256
-→ return presentation-safe typed result
+Host/Origin/auth/syntax validation
+→ verify expected next command_seq
+→ atomically bind sequence to request ID
+→ consume expected sequence
+→ evaluate business preconditions
+→ return/cache typed result
 ```
 
-Any rejection, cancellation, technical failure, reselection, invalidation or
-service close clears retained proof. A late/stale generation cannot become new
-source authority.
+Auth/syntax-invalid requests do not consume sequence. A valid expected-next
+command consumes it before business evaluation, including typed business
+rejection. Same sequence + same request ID may replay cached result; same sequence
++ different request ID, stale or future sequence fails closed.
 
-Scratch is not durable Restore state and lives under:
+## 7. Concurrency and expiry contract
 
-`<system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<session-id>/`.
+Long selection/validation work must not block the only HTTP servicing loop.
+Heartbeat/state/cancel remain serviceable while a worker is in flight.
 
-## 7. Required A1 tests
+Session expiry invalidates session token, A1 generation and retained proof.
+Cleanup waits for the owning worker to quiesce; cancellation must not delete
+scratch out from under active A1 work.
 
-Must prove at least:
+## 8. A2 forbidden scope
 
-1. current-schema source accepted;
-2. supported older schema accepted without migrating source/working DB;
-3. newer/foreign/empty/corrupt/directory/symlink/sidecar/working-DB classes reject;
-4. selected source remains byte-identical in normal validation;
-5. working database remains unchanged;
-6. no durable Restore operation/phase exists;
-7. no `before_restore` safety copy is created;
-8. no Restore AuditLog row is written;
-9. stale/cancelled generation cannot retain proof;
-10. reselection clears previous proof before new staging;
-11. technical failures expose fixed safe text only;
-12. scratch uses restrictive permissions and cleanup is owned-only;
-13. existing C4-I Restore tests remain green.
+Do not implement:
 
-## 8. Exact-head verification gate
+- real `/usr/bin/osascript` picker;
+- `/backups/restore` or frontend Restore UI;
+- production browser bootstrap-fragment handoff;
+- destructive Restore confirmation/execute command;
+- `execute_restore(...)`;
+- durable Restore operation/phase or `before_restore` safety copy;
+- working DB replacement/migration;
+- rollback/startup-recovery mutation;
+- Restore AuditLog;
+- ordinary FastAPI Restore mutation endpoint;
+- WebSocket or generic localhost command server;
+- new dependency or packaging implementation.
 
-Run on the exact published A1 head:
+## 9. Required A2 tests
+
+At minimum cover:
+
+1. loopback-only ephemeral bind;
+2. Host/Origin rejection;
+3. no wildcard CORS/cookie authority;
+4. bootstrap one-use under concurrency;
+5. token entropy/run scoping;
+6. no-store responses;
+7. heartbeat and 60s expiry;
+8. concurrent heartbeat/state/cancel during long fake work;
+9. invalid auth/syntax does not consume sequence;
+10. typed business rejection consumes valid next sequence;
+11. idempotent same request-ID retry;
+12. different request ID/stale/future sequence rejection;
+13. duplicate concurrent select rejection;
+14. cancel/expiry/reselection clears A1 proof/generation;
+15. production `picker_unavailable` returns no path;
+16. request/browser DTO has no path/file authority;
+17. real production browser URL remains unchanged;
+18. no durable Restore/safety-copy/AuditLog/working-DB mutation;
+19. A1 + C4-I regressions remain green.
+
+## 10. Exact-head verification gate
+
+Run on the final A2 head:
 
 ```text
 git status --short
-→ git diff --check <A1-base>...HEAD
+→ git diff --check <A2-base>...HEAD
 → python3 scripts/check_documentation_lifecycle.py
-→ python3 -m pytest launcher/tests/test_restore_validation_session.py
-→ C4-I Restore regression tests
+→ targeted A2 tests
+→ A1 + existing C4-I Restore regression tests
 → python3 -m pytest backend/app/tests launcher/tests
-→ python3 scripts/smoke_restore_validation_session.py --expected-head <HEAD>
+→ exact-head direct-local-HTTP A2 smoke
 → verify clean status again
 → independent exact-head code/architecture audit
 → P0=0 / P1=0 / P2=0
 ```
 
-The smoke must use real temporary SQLite sources and the real candidate-preparation
-service/C4-I staging/validation; synthetic final-result injection is insufficient.
+## 11. Successor gates
 
-## 9. Successor gates
+A3 remains blocked until A2 passes its exact-head gate, merges, and lifecycle is
+closed from updated `main`. A4 remains blocked by A3. C4-II-B destructive
+confirmation/execution remains separately not authorized.
 
-A2 remains blocked until A1 passes the gate, merges, and lifecycle/project memory
-is updated from merged `main`.
-
-A2 then owns only exact-run loopback control/session protocol and uses the accepted
-`picker_unavailable` production seam until A3. A3 owns the real macOS picker. A4
-owns the first production browser bootstrap-fragment handoff and `/backups/restore`.
-
-C4-II-B destructive confirmation/execution remains separately not authorized.
-
-## 10. Current next action
+## 12. Current next action
 
 ```text
-Finish A1 implementation review
-→ publish draft PR
-→ run exact-head tests + smoke in clean checkout
-→ resolve every P0/P1/P2 finding
-→ merge only after evidence is complete
-→ close A1 lifecycle from updated main before starting A2
+merge post-A1 lifecycle closure
+→ create fresh A2 branch from updated main
+→ implement only exact-run launcher control plane
+→ exact-head tests + direct local HTTP smoke + independent audit
 ```

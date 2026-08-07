@@ -26,16 +26,21 @@ compatibility is not claimed and remains a future packaging decision.
 ## C4-II-A status
 
 ```text
-C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A2 — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
+C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
 C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 ```
 
-A1 adds no packaging implementation and no dependency. Its validation scratch is
-runtime system-temp state only. It does not bundle or invoke `/usr/bin/osascript`,
-does not add a control listener and does not change the production browser launch
-URL.
+A1 added no packaging implementation or dependency.
 
-A2/A3/A4 packaging consequences remain separately gated. C4-II-B destructive
-Restore remains not authorized.
+A2 may implement only launcher runtime control/session behavior. It may start an
+exact-run loopback control listener from launcher lifecycle, but must not add
+packaging implementation, new runtime dependency, real picker, or browser
+bootstrap-fragment handoff.
+
+Production A2 source selection remains typed `picker_unavailable`. The real
+`/usr/bin/osascript` picker remains A3. The first production browser handoff
+remains A4.
+
+C4-II-B destructive Restore remains not authorized.
