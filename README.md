@@ -10,12 +10,13 @@ Node.js, Docker or a terminal.
 
 ```text
 PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
+PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
-C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
+C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -30,9 +31,14 @@ PR #174 reviewed head
 17 targeted A1 tests, 514 existing C4-I Restore tests, 2415 full backend+launcher
 tests and P0=0 / P1=0 / P2=0 audit.
 
+PR #175 reviewed head
+`b1a48d8f668fa984e3032f85c226f77e30d92e4e` merged as
+`636645ece744752f6a753ae5a25a05297fd34e10`, closing A1 lifecycle and opening
+only A2 as the next runtime slice.
+
 ## Closed A1 boundary
 
-A1 now provides the launcher-owned non-destructive candidate-validation core:
+A1 provides the launcher-owned non-destructive candidate-validation core:
 
 - `RestoreCandidatePreparationService` / `prepare_restore_candidate(...)`;
 - private system-temp validation scratch;
@@ -43,31 +49,35 @@ A1 now provides the launcher-owned non-destructive candidate-validation core:
 - launcher-private retained source proof;
 - owned-only scratch cleanup.
 
-A1 contains no control-plane HTTP, native picker, frontend Restore UI or
-destructive Restore authority.
+A1 remains the single candidate-preparation authority.
 
-## Current A2 boundary
+## Current A2 implementation boundary
 
-After this post-A1 lifecycle closure merges, A2 is the only authorized runtime
-successor. It owns the exact-run launcher control/session protocol:
+The current changeset implements the exact-run launcher-owned control/session
+protocol around A1:
 
-- exact `127.0.0.1` + ephemeral port;
-- exact Host/Origin checks;
-- one-use >=256-bit bootstrap capability;
-- separate >=256-bit run session token;
-- `Cache-Control: no-store`;
+- stdlib concurrent HTTP server bound exactly to `127.0.0.1` on an ephemeral port;
+- exact Host and configured local frontend Origin;
+- one-use >=256-bit bootstrap capability with atomic consume;
+- separate >=256-bit run-scoped session token;
+- `Cache-Control: no-store`, no wildcard CORS and no cookie authority;
 - 15s heartbeat / 60s authenticated inactivity expiry;
-- concurrent heartbeat/state/cancel servicing;
-- >=128-bit request ID + strict monotonic `command_seq`;
-- idempotent retries and stale replay rejection;
-- A1 generation/cancel integration.
+- heartbeat/state/cancel remain responsive while one worker owns selection or
+  validation;
+- >=128-bit request ID namespace + strict monotonic `command_seq`;
+- expected-next sequence consumed before business precondition evaluation;
+- idempotent same-request retry and stale/future/conflict rejection;
+- A1 generation/cancel/proof invalidation on reselection/cancel/expiry/close;
+- launcher lifetime wiring after proved backend start and before backend shutdown.
 
-Production A2 still returns typed `picker_unavailable`; it must not obtain a
-filesystem path. The browser may never send `path`, `source_path`, file bytes,
-upload/blob or other filesystem authority.
+Production A2 still returns typed `picker_unavailable` through
+`UnavailableSourceSelectionAdapter`; it obtains no filesystem path. The HTTP
+schema contains no `path`, `source_path`, upload/file bytes or equivalent browser
+filesystem authority.
 
-The actual product-browser launch URL remains unchanged in A2. A4 owns the first
-production bootstrap-fragment handoff and `/backups/restore` browser consumer.
+The actual product-browser launch URL remains unchanged. A2 does not put
+`#cw-control`, control port, bootstrap capability or session material into browser
+navigation. A4 owns the first production fragment handoff and `/backups/restore`.
 
 ## Restore authority
 
@@ -85,7 +95,7 @@ C4-II-B destructive confirmation/execution remains **NOT AUTHORIZED**.
 
 ```text
 A1 — validation-session core                     ← DONE / merged
-→ A2 — exact-run launcher control plane          ← authorized next after closure merge
+→ A2 — exact-run launcher control plane          ← current changeset / not closed
 → A3 — native macOS picker integration           ← blocked
 → A4 — browser /backups/restore + E2E UX         ← blocked
 ```
