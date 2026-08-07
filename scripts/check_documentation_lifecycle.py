@@ -97,8 +97,13 @@ DECISION_REQUIRED_MARKERS = (
     "sessionStorage",
     "URL fragment",
     "no wildcard origin",
+    "atomic compare-and-consume",
+    "Cache-Control: no-store",
+    "Mandatory concurrency model",
     "heartbeat interval: 15 seconds",
     "control-session expiry: 60 seconds",
+    "at least 128 bits of entropy",
+    "clear launcher-private retained source proof/path",
     "prepare_restore_candidate",
     "SourceIdentity",
     "SHA-256",
@@ -112,8 +117,13 @@ RESTORE_PROFILE_REQUIRED_MARKERS = (
     "127.0.0.1",
     "/usr/bin/osascript",
     "sessionStorage",
-    "15 seconds",
-    "60 seconds",
+    "atomic compare-and-consume",
+    "Cache-Control: no-store",
+    "Mandatory control-plane concurrency",
+    "heartbeat interval: 15 seconds",
+    "control-session expiry: 60 seconds",
+    "at least 128 bits of entropy",
+    "clear launcher-private retained source proof/path",
     "prepare_restore_candidate",
     "SourceIdentity",
     "SHA-256",
@@ -136,9 +146,6 @@ MAINTAINED_HISTORY_GUIDANCE = (
     ROOT / "docs/history/c4-i-implementation-and-audit-history.md",
 )
 
-# The unsafe historical recipe used the PR #170 merge SHA as a --source value.
-# Generic `git restore --source=<old-commit>` may appear only as an explicit
-# prohibition; an executable recipe with the real old SHA is never allowed.
 UNSAFE_EXECUTABLE_HISTORY_PATTERNS = (
     "--source=e6997281d2e0268ce54184d988c114bac71c35e2",
     "git restore --source=e699728",
@@ -181,12 +188,9 @@ def main() -> int:
         if marker.casefold() not in profile_folded:
             fail(f"current lifecycle profile is missing marker: {marker!r}")
 
-    # Every compact active control file must agree on the post-PR-171 / CR-011
-    # lifecycle and must not keep the former pre-merge action as current work.
     for path in COMPACT_ACTIVE_FILES:
         require_markers(path, CORE_CURRENT_MARKERS)
-        text = read(path)
-        folded = text.casefold()
+        folded = read(path).casefold()
         for phrase in STALE_COMPACT_ACTIVE_PHRASES:
             if phrase.casefold() in folded:
                 fail(
@@ -194,7 +198,6 @@ def main() -> int:
                     f"{path.relative_to(ROOT)}: {phrase!r}"
                 )
 
-    # ADR authority must remain explicitly bounded by scope and recency.
     decisions_agents = read(DECISIONS_AGENTS)
     for marker in (
         "scope and recency",
@@ -207,8 +210,6 @@ def main() -> int:
         if marker.casefold() not in decisions_agents.casefold():
             fail(f"docs/decisions/AGENTS.md is missing ADR authority marker: {marker!r}")
 
-    # ADR 0016 intentionally retains branch-era lifecycle prose, so the current
-    # profile must continue to list it in the bounded supersession map.
     adr_0016_text = read(ADR_0016)
     if "C4-I — IMPLEMENTED ON PR BRANCH" in adr_0016_text:
         if "docs/decisions/0016-launcher-assisted-restore.md" not in profile:
@@ -216,8 +217,6 @@ def main() -> int:
         if "supersession remains bounded to lifecycle metadata only" not in profile_folded:
             fail("ADR 0016 lifecycle supersession is not explicitly bounded")
 
-    # ADR 0017 intentionally remains accepted history for C4-I closure but its
-    # pre-decision CR-011 status must now be explicitly bounded below ADR 0018.
     adr_0017_text = read(ADR_0017)
     if "CR-011" in adr_0017_text and "NOT DECIDED" in adr_0017_text:
         if "docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md" not in profile:
@@ -232,13 +231,9 @@ def main() -> int:
         if relative not in profile:
             fail(f"superseded status file is not declared in current lifecycle: {relative}")
 
-    # CR-011 must now be a real selected decision, not just a gate document.
     require_markers(ADR_0018, DECISION_REQUIRED_MARKERS)
     require_markers(RESTORE_PROFILE, RESTORE_PROFILE_REQUIRED_MARKERS)
 
-    # The selected packaging/deployment consequences must be visible outside the
-    # ADR so later packaging work does not silently invent another picker/control
-    # architecture.
     require_markers(
         PACKAGING,
         (
@@ -258,7 +253,6 @@ def main() -> int:
         ),
     )
 
-    # Preserve all searchable pre-compaction project memory byte-for-byte.
     for path in REQUIRED_HISTORY:
         if not path.is_file():
             fail(f"missing preserved history: {path.relative_to(ROOT)}")
@@ -273,8 +267,6 @@ def main() -> int:
                 f"expected blob {expected_sha}, got {actual_sha}"
             )
 
-    # Maintained historical guidance may mention git restore only as a
-    # prohibition; never retain an executable old-SHA recipe.
     for path in MAINTAINED_HISTORY_GUIDANCE:
         text = read(path)
         for pattern in UNSAFE_EXECUTABLE_HISTORY_PATTERNS:
@@ -288,8 +280,6 @@ def main() -> int:
     if "Do not use `git restore --source=<old-commit>`" not in history_policy:
         fail("docs/history/AGENTS.md does not prohibit active-checkout historical restore")
 
-    # Current ledger must describe the decision while keeping implementation
-    # authorization separate.
     cr_text = read(CHANGE_REQUESTS)
     cr_folded = cr_text.casefold()
     if "| CR-011 |" not in cr_text:
@@ -313,7 +303,7 @@ def main() -> int:
     print(f"Verified {len(EXPECTED_HISTORY_BLOBS)} exact historical Git blob identities.")
     print("Verified ADR 0016 / ADR 0017 / ADR 0018 scope-and-recency authority.")
     print("Verified bounded ADR 0017 pre-decision CR-011 supersession.")
-    print("Verified CR-011 selected loopback-control/picker/validation architecture.")
+    print("Verified CR-011 loopback/picker/security/concurrency/validation architecture.")
     print("Verified C4-II-A remains separately not authorized.")
     print("Verified maintained historical guidance contains no executable old-commit restore recipe.")
     return 0
