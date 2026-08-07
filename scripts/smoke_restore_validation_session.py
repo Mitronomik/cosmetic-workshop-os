@@ -18,6 +18,14 @@ import subprocess
 import sys
 import tempfile
 
+# Direct execution (`python3 scripts/smoke_restore_validation_session.py`) makes
+# `scripts/` sys.path[0], not the repository root.  Add the exact repo root before
+# importing launcher/backend packages so the documented smoke command is runnable
+# from a clean checkout without relying on PYTHONPATH or an installed package.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 
 def _git(*args: str) -> str:
     return subprocess.check_output(["git", *args], text=True).strip()
