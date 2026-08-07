@@ -131,7 +131,13 @@ SLICE_PLAN_REQUIRED_MARKERS = (
     "prepare_restore_candidate",
     "A1 must not implement HTTP control plane",
     "A2 must not implement real native picker",
+    "picker_unavailable",
+    "The browser may never provide the source path",
+    "No temporary query/body field such as `path`",
+    "the production browser launch URL remains unchanged until A4",
+    "A3 replaces the A2 `picker_unavailable` production adapter",
     "A3 must not implement final browser Restore workspace",
+    "production launcher browser handoff",
     "A4 must not implement destructive Restore confirmation",
     "Each implementation slice starts from updated `main`",
     "P0=0/P1=0/P2=0 before merge",
@@ -354,6 +360,7 @@ def main() -> int:
     print("Verified PR #172 merged / CR-011 accepted baseline.")
     print("Verified sliced C4-II-A authorization and A1-only immediate successor.")
     print("Verified A2/A3/A4 predecessor merge + exact-head gates.")
+    print("Verified A2 has no browser-path authority or premature production browser fragment handoff.")
     print("Verified C4-II-B remains separately not authorized.")
     print("Verified C4-II-A1 stays non-destructive and excludes control/picker/frontend scope.")
     print("Verified maintained historical guidance contains no executable old-commit restore recipe.")
