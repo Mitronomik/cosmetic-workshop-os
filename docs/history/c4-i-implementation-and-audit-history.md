@@ -351,7 +351,7 @@ documentation-only PR #171.
 ## Full pre-compaction snapshots
 
 The complete branch-era state journals remain available at the PR #170 merge
-commit:
+commit. Read them without replacing files in the active checkout:
 
 ```bash
 git show e6997281d2e0268ce54184d988c114bac71c35e2:state/current-focus.md
@@ -359,13 +359,17 @@ git show e6997281d2e0268ce54184d988c114bac71c35e2:state/progress.md
 git show e6997281d2e0268ce54184d988c114bac71c35e2:state/handoff.md
 ```
 
-They can be restored to a temporary worktree when deeper archaeology is required:
+For side-by-side archaeology, create a separate detached worktree:
 
 ```bash
-git restore \
-  --source=e6997281d2e0268ce54184d988c114bac71c35e2 \
-  -- state/current-focus.md state/progress.md state/handoff.md
+git worktree add \
+  ../cosmetic-workshop-os-history-pr170 \
+  e6997281d2e0268ce54184d988c114bac71c35e2
 ```
+
+Do not use `git restore --source=<old-commit>` in the active development checkout
+merely to inspect history. It replaces working-tree files and can silently
+reintroduce obsolete active instructions.
 
 Those snapshots contain obsolete active instructions from the period when PR
 #170 was still open. They are evidence of that period, not current project
