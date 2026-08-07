@@ -1,8 +1,6 @@
-# Current focus — CR-011 decision gate
+# Current focus — PR #171 documentation closure gate
 
-Updated: `2026-08-06`
-
-This file is the compact current short-horizon source of truth.
+Updated: `2026-08-07`
 
 Current lifecycle authority:
 [`docs/current-lifecycle.md`](../docs/current-lifecycle.md).
@@ -13,11 +11,8 @@ Current decision:
 Current change-request ledger:
 [`state/change-requests.md`](change-requests.md).
 
-Searchable project history and exact pre-compaction snapshots:
+Searchable project history:
 [`docs/history/README.md`](../docs/history/README.md).
-
-Detailed C4-I implementation and audit history:
-[`docs/history/c4-i-implementation-and-audit-history.md`](../docs/history/c4-i-implementation-and-audit-history.md).
 
 ## Current lifecycle
 
@@ -26,68 +21,46 @@ C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 CR-010 — ACCEPTED
-
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-— PR #170
-— final reviewed head ac95e2990efa979b3ded6cb48f91ddd0750aa7c8
-— merge commit e6997281d2e0268ce54184d988c114bac71c35e2
-
-CR-011 — Launcher Restore interaction and validation-session boundary
-— AUTHORIZED — DECISION ONLY — NOT DECIDED
-
-C4-II-A — Launcher Restore source selection and validation presentation
-— PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
-
-C4-II-B — Explicit confirmation and Restore execution
-— PLANNED — NOT AUTHORIZED
-
-C4-II-C — Completion, rollback and support-assisted outcome UX
-— PLANNED — NOT AUTHORIZED
-
-C4-III — Restore end-to-end verification and lifecycle closure
-— PLANNED — NOT AUTHORIZED
-
-C4 — ACTIVE
+CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
-macOS packaging — NOT COMPLETED
-safe packaged update flow — NOT COMPLETED
-installation verification — NOT COMPLETED
-full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-## Only authorized next task
+## Current action while PR #171 is open
+
+PR #171 is the current task.
+
+```text
+finish independent documentation/architecture audit
+→ correct every finding
+→ run documentation checks in a real checkout
+→ repeat exact-head read-only gate
+→ merge PR #171
+```
+
+Do not start CR-011 from the unmerged PR #171 branch.
+Do not create a dependent CR-011 branch from the PR #171 head.
+No runtime implementation is authorized in this branch.
+
+## Authorized successor after PR #171 merges
+
+After PR #171 merges, update `main` and create a fresh branch from merged `main`.
+Only then begin:
 
 ```text
 CR-011 — Decide the launcher Restore interaction and validation-session boundary.
 Decision-only. No runtime implementation is authorized.
 ```
 
-CR-011 must choose one concrete architecture for:
-
-- the location and owning process of the user-facing Restore screen;
-- the process that opens the native macOS file picker;
-- the exact command path between any browser action and the launcher;
-- local-run authentication, origin, token, replay, stale-session, and duplicate
-  action protection;
-- path privacy and whether an absolute source path ever leaves the launcher;
-- backend lifecycle during selection and validation;
-- allowed dependencies and packaging implications;
-- launcher-owned cancellation, reselection, cleanup, and interrupted-session
-  recovery;
-- exact-head smoke for the chosen architecture.
-
-The decision must also preserve one non-destructive launcher-owned candidate
-preparation boundary. Conceptually:
-
-```text
-prepare_restore_candidate(...)
-```
-
-It must not call `execute_restore(...)`, create a durable Restore operation
-record, enter a Restore phase, create a `before_restore` safety copy, mutate the
-working database, migrate the working database, perform rollback, or write a
-Restore AuditLog event.
+CR-011 must select one concrete architecture for screen ownership, native picker
+ownership, browser-to-launcher command path if any, exact-run authentication,
+origin/replay/stale-session protection, path privacy, backend lifecycle,
+dependencies, packaging consequences, cleanup, and exact-head smoke.
 
 ## Blocked until CR-011 is accepted
 
@@ -104,35 +77,27 @@ No agent may implement:
 - packaging changes for Restore;
 - C4-II-A, C4-II-B, C4-II-C, or C4-III runtime work.
 
-The ordinary browser UI currently has no accepted launcher command channel.
-Implementation by assumption is prohibited.
+## Mandatory future validation-session semantics
 
-## Superseded status rule
+Future C4-II-A must use a launcher-owned non-destructive boundary conceptually
+represented as `prepare_restore_candidate(...)`.
 
-Dated C4 status paragraphs in `docs/architecture.md`, `docs/roadmap.md`, and
-`docs/backup-and-restore.md` do not override the current lifecycle profile.
-Their product and safety contracts remain relevant; lifecycle labels such as
-`NOT MERGED` or `NOT IMPLEMENTED` for C4-I are historical.
+It must not call `execute_restore(...)`, create a durable Restore operation,
+enter a Restore phase, create a `before_restore` safety copy, mutate or migrate
+the working database, perform rollback/recovery mutation, write a Restore
+AuditLog event, or give the browser authority over the selected-source path.
 
-## Preserved Restore invariants
-
-- exactly twelve durable phases;
-- `phase` is the sole authoritative lifecycle field;
-- accepted transition graph and recovery matrix unchanged;
-- immutable selected source;
-- verified `before_restore` safety copy before future replacement;
-- launcher ownership of destructive Restore;
-- no ordinary backend or SPA Restore mutation;
-- no Restore AuditLog event;
-- browser opens into the ordinary workspace only after durable `completed`;
-- user-facing Restore remains `NOT IMPLEMENTED`.
+C4-II-B must later re-prove source or retained-candidate identity through
+launcher-owned state and accepted C4-I rules before destructive execution.
 
 ## Documentation verification
 
-Before PR #171 can merge, run:
+Before PR #171 can merge, run in a real checkout:
 
 ```bash
+git diff --check
 python3 scripts/check_documentation_lifecycle.py
 ```
 
-This is a documentation consistency check, not product smoke.
+Also run the repository Markdown/link check if one is defined, then repeat the
+independent exact-head read-only audit.
