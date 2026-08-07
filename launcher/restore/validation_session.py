@@ -39,6 +39,8 @@ from launcher.restore.workspace import RestoreWorkspaceError
 logger = logging.getLogger(__name__)
 
 READ_CHUNK_BYTES = 1024 * 1024
+MAX_DISPLAY_FILENAME_CHARS = 160
+FALLBACK_DISPLAY_FILENAME = "резервная копия"
 
 CANCELLED_MESSAGE = "Проверка резервной копии отменена. Данные мастерской не изменились."
 TECHNICAL_FAILURE_MESSAGE = (
@@ -109,11 +111,24 @@ class _PreparedCandidate:
 
 
 def _safe_filename(selected_source: object) -> str:
-    if isinstance(selected_source, (str, Path)):
-        name = Path(selected_source).name
-        if name:
-            return name
-    return "резервная копия"
+    """Return a bounded, display-only basename with no control formatting.
+
+    The real path remains launcher-private authority.  This value is only a UI
+    label, so non-printable/control characters are replaced with spaces,
+    whitespace is collapsed and length is bounded before it can reach a future
+    browser surface.
+    """
+
+    if not isinstance(selected_source, (str, Path)):
+        return FALLBACK_DISPLAY_FILENAME
+    name = Path(selected_source).name
+    if not name:
+        return FALLBACK_DISPLAY_FILENAME
+    printable = "".join(character if character.isprintable() else " " for character in name)
+    collapsed = " ".join(printable.split()).strip()
+    if not collapsed:
+        return FALLBACK_DISPLAY_FILENAME
+    return collapsed[:MAX_DISPLAY_FILENAME_CHARS]
 
 
 def _sha256_file(path: Path) -> str:
