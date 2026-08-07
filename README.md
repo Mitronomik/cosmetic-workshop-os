@@ -2,28 +2,19 @@
 
 Client-facing product name: **Мастерская косметолога**.
 
-A local-first working system for a cosmetic workshop: recipes and versions,
-individual client formulas, clients/feedback, ingredients/lots, packaging,
-orders, production, stock movements, alerts, purchases, imports, exports,
-backups, onboarding and help.
-
-The product goal is a packaged local application that a non-technical user can
-open and use without GitHub, Git, Python, Node.js, Docker or a terminal.
+A local-first working system for a cosmetic workshop. The product goal is a
+packaged application a non-technical user can run without GitHub, Git, Python,
+Node.js, Docker or a terminal.
 
 ## Current product status
 
 ```text
-PR #171 — MERGED
-PR #172 — MERGED — CR-011 ACCEPTED
-C1 — COMPLETED
-C2 — COMPLETED
-C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
-CR-010 — ACCEPTED
+PR #173 — MERGED — C4-II-A SLICED AUTHORIZATION
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — AUTHORIZED AS SLICED — NOT IMPLEMENTED
-C4-II-A1 — AUTHORIZED NEXT — NOT IMPLEMENTED
-C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE
+C4-II-A — IN PROGRESS — SLICED
+C4-II-A1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
@@ -33,162 +24,108 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-On the PR #173 authorization branch, this C4-II-A authorization becomes project
-authority only when the changeset is merged to `main`. No runtime implementation
-belongs in PR #173 itself.
+PR #173 reviewed head `9f5722c5dec695588596d45daa5588092ce7f080`
+merged as `aaedf2735660fb92eb627f7eeab327437d459b56`.
 
-For current lifecycle/authorization read:
+The current A1 changeset starts from that merged baseline and implements only the
+launcher-owned **non-destructive validation-session core**. It does not implement
+HTTP control, browser session/bootstrap, native picker, frontend Restore UI or
+destructive Restore.
 
-1. [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
-2. newest applicable ADR
-3. [`docs/c4-ii-a-implementation-slices.md`](docs/c4-ii-a-implementation-slices.md)
-4. [`docs/implementation-plan.md`](docs/implementation-plan.md)
-5. [`state/current-focus.md`](state/current-focus.md)
-6. [`state/progress.md`](state/progress.md)
-7. [`state/handoff.md`](state/handoff.md)
-8. [`state/change-requests.md`](state/change-requests.md)
+## Current A1 boundary
+
+Implemented in the current changeset:
+
+- `RestoreCandidatePreparationService` / `prepare_restore_candidate(...)`;
+- system-temp validation scratch under
+  `<system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<session-id>/`;
+- user-only scratch permissions and ownership-marker cleanup;
+- direct reuse of C4-I `open_selected_source(...)`, held-descriptor staging and
+  `validate_staged_candidate(...)`;
+- typed presentation-safe accepted/rejected/cancelled/technical-failure results;
+- generation/cancel/reselection invalidation;
+- launcher-private retained source path + `SourceIdentity` + full SHA-256 proof;
+- removal of staged validation scratch before accepted proof publication;
+- automated A1 tests and an exact-head service-level smoke runner.
+
+Explicitly absent:
+
+- no `execute_restore(...)` call;
+- no durable Restore operation or phase;
+- no `before_restore` safety copy;
+- no working-database replacement/migration;
+- no rollback/startup-recovery mutation;
+- no Restore AuditLog write;
+- no HTTP control plane / `command_seq`;
+- no `/usr/bin/osascript` picker integration;
+- no `/backups/restore` frontend route or browser bootstrap handoff;
+- no new runtime dependency or packaging implementation.
+
+A2 remains blocked until A1 is independently reviewed, exact-head tested and
+smoked, merged, and lifecycle/project memory is closed from updated `main`.
 
 ## Restore authority
 
-Authority is intentionally split:
+Authority remains intentionally split:
 
-- ADR 0016 — durable launcher-assisted destructive Restore safety/state machine;
-- ADR 0017 — C4-I lifecycle closure and CR-011 gate;
+- ADR 0016 — durable destructive Restore safety/state machine;
+- ADR 0017 — C4-I lifecycle closure/history;
 - ADR 0018 — interaction/control/picker/validation-session architecture;
-- `docs/c4-ii-a-implementation-slices.md` — bounded A1→A4 implementation
-  authorization and PR gates;
-- `docs/current-lifecycle.md` — current implementation authorization.
+- `docs/c4-ii-a-implementation-slices.md` — bounded A1→A4 implementation plan;
+- `docs/current-lifecycle.md` — current implementation authorization/status.
 
-ADR 0018 does not change the twelve phases, transition graph, startup recovery
-matrix, `replacement_intent`, mandatory safety-copy rule, immutable-source rule,
-or Restore AuditLog boundary accepted by ADR 0016.
+A1 does not amend ADR 0016 or ADR 0018. C4-II-B destructive confirmation and
+execution remains **NOT AUTHORIZED**.
 
-## C4-II-A implementation sequence
-
-C4-II-A is deliberately split into four small PRs:
+## C4-II-A sequence
 
 ```text
-A1 — validation-session core
-→ A2 — exact-run launcher control plane
-→ A3 — native macOS picker integration
-→ A4 — browser /backups/restore + end-to-end non-destructive flow
+A1 — validation-session core                     ← current changeset
+→ A2 — exact-run launcher control plane          ← blocked
+→ A3 — native macOS picker integration           ← blocked
+→ A4 — browser /backups/restore + E2E UX         ← blocked
 ```
 
-Only **A1** is authorized to begin after PR #173 merges. A2–A4 require their
-predecessor to be independently reviewed, exact-head tested, merged, and the
-lifecycle state updated before the next branch is created.
+Each later slice starts from updated `main` only after its predecessor merge,
+exact-head gate and lifecycle update.
 
-C4-II-B destructive confirmation/execution remains **NOT AUTHORIZED**.
+## Current verification gate
 
-Complete slice contract:
-
-- [`docs/c4-ii-a-implementation-slices.md`](docs/c4-ii-a-implementation-slices.md)
-
-Selected interaction architecture:
-
-- [`docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`](docs/decisions/0018-launcher-restore-interaction-and-validation-session.md)
-- [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
-
-## Current action — PR #173
-
-PR #173 is documentation/lifecycle only.
-
-Before merge:
+Before the A1 changeset can be considered complete:
 
 ```text
-synchronize post-#172 lifecycle
-→ git diff --check
-→ python3 scripts/check_documentation_lifecycle.py
-→ verify docs/state/checker-only diff
-→ fresh independent exact-head documentation/authorization audit
-→ resolve every P0/P1/P2 finding
-→ merge PR #173
+git diff --check
+→ documentation lifecycle checker
+→ targeted A1 tests
+→ existing C4-I Restore regression tests
+→ full backend + launcher regression suite
+→ exact-head A1 service-level smoke
+→ independent exact-head code/architecture audit
+→ P0=0 / P1=0 / P2=0
 ```
 
-Do not implement A1 on the unmerged PR #173 branch.
+Do not claim A1 `DONE` or start A2 before that gate closes.
 
-After PR #173 merges, update `main`, create a fresh A1 branch, and implement only
-`C4-II-A1 — Validation-session core`.
+## Current authority map
 
-## Project history
+1. [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
+2. applicable accepted ADR
+3. [`docs/c4-ii-a-implementation-slices.md`](docs/c4-ii-a-implementation-slices.md)
+4. [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
+5. [`docs/implementation-plan.md`](docs/implementation-plan.md)
+6. active [`state/`](state/) files
 
-Searchable history is retained under [`docs/history/`](docs/history/README.md).
-Exact pre-compaction snapshots remain byte-identical and are protected by
-`scripts/check_documentation_lifecycle.py`.
-
-History is non-normative evidence and cannot authorize current work.
-
-## Documentation map
-
-### Product and architecture
-
-- [`AGENTS.md`](AGENTS.md) — main agent contract
-- [`docs/current-lifecycle.md`](docs/current-lifecycle.md) — lifecycle authority
-- [`docs/product-spec.md`](docs/product-spec.md) — product specification
-- [`docs/architecture.md`](docs/architecture.md) — durable architecture
-- [`docs/domain-model.md`](docs/domain-model.md) — domain model
-- [`docs/roadmap.md`](docs/roadmap.md) — strategic roadmap
-- [`docs/implementation-plan.md`](docs/implementation-plan.md) — active sequence
-- [`docs/c4-ii-a-implementation-slices.md`](docs/c4-ii-a-implementation-slices.md)
-  — C4-II-A authorization/slicing
-- [`docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`](docs/decisions/0018-launcher-restore-interaction-and-validation-session.md)
-  — CR-011 decision
-- [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
-  — Restore interaction profile
-
-### UI/product language
-
-- [`docs/ui-ux-contract.md`](docs/ui-ux-contract.md)
-- [`docs/frontend-concept.md`](docs/frontend-concept.md)
-- [`docs/user-guide.md`](docs/user-guide.md)
-
-### Data safety/operations
-
-- [`docs/backup-and-restore.md`](docs/backup-and-restore.md)
-- [`docs/deployment.md`](docs/deployment.md)
-- [`docs/packaging.md`](docs/packaging.md)
-- [`docs/local-install.md`](docs/local-install.md)
-- [`docs/update-guide.md`](docs/update-guide.md)
-- [`docs/pr-testing-and-smoke-rules.md`](docs/pr-testing-and-smoke-rules.md)
-
-### Project memory
-
-- [`docs/codex-project-structure.md`](docs/codex-project-structure.md)
-- [`docs/codex-prompting-rules.md`](docs/codex-prompting-rules.md)
-- [`state/current-focus.md`](state/current-focus.md)
-- [`state/progress.md`](state/progress.md)
-- [`state/handoff.md`](state/handoff.md)
-- [`state/change-requests.md`](state/change-requests.md)
-- [`docs/history/README.md`](docs/history/README.md)
+Searchable history remains under [`docs/history/`](docs/history/README.md). The
+five protected pre-compaction snapshots must remain byte-identical.
 
 ## Architectural invariants
 
-Every change must preserve:
-
-- local-first work without required internet;
-- user data separate from code/package;
-- deliverable product rather than repository workflow;
-- API-first backend business architecture;
-- backend-owned business calculations/critical mutations;
-- immutable historical production meaning;
-- versioned recipes and first-class individual client formulas;
-- inventory through lots/movements;
-- transactional production;
-- import through draft/preview/validation/confirmation/apply;
-- backup before migrations;
-- understandable non-technical UI;
-- no silent MVP expansion into cloud, OCR, full accounting, roles or advanced
-  analytics.
+Every change must preserve local-first operation, user data outside code/package,
+API-first business architecture, safe historical data, recipe versions,
+first-class client recipes, lot/movement inventory, transactional production,
+safe import preview/confirmation, backup-before-migration and a human-readable
+non-technical UI.
 
 Restore additionally preserves launcher ownership of filesystem/destructive
-authority and never uses the ordinary browser as absolute-path authority.
-
-## Documentation check
-
-After lifecycle documentation changes run:
-
-```bash
-python3 scripts/check_documentation_lifecycle.py
-```
-
-This is documentation consistency validation, not product smoke.
+authority, immutable selected source, no browser absolute-path authority and no
+destructive action before separately authorized C4-II-B.
