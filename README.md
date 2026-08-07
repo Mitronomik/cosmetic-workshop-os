@@ -2,153 +2,206 @@
 
 Client-facing product name: **Мастерская косметолога**.
 
-Local-first web app for a cosmetic workshop: recipes, recipe versions, individual client formulas, clients, wishes and feedback, ingredients, lots, packaging, orders, production, stock movements, alerts, purchase suggestions, imports, exports, backups and onboarding.
+A local-first working system for a cosmetic workshop: recipes and recipe
+versions, individual client formulas, clients and feedback, ingredients and
+lots, packaging, orders, production, stock movements, alerts, purchase
+suggestions, imports, exports, backups, onboarding, and help.
+
+The product goal is a packaged local application that a non-technical user can
+open, understand, update, and use without GitHub, Git, Python, Node.js, Docker,
+or a terminal.
+
+## Current product status
+
+```text
+C1 — COMPLETED
+C2 — COMPLETED
+C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
+CR-010 — ACCEPTED
+C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-011 — AUTHORIZED — DECISION ONLY — NOT DECIDED
+C4-II-A — PLANNED — BLOCKED BY CR-011 — NOT AUTHORIZED
+C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
+Restore — NOT IMPLEMENTED
+Product release readiness — NOT CLAIMED
+```
+
+The repository intentionally does not embed a permanently changing current
+baseline SHA in this README.
+
+For lifecycle and authorization, read in this order:
+
+1. [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
+2. [`docs/implementation-plan.md`](docs/implementation-plan.md)
+3. [`state/current-focus.md`](state/current-focus.md)
+4. [`state/progress.md`](state/progress.md)
+5. [`state/handoff.md`](state/handoff.md)
+6. [`state/change-requests.md`](state/change-requests.md)
+
+## Current action while PR #171 is open
+
+PR #171 is the current documentation closure gate.
+
+```text
+finish independent audit
+→ correct every finding
+→ run documentation checks in a real checkout
+→ repeat exact-head read-only audit
+→ merge PR #171
+```
+
+Do not start CR-011 from the unmerged PR #171 branch.
+Do not create a dependent CR-011 branch from the PR #171 head.
+
+## Authorized successor after PR #171 merges
+
+After PR #171 is merged, update `main` and create a new branch from the merged
+`main`. Only then begin:
+
+```text
+CR-011 — Decide the launcher Restore interaction and validation-session boundary.
+Decision-only. No runtime implementation is authorized.
+```
+
+C4-II-A remains planned, blocked by CR-011, and not authorized.
+
+## Lifecycle consistency note
+
+`docs/architecture.md`, `docs/roadmap.md`, `docs/backup-and-restore.md`, and the
+dated implementation-status blocks in ADR 0016 retain valuable product,
+safety, and architecture context but contain branch-era C4 lifecycle wording.
+
+Current lifecycle and authorization are governed by:
+
+- [`docs/current-lifecycle.md`](docs/current-lifecycle.md);
+- ADR 0017;
+- the active implementation plan.
+
+ADR 0016 remains authoritative for the launcher-assisted Restore product and
+safety decision, including its twelve-phase state machine and recovery contract.
+Only its dated implementation-status / authorization wording is superseded by
+ADR 0017 after PR #170 merged.
+
+No agent may reopen C4-I or authorize C4-II runtime work from a historical status
+sentence.
+
+## C4-I history and current Restore decision
+
+- Current lifecycle authority:
+  [`docs/current-lifecycle.md`](docs/current-lifecycle.md)
+- Current lifecycle and architecture gate:
+  [`docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`](docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md)
+- Normative Restore interaction and non-destructive validation-session profile:
+  [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
+- Accepted launcher-assisted Restore safety contract:
+  [`docs/decisions/0016-launcher-assisted-restore.md`](docs/decisions/0016-launcher-assisted-restore.md)
+- C4-I implementation and six-round audit history:
+  [`docs/history/c4-i-implementation-and-audit-history.md`](docs/history/c4-i-implementation-and-audit-history.md)
+- Project timeline and exact pre-compaction snapshots:
+  [`docs/history/README.md`](docs/history/README.md)
+- Backup and Restore product/safety contract:
+  [`docs/backup-and-restore.md`](docs/backup-and-restore.md)
+
+C4-I is internal safety infrastructure. It does not provide a user-facing file
+picker, validation screen, destructive confirmation, Restore action, terminal
+outcome screen, ordinary FastAPI Restore endpoint, or ordinary SPA Restore
+mutation.
+
+The launcher currently opens an ordinary system browser. There is not yet an
+accepted browser-to-launcher command channel or a public non-destructive
+validation-session service. CR-011 must choose those boundaries before runtime
+work begins.
 
 ## Documentation map
 
-- `AGENTS.md` - main Codex contract
-- `docs/product-spec.md` - product specification
-- `docs/architecture.md` - architecture contract
-- `docs/roadmap.md` - PR-based roadmap
-- `docs/implementation-plan.md` - current implementation sequence, product-readiness slices, and MVP release gates
-- `docs/domain-model.md` - domain model
-- `docs/ui-ux-contract.md` - human-friendly UI rules
-- `docs/audit-log.md` - durable AuditLog workspace product, API, privacy and presentation contract (C3)
-- `docs/backup-and-restore.md` - backup contract and the accepted launcher-assisted Restore contract (C4)
-- `docs/ui-skill-policy.md` - UI skill priority and third-party skill boundaries
-- `docs/third-party-skills.md` - registry template for future third-party Codex skills
-- `docs/codex-project-structure.md` - repository memory structure
-- `docs/codex-prompting-rules.md` - Codex Web prompt rules
-- `docs/pr-testing-and-smoke-rules.md` - testing and smoke rules
-- `docs/import-format.md` - CSV/XLSX import format contract
-- `state/current-focus.md` - current task
-- `state/progress.md` - current progress
-- `state/handoff.md` - cross-session handoff
+### Product and architecture
 
-## Status
+- [`AGENTS.md`](AGENTS.md) — main Codex contract
+- [`docs/current-lifecycle.md`](docs/current-lifecycle.md) — lifecycle authority
+  and supersession map
+- [`docs/product-spec.md`](docs/product-spec.md) — product specification
+- [`docs/architecture.md`](docs/architecture.md) — architecture contract
+- [`docs/restore-interaction-and-validation-session.md`](docs/restore-interaction-and-validation-session.md)
+  — current C4 interaction/validation-session profile
+- [`docs/domain-model.md`](docs/domain-model.md) — domain model
+- [`docs/roadmap.md`](docs/roadmap.md) — strategic roadmap
+- [`docs/implementation-plan.md`](docs/implementation-plan.md) — active
+  implementation sequence and release gates
 
-**Block B is complete.** B4.1, B4, and Block B are DONE. PR #141 — `B4.1 — Dashboard safe GET timeout and recovery` — merged on 2026-07-26 at merge commit `70cb6f01bf23a3d09dd2e5caa320424d3b1a2ffa` from final reviewed head `d0cde127355b146f101ddf3769d76d0226c71ec0`. The Dashboard pilot uses one 8-second deadline for five concurrent, opt-in safe GET requests, commits only a fully validated coherent snapshot, preserves the previous snapshot after refresh timeout, and recovers only through an explicit user action.
+### UI and product language
 
-B4 is closed with the Dashboard safe-GET pilot only. Safe GET timeout and recovery coverage for the remaining read routes — including but not limited to Alerts, Purchases, Orders, Reports, Backups, Exports, and Report Documents — was deliberately deferred and was not delivered. Any future expansion requires a separately authorized slice and a change request. Closing B4 does not imply that those routes are protected against an indefinitely hanging local GET. No B4.2 slice exists or is authorized.
+- [`docs/ui-ux-contract.md`](docs/ui-ux-contract.md) — human-friendly UI rules
+- [`docs/frontend-concept.md`](docs/frontend-concept.md) — frontend concept
+- [`docs/user-guide.md`](docs/user-guide.md) — user guidance
 
-The **backend baseline correction gate is DONE**. The four accepted failures were diagnosed and bounded in `docs/backend-baseline-failure-triage.md`, and all three correction slices — `R3`, `R2`, and `R4` — are now merged and closed. `R3 — Repair purchase-suggestions API smoke seeding` is **merged and DONE**: PR #143 merged on 2026-07-27 at merge commit `f6468fae04f9dc7ae03a491560a32fac94f3a1ec` from final reviewed head `c5fc27059a7aea0435c84535d2d15e6a0fc58428`, taking the complete backend baseline from `496 collected, 492 passed, 4 failed, 0 skipped` to `496 collected, 493 passed, 3 failed, 0 skipped`. `R2 — Align import draft baseline test with date normalization` is also **merged and DONE**: PR #144 merged on 2026-07-27 at merge commit `8efbdc5c85b5932f4aeef51045542c207cf4635c` from final reviewed head `52e2c64fc601b458cfd60e8b86a778efabd65671`, taking the baseline to `496 collected, 494 passed, 2 failed, 0 skipped`. No production code changed in either slice; both were test-only.
+### Data safety and operations
 
-The two filename-reason nodes — backups and exports — were the last open gate nodes and are now **closed on `main`** by the merged `R4`. `CR-005` is **decided, accepted, and implemented**: the canonical filename reason segment collapses runs of non-alphanumeric characters to one underscore, normalizes hyphens to underscores, strips leading and trailing underscores, falls back to `manual`, prefixes a digits-only result with `reason_`, and preserves case and Unicode alphanumerics. The backup/export API `reason` is that canonical filename-derived segment and is the single source of truth; the frontend consumes it without reconstructing, sanitizing, or normalizing it, mapping known system slugs to the existing localized Russian display labels and rendering custom or unmapped slugs verbatim — so the visible label is not always literally the slug. The export JSON manifest keeps the normalized human reason. Existing artifacts are never renamed or migrated, and legacy listing stays best-effort. The contract is durable in `docs/backup-and-restore.md`, `docs/export.md`, and `docs/api.md`. With the contract decided, both nodes are reclassified from `INCONCLUSIVE` to `PRODUCT DEFECT — CONTRACT MISMATCH`, severity MEDIUM, with no proven data loss.
+- [`docs/backup-and-restore.md`](docs/backup-and-restore.md) — backup and Restore
+  contract
+- [`docs/local-install.md`](docs/local-install.md) — local installation
+- [`docs/update-guide.md`](docs/update-guide.md) — safe update contract
+- [`docs/pr-testing-and-smoke-rules.md`](docs/pr-testing-and-smoke-rules.md) — PR
+  test and smoke requirements
+- [`docs/smoke-script-authoring-rules.md`](docs/smoke-script-authoring-rules.md) —
+  external smoke-runner rules
 
-The `CR-005` decision PR #145 is **merged** — merged on 2026-07-27 at merge commit `bef36822e50c245b72f813dad0afbffc7f772588` from final reviewed head `7d68b45bee1f223b67f105c30e3acbb89dc8d41d`. `CR-005` remains **accepted and implemented**.
+### Development memory
 
-`R4 — Canonical backup/export filename reason normalization` is **merged and DONE**. PR #146 merged on 2026-07-27 at merge commit `127191feb182ccf68a4d7b9f2be28f6aa5b42453` from final reviewed head `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb` (VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE). With `R4` merged, the **backend baseline correction gate is DONE**: all four accepted gate failures are closed, and the two remaining filename-reason nodes — backups and exports — are closed on `main`.
+- [`docs/codex-project-structure.md`](docs/codex-project-structure.md) — project
+  memory structure
+- [`docs/codex-prompting-rules.md`](docs/codex-prompting-rules.md) — Codex task
+  rules
+- [`state/current-focus.md`](state/current-focus.md) — current task
+- [`state/progress.md`](state/progress.md) — current progress
+- [`state/handoff.md`](state/handoff.md) — cross-session handoff
+- [`state/change-requests.md`](state/change-requests.md) — compact current CR ledger
+- [`docs/history/README.md`](docs/history/README.md) — searchable history index
 
-*Accepted `R4` merged evidence (PR #146) — historical, not the current baseline:* the complete backend suite run from `backend/` gave `562 collected, 562 passed, 0 failed, 0 skipped`, up from the pre-change baseline `496 collected, 494 passed, 2 failed, 0 skipped`; the 66-test difference is added regression coverage and every previously collected node ID is still collected. The focused frontend suite `npm run test:local-artifacts-reports-feedback` gives `40 pass, 0 fail, 0 skipped` and `npm run build` is `PASS`. The focused exact-published-head `/backups` and `/exports` browser smoke **passed** against the exact smoke-tested head `c505de2dc213ff75e0eb7cb5ffbcd180069a86fb`. No frontend production file changed, no database or filesystem migration was involved, and no existing artifact was renamed, rewritten, or deleted.
+## Architectural invariants
 
-**Current merged baseline.** `origin/main` is `867afeb0967637d07172f88c95e02e9bc500a311` — the PR #168 merge commit — with no later commit. All earlier baseline values in this file, including the PR #161, PR #159 and PR #157 values, are **historical**.
+Every change must preserve:
 
-**`C1-I — Implement backend-owned tax-rate setting` is merged and `DONE`.** PR #149 merged on 2026-07-27 at `2026-07-27T19:44:53Z`, merge commit `ff7afe6b0778ab2b348229a4df34acf3e3fc0001`, from final reviewed head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9` (VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE). That merge commit was `main` at the time; `main` has since advanced to `d432fcaee52a16a4f8b609ec160cf3fa2b33d013` through PR #151, PR #152, PR #153, and PR #154. Accepted `C1-I` evidence, historical to that slice: backend `671 collected, 671 passed, 0 failed, 0 skipped` with all 562 original merged baseline node IDs still collected; the focused tax-setting frontend suite `52 passed, 0 failed, 0 skipped`; all 13 focused frontend suites `568 passed, 0 failed, 0 skipped`; frontend production build `PASS`; the exact-head `/settings` browser smoke `PASS — 146 checks / 0 failures` against head `1c01c05c861c4008ad6304210dbd65d9fd8dcdf9`; `frontend/src/main.ts` `6406 → 6399` lines. The slice adds `GET /api/settings/tax-rate` and `PUT /api/settings/tax-rate`, persistence of the `default_tax_rate` key through the existing `app_settings` table, atomic `tax_rate_setting_changed` audit, and a `Налоговая ставка для расчётов` section inside `/settings`. It added **no migration**, calculates **no tax and no margin**, and mutates **no historical record**. Nothing in `C1-I` still awaits smoke or merge.
+- local-first work without required internet;
+- user data stored separately from application code and package contents;
+- a deliverable product rather than a repository-based user workflow;
+- API-first backend architecture;
+- backend-owned business calculations and critical mutations;
+- immutable historical production data;
+- versioned recipes and first-class individual client formulas;
+- inventory through lots and movements;
+- transactional production;
+- import through draft, preview, validation, confirmation, and apply;
+- backup before migration;
+- understandable non-technical UI and error language;
+- no silent expansion into cloud sync, OCR, full accounting, roles,
+  multi-user operation, or advanced analytics in the MVP.
 
-**The C2 financial contract is accepted and fully implemented. `C2 — COMPLETED`.** `CR-008 — Decide C2 financial estimates and immutable production snapshots` records the accepted calculation and immutable-snapshot contract. All four slices are **merged and `DONE — MERGED AND EXACT-HEAD VERIFIED`**: `C2-I` — the backend financial readiness estimate (PR #151); `C2-II` — the transactional production financial snapshots, including migration `0019` (PR #152, merge commit `c3a3a7b8db06fe85290216113b784123ed9b6b30`, merged `2026-07-28T09:00:50Z`); `C2-III-A` — Order and `ProductionBatch` financial presentation (PR #154, final reviewed head `ef1103811a8f062f9129bfb465a98e0cfa388935`, merge commit `d432fcaee52a16a4f8b609ec160cf3fa2b33d013`, merged `2026-07-28T13:05:34Z`); and `C2-III-B` — snapshot-backed reports and report documents (PR #157, final reviewed head `305d5421e79b8cb833df9588e705e9418781e021`, merge commit `87410910aad472343c057f0bcbfcc3797f8b8e09`, merged `2026-07-28T22:21:18Z`). **Reports on merged `main` are snapshot-backed**: report tax and margin come only from persisted `ProductionBatch` snapshots, and the former paired sale-price/cost margin derivation is gone. Accepted PR #157 evidence — not re-executed here: exact-head API smoke `PASS — 53 checks / 0 failures`; exact-head browser smoke `PASS — FULL AUTOMATED SMOKE PASSED`; complete backend suite `942 passed / 0 failed / 0 skipped`; focused report frontend suite `54 pass / 0 fail`; all 17 frontend test scripts `PASS`; production build `PASS`; `frontend/src/main.ts` `6398` lines. Contract: `docs/decisions/0012-c2-financial-calculation-snapshots.md`. **The product is still not release-ready.**
+## Restore boundary until CR-011 is accepted
 
-**C3-I and C3-II-A are both `DONE — MERGED AND EXACT-HEAD VERIFIED`.** PR #159 delivered `GET /api/audit-logs` and `/settings/audit-log` (`Журнал действий`) with the accepted read-only, backend-owned privacy contract. PR #161 then delivered atomic Workshop-profile coverage. Exact-final-head evidence for PR #161 is `PASS — EXACT-HEAD C3-II-A FOCUSED SMOKE PASSED` on `6c327630d0e4cca3c566253bf9f8224aaaa33172`. Focused backend `591 passed`, complete backend `1376 passed` with all `1364` baseline node IDs preserved and `12` added, all `18` frontend test scripts, the focused AuditLog runs (`92` default and `92` with `TZ=Europe/Amsterdam`) and the frontend build ran on `354104cc326f1e1374324ef9128e5ef771a4a063`; the final documentation-only head was production/test byte-identical, but those suites were not rerun or relabelled as exact-final-head results. The focused smoke is not release smoke.
+No agent may add, by assumption:
 
-Remaining C3 work is bounded deliberately. `CR-009 — Durable file-backed artifact AuditLog semantics` is **accepted**, and its first runtime slice `C3-II-B1` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #163, final reviewed head `afd65fd2878fa02a0d4dc4963812c80644a4e787`, merge commit `ef0297e41a731f082a2a21a46b361aa9aac36cfa`, merged `2026-08-01T05:30:38Z`. Accepted PR #163 evidence, not re-executed here: complete backend + launcher suite `1550 passed / 0 failed`; backend collection `1533` with all `1376` baseline node IDs preserved and `157` added; complete launcher suite `17 passed / 0 failed`; all `19` frontend `test:*` scripts passed; frontend build `PASS`; final exact-head launcher smoke `PASS` on `afd65fd`; no unresolved P0 or P1 findings. A verified artifact is the authoritative result; audit-finalization failure preserves it and returns HTTP `201` with a separate pending-Journal warning, backed by a bounded idempotent SQLite operation ledger and startup/pre-create reconciliation. `C3-II-B1 — Durable ledger and report-document AuditLog coverage` added migration `0020_artifact_audit_operations` and covers report documents only. `CR-006` is **accepted**, and `C3-II-B2 — JSON export AuditLog coverage` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #166, final reviewed head `530b3a112b937f8955dd5768741f0ec403809b5a`, merge commit `844526ae4057a454312f790abcaf21be518cdbd9`, merged `2026-08-01T11:19:55Z`. It reused the existing ledger with **no new migration** and carried the accepted `CR-006` create-response correction, so on merged `main` the export create path no longer re-scans the directory, builds the response from the exact `ExportResult`, derives the API `reason` from the exact final filename, reserves that filename once, commits a `prepared` `json_export` ledger row before the write, verifies the exact artifact read-only, and finalizes exactly one `export.created` event atomically with the `audited` transition. Accepted PR #166 evidence, not re-executed here: complete backend + launcher suite `1648 passed / 0 failed`, all `1550` baseline node IDs preserved and `98` added; launcher `17 passed / 0 failed`; all `20` frontend `test:*` scripts passed; frontend build `PASS`. `CR-004` is **accepted and implemented** — classified `PRODUCT DEFECT — BACKUP CONSISTENCY`, severity `HIGH` — and `C3-II-B3 — Manual backup AuditLog coverage` is **`DONE — MERGED AND EXACT-HEAD VERIFIED`** — PR #167, final reviewed head `259697805660fd4dc37e6ac5f50567d48037be94`, merge commit `7af53a3305fa9fdb984d4c478e1186685fbb6727`. It was the last remaining C3 slice.
+- a FastAPI Restore endpoint;
+- SPA-owned filesystem access;
+- browser upload as the authoritative Restore source;
+- a generic unauthenticated localhost endpoint;
+- wildcard CORS;
+- an undocumented WebSocket or IPC channel;
+- a native shell technology or dependency not selected by an accepted decision;
+- an absolute selected-source path in ordinary browser state;
+- hidden Restore packaging work.
 
-**The C3 artifact-finalization hardening is merged.** PR #168 — `C3 hardening — Separate artifact verification from AuditLog persistence` — is **`DONE — MERGED AND EXACT-HEAD VERIFIED`**: final reviewed and exact-head-smoke-tested head `6c57c7f5ba851ce2124577268baeda07d19ce4ae`, merge commit `867afeb0967637d07172f88c95e02e9bc500a311`, merged `2026-08-02T08:34:02Z` (VERIFIED FROM REPOSITORY / GITHUB / MERGED PR EVIDENCE). On merged `main`, report-document and JSON-export finalization now use typed, artifact-specific results: `recorded` means the artifact was verified and its AuditLog event committed, `audit_pending` means the artifact was verified but AuditLog persistence did not commit, and `artifact_invalid` means mandatory verification did not prove the artifact authoritative. Only `recorded` and `audit_pending` may produce HTTP `201`; `artifact_invalid` produces a fixed structured HTTP `500`. An invalid artifact is not deleted, is not audited, remains unresolved and is counted for bounded reconciliation, and no filename, path, reason, operation ID, schema version, entity count, verifier detail or SQLite detail is exposed through safe error responses. Accepted PR #168 evidence, **not re-executed** in the documentation work that recorded this closure: complete backend `1826 passed`; complete root suite `1843 passed`; launcher `17 passed`; baseline node IDs `1804` preserved, `0` lost, `39` added; all `21` frontend `test:*` scripts passed; frontend production build `PASS`; `frontend/src/main.ts` `6399` lines; final independent audit `P0 — none`, `P1 — none`, `P2 — documented only`; exact-head launcher/API/browser smoke `PASS`.
+The later CR-011 decision must select one concrete interaction architecture and
+define the launcher-owned non-destructive validation-session boundary before
+C4-II-A can be authorized.
 
-**`C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`.** Durable decisions: `docs/decisions/0013-file-backed-artifact-audit-semantics.md`, `docs/decisions/0014-json-export-create-confirmation-semantics.md` and `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`.
+## Documentation check
 
-**C4 Restore now has an accepted product decision, and no implementation.** `CR-010 — Decide launcher-assisted Restore semantics` is **accepted**: MVP Restore is **launcher-assisted**. Restore is not performed by a running FastAPI backend endpoint and is not an ordinary SPA mutation; the launcher owns process shutdown, backup validation, the pre-restore safety copy, staging, atomic database replacement, post-restore startup verification, rollback and incomplete-restore recovery. Support-assisted recovery stays a fallback for failures that cannot be resolved automatically, and the user never needs Git, Python, Node.js, Docker, SQLite tools, GitHub or a terminal. Restore is whole-database only from one validated local SQLite backup, the selected file is immutable read-only input, validation runs from a staged read-only copy and completes before any mutation, replacement, deletion or migration of the current working database, `PRAGMA quick_check = ok` alone is never sufficient, a newer-than-current schema is rejected before replacement, a verified `before_restore` safety copy is mandatory, replacement goes through staging and a same-directory atomic boundary guarded by a durable twelve-phase operation record whose `replacement_intent` phase is always recovered by conservative rollback, incomplete operations are recovered before the ordinary backend starts, any post-replacement failure rolls back, the browser opens only after post-restore verification passes, and **no Restore AuditLog event is authorized**. `C4-I — Launcher-owned restore safety engine` is the only authorized future runtime slice and is `NOT IMPLEMENTED`; `C4-II` and `C4-III` are `PLANNED — NOT AUTHORIZED`. **Restore is not implemented.** Durable decision: `docs/decisions/0016-launcher-assisted-restore.md`; complete contract: `docs/backup-and-restore.md`.
-
-The API field is **`actor_type` / `actor_label`**, not `source`. The values that exist — `system` and `user` — describe the **actor that initiated the action**, not a process origin, so presenting them as a source would silently change the field's meaning. The historical process vocabulary (`manual`, `import`, `production`, `migration`, `backup`, `onboarding`, `restore`) is aspirational: no write call site persists that dimension, so a true `source` field is **deferred** to a separately authorized decision and write-side slice. The column is not renamed, and there is no migration and no backfill.
-
-The API returns **`display_summary`**, a backend-owned safe Russian value resolved from the known `action` by a focused presenter. The **raw persisted summary is never returned verbatim and is never used as an unrestricted fallback** — it is write-time technical text, mostly English, sometimes carrying internal record IDs, and `client_wish.*` values carry user-authored wish text. A safe business name may contribute only through a bounded seven-condition rule and an exact 21-action allowlist that excludes `client_wish.*`, `client_recipe.*` and every ID-bearing action. Raw `metadata_json`, table names, internal entity IDs, stack traces, SQL and developer paths are never returned or displayed either, and no historical row is ever rewritten. Invalid pagination is rejected with a structured `422` under a fixed precedence — `limit=-1` is `negative_quantity`, `limit=0` is `pagination_out_of_range` — never silently clamped. The old roadmap proposal `GET /api/audit-logs/{id}` is **explicitly superseded for the MVP**. No AuditLog edit, delete, rollback, export, analytics or search over sensitive text is authorized, and **no Restore AuditLog event is authorized** — `restore.completed` needs a separately explicit C4 decision. Durable contract: `docs/audit-log.md`.
-
-`CR-007 — Decide the C1 workshop tax-rate setting contract` is **accepted**, and its authorized slice `C1-I` is **implemented and merged**. One global setting `default_tax_rate`, user-facing `Налоговая ставка для расчётов`, is an internal planning estimate and never tax filing, a declaration, VAT accounting, legal advice, regime detection, or an accounting subsystem. It is a **percentage, not a coefficient** — `6` and `6.00` mean `6%`, `0.06` means `0.06%` — held as `Decimal` decimal strings in the range `0.00`–`100.00`, where excess precision such as `6.005` is rejected rather than rounded. The canonical persisted and API form is **exactly two fractional digits**, so `6` becomes `6.00` and `100` becomes `100.00`, applied after validation and never used to absorb precision. The taxable base is the order sale price, `tax_amount = ROUND_MONEY(sale_price × tax_rate_percent ÷ 100)` with money quantum `0.01` and `ROUND_HALF_UP`, and tax is deducted from gross revenue rather than added on top. A change takes effect immediately through a backend-generated `effective_at` — exposed as ISO-8601 UTC by the API while the underlying `app_settings.updated_at` column stays in SQLite's `YYYY-MM-DD HH:MM:SS` UTC format — and never modifies completed production batches, report snapshots, prior audit records, or generated documents. A missing rate is `null` and never `0%`, leaving tax and dependent margin unavailable without blocking physical production, while a configured `0.00` is a real value; no missing financial value is ever displayed as a fabricated zero. Explicit Clear is **row deletion** of the `default_tax_rate` setting — never of the legacy `tax.default_rate` placeholder — after which `effective_at` is `null` and the clear time lives in the audit record. Every real mutation, upsert or delete, is audited atomically with the persistence change, and a no-op writes nothing. The durable contract is `docs/settings.md`, with the API shape in `docs/api.md`, snapshot semantics in `docs/domain-model.md`, the report boundary in `docs/reports.md`, and the rationale in `docs/decisions/0011-tax-rate-setting.md`. `AGENTS.md` § 6.6 and the `docs/roadmap.md` settings placeholder were aligned with the decision.
-
-`C1-I` was the single authorized follow-up slice and it is **merged**, started from merged `origin/main` `80b83de3e838cf676669a1b627770300590c99c0`. Delivered: the two endpoints, Decimal-string validation with structured Russian errors, the canonical exactly-two-decimal representation, backend-generated monotonic `effective_at`, explicit confirmed Clear as row deletion, one atomic `AuditLog` per real mutation, a no-op contract that writes nothing, the `/settings` UI section, focused backend and frontend tests, and the Settings Decision Matrix update that makes `default_tax_rate` — and only `default_tax_rate` — newly editable. The exact-head `/settings` browser smoke passed before merge. Readiness tax estimates, production tax snapshots, and margin were left to **C2**, and every C2 slice has since merged: on current merged `main` production readiness returns `estimated_tax`, `estimated_margin`, and `estimated_margin_percent` (`C2-I`, PR #151); `ProductionBatch` carries the `tax_rate_percent_snapshot` and `tax_rate_effective_at_snapshot` columns added by migration `0019` together with persisted `tax`, `margin`, and `margin_percent` (`C2-II`, PR #152); Orders and `ProductionBatch` present those financials (`C2-III-A`, PR #154); and reports read the persisted snapshots (`C2-III-B`, PR #157). C2 is **complete**. C3-I, C3-II-A and C3-II-B1 have all since merged.
-
-`CR-006 — Investigate export create-response fallback confirmation semantics` is **accepted**. In `backend/app/api/exports.py::create_export`, when the exact created export file is found through `list_export_files` the response uses parsed filename metadata and returns the canonical filename-derived reason; when it is not found, a defensive fallback builds the response from `ExportResult.reason`, which is the normalized human reason. The executed diagnostic established that this fallback **is reachable in production-equivalent behavior** — an ordinary per-file `stat` failure during the endpoint's secondary directory re-scan, or a directory-entry race, reaches it while the created export is present and correct on disk — and that the same redundant re-scan can also turn a fully successful creation into an HTTP `500`. Classification: `PRODUCT DEFECT — CREATE-RESPONSE CONTRACT MISMATCH`, severity `MEDIUM`; **no data loss, overwrite, incorrect export bytes, source database mutation, or privacy exposure**. Accepted contract: a successfully returned `ExportResult` is the authoritative create result, the response is built only from it, and the API `reason` is parsed from the exact final filename — the human manifest reason is never the API reason. **The correction is on merged `main`**: `C3-II-B2` carried it and merged as PR #166. See `docs/decisions/0014-json-export-create-confirmation-semantics.md`, `state/change-requests.md` and `docs/backend-baseline-failure-triage.md` §17.5.
-
-The product is **not** release-ready. C1, C2 and C3 are merged and complete, and the C4 Restore product decision is made, but the remaining release obligations include: **Restore implementation** (`C4-I` first, then `C4-II` and `C4-III`); final macOS packaging and user-ready launch; installation verification; the packaged update flow and update smoke; the full release-candidate smoke; and continuing documentation accuracy. **Restore is not implemented, macOS packaging is not completed, the safe packaged update flow is not completed, the full release-candidate smoke is not completed, and product release readiness is not claimed.**
-
-Runtime product implementation includes the local-first backend/API and SQLite safety foundations, onboarding, recipes and immutable recipe versions, individual client formulas, clients, wishes and append-only feedback, ingredient and packaging stock movements, orders, production readiness and confirmation, production history, alerts, purchase suggestions, reports, manual backups, local exports, safe CSV/XLSX imports, demo data, Help Center, editable Workshop profile settings, and explicit Markdown/PDF `Сводка мастерской` document generation.
-
-Newly generated workshop summary documents include configured Workshop profile fields. Empty fields are omitted, an empty profile omits the whole section, and existing generated documents are not mutated.
-
-Keep DOCX, arbitrary file browsing, unrelated file access, automatic report generation, scheduled jobs, polling, cloud sync, AI/RAG, template editing, logo upload, document preview, calculation-sensitive settings, roles/auth, and unrelated business mutations out of scope unless explicitly approved.
-
-## Developer commands
-
-```bash
-make setup          # install backend/frontend development dependencies when registries are available
-make dev            # print backend/frontend development startup commands
-make test           # run backend tests
-make build          # build the frontend shell
-make smoke          # print the current smoke checklist
-```
-
-Direct commands:
-
-```bash
-cd backend && python3 -m pytest
-cd frontend && npm run build
-cd frontend && npm run dev    # builds the shell, then serves dist on http://127.0.0.1:5173
-```
-
-Frontend dependency note: `frontend/package.json` declares `typescript` as a dev dependency because the build script runs `tsc`; run `cd frontend && npm install` when registry access is available.
-
-Frontend local API proxy for development/smoke only:
+After lifecycle documentation changes, run:
 
 ```bash
-# Terminal 1
-export COSMETIC_WORKSHOP_DB_PATH="/path/to/.local/smoke.sqlite"
-python3 - <<'PY'
-from app.services.startup import initialize_startup
-result = initialize_startup("development")
-print("DB:", result.database_path)
-print("Applied migrations:", result.applied_migrations)
-PY
-cd backend
-python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
-
-# Terminal 2
-cd frontend
-COSMETIC_WORKSHOP_API_PROXY_TARGET=http://127.0.0.1:8010 npm run dev
+python3 scripts/check_documentation_lifecycle.py
 ```
 
-Then open `http://127.0.0.1:5173/packaging-items`. During `npm run dev`, frontend requests whose path starts with `/api/` are proxied to `COSMETIC_WORKSHOP_API_PROXY_TARGET`; if the variable is not set, the dev server uses `http://127.0.0.1:8000`. This proxy is only for developer smoke testing and does not change the client runtime/deployment contract.
-
-
-
-Backend database foundation notes:
-
-- Local development uses SQLite. If `COSMETIC_WORKSHOP_DB_PATH` is unset, the backend uses repository-root `.local/cosmetic_workshop.sqlite`, which is gitignored and intended only for local development.
-- Tests should set `COSMETIC_WORKSHOP_DB_PATH` or pass a temporary database path through backend helpers.
-- Technical endpoints added in PR2: `GET /api/database/status` and `GET /api/settings`. They do not run migrations implicitly; initialize the database explicitly before reading settings.
-- Only infrastructure tables are created in PR2: `app_settings`, `audit_logs`, and migration metadata. Business tables remain future roadmap scope.
-
-Backend dependency note: the PR1 backend runtime is FastAPI only; install backend dependencies with `python3 -m pip install -e "backend[test]"` before running backend tests or local API startup.
-
-Backend health endpoint shape:
-
-```json
-{
-  "status": "ok",
-  "app": "cosmetic-workshop-os",
-  "product_name": "Мастерская косметолога",
-  "mode": "local-first",
-  "version": "0.1.0"
-}
-```
-
-## Current implementation focus
-
-The current focus is the merged closure of C3 and the accepted C4 Restore decision. C1 and C2 are **COMPLETED**. C3-I (PR #159), C3-II-A (PR #161), C3-II-B1 (PR #163), C3-II-B2 (PR #166) and C3-II-B3 (PR #167) are all **DONE — MERGED AND EXACT-HEAD VERIFIED**, and the artifact-finalization hardening merged as PR #168, so **`C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED`**. `CR-009` is accepted and implemented on merged `main` for report documents, JSON exports and manual backups. `CR-004` is **accepted and implemented**: raw `shutil.copy2` of the live SQLite main file silently omitted all committed-but-uncheckpointed WAL data while returning `quick_check = ok`, produced mixed transaction state including never-committed rows with the stock page cache, and in one scenario produced a structurally corrupt file — classified `PRODUCT DEFECT — BACKUP CONSISTENCY`, severity `HIGH`, with no source mutation and no live-data loss; backups now use the SQLite Online Backup API with bounded busy behaviour.
-
-The single authorized next runtime slice is **`C4-I — Launcher-owned restore safety engine`**, which is `NOT IMPLEMENTED`. Durable contracts: `docs/audit-log.md`, `docs/backup-and-restore.md`, `docs/decisions/0013-file-backed-artifact-audit-semantics.md`, `docs/decisions/0014-json-export-create-confirmation-semantics.md`, `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md` and `docs/decisions/0016-launcher-assisted-restore.md`.
-
-`CR-005` is accepted and implemented. For newly created backups and exports, the filename reason segment collapses each maximal run of non-alphanumeric separators to one underscore, normalizes literal hyphens to underscores, strips leading and trailing underscores, uses `manual` when empty, prefixes a digits-only result with `reason_`, and preserves letter case and Unicode alphanumerics without lowercasing, transliteration, or new truncation — so `before/update ../unsafe` becomes `before_update_unsafe`, `before-import` becomes `before_import`, `123` becomes `reason_123`, and `перед обновлением` becomes `перед_обновлением`. The create, list, and status `reason` values are that canonical filename-derived segment, and the uniqueness suffix is never part of it.
-
-The visible UI label resolves from the same canonical slug but is not always literally equal to it: the frontend receives the slug from the API and must never reconstruct, sanitize, or normalize it, mapping **known system slugs** to the **existing localized Russian display labels** — canonical `before_import` renders as `Перед импортом` — and rendering **custom or unmapped slugs verbatim**, so canonical `before_update_unsafe` renders as `before_update_unsafe`. The export JSON manifest keeps the normalized human reason. Existing artifacts are not renamed, rewritten, or migrated, and legacy listing stays best-effort.
-
-`R4 — Canonical backup/export filename reason normalization` delivered that contract as one bounded slice covering both nodes through a single shared backend helper, and it is **merged and DONE** as PR #146. `CR-006` is **accepted and implemented** and does not reopen `CR-005` or `R4`; its correction was carried by `C3-II-B2` and merged as PR #166. `CR-004` is separately **accepted and implemented** (ADR 0015) and does not reopen `CR-005` or `R4`. C1, C2 and C3 are **COMPLETED**. C4 has an accepted product decision (`CR-010`, ADR 0016) and **no implementation**. Restore, packaging/install/update work and the full release-candidate smoke remain open, and **product release readiness is not claimed**. Contract: `state/current-focus.md` and `docs/implementation-plan.md`. Evidence: `docs/backend-baseline-failure-triage.md`.
-
-The durable `CR-005` contract documents `docs/backup-and-restore.md`, `docs/export.md`, and `docs/api.md` record the merged `R4` implementation status, so they agree with the merged `main` behavior.
+This is a documentation consistency check, not product smoke.
