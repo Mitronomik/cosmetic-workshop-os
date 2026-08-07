@@ -488,6 +488,14 @@ class RestoreControlSession:
 
             with self._lock:
                 if not self._worker_generation_current_locked(generation):
+                    # Cancel/expiry can land after the control generation check
+                    # above but before A1 enters its own `_begin()`. In that race
+                    # A1 may legitimately create a newer internal generation and
+                    # publish a retained proof even though this control worker is
+                    # stale. No newer control worker can exist while this thread
+                    # is still the owned worker, so re-invalidating here is safe
+                    # and guarantees stale A1 authority is gone before quiescence.
+                    self._candidate_service.cancel()
                     return
                 if candidate.state is CandidatePreparationState.ACCEPTED:
                     view_state = ControlViewState.ACCEPTED
