@@ -24,8 +24,8 @@ This command is not the final user workflow.
 
 ## CR-011 selected Restore control topology
 
-ADR 0018 selects a separate launcher-owned local control boundary for future
-Restore source selection/validation:
+ADR 0018 selects a separate launcher-owned local control boundary for Restore
+source selection/validation:
 
 ```text
 browser presentation
@@ -38,7 +38,7 @@ browser presentation
 The Restore control plane is not an ordinary FastAPI route and may never bind to
 LAN/remote interfaces.
 
-Future C4-II-A, when separately authorized, must use:
+The accepted C4-II-A architecture requires:
 
 - exact `127.0.0.1` loopback binding;
 - OS-assigned ephemeral port;
@@ -58,5 +58,21 @@ CR-011 does not implement the control plane, picker, validation session,
 packaging, updater, service daemon, Electron/Tauri shell, cloud sync or remote
 access.
 
-C4-II-A remains `PLANNED — NOT AUTHORIZED` until a separate post-CR-011 task
-explicitly authorizes runtime implementation.
+## C4-II-A authorization state
+
+Implementation is authorized only through
+`docs/c4-ii-a-implementation-slices.md`:
+
+```text
+C4-II-A — AUTHORIZED AS SLICED — NOT IMPLEMENTED
+C4-II-A1 — AUTHORIZED NEXT — validation-session core only
+C4-II-A2 — BLOCKED BY A1 MERGE + EXACT-HEAD GATE
+C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
+C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+```
+
+A1 may not implement the control plane, picker or frontend UI. Those remain
+separately gated A2/A3/A4 slices.
+
+No A1–A4 slice may add destructive Restore authority. C4-II-B remains separately
+not authorized.

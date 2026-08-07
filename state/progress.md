@@ -10,28 +10,30 @@ Current lifecycle authority: `docs/current-lifecycle.md`.
 - C2 — completed.
 - C3 — completed, merged, exact-head verified and hardened.
 - CR-010 — launcher-assisted Restore semantics accepted.
-- C4-I — launcher-owned Restore safety engine:
-  `DONE — MERGED AND EXACT-HEAD VERIFIED`.
-- PR #170 reviewed head:
-  `ac95e2990efa979b3ded6cb48f91ddd0750aa7c8`.
-- PR #170 merge commit:
-  `e6997281d2e0268ce54184d988c114bac71c35e2`.
+- C4-I — launcher-owned Restore safety engine: `DONE — MERGED AND EXACT-HEAD VERIFIED`.
+- PR #170 reviewed head: `ac95e2990efa979b3ded6cb48f91ddd0750aa7c8`.
+- PR #170 merge commit: `e6997281d2e0268ce54184d988c114bac71c35e2`.
 - Six independent C4-I audit rounds closed twenty-four findings.
 - PR #171 — project-memory/lifecycle closure — merged.
-- PR #171 reviewed head:
-  `4978aa9a7c05117011eae1bc00276d5f98378d9b`.
-- PR #171 merge commit:
-  `76ab59216047222714a32f2793a789b3dc8df19a`.
-- Searchable history and five exact pre-compaction snapshots remain protected
-  under `docs/history/`.
+- PR #171 reviewed head: `4978aa9a7c05117011eae1bc00276d5f98378d9b`.
+- PR #171 merge commit: `76ab59216047222714a32f2793a789b3dc8df19a`.
+- PR #172 / CR-011 interaction decision — merged.
+- PR #172 reviewed head: `c51d5baa07e4cd8912b1973649c22b20f581e3d2`.
+- PR #172 merge commit: `998596560db6780a677bdec363d1fd19db30c1b6`.
+- PR #172 exact-head architecture audit: P0=0, P1=0, P2=0.
+- Searchable history and five exact pre-compaction snapshots remain protected under `docs/history/`.
 
 ## Current lifecycle
 
 ```text
-PR #171 — MERGED
+PR #172 — MERGED — CR-011 ACCEPTED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — DECIDED — ADR 0018 ACCEPTED — NORMATIVE ON MAIN
-C4-II-A — PLANNED — NOT AUTHORIZED
+CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
+C4-II-A — AUTHORIZED AS SLICED — NOT IMPLEMENTED
+C4-II-A1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A2 — PLANNED — BLOCKED BY A1 MERGE + EXACT-HEAD GATE
+C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
+C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -39,106 +41,63 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-On the CR-011 PR branch, ADR 0018 becomes normative only after merge to `main`.
+The sliced authorization becomes normative only when PR #173 merges to `main`.
 
-## CR-011 decision produced
+## Current work — PR #173
 
-The current decision changeset selects **one** interaction architecture:
+PR #173 is documentation/lifecycle only.
 
-```text
-ordinary browser
-→ launcher-owned authenticated loopback control plane
-→ launcher-owned native macOS picker
-→ launcher-owned non-destructive validation session
-→ C4-I source intake/staging/validation
-```
+Its job is to:
 
-ADR:
+- record PR #172 as merged / CR-011 accepted;
+- authorize C4-II-A only as A1→A4 bounded implementation slices;
+- make A1 the only immediate runtime successor;
+- keep A2/A3/A4 predecessor-gated;
+- keep C4-II-B not authorized;
+- synchronize active lifecycle/status surfaces and checker.
 
-`docs/decisions/0018-launcher-restore-interaction-and-validation-session.md`
+No runtime or tests belong in this branch.
 
-Normative profile:
+## Authorized implementation sequence after PR #173 merge
 
-`docs/restore-interaction-and-validation-session.md`
+### A1 — Validation-session core — next
 
-### Security/process decision
+Launcher-owned non-destructive candidate preparation, C4-I primitive reuse,
+validation scratch, generation/cancel/stale semantics, typed safe result,
+retained `SourceIdentity` + SHA-256 proof, owned-only cleanup, tests and
+service-level smoke.
 
-- `127.0.0.1` only;
-- OS-assigned ephemeral control port;
-- separate from ordinary FastAPI business API;
-- exact local frontend Origin, no wildcard CORS;
-- one-use >=256-bit bootstrap token in URL fragment;
-- >=256-bit run-scoped browser session token in `sessionStorage` only;
-- 15-second heartbeat / 60-second inactive control-session expiry;
-- replay/idempotency request IDs;
-- monotonically increasing selection generation;
-- no WebSocket;
-- no generic launcher command surface;
-- no durable token;
-- absolute selected-source path remains launcher-private.
+### A2 — Exact-run control plane — blocked by A1 merge
 
-### Picker decision
+Loopback Host/Origin/bootstrap/session/concurrency/replay/command ordering only.
+No real picker or final UI.
 
-- launcher owns picker authority;
-- owned short-lived `/usr/bin/osascript` child;
-- macOS Standard Additions `choose file`;
-- no `shell=True`;
-- no `System Events`;
-- no new Python/application dependency;
-- Mac App Store sandbox support deferred to a later packaging decision.
+### A3 — Native picker integration — blocked by A2 merge
 
-### Validation decision
+Real `/usr/bin/osascript` + Standard Additions `choose file`, picker worker
+lifecycle and A1 integration. No final browser workspace.
 
-Future C4-II-A must implement a launcher-owned
-`prepare_restore_candidate(...)`-equivalent that:
+### A4 — Browser Restore screen — blocked by A3 merge
 
-- creates no durable Restore operation;
-- enters no Restore phase;
-- creates no `before_restore` safety copy;
-- changes no working database;
-- writes no Restore AuditLog event;
-- reuses C4-I source intake, held descriptor, sidecar checks, digest-stable
-  staging and candidate validation;
-- uses isolated temporary scratch;
-- returns typed safe presentation only.
+`/backups/restore`, entry from `/backups`, fragment/sessionStorage handling,
+typed safe UX and real non-destructive end-to-end macOS smoke.
 
-After successful validation the temporary staged candidate is deleted. Launcher
-memory retains the source path + C4-I `SourceIdentity` + full SHA-256 proof.
+## Cross-slice prohibition
 
-Future C4-II-B must reopen, compare identity, recompute digest, re-check sidecars,
-restage and revalidate before entering destructive C4-I execution.
+No A1–A4 slice may call `execute_restore(...)`, create a durable Restore
+operation/phase, create `before_restore` safety copy, replace/migrate working DB,
+perform rollback/recovery mutation or write Restore AuditLog.
 
-## Current work
-
-Finish the CR-011 decision PR only:
-
-```text
-synchronize docs/state/checker
-→ run documentation checks in real checkout
-→ verify docs-only diff
-→ fresh independent exact-head architecture audit
-→ correct every P0/P1/P2 finding
-→ merge CR-011 decision PR
-```
-
-No runtime work belongs in this branch.
-
-## Planned but not authorized
-
-```text
-C4-II-A — PLANNED — NOT AUTHORIZED
-C4-II-B — PLANNED — NOT AUTHORIZED
-C4-II-C — PLANNED — NOT AUTHORIZED
-C4-III — PLANNED — NOT AUTHORIZED
-```
-
-CR-011 removes the architecture ambiguity; it does not itself authorize C4-II-A.
+C4-II-B remains separately not authorized.
 
 ## Open product obligations
 
-- separate bounded C4-II-A authorization/task after CR-011 merge;
-- C4-II-A source selection + non-destructive validation presentation;
-- C4-II-B destructive confirmation/execution handoff;
+- validate/audit/merge PR #173;
+- implement/review/merge A1;
+- then A2;
+- then A3;
+- then A4 + exact-head non-destructive end-to-end smoke;
+- separately authorize and implement C4-II-B;
 - C4-II-C outcome/restart/support UX;
 - C4-III end-to-end Restore verification;
 - macOS packaging;
@@ -146,14 +105,12 @@ CR-011 removes the architecture ambiguity; it does not itself authorize C4-II-A.
 - installation verification;
 - full release-candidate smoke.
 
-## Required checks for current decision PR
+## Required checks for PR #173
 
 ```bash
 git diff --check
 python3 scripts/check_documentation_lifecycle.py
 ```
 
-Also run a repository-defined Markdown/link check if present and verify no
-`backend/`, `frontend/` or `launcher/` path changed.
-
-Product smoke: **NOT APPLICABLE** for this documentation/architecture changeset.
+Also verify docs/state/checker-only diff and run repository-defined Markdown/link
+check if present. Product smoke: **NOT APPLICABLE** for this docs-only changeset.
