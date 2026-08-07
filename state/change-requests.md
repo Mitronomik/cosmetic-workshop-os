@@ -1,15 +1,14 @@
 # Change Requests
 
-Updated: `2026-08-06`
+Updated: `2026-08-07`
 Status: **CURRENT COMPACT LEDGER**
 
 The complete pre-compaction ledger is preserved byte-for-byte at:
 
 `docs/history/change-requests/2026-08-06-pre-compaction.md`
 
-That snapshot contains dated lifecycle wording and detailed evidence that remain
-valuable as history but do not override current status. Durable decisions remain
-in their ADR and profile documents.
+That snapshot is historical evidence and does not override current lifecycle or
+authorization.
 
 ## Current lifecycle
 
@@ -34,12 +33,23 @@ Current lifecycle authority:
 - `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md`;
 - `docs/implementation-plan.md`.
 
+## PR sequencing rule
+
+While PR #171 is open, PR #171 closure is the current task.
+
+Do not start CR-011 from the unmerged PR #171 branch.
+Do not create a dependent CR-011 branch from the PR #171 head.
+
+CR-011 is the **authorized successor**, not the current branch task. It may begin
+only after PR #171 merges, local `main` is updated, and a new branch is created
+from that merged `main`.
+
 ## Ledger
 
 | ID | Date | Request | Current status | Durable record / outcome |
 |---|---|---|---|---|
 | CR-001 | 2026-06-21 | Add Codex project-memory structure | accepted and in use | `docs/codex-project-structure.md`; establishes `AGENTS.md`, durable `docs/`, active `state/`, and bounded PR workflow. |
-| CR-002 | 2026-07-26 | Close B4 with Dashboard safe-GET pilot only | accepted and implemented | Dashboard timeout/recovery pilot delivered; expansion to other read routes was deliberately deferred and requires a separate authorization. Historical contract in the preserved implementation plan. |
+| CR-002 | 2026-07-26 | Close B4 with Dashboard safe-GET pilot only | accepted and implemented | Dashboard timeout/recovery pilot delivered; expansion to other read routes was deliberately deferred and requires separate authorization. Historical contract in the preserved implementation plan. |
 | CR-003 | 2026-07-26 | Open backend baseline correction gate | accepted and completed | Four deterministic failures were classified and closed through R2, R3, CR-005, and R4; `docs/backend-baseline-failure-triage.md`. |
 | CR-004 | 2026-07-26 | Investigate SQLite backup transaction consistency | accepted and implemented | Classified `PRODUCT DEFECT — BACKUP CONSISTENCY`, severity `HIGH`; raw live-file copy replaced by SQLite Online Backup API. `docs/decisions/0015-sqlite-backup-consistency-and-manual-audit.md`. |
 | CR-005 | 2026-07-27 | Decide backup/export filename reason contract | accepted and implemented | Canonical filename-derived reason grammar implemented by R4 / PR #146; legacy artifacts are not renamed. `docs/backup-and-restore.md`, `docs/export.md`. |
@@ -48,11 +58,11 @@ Current lifecycle authority:
 | CR-008 | 2026-07-27 | Decide financial estimates and immutable production snapshots | accepted and implemented | C2-I, C2-II, C2-III-A, and C2-III-B completed through PR #157. `docs/decisions/0012-c2-financial-calculation-snapshots.md`. |
 | CR-009 | 2026-07-30 | Decide durable file-backed artifact AuditLog semantics | accepted and implemented | Shared bounded ledger and truthful `recorded` / `audit_pending` / `artifact_invalid` semantics implemented through PRs #163, #166, #167, and #168. `docs/decisions/0013-file-backed-artifact-audit-semantics.md`. |
 | CR-010 | 2026-08-02 | Decide launcher-assisted Restore semantics | accepted; C4-I implemented; product Restore incomplete | ADR 0016 accepted. Internal C4-I safety engine merged in PR #170; user-facing Restore remains not implemented. `docs/decisions/0016-launcher-assisted-restore.md`. |
-| CR-011 | 2026-08-06 | Decide launcher Restore interaction and non-destructive validation-session boundary | **authorized — decision only — not decided** | Only authorized next task. Must select one screen/picker/command-channel/security/process/packaging architecture and define launcher-owned candidate preparation. No runtime implementation is authorized. ADR 0017 and `docs/restore-interaction-and-validation-session.md`. |
+| CR-011 | 2026-08-06 | Decide launcher Restore interaction and non-destructive validation-session boundary | **authorized — decision only — not decided; successor after PR #171 merge** | Must select one screen/picker/command-channel/security/process/packaging architecture and define launcher-owned candidate preparation. No runtime implementation is authorized. ADR 0017 and `docs/restore-interaction-and-validation-session.md`. |
 
 ## CR-011 decision gate
 
-CR-011 must decide one concrete architecture for:
+After PR #171 merges, CR-011 must decide one concrete architecture for:
 
 - where the user-facing C4-II-A screen lives and which process owns it;
 - which process opens the native macOS picker;
@@ -66,17 +76,7 @@ CR-011 must decide one concrete architecture for:
   isolated exact-head smoke;
 - one launcher-owned, non-destructive candidate-preparation boundary.
 
-Before CR-011 is accepted, no agent may implement:
-
-- C4-II-A, C4-II-B, C4-II-C, or C4-III;
-- a native picker;
-- launcher IPC, WebSocket, or loopback control service;
-- an ordinary FastAPI Restore endpoint;
-- SPA-owned filesystem access;
-- browser upload/blob transfer as authoritative Restore source;
-- a validation-session Python service;
-- Restore packaging changes;
-- destructive Restore execution.
+Before CR-011 is accepted, no C4-II runtime implementation is authorized.
 
 ## History policy
 
