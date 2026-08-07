@@ -163,8 +163,10 @@ class RestoreControlSession:
                 raise ControlSessionError(401, "bootstrap_invalid")
 
             # Consumption happens before the new token becomes observable, so two
-            # concurrent exchanges can never both pass the capability check.
+            # concurrent exchanges can never both pass the capability check. The
+            # consumed secret is also cleared from coordinator memory immediately.
             self._bootstrap_consumed = True
+            self._bootstrap_capability = ""
             session_token = secrets.token_urlsafe(SESSION_RANDOM_BYTES)
             self._session_token = session_token
             self._last_authenticated_at = self._clock()
@@ -198,11 +200,7 @@ class RestoreControlSession:
         request_id: str,
         command_seq: int,
     ) -> CommandReply | None:
-        """Consume exactly-next sequence before any business precondition check.
-
-        Returns a retained idempotent reply for the only retry that is allowed:
-        the current highest sequence with the same request ID *and* command name.
-        """
+        """Consume exactly-next sequence before any business precondition check."""
 
         if command_seq < self._highest_command_seq:
             raise ControlSessionError(409, "command_sequence_stale")
@@ -249,8 +247,6 @@ class RestoreControlSession:
             if retry is not None:
                 return retry
 
-            # This business refusal intentionally happens *after* sequence
-            # consumption. A later retry cannot become a successful select.
             if self._worker is not None and self._worker.is_alive():
                 return self._record_reply_locked(
                     CommandReply(
@@ -269,8 +265,6 @@ class RestoreControlSession:
                     )
                 )
 
-            # Reselection invalidates launcher-private A1 proof synchronously,
-            # before a new worker can acquire any source authority.
             self._selection_generation += 1
             generation = self._selection_generation
             self._candidate_service.cancel()
@@ -543,6 +537,7 @@ class RestoreControlSession:
             if self._closed:
                 return
             self._closed = True
+            self._bootstrap_capability = ""
             self._session_token = None
             self._last_authenticated_at = None
             self._selection_generation += 1
