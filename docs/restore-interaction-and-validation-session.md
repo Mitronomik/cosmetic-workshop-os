@@ -5,12 +5,12 @@ Updated: `2026-08-07`
 
 Normative sources:
 
-- `docs/decisions/0016-launcher-assisted-restore.md` — durable Restore safety and twelve-phase state machine;
+- `docs/decisions/0016-launcher-assisted-restore.md` — durable Restore safety/state machine;
 - `docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md` — C4-I lifecycle closure and decision-only CR-011 gate;
-- `docs/decisions/0018-launcher-restore-interaction-and-validation-session.md` — selected CR-011 interaction architecture;
+- `docs/decisions/0018-launcher-restore-interaction-and-validation-session.md` — selected interaction architecture;
 - `docs/current-lifecycle.md` — current implementation authorization.
 
-ADR 0018 is newer only for the CR-011 interaction/validation-session topic. It does not amend ADR 0016 safety semantics and does not authorize C4-II-A runtime work.
+ADR 0018 is newer only for the CR-011 interaction/validation-session topic. It does not amend ADR 0016 and does not authorize C4-II-A runtime work.
 
 ## Current lifecycle
 
@@ -26,135 +26,98 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-On a CR-011 PR branch the decision becomes project authority only when present on `main`.
-
-## Selected interaction architecture
-
-CR-011 selects a **narrowly authenticated launcher-owned loopback control plane**.
+## Selected architecture and screen
 
 ```text
-ordinary browser / SPA
-  ├── business API ──→ ordinary FastAPI backend
-  └── Restore control ──→ launcher control plane
-                           127.0.0.1:<ephemeral>
-                                  ↓
-                           action/session coordinator
-                             ├── picker worker
-                             └── validation worker
-                                  ↓
-                    C4-I intake/staging/validation
+browser SPA /backups/restore
+  ├── ordinary business API → FastAPI backend
+  └── Restore control → launcher-owned 127.0.0.1:<ephemeral>
+                         → action/session coordinator
+                           ├── /usr/bin/osascript picker worker
+                           └── validation worker
+                         → C4-I intake/staging/validation
 ```
 
-The control plane is separate from the ordinary backend, is not a generic local command server, and has no destructive execute/confirm operation in C4-II-A.
+The screen is browser-owned presentation at exact future route `/backups/restore`, entered through a human-readable action from `/backups`.
 
-No WebSocket is selected. No new application dependency is authorized.
+No WebSocket, generic localhost command server, browser file authority, ordinary FastAPI Restore mutation or new application dependency is selected.
 
 ## Startup order
 
-Future user-mode startup order is:
-
 ```text
-acquire launcher lifecycle / instance authority
-→ resolve interrupted C4-I Restore recovery gate
-→ ordinary startup / migrations / backup-before-migration
-→ start and prove ordinary backend ready
-→ bind launcher control plane on 127.0.0.1:<ephemeral>
-→ create exact-run bootstrap capability
-→ open ordinary browser with bootstrap fragment
-→ keep browser UI + backend + control plane under one launcher lifetime
+launcher lifecycle/instance authority
+→ interrupted C4-I recovery gate
+→ ordinary startup/migrations/backup-before-migration
+→ ordinary backend ready proof
+→ control plane bind on 127.0.0.1:<ephemeral>
+→ exact-run bootstrap capability
+→ browser open
+→ browser + backend + control plane live under launcher lifetime
 ```
 
-If the control plane cannot start safely, normal product use may continue when otherwise safe, but Restore controls fail closed and no fallback transport is invented.
+If the control plane is unavailable, normal product use may continue when otherwise safe, but Restore fails closed. No fallback transport is allowed.
 
-## Bind, Host and Origin
+## Bind, Host, Origin and CORS
 
-Future C4-II-A must enforce:
+Future C4-II-A requires:
 
-- bind exactly `127.0.0.1`;
-- OS-assigned ephemeral control port;
-- no `0.0.0.0`, LAN or remote binding;
-- HTTP `Host` equal to actual `127.0.0.1:<bound-port>`;
-- one exact allowed Origin derived from configured local `frontend_url`;
-- user-mode Origin is local HTTP on `127.0.0.1` with configured frontend port;
+- exact `127.0.0.1` bind;
+- OS-assigned ephemeral port;
+- exact `Host: 127.0.0.1:<bound-port>`;
+- exact allowed local frontend Origin from configured `frontend_url`;
 - no wildcard CORS;
 - no credentialed cookie session;
-- only required methods/headers and no broadened preflight.
+- no LAN/remote binding;
+- only required methods/headers.
 
-A page without a valid launcher session fails closed with human-readable guidance to open/restart the application normally; no browser-upload or FastAPI Restore fallback is allowed.
+A `/backups/restore` page without valid launcher session shows human-safe restart/open guidance and does not fall back to upload/FastAPI Restore.
 
-## Bootstrap and exact-run authority
+## Bootstrap, sessionStorage and reload
 
-Before opening the browser, launcher creates:
+Launcher creates `run_id`, one-use bootstrap token with at least 256 bits entropy and ephemeral control port before browser open.
 
-- opaque `run_id`;
-- one-use bootstrap token with at least 256 bits of cryptographic entropy;
-- control-plane ephemeral port.
-
-Control port + bootstrap token enter the browser in the URL **fragment**, never query parameters.
-
-Conceptually:
+Control metadata enters browser only in URL **fragment**:
 
 ```text
-http://127.0.0.1:5173/#cw-control=<ephemeral-port>:<bootstrap-token>
+#cw-control=<ephemeral-port>:<bootstrap-token>
 ```
 
-Mandatory behavior:
+Bootstrap must be an **atomic compare-and-consume**: exactly one concurrent exchange succeeds; all replay/concurrent losers fail. The fragment is removed immediately after success and never persisted/logged.
 
-- fragment is not sent to frontend HTTP server;
-- frontend exchanges it through `POST /v1/bootstrap`;
-- bootstrap is an **atomic compare-and-consume** operation;
-- exactly one concurrent exchange succeeds;
-- replay/concurrent losers are refused;
-- frontend immediately removes the fragment with `history.replaceState(...)` or equivalent;
-- bootstrap capability is never logged or persisted.
+Successful bootstrap returns a second >=256-bit run-scoped session token.
 
-Successful bootstrap returns a second run-scoped token with at least 256 bits of entropy.
+For reload the SPA stores in `sessionStorage` only:
 
-The session token:
+- `control_origin = http://127.0.0.1:<ephemeral-port>`;
+- opaque `run_id` if needed for session matching;
+- run-scoped session token.
 
-- is valid only for exact `run_id`;
-- is stored only in browser `sessionStorage`, never `localStorage`;
-- is sent in explicit authorization header, never URL;
-- is bound to exact allowed Origin;
-- is invalidated on launcher exit/restart/session expiry;
-- is never persisted or logged.
+`control_origin` is non-secret routing metadata, not authority. The token is sent only in an authorization header and is never `localStorage`/URL/durable state.
 
-All bootstrap/control responses containing session or validation state use `Cache-Control: no-store` and equivalent no-cache behavior where applicable.
+On invalid-token/run-mismatch response, SPA clears stale `control_origin`, `run_id` and token from `sessionStorage`.
+
+All bootstrap/control responses carrying session or validation state use `Cache-Control: no-store`.
 
 ## Mandatory control-plane concurrency
 
-A long-running select/picker/validation action must **not** block the only control request loop.
+Long-running picker/validation must not block the only control request loop.
 
-Future C4-II-A must use a `ThreadingHTTPServer`-equivalent concurrent request model or equivalent launcher-owned dispatcher/worker coordination so that while picker/validation is in flight:
+Use `ThreadingHTTPServer`-equivalent concurrent request servicing or equivalent launcher dispatcher/worker coordination so heartbeat, state, cancel and timeout remain active while select is in flight.
 
-- heartbeat remains serviceable;
-- `GET /v1/state` remains serviceable;
-- cancel remains serviceable;
-- session timeout remains enforceable;
-- owned picker helper can be terminated after cancel/session expiry.
+At most one picker/validation owner exists per control session.
 
-Concurrency never creates multiple authority owners. Explicit synchronization permits at most one picker/validation owner per control session.
+Cancellation/session-expiry invalidates authority immediately. A late worker result cannot publish because publication is generation-gated. Cleanup that could race with a worker waits for worker quiescence/file release. A shared staging refactor may add cooperative cancellation checks at safe chunk boundaries while preserving existing C4-I caller behavior.
 
 ## Browser liveness
 
 - heartbeat interval: 15 seconds;
-- control-session expiry: 60 seconds without authenticated heartbeat or other authenticated control request.
+- control-session expiry: 60 seconds without authenticated activity.
 
-On expiry launcher atomically:
+Expiry atomically invalidates token/generation, terminates owned picker if active, blocks stale publication, **clear launcher-private retained source proof/path**, coordinates worker quiescence, cleans only owned scratch and leaves workshop data unchanged.
 
-- invalidates browser token;
-- invalidates/advances selection generation;
-- terminates owned picker helper if active;
-- prevents stale result publication;
-- clear launcher-private retained source proof/path for that control session;
-- cleans only proved owned validation scratch;
-- leaves ordinary backend/workshop data unchanged.
+## Control vocabulary
 
-Browser reload may recover via current `sessionStorage` token + `GET /v1/state`.
-
-## Narrow control vocabulary
-
-C4-II-A may expose only an equivalent of:
+Only an equivalent of:
 
 ```text
 POST /v1/bootstrap
@@ -164,252 +127,143 @@ POST /v1/restore/select
 POST /v1/restore/cancel
 ```
 
-No destructive execute/confirm endpoint belongs in C4-II-A. No arbitrary filesystem, shell, SQL, proxy or generic launcher endpoint is allowed.
+No execute/confirm/destructive operation belongs in C4-II-A.
 
-## Replay, duplicate and command ordering
+## Replay and command ordering
 
-Each mutating control command carries:
+Each mutating command carries:
 
-- cryptographically random request ID with at least 128 bits of entropy;
-- strictly monotonic `command_seq` scoped to the authenticated control session.
+- random request ID with at least 128 bits of entropy;
+- strictly monotonic `command_seq` per authenticated session.
 
-Launcher keeps bounded command state: highest accepted sequence, its request ID and safe in-progress/final result needed for retry.
+Launcher keeps bounded state including `highest_command_seq`, request ID for that sequence and safe in-progress/final retry result.
 
 Rules:
 
-- next new mutation must use exactly the next sequence;
-- lower sequence is permanently stale/replay and rejected;
-- current sequence retries only when request ID matches, and do not re-execute;
-- current sequence with a different request ID is rejected as conflict;
+- next new mutation must use exact next sequence;
+- lower sequence is permanently stale/replay;
+- current sequence retries only with same request ID and never re-executes;
+- current sequence + different request ID is rejected;
 - skipped/future sequence is rejected;
-- new select while picker/validation owns the session is action-in-progress;
+- active select owns the session; second select is `action_in_progress`;
 - accepted select/cancel/reselect advances separate selection generation;
-- result publishes only when captured generation remains current;
-- cancel/reselect invalidates old generation and clears its retained proof before new source authority;
-- stale results cannot overwrite browser state.
-
-Heartbeat is an authenticated liveness signal and does not consume `command_seq`.
+- result publishes only if captured generation remains current;
+- cancel/reselect clears old proof before new source authority;
+- heartbeat does not consume `command_seq`.
 
 ## Native macOS picker
 
-Launcher owns picker authority.
+Launcher-owned adapter:
 
 ```text
-launcher
-→ owned short-lived /usr/bin/osascript child
+/usr/bin/osascript
 → macOS Standard Additions `choose file`
-→ POSIX selected path returned only to launcher
+→ selected POSIX path returned only to launcher
 ```
 
-Requirements:
+No `shell=True`, no `System Events`, no user data interpolated into executable AppleScript, typed cancellation, no absolute path to browser/backend.
 
-- no `shell=True`;
-- no user-controlled text interpolated into AppleScript source;
-- no `System Events` automation;
-- typed cancellation;
-- no absolute path returned to browser/ordinary backend;
-- filename/type filter is presentation hint only.
+No PyObjC/Electron/Tauri/pywebview/tkinter dependency is authorized. Mac App Store sandbox compatibility remains a separate future packaging decision.
 
-No PyObjC, Electron, Tauri, pywebview, tkinter or other new runtime dependency is authorized.
+## Mandatory non-destructive boundary
 
-Mac App Store sandbox compatibility is not claimed. A future sandbox decision may replace the adapter while preserving launcher ownership/path privacy unless a later ADR changes them.
-
-## Mandatory non-destructive validation boundary
-
-Future C4-II-A implements one launcher-owned service conceptually equivalent to:
+Future C4-II-A uses one launcher-owned service conceptually:
 
 ```text
 prepare_restore_candidate(...)
 ```
 
-It must:
+It must never call `execute_restore(...)`, create a durable Restore operation, enter any of twelve phases, create `before_restore` safety copy, replace/migrate working DB, perform rollback/recovery mutation or write Restore AuditLog.
 
-- never call `execute_restore(...)`;
-- create no durable Restore operation;
-- enter none of twelve durable Restore phases;
-- create no `before_restore` safety copy;
-- replace/migrate no working database;
-- perform no rollback/startup-recovery mutation;
-- write no Restore AuditLog event;
-- leave original selected source byte-identical;
-- use isolated temporary validation staging outside durable Restore operation workspaces;
-- reuse C4-I `open_selected_source(...)`, `HeldSource` identity/revalidation/digest, stable two-pass staging and `validate_staged_candidate(...)` through shared collaborators;
-- return typed presentation-safe results only;
-- keep raw SQLite errors, stack traces, migration IDs/internal paths in local technical logs only;
-- expose only opaque run/session/generation identifiers;
-- never claim Restore completed.
+It must leave source byte-identical and reuse C4-I `open_selected_source(...)`, `HeldSource` identity/revalidation/digest, stable two-pass staging and `validate_staged_candidate(...)` through shared collaborators.
 
-If `stage_source(...)` is too coupled to `RestoreWorkspace`, C4-II-A may extract one shared lower-level staging primitive while preserving all existing C4-I behavior/tests. A second weaker staging algorithm is forbidden.
+If `stage_source(...)` is coupled to `RestoreWorkspace`, C4-II-A may extract one shared lower-level primitive while preserving C4-I behavior/tests. A second weaker algorithm is forbidden.
 
 ## Validation scratch
 
-Canonical launcher-owned root under current user's system temp area, conceptually:
+Conceptual root:
 
 ```text
 <system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<session-id>/
 ```
 
-Rules:
+Root/session directories use `0700` or platform-equivalent restrictive user-only permissions. No user-provided path components, no symlink traversal, cleanup only within canonical launcher root after ownership proof, and scratch never becomes durable Restore state.
 
-- root resolved by launcher only;
-- root/session directories created/used with user-only permissions (`0700` or platform-equivalent restrictive permissions);
-- opaque random run/session path components;
-- no user-provided path component;
-- no symlink traversal;
-- ownership/version marker sufficient to prove cleanup;
-- cleanup refuses paths outside canonical root;
-- scratch is never a durable Restore operation;
-- next-run cleanup removes only recognized/proved owned session directories.
+## Typed browser state and path privacy
 
-## Typed browser-visible result
+Allowed: opaque run/session, generation, safe filename label, idle/selecting/validating/accepted/rejected/cancelled/technical_failure, typed compatibility and fixed safe guidance.
 
-Allowed:
+Forbidden: absolute source/staged paths, raw SQLite/SQL, migration IDs, stack traces, operation records, arbitrary DB contents.
 
-- opaque run/session identity;
-- selection generation;
-- safe display filename/label;
-- state: idle/selecting/validating/accepted/rejected/cancelled/technical_failure;
-- current-schema / older-supported-schema compatibility;
-- fixed rejection category/guidance;
-- stale/cancelled state.
-
-Forbidden:
-
-- absolute source path;
-- staged candidate path;
-- raw SQL/SQLite text;
-- migration IDs;
-- stack traces;
-- operation-record contents;
-- arbitrary database contents.
-
-Displayed filename is never compatibility/authority proof.
+Filename is presentation only.
 
 ## Retained launcher-private proof
 
-After successful validation, delete temporary staged candidate.
+After successful validation the staged candidate is deleted. For the current authenticated control session launcher may retain only:
 
-For current authenticated control session only, launcher may retain:
-
-- canonical absolute source path, launcher-private;
+- launcher-private canonical source path;
 - C4-I `SourceIdentity`;
-- full SHA-256 from held descriptor;
-- successful selection generation;
-- typed compatibility result.
+- full SHA-256;
+- successful generation;
+- typed compatibility.
+
+Proof/path clears on cancel, reselection, rejection/failure, session expiry, launcher exit or any invalidating transition. No proof survives launcher crash.
 
 Browser token references this state but is not authority.
 
-Retained proof/path is cleared on:
-
-- cancel;
-- reselection before next generation becomes authoritative;
-- validation rejection/technical failure;
-- browser control-session expiry;
-- launcher normal exit;
-- any transition invalidating successful generation.
-
-No token/proof survives launcher crash.
-
 ## Future C4-II-B re-proof
-
-Before destructive execution future C4-II-B must:
 
 ```text
 reopen launcher-private original path through C4-I intake
-→ compare descriptor/path SourceIdentity
-→ recompute and compare full SHA-256
+→ compare SourceIdentity
+→ recompute/compare full SHA-256
 → re-check sidecars/self-containment
-→ stage again through C4-I semantics
+→ stage again
 → validate again
 → only then enter existing C4-I destructive execution
 ```
 
-Any mismatch invalidates prior validation and returns to source selection. Browser state, filename, extension or token possession cannot bypass re-proof.
+Any mismatch returns to selection.
 
 ## Backend lifecycle
 
-The **ordinary backend remains running** during file selection, source intake, temporary staging, candidate validation and result presentation.
-
-C4-II-A is non-destructive and operates on selected source + isolated staged copy. Existing C4-I backend stop/exclusion proof remains the future C4-II-B destructive boundary.
+The **ordinary backend remains running** during picker, source intake, temporary staging, candidate validation and result presentation. C4-II-A is non-destructive; C4-I backend exclusion remains future C4-II-B destructive authority.
 
 ## Cleanup matrix
 
 | Event | Required behavior |
 |---|---|
-| Picker cancel | invalidate generation, clear proof, no durable operation/safety copy, clean owned scratch |
-| Reselect | invalidate generation and clear proof first, end old ownership, clean scratch, then next generation |
-| Rejection/technical failure | safe browser category, technical detail local, clear proof, clean scratch |
-| Browser reload | recover typed state through current run-scoped session |
-| Browser/tab close | heartbeat expiry invalidates control authority, clears proof, cancels active picker/validation, cleans scratch |
-| Launcher normal exit | invalidate tokens/generation, clear proof, terminate picker, clean scratch, stop control plane |
-| Launcher crash/interruption | no token/proof survives; next run cleans only recognized owned scratch |
+| Picker cancel | invalidate generation/proof immediately; terminate picker; clean scratch after quiescence |
+| Reselect | invalidate old generation/proof; quiesce owner; clean scratch; then next generation |
+| Rejection/failure | safe browser category; detail local; clear proof; clean scratch |
+| Reload | recover through sessionStorage `control_origin` + token + `GET /v1/state` |
+| Tab close | heartbeat expiry invalidates authority/proof, cancels owner, then cleans scratch |
+| Launcher exit | invalidate tokens/generation/proof, terminate picker, quiesce workers, clean scratch, stop control plane |
+| Crash/interruption | no token/proof survives; next run cleans only recognized owned scratch |
 
-Validation scratch never triggers a Restore phase, startup recovery or working-database mutation.
+## Future C4-II-A tests
 
-## Future C4-II-A minimum tests
-
-At minimum prove:
-
-1. loopback-only ephemeral bind;
-2. wrong/missing Host or Origin rejected;
-3. no wildcard CORS;
-4. atomic bootstrap one-use under concurrent attempts;
-5. old-run/wrong session token rejected;
-6. state/session responses use `Cache-Control: no-store`;
-7. heartbeat/state/cancel remain serviceable while picker/validation is in flight;
-8. `command_seq` prevents replay/out-of-order re-execution after old result detail is discarded;
-9. same current sequence + same request ID is idempotent;
-10. same sequence + different request ID rejected;
-11. duplicate concurrent select rejected;
-12. stale generation cannot publish;
-13. cancel/reselect/session-expiry clears retained proof;
-14. browser payload contains no absolute path;
-15. picker cancellation typed/non-destructive;
-16. valid current/supported older backup accepted;
-17. newer/foreign/empty/corrupt/directory/symlink/path-escape rejected;
-18. source remains byte-identical;
-19. no durable Restore operation/phase/safety copy/AuditLog event;
-20. no working DB replacement/migration;
-21. backend usable during validation;
-22. scratch uses restrictive user-only permissions;
-23. cleanup removes only proved owned scratch;
-24. next-run cleanup ignores foreign/unproved paths;
-25. browser reload recovers safe state;
-26. heartbeat expiry invalidates stale authority.
+Must prove at least: loopback/Host/Origin/CORS, atomic bootstrap, stale-run clearing of sessionStorage metadata, `no-store`, concurrent heartbeat/state/cancel during in-flight picker/validation, worker-quiescence cleanup, `command_seq` replay/order rules, duplicate select, stale generation, retained-proof clearing, no browser absolute path, real picker cancel, accepted/rejected backup classes, source byte identity, no Restore operation/phase/safety copy/AuditLog/working-DB mutation, backend usability, `0700` scratch, owned-only cleanup, next-run cleanup, and `/backups/restore` fail-closed behavior without launcher session.
 
 ## Future exact-head macOS smoke
 
 ```text
-real launcher run
-→ real browser Restore screen
-→ real authenticated launcher-control request
+real launcher
+→ real browser /backups/restore
+→ real authenticated control request
 → real /usr/bin/osascript picker
-→ select prepared temporary workshop backup
 → real candidate preparation/validation
 → typed browser result
-→ prove heartbeat/state/cancel responsiveness while picker/validation is in flight
-→ cancel/reselect exercise
-→ prove source bytes unchanged
-→ prove no durable Restore operation/safety copy/working-DB change
-→ prove retained proof cleared after cancel/session expiry
-→ prove owned processes/control plane/scratch cleaned
+→ prove heartbeat/state/cancel responsive while work is in flight
+→ cancel/reselect
+→ prove source unchanged and no durable/destructive mutation
+→ prove proof/workers/control-plane/picker/scratch cleanup
 ```
 
-Injecting the final result or bypassing picker/control/session boundary is insufficient.
+Synthetic bypass is insufficient.
 
 ## Not authorized yet
 
-This profile does not authorize:
-
-- C4-II-A runtime implementation;
-- C4-II-B/C4-II-C/C4-III;
-- frontend Restore controls;
-- launcher control-plane code;
-- picker code;
-- validation-session code;
-- destructive Restore confirmation/execution;
-- new dependencies;
-- packaging implementation;
-- changes to ADR 0016 state-machine/recovery semantics.
+C4-II-A runtime implementation, C4-II-B/C4-II-C/C4-III, frontend Restore code, launcher control/picker/validation code, destructive execution, new dependencies, packaging implementation and ADR 0016 state-machine changes remain not authorized.
 
 A separate post-CR-011 task must explicitly authorize bounded C4-II-A runtime work.
