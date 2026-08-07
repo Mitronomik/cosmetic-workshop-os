@@ -336,18 +336,20 @@ def resolve_restore_recovery(context, preflight=None):
 def start_restore_control_plane(config: RuntimeConfig, database_path: Path):
     """Start A2 control after launcher authority and proved backend startup.
 
-    The allowed Origin is exactly the URL ordinary product navigation would open:
-    configured `frontend_url`, or the existing local `backend_url` fallback.
-    No alternate Restore transport, picker or browser filesystem fallback exists.
+    ADR 0018 allows ordinary product operation to continue if this exact-run
+    control boundary cannot be established safely. No alternate Restore transport,
+    picker or browser filesystem fallback is created.
     """
     from launcher.restore.control_plane import RestoreControlPlane, RestoreControlPlaneError
 
+    if config.frontend_url is None:
+        raise RestoreControlPlaneError(
+            "Restore control plane requires the configured local frontend origin."
+        )
+
     plane = None
     try:
-        plane = RestoreControlPlane(
-            Path(database_path),
-            frontend_url=config.frontend_url or config.backend_url,
-        )
+        plane = RestoreControlPlane(Path(database_path), frontend_url=config.frontend_url)
         # run_local_runtime already holds canonical launcher single-instance
         # authority here, which is the required gate for interrupted scratch cleanup.
         plane.cleanup_interrupted_validation_scratch()
@@ -393,7 +395,7 @@ def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths |
 
     An unrelated collision therefore refuses with the message it has always used,
     with the Restore history byte-identical, and the next launch — after the user
-    closes that program — resumes from there.
+    closes that program — resumes the same operation from the same phase.
     """
     runtime_config = config or build_runtime_config()
     runtime_paths = paths or resolve_runtime_paths()
