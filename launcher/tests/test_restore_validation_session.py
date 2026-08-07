@@ -10,12 +10,16 @@ import pytest
 
 from app.db.migrations import MIGRATION_TABLE, expected_migration_ids
 from launcher.restore.validation_session import (
+    MAX_DISPLAY_FILENAME_CHARS,
     CandidateCompatibility,
     CandidatePreparationFailure,
     CandidatePreparationState,
     RestoreCandidatePreparationService,
 )
-from launcher.restore.validation_scratch import ValidationScratchManager
+from launcher.restore.validation_scratch import (
+    ValidationScratchError,
+    ValidationScratchManager,
+)
 from launcher.restore.workspace import resolve_restore_dir
 from launcher.tests.restore_fixtures import (
     build_workspace_database,
@@ -89,6 +93,25 @@ def test_current_schema_is_accepted_and_retains_only_launcher_private_proof(
 
     assert digest(current_source) == source_before
     assert digest(working_database) == working_before
+
+
+def test_display_filename_is_bounded_and_removes_control_formatting(
+    tmp_path, working_database, scratch_root
+):
+    unsafe_name = "backup\n\t\u202e" + ("x" * 200) + ".sqlite"
+    source = build_workspace_database(tmp_path / "chosen" / unsafe_name, "unsafe-label")
+
+    with RestoreCandidatePreparationService(
+        working_database, scratch_root=scratch_root
+    ) as service:
+        result = service.prepare_restore_candidate(source)
+
+        assert result.accepted is True
+        assert "\n" not in result.filename
+        assert "\t" not in result.filename
+        assert "\u202e" not in result.filename
+        assert len(result.filename) <= MAX_DISPLAY_FILENAME_CHARS
+        assert str(source.parent) not in result.filename
 
 
 def test_known_older_schema_is_accepted_without_migrating_source_or_working_database(
@@ -368,6 +391,26 @@ def test_validation_scratch_is_private_and_interrupted_cleanup_is_owned_only(
         assert outside.exists()
     finally:
         assert current.cleanup_current_run_if_empty() is True
+
+
+def test_default_scratch_refuses_symlinked_app_ancestry(
+    monkeypatch, tmp_path, working_database
+):
+    from launcher.restore import validation_scratch as module
+
+    fake_temp = tmp_path / "system-temp"
+    fake_temp.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (fake_temp / module.VALIDATION_APP_DIRNAME).symlink_to(
+        outside, target_is_directory=True
+    )
+    monkeypatch.setattr(module.tempfile, "gettempdir", lambda: str(fake_temp))
+
+    with pytest.raises(ValidationScratchError):
+        ValidationScratchManager(working_database)
+
+    assert not (outside / module.VALIDATION_DIRNAME).exists()
 
 
 def test_close_clears_retained_proof_and_removes_empty_run_root(
