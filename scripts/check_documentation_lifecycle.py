@@ -109,6 +109,7 @@ DECISION_REQUIRED_MARKERS = (
     "at least 128 bits of entropy",
     "command_seq",
     "highest_command_seq",
+    "consumes its command sequence",
     "0700",
     "clear launcher-private retained source proof/path",
     "prepare_restore_candidate",
@@ -135,6 +136,7 @@ RESTORE_PROFILE_REQUIRED_MARKERS = (
     "control-session expiry: 60 seconds",
     "at least 128 bits of entropy",
     "command_seq",
+    "consumes its command sequence",
     "0700",
     "clear launcher-private retained source proof/path",
     "prepare_restore_candidate",
@@ -317,6 +319,7 @@ def main() -> int:
     print("Verified ADR 0016 / ADR 0017 / ADR 0018 scope-and-recency authority.")
     print("Verified bounded ADR 0017 pre-decision CR-011 supersession.")
     print("Verified CR-011 route/reload/security/concurrency/ordering/validation architecture.")
+    print("Verified non-replayable typed business rejections.")
     print("Verified C4-II-A remains separately not authorized.")
     print("Verified maintained historical guidance contains no executable old-commit restore recipe.")
     return 0
