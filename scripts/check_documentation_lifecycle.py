@@ -403,7 +403,7 @@ def check_closed_a2_boundary() -> None:
             "command_sequence_future",
             "command_sequence_conflict",
             "self._candidate_service.cancel()",
-            "stale control generation",
+            "guarantees stale A1 authority is gone before quiescence",
             "worker.join()",
         ),
     )
