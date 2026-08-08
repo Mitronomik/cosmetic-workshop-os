@@ -334,13 +334,14 @@ def resolve_restore_recovery(context, preflight=None):
 
 
 def start_restore_control_plane(config: RuntimeConfig, database_path: Path):
-    """Start A2 control after launcher authority and proved backend startup.
+    """Start the closed A2 control plane with the A3 native picker adapter.
 
-    ADR 0018 allows ordinary product operation to continue if this exact-run
-    control boundary cannot be established safely. No alternate Restore transport,
-    picker or browser filesystem fallback is created.
+    ADR 0018 keeps filesystem authority inside the launcher. A3 changes only the
+    production source-selection adapter; browser request schemas, control/session
+    authority and the A1 validation boundary remain unchanged.
     """
     from launcher.restore.control_plane import RestoreControlPlane, RestoreControlPlaneError
+    from launcher.restore.macos_picker import MacOSNativeSourceSelectionAdapter
 
     if config.frontend_url is None:
         raise RestoreControlPlaneError(
@@ -349,7 +350,11 @@ def start_restore_control_plane(config: RuntimeConfig, database_path: Path):
 
     plane = None
     try:
-        plane = RestoreControlPlane(Path(database_path), frontend_url=config.frontend_url)
+        plane = RestoreControlPlane(
+            Path(database_path),
+            frontend_url=config.frontend_url,
+            picker_adapter=MacOSNativeSourceSelectionAdapter(),
+        )
         # run_local_runtime already holds canonical launcher single-instance
         # authority here, which is the required gate for interrupted scratch cleanup.
         plane.cleanup_interrupted_validation_scratch()
@@ -463,8 +468,8 @@ def _run_locked_runtime(
     process = context.backend.start(runtime_config, runtime_paths, startup.database_path)
     control_plane = None
     try:
-        # The owned backend has already proved lock + listening socket here. A2
-        # begins only after that exact point and remains under this launcher run.
+        # The owned backend has already proved lock + listening socket here. The
+        # closed A2 control plane and A3 picker remain under this launcher run.
         try:
             control_plane = start_restore_control_plane(runtime_config, startup.database_path)
         except Exception as exc:  # noqa: BLE001 - ordinary product may continue safely

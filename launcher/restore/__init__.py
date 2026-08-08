@@ -2,9 +2,10 @@
 
 C4-I implements the accepted destructive Restore safety state machine from ADR
 0016. C4-II-A1 adds the merged non-destructive candidate-preparation core. C4-II-
-A2 adds only the exact-run launcher-owned loopback control plane from ADR 0018.
-Product Restore remains ``NOT IMPLEMENTED``: there is still no real native picker,
-no browser Restore screen and no destructive confirmation flow.
+A2 adds the exact-run launcher-owned loopback control plane from ADR 0018. C4-II-
+A3 adds only the launcher-owned native macOS source picker. Product Restore remains
+``NOT IMPLEMENTED``: there is still no browser Restore screen, no production
+browser bootstrap handoff and no destructive confirmation flow.
 
 Destructive entry points still require launcher lifecycle authority::
 
@@ -17,9 +18,9 @@ The non-destructive A1 service remains the only candidate-preparation boundary::
     service = RestoreCandidatePreparationService(database_path)
     result = service.prepare_restore_candidate(selected_source)
 
-A2 wraps that service in an authenticated exact-run local control boundary. The
-production A2 source-selection adapter returns ``picker_unavailable``; real
-filesystem selection remains A3 scope and browser bootstrap-fragment handoff
+A2 wraps that service in an authenticated exact-run local control boundary. A3
+production runtime injects ``MacOSNativeSourceSelectionAdapter`` through the
+existing launcher-only source-selection seam. Browser bootstrap-fragment handoff
 remains A4 scope.
 """
 
@@ -56,6 +57,7 @@ from launcher.restore.control_protocol import (
 from launcher.restore.control_session import RestoreControlSession
 from launcher.restore.engine import RestoreServices, execute_restore
 from launcher.restore.instance_lock import LauncherAlreadyRunningError, LauncherInstanceLock
+from launcher.restore.macos_picker import MacOSNativeSourceSelectionAdapter, NativePickerError
 from launcher.restore.maintenance_lease import (
     BackendMaintenanceLease,
     MaintenanceLeaseError,
@@ -103,7 +105,9 @@ __all__ = [
     "LauncherAlreadyRunningError",
     "LauncherInstanceLock",
     "LauncherLifecycleContext",
+    "MacOSNativeSourceSelectionAdapter",
     "MaintenanceLeaseError",
+    "NativePickerError",
     "PhaseTransitionError",
     "RECOVERY_BLOCKED_MESSAGE",
     "ROLLED_BACK_MESSAGE",

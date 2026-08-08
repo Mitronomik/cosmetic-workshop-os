@@ -1,8 +1,9 @@
-"""Typed launcher-internal contracts for the C4-II-A2 Restore control plane.
+"""Typed launcher-internal contracts for the C4-II-A Restore control flow.
 
-The browser never owns a filesystem path.  A source-selection adapter returns a
-path only inside the launcher process, and the production A2 adapter deliberately
-returns ``picker_unavailable`` until A3 adds the real macOS picker.
+The browser never owns a filesystem path. A source-selection adapter returns a
+path only inside the launcher process. The closed A2 unavailable adapter remains
+the default for direct/test construction; A3 production runtime injects the
+launcher-owned native macOS adapter explicitly.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ class SourceSelectionResult:
     """Launcher-private picker result.
 
     ``selected_source`` is intentionally absent unless the launcher-owned adapter
-    returned ``SELECTED``.  This type is never serialized to HTTP.
+    returned ``SELECTED``. This type is never serialized to HTTP.
     """
 
     state: SourceSelectionState
@@ -47,8 +48,8 @@ class SourceSelectionResult:
 class SourceSelectionAdapter(Protocol):
     """Launcher-owned source-selection seam used by A2/A3.
 
-    A2 production implements only the unavailable adapter below.  Tests may
-    inject a fake adapter directly; HTTP requests never carry a source path.
+    Production A3 injects the native adapter at launcher runtime. Tests may inject
+    fakes directly; HTTP requests never carry a source path.
     """
 
     def select(self, cancel_event: Event) -> SourceSelectionResult:
@@ -56,7 +57,7 @@ class SourceSelectionAdapter(Protocol):
 
 
 class UnavailableSourceSelectionAdapter:
-    """Production A2 seam.  Real native selection is separately gated to A3."""
+    """Closed A2 fail-closed/default adapter retained for direct construction."""
 
     def select(self, cancel_event: Event) -> SourceSelectionResult:
         del cancel_event

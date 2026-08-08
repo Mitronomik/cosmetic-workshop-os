@@ -19,9 +19,8 @@ ADR 0018 remains:
 ```text
 browser presentation
   ├── ordinary business API → FastAPI backend
-  └── Restore control → launcher-owned local control boundary
-                         127.0.0.1:<ephemeral>
-                         → launcher-owned picker adapter
+  └── Restore control → launcher-owned 127.0.0.1:<ephemeral>
+                         → A3 native macOS picker
                          → non-destructive A1 candidate validation
 ```
 
@@ -31,34 +30,29 @@ browser presentation
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 ```
 
-A2 is merged and exact-head verified. Its control plane remains exact loopback,
-ephemeral, exact Host/configured Origin, one-use bootstrap, run-scoped token,
-no-store/narrow CORS, 15s/60s liveness, strict `command_seq` and one long-work
-owner with responsive state/heartbeat/cancel.
+A2 remains the exact-run control/session authority. A3 now injects only the
+launcher-owned native picker into its existing source-selection seam:
 
-A3 may now add only the launcher-owned native macOS picker behind the existing A2
-adapter seam:
-
-- `/usr/bin/osascript`;
+- exact `/usr/bin/osascript`;
 - Standard Additions `choose file`;
 - fixed script, no user interpolation;
-- no `shell=True`, no `System Events`;
-- typed cancellation;
+- `shell=False`, no `System Events`;
+- typed user cancel;
 - absolute POSIX path only in launcher memory;
-- owned child termination/quiescence on cancel/expiry;
+- owned child terminate/reap with kill fallback on cancel/expiry;
 - no new dependency.
 
-The selected path remains launcher-private and flows only into merged A1
-validation. Browser requests may not supply path/file authority.
+The selected path flows only into merged A1 validation. Browser requests remain
+pathless. A1/C4-I remains acceptance authority.
 
-A3 does not change production browser navigation. No `#cw-control`, bootstrap
-capability, control port or session token is appended; `/backups/restore` and the
-first production browser handoff remain A4.
+Production browser navigation remains unchanged through A3: no `#cw-control`,
+bootstrap capability, control port or session token is appended. `/backups/restore`
+and first production browser handoff remain A4.
 
 No A1–A4 slice may add destructive Restore authority. C4-II-B remains separately
 not authorized.
