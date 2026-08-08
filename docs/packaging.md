@@ -19,28 +19,33 @@ ordinary browser
 → launcher-owned validation session
 ```
 
-The expected picker is macOS-provided `/usr/bin/osascript` + Standard Additions
-`choose file`; no new application dependency is authorized. Mac App Store sandbox
-compatibility is not claimed and remains a future packaging decision.
+The expected future picker is macOS-provided `/usr/bin/osascript` + Standard
+Additions `choose file`; no new application dependency is authorized. Mac App
+Store sandbox compatibility is not claimed and remains a future packaging
+decision.
 
 ## C4-II-A status
 
 ```text
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
-C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
+C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 ```
 
 A1 added no packaging implementation or dependency.
 
-A2 may implement only launcher runtime control/session behavior. It may start an
-exact-run loopback control listener from launcher lifecycle, but must not add
-packaging implementation, new runtime dependency, real picker, or browser
-bootstrap-fragment handoff.
+A2 adds only launcher runtime control/session code using Python standard-library
+HTTP/threading/secrets primitives. It starts a loopback control listener during
+launcher lifetime but adds no packaging implementation, dependency or bundle
+resource.
 
-Production A2 source selection remains typed `picker_unavailable`. The real
-`/usr/bin/osascript` picker remains A3. The first production browser handoff
-remains A4.
+Production A2 source selection remains typed `picker_unavailable` through
+`UnavailableSourceSelectionAdapter`; it does not invoke `/usr/bin/osascript`.
+The real picker remains A3.
+
+Production browser launch URL remains unchanged in A2. No `#cw-control`, control
+port, bootstrap capability or session token is added to the browser URL; first
+production handoff remains A4.
 
 C4-II-B destructive Restore remains not authorized.

@@ -31,6 +31,7 @@ launcher-owned interaction/control/picker/validation architecture.
 ```text
 PR #173 — MERGED — C4-II-A SLICED AUTHORIZATION
 PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
+PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
@@ -39,8 +40,8 @@ C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED
-C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE
+C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -54,9 +55,10 @@ full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-`C4-II-A2 — AUTHORIZED NEXT — NOT IMPLEMENTED` becomes the active runtime
-successor only after this post-A1 lifecycle-closure changeset is merged to
-`main`. Do not start A2 from an unmerged closure branch.
+A2 is not `DONE` merely because its implementation exists. It closes only after
+the exact published head passes protocol/security/concurrency tests, A1/C4-I and
+full regressions, the exact-head direct-local-HTTP smoke, independent audit, merge,
+and a post-merge lifecycle update from new `main`.
 
 ## Verified merge baselines
 
@@ -94,107 +96,131 @@ successor only after this post-A1 lifecycle-closure changeset is merged to
 - full backend + launcher regression: 2415 passed
 - independent exact-head audit: P0=0 / P1=0 / P2=0
 
+### A1 closure / A2 authorization / PR #175
+
+- reviewed head: `b1a48d8f668fa984e3032f85c226f77e30d92e4e`
+- merge: `636645ece744752f6a753ae5a25a05297fd34e10`
+- docs-only exact-head lifecycle gate: PASS
+- independent exact-head audit: P0=0 / P1=0 / P2=0
+
+The current A2 implementation branch starts directly from merge
+`636645ece744752f6a753ae5a25a05297fd34e10`.
+
 ## Closed A1 boundary
 
-A1 is now merged and exact-head verified. It provides only the launcher-owned
-non-destructive validation-session core:
+A1 remains merged and exact-head verified. It provides the only launcher-owned
+non-destructive candidate-preparation service:
 
 - `RestoreCandidatePreparationService.prepare_restore_candidate(...)`;
-- private system-temp validation scratch under
-  `<system-temp>/cosmetic-workshop-os/restore-validation/<run-id>/<session-id>/`;
-- C4-I source intake, held-descriptor identity/digest/sidecar proof,
-  `stage_source(...)` and `validate_staged_candidate(...)` reuse;
+- private owned validation scratch;
+- direct C4-I source intake/staging/validation reuse;
 - source identity/SHA-256 re-proof;
 - generation/cancel/reselection invalidation;
-- typed presentation-safe result with bounded safe display filename;
-- launcher-private retained canonical source path + `SourceIdentity` + SHA-256;
-- owned-only scratch cleanup.
+- presentation-safe typed result;
+- launcher-private retained path + `SourceIdentity` + SHA-256.
 
-A1 did not add HTTP control, picker, frontend Restore UI, durable Restore state,
-safety-copy creation, working-DB replacement/migration, rollback/recovery or
-Restore AuditLog.
+A2 does not duplicate or weaken that service.
 
-## A2 authorized boundary — exact-run launcher control plane
+## A2 implemented boundary — exact-run launcher control plane
 
-A2 may implement only the accepted ADR 0018 exact-run local control boundary:
+The current changeset implements only the already-authorized A2 boundary:
 
-- bind exactly `127.0.0.1` on an OS-assigned ephemeral port;
-- exact Host and configured local frontend Origin validation;
-- no wildcard CORS and no cookie-based authority;
-- one-use bootstrap capability with at least 256 bits entropy and atomic consume;
-- separate run-scoped session token with at least 256 bits entropy;
-- `Cache-Control: no-store` on control/session state;
-- 15-second heartbeat and 60-second authenticated inactivity expiry;
-- concurrent request servicing so heartbeat/state/cancel are not blocked by long work;
-- request ID with at least 128 bits entropy plus monotonic `command_seq`;
-- expected-next sequence consumed before business precondition evaluation;
-- idempotent retry and stale/replay rejection;
-- integration with A1 generation/cancel/invalidation;
-- launcher lifecycle ownership of control-plane start/stop;
-- launcher-owned source-selection adapter boundary.
+- `launcher/restore/control_protocol.py` — typed presentation/session and
+  launcher-owned source-selection adapter contracts;
+- `launcher/restore/control_session.py` — one-use bootstrap, run-scoped session,
+  15-second heartbeat / 60-second authenticated inactivity expiry, monotonic
+  `command_seq`, idempotent retry, generation/cancel and one worker owner;
+- `launcher/restore/control_plane.py` — stdlib concurrent HTTP boundary bound
+  exactly to `127.0.0.1` on an OS-assigned ephemeral port;
+- exact Host and configured local frontend Origin checks;
+- no wildcard CORS, no cookie authority, `Cache-Control: no-store`;
+- narrow endpoint vocabulary only:
+  `POST /v1/bootstrap`, `GET /v1/state`, `POST /v1/heartbeat`,
+  `POST /v1/restore/select`, `POST /v1/restore/cancel`;
+- expected-next command sequence consumed atomically before business preconditions;
+- malformed/auth/Host/Origin/schema/stale/future refusals occur before consumption;
+- one launcher-owned selection/validation worker with generation-gated publication;
+- runtime ownership: control plane starts after the owned backend proves lock +
+  listening socket and closes before backend/lifecycle release;
+- if control startup is unsafe, ordinary product operation continues without a
+  fallback Restore transport;
+- exact-head direct-local-HTTP smoke in `scripts/smoke_restore_control_plane.py`.
 
 ### Mandatory A2→A3 seam
 
-A2 must **not** implement the real native picker. Production A2 uses a
-launcher-owned adapter returning typed `picker_unavailable` and obtains no
-filesystem path.
+Production A2 uses `UnavailableSourceSelectionAdapter` and returns typed
+`picker_unavailable`. It obtains **no filesystem path**. Tests/smoke may inject a
+launcher-owned fake adapter directly. HTTP payload schema has no path/file/upload
+field and no test-only filesystem route.
 
-Tests may inject a launcher-owned fake adapter directly. The browser may never
-supply `path`, `source_path`, file bytes, upload/blob, file handle/bookmark or any
-filesystem authority. Do not add a test-only HTTP bypass route or generic
-filesystem/shell/SQL command surface.
+The real `/usr/bin/osascript` picker remains A3 scope.
 
 ### Mandatory A2→A4 seam
 
-The production product-browser launch URL remains unchanged in A2. A2 must not
-append the bootstrap fragment to actual product navigation because the browser
-consumer/removal logic does not exist until A4. Exact-head A2 smoke therefore
-uses a direct authenticated local HTTP harness.
+`open_runtime_browser(...)` remains the ordinary existing product URL. The A2
+runtime does **not** append `#cw-control`, bootstrap capability, control port or
+session material to production browser navigation. First production bootstrap
+fragment handoff and removal remain A4 scope together with `/backups/restore`.
 
-## A2 non-goals
+## A2 hard prohibitions
 
-A2 must not implement:
+The current A2 changeset must not:
 
-- real `/usr/bin/osascript` picker — A3;
-- `/backups/restore` browser workspace — A4;
-- production browser bootstrap-fragment handoff — A4;
-- destructive Restore confirmation or `execute_restore(...)` — C4-II-B;
-- ordinary FastAPI Restore mutation endpoint;
-- durable Restore operation/phase or `before_restore` safety copy;
-- working-DB replacement/migration, rollback or recovery mutation;
-- Restore AuditLog;
-- WebSocket, generic localhost command server, new dependency or packaging work.
+- invoke `/usr/bin/osascript`, `subprocess` picker code or `shell=True`;
+- expose browser-controlled `path`, `source_path`, file bytes, upload/blob,
+  bookmark/handle or equivalent filesystem authority;
+- add `/backups/restore` or frontend Restore code;
+- put bootstrap/session capability in production URL/query/localStorage;
+- add destructive execute/confirm command or call `execute_restore(...)`;
+- create durable Restore phase/state or `before_restore` safety copy;
+- replace/migrate the working database, rollback/recover or write Restore AuditLog;
+- add an ordinary FastAPI Restore mutation endpoint;
+- add WebSocket, generic localhost command server, dependency or packaging work.
+
+ADR 0016 destructive semantics and ADR 0018 architecture remain unchanged.
 
 ## A2 verification gate
 
-Before A2 can close, its exact published head must pass:
+Before A2 can close, the exact published head must pass:
 
 ```text
 clean checkout
 → git diff --check
-→ documentation lifecycle checker
-→ targeted A2 protocol/security/concurrency tests
-→ A1 + existing C4-I Restore regression tests
+→ python3 scripts/check_documentation_lifecycle.py
+→ targeted A2 protocol/security/concurrency/runtime tests
+→ A1 validation-session tests
+→ existing C4-I Restore regression tests
 → full backend + launcher regression suite
-→ exact-head A2 direct-local-HTTP smoke
+→ python3 scripts/smoke_restore_control_plane.py --expected-head <HEAD>
+→ clean checkout/head re-check
 → independent exact-head code/architecture audit
 → P0=0 / P1=0 / P2=0
 ```
 
-A3 remains blocked until A2 is independently reviewed, exact-head verified,
-merged and lifecycle/project memory is updated from new `main`.
+No PASS is claimed until those commands run on the exact published head.
+
+## Successor gate
+
+A3 remains blocked. After A2 passes its exact-head gate and merges:
+
+1. update `main`;
+2. record A2 reviewed head and merge evidence;
+3. close A2 lifecycle/project memory;
+4. only then authorize/create a fresh A3 branch from updated `main`.
+
+A4 remains predecessor-gated. C4-II-B remains separately not authorized.
 
 ## C4-II-B boundary
 
-C4-II-B remains separately **PLANNED — NOT AUTHORIZED**. No A2 command may become
-destructive authority. Future C4-II-B must reopen/re-prove the launcher-private
-original path, compare `SourceIdentity`, recompute SHA-256, re-check sidecars,
-re-stage/revalidate, prove backend exclusion, create mandatory `before_restore`
-safety copy and only then enter existing C4-I destructive execution.
+C4-II-B remains **PLANNED — NOT AUTHORIZED**. No A2 token, browser state or
+command is destructive authority. Future C4-II-B must reopen/re-prove the
+launcher-private original path, compare `SourceIdentity`, recompute SHA-256,
+re-check sidecars, re-stage/revalidate, prove backend exclusion, create mandatory
+`before_restore` safety copy and only then enter existing C4-I destructive execution.
 
 ## Bounded supersession map
 
-Older documents may retain dated C4/CR-011/A1 status labels. Durable semantics
+Older documents may retain dated C4/CR-011/A1/A2 status labels. Durable semantics
 remain authoritative; only lifecycle labels are superseded by this profile:
 
 - `docs/decisions/0016-launcher-assisted-restore.md` — durable C4-I safety remains;

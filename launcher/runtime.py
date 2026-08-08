@@ -333,6 +333,39 @@ def resolve_restore_recovery(context, preflight=None):
     return recover_incomplete_restore(context, preflight=preflight)
 
 
+def start_restore_control_plane(config: RuntimeConfig, database_path: Path):
+    """Start A2 control after launcher authority and proved backend startup.
+
+    ADR 0018 allows ordinary product operation to continue if this exact-run
+    control boundary cannot be established safely. No alternate Restore transport,
+    picker or browser filesystem fallback is created.
+    """
+    from launcher.restore.control_plane import RestoreControlPlane, RestoreControlPlaneError
+
+    if config.frontend_url is None:
+        raise RestoreControlPlaneError(
+            "Restore control plane requires the configured local frontend origin."
+        )
+
+    plane = None
+    try:
+        plane = RestoreControlPlane(Path(database_path), frontend_url=config.frontend_url)
+        # run_local_runtime already holds canonical launcher single-instance
+        # authority here, which is the required gate for interrupted scratch cleanup.
+        plane.cleanup_interrupted_validation_scratch()
+        return plane.start()
+    except RestoreControlPlaneError:
+        if plane is not None:
+            plane.close()
+        raise
+    except Exception as exc:  # noqa: BLE001 - convert to fixed safe launcher failure
+        if plane is not None:
+            plane.close()
+        raise RestoreControlPlaneError(
+            "Не удалось запустить локальный канал восстановления."
+        ) from exc
+
+
 def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths | None = None) -> int:
     """Start the local runtime, or refuse — in that order of authority.
 
@@ -428,10 +461,27 @@ def _run_locked_runtime(
     # Restore needs in order to *prove* the backend stopped — a free port proves
     # nothing, and the backend never takes the launcher lock.
     process = context.backend.start(runtime_config, runtime_paths, startup.database_path)
+    control_plane = None
     try:
+        # The owned backend has already proved lock + listening socket here. A2
+        # begins only after that exact point and remains under this launcher run.
+        try:
+            control_plane = start_restore_control_plane(runtime_config, startup.database_path)
+        except Exception as exc:  # noqa: BLE001 - ordinary product may continue safely
+            from launcher.restore.control_plane import RestoreControlPlaneError
+
+            if not isinstance(exc, RestoreControlPlaneError):
+                raise
+            print(
+                "Восстановление из резервной копии временно недоступно. "
+                "Основная мастерская продолжит работу."
+            )
+
         time.sleep(1)
         if process.poll() is not None:
             raise RuntimeLaunchError("Локальный API не запустился. Проверьте зависимости backend runtime.")
+        # Deliberately unchanged: the first production #cw-control fragment
+        # handoff belongs to A4, after its SPA consumer/removal logic exists.
         if runtime_config.open_browser:
             open_runtime_browser(runtime_config)
         print("Приложение запущено. Для остановки нажмите Ctrl+C в этом окне.")
@@ -440,5 +490,9 @@ def _run_locked_runtime(
         print("Останавливаю локальное приложение…")
         return 0
     finally:
+        # Invalidate/quiesce control + A1 validation before the owned backend and
+        # launcher lifecycle are released.
+        if control_plane is not None:
+            control_plane.close()
         # Through the owner, so the recorded handle is cleared as well as killed.
         context.backend.stop()
