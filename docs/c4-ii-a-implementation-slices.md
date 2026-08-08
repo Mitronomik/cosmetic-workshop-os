@@ -62,7 +62,8 @@ closed A2 control/session contract and merged A1 validation authority.
 
 - `launcher/restore/macos_picker.py` implements
   `MacOSNativeSourceSelectionAdapter`;
-- exact `/usr/bin/osascript` production helper;
+- exact `/usr/bin/osascript` production helper via
+  `OSASCRIPT_PATH = Path("/usr/bin/osascript")`;
 - fixed `use scripting additions` + `choose file` AppleScript;
 - no user-controlled AppleScript interpolation;
 - `shell=False`; no `System Events`;
