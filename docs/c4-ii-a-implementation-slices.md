@@ -3,22 +3,19 @@
 Status: **NORMATIVE IMPLEMENTATION PLAN**
 Updated: `2026-08-08`
 
-This document bounds implementation of
-`C4-II-A — Launcher Restore source selection and non-destructive validation presentation`.
+This document bounds `C4-II-A — Launcher Restore source selection and non-destructive validation presentation`.
 It does not change ADR 0018 and does not authorize C4-II-B destructive execution.
 
 ## Merged authorization baseline
 
 ```text
 PR #172 / CR-011 merge — 998596560db6780a677bdec363d1fd19db30c1b6
-PR #173 reviewed head — 9f5722c5dec695588596d45daa5588092ce7f080
 PR #173 merge — aaedf2735660fb92eb627f7eeab327437d459b56
-PR #174 reviewed A1 head — e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5
-PR #174 merge — 504e776508c940554b3ee8659a201af21db8303c
-PR #175 reviewed closure head — b1a48d8f668fa984e3032f85c226f77e30d92e4e
-PR #175 merge — 636645ece744752f6a753ae5a25a05297fd34e10
-PR #176 reviewed A2 head — 681cb4050bec082db6b637285590e232880af739
-PR #176 merge — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
+PR #174 / A1 merge — 504e776508c940554b3ee8659a201af21db8303c
+PR #175 / A2 authorization merge — 636645ece744752f6a753ae5a25a05297fd34e10
+PR #176 / A2 merge — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
+PR #177 reviewed closure head — d767b957cb3debae584709f2bbadafebd8dd6a9e
+PR #177 / A3 authorization merge — e7ab91dd8e0c11da2cc0b2c30bf41d1dec89f263
 ```
 
 ## Current slice status
@@ -27,7 +24,7 @@ PR #176 merge — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 ```
@@ -37,9 +34,8 @@ not-yet-closed predecessor.
 
 ## A1 — Validation-session core — CLOSED
 
-A1 merged in PR #174 and remains the single candidate-preparation authority. It
-directly reuses C4-I `open_selected_source(...)`, held-source identity/digest/
-sidecar proof, `stage_source(...)` and `validate_staged_candidate(...)`.
+A1 remains the single candidate-preparation authority and directly reuses C4-I
+source intake/staging/validation.
 
 ## A2 — Exact-run launcher control plane — CLOSED
 
@@ -47,109 +43,91 @@ PR #176 completed A2 at reviewed head
 `681cb4050bec082db6b637285590e232880af739`, merged as
 `90a14dd9a11b83bc31a40e1d3fb9523f41772b88`.
 
-Final evidence:
+Final A2 proof: race 2, A2 28, A1 17, C4-I 514, full 2443, smoke PASS,
+independent P0=0 / P1=0 / P2=0.
 
-- lifecycle checker: PASS;
-- stale-A1-authority race regression: 2 passed;
-- all A2 targeted tests: 28 passed;
-- A1 regression: 17 passed;
-- C4-I Restore regression: 514 passed, 62 deselected;
-- full backend + launcher: 2443 passed;
-- exact-head direct-local-HTTP smoke: PASS;
-- independent audit: P0=0 / P1=0 / P2=0.
+A2 durable boundary remains exact loopback/Host/Origin, atomic bootstrap, run
+token, no-store/narrow CORS, 15s/60s liveness, strict command ordering, one
+long-work owner, responsive heartbeat/state/cancel and stale-proof hardening.
 
-A2 durable boundary:
-
-- exact `127.0.0.1:<ephemeral>` concurrent control server;
-- exact Host + configured local frontend Origin;
-- atomic one-use bootstrap + run-scoped session token;
-- no wildcard CORS/cookie authority; no-store responses;
-- 15s heartbeat / 60s inactivity expiry;
-- strict monotonic `command_seq` and idempotent same-request retry;
-- one long-work owner with responsive heartbeat/state/cancel;
-- A1 proof/generation invalidation on reselect/cancel/expiry/close;
-- stale A2→A1 begin race hardened before worker quiescence;
-- runtime order proved backend → control → ordinary browser and
-  control close → backend stop.
-
-Production A2 still uses `UnavailableSourceSelectionAdapter`, so no production
-source path exists until A3. Production browser navigation remains unchanged
-until A4.
-
-## A3 — Native macOS picker integration — AUTHORIZED NEXT
+## A3 — Native macOS picker integration — CURRENT IMPLEMENTATION
 
 ### Goal
 
-Replace only the production `picker_unavailable` source-selection seam with the
+Replace only the production unavailable source-selection seam with the
 launcher-owned native macOS picker selected by ADR 0018, while preserving the
 closed A2 control/session contract and merged A1 validation authority.
 
-### Authorized scope
+### Implemented in the current changeset
 
-- owned short-lived `/usr/bin/osascript` child;
-- macOS Standard Additions `choose file`;
-- fixed executable AppleScript;
-- no user-controlled text interpolation into AppleScript;
-- no `shell=True`;
-- no `System Events` automation;
-- typed ordinary picker cancellation;
-- absolute POSIX path returned only inside launcher memory;
-- picker process ownership, termination and wait/quiescence;
-- cancel/expiry signal from existing A2 worker must terminate the owned picker;
-- integrate through existing A2 `SourceSelectionAdapter` contract;
+- `launcher/restore/macos_picker.py` implements
+  `MacOSNativeSourceSelectionAdapter`;
+- exact `/usr/bin/osascript` production helper;
+- fixed `use scripting additions` + `choose file` AppleScript;
+- no user-controlled AppleScript interpolation;
+- `shell=False`; no `System Events`;
+- AppleScript error `-128` becomes typed ordinary cancellation through an internal
+  sentinel independent of localized stderr;
+- successful output must be an absolute POSIX path and remains launcher-private;
+- picker polls the existing A2 `cancel_event`;
+- cancel/expiry/close terminates and reaps the owned child; timeout falls back to
+  kill + reap;
+- non-macOS or missing exact helper returns typed unavailable;
+- picker technical failures remain launcher-internal and the closed A2 worker
+  emits its fixed safe `selection_failed` result;
+- production `launcher/runtime.py` injects the native adapter into the existing
+  `RestoreControlPlane`; direct/test construction keeps the closed A2 unavailable
+  default;
 - selected path passes only to merged A1 `prepare_restore_candidate(...)`;
 - no new Python/application dependency.
 
 ### Process ownership rules
 
-The picker adapter owns exactly one child for one A2 selection worker. It must
-not detach a process, spawn via shell, or leave an unaccounted child after
-cancel/expiry/close. Cancellation invalidates control/A1 authority immediately;
-process cleanup then quiesces the owned child before the selection worker exits.
+The picker adapter owns exactly one child for one A2 selection worker. It never
+detaches or spawns through a shell. Cancellation invalidates A2/A1 authority
+immediately; process cleanup then quiesces/reaps the owned child before the
+selection worker exits.
 
 ### Path privacy rules
 
-The absolute selected POSIX path is launcher-private. It may appear only in the
-launcher-internal picker result/A1 retained proof path. Browser/control DTOs,
-HTTP payloads, URLs, logs and user-visible errors must not expose it.
+The selected absolute POSIX path is launcher-private. Browser/control request,
+state, URL and user-visible failures remain pathless. C4-I/A1 remains acceptance
+authority; filename/type hints are presentation only.
 
 ### A3 automated proof
 
-At minimum prove:
+Targeted tests cover:
 
-1. exact executable `/usr/bin/osascript`;
-2. fixed Standard Additions `choose file` script;
-3. no `shell=True`, `System Events` or user-controlled script interpolation;
-4. success yields launcher-private absolute POSIX path;
-5. ordinary user cancel yields typed cancel;
-6. cancel/expiry terminates owned child and waits for quiescence;
-7. technical picker failure maps to safe typed failure without raw path/stderr;
-8. browser/control request and state remain pathless;
-9. real A2 selection coordinator receives the adapter result;
-10. selected path flows through real merged A1 validation;
-11. stale A2→A1 proof-race hardening remains green;
-12. product browser URL remains unchanged;
-13. no durable Restore/safety-copy/AuditLog/working-DB mutation;
-14. A2/A1/C4-I/full regressions remain green.
-
-Tests may inject a narrow process runner/factory to avoid unattended GUI dialogs.
-Production code must still execute the exact macOS command when used normally.
+1. exact `/usr/bin/osascript` contract and fixed AppleScript;
+2. no shell/System Events/user interpolation;
+3. typed user cancellation;
+4. pre-spawn cancellation;
+5. terminate/reap and kill fallback;
+6. unavailable helper/platform;
+7. nonzero/empty/non-absolute result failure;
+8. preservation of valid newline-containing POSIX paths;
+9. control cancel and 60s expiry physically terminate owned child;
+10. selected path passes through real A2 session to real A1 validation;
+11. production runtime injects A3 adapter.
 
 ### A3 exact-head smoke
 
-Use the production A3 adapter boundary with a controlled process seam or
-launcher-owned harness to prove:
+`scripts/smoke_restore_native_picker.py`:
 
 ```text
-A2 select
-→ native-picker adapter contract
+exact-head + clean checkout
+→ non-interactive exact /usr/bin/osascript probe
+→ production A3 adapter with launcher-owned process seam
+→ real A2 loopback control
 → launcher-private selected path
 → real A1/C4-I validation
-→ typed non-destructive control state
+→ safe non-destructive state
+→ prove source/working DB/AuditLog/durable Restore unchanged
 ```
 
-The smoke must not add a browser path/file bypass and must not mutate durable
-Restore/working database state.
+The process seam avoids requiring an unattended test to click a modal GUI dialog;
+production adapter command construction remains exact and is asserted by the
+smoke.
 
 ### A3 non-goals
 
@@ -164,49 +142,23 @@ A3 must not implement:
 - rollback/recovery mutation or Restore AuditLog;
 - ordinary FastAPI Restore mutation endpoint;
 - WebSocket/generic localhost command server;
-- new dependency or packaging implementation;
-- cloud sync/OCR/multiuser/advanced analytics.
+- new dependency or packaging implementation.
 
 ## A4 — Browser Restore screen and non-destructive E2E flow — BLOCKED
 
-### Entry gate
-
-A3 must merge and be independently exact-head verified, then lifecycle-closed
-from updated `main`.
-
-### Authorized scope after gate opens
-
-- exact SPA route `/backups/restore` and entry from `/backups`;
-- first production launcher browser handoff carrying bootstrap in URL fragment;
-- immediate fragment consumption/removal;
-- `sessionStorage` run token + non-secret `control_origin`;
-- fail-closed missing/invalid launcher session;
-- select/cancel/reselect/reload;
-- typed safe non-destructive states;
-- real A2 control + A3 picker + A1 validation integration;
-- exact-head end-to-end non-destructive macOS smoke.
-
-A4 must not implement destructive Restore confirmation, `execute_restore(...)`,
-safety-copy creation, backend replacement/migration or C4-II-B.
+A4 may open only after A3 merges, passes independent exact-head verification and
+is lifecycle-closed from updated `main`. A4 will own `/backups/restore`, the first
+production `#cw-control` fragment handoff/removal, `sessionStorage` and browser UX.
+It still will not authorize destructive C4-II-B.
 
 ## Cross-slice constraints
 
-Every A3/A4 PR preserves:
-
-- ADR 0016 destructive state machine unchanged;
-- ADR 0018 launcher-owned control/picker/session architecture;
-- browser presentation only, never absolute-path authority;
-- ordinary FastAPI remains business API, not Restore mutation authority;
-- C4-II-A strictly non-destructive;
-- A1/C4-I staging/validation semantics reused, not weakened;
-- ordinary backend remains usable during non-destructive validation;
-- no destructive authority before separately authorized C4-II-B;
-- no hidden dependency/packaging/test-bypass decision;
-- local-first nontechnical product workflow.
+Every A3/A4 PR preserves ADR 0016, ADR 0018, launcher-only filesystem authority,
+pathless browser presentation, closed A1/A2 semantics, ordinary FastAPI as
+business API only, non-destructive C4-II-A and separately gated C4-II-B.
 
 ## PR discipline
 
 Every slice is a separate small PR with Scope, Non-goals, Architecture
 constraints, Backend/Frontend requirements, Tests, Acceptance criteria, exact
-changed-path review, exact-head smoke, independent audit and
-P0=0/P1=0/P2=0 before merge.
+changed-path review, exact-head smoke and independent P0=0/P1=0/P2=0 before merge.

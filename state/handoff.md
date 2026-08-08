@@ -10,12 +10,13 @@ C4-II-A slice plan: `docs/c4-ii-a-implementation-slices.md`.
 
 ```text
 PR #176 — MERGED — C4-II-A2 EXACT-HEAD VERIFIED
+PR #177 — MERGED — A2 CLOSED / A3 AUTHORIZED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -24,62 +25,58 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Last merged implementation — PR #176 / A2
+## Last merged lifecycle — PR #177
 
 ```text
-reviewed head — 681cb4050bec082db6b637285590e232880af739
-merge commit — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
+reviewed head — d767b957cb3debae584709f2bbadafebd8dd6a9e
+merge commit — e7ab91dd8e0c11da2cc0b2c30bf41d1dec89f263
 ```
 
-Final A2 gate: lifecycle PASS, stale-A1-authority race 2/2, A2 targeted 28/28,
-A1 17/17, C4-I Restore 514/514, full backend+launcher 2443/2443, exact-head
-control-plane smoke PASS, P0=0 / P1=0 / P2=0.
+PR #177 closed A2 after its 2 race / 28 A2 / 17 A1 / 514 C4-I / 2443
+full / smoke / 0-0-0 gate and authorized only A3.
 
 ## Closed A2 contract
 
-A2 owns the exact-run launcher control/session layer and remains unchanged through
-A3 except for its production source-selection adapter seam:
-
-- exact loopback ephemeral HTTP;
-- exact Host/configured Origin;
-- atomic one-use bootstrap + run-scoped token;
-- no-store/narrow CORS/no cookie authority;
-- 15s heartbeat / 60s inactivity expiry;
-- strict monotonic `command_seq` + idempotent same-request retry;
-- one long-work owner with responsive heartbeat/state/cancel;
-- A1 proof invalidation and stale A2→A1 begin-race hardening;
-- backend→control→ordinary-browser and control→backend lifecycle ordering.
+A2 remains unchanged except for production source-selection injection: exact
+loopback/Host/Origin, atomic bootstrap, run token, no-store/narrow CORS,
+15s/60s liveness, strict `command_seq`, one worker, responsive
+heartbeat/state/cancel and stale A2→A1 proof-race hardening.
 
 ## Current work — A3 native picker
 
-Implement only the ADR 0018 native source-selection adapter:
+Implemented:
 
-- owned short-lived `/usr/bin/osascript` child;
-- Standard Additions `choose file`;
-- fixed AppleScript, no user-controlled interpolation;
-- no `shell=True`, no `System Events`;
-- typed ordinary user cancellation;
-- selected absolute POSIX path only in launcher memory;
-- cancel/expiry owns child termination and quiescence;
-- integrate only through existing A2 `SourceSelectionAdapter` into merged A1;
-- no new dependency.
+- `launcher/restore/macos_picker.py`;
+- exact `/usr/bin/osascript` owned child;
+- fixed Standard Additions `choose file` AppleScript;
+- no shell/System Events/user interpolation;
+- typed user cancellation through error `-128` sentinel;
+- absolute POSIX result only in launcher memory;
+- cancel-event polling, terminate/reap, kill fallback;
+- non-macOS/missing helper → unavailable;
+- production-only injection in `runtime.start_restore_control_plane()`;
+- selected path only to merged A1;
+- targeted A3 tests + exact-head smoke.
+
+The default A2 `UnavailableSourceSelectionAdapter` remains for direct/test
+construction, preserving the closed A2 test seam.
 
 ## Not A3
 
-- browser `path`, `source_path`, upload/blob/file bytes, bookmark/handle;
+- browser `path`, `source_path`, file bytes, upload/blob, bookmark/handle;
 - `/backups/restore` frontend screen;
-- production `#cw-control` bootstrap-fragment handoff;
+- production `#cw-control` handoff;
 - destructive confirmation/execute;
 - ordinary FastAPI Restore mutation route;
 - durable Restore state/safety copy/working-DB mutation/rollback/AuditLog;
-- WebSocket/generic localhost command surface;
-- packaging/cloud sync/OCR/multiuser/advanced analytics.
+- WebSocket/generic launcher command surface;
+- new dependency/packaging work.
 
 ## Verification required
 
-A3 must pass targeted native-picker/process/cancel tests, A2/A1/C4-I
-regressions, full backend+launcher suite, exact-head A3 integration smoke, clean
-status/head and independent exact-head audit at P0=0 / P1=0 / P2=0.
+A3 still requires exact-head diff/lifecycle, targeted native-picker tests, closed
+A2/A1/C4-I regressions, full backend+launcher suite, exact-head A3 smoke, clean
+status/head and independent audit at P0=0 / P1=0 / P2=0.
 
 ## Successor gates
 

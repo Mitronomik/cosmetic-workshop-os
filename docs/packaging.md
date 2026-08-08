@@ -19,31 +19,28 @@ ordinary browser
 → launcher-owned validation session
 ```
 
-A1 and A2 add no packaging implementation or external dependency.
-
 ## C4-II-A status
 
 ```text
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 ```
 
-A3 may use only the macOS-provided `/usr/bin/osascript` + Standard Additions
-`choose file` picker selected by ADR 0018. No new Python/application dependency or
-bundle resource is authorized.
+A3 uses only macOS-provided `/usr/bin/osascript` + Standard Additions `choose
+file`. It adds no Python/application dependency and no bundle resource.
 
-The A3 picker must use an owned short-lived child, fixed AppleScript, no
-`System Events`, no `shell=True`, typed cancellation, launcher-private POSIX path
-and owned terminate/wait behavior on cancel/expiry.
+The picker is an owned short-lived child using fixed AppleScript, `shell=False`,
+no `System Events`, typed cancellation, launcher-private POSIX path and owned
+terminate/reap with kill fallback on cancel/expiry.
 
 Mac App Store sandbox compatibility is **not claimed**. A later sandbox/packaging
 decision may replace the picker adapter while preserving launcher ownership and
 path privacy unless a later ADR explicitly changes them.
 
 Production browser launch URL remains unchanged through A3. No `#cw-control`,
-control port, bootstrap capability or session token is added to browser
-navigation; first production handoff remains A4.
+control port, bootstrap capability or session token is added to navigation; first
+production handoff remains A4.
 
 C4-II-B destructive Restore remains not authorized.
