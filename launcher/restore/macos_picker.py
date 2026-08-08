@@ -113,13 +113,25 @@ class MacOSNativeSourceSelectionAdapter:
 
     def _terminate_owned_process(self, process: subprocess.Popen[str]) -> None:
         if process.poll() is not None:
+            process.communicate()
             return
-        process.terminate()
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            # The child can exit naturally between poll() and terminate(). It is
+            # still our child, so drain/reap it and preserve typed cancellation.
+            process.communicate()
+            return
         try:
             process.communicate(timeout=self._terminate_timeout_seconds)
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate(timeout=self._terminate_timeout_seconds)
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            # SIGKILL is the final ownership boundary: wait until the exact child
+            # is reaped rather than returning an unaccounted picker process.
+            process.communicate()
 
 
 def _strip_osascript_record_terminator(output: str) -> str:
