@@ -9,15 +9,14 @@ C4-II-A slice plan: `docs/c4-ii-a-implementation-slices.md`.
 ## Current lifecycle
 
 ```text
-PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
-PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED
+PR #176 — MERGED — C4-II-A2 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
-C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -25,88 +24,64 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Last merged implementation — PR #174 / A1
+## Last merged implementation — PR #176 / A2
 
 ```text
-reviewed head — e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5
-merge commit — 504e776508c940554b3ee8659a201af21db8303c
+reviewed head — 681cb4050bec082db6b637285590e232880af739
+merge commit — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
 ```
 
-A1 exact-head gate: lifecycle/smoke PASS, 17 targeted tests, 514 C4-I Restore
-tests, 2415 backend+launcher tests, P0=0 / P1=0 / P2=0.
+Final A2 gate: lifecycle PASS, stale-A1-authority race 2/2, A2 targeted 28/28,
+A1 17/17, C4-I Restore 514/514, full backend+launcher 2443/2443, exact-head
+control-plane smoke PASS, P0=0 / P1=0 / P2=0.
 
-PR #175 then closed A1 lifecycle and authorized only A2:
+## Closed A2 contract
 
-```text
-reviewed head — b1a48d8f668fa984e3032f85c226f77e30d92e4e
-merge commit — 636645ece744752f6a753ae5a25a05297fd34e10
-```
+A2 owns the exact-run launcher control/session layer and remains unchanged through
+A3 except for its production source-selection adapter seam:
 
-## Current work — A2 exact-run control plane
+- exact loopback ephemeral HTTP;
+- exact Host/configured Origin;
+- atomic one-use bootstrap + run-scoped token;
+- no-store/narrow CORS/no cookie authority;
+- 15s heartbeat / 60s inactivity expiry;
+- strict monotonic `command_seq` + idempotent same-request retry;
+- one long-work owner with responsive heartbeat/state/cancel;
+- A1 proof invalidation and stale A2→A1 begin-race hardening;
+- backend→control→ordinary-browser and control→backend lifecycle ordering.
 
-Implemented:
+## Current work — A3 native picker
 
-- exact `127.0.0.1:<ephemeral>` stdlib concurrent control server;
-- exact Host and configured frontend Origin enforcement;
-- one-use bootstrap capability, atomic consume and separate run-scoped session token;
-- no wildcard CORS/cookie authority, no-store responses;
-- 15s heartbeat / 60s authenticated inactivity expiry;
-- one launcher-owned worker for long selection/validation;
-- responsive heartbeat/state/cancel while worker runs;
-- request ID + monotonic `command_seq` replay discipline;
-- expected-next sequence consumed before business preconditions;
-- A1 generation/proof invalidation and stale-worker publication guard;
-- launcher runtime order: proved backend → control → ordinary browser;
-- shutdown order: control/A1 quiescence → backend stop;
-- direct-local-HTTP exact-head smoke harness.
+Implement only the ADR 0018 native source-selection adapter:
 
-The merged A1 service remains the only candidate-preparation authority; A2 calls
-it after launcher-owned source selection and does not duplicate staging/validation.
+- owned short-lived `/usr/bin/osascript` child;
+- Standard Additions `choose file`;
+- fixed AppleScript, no user-controlled interpolation;
+- no `shell=True`, no `System Events`;
+- typed ordinary user cancellation;
+- selected absolute POSIX path only in launcher memory;
+- cancel/expiry owns child termination and quiescence;
+- integrate only through existing A2 `SourceSelectionAdapter` into merged A1;
+- no new dependency.
 
-## Mandatory A2 seams
+## Not A3
 
-Production source selection uses `UnavailableSourceSelectionAdapter`, returns
-typed `picker_unavailable` and obtains no path. Tests/smoke may inject a
-launcher-owned fake adapter directly.
-
-Browser/request payload cannot contain `path`, `source_path`, file bytes,
-upload/blob, bookmark/handle or equivalent filesystem authority.
-
-Production browser URL remains unchanged: no `#cw-control`, control port,
-bootstrap capability or session token until A4.
-
-## Not A2
-
-- real `/usr/bin/osascript` picker — A3;
-- `/backups/restore` browser UI — A4;
-- production browser bootstrap handoff — A4;
-- destructive confirmation/execute — C4-II-B;
+- browser `path`, `source_path`, upload/blob/file bytes, bookmark/handle;
+- `/backups/restore` frontend screen;
+- production `#cw-control` bootstrap-fragment handoff;
+- destructive confirmation/execute;
 - ordinary FastAPI Restore mutation route;
 - durable Restore state/safety copy/working-DB mutation/rollback/AuditLog;
 - WebSocket/generic localhost command surface;
-- new dependency/packaging work.
+- packaging/cloud sync/OCR/multiuser/advanced analytics.
 
-## Exact-head verification required
+## Verification required
 
-Still pending on the final published A2 head:
-
-```text
-git diff --check
-python3 scripts/check_documentation_lifecycle.py
-targeted A2 tests
-A1 validation-session tests
-existing C4-I Restore tests
-python3 -m pytest backend/app/tests launcher/tests
-python3 scripts/smoke_restore_control_plane.py --expected-head <HEAD>
-clean status/head re-check
-independent exact-head audit
-```
-
-Do not claim PASS or A2 `DONE` before the exact-head gate closes at
-P0=0 / P1=0 / P2=0.
+A3 must pass targeted native-picker/process/cancel tests, A2/A1/C4-I
+regressions, full backend+launcher suite, exact-head A3 integration smoke, clean
+status/head and independent exact-head audit at P0=0 / P1=0 / P2=0.
 
 ## Successor gates
 
-A3 cannot start until A2 is independently exact-head verified, merged and
-lifecycle-closed. A4 remains blocked by A3. C4-II-B remains separately not
-authorized.
+A4 cannot start until A3 is independently exact-head verified, merged and
+lifecycle-closed. C4-II-B remains separately not authorized.

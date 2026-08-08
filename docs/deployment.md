@@ -30,37 +30,34 @@ browser presentation
 ```text
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
-C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 ```
 
-A1 remains the merged launcher-owned non-destructive validation boundary. A2 now
-adds the separate exact-run launcher control listener with:
+A2 is merged and exact-head verified. Its control plane remains exact loopback,
+ephemeral, exact Host/configured Origin, one-use bootstrap, run-scoped token,
+no-store/narrow CORS, 15s/60s liveness, strict `command_seq` and one long-work
+owner with responsive state/heartbeat/cancel.
 
-- exact `127.0.0.1` + OS-assigned ephemeral port;
-- exact Host and configured local frontend Origin;
-- one-use bootstrap and run-scoped session token;
-- no wildcard CORS/cookie authority and no-store responses;
-- 15-second heartbeat / 60-second authenticated inactivity expiry;
-- concurrent state/heartbeat/cancel servicing;
-- strict monotonic `command_seq` and idempotent retry semantics;
-- A1 generation/proof invalidation.
+A3 may now add only the launcher-owned native macOS picker behind the existing A2
+adapter seam:
 
-Launcher runtime starts this control plane only after the owned backend has proved
-its liveness lock and listening socket. Control authority is closed/quiesced
-before the backend is stopped and before launcher lifecycle release.
+- `/usr/bin/osascript`;
+- Standard Additions `choose file`;
+- fixed script, no user interpolation;
+- no `shell=True`, no `System Events`;
+- typed cancellation;
+- absolute POSIX path only in launcher memory;
+- owned child termination/quiescence on cancel/expiry;
+- no new dependency.
 
-If control startup is unsafe, ordinary workshop operation continues with Restore
-control unavailable. No alternate transport is invented.
+The selected path remains launcher-private and flows only into merged A1
+validation. Browser requests may not supply path/file authority.
 
-Production A2 uses typed `picker_unavailable` and obtains no source path. Browser
-requests may not supply `path`, `source_path`, file bytes or equivalent filesystem
-authority. The real `/usr/bin/osascript` picker remains A3.
-
-A2 does not change the production browser launch URL: no `#cw-control`, bootstrap
-capability, control port or session token is appended. `/backups/restore` and the
+A3 does not change production browser navigation. No `#cw-control`, bootstrap
+capability, control port or session token is appended; `/backups/restore` and the
 first production browser handoff remain A4.
 
 No A1–A4 slice may add destructive Restore authority. C4-II-B remains separately

@@ -10,7 +10,7 @@ macOS `.app` / `.dmg` packaging is **NOT COMPLETED**.
 
 ## Restore packaging consequence
 
-ADR 0018 eventually requires:
+ADR 0018 topology remains:
 
 ```text
 ordinary browser
@@ -19,33 +19,31 @@ ordinary browser
 → launcher-owned validation session
 ```
 
-The expected future picker is macOS-provided `/usr/bin/osascript` + Standard
-Additions `choose file`; no new application dependency is authorized. Mac App
-Store sandbox compatibility is not claimed and remains a future packaging
-decision.
+A1 and A2 add no packaging implementation or external dependency.
 
 ## C4-II-A status
 
 ```text
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A3 — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
-C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 ```
 
-A1 added no packaging implementation or dependency.
+A3 may use only the macOS-provided `/usr/bin/osascript` + Standard Additions
+`choose file` picker selected by ADR 0018. No new Python/application dependency or
+bundle resource is authorized.
 
-A2 adds only launcher runtime control/session code using Python standard-library
-HTTP/threading/secrets primitives. It starts a loopback control listener during
-launcher lifetime but adds no packaging implementation, dependency or bundle
-resource.
+The A3 picker must use an owned short-lived child, fixed AppleScript, no
+`System Events`, no `shell=True`, typed cancellation, launcher-private POSIX path
+and owned terminate/wait behavior on cancel/expiry.
 
-Production A2 source selection remains typed `picker_unavailable` through
-`UnavailableSourceSelectionAdapter`; it does not invoke `/usr/bin/osascript`.
-The real picker remains A3.
+Mac App Store sandbox compatibility is **not claimed**. A later sandbox/packaging
+decision may replace the picker adapter while preserving launcher ownership and
+path privacy unless a later ADR explicitly changes them.
 
-Production browser launch URL remains unchanged in A2. No `#cw-control`, control
-port, bootstrap capability or session token is added to the browser URL; first
-production handoff remains A4.
+Production browser launch URL remains unchanged through A3. No `#cw-control`,
+control port, bootstrap capability or session token is added to browser
+navigation; first production handoff remains A4.
 
 C4-II-B destructive Restore remains not authorized.

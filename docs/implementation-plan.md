@@ -29,24 +29,25 @@ PR #172 / CR-011 merge — 998596560db6780a677bdec363d1fd19db30c1b6
 PR #173 / sliced authorization merge — aaedf2735660fb92eb627f7eeab327437d459b56
 PR #174 / A1 merge — 504e776508c940554b3ee8659a201af21db8303c
 PR #175 / A1 closure + A2 authorization merge — 636645ece744752f6a753ae5a25a05297fd34e10
+PR #176 / A2 merge — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
 ```
 
-A1 reviewed head `e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5` passed
-lifecycle/smoke, 17 targeted tests, 514 C4-I Restore tests, 2415 full
-backend+launcher tests and P0=0 / P1=0 / P2=0.
+A2 reviewed head `681cb4050bec082db6b637285590e232880af739` passed
+lifecycle, stale-authority race regression 2/2, all A2 targeted 28/28, A1 17/17,
+C4-I Restore 514/514, full backend+launcher 2443/2443, exact-head control-plane
+smoke and independent audit P0=0 / P1=0 / P2=0.
 
 ## 3. Current lifecycle
 
 ```text
-PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
-PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED
+PR #176 — MERGED — C4-II-A2 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
-C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -54,147 +55,120 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## 4. Current implementation window — C4-II-A2
+## 4. Closed A2 boundary
 
-Goal: implement the exact-run launcher-owned loopback control/session protocol
-around merged A1 without real picker, browser Restore workspace or destructive
-Restore.
+A2 is complete and remains the exact-run launcher control/session authority:
+loopback-only ephemeral HTTP, exact Host/configured Origin, atomic bootstrap,
+run-scoped session token, no-store/narrow CORS, 15s/60s liveness, monotonic
+`command_seq`, one long-work owner, responsive state/heartbeat/cancel, A1 proof
+invalidation and hardened stale A2→A1 begin race.
 
-Implemented in the current changeset:
+Production A2 still uses `UnavailableSourceSelectionAdapter`. Product browser URL
+remains unchanged and carries no control bootstrap/session material.
 
-- `launcher/restore/control_protocol.py` — safe DTOs and launcher-owned picker seam;
-- `launcher/restore/control_session.py` — one-use bootstrap, run session,
-  `command_seq`, liveness/expiry and worker-generation coordination;
-- `launcher/restore/control_plane.py` — exact loopback stdlib HTTP server;
-- exact `127.0.0.1` + OS-assigned ephemeral port;
-- exact Host and configured local frontend Origin;
-- one-use >=256-bit bootstrap capability and >=256-bit session token;
-- no wildcard CORS, no cookie session, `Cache-Control: no-store`;
-- 15-second heartbeat / 60-second authenticated inactivity expiry;
-- concurrent request servicing during one selection/validation worker;
-- >=128-bit request-ID namespace + strict monotonic `command_seq`;
-- expected-next sequence consumed before business preconditions;
-- idempotent same-request retry and stale/future/conflict rejection;
-- A1 generation/cancel/proof invalidation;
-- runtime lifecycle wiring after proved backend start and before backend stop;
-- exact-head direct-local-HTTP smoke with injected launcher-owned fake picker and
-  real A1/C4-I validation.
+## 5. Current implementation window — C4-II-A3
 
-## 5. Mandatory transitional seams
+Goal: replace only the production `picker_unavailable` seam with the launcher-owned
+native macOS picker selected in ADR 0018, then feed the chosen launcher-private
+path through the existing A2 `SourceSelectionAdapter` and merged A1 validation.
 
-### A2→A3
+Authorized implementation scope:
 
-Production A2 uses `UnavailableSourceSelectionAdapter` and returns typed
-`picker_unavailable`; it obtains no filesystem path.
+- owned short-lived `/usr/bin/osascript` child;
+- macOS Standard Additions `choose file`;
+- fixed AppleScript with no user-controlled interpolation;
+- no `shell=True`;
+- no `System Events`;
+- typed user cancellation;
+- absolute POSIX path returned only to launcher memory;
+- process ownership, cancel/expiry termination and wait/quiescence;
+- integration with existing A2 `SourceSelectionAdapter` only;
+- selected path passed only to existing A1 `prepare_restore_candidate(...)`;
+- no new Python/application dependency.
 
-Tests/smoke may inject a launcher-owned fake adapter directly. Browser/control
-payload cannot provide `path`, `source_path`, file bytes, upload/blob,
-handle/bookmark or equivalent filesystem authority. Select/cancel schema is only
-`request_id` + `command_seq`.
+## 6. Mandatory A3 seams
 
-### A2→A4
+### Browser/filesystem seam
 
-Production browser navigation remains unchanged. `open_runtime_browser(...)` does
-not append `#cw-control`, control port, bootstrap capability or session token. A4
-owns the first production fragment handoff, consumer/removal, `sessionStorage`
-and `/backups/restore`.
+Browser/control payload remains pathless. Do not add `path`, `source_path`, file
+bytes, upload/blob, bookmark/handle or equivalent filesystem authority.
 
-A2 smoke uses a direct authenticated local HTTP client.
+### A3→A4 seam
 
-## 6. Command sequencing contract
+Production browser navigation remains unchanged. Do not append `#cw-control`,
+control port, bootstrap capability or session token. Do not add `/backups/restore`.
+A4 owns first production browser handoff and Restore UI.
 
-For mutating commands:
+### A3→C4-II-B seam
 
-```text
-Host/Origin/auth/JSON/schema validation
-→ reject stale/future/conflicting sequence
-→ atomically bind exact expected next sequence to request ID + command
-→ consume sequence
-→ evaluate business preconditions
-→ retain safe in-progress/final result
-```
+A3 is non-destructive. Do not add confirmation/execute, durable Restore phases,
+`before_restore` safety copy, working-DB replacement/migration, rollback/recovery
+mutation or Restore AuditLog.
 
-Invalid transport/auth/schema/sequence requests do not consume sequence. A valid
-expected-next command does, including `action_in_progress` and other typed
-business refusals. Same current sequence + same request ID + same command returns
-the retained safe result; any other replay fails closed.
-
-## 7. Concurrency and expiry contract
-
-Long selection/validation runs on one launcher-owned worker, not the only HTTP
-request loop. Heartbeat/state/cancel remain serviceable. Cancel/expiry/reselection
-invalidate browser session/A1 authority immediately and generation-gate late
-publication. Final cleanup waits for worker quiescence.
-
-## 8. A2 forbidden scope
-
-Do not implement:
-
-- real `/usr/bin/osascript` picker, `shell=True` or A3 picker worker;
-- `/backups/restore` or frontend Restore UI;
-- production browser bootstrap-fragment handoff;
-- destructive Restore confirmation/execute command or `execute_restore(...)`;
-- durable Restore phase/state or `before_restore` safety copy;
-- working DB replacement/migration, rollback/recovery mutation or Restore AuditLog;
-- ordinary FastAPI Restore mutation endpoint;
-- WebSocket or generic localhost command server;
-- new dependency or packaging implementation.
-
-## 9. Required A2 tests
+## 7. Required A3 tests
 
 At minimum cover:
 
-1. loopback-only ephemeral bind;
-2. exact Host/Origin and narrow CORS;
-3. atomic one-use bootstrap race;
-4. token entropy/run scoping and no-store;
-5. heartbeat/60s expiry;
-6. concurrent heartbeat/state/cancel while fake long work runs;
-7. invalid auth/Host/Origin/schema/sequence does not consume sequence;
-8. valid business rejection consumes expected sequence;
-9. idempotent retry plus conflict/stale/future refusal;
-10. duplicate select returns consumed `action_in_progress`;
-11. cancel/expiry/reselection clears A1 proof/generation;
-12. production `picker_unavailable` obtains no path;
-13. request/control state exposes no path/file authority;
-14. production browser URL remains unchanged;
-15. runtime ordering backend→control→browser and control→backend on shutdown;
-16. no durable Restore/safety-copy/AuditLog/working-DB mutation;
-17. A1 + C4-I regressions remain green.
+1. exact executable is `/usr/bin/osascript`;
+2. fixed Standard Additions `choose file` script;
+3. no `shell=True`, `System Events` or user-script interpolation;
+4. successful picker result returns a launcher-private absolute POSIX path;
+5. ordinary user cancellation maps to typed cancellation, not technical failure;
+6. cancel/expiry terminates owned picker child and waits for quiescence;
+7. picker stderr/technical failure is mapped to safe typed failure with no raw path;
+8. browser/control DTO stays pathless;
+9. selected path flows through A2 adapter into real merged A1 validation;
+10. A2 stale-worker/A1-proof hardening remains green;
+11. production browser URL remains unchanged;
+12. no destructive Restore state/safety-copy/AuditLog/working-DB mutation;
+13. A2, A1 and C4-I regressions remain green.
 
-## 10. Exact-head verification gate
+Tests should inject process seams where needed; do not require an unattended test
+to click a real GUI dialog.
 
-Run on the final A2 head:
+## 8. Exact-head verification gate
+
+Run on the final A3 head:
 
 ```text
 git status --short
-→ git diff --check 636645ece744752f6a753ae5a25a05297fd34e10...HEAD
+→ git diff --check <A3-base-main>...HEAD
 → python3 scripts/check_documentation_lifecycle.py
-→ targeted A2 protocol/security/concurrency/runtime tests
-→ A1 validation-session tests
-→ existing C4-I Restore regression tests
+→ targeted A3 native-picker/process/cancel tests
+→ A2 control/session/security/concurrency regressions
+→ A1 validation-session regressions
+→ existing C4-I Restore regressions
 → python3 -m pytest backend/app/tests launcher/tests
-→ python3 scripts/smoke_restore_control_plane.py --expected-head <HEAD>
+→ exact-head A3 integration smoke
 → verify clean status/head again
 → independent exact-head code/architecture audit
 → P0=0 / P1=0 / P2=0
 ```
 
-No PASS is claimed until run on the exact published head.
+## 9. Forbidden scope
 
-## 11. Successor gates
+Do not implement in A3:
 
-A3 remains blocked until A2 passes exact-head verification, merges and lifecycle
-is closed from updated `main`. A4 remains blocked by A3. C4-II-B destructive
-confirmation/execution remains separately not authorized.
+- frontend `/backups/restore` or browser bootstrap-fragment handoff;
+- browser filesystem fallback;
+- destructive Restore confirmation/execution;
+- backend Restore mutation endpoint;
+- WebSocket/generic localhost command server;
+- new dependency or packaging implementation;
+- cloud sync, OCR, roles/multiuser or advanced analytics.
 
-## 12. Current next action
+## 10. Successor gates
+
+A4 remains blocked until A3 passes exact-head verification, merges and lifecycle
+is closed from updated `main`. C4-II-B remains separately not authorized.
+
+## 11. Current next action
 
 ```text
-finish A2 implementation audit
-→ open draft PR
-→ run exact-head tests + direct local HTTP smoke
-→ resolve every P0/P1/P2 finding
-→ merge only after complete evidence
-→ close A2 lifecycle before A3
+create small A3 runtime PR from post-#176 closure main
+→ implement only native picker adapter/process ownership
+→ targeted tests + exact-head smoke
+→ full regression + independent audit
+→ merge only at P0=0 / P1=0 / P2=0
+→ close A3 lifecycle before A4
 ```

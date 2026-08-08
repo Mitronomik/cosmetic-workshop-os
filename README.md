@@ -11,13 +11,14 @@ Node.js, Docker or a terminal.
 ```text
 PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
 PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED
+PR #176 — MERGED — C4-II-A2 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
-C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -25,59 +26,61 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-PR #174 reviewed head
-`e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5` merged as
-`504e776508c940554b3ee8659a201af21db8303c` after exact-head lifecycle/smoke,
-17 targeted A1 tests, 514 existing C4-I Restore tests, 2415 full backend+launcher
-tests and P0=0 / P1=0 / P2=0 audit.
-
-PR #175 reviewed head
-`b1a48d8f668fa984e3032f85c226f77e30d92e4e` merged as
-`636645ece744752f6a753ae5a25a05297fd34e10`, closing A1 lifecycle and opening
-only A2 as the next runtime slice.
+PR #176 reviewed head
+`681cb4050bec082db6b637285590e232880af739` merged as
+`90a14dd9a11b83bc31a40e1d3fb9523f41772b88` after exact-head lifecycle and
+smoke, 2 stale-A1-authority race tests, 28 A2 targeted tests, 17 A1 tests,
+514 C4-I Restore tests, 2443 full backend+launcher tests and independent
+P0=0 / P1=0 / P2=0 audit.
 
 ## Closed A1 boundary
 
-A1 provides the launcher-owned non-destructive candidate-validation core:
+A1 remains the launcher-owned non-destructive candidate-validation authority:
+private validation scratch, direct C4-I intake/staging/validation reuse, source
+identity + SHA-256 re-proof, generation invalidation, bounded presentation-safe
+result and launcher-private retained source proof.
 
-- `RestoreCandidatePreparationService` / `prepare_restore_candidate(...)`;
-- private system-temp validation scratch;
-- C4-I intake/staging/validation reuse;
-- source identity + SHA-256 re-proof;
-- generation/cancel/reselection invalidation;
-- bounded presentation-safe result;
-- launcher-private retained source proof;
-- owned-only scratch cleanup.
+## Closed A2 boundary
 
-A1 remains the single candidate-preparation authority.
+A2 now provides the exact-run launcher-owned control/session protocol around A1:
 
-## Current A2 implementation boundary
-
-The current changeset implements the exact-run launcher-owned control/session
-protocol around A1:
-
-- stdlib concurrent HTTP server bound exactly to `127.0.0.1` on an ephemeral port;
+- concurrent stdlib HTTP server on exact `127.0.0.1:<ephemeral>`;
 - exact Host and configured local frontend Origin;
-- one-use >=256-bit bootstrap capability with atomic consume;
-- separate >=256-bit run-scoped session token;
-- `Cache-Control: no-store`, no wildcard CORS and no cookie authority;
+- atomic one-use bootstrap + separate run-scoped session token;
+- no wildcard CORS/cookie authority and no-store responses;
 - 15s heartbeat / 60s authenticated inactivity expiry;
-- heartbeat/state/cancel remain responsive while one worker owns selection or
-  validation;
-- >=128-bit request ID namespace + strict monotonic `command_seq`;
-- expected-next sequence consumed before business precondition evaluation;
-- idempotent same-request retry and stale/future/conflict rejection;
-- A1 generation/cancel/proof invalidation on reselection/cancel/expiry/close;
-- launcher lifetime wiring after proved backend start and before backend shutdown.
+- strict monotonic `command_seq` + idempotent same-request retry;
+- one long-work owner while state/heartbeat/cancel remain responsive;
+- A1 proof/generation invalidation on reselect/cancel/expiry/close;
+- stale A2→A1 begin race hardened before owned-worker quiescence;
+- launcher runtime owns control only after proved backend start and closes it
+  before backend stop.
 
-Production A2 still returns typed `picker_unavailable` through
-`UnavailableSourceSelectionAdapter`; it obtains no filesystem path. The HTTP
-schema contains no `path`, `source_path`, upload/file bytes or equivalent browser
-filesystem authority.
+Production A2 still uses `UnavailableSourceSelectionAdapter`; browser/control
+requests have no path/file authority and production browser navigation still
+carries no control bootstrap/session material.
 
-The actual product-browser launch URL remains unchanged. A2 does not put
-`#cw-control`, control port, bootstrap capability or session material into browser
-navigation. A4 owns the first production fragment handoff and `/backups/restore`.
+## Authorized A3 boundary
+
+A3 is the only authorized next runtime slice. It may replace
+`picker_unavailable` with the launcher-owned native macOS picker selected by
+ADR 0018:
+
+```text
+/usr/bin/osascript
+→ macOS Standard Additions choose file
+→ absolute POSIX path only in launcher memory
+→ existing A2 SourceSelectionAdapter seam
+→ existing A1 candidate preparation
+```
+
+A3 must use a fixed script, no `shell=True`, no `System Events`, no
+user-controlled AppleScript interpolation, typed cancellation and owned child
+termination/quiescence. It adds no dependency.
+
+A3 **does not** authorize browser path fallback, `/backups/restore`, production
+bootstrap-fragment handoff or any destructive Restore behavior. A4 and C4-II-B
+remain closed.
 
 ## Restore authority
 
@@ -95,12 +98,12 @@ C4-II-B destructive confirmation/execution remains **NOT AUTHORIZED**.
 
 ```text
 A1 — validation-session core                     ← DONE / merged
-→ A2 — exact-run launcher control plane          ← current changeset / not closed
-→ A3 — native macOS picker integration           ← blocked
+→ A2 — exact-run launcher control plane          ← DONE / merged
+→ A3 — native macOS picker integration           ← AUTHORIZED NEXT
 → A4 — browser /backups/restore + E2E UX         ← blocked
 ```
 
-Each later slice starts from updated `main` only after its predecessor merge,
+Each later slice starts from updated `main` only after predecessor merge,
 exact-head gate and lifecycle update.
 
 ## Current authority map
@@ -117,7 +120,7 @@ five protected pre-compaction snapshots must remain byte-identical.
 
 ## Architectural invariants
 
-Every change must preserve local-first operation, user data outside code/package,
+Every change preserves local-first operation, user data outside code/package,
 API-first business architecture, safe historical data, recipe versions,
 first-class client recipes, lot/movement inventory, transactional production,
 safe import preview/confirmation, backup-before-migration and a human-readable
