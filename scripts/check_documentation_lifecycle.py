@@ -295,8 +295,8 @@ def check_durable_authority_and_history() -> None:
         ADR_0016,
         (
             "before_restore",
-            "SourceIdentity",
-            "execute_restore",
+            "replacement_intent",
+            "recovery_blocked",
         ),
     )
     require_markers(
