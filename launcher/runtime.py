@@ -485,10 +485,31 @@ def _run_locked_runtime(
         time.sleep(1)
         if process.poll() is not None:
             raise RuntimeLaunchError("Локальный API не запустился. Проверьте зависимости backend runtime.")
-        # Deliberately unchanged: the first production #cw-control fragment
-        # handoff belongs to A4, after its SPA consumer/removal logic exists.
+
+        browser_config = runtime_config
+        if control_plane is not None:
+            try:
+                from launcher.restore.browser_handoff import (
+                    RestoreBrowserHandoffError,
+                    runtime_config_with_restore_handoff,
+                )
+
+                browser_config = runtime_config_with_restore_handoff(
+                    runtime_config, control_plane
+                )
+            except RestoreBrowserHandoffError:
+                # A control plane without a safely deliverable one-use browser
+                # bootstrap is not usable Restore authority. Invalidate it and
+                # keep the ordinary product available with its unchanged URL.
+                control_plane.close()
+                control_plane = None
+                print(
+                    "Восстановление из резервной копии временно недоступно. "
+                    "Основная мастерская продолжит работу."
+                )
+
         if runtime_config.open_browser:
-            open_runtime_browser(runtime_config)
+            open_runtime_browser(browser_config)
         print("Приложение запущено. Для остановки нажмите Ctrl+C в этом окне.")
         return process.wait()
     except KeyboardInterrupt:

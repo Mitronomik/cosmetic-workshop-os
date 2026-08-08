@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist-tests/restore-control",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "files": [
+    "src/app-navigation-routes.ts",
+    "src/restore-control-contract.ts",
+    "src/restore-control-runtime.ts",
+    "src/restore-control-presentation.ts"
+  ]
+}
