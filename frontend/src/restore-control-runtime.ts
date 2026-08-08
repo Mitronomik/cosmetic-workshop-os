@@ -43,6 +43,7 @@ export interface RestoreControlEnvironment {
 
 const POLL_INTERVAL_MS = 250;
 const OPEN_RESTART_GUIDANCE = 'Восстановление сейчас недоступно. Закройте эту вкладку и откройте или перезапустите «Мастерскую косметолога» обычным способом.';
+const BOOTSTRAP_NETWORK_GUIDANCE = 'Не удалось подтвердить одноразовое подключение к локальному каналу восстановления. Рабочие данные не изменялись. Закройте эту вкладку и откройте или перезапустите «Мастерскую косметолога» обычным способом.';
 const NETWORK_GUIDANCE = 'Не удалось связаться с локальным каналом восстановления. Рабочие данные не изменялись. Проверьте, что приложение запущено, и повторите попытку.';
 const RETRY_GUIDANCE = 'Ответ на последнее действие не получен. Не запускайте новое действие: безопасно повторите именно предыдущую команду.';
 const PROTOCOL_GUIDANCE = 'Сессия восстановления больше не может безопасно продолжать команды. Перезапустите «Мастерскую косметолога» и откройте восстановление снова.';
@@ -138,10 +139,13 @@ export class RestoreControlRuntime {
         referrerPolicy: 'no-referrer',
       });
     } catch {
-      this.invalidateSession(NETWORK_GUIDANCE, 'network_error');
+      if (this.disposed) return;
+      this.invalidateSession(BOOTSTRAP_NETWORK_GUIDANCE, 'unavailable');
       return;
     }
+    if (this.disposed) return;
     const payload = await safeJson(response);
+    if (this.disposed) return;
     if (!response.ok) {
       this.invalidateSession(OPEN_RESTART_GUIDANCE, 'unavailable');
       return;
@@ -178,19 +182,22 @@ export class RestoreControlRuntime {
     this.protocolSafe = this.replay !== null;
     let response: Response;
     try {
-      response = await this.authFetch('/v1/state', { method: 'GET' });
+      response = await this.authFetch(stored, '/v1/state', { method: 'GET' });
     } catch {
+      if (!this.sessionIsCurrent(stored)) return;
       this.availability = 'network_error';
       this.notice = this.replay?.pending ? RETRY_GUIDANCE : NETWORK_GUIDANCE;
       this.startHeartbeat();
       this.emit();
       return;
     }
+    if (!this.sessionIsCurrent(stored)) return;
     if (response.status === 401) {
       this.invalidateSession(OPEN_RESTART_GUIDANCE, 'unavailable');
       return;
     }
     const payload = await safeJson(response);
+    if (!this.sessionIsCurrent(stored)) return;
     const dto = response.ok ? restoreStateDto(payload) : null;
     if (!dto || dto.state.run_id !== stored.runId) {
       this.invalidateSession(PROTOCOL_GUIDANCE, 'protocol_error');
@@ -250,21 +257,24 @@ export class RestoreControlRuntime {
   }
 
   private async sendPendingCommand(pending: RestorePendingCommand): Promise<void> {
-    if (!this.session || !this.replay || this.replay.pending?.requestId !== pending.requestId) return;
+    const session = this.session;
+    if (!session || !this.replay || this.replay.pending?.requestId !== pending.requestId) return;
     const endpoint = pending.action === 'select' ? '/v1/restore/select' : '/v1/restore/cancel';
     let response: Response;
     try {
-      response = await this.authFetch(endpoint, {
+      response = await this.authFetch(session, endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ request_id: pending.requestId, command_seq: pending.commandSeq }),
       });
     } catch {
+      if (!this.sessionIsCurrent(session)) return;
       this.availability = 'network_error';
       this.notice = RETRY_GUIDANCE;
       this.emit();
       return;
     }
+    if (!this.sessionIsCurrent(session)) return;
     if (response.status === 401) {
       this.invalidateSession(OPEN_RESTART_GUIDANCE, 'unavailable');
       return;
@@ -274,8 +284,9 @@ export class RestoreControlRuntime {
       return;
     }
     const payload = await safeJson(response);
+    if (!this.sessionIsCurrent(session)) return;
     const dto = response.ok ? restoreCommandDto(payload) : null;
-    if (!dto || dto.command_seq !== pending.commandSeq || dto.state.run_id !== this.session.runId) {
+    if (!dto || dto.command_seq !== pending.commandSeq || dto.state.run_id !== session.runId) {
       this.invalidateSession(PROTOCOL_GUIDANCE, 'protocol_error');
       return;
     }
@@ -289,23 +300,27 @@ export class RestoreControlRuntime {
   }
 
   private async refreshState(): Promise<void> {
-    if (!this.session || this.disposed) return;
+    const session = this.session;
+    if (!session || this.disposed) return;
     let response: Response;
     try {
-      response = await this.authFetch('/v1/state', { method: 'GET' });
+      response = await this.authFetch(session, '/v1/state', { method: 'GET' });
     } catch {
+      if (!this.sessionIsCurrent(session)) return;
       this.availability = 'network_error';
       this.notice = this.replay?.pending ? RETRY_GUIDANCE : NETWORK_GUIDANCE;
       this.emit();
       return;
     }
+    if (!this.sessionIsCurrent(session)) return;
     if (response.status === 401) {
       this.invalidateSession(OPEN_RESTART_GUIDANCE, 'unavailable');
       return;
     }
     const payload = await safeJson(response);
+    if (!this.sessionIsCurrent(session)) return;
     const dto = response.ok ? restoreStateDto(payload) : null;
-    if (!dto || dto.state.run_id !== this.session.runId) {
+    if (!dto || dto.state.run_id !== session.runId) {
       this.invalidateSession(PROTOCOL_GUIDANCE, 'protocol_error');
       return;
     }
@@ -316,15 +331,17 @@ export class RestoreControlRuntime {
   }
 
   private async heartbeat(): Promise<void> {
-    if (!this.session || this.disposed) return;
+    const session = this.session;
+    if (!session || this.disposed) return;
     let response: Response;
     try {
-      response = await this.authFetch('/v1/heartbeat', {
+      response = await this.authFetch(session, '/v1/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
       });
     } catch {
+      if (!this.sessionIsCurrent(session)) return;
       if (this.availability === 'ready') {
         this.availability = 'network_error';
         this.notice = this.replay?.pending ? RETRY_GUIDANCE : NETWORK_GUIDANCE;
@@ -332,13 +349,15 @@ export class RestoreControlRuntime {
       }
       return;
     }
+    if (!this.sessionIsCurrent(session)) return;
     if (response.status === 401) {
       this.invalidateSession(OPEN_RESTART_GUIDANCE, 'unavailable');
       return;
     }
     const payload = await safeJson(response);
+    if (!this.sessionIsCurrent(session)) return;
     const dto = response.ok ? restoreStateDto(payload) : null;
-    if (!dto || dto.state.run_id !== this.session.runId) {
+    if (!dto || dto.state.run_id !== session.runId) {
       this.invalidateSession(PROTOCOL_GUIDANCE, 'protocol_error');
       return;
     }
@@ -348,17 +367,20 @@ export class RestoreControlRuntime {
     this.emit();
   }
 
-  private authFetch(path: string, init: RequestInit): Promise<Response> {
-    if (!this.session) return Promise.reject(new Error('restore_session_unavailable'));
+  private authFetch(session: RestoreStoredSession, path: string, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers ?? {});
-    headers.set('Authorization', `Bearer ${this.session.sessionToken}`);
-    return this.env.fetch(`${this.session.controlOrigin}${path}`, {
+    headers.set('Authorization', `Bearer ${session.sessionToken}`);
+    return this.env.fetch(`${session.controlOrigin}${path}`, {
       ...init,
       headers,
       credentials: 'omit',
       cache: 'no-store',
       referrerPolicy: 'no-referrer',
     });
+  }
+
+  private sessionIsCurrent(session: RestoreStoredSession): boolean {
+    return !this.disposed && this.session === session;
   }
 
   private startHeartbeat(): void {
