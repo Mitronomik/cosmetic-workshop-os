@@ -3,19 +3,15 @@
 Status: **NORMATIVE IMPLEMENTATION PLAN**
 Updated: `2026-08-08`
 
-This document bounds `C4-II-A — Launcher Restore source selection and non-destructive validation presentation`.
-It does not change ADR 0018 and does not authorize C4-II-B destructive execution.
+This document bounds C4-II-A only. It does not change ADR 0018 and does not authorize C4-II-B destructive execution.
 
-## Merged authorization baseline
+## Merged baseline
 
 ```text
-PR #172 / CR-011 merge — 998596560db6780a677bdec363d1fd19db30c1b6
-PR #173 merge — aaedf2735660fb92eb627f7eeab327437d459b56
-PR #174 / A1 merge — 504e776508c940554b3ee8659a201af21db8303c
-PR #175 / A2 authorization merge — 636645ece744752f6a753ae5a25a05297fd34e10
 PR #176 / A2 merge — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
-PR #177 reviewed closure head — d767b957cb3debae584709f2bbadafebd8dd6a9e
 PR #177 / A3 authorization merge — e7ab91dd8e0c11da2cc0b2c30bf41d1dec89f263
+PR #178 reviewed A3 head — b0de148032d9b3d2f9912298897f8649c9b1692b
+PR #178 / A3 merge — 9d95b0c39c4abd05d5a574c6cd8574b8e457f36b
 ```
 
 ## Current slice status
@@ -24,142 +20,86 @@ PR #177 / A3 authorization merge — e7ab91dd8e0c11da2cc0b2c30bf41d1dec89f263
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
+C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A4 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-B — PLANNED — NOT AUTHORIZED
 ```
 
-Each later slice starts from updated `main`; never branch from an unmerged or
-not-yet-closed predecessor.
+## Closed A3 — native macOS picker
 
-## A1 — Validation-session core — CLOSED
+A3 is closed at reviewed head `b0de148032d9b3d2f9912298897f8649c9b1692b`, merged as `9d95b0c39c4abd05d5a574c6cd8574b8e457f36b`.
 
-A1 remains the single candidate-preparation authority and directly reuses C4-I
-source intake/staging/validation.
+Final accepted evidence: A3 14, A2 28, A1 17, C4-I 514, full backend+launcher 2457, exact-head native-picker smoke PASS, lifecycle PASS, clean status/head and P0=0 / P1=0 / P2=0.
 
-## A2 — Exact-run launcher control plane — CLOSED
+Closed A3 contract remains:
 
-PR #176 completed A2 at reviewed head
-`681cb4050bec082db6b637285590e232880af739`, merged as
-`90a14dd9a11b83bc31a40e1d3fb9523f41772b88`.
+- `MacOSNativeSourceSelectionAdapter`;
+- exact `OSASCRIPT_PATH = Path("/usr/bin/osascript")`;
+- fixed `use scripting additions` / `choose file` AppleScript;
+- typed error `-128` cancel;
+- `shell=False`, no `System Events`, no user-controlled script interpolation;
+- launcher-private absolute POSIX path;
+- terminate/reap + kill/reap fallback on cancel/expiry/close;
+- existing A2 adapter seam → existing A1/C4-I validation;
+- no new dependency.
 
-Final A2 proof: race 2, A2 28, A1 17, C4-I 514, full 2443, smoke PASS,
-independent P0=0 / P1=0 / P2=0.
+## A4 — Browser Restore screen and non-destructive E2E flow — AUTHORIZED NEXT
 
-A2 durable boundary remains exact loopback/Host/Origin, atomic bootstrap, run
-token, no-store/narrow CORS, 15s/60s liveness, strict command ordering, one
-long-work owner, responsive heartbeat/state/cancel and stale-proof hardening.
+### Scope
 
-## A3 — Native macOS picker integration — CURRENT IMPLEMENTATION
+A4 may implement only the browser presentation/session layer selected by ADR 0018:
 
-### Goal
+1. canonical nested route `/backups/restore`;
+2. explicit human-readable “restore from backup” action from `/backups`;
+3. first production launcher bootstrap handoff in URL fragment only:
+   `#cw-control=<ephemeral-port>:<bootstrap-token>`;
+4. frontend atomic bootstrap exchange through existing `POST /v1/bootstrap`;
+5. immediate fragment removal with `history.replaceState(...)` or equivalent;
+6. `sessionStorage` only for `control_origin`, optional opaque `run_id`, and run-scoped session token; never `localStorage`;
+7. explicit Authorization header to the exact launcher control origin;
+8. reload via `GET /v1/state`;
+9. heartbeat at 15 seconds while session is active; existing 60-second launcher expiry remains authority;
+10. select/cancel/reselect through existing A2 commands with >=128-bit random request IDs and strictly monotonic `command_seq`;
+11. typed presentation-safe states and nontechnical fail-closed guidance;
+12. real non-destructive E2E chain: browser → A2 control → A3 picker → A1/C4-I validation.
 
-Replace only the production unavailable source-selection seam with the
-launcher-owned native macOS picker selected by ADR 0018, while preserving the
-closed A2 control/session contract and merged A1 validation authority.
+### Browser/filesystem seam
 
-### Implemented in the current changeset
+Browser remains presentation only. It must never submit `path`, `source_path`, file bytes, upload/blob, bookmark/handle or equivalent filesystem authority. No `<input type="file">` fallback.
 
-- `launcher/restore/macos_picker.py` implements
-  `MacOSNativeSourceSelectionAdapter`;
-- exact `/usr/bin/osascript` production helper via
-  `OSASCRIPT_PATH = Path("/usr/bin/osascript")`;
-- fixed `use scripting additions` + `choose file` AppleScript;
-- no user-controlled AppleScript interpolation;
-- `shell=False`; no `System Events`;
-- AppleScript error `-128` becomes typed ordinary cancellation through an internal
-  sentinel independent of localized stderr;
-- successful output must be an absolute POSIX path and remains launcher-private;
-- picker polls the existing A2 `cancel_event`;
-- cancel/expiry/close terminates and reaps the owned child; timeout falls back to
-  kill + reap;
-- non-macOS or missing exact helper returns typed unavailable;
-- picker technical failures remain launcher-internal and the closed A2 worker
-  emits its fixed safe `selection_failed` result;
-- production `launcher/runtime.py` injects the native adapter into the existing
-  `RestoreControlPlane`; direct/test construction keeps the closed A2 unavailable
-  default;
-- selected path passes only to merged A1 `prepare_restore_candidate(...)`;
-- no new Python/application dependency.
+### Bootstrap/session privacy
 
-### Process ownership rules
+Bootstrap/session material must never be placed in query parameters, backend API payloads, logs or persistent storage. Fragment is consumed once and removed immediately. Session token is never written to `localStorage`.
 
-The picker adapter owns exactly one child for one A2 selection worker. It never
-detaches or spawns through a shell. Cancellation invalidates A2/A1 authority
-immediately; process cleanup then quiesces/reaps the owned child before the
-selection worker exits.
+### A4→C4-II-B seam
 
-### Path privacy rules
+A4 is still non-destructive. It must not add destructive confirmation/execute, `execute_restore(...)`, durable Restore phase/state, `before_restore` safety copy, working-DB replacement/migration, rollback/recovery mutation or Restore AuditLog.
 
-The selected absolute POSIX path is launcher-private. Browser/control request,
-state, URL and user-visible failures remain pathless. C4-I/A1 remains acceptance
-authority; filename/type hints are presentation only.
+## Required A4 tests
 
-### A3 automated proof
+At minimum prove:
 
-Targeted tests cover:
+- `/backups/restore` exact route and `/backups` entry;
+- fragment parser accepts only the intended `cw-control` bootstrap grammar;
+- query transport is absent;
+- fragment is removed immediately after bootstrap attempt;
+- bootstrap capability is not persisted;
+- only permitted run descriptors enter `sessionStorage`; no `localStorage` token;
+- reload success through `GET /v1/state`;
+- explicit invalid token/run mismatch clears stale descriptors;
+- missing launcher session fails closed with no browser file fallback;
+- heartbeat lifecycle and cleanup;
+- request IDs and monotonic `command_seq` behavior at the frontend client seam;
+- select/cancel/reselect typed UX;
+- browser DTO stays pathless even when picker/internal errors contain paths;
+- production browser launch uses fragment only and preserves exact local origin;
+- A3/A2/A1/C4-I regressions remain green;
+- no destructive C4-II-B behavior.
 
-1. exact `/usr/bin/osascript` contract and fixed AppleScript;
-2. no shell/System Events/user interpolation;
-3. typed user cancellation;
-4. pre-spawn cancellation;
-5. terminate/reap and kill fallback;
-6. unavailable helper/platform;
-7. nonzero/empty/non-absolute result failure;
-8. preservation of valid newline-containing POSIX paths;
-9. control cancel and 60s expiry physically terminate owned child;
-10. selected path passes through real A2 session to real A1 validation;
-11. production runtime injects A3 adapter.
+## A4 exact-head smoke
 
-### A3 exact-head smoke
-
-`scripts/smoke_restore_native_picker.py`:
-
-```text
-exact-head + clean checkout
-→ non-interactive exact /usr/bin/osascript probe
-→ production A3 adapter with launcher-owned process seam
-→ real A2 loopback control
-→ launcher-private selected path
-→ real A1/C4-I validation
-→ safe non-destructive state
-→ prove source/working DB/AuditLog/durable Restore unchanged
-```
-
-The process seam avoids requiring an unattended test to click a modal GUI dialog;
-production adapter command construction remains exact and is asserted by the
-smoke.
-
-### A3 non-goals
-
-A3 must not implement:
-
-- `/backups/restore` or frontend Restore UI;
-- production browser bootstrap-fragment handoff;
-- browser path/file/upload/handle authority;
-- destructive confirmation/execute or `execute_restore(...)`;
-- durable Restore operation/phase or `before_restore` safety copy;
-- working-database replacement/migration;
-- rollback/recovery mutation or Restore AuditLog;
-- ordinary FastAPI Restore mutation endpoint;
-- WebSocket/generic localhost command server;
-- new dependency or packaging implementation.
-
-## A4 — Browser Restore screen and non-destructive E2E flow — BLOCKED
-
-A4 may open only after A3 merges, passes independent exact-head verification and
-is lifecycle-closed from updated `main`. A4 will own `/backups/restore`, the first
-production `#cw-control` fragment handoff/removal, `sessionStorage` and browser UX.
-It still will not authorize destructive C4-II-B.
-
-## Cross-slice constraints
-
-Every A3/A4 PR preserves ADR 0016, ADR 0018, launcher-only filesystem authority,
-pathless browser presentation, closed A1/A2 semantics, ordinary FastAPI as
-business API only, non-destructive C4-II-A and separately gated C4-II-B.
+A4 must include a real non-destructive macOS/browser smoke that exercises the production bootstrap/session flow and route while proving source/working DB/AuditLog/durable Restore state remain unchanged.
 
 ## PR discipline
 
-Every slice is a separate small PR with Scope, Non-goals, Architecture
-constraints, Backend/Frontend requirements, Tests, Acceptance criteria, exact
-changed-path review, exact-head smoke and independent P0=0/P1=0/P2=0 before merge.
+A4 is a separate small PR. Scope, Non-goals, Architecture constraints, Backend requirements, Frontend requirements, Tests and Acceptance criteria are mandatory. No unrelated changes. Merge only after exact-head tests/smoke and independent P0=0 / P1=0 / P2=0 audit.
