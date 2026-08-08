@@ -1,16 +1,10 @@
 # Packaging
 
-Package must include launcher, backend runtime, frontend build, migrations,
-default config and help files. It must not include real user database, backups,
-exports, logs or secrets.
-
-## Current status
+Package must include launcher, backend runtime, frontend build, migrations, default config and help files. It must not include real user database, backups, exports, logs or secrets.
 
 macOS `.app` / `.dmg` packaging is **NOT COMPLETED**.
 
 ## Restore packaging consequence
-
-ADR 0018 topology remains:
 
 ```text
 ordinary browser
@@ -22,25 +16,18 @@ ordinary browser
 ## C4-II-A status
 
 ```text
+PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A4 — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
+C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A4 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B — PLANNED — NOT AUTHORIZED
+Restore — NOT IMPLEMENTED
+Product release readiness — NOT CLAIMED
 ```
 
-A3 uses only macOS-provided `/usr/bin/osascript` + Standard Additions `choose
-file`. It adds no Python/application dependency and no bundle resource.
+A3 remains dependency-free and uses macOS-provided `/usr/bin/osascript`. Mac App Store sandbox compatibility is **not claimed**.
 
-The picker is an owned short-lived child using fixed AppleScript, `shell=False`,
-no `System Events`, typed cancellation, launcher-private POSIX path and owned
-terminate/reap with kill fallback on cancel/expiry.
-
-Mac App Store sandbox compatibility is **not claimed**. A later sandbox/packaging
-decision may replace the picker adapter while preserving launcher ownership and
-path privacy unless a later ADR explicitly changes them.
-
-Production browser launch URL remains unchanged through A3. No `#cw-control`,
-control port, bootstrap capability or session token is added to navigation; first
-production handoff remains A4.
+A4 changes browser/session wiring only; it does not authorize packaging work. Bootstrap material may appear only in the initial URL fragment and must be removed immediately by SPA. Run-scoped session descriptors may live only in `sessionStorage`; secrets must not enter query params, logs, persistent storage or bundle resources.
 
 C4-II-B destructive Restore remains not authorized.

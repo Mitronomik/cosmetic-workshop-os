@@ -5,50 +5,28 @@ Client-facing name: **Мастерская косметолога**
 Status: **active current implementation sequence**
 Updated: `2026-08-08`
 
-Historical pre-compaction plan remains byte-identical at
-`docs/history/implementation-plan/2026-08-06-pre-compaction.md`.
+Historical pre-compaction plan remains byte-identical under `docs/history/`.
 
-## 1. Source of truth
-
-1. applicable `AGENTS.md`;
-2. newest accepted ADR for the exact topic;
-3. `docs/current-lifecycle.md`;
-4. unsuperseded durable ADR semantics;
-5. `docs/restore-interaction-and-validation-session.md`;
-6. `docs/c4-ii-a-implementation-slices.md`;
-7. this plan;
-8. active `state/` files;
-9. `docs/history/` evidence.
-
-## 2. Merged baseline
+## Merged baseline
 
 ```text
-PR #170 / C4-I merge — e6997281d2e0268ce54184d988c114bac71c35e2
-PR #174 / A1 merge — 504e776508c940554b3ee8659a201af21db8303c
-PR #175 / A1 closure + A2 authorization — 636645ece744752f6a753ae5a25a05297fd34e10
 PR #176 / A2 merge — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
-PR #177 / A2 closure + A3 authorization — e7ab91dd8e0c11da2cc0b2c30bf41d1dec89f263
+PR #177 / A3 authorization merge — e7ab91dd8e0c11da2cc0b2c30bf41d1dec89f263
+PR #178 reviewed A3 head — b0de148032d9b3d2f9912298897f8649c9b1692b
+PR #178 / A3 merge — 9d95b0c39c4abd05d5a574c6cd8574b8e457f36b
 ```
 
-A2 reviewed head `681cb4050bec082db6b637285590e232880af739`
-passed race 2/2, A2 28/28, A1 17/17, C4-I 514/514, full 2443/2443,
-smoke and independent P0=0 / P1=0 / P2=0 audit.
-
-PR #177 reviewed head `d767b957cb3debae584709f2bbadafebd8dd6a9e`
-closed A2 lifecycle and authorized only A3.
-
-## 3. Current lifecycle
+## Current lifecycle
 
 ```text
-PR #176 — MERGED — C4-II-A2 EXACT-HEAD VERIFIED
-PR #177 — MERGED — A2 CLOSED / A3 AUTHORIZED
+PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
+C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A4 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -56,123 +34,77 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## 4. Closed A2 boundary
+## A3 closure
 
-A2 remains unchanged: exact loopback/Host/Origin, atomic bootstrap, run token,
-no-store/narrow CORS, 15s/60s liveness, strict `command_seq`, one worker,
-responsive heartbeat/state/cancel and hardened stale A2→A1 proof race.
+A3 final evidence is accepted: targeted A3 14, A2 28, A1 17, C4-I 514, full backend+launcher 2457, exact-head native-picker smoke PASS, lifecycle PASS, clean exact head and independent P0=0 / P1=0 / P2=0.
 
-The default unavailable adapter remains for direct/test construction. A3 is
-wired only into production launcher startup.
+Closed A3 production contract remains exact `/usr/bin/osascript`, fixed Standard Additions `choose file`, `shell=False`, no `System Events`, typed error `-128` cancel, launcher-private absolute POSIX path and owned terminate/reap + kill/reap fallback.
 
-## 5. Current implementation window — C4-II-A3
+## Current implementation window — C4-II-A4
 
-Goal: implement only the launcher-owned native macOS picker from ADR 0018.
+Goal: complete only the browser presentation and exact-run bootstrap/session UX for the already-merged A1/A2/A3 non-destructive chain.
 
-Implemented in the current changeset:
+### Authorized implementation scope
 
-- `launcher/restore/macos_picker.py`:
-  - exact `OSASCRIPT_PATH = Path("/usr/bin/osascript")`;
-  - fixed `use scripting additions` / `choose file` AppleScript;
-  - no user-controlled AppleScript interpolation;
-  - `shell=False`, no `System Events`;
-  - typed user cancellation using AppleScript error `-128` → internal sentinel;
-  - only absolute selected POSIX paths are returned;
-  - A2 `cancel_event` polling;
-  - owned terminate/reap, then kill/reap fallback;
-  - non-macOS/missing helper → typed unavailable;
-  - picker technical failures remain launcher-internal.
-- `launcher/runtime.py`:
-  - production-only injection of `MacOSNativeSourceSelectionAdapter()` into the
-    existing `RestoreControlPlane`;
-  - startup/recovery/control/browser/shutdown ordering otherwise unchanged.
-- `launcher/restore/control_protocol.py` / `launcher/restore/__init__.py`:
-  - documentation/export alignment only; A2 default unavailable seam retained.
-- targeted A3 tests and `scripts/smoke_restore_native_picker.py`.
+- canonical nested route `/backups/restore`;
+- human-readable entry from `/backups`;
+- first production launcher browser handoff via URL fragment only: `#cw-control=<ephemeral-port>:<bootstrap-token>`;
+- bootstrap fragment consumed at SPA startup and exchanged once through existing `POST /v1/bootstrap`;
+- immediate `history.replaceState(...)` removal of bootstrap material;
+- `sessionStorage` only for `control_origin`, optional opaque `run_id`, and run-scoped session token;
+- never persist session token to `localStorage`;
+- exact launcher control origin + explicit authorization header;
+- reload recovery through `GET /v1/state`;
+- invalid-token/run-mismatch clears stale descriptors;
+- heartbeat at 15 seconds while run-scoped session is active;
+- existing A2 select/cancel/reselect with random request IDs and strict monotonic `command_seq`;
+- presentation-safe states for selecting, validating, accepted, rejected, cancelled, expired and technical-unavailable cases;
+- nontechnical open/restart guidance when no valid launcher session exists;
+- non-destructive E2E through A2 → A3 → A1/C4-I.
 
-## 6. Mandatory A3 seams
+### Mandatory seams
 
-### Browser/filesystem seam
+Browser never owns filesystem authority: no `path`, `source_path`, file bytes, upload/blob, bookmark/handle or `<input type="file">` fallback.
 
-Browser/control payload remains pathless. No `path`, `source_path`, file bytes,
-upload/blob, bookmark/handle or equivalent filesystem authority.
+Bootstrap/session capability never goes in query params, backend API payloads, logs or persistent storage.
 
-### A3→A4 seam
+Ordinary FastAPI remains business API only. Launcher control plane remains the Restore interaction authority.
 
-Production browser navigation remains unchanged. No `#cw-control`, control port,
-bootstrap capability, session token or `/backups/restore`. A4 owns those.
+A4 remains non-destructive: no execute/confirm command, no `execute_restore(...)`, no durable Restore phase, no `before_restore`, no DB replacement/migration, no rollback/recovery mutation and no Restore AuditLog.
 
-### A3→C4-II-B seam
+## Required A4 tests
 
-A3 is non-destructive. No confirmation/execute, durable Restore phases,
-`before_restore` safety copy, working-DB replacement/migration,
-rollback/recovery mutation or Restore AuditLog.
+1. nested route resolution for `/backups/restore` and entry from `/backups`;
+2. exact fragment grammar and rejection of malformed bootstrap descriptors;
+3. fragment removal immediately after bootstrap attempt;
+4. no query transport and no bootstrap persistence;
+5. sessionStorage contract and no localStorage token;
+6. authenticated control client uses exact `control_origin` and Authorization header;
+7. reload state recovery and invalid-token/run-mismatch cleanup;
+8. heartbeat startup/cleanup around active launcher session;
+9. monotonic `command_seq` and >=128-bit request IDs at frontend client seam;
+10. select/cancel/reselect typed UI;
+11. pathless DTO/presentation under internal path/stderr failures;
+12. missing session fail-closed guidance with no browser file fallback;
+13. production launcher URL uses fragment only;
+14. A3/A2/A1/C4-I regressions remain green;
+15. exact-head real non-destructive browser smoke.
 
-## 7. Required A3 proof
+## Exact-head gate
 
-At minimum prove:
+Final A4 head must pass diff/lifecycle checks, targeted frontend/session tests, relevant launcher regressions, full backend+launcher/frontend baseline as applicable, exact-head browser smoke, clean status/head and independent P0=0 / P1=0 / P2=0 audit.
 
-1. exact `/usr/bin/osascript` production helper;
-2. fixed Standard Additions `choose file` script;
-3. no shell/System Events/user interpolation;
-4. successful result is launcher-private absolute POSIX path;
-5. user cancel is typed cancellation;
-6. cancel and 60s expiry terminate/reap the owned picker child;
-7. stubborn child reaches kill fallback and is reaped;
-8. technical picker failure reaches safe A2 failure without stderr/path exposure;
-9. browser/control DTO remains pathless;
-10. production runtime injects A3 without changing A2 default test seam;
-11. selected path goes through real A2 coordinator into real A1 validation;
-12. A2 stale-worker proof hardening remains green;
-13. product browser URL remains unchanged;
-14. source/working DB/durable Restore state remain non-destructively unchanged;
-15. A2/A1/C4-I/full regressions remain green.
+## Forbidden scope
 
-## 8. Exact-head verification gate
+Do not add C4-II-B destructive execution, backend Restore mutation endpoint, WebSocket/generic launcher command server, browser filesystem fallback, new unrelated dependency, packaging implementation, cloud sync, OCR, roles/multiuser or advanced analytics.
 
-Run on the final A3 head:
+## Current next action
 
 ```text
-git status --short
-→ git diff --check e7ab91dd8e0c11da2cc0b2c30bf41d1dec89f263...HEAD
-→ python3 scripts/check_documentation_lifecycle.py
-→ python3 -m pytest launcher/tests/test_restore_native_picker*.py
-→ python3 -m pytest launcher/tests/test_restore_control_*.py
-→ python3 -m pytest launcher/tests/test_restore_validation_session.py
-→ existing C4-I Restore regression
-→ python3 -m pytest backend/app/tests launcher/tests
-→ python3 scripts/smoke_restore_native_picker.py --expected-head <HEAD>
-→ verify clean status/head again
-→ independent exact-head audit
-→ P0=0 / P1=0 / P2=0
-```
-
-No PASS is claimed until run on the exact published head.
-
-## 9. Forbidden scope
-
-Do not implement in A3:
-
-- frontend `/backups/restore` or production fragment handoff;
-- browser filesystem fallback;
-- destructive Restore confirmation/execution;
-- backend Restore mutation endpoint;
-- WebSocket/generic launcher command server;
-- new dependency or packaging implementation;
-- cloud sync/OCR/roles/advanced analytics.
-
-## 10. Successor gates
-
-A4 remains blocked until A3 passes exact-head verification, merges and lifecycle
-is closed from updated `main`. C4-II-B remains separately not authorized.
-
-## 11. Current next action
-
-```text
-finish A3 implementation self-audit
-→ open draft A3 PR
-→ run exact-head A3/A2/A1/C4-I/full tests + native-picker smoke
-→ resolve every P0/P1/P2 finding
-→ merge only after complete evidence
-→ close A3 lifecycle before A4
+merge A3 closure / A4 authorization
+→ start A4 from updated main
+→ implement only browser bootstrap/session/route UX
+→ exact-head tests + real non-destructive E2E smoke
+→ independent audit
+→ merge only at P0=0 / P1=0 / P2=0
 ```
