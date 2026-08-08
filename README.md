@@ -2,74 +2,60 @@
 
 Client-facing product name: **Мастерская косметолога**.
 
-Local-first working system for a cosmetic workshop. The product must remain usable by a non-technical user without GitHub, Git, Python, Node.js, Docker or a terminal.
+A local-first working system for a cosmetic workshop. The user product must run without requiring GitHub, Git, Python, Node.js, Docker or a terminal.
 
 ## Current product status
 
 ```text
 PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
+PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B — PLANNED — NOT AUTHORIZED
-C4-II-C — PLANNED — NOT AUTHORIZED
-C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-PR #178 reviewed head `b0de148032d9b3d2f9912298897f8649c9b1692b` merged as `9d95b0c39c4abd05d5a574c6cd8574b8e457f36b` after A3 14, A2 28, A1 17, C4-I 514, full 2457, native-picker smoke PASS, lifecycle PASS and independent P0=0 / P1=0 / P2=0 audit.
+PR #179 reviewed closure head `72b04510efd6d1f104369a450ed1c4d4dfe063ad` merged as `52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf`, closing A3 and authorizing only A4.
 
-## Closed Restore interaction foundation
+## Current A4 implementation boundary
 
-A1: launcher-owned non-destructive candidate preparation and C4-I validation reuse.
-
-A2: exact-run authenticated loopback control/session boundary on `127.0.0.1:<ephemeral>` with exact Host/Origin, one-use bootstrap, run token, heartbeat/expiry and replay-safe commands.
-
-A3: launcher-owned native macOS picker:
+A4 adds the browser presentation/session layer selected by ADR 0018:
 
 ```text
-/usr/bin/osascript
-→ fixed Standard Additions choose file
-→ typed cancel / owned child quiescence
-→ launcher-private absolute POSIX path
-→ A2 coordinator
-→ A1/C4-I validation
-```
-
-Browser/control state remains pathless and no destructive Restore authority exists in A1–A3.
-
-## Authorized A4 boundary
-
-A4 is the only authorized next runtime slice:
-
-```text
-launcher bootstrap fragment
-→ SPA consumes + removes fragment
+launcher control plane
+→ browser URL fragment #cw-control=<ephemeral-port>:<bootstrap-token>
+→ SPA removes fragment immediately
+→ one-use POST /v1/bootstrap
 → run-scoped sessionStorage descriptors
 → /backups/restore presentation
-→ A2 control
-→ A3 picker
-→ A1/C4-I non-destructive validation
+→ existing A2 select/cancel/session
+→ existing A3 native picker
+→ existing A1/C4-I non-destructive validation
 ```
 
-A4 may add `/backups/restore`, the entry from `/backups`, production `#cw-control=<port>:<bootstrap>` fragment handoff, `POST /v1/bootstrap`, `history.replaceState(...)`, run-scoped `sessionStorage`, reload/state/heartbeat/select/cancel/reselect UX.
+The browser never owns an absolute source path. It sends no file bytes, upload, bookmark or filesystem handle. The native picker remains launcher-owned.
 
-A4 may **not** add browser path/file authority, query-token transport, localStorage token persistence, FastAPI Restore mutation, destructive confirmation/execute, safety copy, DB replacement/migration, rollback/recovery mutation or Restore AuditLog.
+Secrets are restricted to the one-use launch fragment and the run-scoped session token in `sessionStorage`. The non-secret strict-command replay metadata needed for safe reload/retry (`nextCommandSeq` and one pending request ID/action/sequence) lives only in same-tab `history.state`; it is not launcher authority. A network-uncertain command is retried with the exact same request ID and sequence. If replay state cannot be proved after prior activity, mutation fails closed with restart guidance.
 
-C4-II-B destructive Restore remains **NOT AUTHORIZED**.
+A4 presents only non-destructive selection and validation. Even after an accepted candidate, the UI explicitly states that working data has not changed and exposes no destructive Restore button.
 
-## Authority map
+## Restore authority
 
-1. `docs/current-lifecycle.md`
-2. accepted ADR for the exact topic
-3. `docs/c4-ii-a-implementation-slices.md`
-4. `docs/restore-interaction-and-validation-session.md`
-5. `docs/implementation-plan.md`
-6. active `state/`
+- ADR 0016 — destructive Restore safety/state machine;
+- ADR 0018 — launcher control/picker/exact-run browser-session architecture;
+- `docs/current-lifecycle.md` — current authorization and gate;
+- `docs/c4-ii-a-implementation-slices.md` — bounded A1→A4 implementation sequence.
 
-Protected history under `docs/history/` remains byte-identical.
+C4-II-B destructive confirmation/execution remains **NOT AUTHORIZED**.
+
+## Architectural invariants
+
+Every change preserves local-first operation, user data outside code/package, API-first business architecture, safe historical data, recipe versions, first-class client recipes, lot/movement inventory, transactional production, safe import preview/confirmation, backup-before-migration and a human-readable non-technical UI.
+
+Restore additionally preserves launcher filesystem/destructive authority, immutable selected source, pathless browser presentation and no destructive action before separately authorized C4-II-B.

@@ -4,30 +4,31 @@ Package must include launcher, backend runtime, frontend build, migrations, defa
 
 macOS `.app` / `.dmg` packaging is **NOT COMPLETED**.
 
-## Restore packaging consequence
-
-```text
-ordinary browser
-→ launcher-owned 127.0.0.1:<ephemeral> control plane
-→ launcher-owned /usr/bin/osascript picker
-→ launcher-owned validation session
-```
-
 ## C4-II-A status
 
 ```text
 PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
+PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
+C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
+CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
+C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-A3 remains dependency-free and uses macOS-provided `/usr/bin/osascript`. Mac App Store sandbox compatibility is **not claimed**.
+## A4 packaging consequences
 
-A4 changes browser/session wiring only; it does not authorize packaging work. Bootstrap material may appear only in the initial URL fragment and must be removed immediately by SPA. Run-scoped session descriptors may live only in `sessionStorage`; secrets must not enter query params, logs, persistent storage or bundle resources.
+A4 adds no runtime dependency and no package resource beyond frontend source/build output and launcher Python already included by the application.
+
+The native picker remains the macOS-provided `/usr/bin/osascript` adapter from A3. Mac App Store sandbox compatibility is **not claimed**; a later packaging decision may replace the picker adapter without moving path authority into the browser.
+
+The one-use bootstrap token is launch-time memory only and travels in the browser URL fragment. It is removed immediately by the SPA. The run-scoped session token is stored only in `sessionStorage`, never `localStorage`, package files, logs or persistent config. Same-tab non-secret command replay metadata lives only in `history.state`.
+
+A packaged build must preserve script ordering so `restore-control-entry.js` loads before `main.js`, allowing fragment capture/removal before ordinary shell route resolution.
 
 C4-II-B destructive Restore remains not authorized.

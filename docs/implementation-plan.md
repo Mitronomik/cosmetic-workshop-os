@@ -5,106 +5,108 @@ Client-facing name: **Мастерская косметолога**
 Status: **active current implementation sequence**
 Updated: `2026-08-08`
 
-Historical pre-compaction plan remains byte-identical under `docs/history/`.
-
-## Merged baseline
-
-```text
-PR #176 / A2 merge — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
-PR #177 / A3 authorization merge — e7ab91dd8e0c11da2cc0b2c30bf41d1dec89f263
-PR #178 reviewed A3 head — b0de148032d9b3d2f9912298897f8649c9b1692b
-PR #178 / A3 merge — 9d95b0c39c4abd05d5a574c6cd8574b8e457f36b
-```
-
 ## Current lifecycle
 
 ```text
 PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
+PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B — PLANNED — NOT AUTHORIZED
-C4-II-C — PLANNED — NOT AUTHORIZED
-C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## A3 closure
+## Merged baseline
 
-A3 final evidence is accepted: targeted A3 14, A2 28, A1 17, C4-I 514, full backend+launcher 2457, exact-head native-picker smoke PASS, lifecycle PASS, clean exact head and independent P0=0 / P1=0 / P2=0.
+```text
+PR #178 reviewed A3 head — b0de148032d9b3d2f9912298897f8649c9b1692b
+PR #178 merge — 9d95b0c39c4abd05d5a574c6cd8574b8e457f36b
+PR #179 reviewed A3-closure/A4-auth head — 72b04510efd6d1f104369a450ed1c4d4dfe063ad
+PR #179 merge — 52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf
+```
 
-Closed A3 production contract remains exact `/usr/bin/osascript`, fixed Standard Additions `choose file`, `shell=False`, no `System Events`, typed error `-128` cancel, launcher-private absolute POSIX path and owned terminate/reap + kill/reap fallback.
+A3 final proof: 14 A3, 28 A2, 17 A1, 514 C4-I, 2457 full backend+launcher, native-picker smoke PASS, lifecycle PASS, independent P0=0/P1=0/P2=0.
 
 ## Current implementation window — C4-II-A4
 
-Goal: complete only the browser presentation and exact-run bootstrap/session UX for the already-merged A1/A2/A3 non-destructive chain.
+Implement only the browser/session/presentation layer already selected by ADR 0018:
 
-### Authorized implementation scope
+- launcher fragment handoff without mutating the ordinary runtime config;
+- exact `/backups/restore` nested route and secondary entry from `/backups`;
+- synchronous fragment capture/removal before the ordinary shell module;
+- one-use bootstrap exchange;
+- only `control_origin`, `run_id`, session token in `sessionStorage`;
+- strict reload/retry metadata in same-tab `history.state`, never authority;
+- heartbeat and state polling;
+- exact DTO allowlists and pathless presentation;
+- select/cancel/reselect over existing A2 only;
+- Russian human-readable non-destructive UX;
+- cross-layer A4→A2→A3→A1/C4-I smoke.
 
-- canonical nested route `/backups/restore`;
-- human-readable entry from `/backups`;
-- first production launcher browser handoff via URL fragment only: `#cw-control=<ephemeral-port>:<bootstrap-token>`;
-- bootstrap fragment consumed at SPA startup and exchanged once through existing `POST /v1/bootstrap`;
-- immediate `history.replaceState(...)` removal of bootstrap material;
-- `sessionStorage` only for `control_origin`, optional opaque `run_id`, and run-scoped session token;
-- never persist session token to `localStorage`;
-- exact launcher control origin + explicit authorization header;
-- reload recovery through `GET /v1/state`;
-- invalid-token/run-mismatch clears stale descriptors;
-- heartbeat at 15 seconds while run-scoped session is active;
-- existing A2 select/cancel/reselect with random request IDs and strict monotonic `command_seq`;
-- presentation-safe states for selecting, validating, accepted, rejected, cancelled, expired and technical-unavailable cases;
-- nontechnical open/restart guidance when no valid launcher session exists;
-- non-destructive E2E through A2 → A3 → A1/C4-I.
+## Mandatory A4 seams
 
-### Mandatory seams
+### Browser/filesystem seam
 
-Browser never owns filesystem authority: no `path`, `source_path`, file bytes, upload/blob, bookmark/handle or `<input type="file">` fallback.
+No browser-controlled `path`, `source_path`, file bytes, upload/blob, bookmark/handle or `<input type="file">`. Native picker and absolute path remain launcher-owned.
 
-Bootstrap/session capability never goes in query params, backend API payloads, logs or persistent storage.
+### Session/replay seam
 
-Ordinary FastAPI remains business API only. Launcher control plane remains the Restore interaction authority.
+The one-use bootstrap secret exists only in the launch fragment until exchange. The session token lives only in `sessionStorage` and Authorization headers. Non-secret command replay metadata may live in `history.state` only to preserve exact A2 idempotency across reload/network uncertainty. Missing replay after prior activity must fail closed; it must never guess a sequence.
 
-A4 remains non-destructive: no execute/confirm command, no `execute_restore(...)`, no durable Restore phase, no `before_restore`, no DB replacement/migration, no rollback/recovery mutation and no Restore AuditLog.
+### A4→C4-II-B seam
 
-## Required A4 tests
+A4 is non-destructive. Accepted validation is not Restore authorization. No `execute_restore`, confirmation, durable Restore phase, `before_restore` safety copy, database replacement/migration, rollback/recovery mutation or Restore AuditLog.
 
-1. nested route resolution for `/backups/restore` and entry from `/backups`;
-2. exact fragment grammar and rejection of malformed bootstrap descriptors;
-3. fragment removal immediately after bootstrap attempt;
-4. no query transport and no bootstrap persistence;
-5. sessionStorage contract and no localStorage token;
-6. authenticated control client uses exact `control_origin` and Authorization header;
-7. reload state recovery and invalid-token/run-mismatch cleanup;
-8. heartbeat startup/cleanup around active launcher session;
-9. monotonic `command_seq` and >=128-bit request IDs at frontend client seam;
-10. select/cancel/reselect typed UI;
-11. pathless DTO/presentation under internal path/stderr failures;
-12. missing session fail-closed guidance with no browser file fallback;
-13. production launcher URL uses fragment only;
-14. A3/A2/A1/C4-I regressions remain green;
-15. exact-head real non-destructive browser smoke.
+## Required A4 proof
+
+At minimum prove:
+
+1. launcher handoff is fragment-only and original config remains unchanged;
+2. handoff failure closes control authority but ordinary product still opens;
+3. fragment is removed before shell route processing;
+4. sessionStorage contains only the three approved descriptors;
+5. no localStorage/query/file-input/path fallback;
+6. unknown/path-bearing DTO fields are rejected;
+7. 15-second heartbeat and 60-second server expiry contract remain aligned;
+8. random request ID is 128 bits and command sequence is strict;
+9. network uncertainty retries exact same request ID/sequence;
+10. reload recovers sequence only from same-tab replay or pristine `idle/generation=0` proof;
+11. invalid session/run mismatch clears descriptors;
+12. `/backups/restore` is human-readable, keyboard reachable and narrow-screen usable;
+13. accepted state clearly says working data is unchanged and Restore has not started;
+14. `frontend/src/main.ts` remains byte-identical;
+15. A3/A2/A1/C4-I and broader regressions remain green;
+16. cross-layer smoke proves no source/working-DB/AuditLog/durable-Restore mutation.
 
 ## Exact-head gate
 
-Final A4 head must pass diff/lifecycle checks, targeted frontend/session tests, relevant launcher regressions, full backend+launcher/frontend baseline as applicable, exact-head browser smoke, clean status/head and independent P0=0 / P1=0 / P2=0 audit.
+```text
+git status --short
+→ git diff --check 52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf...HEAD
+→ python3 scripts/check_documentation_lifecycle.py
+→ cd frontend && npm run build && npm run test:restore-control
+→ launcher A4 targeted tests
+→ A3/A2/A1/C4-I regressions
+→ full backend + launcher suite
+→ relevant frontend regression suite
+→ python3 scripts/smoke_restore_browser_session.py --expected-head <HEAD>
+→ desktop/narrow/keyboard smoke of /backups and /backups/restore
+→ clean status/head
+→ independent P0=0/P1=0/P2=0
+```
+
+No PASS is claimed until this runs on the final published A4 head.
 
 ## Forbidden scope
 
-Do not add C4-II-B destructive execution, backend Restore mutation endpoint, WebSocket/generic launcher command server, browser filesystem fallback, new unrelated dependency, packaging implementation, cloud sync, OCR, roles/multiuser or advanced analytics.
+No destructive C4-II-B, backend Restore mutation endpoint, WebSocket/generic launcher server, packaging redesign, cloud sync, OCR, roles/multiuser or advanced analytics.
 
-## Current next action
+## Next action
 
-```text
-merge A3 closure / A4 authorization
-→ start A4 from updated main
-→ implement only browser bootstrap/session/route UX
-→ exact-head tests + real non-destructive E2E smoke
-→ independent audit
-→ merge only at P0=0 / P1=0 / P2=0
-```
+Finish A4 self-audit → open Draft PR → run exact-head build/tests/smoke/UI review → resolve every P0/P1/P2 → merge only after complete evidence → post-merge lifecycle/authorization decision before C4-II-B.
