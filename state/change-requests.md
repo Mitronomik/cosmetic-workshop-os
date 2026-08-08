@@ -10,8 +10,7 @@ does not override current lifecycle or authorization.
 ## Current lifecycle
 
 ```text
-PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
-PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED
+PR #176 — MERGED — C4-II-A2 EXACT-HEAD VERIFIED
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
@@ -20,9 +19,9 @@ C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
-C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -48,8 +47,8 @@ Product release readiness — NOT CLAIMED
 
 ## C4-II-A sliced implementation authorization
 
-PR #173 is **not** a new architecture/change request. It is the lifecycle
-authorization required by CR-011 and fixes the implementation order:
+PR #173 is not a new architecture/change request. It fixes the implementation
+order already selected by CR-011:
 
 ```text
 A1 — validation-session core
@@ -60,43 +59,50 @@ A1 — validation-session core
 
 ## A1 closure evidence
 
-PR #174 completed A1:
+PR #174 completed A1 at reviewed head
+`e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5`, merged as
+`504e776508c940554b3ee8659a201af21db8303c`, with lifecycle/smoke PASS,
+17 A1 tests, 514 C4-I tests, 2415 full tests and audit 0/0/0.
+
+A1 remains the single non-destructive candidate-preparation authority.
+
+## A2 closure evidence
+
+PR #175 authorized A2 from merge
+`636645ece744752f6a753ae5a25a05297fd34e10`.
+
+PR #176 completed A2:
 
 ```text
-reviewed head — e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5
-merge commit — 504e776508c940554b3ee8659a201af21db8303c
+reviewed head — 681cb4050bec082db6b637285590e232880af739
+merge commit — 90a14dd9a11b83bc31a40e1d3fb9523f41772b88
 ```
 
-Accepted exact-head evidence: lifecycle checker PASS, A1 smoke PASS, 17 targeted
-A1 tests, 514 C4-I Restore tests, 2415 backend+launcher tests and independent
-audit P0=0 / P1=0 / P2=0.
+Accepted exact-head evidence: lifecycle PASS, stale-A1-authority race 2 passed,
+A2 targeted 28 passed, A1 17 passed, C4-I Restore 514 passed, full
+backend+launcher 2443 passed, exact-head A2 smoke PASS and independent audit
+P0=0 / P1=0 / P2=0.
 
-A1 is **DONE — MERGED AND EXACT-HEAD VERIFIED** and remains the single
-non-destructive candidate-preparation authority.
+A2 is **DONE — MERGED AND EXACT-HEAD VERIFIED**.
 
-## A2 lifecycle authorization and current implementation
+## A3 lifecycle authorization
 
-This post-A1 closure is not a new CR and does not change ADR 0018.
+This post-A2 closure is not a new CR and does not change ADR 0018.
 
-PR #175:
+A3 is now **AUTHORIZED NEXT — NOT IMPLEMENTED**. It may implement only the
+launcher-owned native macOS picker already selected by CR-011/ADR 0018:
 
-```text
-reviewed head — b1a48d8f668fa984e3032f85c226f77e30d92e4e
-merge commit — 636645ece744752f6a753ae5a25a05297fd34e10
-```
+- `/usr/bin/osascript` + Standard Additions `choose file`;
+- fixed script, no user-controlled interpolation;
+- no `shell=True`, no `System Events`;
+- typed cancellation;
+- absolute POSIX path only in launcher memory;
+- owned child terminate/wait on cancel/expiry;
+- existing A2 source-selection adapter → existing A1 validation;
+- no new dependency.
 
-A2 is now **IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED**. The current
-runtime changeset is limited to the already-decided exact-run launcher
-control/session protocol: loopback bind, Host/Origin, one-use bootstrap, run token,
-no-store/CORS boundary, 15s/60s liveness, `command_seq`, concurrent worker
-coordination, A1 invalidation and launcher lifetime wiring.
-
-Production A2 uses typed `picker_unavailable` and obtains no filesystem path.
-Browser/control request schema carries no path/file authority. Production browser
-navigation remains unchanged and receives no bootstrap/session material before A4.
-
-A2 still requires exact-head tests/smoke/audit and merge + post-merge lifecycle
-closure before A3 can open.
+A3 may not add browser path/file authority, `/backups/restore`, production
+bootstrap-fragment handoff or destructive Restore authority.
 
 ## C4-II-B boundary
 

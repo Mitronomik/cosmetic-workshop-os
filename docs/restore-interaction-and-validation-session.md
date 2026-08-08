@@ -10,20 +10,19 @@ Normative sources:
 - `docs/c4-ii-a-implementation-slices.md` — bounded A1→A4 implementation plan;
 - `docs/current-lifecycle.md` — current lifecycle authorization.
 
-ADR 0018 architecture is unchanged by A1 closure or the current A2 implementation.
+ADR 0018 architecture is unchanged by A1/A2 closure or A3 authorization.
 
 ## Current lifecycle
 
 ```text
-PR #174 — MERGED — C4-II-A1 EXACT-HEAD VERIFIED
-PR #175 — MERGED — A1 CLOSED / A2 AUTHORIZED
+PR #176 — MERGED — C4-II-A2 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — IN PROGRESS — SLICED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-A3 — PLANNED — BLOCKED BY A2 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
-C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE
+C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-A3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-A4 — PLANNED — BLOCKED BY A3 MERGE + EXACT-HEAD GATE + LIFECYCLE UPDATE
 C4-II-B — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -43,16 +42,12 @@ browser SPA /backups/restore
                          → C4-I intake/staging/validation
 ```
 
-Browser owns presentation only. Launcher owns control, future picker, absolute
-selected source path, validation-session authority and all future destructive
-authority. No WebSocket, generic localhost command server, browser filesystem
-authority or ordinary FastAPI Restore mutation is selected.
+Browser owns presentation only. Launcher owns control, picker, absolute selected
+source path, validation-session authority and all future destructive authority.
+No WebSocket, generic localhost command server, browser filesystem authority or
+ordinary FastAPI Restore mutation is selected.
 
 ## A1 merged validation boundary
-
-PR #174 merged exact-head verified A1 at
-`e0e5e8c0b5ccbf0a17c85952b5aacd40589aabb5` as
-`504e776508c940554b3ee8659a201af21db8303c`.
 
 A1 remains the only candidate-preparation service:
 
@@ -72,132 +67,107 @@ new selection generation
 A1 creates no durable Restore operation/phase, `before_restore` safety copy,
 working-DB mutation/migration, rollback/recovery mutation or Restore AuditLog.
 
-## A2 exact-run control plane — current implementation
+## A2 exact-run control plane — CLOSED
 
-The current changeset implements the local control/session protocol only.
+PR #176 reviewed head `681cb4050bec082db6b637285590e232880af739`
+merged as `90a14dd9a11b83bc31a40e1d3fb9523f41772b88` after exact-head
+race/A2/A1/C4-I/full regressions, direct-local-HTTP smoke and P0=0/P1=0/P2=0
+audit.
 
-### Bind and request authority
+A2 durable contract:
 
-- stdlib `ThreadingHTTPServer`-equivalent concurrent server;
-- bind exactly `127.0.0.1` on OS-assigned ephemeral port;
-- exact `Host = 127.0.0.1:<bound-port>`;
-- exact configured local frontend Origin;
-- no wildcard CORS and no credentialed cookie authority;
-- duplicate/missing authority headers fail closed;
-- query/unknown path and broadened request schema fail closed;
-- `Cache-Control: no-store`, `Pragma: no-cache` and `nosniff` on responses;
-- no access logging of bootstrap/session material.
+- concurrent stdlib control server on exact `127.0.0.1:<ephemeral>`;
+- exact Host + configured local frontend Origin;
+- one-use bootstrap using 32 random bytes and separate 32-random-byte-class run token;
+- no wildcard CORS/cookie authority; no-store/no-cache responses;
+- 15-second heartbeat / 60-second authenticated inactivity expiry;
+- strict monotonic `command_seq` with sequence consumed before business preconditions;
+- same-sequence/same-request idempotency and stale/future/conflict refusal;
+- one selection/validation worker while heartbeat/state/cancel remain serviceable;
+- cancel/expiry/reselection/close invalidate session/A1 authority;
+- stale worker crossing the A2→A1 begin boundary cannot leave resurrected retained proof;
+- runtime order: proved backend → control → ordinary browser; control close → backend stop.
 
-Narrow HTTP vocabulary remains exactly:
+Production A2 still uses `UnavailableSourceSelectionAdapter`; browser/control
+request schema is pathless. Production browser navigation still carries no
+control bootstrap/session material.
 
-```text
-POST /v1/bootstrap
-GET  /v1/state
-POST /v1/heartbeat
-POST /v1/restore/select
-POST /v1/restore/cancel
-```
+## A3 native picker — AUTHORIZED NEXT
 
-There is no destructive command and no generic filesystem/shell/SQL/backend proxy.
+A3 may replace only the production unavailable picker seam.
 
-### Bootstrap and session
+### Native picker ownership
 
-- launcher creates one-use bootstrap capability using 32 random bytes;
-- bootstrap compare-and-consume is atomic under session lock;
-- exactly one concurrent exchange can succeed;
-- consumed bootstrap capability is cleared from coordinator memory;
-- successful bootstrap creates a separate 32-random-byte-class run token;
-- token is explicit Bearer authority, not cookie/query authority;
-- heartbeat contract is 15 seconds;
-- session expires after 60 seconds without authenticated activity;
-- expiry invalidates session token, selection generation and A1 retained proof.
+Launcher owns the picker and absolute path:
 
-A2 deliberately does **not** transport bootstrap capability to the production
-browser. It remains launcher-private until A4 adds the fragment consumer/removal
-flow.
+- owned short-lived `/usr/bin/osascript` child;
+- macOS Standard Additions `choose file`;
+- fixed AppleScript, with no user-controlled text interpolation;
+- no `shell=True`;
+- no `System Events` automation;
+- typed ordinary cancellation;
+- selected POSIX path returned only to launcher memory;
+- no new Python/application dependency.
 
-### Concurrency and worker ownership
-
-Selection/validation runs on one launcher-owned worker while the HTTP server stays
-concurrent. Heartbeat, `GET /v1/state` and cancel remain serviceable.
-
-Cancellation, expiry, reselection and close invalidate A1/browser authority before
-a late worker can publish. Worker publication is selection-generation gated. Final
-session close waits for worker quiescence before A1 service cleanup.
-
-### Request ordering
-
-Mutating commands carry request ID plus strict monotonic `command_seq`.
-
-```text
-exact Host/Origin
-→ session auth
-→ JSON + exact schema
-→ validate stale/future/conflict
-→ atomically consume exact expected-next sequence
-→ evaluate business preconditions
-→ retain safe in-progress/final reply
-```
-
-Wrong Host/Origin/auth, malformed JSON/schema, stale or future requests do not
-consume the sequence. A valid expected-next command consumes it **before**
-business preconditions, so `action_in_progress` or another typed business
-rejection cannot later become success by replay.
-
-Same current sequence + same request ID + same command returns retained safe
-state without re-execution. Same sequence with different request ID/command fails.
-
-## A2→A3 source-selection seam
-
-Production A2 uses `UnavailableSourceSelectionAdapter` and returns typed
-`picker_unavailable`; it obtains **no filesystem path**.
-
-Tests and exact-head smoke may inject a launcher-owned fake adapter directly into
-the control/session code. Browser/control request schema cannot contain `path`,
-`source_path`, upload/blob/file bytes, bookmark/handle or equivalent filesystem
+Filename/type hints are presentation only. C4-I/A1 validation remains acceptance
 authority.
 
-A3 later replaces the unavailable adapter with launcher-owned:
+### Picker process lifecycle
 
-```text
-/usr/bin/osascript
-→ macOS Standard Additions choose file
-→ absolute POSIX path returned only to launcher memory
-```
+The existing A2 selection worker remains the one long-work owner. The A3 adapter
+may own one child process for that worker. Cancel/expiry/close must invalidate
+control/A1 authority immediately, signal/terminate the owned picker process when
+active, and coordinate child wait/quiescence before the selection worker exits.
+No detached or unaccounted picker child is allowed.
 
-No `shell=True`, `System Events`, user text interpolation or new application
-dependency is authorized.
+### Path privacy
 
-## A2→A4 browser seam
+The selected absolute POSIX path is launcher-private. It must not appear in:
 
-The production product-browser launch URL remains unchanged during A2.
-`open_runtime_browser(...)` does not append `#cw-control`, control port, bootstrap
+- browser/control request payloads;
+- control DTO/state;
+- browser URL/query/fragment;
+- user-visible error messages;
+- logs containing raw selected path;
+- backend API payloads.
+
+It flows only through the launcher-internal source-selection result into merged
+A1 candidate preparation and later launcher-private retained proof.
+
+### Technical failure boundary
+
+Picker technical errors return a fixed safe typed failure to the control layer.
+Raw AppleScript/osascript stderr, stack traces and absolute paths remain local
+technical detail and are not browser presentation.
+
+## A3→A4 browser seam
+
+Production product-browser launch URL remains unchanged during A3.
+`open_runtime_browser(...)` must not append `#cw-control`, control port, bootstrap
 capability or session token.
 
 A4 owns `/backups/restore`, first production browser fragment handoff, immediate
 fragment removal, `sessionStorage` token + non-secret `control_origin`, typed UX
-and real non-destructive E2E macOS smoke.
-
-A2 exact-head smoke uses a direct authenticated local HTTP harness instead.
+and real non-destructive browser E2E smoke.
 
 ## Launcher runtime ownership
 
-The current A2 runtime wiring preserves the accepted order:
+A3 preserves the already-verified A2 order:
 
 ```text
 launcher lifecycle / recovery / startup
 → owned backend start + proved lock/socket handshake
-→ start exact-run Restore control plane
+→ exact-run Restore control plane
 → ordinary product browser URL unchanged
-→ run
-→ close control plane and quiesce A1 worker
+→ A2 selection worker owns A3 picker child when user selects
+→ selected launcher-private path enters A1 validation
+→ close/quiesce picker/control/A1
 → stop owned backend
 → release launcher lifecycle
 ```
 
-If the control plane cannot establish its exact local boundary safely, ordinary
-workshop operation may continue with Restore control unavailable. No alternate
-transport is invented.
+If the picker cannot run safely, Restore source selection returns a safe typed
+failure. No browser file input or alternate Restore transport is invented.
 
 ## Future C4-II-B re-proof
 
@@ -219,19 +189,11 @@ Browser state/token/filename is never destructive authority.
 
 ## Backend lifecycle
 
-The ordinary backend remains running during non-destructive A1 validation and A2
-control/session work. Backend exclusion/stop remains a future destructive
-C4-II-B/C4-I boundary.
-
-## A2 verification
-
-A2 is not closed until exact published-head tests prove loopback/Host/Origin/CORS,
-bootstrap race, token/session expiry, request ordering, concurrency, A1 proof
-invalidation, production `picker_unavailable`, unchanged browser navigation,
-runtime ownership, non-destructive behavior, A1/C4-I regressions and exact-head
-direct-local-HTTP smoke.
+The ordinary backend remains running during non-destructive A1 validation, A2
+control/session work and A3 picker selection. Backend exclusion/stop remains a
+future destructive C4-II-B/C4-I boundary.
 
 ## Successor gates
 
-A3 remains blocked until A2 is exact-head verified, merged and lifecycle-closed.
-A4 remains blocked by A3. C4-II-B remains separately not authorized.
+A4 remains blocked until A3 is exact-head verified, merged and lifecycle-closed.
+C4-II-B remains separately not authorized.
