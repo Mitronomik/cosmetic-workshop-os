@@ -31,8 +31,11 @@ export function restoreControlMarkup(view: RestoreControlView): string {
 
   const unavailable = !view.hasSession || view.availability === 'protocol_error';
   const networkOnly = view.hasSession && view.availability === 'network_error';
+  const displayNotice = !view.hasSession && view.availability === 'network_error'
+    ? 'Не удалось завершить безопасное подключение к восстановлению. Одноразовая сессия могла быть использована, поэтому перезапустите «Мастерскую косметолога» и откройте восстановление снова.'
+    : view.notice;
   const filename = snapshot?.filename ? `<dl class="metadata-list"><div><dt>Выбранный файл</dt><dd>${escapeHtml(snapshot.filename)}</dd></div><div><dt>Проверка</dt><dd>${snapshot.state === 'accepted' ? 'Совместимость подтверждена' : 'Результат показан выше'}</dd></div></dl>` : '';
-  const notice = view.notice ? `<section class="card ${unavailable ? 'error-card' : 'data-card'}"><h2>${unavailable ? 'Восстановление недоступно' : pending ? 'Последнее действие требует повторения' : 'Связь с локальной сессией прервана'}</h2><p>${escapeHtml(view.notice)}</p>${networkOnly && !pending ? '<div class="actions"><button class="secondary-action" type="button" data-restore-action="refresh">Проверить соединение</button></div>' : ''}${pending ? '<div class="actions"><button class="primary-action" type="button" data-restore-action="retry">Повторить последнее действие</button></div>' : ''}</section>` : '';
+  const notice = displayNotice ? `<section class="card ${unavailable ? 'error-card' : 'data-card'}"><h2>${unavailable ? 'Восстановление недоступно' : pending ? 'Последнее действие требует повторения' : 'Связь с локальной сессией прервана'}</h2><p>${escapeHtml(displayNotice)}</p>${networkOnly && !pending ? '<div class="actions"><button class="secondary-action" type="button" data-restore-action="refresh">Проверить соединение</button></div>' : ''}${pending ? '<div class="actions"><button class="primary-action" type="button" data-restore-action="retry">Повторить последнее действие</button></div>' : ''}</section>` : '';
 
   const actionMarkup = unavailable
     ? ''
