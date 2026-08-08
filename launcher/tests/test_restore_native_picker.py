@@ -67,6 +67,34 @@ class BlockingProcess:
         self.killed = True
 
 
+class ExitBetweenPollAndTerminateProcess:
+    """Deterministically model natural child exit in the poll→terminate window."""
+
+    def __init__(self, cancel_event: threading.Event) -> None:
+        self.cancel_event = cancel_event
+        self.returncode = None
+        self.first_communicate = True
+        self.reaped = False
+
+    def communicate(self, timeout=None):
+        if self.first_communicate:
+            self.first_communicate = False
+            self.cancel_event.set()
+            raise subprocess.TimeoutExpired(cmd="osascript", timeout=timeout or 0)
+        self.returncode = 0
+        self.reaped = True
+        return "", ""
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        raise ProcessLookupError("child exited naturally")
+
+    def kill(self):
+        raise AssertionError("naturally exited child must not be killed")
+
+
 @pytest.fixture
 def fake_osascript(tmp_path: Path) -> Path:
     path = tmp_path / "osascript"
@@ -180,6 +208,22 @@ def test_terminate_timeout_kills_and_reaps_owned_picker_process(fake_osascript: 
     assert process.terminated is True
     assert process.killed is True
     assert holder[0].state is SourceSelectionState.CANCELLED
+
+
+def test_natural_exit_between_poll_and_terminate_is_reaped_as_cancel(fake_osascript: Path):
+    cancel = threading.Event()
+    process = ExitBetweenPollAndTerminateProcess(cancel)
+    adapter = MacOSNativeSourceSelectionAdapter(
+        process_factory=lambda *_args, **_kwargs: process,
+        platform_name="darwin",
+        osascript_path=fake_osascript,
+        poll_seconds=0.01,
+    )
+
+    result = adapter.select(cancel)
+
+    assert result.state is SourceSelectionState.CANCELLED
+    assert process.reaped is True
 
 
 def test_non_macos_or_missing_exact_helper_is_typed_unavailable(fake_osascript: Path, tmp_path: Path):
