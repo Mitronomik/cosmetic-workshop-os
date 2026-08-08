@@ -210,3 +210,8 @@ test('A4 browser runtime source contains no localStorage or browser file input f
   assert.ok(!combined.includes('source_path'));
   assert.ok(!combined.includes('execute_restore'));
 });
+
+test('entry avoids self-triggering heading mutation loop', async () => {
+  const entrySource = await readFile(new URL('../src/restore-control-entry.ts', import.meta.url), 'utf8');
+  assert.ok(entrySource.includes("heading && heading.textContent !== 'Восстановление'"));
+});

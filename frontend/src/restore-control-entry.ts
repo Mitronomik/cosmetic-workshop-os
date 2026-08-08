@@ -43,7 +43,7 @@ function syncDom(): void {
       }
     }
     const heading = content.querySelector<HTMLElement>('.topbar h1');
-    if (heading) heading.textContent = 'Восстановление';
+    if (heading && heading.textContent !== 'Восстановление') heading.textContent = 'Восстановление';
     return;
   }
 
