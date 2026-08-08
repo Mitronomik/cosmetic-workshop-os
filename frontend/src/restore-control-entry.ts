@@ -1,8 +1,8 @@
-import { RESTORE_ROUTE, captureRestoreBootstrap } from './restore-control-contract.js';
+import { RESTORE_ROUTE, type RestoreBootstrapCapture, captureRestoreBootstrap } from './restore-control-contract.js';
 import { RestoreControlRuntime } from './restore-control-runtime.js';
 import { restoreControlMarkup, restoreEntryButtonMarkup } from './restore-control-presentation.js';
 
-const capture = captureRestoreBootstrap(window.location, window.history);
+let bootstrapCapture: RestoreBootstrapCapture = captureRestoreBootstrap(window.location, window.history);
 const runtime = new RestoreControlRuntime({
   fetch: (input, init) => window.fetch(input, init),
   sessionStorage: window.sessionStorage,
@@ -34,9 +34,13 @@ function syncDom(): void {
     if (!content || !page) return;
     const signature = JSON.stringify(currentView);
     if (!page.hasAttribute('data-restore-control-page') || page.dataset.restoreRenderKey !== signature) {
+      const restoreFocusOwned = page.contains(document.activeElement);
       page.outerHTML = restoreControlMarkup(currentView);
       const rendered = content.querySelector<HTMLElement>('[data-restore-control-page]');
-      if (rendered) rendered.dataset.restoreRenderKey = signature;
+      if (rendered) {
+        rendered.dataset.restoreRenderKey = signature;
+        if (restoreFocusOwned) rendered.focus();
+      }
     }
     const heading = content.querySelector<HTMLElement>('.topbar h1');
     if (heading) heading.textContent = 'Восстановление';
@@ -76,7 +80,7 @@ document.addEventListener('click', (event) => {
 });
 
 window.addEventListener('popstate', queueDomSync);
-window.addEventListener('pageshow', () => { void runtime.refresh(); queueDomSync(); });
+window.addEventListener('pageshow', queueDomSync);
 window.addEventListener('beforeunload', () => runtime.dispose(), { once: true });
 
 const observer = new MutationObserver(queueDomSync);
@@ -87,4 +91,6 @@ runtime.subscribe((view) => {
   queueDomSync();
 });
 
-void runtime.start(capture);
+const startup = runtime.start(bootstrapCapture);
+bootstrapCapture = { kind: 'none' };
+void startup;
