@@ -42,13 +42,14 @@ class BlockingProcess:
 
 
 class CompletedProcess:
-    def __init__(self, output: str) -> None:
+    def __init__(self, output: str, *, returncode: int = 0, stderr: str = "") -> None:
         self.output = output
-        self.returncode = 0
+        self.stderr = stderr
+        self.returncode = returncode
 
     def communicate(self, timeout=None):
         del timeout
-        return self.output, ""
+        return self.output, self.stderr
 
     def poll(self):
         return self.returncode
@@ -159,5 +160,37 @@ def test_native_selected_path_flows_only_through_a1_candidate_preparation(tmp_pa
         assert proof.source_path == candidate
         assert session.current_state.filename == candidate.name
         assert str(candidate) not in session.current_state.to_dict().values()
+    finally:
+        session.close()
+
+
+def test_picker_stderr_and_raw_path_never_cross_safe_control_state(tmp_path: Path):
+    working = build_workspace_database(tmp_path / "working.sqlite", "working")
+    secret_path = "/Users/private/customer-backup.sqlite"
+    service = RestoreCandidatePreparationService(
+        working,
+        scratch_root=tmp_path / "scratch",
+    )
+    adapter = MacOSNativeSourceSelectionAdapter(
+        process_factory=lambda *_args, **_kwargs: CompletedProcess(
+            "",
+            returncode=1,
+            stderr=f"osascript raw failure at {secret_path}",
+        ),
+        platform_name="darwin",
+        osascript_path=_fake_osascript(tmp_path),
+    )
+    session = RestoreControlSession(service, picker_adapter=adapter)
+    token, _state = session.bootstrap(session.bootstrap_capability)
+    try:
+        session.select(token, request_id="e" * 32, command_seq=1)
+        _wait_for_state(session, ControlViewState.TECHNICAL_FAILURE)
+
+        state = session.current_state
+        serialized = repr(state.to_dict())
+        assert state.failure == "technical_failure"
+        assert secret_path not in serialized
+        assert "osascript raw failure" not in serialized
+        assert service.retained_proof is None
     finally:
         session.close()
