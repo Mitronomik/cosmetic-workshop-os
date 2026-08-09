@@ -1,72 +1,59 @@
 # Progress
 
-Updated: `2026-08-08`
+Updated: `2026-08-09`
 
 ## Completed / merged baseline
 
 - C1/C2 completed; C3 completed, merged, exact-head verified and hardened.
 - C4-I — `DONE — MERGED AND EXACT-HEAD VERIFIED`.
-- A1 — merged/exact-head verified.
-- A2 — merged/exact-head verified with 2 stale-authority race tests, 28 A2, 17 A1, 514 C4-I, 2443 full and smoke PASS.
-- A3 / PR #178 — reviewed `b0de148032d9b3d2f9912298897f8649c9b1692b`, merge `9d95b0c39c4abd05d5a574c6cd8574b8e457f36b`, 14 A3 / 28 A2 / 17 A1 / 514 C4-I / 2457 full / smoke / audit 0/0/0.
-- PR #179 A3 closure / A4 authorization — reviewed `72b04510efd6d1f104369a450ed1c4d4dfe063ad`, merge `52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf`, lifecycle PASS, 12 docs/state/checker paths, audit 0/0/0.
+- A1/A2/A3 — merged and exact-head verified.
+- A4 / PR #180 — reviewed `79c698ed76d478d608a25f4b95499ff519794228`, merged as `e61d4e233c98d3c53e7749fe96ed0ee630610372`.
+- A4 gate: launcher 15 / A3 14 / A2 29 / A1 17 / C4-I 514 / full backend+launcher 2470 / frontend A4 16 / backup 25 / audit-log 92 / exact-head smoke PASS / manual desktop+narrow+keyboard+native-picker UI PASS / independent 0-0-0.
+- C4-II-A is now complete.
 - Searchable history and five exact pre-compaction snapshots remain protected.
 
 ## Current lifecycle
 
 ```text
-PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
-PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
+PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — IN PROGRESS — SLICED
+C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B — IN PROGRESS — SLICED
+C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B3 — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## A4 implemented in current changeset
+## B1 authorization
 
-Runtime/frontend:
+B1 is intentionally small: add the launcher-private expected-source proof gate at existing C4-I intake, using the same `HeldSource` descriptor that will be staged. It must compare expected `SourceIdentity`, revalidate identity/path/self-containment, recompute full SHA-256 through the held descriptor, verify byte count, then revalidate again.
 
-- launcher browser fragment handoff and fail-closed ordinary-product fallback;
-- exact nested `/backups/restore` route;
-- pre-shell fragment capture/removal;
-- one-use bootstrap and sessionStorage descriptor allowlist;
-- same-tab `history.state` command replay metadata;
-- strict A2 sequence/idempotent retry behavior across network uncertainty/reload;
-- heartbeat/state polling;
-- exact DTO shape allowlists;
-- pathless Russian Restore presentation;
-- `frontend/src/main.ts` unchanged.
-
-Verification assets:
-
-- launcher handoff/runtime tests;
-- targeted frontend Restore control tests;
-- TypeScript build coverage;
-- live A4→A2→A3→A1/C4-I non-destructive smoke.
-
-## Verification status
-
-Implementation exists, but exact-head verification is pending. Do not mark A4 `DONE` until lifecycle/diff, frontend build/targeted/relevant regressions, launcher A4/A3/A2/A1/C4-I/full regressions, browser-session smoke, desktop/narrow/keyboard review and independent audit pass on the final published head.
+A mismatch must stop before `prepared`, safety copy or any working-database mutation. Existing C4-I callers without expected proof remain unchanged.
 
 ## Still blocked
 
 ```text
-C4-II-B — not authorized
+C4-II-B2 — not authorized
+C4-II-B3 — not authorized
 C4-II-C — not authorized
 C4-III — not authorized
 ```
 
 ## Open product obligations
 
-- exact-head verify/review/merge A4;
-- post-merge lifecycle/authorization decision before C4-II-B;
+- merge/verify the A4 closure + B1 authorization documentation PR;
+- implement and exact-head verify B1;
+- lifecycle-close B1 before deciding B2 destructive coordinator/control semantics;
+- later B3 explicit destructive confirmation;
 - later C4-II-C outcome/restart/support UX;
 - C4-III end-to-end Restore closure;
 - macOS packaging/update/install verification/full release-candidate smoke.

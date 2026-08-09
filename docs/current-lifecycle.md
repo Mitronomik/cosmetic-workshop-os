@@ -1,26 +1,28 @@
 # Current project lifecycle and documentation authority
 
 Status: **CURRENT — NORMATIVE LIFECYCLE PROFILE**
-Updated: `2026-08-08`
+Updated: `2026-08-09`
 
 This is the compact authority for current implementation lifecycle and authorization. ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authoritative for launcher control, picker and exact-run browser-session interaction.
 
 ## Current lifecycle
 
 ```text
-PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
-PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
+PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — IN PROGRESS — SLICED
+C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B — IN PROGRESS — SLICED
+C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -31,121 +33,55 @@ full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-## Verified A3 closure / A4 authorization baseline
+## A4 closure evidence
 
-PR #178:
-- reviewed head `b0de148032d9b3d2f9912298897f8649c9b1692b`;
-- merge `9d95b0c39c4abd05d5a574c6cd8574b8e457f36b`;
-- A3 14, A2 28, A1 17, C4-I 514, full backend + launcher: 2457 passed;
-- native-picker smoke PASS;
-- independent audit P0=0 / P1=0 / P2=0.
+PR #180 final reviewed head:
+`79c698ed76d478d608a25f4b95499ff519794228`
 
-PR #179:
-- reviewed head `72b04510efd6d1f104369a450ed1c4d4dfe063ad`;
-- merge `52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf`;
-- lifecycle checker PASS;
-- exactly 12 docs/state/checker paths;
-- A3 closed and only A4 authorized.
+Merge/new main:
+`e61d4e233c98d3c53e7749fe96ed0ee630610372`
 
-The current A4 branch starts directly from merge `52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf`.
+Accepted evidence:
 
-## Closed A1/A2/A3 boundaries
+- `git diff --check`: PASS;
+- documentation lifecycle checker: PASS;
+- A4 launcher targeted: 15 passed;
+- A3 regression: 14 passed;
+- A2 regression: 29 passed;
+- A1 regression: 17 passed;
+- C4-I Restore regression: 514 passed;
+- full backend + launcher: 2470 passed;
+- frontend build: PASS;
+- frontend A4: 16 passed, including bootstrap/session race regressions;
+- backup frontend regression: 25 passed;
+- audit-log frontend regression: 92 passed;
+- A4 exact-head cross-layer smoke: PASS;
+- `frontend/src/main.ts` remained blob `ea98a76638bddcb5a92b9ba31941508f8a816d42`;
+- desktop, narrow-window, keyboard/focus and real macOS picker UI smoke: PASS;
+- valid backup acceptance remained explicitly non-destructive and pathless;
+- clean exact head before/after;
+- independent audit: P0=0 / P1=0 / P2=0.
 
-A1 remains the single non-destructive candidate-preparation authority and reuses C4-I intake/staging/validation. A2 remains exact loopback/Origin/Host, one-use bootstrap, run token, no-store/narrow CORS, 15s/60s liveness, strict command ordering and generation-gated worker publication. A3 remains the launcher-owned exact `/usr/bin/osascript` picker with fixed `choose file`, typed cancel, launcher-private absolute path and owned child terminate/reap.
+## Closed C4-II-A boundary
 
-## A4 current implementation — browser session and Restore workspace
+A1 remains non-destructive candidate preparation and retained source proof. A2 remains exact-run loopback authentication/liveness/replay authority. A3 remains the launcher-owned native picker/path/process boundary. A4 remains the browser fragment/session/presentation layer under `/backups/restore`.
 
-A4 implements only presentation/session behavior selected by ADR 0018.
+A4 browser state is never destructive authority. Filename, session token, `history.state` and accepted presentation cannot authorize database replacement.
 
-### Launcher handoff
+## Authorized B1 boundary
 
-`launcher/restore/browser_handoff.py` creates a browser-only copy of `RuntimeConfig` whose local frontend URL carries:
+Only **C4-II-B1 — retained-source proof binding into C4-I intake** is authorized next.
 
-```text
-#cw-control=<ephemeral-port>:<one-use-bootstrap-token>
-```
+B1 must reuse the source descriptor opened by existing `open_selected_source(...)`. When an expected A1 proof is supplied, the C4-I intake must compare the held `SourceIdentity`, revalidate path/descriptor identity, re-check sidecars/self-containment and recompute the full SHA-256 through `HeldSource.digest()` before any durable Restore record, safety copy or working-database mutation exists.
 
-No query parameter is used. The ordinary runtime config is not mutated. If a safe fragment cannot be built, the control plane is closed and the ordinary product still opens without Restore authority.
+The proof check must be against the same `HeldSource` descriptor that C4-I will stage. A separate path re-open followed by a later destructive re-open is not sufficient because it leaves a substitution window.
 
-### SPA bootstrap and secret lifetime
+B1 is an additive safety gate only. Existing C4-I callers without an expected proof retain current behavior. B1 may not add a browser action, a new control endpoint, a new Restore engine, a safety copy, replacement, migration, rollback/recovery mutation or Restore AuditLog.
 
-`frontend/src/restore-control-entry.ts` is loaded before `main.js`. It synchronously captures and removes only the `#cw-control` fragment before the shell resolves the route. The module-level capture binding is then cleared after starting the exchange.
-
-The browser sends the one-use capability only as JSON to `POST /v1/bootstrap`. Successful bootstrap stores only:
-
-- `control_origin`;
-- opaque `run_id`;
-- run-scoped session token;
-
-in `sessionStorage`. No Restore secret is written to `localStorage`, query parameters or backend business API state.
-
-### Reload and strict command replay
-
-ADR 0018 permits only the run-scoped descriptors above in `sessionStorage`. The browser therefore keeps non-secret protocol replay metadata in same-tab `history.state`:
-
-- next expected `command_seq`;
-- at most one pending non-destructive command `{action, requestId, commandSeq}`.
-
-This is browser retry metadata, not launcher authority. On a network-uncertain mutation, the exact same request ID and sequence is retried. A successful HTTP command reply advances the next sequence even when its business result is a typed no-op/rejection, matching the closed A2 consume-before-preconditions rule.
-
-On reload, stored session descriptors are re-proved with `GET /v1/state`. If history replay metadata is absent, mutation may initialize at sequence 1 only when launcher state proves pristine `idle / generation=0`; after any prior generation the browser fails closed and asks the user to restart the application.
-
-### Browser runtime and UI
-
-A4 provides:
-
-- nested `/backups/restore`, owned by the existing `Резервные копии` shell section;
-- a human-readable secondary entry action from `/backups`;
-- exact-origin Bearer requests with `credentials: omit`, `cache: no-store`, `referrerPolicy: no-referrer`;
-- 15-second heartbeat and authenticated state polling while selection/validation is active;
-- select/cancel/reselect over existing A2 endpoints only;
-- exact response-shape validation: unknown DTO fields are rejected, including accidental path-bearing fields;
-- Russian loading/unavailable/network/pending/selecting/validating/accepted/rejected/cancelled/technical-failure presentation;
-- fail-closed open/restart guidance when launcher session authority is absent or protocol replay cannot be proved;
-- no destructive confirmation/execute action.
-
-`frontend/src/main.ts` remains byte-identical at Git blob `ea98a76638bddcb5a92b9ba31941508f8a816d42`; A4 is isolated in `restore-control-*` modules rather than expanding the shell monolith.
-
-## A4 hard prohibitions
-
-A4 must not add browser-controlled absolute paths, `<input type="file">`, file bytes, upload/blob/bookmark/handle authority, `localStorage` token persistence, ordinary FastAPI Restore mutation, WebSocket/generic launcher commands, `execute_restore(...)`, durable Restore phases, `before_restore` safety copy, working-DB replacement/migration, rollback/recovery mutation or Restore AuditLog.
-
-C4-II-B remains separately not authorized.
-
-## A4 verification assets
-
-- `launcher/tests/test_restore_browser_handoff.py`;
-- updated `launcher/tests/test_restore_control_runtime.py`;
-- `frontend/test/restore-control.test.mjs`;
-- `frontend/tsconfig.test.restore-control.json`;
-- `frontend/scripts/smoke-restore-control-client.mjs`;
-- `scripts/smoke_restore_browser_session.py`.
-
-The exact-head smoke builds/tests the frontend, drives the real browser-session TypeScript runtime through a live launcher A2 control plane, production A3 adapter process seam and real A1/C4-I validation, then proves source/working DB/AuditLog/durable Restore state remain unchanged.
-
-## Exact-head verification gate
-
-A4 is not `DONE` until the final published head passes:
-
-```text
-clean checkout
-→ git diff --check 52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf...HEAD
-→ python3 scripts/check_documentation_lifecycle.py
-→ npm run build
-→ npm run test:restore-control
-→ launcher A4 targeted tests
-→ closed A3/A2/A1 regressions
-→ C4-I Restore regression
-→ full backend + launcher regression
-→ relevant frontend regression suite
-→ python3 scripts/smoke_restore_browser_session.py --expected-head <HEAD>
-→ desktop + narrow-screen + keyboard/focus review of /backups and /backups/restore
-→ clean status/head
-→ independent P0/P1/P2 audit
-```
-
-No PASS is claimed until these run on the final published A4 head.
+`docs/c4-ii-b-implementation-slices.md` is the normative implementation slice plan for B1/B2/B3.
 
 ## Successor gate
 
-C4-II-B remains **PLANNED — NOT AUTHORIZED**. A4 merge does not itself authorize destructive Restore. A separate post-merge lifecycle/architecture gate is required before any C4-II-B implementation.
+B2 and B3 remain **PLANNED — NOT AUTHORIZED**. B1 must be implemented in one bounded PR, exact-head verified, merged and lifecycle-closed before the exact destructive coordinator/control semantics for B2 may be authorized.
+
+C4-II-C and C4-III remain separately blocked. Product Restore is still **NOT IMPLEMENTED**.

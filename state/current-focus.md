@@ -1,55 +1,59 @@
-# Current Focus — C4-II-A4 browser Restore session UX
+# Current Focus — C4-II-B1 retained source-proof binding
 
-Updated: `2026-08-08`
+Updated: `2026-08-09`
 
 ## Merged baseline
 
 ```text
-PR #178 reviewed A3 head — b0de148032d9b3d2f9912298897f8649c9b1692b
-PR #178 merge — 9d95b0c39c4abd05d5a574c6cd8574b8e457f36b
-PR #179 reviewed closure head — 72b04510efd6d1f104369a450ed1c4d4dfe063ad
-PR #179 merge — 52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf
+PR #180 reviewed A4 head — 79c698ed76d478d608a25f4b95499ff519794228
+PR #180 merge/new main — e61d4e233c98d3c53e7749fe96ed0ee630610372
 ```
 
 ## Current lifecycle
 
 ```text
-PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
-PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
+PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — IN PROGRESS — SLICED
+C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B — IN PROGRESS — SLICED
+C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B3 — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Current A4 implementation
+## A4 closure evidence
 
-- fragment-only launcher handoff through `launcher/restore/browser_handoff.py`;
-- `/backups/restore` exact nested route and secondary entry from `/backups`;
-- `restore-control-entry.ts` loaded before `main.js`;
-- synchronous fragment removal before shell routing;
-- one-use bootstrap exchange;
-- only `control_origin`, `run_id`, session token in `sessionStorage`;
-- same-tab non-secret `history.state` replay metadata for exact A2 retry/sequence safety;
-- fail-closed reload if prior command history cannot be proved;
-- 15s heartbeat + active-state polling;
-- strict DTO allowlists and no browser path/file authority;
-- safe Russian states and no destructive action;
-- `frontend/src/main.ts` stays byte-identical;
-- cross-layer browser-session smoke added.
+- lifecycle/diff PASS;
+- A4 launcher 15;
+- A3 14;
+- A2 29;
+- A1 17;
+- C4-I 514;
+- full backend+launcher 2470;
+- frontend A4 16;
+- backup regression 25;
+- audit-log regression 92;
+- exact-head cross-layer smoke PASS;
+- desktop/narrow/keyboard/native-picker UI smoke PASS;
+- independent P0=0/P1=0/P2=0.
+
+## Current work — B1 only
+
+B1 will bind A1 launcher-private `SourceIdentity` + SHA-256 to the exact held descriptor opened by existing C4-I intake. The comparison must use `HeldSource.revalidate()`, self-containment checks and `HeldSource.digest()` before any durable Restore state or safety copy exists.
+
+The objective is to guarantee that the backup eventually offered to destructive C4-I is the same backup the user previously validated, even if the path was replaced or the bytes changed after A4 acceptance.
 
 ## Hard seams
 
-No `localStorage` token, query token, browser file input/upload/path, FastAPI Restore mutation, WebSocket/generic launcher command surface, `execute_restore`, safety copy, DB replacement/migration, rollback/recovery mutation or Restore AuditLog.
+No browser change, no new control endpoint, no destructive confirmation, no new Restore engine, no duplicate staging/validation, no safety-copy/replacement/recovery redesign, no Restore AuditLog change, no packaging/cloud/OCR/multiuser/advanced analytics.
 
-C4-II-B remains separately not authorized.
-
-## Verification still required
-
-No PASS is claimed until the final exact A4 head passes lifecycle/diff, frontend build + targeted tests, launcher A4/A3/A2/A1/C4-I regressions, full backend+launcher regression, relevant frontend regression, exact-head A4 browser-session smoke, desktop/narrow/keyboard review, clean status/head and independent P0=0/P1=0/P2=0 audit.
+B2/B3 remain separately not authorized.

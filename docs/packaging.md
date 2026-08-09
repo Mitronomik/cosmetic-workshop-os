@@ -4,31 +4,29 @@ Package must include launcher, backend runtime, frontend build, migrations, defa
 
 macOS `.app` / `.dmg` packaging is **NOT COMPLETED**.
 
-## C4-II-A status
+## Restore lifecycle
 
 ```text
-PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
-PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
-C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — IN PROGRESS — SLICED
-C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B — PLANNED — NOT AUTHORIZED
+PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
+C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B — IN PROGRESS — SLICED
+C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B3 — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## A4 packaging consequences
+## Closed A4 packaging consequences
 
-A4 adds no runtime dependency and no package resource beyond frontend source/build output and launcher Python already included by the application.
+A4 adds no runtime dependency. A packaged build must preserve `restore-control-entry.js` before `main.js` so the one-use fragment is captured/removed before shell routing.
 
-The native picker remains the macOS-provided `/usr/bin/osascript` adapter from A3. Mac App Store sandbox compatibility is **not claimed**; a later packaging decision may replace the picker adapter without moving path authority into the browser.
+The native picker remains macOS-provided `/usr/bin/osascript`. Mac App Store sandbox compatibility is **not claimed**; any later picker replacement must preserve launcher path authority unless a later ADR explicitly changes it.
 
-The one-use bootstrap token is launch-time memory only and travels in the browser URL fragment. It is removed immediately by the SPA. The run-scoped session token is stored only in `sessionStorage`, never `localStorage`, package files, logs or persistent config. Same-tab non-secret command replay metadata lives only in `history.state`.
+Bootstrap capability is launch-memory only. Session token stays in `sessionStorage`, never `localStorage`, package files, logs or persistent config. Same-tab non-secret command replay metadata stays in `history.state`.
 
-A packaged build must preserve script ordering so `restore-control-entry.js` loads before `main.js`, allowing fragment capture/removal before ordinary shell route resolution.
+## B1 packaging consequence
 
-C4-II-B destructive Restore remains not authorized.
+B1 is internal Python launcher/C4-I proof binding. It authorizes no dependency, helper executable, new package resource, background service or persistent secret. Packaging behavior remains unchanged.
+
+B2/B3 destructive execution/confirmation remain separately not authorized.
