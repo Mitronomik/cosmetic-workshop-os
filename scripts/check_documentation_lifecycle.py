@@ -41,6 +41,8 @@ CORE = (
     "C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-II-B3 — PLANNED — NOT AUTHORIZED",
+    "C4-II-C — PLANNED — NOT AUTHORIZED",
+    "C4-III — PLANNED — NOT AUTHORIZED",
     "Restore — NOT IMPLEMENTED",
     "Product release readiness — NOT CLAIMED",
 )
@@ -61,28 +63,40 @@ STALE = (
     "C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
     "C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-II-B2 — PLANNED — NOT AUTHORIZED",
-    "C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "C4-II-B3 — AUTHORIZED NEXT",
+    "C4-II-C — AUTHORIZED NEXT",
+    "C4-II-C — IN PROGRESS",
+    "C4-III — AUTHORIZED NEXT",
+    "C4-III — IN PROGRESS",
 )
 
 B1_REVIEWED_HEAD = "27726058af4f373ab65225ecf4d1a945f1c53067"
 B1_MERGE_MAIN = "5e13b50f1918dacbf8d54066c9156942a9adb895"
 
 # Closure branches may document B2 but may not implement it. Pin every
-# load-bearing B1/C4-I surface plus the exact control/runtime/frontend seams B2
-# is expected to change later. Any byte of runtime change fails this closure gate.
+# load-bearing B1/C4-I surface plus every closed A1/A2/A3/A4 launcher/runtime/
+# frontend seam whose bytes must remain unchanged until B2 implementation begins.
+# Any byte change in these protected pre-B2 surfaces fails this closure gate.
 PINNED_BLOBS = {
     P("launcher/restore/contracts.py"): "1b4adf345b2470e7c50987570e7848012aa15a95",
     P("launcher/restore/engine.py"): "91eb99d14aa3dc70e7d6fb0d63cb03c6af7d255f",
     P("launcher/restore/source_proof.py"): "2339ee118d7ae85f792cb550c5a8ea1cc77f716c",
     P("launcher/restore/staging.py"): "3126d5b1e68e764c135739fad71915912481c493",
     P("launcher/restore/validation_session.py"): "c8734ab60a576ecad53acd961571ddf2c14bdcf4",
+    P("launcher/restore/validation_scratch.py"): "6703052865d6e1d05dbfac14ea37fc47409d4da7",
     P("launcher/tests/test_restore_source_proof_binding.py"): "256ce4edc86d5060e056466bdeb35fb319269e33",
     P("launcher/restore/control_protocol.py"): "13ab63969cf419ff70ba93eaee750f946785046e",
     P("launcher/restore/control_session.py"): "617511e38ada4bf9fcbc5bc0922d9137135a85ea",
     P("launcher/restore/control_plane.py"): "e5d0227a05cd4c8a67480f63f1aade9401f1da32",
+    P("launcher/restore/macos_picker.py"): "2bb2a048bb30866f9bf410da10a76537dbe09cdd",
+    P("launcher/restore/browser_handoff.py"): "31aa42da893a551680091f9d7b97b3ef15422251",
     P("launcher/runtime.py"): "3f5381c3ad717d272deeb7617f2cfc2585c80c6c",
     P("frontend/src/main.ts"): "ea98a76638bddcb5a92b9ba31941508f8a816d42",
+    P("frontend/src/app-navigation-routes.ts"): "cac0f380a6daf70cde21d8f5318c745e442e14e4",
     P("frontend/src/restore-control-contract.ts"): "227243fc9ceb3c833a474fc1f1d44e141cfe294c",
+    P("frontend/src/restore-control-runtime.ts"): "c03d851d0c92278698683f8cbae4ed25a3de1392",
+    P("frontend/src/restore-control-presentation.ts"): "9e9a08cd96278ccf6567533fc8d8c34e870dc184",
+    P("frontend/src/restore-control-entry.ts"): "8248fef98932063c92729680627bd9db202acbf7",
 }
 
 HISTORY = (
@@ -314,7 +328,7 @@ def check_exact_pre_b2_runtime_boundary() -> None:
     forbid(
         control_protocol,
         (
-            "RESTORING = \"restoring\"",
+            'RESTORING = "restoring"',
             "RESTORE_COMPLETED",
             "RESTORE_FAILED",
             "RESTORE_BLOCKED",
