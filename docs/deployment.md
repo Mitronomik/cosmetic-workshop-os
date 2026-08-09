@@ -11,24 +11,20 @@ MVP is local-first. User mode must not require Git, terminal, Python, Node.js or
 - ordinary browser remains the product UI;
 - final macOS `.app`/`.dmg` packaging is not implemented.
 
-## C4-II-A status
+## Restore lifecycle
 
 ```text
-PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
-PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
-C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — IN PROGRESS — SLICED
-C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B — PLANNED — NOT AUTHORIZED
+PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
+C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B — IN PROGRESS — SLICED
+C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B3 — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Restore topology now implemented through A4
+## Implemented topology through A4
 
 ```text
 launcher
@@ -39,10 +35,10 @@ launcher
 → A4 fragment-only browser bootstrap + /backups/restore presentation
 ```
 
-A4 launcher handoff transports the ephemeral control port and one-use bootstrap capability in the URL **fragment only**, never the query. The bootstrap transport is fragment only and never a query parameter. If the handoff cannot be built safely, the launcher closes Restore control authority and opens the ordinary product URL.
+The browser remains presentation only. The bootstrap capability travels in the URL fragment only and is removed immediately. The run-scoped session token lives only in `sessionStorage`; same-tab replay metadata lives only in `history.state`.
 
-The SPA removes the fragment immediately, exchanges it once, and retains only `control_origin`, `run_id` and the session token in `sessionStorage`. Non-secret strict-command replay metadata lives only in same-tab `history.state`. No token is written to `localStorage` or the ordinary backend API.
+## B1 deployment consequence
 
-Production browser Restore remains presentation only. The browser never owns a local file path and never falls back to upload/file-input authority.
+B1 is internal launcher/C4-I safety hardening only. It adds no service, port, process, browser transport, dependency or packaging requirement. It must not broaden the A2 HTTP vocabulary or change ordinary backend startup.
 
-C4-II-B destructive Restore remains separately not authorized.
+B1 binds an optional A1 expected source proof to the exact held descriptor already opened by C4-I. B2/B3 destructive runtime wiring remains not authorized.
