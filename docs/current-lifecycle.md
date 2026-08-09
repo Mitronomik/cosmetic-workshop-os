@@ -68,11 +68,11 @@ Only **C4-II-B2 — launcher destructive coordinator/control command** is author
 
 B2 must add a single authenticated `/v1/restore/execute` command with exact body `request_id`, `command_seq`, `generation`. The command may transfer only current launcher-private A1 authority into one in-memory execution intent. It may not accept a path/proof/digest from browser.
 
-The HTTP/session layer must not call C4-I. The launcher main runtime loop owns the execution intent and invokes existing `execute_restore(ProofBoundRestoreRequest(...), context)` exactly once.
+The HTTP/session layer must not call C4-I. The main launcher runtime loop owns the execution intent and invokes existing `execute_restore(ProofBoundRestoreRequest(...), context)` exactly once.
 
 The same loopback control plane remains alive on the same ephemeral port while C4-I intentionally stops the ordinary backend. Heartbeat/state remain serviceable. Browser/session cancellation or expiry after accepted execution cannot cancel destructive Restore.
 
-After C4-I returns, the launcher main runtime owns ordinary-backend restart handoff. A safe C4-I result is not reinterpreted or rolled back merely because ordinary backend restart fails. B2 publishes only fixed pathless control state and leaves full outcome UX to later C4-II-C.
+After C4-I returns, the main launcher runtime owns ordinary-backend restart handoff. A safe C4-I result is not reinterpreted or rolled back merely because ordinary backend restart fails. B2 publishes only fixed pathless control state and leaves full outcome UX to later C4-II-C.
 
 Exact B2 semantics, allowed paths, tests and prohibitions are normative in `docs/c4-ii-b-implementation-slices.md`.
 
