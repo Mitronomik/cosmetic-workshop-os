@@ -7,7 +7,7 @@ Current lifecycle authority: `docs/current-lifecycle.md`. Accepted Restore decis
 ## Current lifecycle
 
 ```text
-PR #181 — MERGED — B1 AUTHORIZED
+PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -16,8 +16,8 @@ C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -25,47 +25,50 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Authorization baseline — PR #181
+## B1 merged baseline
 
 ```text
-reviewed head — d2549cd9be2b60c5aee2479050e05a6ad8530c6c
-merge/new main — beae1407af270ad1c800c308ea7907750430eb1d
+reviewed head — 27726058af4f373ab65225ecf4d1a945f1c53067
+merge/new main — 5e13b50f1918dacbf8d54066c9156942a9adb895
+full backend+launcher — 2480/2480 PASS
+external exact-head substitution smoke — PASS
+independent audit — P0=0 / P1=0 / P2=0
 ```
 
-## Current B1 implementation
+## Authorized work — B2 only
 
 ```text
-A1 retained SourceIdentity + SHA-256
-→ ProofBoundRestoreRequest(
-     selected_source=Path,
-     expected_source_proof=ExpectedSourceProof(...)
-   )
-→ existing C4-I open_selected_source(...)
-→ HeldSource H
-→ bind_expected_source_proof(H, expected)
-→ identity + revalidate + self-containment
-→ full H.digest() + exact byte count
-→ revalidate + self-containment again
-→ exact same H
-→ unchanged C4-I stage_source(..., H)
+browser/session
+→ POST /v1/restore/execute(request_id, command_seq, generation)
+→ exact-next command consumed
+→ require current accepted generation + retained A1 proof
+→ copy proof/path into one launcher-private in-memory intent
+→ invalidate retained source authority
+→ state = restoring
+→ HTTP returns without running C4-I
+→ launcher main runtime takes intent
+→ ProofBoundRestoreRequest
+→ existing C4-I execute_restore
+→ ordinary backend restart handoff if safe
+→ pathless final control state
 ```
 
-Base `RestoreRequest` remains selected-source-only for all historical C4-I callers. The proof subtype contains no additional filesystem path and grants no authority by itself.
+The control plane stays alive on the same ephemeral port while ordinary backend is intentionally stopped/restarted. Heartbeat/state remain serviceable. Cancel/session expiry after execution acceptance cannot cancel destructive Restore.
 
-Mismatch stops before `_execute_with_source(...)`, so there is no `prepared`, safety copy or working-database mutation. It returns fixed `SOURCE_CHANGED` guidance. `launcher/restore/staging.py` stays byte-identical to baseline.
+B2 must change the launcher runtime wait model so an intentional C4-I stop of the original backend is not treated as launcher termination and cannot cause cleanup to kill a newly restarted backend.
 
-Focused B1 tests are in `launcher/tests/test_restore_source_proof_binding.py`. PR-specific exact-head smoke must be external to the tested branch and use isolated data.
+## Not B2
 
-## Not B1
-
-- browser confirmation/button;
-- new control HTTP command;
-- user-facing destructive coordinator;
-- duplicate staging/validation engine;
-- durable phase vocabulary changes;
-- safety-copy/replacement/recovery redesign;
-- Restore AuditLog changes.
+- browser confirmation/button or frontend parser changes;
+- `/v1/restore/confirm`;
+- browser path/proof/digest;
+- C4-I/staging/safety-copy/replacement/rollback duplication;
+- destructive cancellation;
+- persistent execution state beyond existing C4-I durable record;
+- Restore AuditLog changes;
+- dependency/packaging redesign;
+- B3/C4-II-C/C4-III authorization.
 
 ## Successor gate
 
-B2/B3 are not authorized. B1 must be exact-head verified, externally smoked, independently audited, merged and lifecycle-closed before B2 may be authorized.
+B3 remains not authorized. B2 requires focused exact-head tests, full regressions, external isolated process smoke and independent `P0=0/P1=0/P2=0`, then merge and separate lifecycle closure before any B3 authorization.
