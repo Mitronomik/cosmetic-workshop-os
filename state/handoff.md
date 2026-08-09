@@ -1,67 +1,67 @@
 # Handoff
 
-Updated: `2026-08-08`
+Updated: `2026-08-09`
 
-Current lifecycle authority: `docs/current-lifecycle.md`. Accepted CR-011 architecture: ADR 0018. C4-II-A slice plan: `docs/c4-ii-a-implementation-slices.md`.
+Current lifecycle authority: `docs/current-lifecycle.md`. Accepted Restore decisions: ADR 0016 and ADR 0018. Closed A plan: `docs/c4-ii-a-implementation-slices.md`. Current B plan: `docs/c4-ii-b-implementation-slices.md`.
 
 ## Current lifecycle
 
 ```text
-PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
-PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
+PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — IN PROGRESS — SLICED
+C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B — IN PROGRESS — SLICED
+C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B3 — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Last merged lifecycle — PR #179
+## Last merged implementation — PR #180
 
 ```text
-reviewed head — 72b04510efd6d1f104369a450ed1c4d4dfe063ad
-merge commit — 52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf
+reviewed head — 79c698ed76d478d608a25f4b95499ff519794228
+merge/new main — e61d4e233c98d3c53e7749fe96ed0ee630610372
 ```
 
-PR #179 closed A3 after its 14 A3 / 28 A2 / 17 A1 / 514 C4-I / 2457 full / native-picker smoke / 0-0-0 gate and authorized only A4.
+A4 closed after automated exact-head gates, cross-layer non-destructive smoke, desktop/narrow/keyboard/native-picker UI smoke and independent P0=0/P1=0/P2=0.
 
-## Current work — A4 browser Restore session UX
+## Current work — B1 retained source-proof binding
 
-Implemented:
+Implement one internal safety seam only:
 
-- launcher-owned fragment handoff, no query transport;
-- SPA consumes/removes fragment before shell routing;
-- one-use bootstrap → exact run-scoped session;
-- `sessionStorage` only for `control_origin`, `run_id`, session token;
-- non-secret same-tab `history.state` for exact command replay metadata;
-- network-uncertain mutation retries the same request ID/sequence;
-- missing replay after prior activity fails closed rather than guessing;
-- 15s heartbeat and state polling;
-- exact response-field allowlists reject unknown/path-bearing fields;
-- `/backups/restore` + human-readable entry from `/backups`;
-- accepted state remains explicitly non-destructive;
-- `frontend/src/main.ts` unchanged;
-- targeted tests and cross-layer smoke.
+```text
+A1 retained SourceIdentity + SHA-256
+→ future trusted expectation
+→ C4-I open_selected_source(...)
+→ exact same HeldSource descriptor
+→ identity + revalidate + self-containment
+→ held digest + exact byte count
+→ revalidate + self-containment again
+→ existing C4-I staging/validation may continue
+```
 
-## Not A4
+The mismatch path must stop before durable `prepared`, safety copy or working-database mutation.
 
-- browser path/source_path/file bytes/upload/bookmark/handle or file input;
-- localStorage token persistence;
-- ordinary FastAPI Restore mutation;
-- WebSocket/generic launcher server;
-- destructive confirmation/execute;
-- durable Restore phase/safety copy/working-DB mutation/rollback/AuditLog;
+## Not B1
+
+- browser confirmation or button;
+- new control HTTP command;
+- user-facing `execute_restore` coordinator;
+- duplicate staging/validation engine;
+- durable phase vocabulary changes;
+- safety-copy/replacement/recovery redesign;
+- Restore AuditLog changes;
 - packaging/cloud/OCR/multiuser/advanced analytics.
-
-## Verification required
-
-A4 still requires exact-head diff/lifecycle, frontend build + targeted/relevant regressions, launcher A4/A3/A2/A1/C4-I/full regressions, exact-head browser-session smoke, desktop/narrow/keyboard review, clean status/head and independent P0=0/P1=0/P2=0.
 
 ## Successor gate
 
-C4-II-B remains separately not authorized. A4 merge does not authorize destructive Restore; post-merge lifecycle/architecture closure is required first.
+B2/B3 are not authorized. After B1 is implemented, exact-head verified and merged, create a separate closure/authorization PR before defining the destructive coordinator/control command.
