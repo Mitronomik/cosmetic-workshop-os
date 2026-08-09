@@ -8,7 +8,7 @@ Normative sources: ADR 0016 for destructive Restore; ADR 0018 for launcher contr
 ## Current lifecycle
 
 ```text
-PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
+PR #181 — MERGED — B1 AUTHORIZED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -17,7 +17,7 @@ C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B2 — PLANNED — NOT AUTHORIZED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -40,65 +40,55 @@ browser SPA /backups/restore
 
 Browser owns presentation only. Launcher owns loopback control, picker, selected absolute path, candidate proof and all destructive authority.
 
-A1 owns candidate preparation and retained proof. A2 owns exact Host/Origin, one-use bootstrap, session, 15s heartbeat / 60s expiry, strict replay/order and generation-gated worker publication. A3 owns exact `/usr/bin/osascript` `choose file`, typed cancel, absolute POSIX path and child quiescence. A4 owns fragment handoff, exact three-key `sessionStorage`, same-tab `history.state` replay metadata and the pathless `/backups/restore` UX.
-
-A4 is now merged/exact-head verified. Its accepted screen remains non-destructive and exposes no final Restore action.
-
 ## Retained A1 proof
 
-After successful A1 validation the launcher may retain, for the current active generation only:
+A1 retains launcher-private canonical source path, `SourceIdentity`, full SHA-256, selection generation and compatibility for the current active generation. Filename/browser state/session token/history state are never destructive authority.
+
+## Implemented B1 seam — proof binding at C4-I intake
+
+B1 adds no second Restore pipeline and does not widen the historical base request surface. `RestoreRequest` remains the selected-source-only C4-I request. A future trusted launcher coordinator that owns the current retained A1 proof uses `ProofBoundRestoreRequest(RestoreRequest)` with one additional non-path field: `ExpectedSourceProof(SourceIdentity, SHA-256)`.
+
+The engine opens the source once through existing `open_selected_source(...)`. Before `_execute_with_source(...)`, `bind_expected_source_proof(...)` proves against that exact `HeldSource`:
 
 ```text
-canonical absolute source path
-SourceIdentity
-full SHA-256
-selection generation
-compatibility
-```
-
-That proof is launcher-private. Filename, browser state, run/session token and `history.state` are not source proof and can never become destructive authority.
-
-## Authorized B1 seam — proof binding at C4-I intake
-
-C4-I already owns the complete destructive engine and already performs held-descriptor source intake, staging, validation, mandatory `before_restore` safety copy, durable phase transitions, replacement, verification and rollback.
-
-B1 therefore adds **no second Restore pipeline**. It only adds an optional launcher-private expected-source gate at the existing C4-I intake boundary.
-
-When an expected A1 proof is supplied, the comparison must happen against the same `HeldSource` descriptor returned by `open_selected_source(...)` and later used by C4-I staging:
-
-```text
-open_selected_source(...)
+RestoreRequest(selected_source=Path)
+or
+ProofBoundRestoreRequest(selected_source=Path, expected_source_proof=ExpectedSourceProof(...))
 → held.identity == expected SourceIdentity
 → held.revalidate()
 → held.assert_still_self_contained()
-→ held.digest() == expected SHA-256 and exact expected byte count
+→ held.digest()
+→ exact byte count + expected SHA-256
 → held.revalidate()
 → held.assert_still_self_contained()
-→ existing C4-I flow may continue
+→ same `HeldSource` descriptor
+→ existing stage_source(...)
 ```
 
-A path-only pre-check followed by a later re-open is forbidden because it leaves a substitution window between proof and destructive intake.
+A path-only pre-check followed by a later re-open is forbidden. B1 does not do that: proof binding and staging use the same descriptor/object.
 
-Any mismatch must fail closed before a durable `prepared` record exists. The ordinary result must use fixed nontechnical wording and expose no path, SQL, migration ID, stack trace or database contents.
+Any failure to reopen a previously accepted source, or any identity/content/self-containment mismatch at the B1 gate, fails before `prepared` with fixed `RestoreFailure.SOURCE_CHANGED` guidance. No path, SQL, migration ID, stack trace or database content enters the safe result.
 
-Existing C4-I callers without an expectation retain current behavior. This is additive safety hardening for future C4-II-B, not a rewrite of C4-I.
+`launcher/restore/staging.py` remains byte-identical to baseline blob `3126d5b1e68e764c135739fad71915912481c493`; existing source intake/staging semantics are not rewritten. Existing C4-I callers continue to use base `RestoreRequest` and retain current behavior.
+
+The proof subtype carries no database path, backup-directory path, Restore-directory path or lock path. Those destructive/application-owned paths remain derived only from `LauncherLifecycleContext`.
 
 ## B1 non-goals
 
-B1 does not authorize:
+B1 does not authorize or implement:
 
 - browser destructive confirmation;
 - a new A2/control HTTP command;
 - backend shutdown wiring from browser/session;
-- calling `execute_restore(...)` from a new user-facing coordinator;
+- a new user-facing `execute_restore(...)` coordinator;
 - safety-copy creation merely to compare proof;
-- a new staging or validation algorithm;
+- a new staging/validation algorithm;
 - durable phase/recovery changes;
 - working-database replacement/migration changes;
 - Restore AuditLog changes.
 
 ## Future B2/B3
 
-B2 remains blocked until B1 is merged and closed. B2 must define the exact destructive launcher/session coordinator and command semantics, including one-shot replay behavior, current-generation ownership, backend stop/exclusion, session invalidation and result handoff while reusing existing C4-I `execute_restore(...)`.
+B2 remains blocked until B1 is exact-head verified, merged and lifecycle-closed. B2 must separately define destructive launcher/session coordinator semantics while reusing existing C4-I `execute_restore(...)`; when authorized, that trusted coordinator is the only future owner allowed to construct `ProofBoundRestoreRequest` from the current A1 retained proof.
 
-B3 remains blocked until B2 is merged and closed. It will own the explicit destructive browser confirmation required by ADR 0016; browser state itself will still not be authority.
+B3 remains blocked until B2 is merged and closed. It will own explicit destructive browser confirmation; browser state itself will still not be authority.

@@ -6,16 +6,14 @@ Updated: `2026-08-09`
 
 - C1/C2 completed; C3 completed, merged, exact-head verified and hardened.
 - C4-I — `DONE — MERGED AND EXACT-HEAD VERIFIED`.
-- A1/A2/A3 — merged and exact-head verified.
-- A4 / PR #180 — reviewed `79c698ed76d478d608a25f4b95499ff519794228`, merged as `e61d4e233c98d3c53e7749fe96ed0ee630610372`.
-- A4 gate: launcher 15 / A3 14 / A2 29 / A1 17 / C4-I 514 / full backend+launcher 2470 / frontend A4 16 / backup 25 / audit-log 92 / exact-head smoke PASS / manual desktop+narrow+keyboard+native-picker UI PASS / independent 0-0-0.
-- C4-II-A is now complete.
+- A1/A2/A3/A4 — merged and exact-head verified.
+- PR #181 reviewed `d2549cd9be2b60c5aee2479050e05a6ad8530c6c`, merged as `beae1407af270ad1c800c308ea7907750430eb1d`; C4-II-A closed and only B1 authorized.
 - Searchable history and five exact pre-compaction snapshots remain protected.
 
 ## Current lifecycle
 
 ```text
-PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
+PR #181 — MERGED — B1 AUTHORIZED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -24,7 +22,7 @@ C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B2 — PLANNED — NOT AUTHORIZED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -33,11 +31,13 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## B1 authorization
+## B1 implementation
 
-B1 is intentionally small: add the launcher-private expected-source proof gate at existing C4-I intake, using the same `HeldSource` descriptor that will be staged. It must compare expected `SourceIdentity`, revalidate identity/path/self-containment, recompute full SHA-256 through the held descriptor, verify byte count, then revalidate again.
+B1 adds `ExpectedSourceProof`, fixed `SOURCE_CHANGED` guidance, launcher-private `ProofBoundRestoreRequest(RestoreRequest)` and `bind_expected_source_proof(...)`. Base `RestoreRequest` remains selected-source-only. The proof is checked against the same C4-I `HeldSource` descriptor later staged: identity → revalidate → self-containment → full descriptor SHA-256/byte count → revalidate → self-containment. The gate runs before `_execute_with_source(...)`, therefore before `prepared`, safety copy or working-DB mutation.
 
-A mismatch must stop before `prepared`, safety copy or any working-database mutation. Existing C4-I callers without expected proof remain unchanged.
+`launcher/restore/staging.py` stays byte-identical; legacy requests remain base `RestoreRequest` and preserve current behavior. Focused tests cover exact match, same descriptor continuity, inode/path substitution, same-inode byte drift, sidecars, symlink, short digest, safe message, immutability, base-request compatibility and legacy behavior.
+
+The first full B1 regression attempt on exact head `e0cce48734116e0527463e914fe62517f24850b1` reached **2479 passed / 1 failed**. The single failure was the historical base `RestoreRequest` field-surface contract. B1 was corrected by moving proof evidence into the dedicated subtype instead of weakening that invariant. The corrected exact head still requires re-verification.
 
 ## Still blocked
 
@@ -50,8 +50,7 @@ C4-III — not authorized
 
 ## Open product obligations
 
-- merge/verify the A4 closure + B1 authorization documentation PR;
-- implement and exact-head verify B1;
+- exact-head verify and merge B1;
 - lifecycle-close B1 before deciding B2 destructive coordinator/control semantics;
 - later B3 explicit destructive confirmation;
 - later C4-II-C outcome/restart/support UX;

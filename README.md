@@ -7,7 +7,7 @@ A local-first working system for a cosmetic workshop. The user product must run 
 ## Current product status
 
 ```text
-PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
+PR #181 — MERGED — B1 AUTHORIZED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -16,7 +16,7 @@ C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B2 — PLANNED — NOT AUTHORIZED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -25,26 +25,19 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-PR #180 reviewed exact head `79c698ed76d478d608a25f4b95499ff519794228` merged as `e61d4e233c98d3c53e7749fe96ed0ee630610372` after automated exact-head gates, cross-layer smoke, desktop/narrow/keyboard/native-picker UI smoke and independent P0=0 / P1=0 / P2=0 audit.
+PR #181 reviewed exact head `d2549cd9be2b60c5aee2479050e05a6ad8530c6c` merged as `beae1407af270ad1c800c308ea7907750430eb1d`, closing C4-II-A and authorizing only B1.
 
-## Closed C4-II-A browser interaction foundation
+## Current B1 implementation boundary
 
-```text
-A1 launcher non-destructive candidate proof
-→ A2 exact-run authenticated loopback control
-→ A3 launcher-owned native macOS picker/path
-→ A4 fragment bootstrap + /backups/restore browser presentation
-```
+B1 is a launcher-private additive source-proof gate. The historical base `RestoreRequest` remains selected-source-only. A future trusted launcher coordinator that owns current A1 evidence uses `ProofBoundRestoreRequest(RestoreRequest)` with one additional non-path `ExpectedSourceProof` containing the A1 `SourceIdentity` + full SHA-256 expectation.
 
-The browser owns presentation only. Absolute source path and retained proof remain launcher-private. A4 is non-destructive and exposes no final Restore action.
+C4-I opens the source once through the existing `open_selected_source(...)`, then `bind_expected_source_proof(...)` proves identity, path/descriptor stability, self-containment, full held-descriptor SHA-256 and byte count before `prepared` exists. The exact same `HeldSource` object then continues into the unchanged `stage_source(...)` implementation.
 
-## Authorized next slice — C4-II-B1
+A mismatch returns the fixed non-technical `SOURCE_CHANGED` result before any durable Restore record, safety copy or working-database mutation. Legacy C4-I callers continue to construct base `RestoreRequest` and retain existing behavior.
 
-B1 is a narrow source-proof binding gate. It may bind the A1 `SourceIdentity` + full SHA-256 expectation to the exact `HeldSource` descriptor opened by existing C4-I intake before any durable Restore state or safety copy exists.
+`launcher/restore/staging.py` remains byte-identical to the PR #181 baseline; B1 does not create a second staging or validation algorithm. The proof subtype adds no database, backup-directory, Restore-directory or lock path.
 
-B1 must **not** add browser confirmation, a destructive control command, a second staging/validation engine, safety-copy creation, database replacement/migration, rollback/recovery mutation or Restore AuditLog.
-
-B2 launcher destructive coordination and B3 browser destructive confirmation remain separately **NOT AUTHORIZED**.
+B1 adds no browser action, control-plane command or destructive coordinator. B2 launcher destructive coordination and B3 browser destructive confirmation remain separately **NOT AUTHORIZED**.
 
 ## Restore authority
 

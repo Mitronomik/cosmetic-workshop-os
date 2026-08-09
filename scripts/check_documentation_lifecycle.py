@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard A4 closure, B1-only authorization, and closed Restore boundaries."""
+"""Guard the current B1 implementation and all closed Restore boundaries."""
 
 from __future__ import annotations
 
@@ -28,49 +28,32 @@ ADR18 = P("docs/decisions/0018-launcher-restore-interaction-and-validation-sessi
 
 ENGINE = P("launcher/restore/engine.py")
 CONTRACTS = P("launcher/restore/contracts.py")
+SOURCE_PROOF = P("launcher/restore/source_proof.py")
 STAGING = P("launcher/restore/staging.py")
+B1_TESTS = P("launcher/tests/test_restore_source_proof_binding.py")
 A1 = P("launcher/restore/validation_session.py")
 A1_SCRATCH = P("launcher/restore/validation_scratch.py")
 A2_PROTOCOL = P("launcher/restore/control_protocol.py")
 A2_SESSION = P("launcher/restore/control_session.py")
 A2_PLANE = P("launcher/restore/control_plane.py")
 A3_PICKER = P("launcher/restore/macos_picker.py")
-A3_PICKER_TESTS = P("launcher/tests/test_restore_native_picker.py")
-A3_SESSION_TESTS = P("launcher/tests/test_restore_native_picker_session.py")
-A3_RUNTIME_TESTS = P("launcher/tests/test_restore_native_picker_runtime.py")
-A3_SMOKE = P("scripts/smoke_restore_native_picker.py")
-
-LAUNCHER_RUNTIME = P("launcher/runtime.py")
 A4_HANDOFF = P("launcher/restore/browser_handoff.py")
-A4_HANDOFF_TESTS = P("launcher/tests/test_restore_browser_handoff.py")
-A4_RUNTIME_TESTS = P("launcher/tests/test_restore_control_runtime.py")
-INDEX = P("frontend/index.html")
-PACKAGE = P("frontend/package.json")
+LAUNCHER_RUNTIME = P("launcher/runtime.py")
 MAIN_TS = P("frontend/src/main.ts")
 ROUTES = P("frontend/src/app-navigation-routes.ts")
 BROWSER_CONTRACT = P("frontend/src/restore-control-contract.ts")
 BROWSER_RUNTIME = P("frontend/src/restore-control-runtime.ts")
 PRESENTATION = P("frontend/src/restore-control-presentation.ts")
 ENTRY = P("frontend/src/restore-control-entry.ts")
-TS_CONFIG = P("frontend/tsconfig.test.restore-control.json")
-FRONTEND_TESTS = P("frontend/test/restore-control.test.mjs")
-FRONTEND_RACE_TESTS = P("frontend/test/restore-control-races.test.mjs")
-NODE_SMOKE = P("frontend/scripts/smoke-restore-control-client.mjs")
-A4_SMOKE = P("scripts/smoke_restore_browser_session.py")
 
 EXPECTED_MAIN_BLOB = "ea98a76638bddcb5a92b9ba31941508f8a816d42"
-# Closure branch must not contain B1 implementation. These are the exact runtime
-# blobs merged by PR #180; the next B1 implementation PR is allowed to change
-# them only after this authorization branch itself is merged.
-EXPECTED_ENGINE_BLOB = "7113ac162bc3aab36ae3e63e835a5b4c5bdc16b5"
-EXPECTED_CONTRACTS_BLOB = "b4fcd9e4bad34024fe735cdd1d998e018a16511a"
 EXPECTED_STAGING_BLOB = "3126d5b1e68e764c135739fad71915912481c493"
 EXPECTED_A1_BLOB = "c8734ab60a576ecad53acd961571ddf2c14bdcf4"
 
 ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF_STATE, CHANGE_REQUESTS)
 SUPPORTING = (CURRENT, A_SLICES, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
 CORE = (
-    "PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED",
+    "PR #181 — MERGED — B1 AUTHORIZED",
     "C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN",
     "C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED",
@@ -79,19 +62,16 @@ CORE = (
     "C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B — IN PROGRESS — SLICED",
-    "C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
     "C4-II-B2 — PLANNED — NOT AUTHORIZED",
     "C4-II-B3 — PLANNED — NOT AUTHORIZED",
     "Restore — NOT IMPLEMENTED",
     "Product release readiness — NOT CLAIMED",
 )
 STALE = (
-    "C4-II-A — IN PROGRESS — SLICED",
-    "C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "C4-II-A4 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-II-B — PLANNED — NOT AUTHORIZED",
-    "A4 still requires exact-head",
-    "Manual UI review — REQUIRED / PENDING",
+    "C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
 )
 
 HISTORY = (
@@ -114,7 +94,6 @@ HISTORY_BLOBS = {
 }
 
 DESTRUCTIVE_MODULES = {
-    "launcher.restore.engine",
     "launcher.restore.state",
     "launcher.restore.safety_copy",
     "launcher.restore.replacement",
@@ -220,13 +199,12 @@ def check_docs() -> None:
         CURRENT,
         CORE
         + (
-            "79c698ed76d478d608a25f4b95499ff519794228",
-            "e61d4e233c98d3c53e7749fe96ed0ee630610372",
-            "full backend + launcher: 2470 passed",
-            "frontend A4: 16 passed",
-            "desktop, narrow-window, keyboard/focus and real macOS picker UI smoke: PASS",
+            "d2549cd9be2b60c5aee2479050e05a6ad8530c6c",
+            "beae1407af270ad1c800c308ea7907750430eb1d",
             EXPECTED_MAIN_BLOB,
+            EXPECTED_STAGING_BLOB,
             "same `HeldSource` descriptor",
+            "SOURCE_CHANGED",
         ),
     )
     require(
@@ -234,8 +212,6 @@ def check_docs() -> None:
         (
             "CLOSED NORMATIVE IMPLEMENTATION PLAN",
             "C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED",
-            "PR #180 reviewed head",
-            "frontend A4 16",
             "docs/c4-ii-b-implementation-slices.md",
         ),
     )
@@ -243,11 +219,13 @@ def check_docs() -> None:
         B_SLICES,
         CORE
         + (
-            "B1 — Bind retained source proof into C4-I intake — AUTHORIZED NEXT",
-            "HeldSource.revalidate()",
-            "HeldSource.assert_still_self_contained()",
-            "HeldSource.digest()",
-            "before `prepared` exists",
+            "B1 — Bind retained source proof into C4-I intake — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+            "ExpectedSourceProof",
+            "ProofBoundRestoreRequest",
+            "bind_expected_source_proof",
+            "same `HeldSource`",
+            "before `prepared`",
+            "external",
             "B2 — Launcher destructive coordinator/control command — PLANNED — NOT AUTHORIZED",
             "B3 — Browser explicit destructive confirmation — PLANNED — NOT AUTHORIZED",
         ),
@@ -256,13 +234,13 @@ def check_docs() -> None:
         PROFILE,
         CORE
         + (
-            "Authorized B1 seam — proof binding at C4-I intake",
+            "Implemented B1 seam — proof binding at C4-I intake",
+            "ProofBoundRestoreRequest",
+            "bind_expected_source_proof",
             "same `HeldSource` descriptor",
             "A path-only pre-check followed by a later re-open is forbidden",
         ),
     )
-    require(DEPLOYMENT, ("PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED", "B1 deployment consequence", "/usr/bin/osascript", "sessionStorage"))
-    require(PACKAGING, ("PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED", "B1 packaging consequence", "Mac App Store sandbox compatibility is **not claimed**", "restore-control-entry.js", "main.js"))
 
     for path in ACTIVE + SUPPORTING:
         text = norm(read(path))
@@ -279,10 +257,7 @@ def check_history() -> None:
             "127.0.0.1",
             "/backups/restore",
             "/usr/bin/osascript",
-            "#cw-control=<ephemeral-port>:<bootstrap-token>",
             "sessionStorage",
-            "heartbeat interval: 15 seconds",
-            "control-session expiry: 60 seconds",
             "compare descriptor/path SourceIdentity",
             "recompute and compare full SHA-256",
         ),
@@ -295,100 +270,106 @@ def check_history() -> None:
             fail(f"protected history blob changed: {path.relative_to(ROOT)}")
 
 
-def check_a1_a2_a3() -> None:
-    for path in (A1, A1_SCRATCH):
-        no_destructive(path, {"http.server", "socket", "subprocess", "webbrowser"})
-    require(A1, ("RestoreCandidatePreparationService", "RetainedSourceProof", "SourceIdentity", "sha256", "retained_proof", "prepare_restore_candidate"))
-
-    for path in (A2_PROTOCOL, A2_SESSION, A2_PLANE):
-        no_destructive(path, {"subprocess", "webbrowser"})
-    require(A2_PROTOCOL, ("SourceSelectionAdapter", "ControlStateSnapshot", "CommandReply"))
-    require(A2_SESSION, ("BOOTSTRAP_RANDOM_BYTES = 32", "SESSION_RANDOM_BYTES = 32", "HEARTBEAT_INTERVAL_SECONDS = 15", "SESSION_EXPIRY_SECONDS = 60", "_consume_command_locked", "command_sequence_conflict", "worker.join()"))
-    require(A2_PLANE, ("CONTROL_HOST = \"127.0.0.1\"", "/v1/bootstrap", "/v1/state", "/v1/heartbeat", "/v1/restore/select", "/v1/restore/cancel", "Cache-Control", "no-store"))
-
-    no_destructive(A3_PICKER)
-    require(A3_PICKER, ("OSASCRIPT_PATH = Path(\"/usr/bin/osascript\")", "use scripting additions", "choose file", "on error number -128", "shell=False", "process.terminate()", "process.kill()", "selected_path.is_absolute()"))
-    for marker in ("System Events", "shell=True", "execute_restore("):
-        if marker in read(A3_PICKER):
-            fail(f"A3 picker contains forbidden marker: {marker!r}")
-    require(A3_PICKER_TESTS, ("test_selected_path_uses_exact_owned_osascript_command", "test_cancel_terminates_and_reaps_owned_picker_process"))
-    require(A3_SESSION_TESTS, ("test_control_cancel_terminates_owned_native_picker_process", "test_native_selected_path_flows_only_through_a1_candidate_preparation", "test_picker_stderr_and_raw_path_never_cross_safe_control_state"))
-    require(A3_RUNTIME_TESTS, ("test_start_restore_control_plane_uses_production_native_picker",))
-    require(A3_SMOKE, ("PASS — C4-II-A3 NATIVE MACOS PICKER SMOKE PASSED",))
-
-
-def check_a4_closed() -> None:
+def check_closed_a_boundaries() -> None:
     if blob(MAIN_TS) != EXPECTED_MAIN_BLOB:
         fail(f"frontend/src/main.ts changed after A4 closure; expected blob {EXPECTED_MAIN_BLOB}")
+    if blob(A1) != EXPECTED_A1_BLOB:
+        fail(f"A1 validation-session implementation drifted; expected blob {EXPECTED_A1_BLOB}")
 
-    no_destructive(A4_HANDOFF, {"subprocess", "webbrowser"})
-    require(A4_HANDOFF, ("runtime_config_with_restore_handoff", "cw-control=", "bootstrap_capability", "parsed.query", "parsed.fragment"))
+    for path in (A1, A1_SCRATCH, A2_PROTOCOL, A2_SESSION, A2_PLANE, A3_PICKER, A4_HANDOFF):
+        no_destructive(path, {"webbrowser"} if path != A4_HANDOFF else {"subprocess"})
 
-    tree = parse(LAUNCHER_RUNTIME)
-    if tree is not None:
-        browser = function(tree, "open_runtime_browser")
-        for marker in ("config.frontend_url", "config.backend_url", "webbrowser.open(target_url)"):
-            if marker not in browser:
-                fail(f"open_runtime_browser drifted: {marker!r}")
-        locked = function(tree, "_run_locked_runtime")
-        order = [locked.find(marker) for marker in ("context.backend.start", "start_restore_control_plane", "runtime_config_with_restore_handoff", "open_runtime_browser(browser_config)")]
-        if any(pos < 0 for pos in order) or order != sorted(order):
-            fail("launcher A4 startup ordering drifted")
-
-    index = read(INDEX)
-    entry_script = "/assets/restore-control-entry.js"
-    main_script = "/assets/main.js"
-    if entry_script not in index or main_script not in index or index.find(entry_script) > index.find(main_script):
-        fail("restore-control-entry.js must load before main.js")
-
+    require(A1, ("RestoreCandidatePreparationService", "RetainedSourceProof", "retained_proof"))
+    require(A2_SESSION, ("BOOTSTRAP_RANDOM_BYTES = 32", "SESSION_RANDOM_BYTES = 32", "HEARTBEAT_INTERVAL_SECONDS = 15", "SESSION_EXPIRY_SECONDS = 60"))
+    require(A2_PLANE, ("CONTROL_HOST = \"127.0.0.1\"", "/v1/bootstrap", "/v1/restore/select", "/v1/restore/cancel", "no-store"))
+    require(A3_PICKER, ("OSASCRIPT_PATH = Path(\"/usr/bin/osascript\")", "choose file", "shell=False"))
     require(ROUTES, ("'/backups/restore': 'Резервные копии'",))
-    require(BROWSER_CONTRACT, ("RESTORE_CONTROL_FRAGMENT_PREFIX = '#cw-control='", "RESTORE_SESSION_STORAGE_KEYS", "RESTORE_HISTORY_STATE_KEY", "captureRestoreBootstrap", "newRestoreRequestId"))
-    require(BROWSER_RUNTIME, ("credentials: 'omit'", "cache: 'no-store'", "referrerPolicy: 'no-referrer'", "Authorization", "retryPending", "nextCommandSeq", "pending", "command_seq"))
-    require(ENTRY, ("captureRestoreBootstrap", "window.sessionStorage", "MutationObserver", "bootstrapCapture = { kind: 'none' }", "data-restore-action"))
-    require(PRESENTATION, ("Восстановление из резервной копии", "Рабочие данные не изменены", "восстановление ещё не запускалось", "Восстановить из резервной копии"))
-    require(PACKAGE, ("test:restore-control", "restore-control-races.test.mjs"))
-    require(TS_CONFIG, ("restore-control-contract.ts", "restore-control-runtime.ts", "restore-control-presentation.ts"))
-    require(FRONTEND_TESTS, ("valid bootstrap fragment is captured and removed synchronously", "accepted presentation is explicit that destructive Restore has not run"))
-    require(FRONTEND_RACE_TESTS, ("network-uncertain one-use bootstrap is restart-only, never retry guidance", "late state response is ignored after a concurrent request invalidates the session"))
-    require(NODE_SMOKE, ("captureRestoreBootstrap", "RestoreControlRuntime", "runtime.select()", "fragmentRemoved", "storedKeys", "nextCommandSeq"))
-    require(A4_SMOKE, ("RestoreControlPlane", "MacOSNativeSourceSelectionAdapter", "retained_proof", "audit_logs", "PASS — C4-II-A4 BROWSER RESTORE SESSION SMOKE PASSED"))
-    no_destructive(A4_SMOKE)
+    require(BROWSER_CONTRACT, ("RESTORE_CONTROL_FRAGMENT_PREFIX = '#cw-control='", "RESTORE_SESSION_STORAGE_KEYS"))
+    require(BROWSER_RUNTIME, ("credentials: 'omit'", "cache: 'no-store'", "Authorization", "command_seq"))
+    require(PRESENTATION, ("Рабочие данные не изменены", "восстановление ещё не запускалось"))
+    require(ENTRY, ("captureRestoreBootstrap", "window.sessionStorage", "MutationObserver"))
 
-    production = "\n".join(read(path) for path in (BROWSER_CONTRACT, BROWSER_RUNTIME, ENTRY, PRESENTATION))
-    for marker in ("localStorage", "source_path", "file_bytes", "upload_blob", "filesystem_handle", "execute_restore", '<input type="file"'):
-        if marker in production:
-            fail(f"A4 browser code contains forbidden authority marker: {marker!r}")
-
-    # C4-II-A control vocabulary remains non-destructive until a later B2
-    # authorization explicitly changes it.
-    plane_text = read(A2_PLANE)
+    browser = "\n".join(read(path) for path in (BROWSER_CONTRACT, BROWSER_RUNTIME, ENTRY, PRESENTATION))
+    for marker in ("localStorage", "source_path", "execute_restore", '<input type="file"'):
+        if marker in browser:
+            fail(f"closed A4 browser authority drifted: {marker!r}")
+    plane = read(A2_PLANE)
     for marker in ("/v1/restore/confirm", "/v1/restore/execute"):
-        if marker in plane_text:
-            fail(f"B2 control command leaked into A4 closure branch: {marker}")
+        if marker in plane:
+            fail(f"B2 command leaked before authorization: {marker}")
 
 
-def check_b1_authorization_only() -> None:
-    expected = {
-        ENGINE: EXPECTED_ENGINE_BLOB,
-        CONTRACTS: EXPECTED_CONTRACTS_BLOB,
-        STAGING: EXPECTED_STAGING_BLOB,
-        A1: EXPECTED_A1_BLOB,
-    }
-    for path, expected_blob in expected.items():
-        if blob(path) != expected_blob:
-            fail(f"B1 runtime implementation leaked into closure branch: {path.relative_to(ROOT)}")
+def check_b1_implementation() -> None:
+    if blob(STAGING) != EXPECTED_STAGING_BLOB:
+        fail(f"C4-I staging algorithm changed in B1; expected blob {EXPECTED_STAGING_BLOB}")
 
-    require(ENGINE, ("execute_restore", "open_selected_source", "stage_source", "validate_staged_candidate", "create_verified_safety_copy", "replacement_intent"))
-    require(STAGING, ("class HeldSource", "def revalidate", "def digest", "def assert_still_self_contained", "open_selected_source", "stage_source"))
-    require(CONTRACTS, ("class RestoreRequest", "selected_source: Path", "class RestoreResult"))
+    require(
+        CONTRACTS,
+        (
+            "SOURCE_CHANGED = \"source_changed\"",
+            "class ExpectedSourceProof",
+            "source_identity: \"SourceIdentity\"",
+            "sha256: str",
+            "class RestoreRequest",
+            "selected_source: Path",
+            "expected_source_proof = None",
+            "class ProofBoundRestoreRequest(RestoreRequest)",
+            "expected_source_proof: ExpectedSourceProof = field()",
+            "Резервная копия изменилась после проверки.",
+        ),
+    )
+    no_destructive(SOURCE_PROOF)
+    require(
+        SOURCE_PROOF,
+        (
+            "class SourceProofMismatchError",
+            "def bind_expected_source_proof",
+            "held.identity != expected.source_identity",
+            "held.revalidate()",
+            "held.assert_still_self_contained()",
+            "held.digest()",
+            "byte_count != held.size_bytes",
+            "digest != expected.sha256",
+        ),
+    )
+
+    tree = parse(ENGINE)
+    if tree is not None:
+        intake = function(tree, "_execute_authorized")
+        order = [
+            intake.find("open_selected_source"),
+            intake.find("bind_expected_source_proof"),
+            intake.find("_execute_with_source"),
+        ]
+        if any(pos < 0 for pos in order) or order != sorted(order):
+            fail("B1 must bind proof after one source open and before _execute_with_source")
+        for marker in ("expected_source_proof", "RestoreFailure.SOURCE_CHANGED"):
+            if marker not in intake:
+                fail(f"B1 engine intake missing marker: {marker!r}")
+
+    require(
+        B1_TESTS,
+        (
+            "ProofBoundRestoreRequest",
+            "test_exact_a1_identity_and_digest_allow_existing_c4_i_flow",
+            "test_proof_gate_and_stage_use_the_same_held_source_descriptor",
+            "test_same_path_replaced_with_different_inode_is_refused_before_prepared",
+            "test_same_inode_and_size_changed_bytes_are_refused_by_digest_proof",
+            "test_sidecar_appearing_after_a1_validation_is_refused_before_prepared",
+            "test_symlink_substitution_after_a1_validation_is_refused_before_prepared",
+            "test_expected_digest_byte_count_mismatch_is_refused_before_prepared",
+            "test_wrong_expected_sha_is_refused_without_source_or_database_mutation",
+            "test_source_changed_result_exposes_no_absolute_path",
+            "test_legacy_c4_i_request_without_expected_proof_is_behaviorally_unchanged",
+        ),
+    )
 
 
 def main() -> int:
     check_docs()
     check_history()
-    check_a1_a2_a3()
-    check_a4_closed()
-    check_b1_authorization_only()
+    check_closed_a_boundaries()
+    check_b1_implementation()
 
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
@@ -400,14 +381,13 @@ def main() -> int:
     print(f"Checked {len(ACTIVE)} compact active files.")
     print(f"Verified {len(HISTORY)} required history paths.")
     print(f"Verified {len(HISTORY_BLOBS)} exact historical Git blob identities.")
-    print("Verified PR #180 merged / C4-II-A4 exact-head closure evidence.")
-    print("Verified C4-II-A is DONE and its A1/A2/A3/A4 boundaries remain intact.")
-    print("Verified A4 fragment/session/pathless browser contract and race regressions remain present.")
-    print("Verified frontend/src/main.ts remains byte-identical after A4 closure.")
-    print("Verified B1 is the only authorized next implementation slice.")
-    print("Verified B1 source-proof binding is specified against the same C4-I HeldSource descriptor.")
-    print("Verified no B1 runtime implementation leaked into this closure branch.")
-    print("Verified B2/B3 destructive coordinator/confirmation remain not authorized.")
+    print("Verified PR #181 merged / B1-only authorization baseline.")
+    print("Verified C4-II-A remains closed and frontend/A1 boundaries remain intact.")
+    print("Verified C4-I staging.py remains byte-identical while B1 binds the same HeldSource before prepared.")
+    print("Verified base RestoreRequest remains selected-source-only while ProofBoundRestoreRequest carries B1 evidence.")
+    print("Verified ExpectedSourceProof and fixed SOURCE_CHANGED presentation contract.")
+    print("Verified focused B1 substitution/digest/immutability/legacy test contracts are present.")
+    print("Verified B2/B3 control/browser destructive authority remains not authorized.")
     print("Verified ADR 0016 / ADR 0018 durable authority remains unchanged.")
     print("Verified maintained historical guidance and exact snapshots remain protected.")
     return 0

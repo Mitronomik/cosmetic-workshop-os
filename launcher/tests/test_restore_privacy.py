@@ -50,7 +50,6 @@ def assert_user_safe(message: str) -> None:
 # --------------------------------------------------------------------------
 # The fixed message vocabulary
 # --------------------------------------------------------------------------
-
 def test_every_failure_category_has_a_fixed_non_technical_russian_message():
     assert set(USER_SAFE_MESSAGES) == set(RestoreFailure)
     for failure, message in USER_SAFE_MESSAGES.items():
@@ -72,9 +71,13 @@ def test_the_recovery_blocked_message_points_at_support_without_technical_detail
 def test_the_error_categories_cover_the_accepted_boundary_set():
     """The complete closed vocabulary. Categories, never free text.
 
-    Three of these describe conditions that are not failures of the *Restore*, and
-    they exist precisely so those conditions stop borrowing another category's
-    sentence: `preparation_not_published` is an attempt that never started over a
+    `source_changed` is the B1 proof-binding refusal: A1 accepted a source, but
+    C4-I could not re-prove that same identity/content at intake. It remains a
+    fixed presentation category only; it adds no lifecycle phase and is never
+    persisted in the durable Restore record.
+
+    Three other categories describe conditions that are not failures of the
+    *Restore*: `preparation_not_published` is an attempt that never started over a
     record belonging to a previous operation; `completion_durability_unconfirmed`
     is a `completed` whose flush could not be proved — restored, verified, in
     place, and not rolled back; and `backend_port_unavailable` is another program
@@ -87,6 +90,7 @@ def test_the_error_categories_cover_the_accepted_boundary_set():
     """
     assert {failure.value for failure in RestoreFailure} == {
         "source_rejected",
+        "source_changed",
         "candidate_invalid",
         "unsupported_schema",
         "insufficient_disk_space",

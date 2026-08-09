@@ -14,10 +14,10 @@ MVP is local-first. User mode must not require Git, terminal, Python, Node.js or
 ## Restore lifecycle
 
 ```text
-PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
+PR #181 — MERGED — B1 AUTHORIZED
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B2 — PLANNED — NOT AUTHORIZED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -39,6 +39,6 @@ The browser remains presentation only. The bootstrap capability travels in the U
 
 ## B1 deployment consequence
 
-B1 is internal launcher/C4-I safety hardening only. It adds no service, port, process, browser transport, dependency or packaging requirement. It must not broaden the A2 HTTP vocabulary or change ordinary backend startup.
+B1 is internal launcher/C4-I safety hardening only. It adds no service, port, process, browser transport, dependency or packaging requirement. It does not broaden the A2 HTTP vocabulary or change ordinary backend startup.
 
-B1 binds an optional A1 expected source proof to the exact held descriptor already opened by C4-I. B2/B3 destructive runtime wiring remains not authorized.
+The existing C4-I source descriptor is proof-bound in-process before durable Restore state. `launcher/restore/staging.py` remains unchanged. B2/B3 destructive runtime wiring remains not authorized.

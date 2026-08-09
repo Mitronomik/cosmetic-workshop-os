@@ -16,11 +16,15 @@ loose keys. Two facts drive the shapes here:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from launcher.restore.phases import RestorePhase
+
+if TYPE_CHECKING:
+    from launcher.restore.staging import SourceIdentity
 
 
 class RestoreOutcome(str, Enum):
@@ -54,6 +58,7 @@ class RestoreFailure(str, Enum):
     """
 
     SOURCE_REJECTED = "source_rejected"
+    SOURCE_CHANGED = "source_changed"
     CANDIDATE_INVALID = "candidate_invalid"
     UNSUPPORTED_SCHEMA = "unsupported_schema"
     INSUFFICIENT_DISK_SPACE = "insufficient_disk_space"
@@ -86,6 +91,10 @@ USER_SAFE_MESSAGES: dict[RestoreFailure, str] = {
     RestoreFailure.SOURCE_REJECTED: (
         "Выбранный файл не подходит для восстановления. "
         "Выберите резервную копию, созданную приложением."
+    ),
+    RestoreFailure.SOURCE_CHANGED: (
+        "Резервная копия изменилась после проверки. "
+        "Выберите и проверьте её снова. Данные мастерской не изменились."
     ),
     RestoreFailure.CANDIDATE_INVALID: (
         "Резервная копия повреждена или создана не этим приложением. "
@@ -166,10 +175,23 @@ BACKEND_PORT_UNAVAILABLE_MESSAGE = USER_SAFE_MESSAGES[
 
 
 @dataclass(frozen=True)
-class RestoreRequest:
-    """One Restore attempt, as a future trusted launcher caller supplies it.
+class ExpectedSourceProof:
+    """Launcher-private A1 identity/content expectation for one selected source.
 
-    **The selected source is the only value a caller may supply.** Every
+    The selected path remains the explicit `RestoreRequest.selected_source`.
+    This proof is not a browser DTO and grants no authority by itself. C4-I binds
+    it to the exact held descriptor it will stage before `prepared` exists.
+    """
+
+    source_identity: "SourceIdentity"
+    sha256: str
+
+
+@dataclass(frozen=True)
+class RestoreRequest:
+    """The unchanged C4-I caller-supplied surface for one Restore attempt.
+
+    **The selected source is the only value a base caller may supply.** Every
     destructive or application-owned path — the database, the backup directory,
     the Restore directory, the lock — is derived by
     :class:`~launcher.restore.context.LauncherLifecycleContext` from the
@@ -177,9 +199,33 @@ class RestoreRequest:
     take the lock for one workspace and replace a database in another, and every
     individual check would still pass because each was asked about a path the
     caller chose.
+
+    B1 deliberately preserves this base dataclass exactly. A future trusted
+    launcher coordinator that owns retained A1 evidence uses the dedicated
+    :class:`ProofBoundRestoreRequest` subtype below; the proof contains no path
+    and grants no destructive authority by itself.
     """
 
     selected_source: Path
+
+    # Non-field lookup fallback for the unchanged engine intake. The base
+    # constructor cannot accept this value, so its caller-supplied dataclass
+    # surface remains exactly `selected_source`; the proof-bound subtype below
+    # overrides it with a real required field.
+    expected_source_proof = None
+
+
+@dataclass(frozen=True)
+class ProofBoundRestoreRequest(RestoreRequest):
+    """Launcher-private B1 request carrying retained A1 non-path evidence.
+
+    This subtype is the only B1 extension of the C4-I request contract. It keeps
+    `RestoreRequest` compatible at the dataclass field/constructor surface while
+    allowing a future trusted B2 coordinator to require the source identity and
+    content proof A1 retained earlier.
+    """
+
+    expected_source_proof: ExpectedSourceProof = field()
 
 
 @dataclass(frozen=True)
