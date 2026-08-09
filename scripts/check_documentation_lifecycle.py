@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Guard the current B1 implementation and all closed Restore boundaries."""
+"""Guard B1 closure, B2-only authorization, and the exact pre-B2 runtime boundary."""
 
 from __future__ import annotations
 
-import ast
 from hashlib import sha1
 from pathlib import Path
 import sys
@@ -21,39 +20,16 @@ DEPLOYMENT = P("docs/deployment.md")
 PACKAGING = P("docs/packaging.md")
 FOCUS = P("state/current-focus.md")
 PROGRESS = P("state/progress.md")
-HANDOFF_STATE = P("state/handoff.md")
+HANDOFF = P("state/handoff.md")
 CHANGE_REQUESTS = P("state/change-requests.md")
 ADR16 = P("docs/decisions/0016-launcher-assisted-restore.md")
 ADR18 = P("docs/decisions/0018-launcher-restore-interaction-and-validation-session.md")
 
-ENGINE = P("launcher/restore/engine.py")
-CONTRACTS = P("launcher/restore/contracts.py")
-SOURCE_PROOF = P("launcher/restore/source_proof.py")
-STAGING = P("launcher/restore/staging.py")
-B1_TESTS = P("launcher/tests/test_restore_source_proof_binding.py")
-A1 = P("launcher/restore/validation_session.py")
-A1_SCRATCH = P("launcher/restore/validation_scratch.py")
-A2_PROTOCOL = P("launcher/restore/control_protocol.py")
-A2_SESSION = P("launcher/restore/control_session.py")
-A2_PLANE = P("launcher/restore/control_plane.py")
-A3_PICKER = P("launcher/restore/macos_picker.py")
-A4_HANDOFF = P("launcher/restore/browser_handoff.py")
-LAUNCHER_RUNTIME = P("launcher/runtime.py")
-MAIN_TS = P("frontend/src/main.ts")
-ROUTES = P("frontend/src/app-navigation-routes.ts")
-BROWSER_CONTRACT = P("frontend/src/restore-control-contract.ts")
-BROWSER_RUNTIME = P("frontend/src/restore-control-runtime.ts")
-PRESENTATION = P("frontend/src/restore-control-presentation.ts")
-ENTRY = P("frontend/src/restore-control-entry.ts")
-
-EXPECTED_MAIN_BLOB = "ea98a76638bddcb5a92b9ba31941508f8a816d42"
-EXPECTED_STAGING_BLOB = "3126d5b1e68e764c135739fad71915912481c493"
-EXPECTED_A1_BLOB = "c8734ab60a576ecad53acd961571ddf2c14bdcf4"
-
-ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF_STATE, CHANGE_REQUESTS)
+ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF, CHANGE_REQUESTS)
 SUPPORTING = (CURRENT, A_SLICES, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
+
 CORE = (
-    "PR #181 — MERGED — B1 AUTHORIZED",
+    "PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED",
     "C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN",
     "C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED",
@@ -62,17 +38,52 @@ CORE = (
     "C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B — IN PROGRESS — SLICED",
-    "C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "C4-II-B2 — PLANNED — NOT AUTHORIZED",
+    "C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
+    "C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-II-B3 — PLANNED — NOT AUTHORIZED",
     "Restore — NOT IMPLEMENTED",
     "Product release readiness — NOT CLAIMED",
 )
-STALE = (
-    "C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "C4-II-B — PLANNED — NOT AUTHORIZED",
-    "C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+
+COMPACT_RESTORE_CORE = (
+    "PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED",
+    "C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED",
+    "C4-II-B — IN PROGRESS — SLICED",
+    "C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
+    "C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "C4-II-B3 — PLANNED — NOT AUTHORIZED",
+    "Restore — NOT IMPLEMENTED",
+    "Product release readiness — NOT CLAIMED",
 )
+
+STALE = (
+    "PR #181 — MERGED — B1 AUTHORIZED",
+    "C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+    "C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "C4-II-B2 — PLANNED — NOT AUTHORIZED",
+    "C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED",
+)
+
+B1_REVIEWED_HEAD = "27726058af4f373ab65225ecf4d1a945f1c53067"
+B1_MERGE_MAIN = "5e13b50f1918dacbf8d54066c9156942a9adb895"
+
+# Closure branches may document B2 but may not implement it. Pin every
+# load-bearing B1/C4-I surface plus the exact control/runtime/frontend seams B2
+# is expected to change later. Any byte of runtime change fails this closure gate.
+PINNED_BLOBS = {
+    P("launcher/restore/contracts.py"): "1b4adf345b2470e7c50987570e7848012aa15a95",
+    P("launcher/restore/engine.py"): "91eb99d14aa3dc70e7d6fb0d63cb03c6af7d255f",
+    P("launcher/restore/source_proof.py"): "2339ee118d7ae85f792cb550c5a8ea1cc77f716c",
+    P("launcher/restore/staging.py"): "3126d5b1e68e764c135739fad71915912481c493",
+    P("launcher/restore/validation_session.py"): "c8734ab60a576ecad53acd961571ddf2c14bdcf4",
+    P("launcher/tests/test_restore_source_proof_binding.py"): "256ce4edc86d5060e056466bdeb35fb319269e33",
+    P("launcher/restore/control_protocol.py"): "13ab63969cf419ff70ba93eaee750f946785046e",
+    P("launcher/restore/control_session.py"): "617511e38ada4bf9fcbc5bc0922d9137135a85ea",
+    P("launcher/restore/control_plane.py"): "e5d0227a05cd4c8a67480f63f1aade9401f1da32",
+    P("launcher/runtime.py"): "3f5381c3ad717d272deeb7617f2cfc2585c80c6c",
+    P("frontend/src/main.ts"): "ea98a76638bddcb5a92b9ba31941508f8a816d42",
+    P("frontend/src/restore-control-contract.ts"): "227243fc9ceb3c833a474fc1f1d44e141cfe294c",
+}
 
 HISTORY = (
     P("docs/history/AGENTS.md"),
@@ -85,6 +96,7 @@ HISTORY = (
     P("docs/history/state-snapshots/2026-08-06-c4-i-closure/handoff.md"),
     P("docs/history/change-requests/2026-08-06-pre-compaction.md"),
 )
+
 HISTORY_BLOBS = {
     P("docs/history/implementation-plan/2026-08-06-pre-compaction.md"): "763a720ac7cc30c9eb870c5f24fa23aee75ea054",
     P("docs/history/state-snapshots/2026-08-06-c4-i-closure/current-focus.md"): "3fcd869815a7559cc46f278b37ee06eae683dd75",
@@ -93,22 +105,6 @@ HISTORY_BLOBS = {
     P("docs/history/change-requests/2026-08-06-pre-compaction.md"): "85f284b0a08eba2a2f084672091cc9eedab261dc",
 }
 
-DESTRUCTIVE_MODULES = {
-    "launcher.restore.state",
-    "launcher.restore.safety_copy",
-    "launcher.restore.replacement",
-    "launcher.restore.recovery",
-    "launcher.restore.phases",
-}
-DESTRUCTIVE_CALLS = {
-    "execute_restore",
-    "create_verified_safety_copy",
-    "commit_replacement",
-    "prepare_replacement_artifact",
-    "quiesce_target_journal",
-    "recover_incomplete_restore",
-    "perform_rollback",
-}
 ERRORS: list[str] = []
 
 
@@ -135,78 +131,42 @@ def require(path: Path, markers: tuple[str, ...]) -> None:
             fail(f"{path.relative_to(ROOT)} is missing marker: {marker!r}")
 
 
+def forbid(path: Path, markers: tuple[str, ...]) -> None:
+    text = norm(read(path))
+    for marker in markers:
+        if norm(marker) in text:
+            fail(f"{path.relative_to(ROOT)} contains forbidden marker: {marker!r}")
+
+
 def blob(path: Path) -> str:
-    data = path.read_bytes()
+    try:
+        data = path.read_bytes()
+    except FileNotFoundError:
+        fail(f"missing pinned file: {path.relative_to(ROOT)}")
+        return ""
     return sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
 
 
-def parse(path: Path) -> ast.AST | None:
-    text = read(path)
-    if not text:
-        return None
-    try:
-        return ast.parse(text, filename=str(path))
-    except SyntaxError as exc:
-        fail(f"{path.relative_to(ROOT)} does not parse: {exc}")
-        return None
-
-
-def modules(tree: ast.AST) -> set[str]:
-    out: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            out.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            out.add(node.module)
-    return out
-
-
-def calls(tree: ast.AST) -> set[str]:
-    out: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name):
-                out.add(node.func.id)
-            elif isinstance(node.func, ast.Attribute):
-                out.add(node.func.attr)
-    return out
-
-
-def function(tree: ast.AST, name: str) -> str:
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
-            return ast.unparse(node)
-    fail(f"missing function {name!r}")
-    return ""
-
-
-def no_destructive(path: Path, extra: set[str] | None = None) -> None:
-    tree = parse(path)
-    if tree is None:
-        return
-    forbidden = set(DESTRUCTIVE_MODULES)
-    forbidden.update(extra or set())
-    for item in sorted(modules(tree) & forbidden):
-        fail(f"{path.relative_to(ROOT)} imports forbidden scope: {item}")
-    for item in sorted(calls(tree) & DESTRUCTIVE_CALLS):
-        fail(f"{path.relative_to(ROOT)} calls destructive boundary: {item}")
-
-
-def check_docs() -> None:
+def check_lifecycle_docs() -> None:
     for path in ACTIVE:
         require(path, CORE)
+
     require(
         CURRENT,
         CORE
         + (
-            "d2549cd9be2b60c5aee2479050e05a6ad8530c6c",
-            "beae1407af270ad1c800c308ea7907750430eb1d",
-            EXPECTED_MAIN_BLOB,
-            EXPECTED_STAGING_BLOB,
-            "same `HeldSource` descriptor",
-            "SOURCE_CHANGED",
+            B1_REVIEWED_HEAD,
+            B1_MERGE_MAIN,
+            "2480/2480",
+            "external exact-head",
+            "P0=0 / P1=0 / P2=0",
+            "Only **C4-II-B2",
+            "/v1/restore/execute",
+            "main launcher runtime",
+            "same ephemeral port",
         ),
     )
+
     require(
         A_SLICES,
         (
@@ -215,30 +175,80 @@ def check_docs() -> None:
             "docs/c4-ii-b-implementation-slices.md",
         ),
     )
+
     require(
         B_SLICES,
         CORE
         + (
-            "B1 — Bind retained source proof into C4-I intake — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-            "ExpectedSourceProof",
-            "ProofBoundRestoreRequest",
-            "bind_expected_source_proof",
-            "same `HeldSource`",
-            "before `prepared`",
-            "external",
-            "B2 — Launcher destructive coordinator/control command — PLANNED — NOT AUTHORIZED",
+            "B1 — Bind retained source proof into C4-I intake — DONE — MERGED AND EXACT-HEAD VERIFIED",
+            "B2 — Launcher destructive coordinator/control command — AUTHORIZED NEXT",
+            "POST /v1/restore/execute",
+            '"request_id"',
+            '"command_seq"',
+            '"generation"',
+            "RestoreExecutionIntent",
+            "HTTP request returns; it does not call C4-I",
+            "main launcher runtime",
+            "same `127.0.0.1:<ephemeral>`",
+            "session expiry invalidates browser authentication",
+            "must not cancel",
+            "restoring",
+            "restore_completed",
+            "restore_failed",
+            "restore_blocked",
+            "maintenance lease",
             "B3 — Browser explicit destructive confirmation — PLANNED — NOT AUTHORIZED",
         ),
     )
+
     require(
         PROFILE,
         CORE
         + (
-            "Implemented B1 seam — proof binding at C4-I intake",
-            "ProofBoundRestoreRequest",
-            "bind_expected_source_proof",
-            "same `HeldSource` descriptor",
-            "A path-only pre-check followed by a later re-open is forbidden",
+            "Authorized B2 coordinator seam",
+            "POST /v1/restore/execute",
+            "One-shot authority transfer",
+            "Destructive work does not run in HTTP/session worker",
+            "main launcher runtime loop",
+            "same ephemeral port",
+            "session expiry does not cancel C4-I",
+            "Backend restart handoff",
+            "restoring",
+            "restore_completed",
+            "restore_failed",
+            "restore_blocked",
+        ),
+    )
+
+    require(
+        PLAN,
+        CORE
+        + (
+            "Current implementation window — C4-II-B2",
+            "request_id + command_seq + generation",
+            "launcher-private RestoreExecutionIntent",
+            "HTTP/session workers never call `execute_restore(...)`",
+            "frontend remains byte-identical",
+        ),
+    )
+
+    require(
+        DEPLOYMENT,
+        COMPACT_RESTORE_CORE
+        + (
+            "same ephemeral port",
+            "main runtime owner path",
+            "no new service, port, daemon, helper executable or dependency",
+        ),
+    )
+
+    require(
+        PACKAGING,
+        COMPACT_RESTORE_CORE
+        + (
+            "same launcher process",
+            "no new dependency",
+            "Frontend assets remain byte-identical in B2",
         ),
     )
 
@@ -249,127 +259,78 @@ def check_docs() -> None:
                 fail(f"{path.relative_to(ROOT)} retains stale lifecycle phrase: {stale!r}")
 
 
-def check_history() -> None:
-    require(ADR16, ("before_restore", "replacement_intent", "recovery_blocked", "selected source", "immutable"))
+def check_authority_decisions_and_history() -> None:
+    require(
+        ADR16,
+        (
+            "before_restore",
+            "replacement_intent",
+            "recovery_blocked",
+            "selected source",
+            "immutable",
+        ),
+    )
     require(
         ADR18,
         (
             "127.0.0.1",
             "/backups/restore",
-            "/usr/bin/osascript",
             "sessionStorage",
+            "command_seq",
             "compare descriptor/path SourceIdentity",
             "recompute and compare full SHA-256",
         ),
     )
+
     for path in HISTORY:
         if not path.exists():
             fail(f"missing required history path: {path.relative_to(ROOT)}")
+
     for path, expected in HISTORY_BLOBS.items():
         if path.exists() and blob(path) != expected:
             fail(f"protected history blob changed: {path.relative_to(ROOT)}")
 
 
-def check_closed_a_boundaries() -> None:
-    if blob(MAIN_TS) != EXPECTED_MAIN_BLOB:
-        fail(f"frontend/src/main.ts changed after A4 closure; expected blob {EXPECTED_MAIN_BLOB}")
-    if blob(A1) != EXPECTED_A1_BLOB:
-        fail(f"A1 validation-session implementation drifted; expected blob {EXPECTED_A1_BLOB}")
+def check_exact_pre_b2_runtime_boundary() -> None:
+    for path, expected in PINNED_BLOBS.items():
+        actual = blob(path)
+        if actual and actual != expected:
+            fail(
+                f"B2 runtime implementation leaked into closure branch: "
+                f"{path.relative_to(ROOT)} expected blob {expected}, got {actual}"
+            )
 
-    for path in (A1, A1_SCRATCH, A2_PROTOCOL, A2_SESSION, A2_PLANE, A3_PICKER, A4_HANDOFF):
-        no_destructive(path, {"webbrowser"} if path != A4_HANDOFF else {"subprocess"})
+    control_plane = P("launcher/restore/control_plane.py")
+    control_session = P("launcher/restore/control_session.py")
+    control_protocol = P("launcher/restore/control_protocol.py")
+    runtime = P("launcher/runtime.py")
+    frontend_contract = P("frontend/src/restore-control-contract.ts")
 
-    require(A1, ("RestoreCandidatePreparationService", "RetainedSourceProof", "retained_proof"))
-    require(A2_SESSION, ("BOOTSTRAP_RANDOM_BYTES = 32", "SESSION_RANDOM_BYTES = 32", "HEARTBEAT_INTERVAL_SECONDS = 15", "SESSION_EXPIRY_SECONDS = 60"))
-    require(A2_PLANE, ("CONTROL_HOST = \"127.0.0.1\"", "/v1/bootstrap", "/v1/restore/select", "/v1/restore/cancel", "no-store"))
-    require(A3_PICKER, ("OSASCRIPT_PATH = Path(\"/usr/bin/osascript\")", "choose file", "shell=False"))
-    require(ROUTES, ("'/backups/restore': 'Резервные копии'",))
-    require(BROWSER_CONTRACT, ("RESTORE_CONTROL_FRAGMENT_PREFIX = '#cw-control='", "RESTORE_SESSION_STORAGE_KEYS"))
-    require(BROWSER_RUNTIME, ("credentials: 'omit'", "cache: 'no-store'", "Authorization", "command_seq"))
-    require(PRESENTATION, ("Рабочие данные не изменены", "восстановление ещё не запускалось"))
-    require(ENTRY, ("captureRestoreBootstrap", "window.sessionStorage", "MutationObserver"))
-
-    browser = "\n".join(read(path) for path in (BROWSER_CONTRACT, BROWSER_RUNTIME, ENTRY, PRESENTATION))
-    for marker in ("localStorage", "source_path", "execute_restore", '<input type="file"'):
-        if marker in browser:
-            fail(f"closed A4 browser authority drifted: {marker!r}")
-    plane = read(A2_PLANE)
-    for marker in ("/v1/restore/confirm", "/v1/restore/execute"):
-        if marker in plane:
-            fail(f"B2 command leaked before authorization: {marker}")
-
-
-def check_b1_implementation() -> None:
-    if blob(STAGING) != EXPECTED_STAGING_BLOB:
-        fail(f"C4-I staging algorithm changed in B1; expected blob {EXPECTED_STAGING_BLOB}")
-
-    require(
-        CONTRACTS,
+    forbid(control_plane, ("/v1/restore/execute", "/v1/restore/confirm"))
+    forbid(
+        control_session,
+        ("RestoreExecutionIntent", "restore_completed", "restore_failed", "restore_blocked"),
+    )
+    forbid(
+        control_protocol,
         (
-            "SOURCE_CHANGED = \"source_changed\"",
-            "class ExpectedSourceProof",
-            "source_identity: \"SourceIdentity\"",
-            "sha256: str",
-            "class RestoreRequest",
-            "selected_source: Path",
-            "expected_source_proof = None",
-            "class ProofBoundRestoreRequest(RestoreRequest)",
-            "expected_source_proof: ExpectedSourceProof = field()",
-            "Резервная копия изменилась после проверки.",
+            "RESTORING = \"restoring\"",
+            "RESTORE_COMPLETED",
+            "RESTORE_FAILED",
+            "RESTORE_BLOCKED",
         ),
     )
-    no_destructive(SOURCE_PROOF)
-    require(
-        SOURCE_PROOF,
-        (
-            "class SourceProofMismatchError",
-            "def bind_expected_source_proof",
-            "held.identity != expected.source_identity",
-            "held.revalidate()",
-            "held.assert_still_self_contained()",
-            "held.digest()",
-            "byte_count != held.size_bytes",
-            "digest != expected.sha256",
-        ),
-    )
-
-    tree = parse(ENGINE)
-    if tree is not None:
-        intake = function(tree, "_execute_authorized")
-        order = [
-            intake.find("open_selected_source"),
-            intake.find("bind_expected_source_proof"),
-            intake.find("_execute_with_source"),
-        ]
-        if any(pos < 0 for pos in order) or order != sorted(order):
-            fail("B1 must bind proof after one source open and before _execute_with_source")
-        for marker in ("expected_source_proof", "RestoreFailure.SOURCE_CHANGED"):
-            if marker not in intake:
-                fail(f"B1 engine intake missing marker: {marker!r}")
-
-    require(
-        B1_TESTS,
-        (
-            "ProofBoundRestoreRequest",
-            "test_exact_a1_identity_and_digest_allow_existing_c4_i_flow",
-            "test_proof_gate_and_stage_use_the_same_held_source_descriptor",
-            "test_same_path_replaced_with_different_inode_is_refused_before_prepared",
-            "test_same_inode_and_size_changed_bytes_are_refused_by_digest_proof",
-            "test_sidecar_appearing_after_a1_validation_is_refused_before_prepared",
-            "test_symlink_substitution_after_a1_validation_is_refused_before_prepared",
-            "test_expected_digest_byte_count_mismatch_is_refused_before_prepared",
-            "test_wrong_expected_sha_is_refused_without_source_or_database_mutation",
-            "test_source_changed_result_exposes_no_absolute_path",
-            "test_legacy_c4_i_request_without_expected_proof_is_behaviorally_unchanged",
-        ),
+    forbid(runtime, ("RestoreExecutionIntent",))
+    forbid(
+        frontend_contract,
+        ("'restoring'", "'restore_completed'", "'restore_failed'", "'restore_blocked'", "'execute'"),
     )
 
 
 def main() -> int:
-    check_docs()
-    check_history()
-    check_closed_a_boundaries()
-    check_b1_implementation()
+    check_lifecycle_docs()
+    check_authority_decisions_and_history()
+    check_exact_pre_b2_runtime_boundary()
 
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
@@ -381,13 +342,15 @@ def main() -> int:
     print(f"Checked {len(ACTIVE)} compact active files.")
     print(f"Verified {len(HISTORY)} required history paths.")
     print(f"Verified {len(HISTORY_BLOBS)} exact historical Git blob identities.")
-    print("Verified PR #181 merged / B1-only authorization baseline.")
-    print("Verified C4-II-A remains closed and frontend/A1 boundaries remain intact.")
-    print("Verified C4-I staging.py remains byte-identical while B1 binds the same HeldSource before prepared.")
-    print("Verified base RestoreRequest remains selected-source-only while ProofBoundRestoreRequest carries B1 evidence.")
-    print("Verified ExpectedSourceProof and fixed SOURCE_CHANGED presentation contract.")
-    print("Verified focused B1 substitution/digest/immutability/legacy test contracts are present.")
-    print("Verified B2/B3 control/browser destructive authority remains not authorized.")
+    print("Verified PR #182 merged / C4-II-B1 exact-head closure evidence.")
+    print("Verified B1 is DONE and B2 is the only authorized next implementation slice.")
+    print("Verified exact /v1/restore/execute request, replay, one-shot generation/proof-transfer contract.")
+    print("Verified destructive execution belongs to the launcher main runtime, never the HTTP/session worker.")
+    print("Verified same control-plane lifetime and heartbeat/state availability across backend stop/restart.")
+    print("Verified restart/result handoff and session-expiry non-cancellation semantics are documented.")
+    print("Verified B3/C4-II-C/C4-III remain not authorized.")
+    print(f"Verified {len(PINNED_BLOBS)} exact pre-B2 runtime/frontend Git blob identities.")
+    print("Verified no B2 runtime implementation leaked into this closure branch.")
     print("Verified ADR 0016 / ADR 0018 durable authority remains unchanged.")
     print("Verified maintained historical guidance and exact snapshots remain protected.")
     return 0

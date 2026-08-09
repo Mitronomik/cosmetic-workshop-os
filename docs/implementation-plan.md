@@ -8,7 +8,7 @@ Updated: `2026-08-09`
 ## Current lifecycle
 
 ```text
-PR #181 — MERGED — B1 AUTHORIZED
+PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -17,8 +17,8 @@ C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -29,67 +29,96 @@ Product release readiness — NOT CLAIMED
 ## Merged baseline
 
 ```text
-PR #181 reviewed B1-authorization head — d2549cd9be2b60c5aee2479050e05a6ad8530c6c
-PR #181 merge/new main — beae1407af270ad1c800c308ea7907750430eb1d
+PR #182 reviewed B1 head — 27726058af4f373ab65225ecf4d1a945f1c53067
+PR #182 merge/new main — 5e13b50f1918dacbf8d54066c9156942a9adb895
 ```
 
-## Current implementation window — C4-II-B1
+B1 closure evidence: full backend+launcher `2480/2480`, external exact-head substitution smoke PASS, independent `P0=0/P1=0/P2=0`.
 
-B1 is implemented as a narrow launcher-private gate while retaining the closed C4-I base request surface:
+## Current implementation window — C4-II-B2
+
+Implement only the launcher destructive coordinator/control command defined in `docs/c4-ii-b-implementation-slices.md`.
+
+Required flow:
 
 ```text
-RestoreRequest(selected_source=Path)
-or
-ProofBoundRestoreRequest(
-    selected_source=Path,
-    expected_source_proof=ExpectedSourceProof(SourceIdentity, SHA-256)
-)
-→ existing open_selected_source(...)
-→ HeldSource H
-→ bind_expected_source_proof(H, expected)
-→ H.identity equality
-→ H.revalidate()
-→ H.assert_still_self_contained()
-→ H.digest()
-→ exact byte count + SHA-256 equality
-→ H.revalidate() + self-containment again
-→ same H
-→ existing _execute_with_source(...)
-→ unchanged stage_source(..., H)
+POST /v1/restore/execute
+  exact body: request_id + command_seq + generation
+→ authenticated/session/replay checks
+→ consume exactly-next sequence before business preconditions
+→ require current accepted generation + current retained A1 proof
+→ atomically invalidate retained source authority
+→ queue exactly one launcher-private RestoreExecutionIntent
+→ return safe `restoring` reply; HTTP thread performs no C4-I work
+→ launcher main runtime consumes intent
+→ ProofBoundRestoreRequest(retained source path, ExpectedSourceProof)
+→ existing execute_restore(..., LauncherLifecycleContext)
+→ existing C4-I owns backend stop/exclusion + all destructive semantics
+→ main runtime performs ordinary-backend restart handoff when safe
+→ publish one safe final control state
 ```
 
-A mismatch stops before `_execute_with_source(...)`, hence before `prepared`, `before_restore` and any working-database mutation. A fixed `SOURCE_CHANGED` message contains no path, SQL, migration ID, stack trace or database content.
+## Mandatory B2 seams
 
-## Mandatory B1 seams
+- `/v1/restore/execute` is the only new destructive control command.
+- Browser body carries no path, proof, digest, operation ID or target path.
+- `generation` is a stale-view guard only; source authority remains launcher-private retained proof.
+- Command sequence/retry rules remain ADR 0018 exact-next and idempotent.
+- The accepted source authority is one-shot and invalidated before destructive execution begins.
+- HTTP/session workers never call `execute_restore(...)`.
+- C4-I remains the only destructive Restore engine.
+- The same control plane stays alive while ordinary backend is intentionally stopped/restarted.
+- Heartbeat/state remain responsive during `restoring`.
+- Cancel/session expiry cannot cancel destructive C4-I after intent acceptance.
+- Launcher main runtime, not one stale initial `process.wait()`, owns backend lifetime across the stop/restart transition.
+- Backend restart uses the canonical `context.database_path` and `BackendProcessOwner`; no process discovery by port/name/PID pattern.
+- If C4-I does not permit normal startup, no ordinary backend starts.
+- Backend restart failure does not rewrite or roll back the C4-I result.
+- B2 may add safe control states `restoring`, `restore_completed`, `restore_failed`, `restore_blocked`; frontend remains unchanged until B3/C.
+- B3 remains not authorized.
 
-- Base `RestoreRequest` remains selected-source-only; the historical C4-I type-level security invariant stays true.
-- `ProofBoundRestoreRequest` is launcher-private and adds only `ExpectedSourceProof`, never another path.
-- C4-I remains the only Restore engine.
-- `launcher/restore/staging.py` remains byte-identical to baseline; no duplicate staging/validation algorithm exists.
-- The proof check and staging use the same `HeldSource` object/fd.
-- Existing C4-I calls using base `RestoreRequest` keep current behavior.
-- B1 adds no browser route/button and no A2 control endpoint.
-- B2/B3 remain not authorized.
+## Protected implementation boundaries
 
-## Required B1 proof before merge
+B2 should not modify these merged B1/C4-I files:
 
-1. focused B1 pytest contract passes;
-2. base `RestoreRequest` remains selected-source-only;
-3. matching identity+digest continues through existing C4-I;
-4. different inode, same-inode changed bytes, late sidecar, symlink and short digest are refused;
-5. mismatch creates no durable record, safety copy or working-DB change;
-6. selected source stays unchanged;
-7. legacy C4-I regression remains green;
-8. A1/A2/A3/A4 closed-boundary regressions remain green;
-9. full backend+launcher regression remains green;
-10. exact published head is smoke-tested with an external isolated runner under the project smoke-runner contract;
-11. worktree/head remain clean and exact;
-12. independent P0=0/P1=0/P2=0 audit.
+```text
+launcher/restore/contracts.py
+launcher/restore/engine.py
+launcher/restore/source_proof.py
+launcher/restore/staging.py
+launcher/restore/validation_session.py
+frontend/**
+backend/**
+migrations/**
+```
+
+A new focused launcher execution-coordinator module is allowed. A tiny observation accessor on `BackendProcessOwner` is allowed only if needed for the main runtime loop; ownership/stopping semantics are not.
+
+## Required B2 proof before merge
+
+1. exact endpoint schema and Host/Origin/auth/replay tests;
+2. one-shot accepted-generation/proof transfer tests;
+3. duplicate/retry executes at most once;
+4. stale generation/missing proof/in-progress commands queue nothing;
+5. HTTP worker never calls C4-I;
+6. main runtime invokes existing C4-I exactly once with `ProofBoundRestoreRequest` built only from retained launcher proof;
+7. control plane remains responsive on the same port while backend is stopped;
+8. session expiry/cancel does not cancel destructive execution;
+9. completed/failed/blocked result mapping is safe and pathless;
+10. ordinary backend restart uses exact owner/lock handshake and canonical database;
+11. restart failure leaves C4-I truth unchanged and maintenance exclusion safe;
+12. intentional Restore stop does not terminate launcher runtime or kill a restarted backend;
+13. existing A1/A2/A3/A4/B1/C4-I regressions remain green;
+14. frontend remains byte-identical;
+15. full backend+launcher regression green;
+16. external exact-head isolated process smoke proves command → stop → B1 re-proof → C4-I → restart/result handoff;
+17. clean exact head/worktree;
+18. independent `P0=0/P1=0/P2=0` audit.
 
 ## Forbidden scope
 
-No B2/B3 runtime wiring, browser destructive confirmation, new control command, FastAPI Restore mutation, second Restore engine, phase/recovery redesign, packaging redesign, cloud sync, OCR, roles/multiuser or advanced analytics.
+No B3 browser confirmation/UI, no `/v1/restore/confirm`, no ordinary FastAPI Restore mutation, no second Restore engine, no phase/recovery redesign, no Restore AuditLog change, no new dependency, no packaging redesign, no cloud sync/OCR/roles/multiuser/advanced analytics.
 
 ## Next action
 
-Publish B1 Draft PR → exact-head local tests → external isolated smoke → independent audit → merge only after all evidence is green → separate post-merge lifecycle closure before any B2 authorization.
+Merge this B1-closure/B2-authorization docs PR after exact-head lifecycle review → implement B2 as one bounded Draft PR → exact-head tests + external smoke + independent audit → merge only when green → separate lifecycle closure before any B3 authorization.

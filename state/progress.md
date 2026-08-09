@@ -7,13 +7,14 @@ Updated: `2026-08-09`
 - C1/C2 completed; C3 completed, merged, exact-head verified and hardened.
 - C4-I — `DONE — MERGED AND EXACT-HEAD VERIFIED`.
 - A1/A2/A3/A4 — merged and exact-head verified.
-- PR #181 reviewed `d2549cd9be2b60c5aee2479050e05a6ad8530c6c`, merged as `beae1407af270ad1c800c308ea7907750430eb1d`; C4-II-A closed and only B1 authorized.
+- PR #181 merged as `beae1407af270ad1c800c308ea7907750430eb1d`, closing C4-II-A and authorizing B1.
+- PR #182 reviewed `27726058af4f373ab65225ecf4d1a945f1c53067`, merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`; B1 exact-head verified and closed by current lifecycle changeset.
 - Searchable history and five exact pre-compaction snapshots remain protected.
 
 ## Current lifecycle
 
 ```text
-PR #181 — MERGED — B1 AUTHORIZED
+PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -22,8 +23,8 @@ C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -31,18 +32,36 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## B1 implementation
+## B1 final evidence
 
-B1 adds `ExpectedSourceProof`, fixed `SOURCE_CHANGED` guidance, launcher-private `ProofBoundRestoreRequest(RestoreRequest)` and `bind_expected_source_proof(...)`. Base `RestoreRequest` remains selected-source-only. The proof is checked against the same C4-I `HeldSource` descriptor later staged: identity → revalidate → self-containment → full descriptor SHA-256/byte count → revalidate → self-containment. The gate runs before `_execute_with_source(...)`, therefore before `prepared`, safety copy or working-DB mutation.
+- focused B1: 10/10;
+- Restore privacy: 10/10;
+- full backend+launcher: 2480/2480;
+- external exact-head source substitution smoke: PASS;
+- source changed before `prepared`, no operation record/safety copy/working DB mutation;
+- exact repository status/head remained clean;
+- independent audit: `P0=0/P1=0/P2=0`.
 
-`launcher/restore/staging.py` stays byte-identical; legacy requests remain base `RestoreRequest` and preserve current behavior. Focused tests cover exact match, same descriptor continuity, inode/path substitution, same-inode byte drift, sidecars, symlink, short digest, safe message, immutability, base-request compatibility and legacy behavior.
+## B2 authorization
 
-The first full B1 regression attempt on exact head `e0cce48734116e0527463e914fe62517f24850b1` reached **2479 passed / 1 failed**. The single failure was the historical base `RestoreRequest` field-surface contract. B1 was corrected by moving proof evidence into the dedicated subtype instead of weakening that invariant. The corrected exact head still requires re-verification.
+B2 is now the only authorized implementation slice. Exact semantics are fixed in `docs/c4-ii-b-implementation-slices.md`:
+
+```text
+/v1/restore/execute
+→ exact request_id + command_seq + generation
+→ one-shot accepted authority transfer
+→ launcher-private RestoreExecutionIntent
+→ main launcher runtime
+→ ProofBoundRestoreRequest
+→ existing C4-I execute_restore
+→ ordinary backend restart/result handoff
+```
+
+The same control plane remains alive through the destructive interval; session expiry cannot cancel already accepted C4-I execution. Frontend remains unchanged until B3.
 
 ## Still blocked
 
 ```text
-C4-II-B2 — not authorized
 C4-II-B3 — not authorized
 C4-II-C — not authorized
 C4-III — not authorized
@@ -50,8 +69,8 @@ C4-III — not authorized
 
 ## Open product obligations
 
-- exact-head verify and merge B1;
-- lifecycle-close B1 before deciding B2 destructive coordinator/control semantics;
+- implement and exact-head verify B2;
+- lifecycle-close B2 before any B3 authorization;
 - later B3 explicit destructive confirmation;
 - later C4-II-C outcome/restart/support UX;
 - C4-III end-to-end Restore closure;

@@ -14,31 +14,36 @@ MVP is local-first. User mode must not require Git, terminal, Python, Node.js or
 ## Restore lifecycle
 
 ```text
-PR #181 — MERGED — B1 AUTHORIZED
+PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Implemented topology through A4
+## Implemented topology through B1
 
 ```text
 launcher
 → ordinary backend
 → A2 exact-run 127.0.0.1:<ephemeral> control plane
 → A3 launcher-owned /usr/bin/osascript picker
-→ A1/C4-I non-destructive validation
+→ A1 non-destructive validation + retained source proof
 → A4 fragment-only browser bootstrap + /backups/restore presentation
+→ B1 same-HeldSource proof binding at C4-I intake
 ```
 
 The browser remains presentation only. The bootstrap capability travels in the URL fragment only and is removed immediately. The run-scoped session token lives only in `sessionStorage`; same-tab replay metadata lives only in `history.state`.
 
-## B1 deployment consequence
+## B2 deployment consequence
 
-B1 is internal launcher/C4-I safety hardening only. It adds no service, port, process, browser transport, dependency or packaging requirement. It does not broaden the A2 HTTP vocabulary or change ordinary backend startup.
+B2 adds no new service, port, daemon, helper executable or dependency. It extends the existing launcher-owned loopback control plane with one authenticated `/v1/restore/execute` command and adds launcher-runtime coordination inside the same process.
 
-The existing C4-I source descriptor is proof-bound in-process before durable Restore state. `launcher/restore/staging.py` remains unchanged. B2/B3 destructive runtime wiring remains not authorized.
+The same control plane must remain bound to the same ephemeral port while the ordinary backend is intentionally stopped by C4-I and while the launcher attempts the ordinary-backend restart handoff. No second control server/bootstrap is created for the destructive interval.
+
+The destructive execution itself runs under the launcher main runtime owner path, not an HTTP worker. C4-I remains responsible for backend exclusion, safety copy, replacement, verification and rollback. The launcher runtime must track the current owned backend across the intentional stop/restart instead of treating the initial child process lifetime as the whole application lifetime.
+
+B2 does not change frontend, packaging topology or the ordinary FastAPI business API. B3/C remain required before this becomes a complete user-visible Restore flow.
