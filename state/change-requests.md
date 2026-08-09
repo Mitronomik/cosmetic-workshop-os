@@ -8,7 +8,7 @@ The complete pre-compaction ledger remains byte-identical at `docs/history/chang
 ## Current lifecycle
 
 ```text
-PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
+PR #181 — MERGED — B1 AUTHORIZED
 C1 — COMPLETED
 C2 — COMPLETED
 C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
@@ -21,7 +21,7 @@ C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B2 — PLANNED — NOT AUTHORIZED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -46,21 +46,21 @@ Product release readiness — NOT CLAIMED
 | CR-010 | 2026-08-02 | Launcher-assisted Restore semantics | accepted; C4-I implemented; product Restore incomplete | ADR 0016. |
 | CR-011 | 2026-08-06 | Launcher Restore interaction and non-destructive validation-session boundary | **accepted — ADR 0018 normative on main** | launcher loopback control, `/usr/bin/osascript` picker, exact-run browser session, non-destructive validation. |
 
-## A4 closure
+## B1 implementation under accepted decisions
 
-PR #180 reviewed exact head `79c698ed76d478d608a25f4b95499ff519794228` merged as `e61d4e233c98d3c53e7749fe96ed0ee630610372`. A4 passed automated gates, cross-layer smoke, manual desktop/narrow/keyboard/native-picker UI smoke and independent P0=0/P1=0/P2=0. C4-II-A is complete.
+No new CR/ADR was needed. PR #181 authorized B1 under ADR 0016/0018 and merged as `beae1407af270ad1c800c308ea7907750430eb1d`.
 
-## B slicing decision
+B1 implements only the authorized source-proof binding seam. Historical base `RestoreRequest` remains selected-source-only; launcher-private `ProofBoundRestoreRequest(RestoreRequest)` adds only `ExpectedSourceProof(SourceIdentity, SHA-256)`. That proof is checked against the same C4-I `HeldSource` later staged, before `prepared`.
 
-No new CR or ADR is required for B1. ADR 0016 already requires immutable source, full revalidation before destructive work, mandatory safety copy and C4-I launcher ownership. ADR 0018 already requires a later B to reopen/re-prove the launcher-private source before destructive execution.
+Mismatch maps to fixed `SOURCE_CHANGED` guidance and creates no Restore record, safety copy or working-database mutation. Legacy C4-I callers continue to use the unchanged base request. No additional destructive/application-owned path is caller-supplied.
 
-`docs/c4-ii-b-implementation-slices.md` translates those accepted decisions into small PR boundaries:
+`launcher/restore/staging.py` remains byte-identical; phase, safety-copy, replacement, rollback/recovery and AuditLog semantics are unchanged.
 
-- B1 — source-proof binding at C4-I held-descriptor intake — **AUTHORIZED NEXT**;
-- B2 — launcher destructive coordinator/control command — planned, not authorized;
-- B3 — browser explicit destructive confirmation — planned, not authorized.
+- B1 — **IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED**;
+- B2 — planned, not authorized;
+- B3 — planned, not authorized.
 
-B1 is not permission to implement B2/B3. If B1 cannot preserve current C4-I phase/safety/recovery semantics without a new architectural decision, stop and open a new change request instead of silently changing the contract.
+B1 is not permission to implement B2/B3. If exact-head tests reveal that this seam cannot preserve current C4-I semantics, stop and open a new change request instead of silently changing architecture.
 
 ## History policy
 

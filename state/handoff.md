@@ -7,7 +7,7 @@ Current lifecycle authority: `docs/current-lifecycle.md`. Accepted Restore decis
 ## Current lifecycle
 
 ```text
-PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
+PR #181 — MERGED — B1 AUTHORIZED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
@@ -16,7 +16,7 @@ C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
-C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B1 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B2 — PLANNED — NOT AUTHORIZED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
@@ -25,43 +25,47 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Last merged implementation — PR #180
+## Authorization baseline — PR #181
 
 ```text
-reviewed head — 79c698ed76d478d608a25f4b95499ff519794228
-merge/new main — e61d4e233c98d3c53e7749fe96ed0ee630610372
+reviewed head — d2549cd9be2b60c5aee2479050e05a6ad8530c6c
+merge/new main — beae1407af270ad1c800c308ea7907750430eb1d
 ```
 
-A4 closed after automated exact-head gates, cross-layer non-destructive smoke, desktop/narrow/keyboard/native-picker UI smoke and independent P0=0/P1=0/P2=0.
-
-## Current work — B1 retained source-proof binding
-
-Implement one internal safety seam only:
+## Current B1 implementation
 
 ```text
 A1 retained SourceIdentity + SHA-256
-→ future trusted expectation
-→ C4-I open_selected_source(...)
-→ exact same HeldSource descriptor
+→ ProofBoundRestoreRequest(
+     selected_source=Path,
+     expected_source_proof=ExpectedSourceProof(...)
+   )
+→ existing C4-I open_selected_source(...)
+→ HeldSource H
+→ bind_expected_source_proof(H, expected)
 → identity + revalidate + self-containment
-→ held digest + exact byte count
+→ full H.digest() + exact byte count
 → revalidate + self-containment again
-→ existing C4-I staging/validation may continue
+→ exact same H
+→ unchanged C4-I stage_source(..., H)
 ```
 
-The mismatch path must stop before durable `prepared`, safety copy or working-database mutation.
+Base `RestoreRequest` remains selected-source-only for all historical C4-I callers. The proof subtype contains no additional filesystem path and grants no authority by itself.
+
+Mismatch stops before `_execute_with_source(...)`, so there is no `prepared`, safety copy or working-database mutation. It returns fixed `SOURCE_CHANGED` guidance. `launcher/restore/staging.py` stays byte-identical to baseline.
+
+Focused B1 tests are in `launcher/tests/test_restore_source_proof_binding.py`. PR-specific exact-head smoke must be external to the tested branch and use isolated data.
 
 ## Not B1
 
-- browser confirmation or button;
+- browser confirmation/button;
 - new control HTTP command;
-- user-facing `execute_restore` coordinator;
+- user-facing destructive coordinator;
 - duplicate staging/validation engine;
 - durable phase vocabulary changes;
 - safety-copy/replacement/recovery redesign;
-- Restore AuditLog changes;
-- packaging/cloud/OCR/multiuser/advanced analytics.
+- Restore AuditLog changes.
 
 ## Successor gate
 
-B2/B3 are not authorized. After B1 is implemented, exact-head verified and merged, create a separate closure/authorization PR before defining the destructive coordinator/control command.
+B2/B3 are not authorized. B1 must be exact-head verified, externally smoked, independently audited, merged and lifecycle-closed before B2 may be authorized.

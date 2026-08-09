@@ -84,6 +84,7 @@ from launcher.restore.replacement import (
     quiesce_target_journal,
 )
 from launcher.restore.safety_copy import SafetyCopyError, create_verified_safety_copy, verify_safety_copy
+from launcher.restore.source_proof import SourceProofMismatchError, bind_expected_source_proof
 from launcher.restore.staging import (
     SourceRejectedError,
     StagingError,
@@ -315,11 +316,24 @@ def _execute_authorized(
         held = open_selected_source(request.selected_source, database_path)
     except SourceRejectedError as exc:
         logger.warning("Restore source rejected: %s", exc.rejection)
-        return _refused_before_any_state(operation_id, _source_failure(exc))
+        failure = (
+            RestoreFailure.SOURCE_CHANGED
+            if request.expected_source_proof is not None
+            else _source_failure(exc)
+        )
+        return _refused_before_any_state(operation_id, failure)
 
-    # The descriptor is held for the whole of staging, so identity cannot be
-    # swapped underneath the copy.
+    # The descriptor is held for the whole of proof binding and staging, so the
+    # source proved here is the exact descriptor copied later.
     with held:
+        if request.expected_source_proof is not None:
+            try:
+                bind_expected_source_proof(held, request.expected_source_proof)
+            except SourceProofMismatchError:
+                logger.warning("Restore source no longer matches the retained A1 proof.")
+                return _refused_before_any_state(
+                    operation_id, RestoreFailure.SOURCE_CHANGED
+                )
         return _execute_with_source(
             held, context, services, operation_id, store, database_path, backup_dir
         )
