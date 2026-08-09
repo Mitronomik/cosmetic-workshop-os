@@ -52,7 +52,7 @@ Accepted evidence:
 - C4-I Restore regression: 514 passed;
 - full backend + launcher: 2470 passed;
 - frontend build: PASS;
-- A4 frontend: 16 passed, including bootstrap/session race regressions;
+- frontend A4: 16 passed, including bootstrap/session race regressions;
 - backup frontend regression: 25 passed;
 - audit-log frontend regression: 92 passed;
 - A4 exact-head cross-layer smoke: PASS;
@@ -74,7 +74,7 @@ Only **C4-II-B1 — retained-source proof binding into C4-I intake** is authoriz
 
 B1 must reuse the source descriptor opened by existing `open_selected_source(...)`. When an expected A1 proof is supplied, the C4-I intake must compare the held `SourceIdentity`, revalidate path/descriptor identity, re-check sidecars/self-containment and recompute the full SHA-256 through `HeldSource.digest()` before any durable Restore record, safety copy or working-database mutation exists.
 
-The proof check must be against the same held descriptor that C4-I will stage. A separate path re-open followed by a later destructive re-open is not sufficient because it leaves a substitution window.
+The proof check must be against the same `HeldSource` descriptor that C4-I will stage. A separate path re-open followed by a later destructive re-open is not sufficient because it leaves a substitution window.
 
 B1 is an additive safety gate only. Existing C4-I callers without an expected proof retain current behavior. B1 may not add a browser action, a new control endpoint, a new Restore engine, a safety copy, replacement, migration, rollback/recovery mutation or Restore AuditLog.
 
