@@ -3,21 +3,25 @@
 Project: `cosmetic-workshop-os`
 Client-facing name: **Мастерская косметолога**
 Status: **active current implementation sequence**
-Updated: `2026-08-08`
+Updated: `2026-08-09`
 
 ## Current lifecycle
 
 ```text
-PR #178 — MERGED — C4-II-A3 EXACT-HEAD VERIFIED
-PR #179 — MERGED — A3 CLOSED / A4 AUTHORIZED
+PR #180 — MERGED — C4-II-A4 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
-C4-II-A — IN PROGRESS — SLICED
+C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-A4 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B — PLANNED — NOT AUTHORIZED
+C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B — IN PROGRESS — SLICED
+C4-II-B1 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — PLANNED — NOT AUTHORIZED
+C4-II-B3 — PLANNED — NOT AUTHORIZED
+C4-II-C — PLANNED — NOT AUTHORIZED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -25,88 +29,74 @@ Product release readiness — NOT CLAIMED
 ## Merged baseline
 
 ```text
-PR #178 reviewed A3 head — b0de148032d9b3d2f9912298897f8649c9b1692b
-PR #178 merge — 9d95b0c39c4abd05d5a574c6cd8574b8e457f36b
-PR #179 reviewed A3-closure/A4-auth head — 72b04510efd6d1f104369a450ed1c4d4dfe063ad
-PR #179 merge — 52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf
+PR #180 reviewed A4 head — 79c698ed76d478d608a25f4b95499ff519794228
+PR #180 merge/new main — e61d4e233c98d3c53e7749fe96ed0ee630610372
 ```
 
-A3 final proof: 14 A3, 28 A2, 17 A1, 514 C4-I, 2457 full backend+launcher, native-picker smoke PASS, lifecycle PASS, independent P0=0/P1=0/P2=0.
+A4 final proof: launcher 15, A3 14, A2 29, A1 17, C4-I 514, full backend+launcher 2470, frontend A4 16, backup regression 25, audit-log regression 92, exact-head cross-layer smoke PASS, manual desktop/narrow/keyboard/native-picker smoke PASS, lifecycle PASS, independent P0=0/P1=0/P2=0.
 
-## Current implementation window — C4-II-A4
+## Current implementation window — C4-II-B1
 
-Implement only the browser/session/presentation layer already selected by ADR 0018:
+Implement only the launcher-private expected-source proof binding described in `docs/c4-ii-b-implementation-slices.md`.
 
-- launcher fragment handoff without mutating the ordinary runtime config;
-- exact `/backups/restore` nested route and secondary entry from `/backups`;
-- synchronous fragment capture/removal before the ordinary shell module;
-- one-use bootstrap exchange;
-- only `control_origin`, `run_id`, session token in `sessionStorage`;
-- strict reload/retry metadata in same-tab `history.state`, never authority;
-- heartbeat and state polling;
-- exact DTO allowlists and pathless presentation;
-- select/cancel/reselect over existing A2 only;
-- Russian human-readable non-destructive UX;
-- cross-layer A4→A2→A3→A1/C4-I smoke.
+B1 must add a narrow reusable gate at existing C4-I source intake. When a future trusted caller supplies the A1 expected source proof, C4-I must compare it against the exact `HeldSource` descriptor it has opened before any durable Restore operation exists.
 
-## Mandatory A4 seams
+Required proof:
 
-### Browser/filesystem seam
+```text
+expected A1 SourceIdentity + SHA-256
+→ open_selected_source(...)
+→ same held descriptor
+→ identity equality
+→ revalidate()
+→ assert_still_self_contained()
+→ HeldSource.digest()
+→ exact byte count + SHA-256 equality
+→ revalidate + self-containment again
+→ only then existing C4-I staging/validation may continue
+```
 
-No browser-controlled `path`, `source_path`, file bytes, upload/blob, bookmark/handle or `<input type="file">`. Native picker and absolute path remain launcher-owned.
+A mismatch must stop before `prepared`, before `before_restore`, and before any working-database mutation.
 
-### Session/replay seam
+## Mandatory B1 seams
 
-The one-use bootstrap secret exists only in the launch fragment until exchange. The session token lives only in `sessionStorage` and Authorization headers. Non-secret command replay metadata may live in `history.state` only to preserve exact A2 idempotency across reload/network uncertainty. Missing replay after prior activity must fail closed; it must never guess a sequence.
+### Single-engine seam
 
-### A4→C4-II-B seam
+C4-I remains the only staging/validation/destructive Restore engine. B1 must not copy C4-I logic into a new coordinator or create a second staging algorithm.
 
-A4 is non-destructive. Accepted validation is not Restore authorization. No `execute_restore`, confirmation, durable Restore phase, `before_restore` safety copy, database replacement/migration, rollback/recovery mutation or Restore AuditLog.
+### Held-descriptor seam
 
-## Required A4 proof
+The expectation must be checked against the descriptor C4-I actually stages. A pre-check that reopens the path and then lets C4-I reopen it later is insufficient because the path could be substituted between checks.
+
+### Compatibility seam
+
+Existing C4-I calls without an expected proof keep current behavior. B1 is additive safety hardening for the future C4-II-B trusted path, not a rewrite of historical internal C4-I callers.
+
+### Presentation seam
+
+B1 adds no browser route, control endpoint or destructive button. Any mismatch maps to a fixed safe source-changed category/message; raw paths, SQL, migration IDs, stack traces and database contents remain private.
+
+## Required B1 proof
 
 At minimum prove:
 
-1. launcher handoff is fragment-only and original config remains unchanged;
-2. handoff failure closes control authority but ordinary product still opens;
-3. fragment is removed before shell route processing;
-4. sessionStorage contains only the three approved descriptors;
-5. no localStorage/query/file-input/path fallback;
-6. unknown/path-bearing DTO fields are rejected;
-7. 15-second heartbeat and 60-second server expiry contract remain aligned;
-8. random request ID is 128 bits and command sequence is strict;
-9. network uncertainty retries exact same request ID/sequence;
-10. reload recovers sequence only from same-tab replay or pristine `idle/generation=0` proof;
-11. invalid session/run mismatch clears descriptors;
-12. `/backups/restore` is human-readable, keyboard reachable and narrow-screen usable;
-13. accepted state clearly says working data is unchanged and Restore has not started;
-14. `frontend/src/main.ts` remains byte-identical;
-15. A3/A2/A1/C4-I and broader regressions remain green;
-16. cross-layer smoke proves no source/working-DB/AuditLog/durable-Restore mutation.
-
-## Exact-head gate
-
-```text
-git status --short
-→ git diff --check 52cc0b04e0b9531b6cc234c83cbcbb81e04a37bf...HEAD
-→ python3 scripts/check_documentation_lifecycle.py
-→ cd frontend && npm run build && npm run test:restore-control
-→ launcher A4 targeted tests
-→ A3/A2/A1/C4-I regressions
-→ full backend + launcher suite
-→ relevant frontend regression suite
-→ python3 scripts/smoke_restore_browser_session.py --expected-head <HEAD>
-→ desktop/narrow/keyboard smoke of /backups and /backups/restore
-→ clean status/head
-→ independent P0=0/P1=0/P2=0
-```
-
-No PASS is claimed until this runs on the final published A4 head.
+1. matching identity+digest can continue into unchanged C4-I behavior;
+2. same path/new inode is rejected before `prepared`;
+3. same inode/size but different bytes is rejected by held-descriptor digest;
+4. a newly appeared WAL/SHM/journal sidecar is rejected;
+5. symlink/path substitution remains rejected;
+6. digest byte-count mismatch is rejected;
+7. mismatch creates no durable operation record, safety copy or working-DB change;
+8. selected source remains byte-identical;
+9. legacy C4-I calls without expectation retain behavior;
+10. closed A1/A2/A3/A4 regressions remain green;
+11. exact-head smoke proves changed-source refusal before any destructive boundary;
+12. independent P0=0/P1=0/P2=0 audit.
 
 ## Forbidden scope
 
-No destructive C4-II-B, backend Restore mutation endpoint, WebSocket/generic launcher server, packaging redesign, cloud sync, OCR, roles/multiuser or advanced analytics.
+No B2/B3 runtime wiring, browser destructive confirmation, new control command, FastAPI Restore mutation, second Restore engine, phase/recovery redesign, packaging redesign, cloud sync, OCR, roles/multiuser or advanced analytics.
 
 ## Next action
 
-Finish A4 self-audit → open Draft PR → run exact-head build/tests/smoke/UI review → resolve every P0/P1/P2 → merge only after complete evidence → post-merge lifecycle/authorization decision before C4-II-B.
+Merge and independently verify this A4-closure/B1-authorization docs PR → implement B1 as one bounded PR → exact-head tests/smoke/audit → lifecycle-close B1 before deciding B2 command/coordinator semantics.
