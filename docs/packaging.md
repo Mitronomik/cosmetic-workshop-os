@@ -7,13 +7,14 @@ macOS `.app` / `.dmg` packaging is **NOT COMPLETED**.
 ## Restore lifecycle
 
 ```text
-PR #183 — MERGED — B2 AUTHORIZED
+PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
+PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B3 — PLANNED — NOT AUTHORIZED
+C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -28,10 +29,18 @@ Bootstrap capability is launch-memory only. Session token stays in `sessionStora
 
 B1 is internal Python launcher/C4-I proof binding and adds no package resource or persistent state.
 
-## B2 packaging consequence
+## Closed B2 packaging consequence
 
-B2 remains inside the same launcher process and same ephemeral loopback control plane. The current changeset adds only Python launcher coordination/tests plus lifecycle documentation; it adds no new dependency, background service, port, helper executable, entitlement, persistent secret or package resource.
+B2 remains inside the same launcher process and same ephemeral loopback control plane. It adds only launcher coordination/tests and no new dependency, background service, port, helper executable, entitlement, persistent secret or package resource.
 
-The same launcher process now owns the ordinary backend across an intentional C4-I stop/restart using one bounded runtime owner loop. That is runtime coordination, not a packaging redesign.
+The same launcher process owns the ordinary backend across an intentional C4-I stop/restart using one bounded runtime owner loop. That is runtime coordination, not a packaging redesign.
 
-Frontend assets remain byte-identical in B2. B3 later owns the browser confirmation/parser extension. macOS packaging work remains separately incomplete and is not authorized by B2.
+The pre-B3 frontend assets remain byte-identical in this closure/authorization PR.
+
+## B3 packaging boundary
+
+B3 may change frontend assets only. It adds no new dependency, entitlement, background service, helper executable, persistent filesystem authority or packaging topology.
+
+Pending execute replay may retain only action, request ID, command sequence and accepted generation. No source path, proof or digest may be packaged or persisted.
+
+macOS packaging work remains separately incomplete and is not authorized by B3.

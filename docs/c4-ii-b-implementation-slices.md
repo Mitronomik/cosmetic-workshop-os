@@ -1,7 +1,7 @@
 # C4-II-B implementation authorization and slice plan
 
 Status: **NORMATIVE IMPLEMENTATION PLAN**
-Updated: `2026-08-09`
+Updated: `2026-08-11`
 
 This document slices `C4-II-B — destructive Restore confirmation and execution` without changing ADR 0016 or ADR 0018. Destructive Restore enters only through small independently reviewed PRs.
 
@@ -16,12 +16,15 @@ PR #182 reviewed B1 head — 27726058af4f373ab65225ecf4d1a945f1c53067
 PR #182 / B1 merge — 5e13b50f1918dacbf8d54066c9156942a9adb895
 PR #183 reviewed B2-authorization head — fa922f56c19a2dd33b6307ae0a197d476f91489b
 PR #183 / B2-authorization merge — 4617b8c436eaa510fd545d863346595e2d808ea7
+PR #184 reviewed B2 head — 1ae8bfcdf0f1f1798ce85eac0931925d029379c4
+PR #184 / B2 merge — 266c50a77e5f353fa77701cb854629a99460667f
 ```
 
 ## Current slice status
 
 ```text
-PR #183 — MERGED — B2 AUTHORIZED
+PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
+PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
@@ -32,15 +35,15 @@ C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-B3 — PLANNED — NOT AUTHORIZED
+C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-B2 code exists in the current changeset, but B2 is not closed until focused/regression exact-head tests, external isolated process smoke, independent audit, merge and a separate lifecycle-closure change are complete. B3 remains blocked throughout.
+B2 is now lifecycle-closed on merged PR #184. B3 is the only authorized next implementation slice; C4-II-C and C4-III remain blocked.
 
 ## B1 — Bind retained source proof into C4-I intake — DONE — MERGED AND EXACT-HEAD VERIFIED
 
@@ -60,13 +63,13 @@ Accepted exact-head evidence:
 
 The closed B1 implementation keeps base `RestoreRequest` selected-source-only and uses launcher-private `ProofBoundRestoreRequest` with `ExpectedSourceProof(SourceIdentity, SHA-256)`. The expected proof is bound to the same `HeldSource` descriptor C4-I later stages, before `_execute_with_source(...)` and before `prepared`.
 
-## B2 — Launcher destructive coordinator/control command — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+## B2 — Launcher destructive coordinator/control command — DONE — MERGED AND EXACT-HEAD VERIFIED
 
 ### Goal
 
 Add one bounded launcher-owned bridge from the existing exact-run control session into the existing C4-I engine without moving destructive work into HTTP threads, browser code or a second Restore implementation.
 
-The implemented B2 architecture is:
+The closed B2 architecture is:
 
 ```text
 browser/session
@@ -86,22 +89,24 @@ browser/session
 → control session receives one safe final execution state
 ```
 
-### Implementation status in this changeset
+### Accepted B2 closure evidence
 
-The current B2 changeset implements the bounded seam in:
+- reviewed exact head `1ae8bfcdf0f1f1798ce85eac0931925d029379c4`;
+- merge/new main `266c50a77e5f353fa77701cb854629a99460667f`;
+- focused B2/runtime tests: **37 PASS** in the independent audit;
+- launcher regression: **636 PASS**;
+- backend regression: **1867 PASS**;
+- full backend + launcher: **2503/2503 PASS**;
+- frontend Restore regression: **16/16 PASS**;
+- anti-hang owner-loop gate: **PASS**, autonomous, no manual `Ctrl+C`;
+- corrected external exact-head isolated process smoke: **PASS**;
+- external smoke proved production A4 handoff before bootstrap, authenticated `select → accepted → execute`, `restore_accepted / restoring`, same control-plane port through ordinary-backend stop and real C4-I verification lifetimes, durable phase `completed`, safe ordinary-backend restart, `restore_completed`, and isolated cleanup;
+- independent audit: **P0=0 / P1=0 / P2=0 — AUDIT GATE PASS**;
+- final no-change exact-head / clean-worktree gate: **PASS**.
 
-```text
-launcher/restore/control_protocol.py
-launcher/restore/control_session.py
-launcher/restore/control_plane.py
-launcher/restore/execution_coordinator.py
-launcher/runtime.py
-launcher/tests/test_restore_execution_coordinator.py
-```
+The earlier eight-hour run that required repeated manual `Ctrl+C` remains **INVALID / NOT A PASS**. The first external smoke runner remains **INCONCLUSIVE RUNNER** because it consumed the one-use bootstrap before the production A4 handoff; it is neither product PASS nor product failure evidence.
 
-The lifecycle checker is converted from a pre-B2 closure gate into a B2 implementation gate. It permits those explicitly authorized B2 seams while keeping the closed B1/C4-I/A1/A3/A4/frontend boundaries byte-pinned.
-
-No test result is implied by this implementation status. Exact-head execution evidence remains a separate merge gate.
+The lifecycle checker now pins the accepted merged B2 production blobs as a closed boundary.
 
 ### Why execution belongs to the main launcher runtime
 
@@ -190,7 +195,7 @@ restore_failed
 restore_blocked
 ```
 
-They are launcher/control protocol states only. Existing A4 frontend code remains byte-identical and therefore does not initiate or present B2 execution. B3/C must later extend the TypeScript parser/presentation before the product browser can use these states.
+They are launcher/control protocol states only. Existing A4 frontend code remains byte-identical in B2 and therefore does not initiate or present B2 execution.
 
 The existing snapshot shape remains pathless. B2 does not add operation ID, durable record content, absolute path, safety-copy path, SQL, migration ID or traceback to browser state.
 
@@ -273,9 +278,9 @@ Publication is matched to the exact accepted execution intent. A stale selection
 
 The result is in-memory for the current launcher run only. B2 adds no new persistence. Durable truth remains the C4-I operation record; C4-II-C later owns full user-facing completion/rollback/restart/support presentation.
 
-### B2 allowed implementation surface
+### Closed B2 implementation surface
 
-The implemented surface is limited to what is required for this coordinator/control seam:
+The accepted merged surface is:
 
 ```text
 launcher/restore/control_protocol.py
@@ -283,13 +288,11 @@ launcher/restore/control_session.py
 launcher/restore/control_plane.py
 launcher/runtime.py
 launcher/restore/execution_coordinator.py
-launcher/tests/test_restore_execution_coordinator.py
-docs/state lifecycle/checker files
 ```
 
-No `BackendProcessOwner` ownership/stopping semantics are changed.
+No `BackendProcessOwner` ownership/stopping semantics changed.
 
-The following closed B1/C4-I implementations remain byte-identical:
+The following B1/C4-I implementations remain byte-identical:
 
 ```text
 launcher/restore/contracts.py
@@ -302,11 +305,11 @@ launcher/restore/context.py
 launcher/restore/verification.py
 ```
 
-A3 picker, A4 browser handoff and all frontend source also remain byte-identical. Ordinary FastAPI backend, migrations, dependencies and packaging resources are outside B2.
+A3 picker, A4 browser handoff and pre-B3 frontend source remain protected by the closure gate.
 
-### B2 hard prohibitions
+### B2 hard prohibitions — closed evidence
 
-B2 must not:
+The merged B2 implementation did not:
 
 - add browser confirmation/button/UI;
 - modify current frontend contracts or presentation;
@@ -319,52 +322,130 @@ B2 must not:
 - expose operation ID, durable record, internal path or technical exception text;
 - persist A1 proof/path/session token/intent/result;
 - change the twelve durable phases, recovery matrix or Restore AuditLog semantics;
-- add a new dependency, service, port or helper executable;
-- authorize B3/C4-II-C/C4-III.
+- add a new dependency, service, port or helper executable.
 
-### Required B2 tests
+### Accepted B2 tests
 
-The current changeset includes focused tests intended to prove the B2 seams below. They are **not considered PASS until run against the published exact head**.
+The following classes of tests are accepted on the reviewed head:
 
-At minimum prove:
+- exact `/v1/restore/execute` schema and privacy;
+- Host/Origin/auth/schema before sequence consumption;
+- exact-next replay/one-shot semantics;
+- stale/non-accepted generation and missing proof refusals;
+- distinct control/proof generation domains;
+- immediate retained-authority invalidation;
+- HTTP/session never calling C4-I;
+- main runtime consuming intent exactly once;
+- control plane surviving ordinary backend stop;
+- restoring-time heartbeat/state and duplicate command refusal;
+- session expiry non-cancellation;
+- completed/failed/blocked result mappings;
+- SOURCE_CHANGED pre-replacement refusal with unchanged working DB;
+- restart failure and retryable-port fail-closed behavior;
+- backend-exit race sealing;
+- existing A1/A2/A3/A4/B1/C4-I regressions;
+- external isolated process smoke.
 
-- `/v1/restore/execute` exact schema accepts only `request_id`, `command_seq`, `generation`;
-- no path/proof/digest can cross HTTP;
-- wrong Host/Origin/auth/schema cannot consume sequence;
-- exact-next sequence is consumed before business preconditions;
-- same request ID/sequence retry queues and executes at most once;
-- same sequence/different request conflicts; stale/future sequence is refused;
-- stale/non-accepted generation queues nothing;
-- missing retained A1 proof queues nothing;
-- control generation and retained-proof generation need not be numerically equal;
-- accepted execution atomically invalidates retained source authority;
-- queued intent carries launcher-private path + B1 expected proof only in memory;
-- HTTP/session worker never calls `execute_restore(...)`;
-- main runtime consumes the intent and calls existing C4-I exactly once;
-- `ProofBoundRestoreRequest` is constructed from retained A1 proof, never browser values;
-- control plane remains reachable on the same port while ordinary backend is stopped;
-- heartbeat/state remain responsive during `restoring`;
-- select/cancel/second execute during `restoring` cannot cancel or duplicate destructive work;
-- session expiry during `restoring` invalidates browser auth but does not cancel C4-I or overwrite final launcher-owned state;
-- completed C4-I + successful backend restart publishes `restore_completed`;
-- safe failed/rolled-back C4-I + successful restart publishes `restore_failed`;
-- source-changed/pre-replacement refusal restarts ordinary backend and leaves working DB unchanged;
-- `normal_startup_allowed=false` publishes `restore_blocked` and starts no ordinary backend;
-- retryable verification-port condition publishes `restore_blocked` without changing durable phase;
-- backend restart failure does not rewrite/rollback C4-I result and leaves maintenance exclusion safe;
-- intentional C4-I stop of the original backend does not terminate the launcher runtime or kill a newly restarted child;
-- existing A1/A2/A3/A4/B1/C4-I regressions remain green;
-- frontend source remains byte-identical in B2;
-- external exact-head smoke proves one authenticated execute intent, real backend stop, B1 re-proof, C4-I execution and safe restart/result handoff using isolated data/processes.
+## B3 — Browser explicit destructive confirmation — AUTHORIZED NEXT — NOT IMPLEMENTED
 
-## B3 — Browser explicit destructive confirmation — PLANNED — NOT AUTHORIZED
+### Goal
 
-B3 remains blocked until B2 is merged, exact-head verified and separately lifecycle-closed.
+Connect the accepted A4 browser Restore route to merged B2 only after explicit human confirmation.
 
-Future B3 will extend the browser TypeScript contract for the B2 execution states and add the explicit human confirmation UI that sends `/v1/restore/execute` only after the user confirms. Browser filename/state/token/generation remain presentation/reference values, never source proof.
+```text
+A4 browser Restore route
+→ candidate state = accepted
+→ explicit destructive confirmation
+→ dismiss locally OR confirm
+→ authenticated POST /v1/restore/execute
+→ B2 authority-transfer boundary
+→ browser follows pathless launcher state
+```
 
-B2's existence is not permission to surface a destructive button early.
+B3 is frontend-only except focused frontend tests and lifecycle/checker/status docs. **No launcher/backend changes are authorized**.
+
+### Browser authority boundary
+
+The browser may use the safe display filename and accepted control `generation`. It must never know, send or persist absolute source path, source identity, SHA-256, `ExpectedSourceProof`, working database path, backup directory, Restore workspace, safety-copy path, operation ID, durable operation record, lock path, SQL or traceback.
+
+Filename is display-only. `generation` is a stale-view guard, never source proof.
+
+### Frontend control states
+
+B3 may add exactly these existing launcher states to TypeScript parsing:
+
+```text
+restoring
+restore_completed
+restore_failed
+restore_blocked
+```
+
+Unknown states continue to fail closed. The launcher snapshot shape is unchanged.
+
+### Execute command
+
+B3 may add frontend action `execute`, calling only `POST /v1/restore/execute` with exact `request_id + command_seq + generation`. No additional request key is allowed. `/v1/restore/confirm` remains forbidden: confirmation is browser presentation, not a second authority endpoint.
+
+### Replay requirement — load-bearing
+
+Current select/cancel replay stores `action + requestId + commandSeq`. Execute additionally needs the accepted `generation`.
+
+B3 must represent pending commands semantically as:
+
+```text
+select/cancel:
+  action
+  requestId
+  commandSeq
+
+execute:
+  action
+  requestId
+  commandSeq
+  generation
+```
+
+If the execute transport result is ambiguous, retry must send the **same request ID, command sequence and generation**. It must not allocate a new request ID or sequence. No filesystem authority may be stored in history/session replay state. Existing select/cancel replay must remain backward-safe.
+
+### Confirmation UX
+
+Confirmation is shown only for the current `accepted` candidate. It identifies the backup via safe display filename and explains in plain language that current workshop data will be replaced, the application may be temporarily unavailable, and existing C4-I creates a protective copy before replacement.
+
+Dismissing the dialog is local only and must not implicitly call `/v1/restore/cancel`. The destructive action uses existing danger language, accessible dialog/focus semantics, and must be protected against double-click/repeated confirm.
+
+### Restoring and minimal final presentation
+
+While `restoring`, show a clear non-technical in-progress state, disable duplicate destructive confirmation, offer no destructive cancellation, display no fake progress/phase, and continue heartbeat/state polling.
+
+For `restore_completed`, `restore_failed`, `restore_blocked`, B3 may minimally display the safe launcher message. It must not infer durable phases or implement the richer completion/rollback/restart/support experience owned by C4-II-C.
+
+### Authorized implementation surface for the next PR
+
+Primarily:
+
+```text
+frontend/src/restore-control-contract.ts
+frontend/src/main.ts                 # minimal wiring only
+frontend/src/<focused Restore B3 modules if needed>
+frontend/tests/<focused Restore B3 tests>
+docs/state/checker files required for implementation status
+```
+
+Prefer focused modules over growing `main.ts`. No launcher/backend changes are authorized. If they appear necessary, stop and open an architecture/lifecycle question.
+
+### Required B3 tests
+
+- existing A4 states remain valid; four B2 execution states parse; unknown state fails closed;
+- execute body is exactly `request_id + command_seq + generation`, with generation from current `accepted`;
+- accepted state alone does not execute; explicit confirm is required; dismiss sends neither execute nor cancel;
+- repeated confirmation cannot duplicate execute and keyboard/focus semantics remain accessible;
+- ambiguous execute retry preserves exact request ID, sequence and generation without allocating a second sequence;
+- select/cancel replay remains unchanged and no filesystem authority is persisted;
+- `restoring` disables duplicate/destructive-cancel actions while heartbeat/state polling continues;
+- completed/failed/blocked states safely present launcher messages without internal paths or C4-II-C semantics;
+- existing A4 bootstrap/session/select/cancel/replay and ordinary navigation remain green.
 
 ## Successor discipline
 
-Each B slice is a separate PR with exact changed-path review, tests, smoke and independent P0/P1/P2 audit. B2 implementation in the current changeset does not imply closure. B2 merge does not authorize B3. A separate lifecycle closure is required, and C4-II-C/C4-III remain separately blocked.
+Each B slice is a separate PR with exact changed-path review, tests, appropriate smoke and independent P0/P1/P2 audit. B3 authorization does not authorize C4-II-C or C4-III. Product Restore remains NOT IMPLEMENTED.
