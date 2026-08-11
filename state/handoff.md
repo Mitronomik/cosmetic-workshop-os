@@ -5,6 +5,7 @@ Updated: `2026-08-11`
 ## Current lifecycle
 
 ```text
+PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
@@ -20,38 +21,42 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Closed baseline
+## Closed predecessor
 
-PR #186 final reviewed head `316358c65a851b46090121c7a6bc877b980176ba` merged as `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`.
+PR #187 reviewed head `48e245811af706bb666620c6dda8033ff200967a` merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7`. C4-II-C is the only authorized successor.
 
-B3 accepted evidence: lifecycle/build PASS; focused Restore 30/30 PASS; browser smoke v4 PASS; final independent P0=0/P1=0/P2=0; final no-change gate PASS. Preserve the earlier `de827c57…` P1=1 audit as historical evidence; do not rewrite it as a PASS.
+## Current implementation handoff
 
-## Next implementation handoff
+C4-II-C is present in the current changeset and remains **NOT YET CLOSED**.
 
-**C4-II-C — Truthful Restore completion/recovery/restart/support UX** is the only authorized next slice and is **frontend-only**.
-
-Use existing merged states only:
+Changed production file:
 
 ```text
-restore_completed
-restore_failed
-restore_blocked
+frontend/src/restore-control-presentation.ts
 ```
 
-Also handle **session/network uncertainty** without inventing final truth.
+Focused test file:
 
-Expected primary file: `frontend/src/restore-control-presentation.ts`. `frontend/src/restore-control-entry.ts` may change only for bounded navigation/focus/help/restart affordance wiring.
+```text
+frontend/test/restore-control-races.test.mjs
+```
 
-Keep byte-identical unless separately authorized: launcher/**, backend/**, `frontend/src/restore-control-contract.ts`, `frontend/src/restore-control-runtime.ts`, `frontend/src/main.ts`, app navigation, migrations, dependencies, package resources, ADR 0016, ADR 0018.
+Do not change `restore-control-contract.ts`, `restore-control-runtime.ts`, `restore-control-entry.ts`, launcher/backend, main/navigation, dependencies, migrations, package resources or ADRs.
 
-Hard stops: no new launcher state; no new control endpoint; no browser filesystem authority; no destructive retry; no destructive cancel; no operation ID or durable phase in browser; no backend Restore ownership; no packaging redesign.
+Load-bearing truth:
 
-`restore_failed` must not infer rollback/unchanged data. `restore_blocked` must not offer normal work as safe. `restore_completed` may offer ordinary navigation only within merged B2 backend-ready semantics.
+- `restore_completed` → success and ordinary work ready;
+- `restore_failed` → ordinary work ready, but no inference that rollback happened or data is unchanged;
+- `restore_blocked` → ordinary work not safely available; restart/help only, no normal navigation;
+- execute/restoring session/network uncertainty → unknown result; no success/failure/rollback/unchanged-data claim;
+- exact replay may repeat only the same pending execute command.
 
-C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+Required before merge: exact-head lifecycle/build/34 focused tests, browser smoke including narrow/keyboard and all result states, closed-blob review, independent P0/P1/P2 audit, final no-change gate.
+
+C4-III remains blocked. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
