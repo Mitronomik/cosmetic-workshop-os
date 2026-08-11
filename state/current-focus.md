@@ -1,55 +1,45 @@
-# Current Focus — C4-II-B3 browser confirmation implementation
+# Current Focus — C4-II-C authorization after B3 closure
 
 Updated: `2026-08-11`
 
 ## Current lifecycle
 
 ```text
-PR #185 — MERGED — B3 AUTHORIZED
+PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
+PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B — IN PROGRESS — SLICED
+C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-C — PLANNED — NOT AUTHORIZED
+C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Closed baseline
+## Closed predecessor
 
-PR #184 reviewed B2 head `1ae8bfcdf0f1f1798ce85eac0931925d029379c4` merged as `266c50a77e5f353fa77701cb854629a99460667f`.
+PR #186 final reviewed head `316358c65a851b46090121c7a6bc877b980176ba` merged as `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`.
 
-PR #185 reviewed B3-authorization head `f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c` merged as `f6589bdd7c403b6d400e3f5b7a0daea75b14632a`.
+Accepted B3 evidence: lifecycle/build PASS, 30/30 focused Restore tests, browser smoke v4 PASS, final independent P0=0/P1=0/P2=0, and final no-change gate PASS. The earlier P1=1 audit on `de827c5789f165949d0dbcd4fbbda4f5d368d71f` remains historical evidence and was corrected before merge.
 
-## Current work — B3 verification only
+## Current authorized work
 
-The B3 frontend seam is present:
+**C4-II-C — Truthful Restore completion/recovery/restart/support UX** is the only authorized next implementation slice and is **frontend-only**.
 
-- explicit confirmation only from current `accepted` snapshot;
-- local dismiss/Escape sends no execute/cancel;
-- exact execute body `request_id + command_seq + generation`;
-- generation sourced only from parsed accepted snapshot;
-- exact ambiguous retry with the same request ID, command sequence and generation;
-- backward-safe select/cancel replay;
-- duplicate execute guard before HTTP;
-- `restoring` polling without select/cancel/reconfirm/fake progress;
-- minimal safe final state presentation;
-- `main.ts` unchanged;
-- no launcher/backend/dependency/migration/package-resource change.
+Primary implementation surface: `frontend/src/restore-control-presentation.ts`; bounded `restore-control-entry.ts` wiring only if needed.
 
-Current work is now evidence gathering. Do not claim B3 closed or tested until exact-head build/tests/smoke/audit are observed.
+No new launcher state, no new control endpoint, no browser filesystem authority, no destructive retry, no destructive cancel. Closed launcher/backend/contract/runtime/main-shell seams must remain byte-identical.
 
-## Hard seams
+The slice must distinguish `restore_completed`, `restore_failed`, `restore_blocked` and **session/network uncertainty** truthfully. Do not infer rollback, unchanged data or durable phases in browser.
 
-No `/v1/restore/confirm`, no browser source path/proof/digest, no destructive cancel, no launcher/backend Restore change, no C4-II-C/C4-III authorization.
+C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

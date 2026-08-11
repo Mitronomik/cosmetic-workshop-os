@@ -2,76 +2,51 @@
 
 Updated: `2026-08-11`
 
-## Completed / merged baseline
-
-- C1/C2 completed; C3 completed, merged, exact-head verified and hardened.
-- C4-I — `DONE — MERGED AND EXACT-HEAD VERIFIED`.
-- A1/A2/A3/A4 — merged and exact-head verified.
-- B1 — merged and exact-head verified on PR #182.
-- B2 — reviewed head `1ae8bfcdf0f1f1798ce85eac0931925d029379c4`, merged as `266c50a77e5f353fa77701cb854629a99460667f`, exact-head verified and closed.
-- B2 accepted evidence: focused 37 PASS; launcher 636; backend 1867; total 2503/2503; frontend Restore 16/16; anti-hang PASS; corrected external process smoke PASS; independent `P0=0/P1=0/P2=0`; final clean-head PASS.
-- PR #185 reviewed B3 authorization head `f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c`, merged as `f6589bdd7c403b6d400e3f5b7a0daea75b14632a`.
-
 ## Current lifecycle
 
 ```text
-PR #185 — MERGED — B3 AUTHORIZED
+PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
+PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B — IN PROGRESS — SLICED
+C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-C — PLANNED — NOT AUTHORIZED
+C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## B3 implementation changeset
+## 2026-08-11 — C4-II-B3 merged and closed
 
-Implemented:
+PR #186:
 
-- frontend parses `restoring`, `restore_completed`, `restore_failed`, `restore_blocked` and still rejects unknown states;
-- current accepted candidate exposes explicit destructive confirmation rather than auto-executing;
-- confirmation dismiss/Escape stays local and sends no cancel command;
-- execute body is exactly `request_id + command_seq + generation`;
-- runtime derives generation only from current accepted snapshot;
-- execute pending replay stores that generation while select/cancel historical replay shape remains unchanged;
-- ambiguous execute retry preserves the **same request ID, command sequence and generation**;
-- reload can resume exact pending execute;
-- duplicate execute race is guarded before HTTP by the persisted pending command;
-- restoring state continues launcher-control polling and removes select/cancel/reconfirm/fake-progress affordances;
-- final B2 states minimally show safe launcher messages;
-- `main.ts` remains unchanged;
-- no launcher/backend/migration/dependency/package-resource implementation change.
+- final reviewed head `316358c65a851b46090121c7a6bc877b980176ba`;
+- merge/new main `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`;
+- merged at `2026-08-11T11:14:15Z`;
+- exact-head lifecycle/build — PASS;
+- focused Restore control — **30/30 PASS**;
+- browser smoke v4 — PASS, execute_calls=1, cancel_calls=0, Chrome exit 0;
+- final independent audit — **P0=0 / P1=0 / P2=0 — PASS**;
+- final no-change exact-head/worktree gate — PASS.
 
-Actual build/test/smoke PASS is not claimed until exact-head verification runs on the published B3 PR head.
+Historical audit evidence is preserved: earlier head `de827c5789f165949d0dbcd4fbbda4f5d368d71f` had **P1=1** for false `accepted + pending execute` unchanged/not-started copy. The correction was narrowly limited to presentation + focused regression test relative to that head, then independently re-audited.
 
-## Still blocked
+C4-II-B is now DONE — MERGED AND EXACT-HEAD VERIFIED.
 
-```text
-C4-II-C — not authorized
-C4-III — not authorized
-```
+## Next authorized slice
 
-## Open B3 gates
+**C4-II-C — Truthful Restore completion/recovery/restart/support UX** — AUTHORIZED NEXT — NOT IMPLEMENTED, frontend-only.
 
-- lifecycle checker + `git diff --check`;
-- frontend build/type-check;
-- focused Restore control tests including exact replay and duplicate-submit race;
-- desktop and narrow-screen Restore route smoke;
-- keyboard/focus/Escape confirmation smoke;
-- loading/network/restoring/final/disabled-state review;
-- clean exact head/worktree;
-- independent `P0=0/P1=0/P2=0` audit;
-- merge only after all exact-head evidence is green;
-- separate B3 lifecycle closure before any C4-II-C authorization.
+No new launcher state, no new control endpoint, no browser filesystem authority, no destructive retry, no destructive cancel. Existing final states `restore_completed`, `restore_failed`, `restore_blocked` and session/network uncertainty are the only result inputs.
+
+C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

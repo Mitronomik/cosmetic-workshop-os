@@ -7,63 +7,51 @@ A local-first working system for a cosmetic workshop. The user product must run 
 ## Current product status
 
 ```text
-PR #185 — MERGED — B3 AUTHORIZED
+PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
+PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B — IN PROGRESS — SLICED
+C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-C — PLANNED — NOT AUTHORIZED
+C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-PR #184 reviewed exact head `1ae8bfcdf0f1f1798ce85eac0931925d029379c4` merged as `266c50a77e5f353fa77701cb854629a99460667f`, closing B2.
+PR #186 reviewed exact head `316358c65a851b46090121c7a6bc877b980176ba` and merged as `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`, closing C4-II-B3 and the complete C4-II-B group.
 
-PR #185 reviewed B2-closure/B3-authorization head `f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c` merged as `f6589bdd7c403b6d400e3f5b7a0daea75b14632a`, authorizing B3 only.
+## Closed Restore authority through B3
 
-## Closed Restore authority through B2
+C4-I remains the only destructive Restore engine. B1 binds launcher-private retained source proof to C4-I intake. B2 owns the authenticated one-shot `/v1/restore/execute` authority transfer and ordinary-backend restart handoff. B3 owns explicit browser confirmation, exact destructive replay, and pathless `restoring`/final-state presentation.
 
-A1 retains launcher-private source path + `SourceIdentity` + SHA-256. B1 binds that proof to the exact `HeldSource` entering C4-I. B2 adds the one-shot authenticated `/v1/restore/execute` coordinator on the launcher main runtime path. C4-I remains the only destructive Restore engine.
+The browser has no filesystem/source authority. No source path, proof, digest, operation ID, database path, backup path or lock path crosses the browser boundary. No `/v1/restore/confirm` endpoint exists.
 
-The browser remains presentation only. No source path, proof, digest, operation ID, database path, backup path or lock path crosses the control boundary.
+## Authorized next work
 
-## B3 implementation changeset
+**C4-II-C — Truthful Restore completion/recovery/restart/support UX** is the only authorized next implementation slice. It is **frontend-only** and must use the already-merged `restore_completed`, `restore_failed`, and `restore_blocked` states without reopening launcher/backend/contract/runtime authority.
 
-B3 now implements the authorized frontend-only confirmation/replay seam without changing launcher/backend authority:
+Hard constraints: no new launcher state, no new control endpoint, no browser filesystem authority, no destructive retry, no destructive cancel, no durable-phase reconstruction in frontend, and no C4-III implementation.
 
-- current `accepted` candidate exposes an explicit destructive confirmation dialog;
-- dismiss/Escape are local UI actions and send neither execute nor `/v1/restore/cancel`;
-- destructive confirmation calls only `/v1/restore/execute` with exact `request_id + command_seq + generation`;
-- generation comes only from the current parsed accepted snapshot;
-- ambiguous execute retry preserves the exact same request ID, command sequence and generation;
-- select/cancel replay keeps its historical shape;
-- browser parsing accepts the merged B2 states `restoring`, `restore_completed`, `restore_failed`, `restore_blocked` and still fails closed on unknown states;
-- `restoring` offers no destructive cancel, no duplicate confirmation and no fake progress;
-- final B2 states minimally present only the safe launcher-provided message;
-- `frontend/src/main.ts` remains unchanged.
-
-No `/v1/restore/confirm` endpoint is introduced. C4-II-C/C4-III remain blocked. Product Restore remains **NOT IMPLEMENTED** until later lifecycle slices close richer result/recovery UX and the end-to-end product gate.
+Restore remains **NOT IMPLEMENTED** as a complete product flow until C4-II-C and later product gates close. Product release readiness remains **NOT CLAIMED**.
 
 ## Restore authority
 
 - ADR 0016 — destructive Restore safety/state machine and mandatory `before_restore` recovery point;
 - ADR 0018 — launcher control/picker/exact-run browser-session architecture;
 - `docs/current-lifecycle.md` — current lifecycle authority;
-- `docs/c4-ii-b-implementation-slices.md` — B1→B3 implementation and authorization contract.
+- `docs/c4-ii-b-implementation-slices.md` — closed B1→B3 implementation contract;
+- `docs/restore-interaction-and-validation-session.md` — active browser/control interaction profile.
 
 ## Architectural invariants
 
 Every change preserves local-first operation, user data outside code/package, API-first business architecture, safe historical data, recipe versions, first-class client recipes, lot/movement inventory, transactional production, safe import preview/confirmation, backup-before-migration and a human-readable non-technical UI.
-
-Restore additionally preserves immutable selected source, launcher filesystem/destructive authority, pathless browser presentation, C4-I as the single destructive engine, exact-run authenticated control, one-shot command semantics, and explicit human confirmation before browser destructive execution.
