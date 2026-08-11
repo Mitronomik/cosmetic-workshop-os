@@ -8,127 +8,110 @@ ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authori
 ## Current lifecycle
 
 ```text
-PR #185 — MERGED — B3 AUTHORIZED
+PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
+PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
-C1 — COMPLETED
-C2 — COMPLETED
-C3 — COMPLETED — MERGED, EXACT-HEAD VERIFIED AND HARDENED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
-CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B — IN PROGRESS — SLICED
+C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-II-C — PLANNED — NOT AUTHORIZED
+C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
-macOS packaging — NOT COMPLETED
-safe packaged update flow — NOT COMPLETED
-installation verification — NOT COMPLETED
-full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-## Merged baseline through B3 authorization
+macOS packaging, safe packaged update flow, installation verification and full release-candidate smoke remain incomplete.
 
-PR #182 reviewed B1 head `27726058af4f373ab65225ecf4d1a945f1c53067` merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`.
+## Merged baseline through B3 closure
 
-PR #183 reviewed B2 authorization head `fa922f56c19a2dd33b6307ae0a197d476f91489b` merged as `4617b8c436eaa510fd545d863346595e2d808ea7`.
+- PR #182 reviewed B1 head `27726058af4f373ab65225ecf4d1a945f1c53067`, merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`.
+- PR #183 reviewed B2 authorization head `fa922f56c19a2dd33b6307ae0a197d476f91489b`, merged as `4617b8c436eaa510fd545d863346595e2d808ea7`.
+- PR #184 reviewed B2 head `1ae8bfcdf0f1f1798ce85eac0931925d029379c4`, merged as `266c50a77e5f353fa77701cb854629a99460667f`.
+- PR #185 reviewed B3 authorization head `f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c`, merged as `f6589bdd7c403b6d400e3f5b7a0daea75b14632a`.
+- PR #186 reviewed B3 head `316358c65a851b46090121c7a6bc877b980176ba`, merged as `b9ca2bd77d5f2be0ba406e9669c18f74e1955725` at `2026-08-11T11:14:15Z`.
 
-PR #184 reviewed B2 implementation head `1ae8bfcdf0f1f1798ce85eac0931925d029379c4` merged as `266c50a77e5f353fa77701cb854629a99460667f`.
+## Accepted B3 evidence
 
-PR #185 reviewed B2-closure/B3-authorization head `f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c` merged as `f6589bdd7c403b6d400e3f5b7a0daea75b14632a`.
+Final exact-head evidence on `316358c65a851b46090121c7a6bc877b980176ba`:
 
-## Accepted B2 evidence
+- `git diff --check` — **PASS**;
+- documentation lifecycle checker — **PASS**;
+- frontend `npm ci` — **PASS**, 0 vulnerabilities;
+- frontend build — **PASS**;
+- focused Restore control suite — **30/30 PASS**;
+- regression `pending execute presentation never claims Restore has not started` — **PASS**;
+- external browser smoke v4 — **PASS**, runner SHA-256 `5103a50f578d624345323731e2eb910cc4e4d756b33bb7b430b03eb4af239b62`;
+- browser smoke observed `execute_calls=1`, `cancel_calls=0`, Chrome exit 0;
+- final exact-head/worktree no-change gate — **PASS**.
 
-- focused B2/runtime tests: **37 PASS** in the independent audit;
-- launcher regression: **636 PASS**;
-- backend regression: **1867 PASS**;
-- full backend + launcher: **2503/2503 PASS**;
-- frontend Restore regression: **16/16 PASS**;
-- anti-hang owner-loop gate: **PASS**, autonomous, no manual `Ctrl+C`;
-- corrected external exact-head isolated process smoke: **PASS**;
-- independent audit: **P0=0 / P1=0 / P2=0 — AUDIT GATE PASS**;
-- final no-change exact-head / clean-worktree gate: **PASS**.
+Audit history is preserved truthfully. Earlier head `de827c5789f165949d0dbcd4fbbda4f5d368d71f` had **P0 = 0 / P1 = 1 / P2 = 0 — AUDIT GATE FAIL** because `accepted + pending execute` could falsely claim that working data was unchanged and Restore had not started. That P1 was corrected before merge. The final reviewed head was independently re-audited: **P0 = 0 / P1 = 0 / P2 = 0 — AUDIT GATE PASS**, merge recommendation YES.
 
-The earlier eight-hour run that required repeated manual `Ctrl+C` remains **INVALID / NOT A PASS**. The first external smoke runner remains **INCONCLUSIVE RUNNER**.
-
-## Closed B2 boundary
-
-```text
-browser/session
-→ authenticated POST /v1/restore/execute(request_id, command_seq, generation)
-→ exactly-next sequence consumed before business preconditions
-→ current accepted control generation + current launcher-private retained A1 proof
-→ one in-memory RestoreExecutionIntent
-→ retained source authority invalidated immediately
-→ pathless restoring
-→ HTTP returns without C4-I
-→ launcher main runtime consumes intent synchronously
-→ ProofBoundRestoreRequest from launcher-private authority
-→ existing C4-I execute_restore(..., LauncherLifecycleContext)
-→ canonical ordinary-backend restart handoff when safe
-→ pathless restore_completed / restore_failed / restore_blocked
-```
-
-The accepted B2 launcher implementation is a closed boundary. The same control plane survives the destructive interval; browser generation remains a stale-view guard and never source proof.
-
-## B3 implementation changeset
-
-The current B3 changeset implements only the authorized frontend confirmation/replay seam:
+## Closed B3 contract
 
 ```text
-accepted browser snapshot
-→ explicit human confirmation dialog
-→ local dismiss OR destructive confirm
-→ frontend creates one pending execute command
-   request_id + command_seq + accepted generation
-→ pending command is persisted in same-tab history replay state
-→ authenticated POST /v1/restore/execute
-→ ambiguous transport result keeps exact same request_id + command_seq + generation
-→ merged B2 remains the destructive authority boundary
-→ browser polls pathless restoring/final launcher state
+accepted candidate
+→ explicit native dialog
+→ local dismiss/Escape OR explicit confirm
+→ runtime obtains current accepted generation
+→ pending execute persisted before network I/O
+→ POST /v1/restore/execute
+   exact request_id + command_seq + generation
+→ ambiguous retry preserves same request ID, command sequence and generation
+→ merged B2 remains destructive authority
+→ browser polls pathless restoring/final state
 ```
 
-Implemented frontend behavior:
+Closed guarantees:
 
-- TypeScript parsing accepts exactly the four merged B2 execution states: `restoring`, `restore_completed`, `restore_failed`, `restore_blocked`;
-- unknown control states remain fail-closed;
-- pending replay is a discriminated union: select/cancel retain the historical shape, while execute additionally requires `generation`;
-- `RestoreControlRuntime.execute()` derives generation only from the current parsed `accepted` snapshot; DOM code cannot supply filesystem authority or its own generation;
-- execute request body is centralized and contains exactly `request_id + command_seq + generation`;
-- ambiguous execute retry reuses the exact same request ID, command sequence and generation;
-- explicit confirmation is local browser presentation; dismiss/Escape sends neither execute nor `/v1/restore/cancel`;
-- repeated confirmation is blocked by the already-persisted pending command;
-- `restoring` continues launcher-control polling and offers no select/cancel/destructive-cancel action or fake percentage;
-- completed/failed/blocked states minimally present only the safe launcher-provided message;
-- generic post-execute network guidance no longer falsely promises that working data was unchanged;
-- `frontend/src/main.ts` is unchanged; B3 stays inside the focused Restore contract/runtime/presentation/entry modules.
+- parser accepts exactly `restoring`, `restore_completed`, `restore_failed`, `restore_blocked` in addition to closed A4 states and still fails closed on unknown state;
+- generation comes only from the current parsed `accepted` snapshot;
+- select/cancel replay remains backward-safe;
+- execute replay stores the exact positive generation;
+- pending execute is persisted before HTTP and blocks duplicate destructive requests;
+- dismiss/Escape are local;
+- safe confirmation action receives initial focus;
+- `restoring` exposes no select/cancel/reconfirm/destructive cancel/fake progress;
+- pending execute presentation does not claim data is unchanged or Restore has not started;
+- final browser states remain pathless and technical-detail-free.
 
-No launcher, ordinary FastAPI backend, migration, dependency or domain behavior changes are included. No `/v1/restore/confirm` endpoint is added. Browser source path/proof/digest authority remains impossible.
+## C4-II-C authorization
 
-## B3 verification gate
+**C4-II-C — Truthful Restore completion/recovery/restart/support UX** is **AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
-B3 is not lifecycle-closed merely because code exists. Before merge it still requires actual exact-head evidence for:
+Conceptually:
 
-1. `git diff --check` and lifecycle checker;
-2. frontend build/type-check;
-3. focused Restore control tests covering exact execute schema, confirmation, exact replay, duplicate-submit race and B2 state parsing/presentation;
-4. existing A4 bootstrap/session/select/cancel/replay regression;
-5. desktop Restore-route smoke;
-6. narrow-screen Restore-route smoke;
-7. keyboard/focus/Escape confirmation smoke;
-8. restoring/error/success/disabled-state review;
-9. clean exact head/worktree;
-10. independent `P0=0 / P1=0 / P2=0` audit.
+```text
+merged B3
+→ restoring
+→ launcher-owned final state:
+   restore_completed
+   restore_failed
+   restore_blocked
+→ truthful human-readable final result
+→ safe next action
+→ restart/recovery/support guidance where appropriate
+```
 
-Do not record these as PASS until they actually run against the published B3 PR head.
+C4-II-C is **frontend-only**. Primary expected surface is `frontend/src/restore-control-presentation.ts`; `frontend/src/restore-control-entry.ts` is allowed only for bounded navigation/focus/help/restart affordance wiring.
 
-C4-II-C and C4-III remain **PLANNED — NOT AUTHORIZED**. Product Restore remains **NOT IMPLEMENTED** until later lifecycle closure adds the richer truthful result/restart/support experience and end-to-end product gate.
+Closed seams must remain byte-identical unless a separate architecture/lifecycle decision explicitly reopens them: `launcher/**`, `backend/**`, `frontend/src/restore-control-contract.ts`, `frontend/src/restore-control-runtime.ts`, `frontend/src/main.ts`, `frontend/src/app-navigation-routes.ts`, migrations, dependencies, package resources, ADR 0016 and ADR 0018.
+
+Hard prohibitions: **no new launcher state**, **no new control endpoint**, **no browser filesystem authority**, **no destructive retry**, **no destructive cancel**, no automatic retry, no operation ID/durable phase in browser, no backend Restore ownership and no packaging redesign.
+
+### Final-state truthfulness
+
+- `restore_completed`: may present success and safe ordinary navigation only to the extent merged B2 semantics prove ordinary backend readiness.
+- `restore_failed`: must not infer rollback, unchanged working data, restored old data or absence of mutation unless launcher-safe truth explicitly says so; do not encourage blind destructive retry.
+- `restore_blocked`: must say ordinary work cannot safely continue in the current run; provide restart/recovery/support guidance and do not offer normal app navigation or destructive retry as if safe.
+- **session/network uncertainty** after destructive execution may have begun must never be converted into success, failure, unchanged-data or rollback claims.
+
+C4-III remains not authorized. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

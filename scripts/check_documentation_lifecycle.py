@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard the authorized B3 frontend changeset and all closed Restore boundaries."""
+"""Guard merged B3 closure and the bounded C4-II-C authorization."""
 
 from __future__ import annotations
 
@@ -25,76 +25,49 @@ CHANGE_REQUESTS = P("state/change-requests.md")
 ADR16 = P("docs/decisions/0016-launcher-assisted-restore.md")
 ADR18 = P("docs/decisions/0018-launcher-restore-interaction-and-validation-session.md")
 
-FRONTEND_MAIN = P("frontend/src/main.ts")
-FRONTEND_NAV = P("frontend/src/app-navigation-routes.ts")
-FRONTEND_CONTRACT = P("frontend/src/restore-control-contract.ts")
-FRONTEND_RUNTIME = P("frontend/src/restore-control-runtime.ts")
-FRONTEND_PRESENTATION = P("frontend/src/restore-control-presentation.ts")
-FRONTEND_ENTRY = P("frontend/src/restore-control-entry.ts")
-B3_TESTS = P("frontend/test/restore-control.test.mjs")
-B3_RACE_TESTS = P("frontend/test/restore-control-races.test.mjs")
-
 ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF, CHANGE_REQUESTS)
-SUPPORTING = (CURRENT, A_SLICES, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
+SUPPORTING = (CURRENT, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
 
 CORE = (
-    "PR #185 — MERGED — B3 AUTHORIZED",
+    "PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED",
+    "PR #185 — MERGED — B3 AUTHORIZATION BASELINE",
     "PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED",
     "PR #183 — MERGED — B2 AUTHORIZATION BASELINE",
     "PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED",
     "C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN",
     "C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-A1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-A2 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "C4-II-B — IN PROGRESS — SLICED",
+    "C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "C4-II-C — PLANNED — NOT AUTHORIZED",
+    "C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED",
+    "C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-III — PLANNED — NOT AUTHORIZED",
     "Restore — NOT IMPLEMENTED",
     "Product release readiness — NOT CLAIMED",
 )
 
-COMPACT = (
-    "PR #185 — MERGED — B3 AUTHORIZED",
-    "PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED",
-    "C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "Restore — NOT IMPLEMENTED",
-    "Product release readiness — NOT CLAIMED",
-)
-
 STALE = (
-    "C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "C4-II-B2 — PLANNED — NOT AUTHORIZED",
+    "C4-II-B — IN PROGRESS — SLICED",
+    "C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
+    "C4-II-B3 — AUTHORIZED NEXT",
     "C4-II-B3 — PLANNED — NOT AUTHORIZED",
-    "C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "C4-II-B3 — DONE",
-    "C4-II-C — AUTHORIZED NEXT",
-    "C4-II-C — IN PROGRESS",
+    "C4-II-C — PLANNED — NOT AUTHORIZED",
+    "C4-II-C — DONE",
     "C4-III — AUTHORIZED NEXT",
     "C4-III — IN PROGRESS",
     "Restore — IMPLEMENTED",
     "Product release readiness — READY",
 )
 
-B1_REVIEWED_HEAD = "27726058af4f373ab65225ecf4d1a945f1c53067"
-B1_MERGE_MAIN = "5e13b50f1918dacbf8d54066c9156942a9adb895"
-B2_AUTH_REVIEWED_HEAD = "fa922f56c19a2dd33b6307ae0a197d476f91489b"
-B2_AUTH_MERGE_MAIN = "4617b8c436eaa510fd545d863346595e2d808ea7"
-B2_REVIEWED_HEAD = "1ae8bfcdf0f1f1798ce85eac0931925d029379c4"
-B2_MERGE_MAIN = "266c50a77e5f353fa77701cb854629a99460667f"
-B3_AUTH_REVIEWED_HEAD = "f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c"
-B3_AUTH_MERGE_MAIN = "f6589bdd7c403b6d400e3f5b7a0daea75b14632a"
+B3_REVIEWED_HEAD = "316358c65a851b46090121c7a6bc877b980176ba"
+B3_MERGE_MAIN = "b9ca2bd77d5f2be0ba406e9669c18f74e1955725"
+B3_FAILED_AUDIT_HEAD = "de827c5789f165949d0dbcd4fbbda4f5d368d71f"
+B3_SMOKE_SHA = "5103a50f578d624345323731e2eb910cc4e4d756b33bb7b430b03eb4af239b62"
 
-# Closed launcher/B1/C4-I/B2 boundaries plus frontend shell/navigation that B3
-# is explicitly not authorized to change. The four focused Restore B3 modules
-# are intentionally checked structurally below instead of being blob-pinned.
 PINNED_BLOBS = {
     P("launcher/restore/contracts.py"): "1b4adf345b2470e7c50987570e7848012aa15a95",
     P("launcher/restore/engine.py"): "91eb99d14aa3dc70e7d6fb0d63cb03c6af7d255f",
@@ -112,21 +85,13 @@ PINNED_BLOBS = {
     P("launcher/restore/control_plane.py"): "b99a2ef2747cb4880465eb7b37e27cffbab18abc",
     P("launcher/restore/execution_coordinator.py"): "ea059358dd730969ccc8abcaaf6f7d4dfa5b3d51",
     P("launcher/runtime.py"): "7cca822944a335e03e196be6d9def8817267205e",
-    FRONTEND_MAIN: "ea98a76638bddcb5a92b9ba31941508f8a816d42",
-    FRONTEND_NAV: "cac0f380a6daf70cde21d8f5318c745e442e14e4",
+    P("frontend/src/main.ts"): "ea98a76638bddcb5a92b9ba31941508f8a816d42",
+    P("frontend/src/app-navigation-routes.ts"): "cac0f380a6daf70cde21d8f5318c745e442e14e4",
+    P("frontend/src/restore-control-contract.ts"): "15c50941998f38d441e1314f7227847bca11e3d0",
+    P("frontend/src/restore-control-runtime.ts"): "3861dfd51ab3b146fb082133cf33a9cb24688b5c",
+    P("frontend/src/restore-control-presentation.ts"): "7f3b7d3d95294db8bbb46c81eda4a497ff9efd51",
+    P("frontend/src/restore-control-entry.ts"): "dfcec88d788d0e46dcc5cc9b53def89efb567ab6",
 }
-
-HISTORY = (
-    P("docs/history/AGENTS.md"),
-    P("docs/history/README.md"),
-    P("docs/history/project-timeline-through-pr170.md"),
-    P("docs/history/c4-i-implementation-and-audit-history.md"),
-    P("docs/history/implementation-plan/2026-08-06-pre-compaction.md"),
-    P("docs/history/state-snapshots/2026-08-06-c4-i-closure/current-focus.md"),
-    P("docs/history/state-snapshots/2026-08-06-c4-i-closure/progress.md"),
-    P("docs/history/state-snapshots/2026-08-06-c4-i-closure/handoff.md"),
-    P("docs/history/change-requests/2026-08-06-pre-compaction.md"),
-)
 
 HISTORY_BLOBS = {
     P("docs/history/implementation-plan/2026-08-06-pre-compaction.md"): "763a720ac7cc30c9eb870c5f24fa23aee75ea054",
@@ -134,14 +99,23 @@ HISTORY_BLOBS = {
     P("docs/history/state-snapshots/2026-08-06-c4-i-closure/progress.md"): "fcc0479d15cefa1672d01939418b9c37152559d7",
     P("docs/history/state-snapshots/2026-08-06-c4-i-closure/handoff.md"): "e47f8872415ada073d5518c5bd24dace20ff5fe4",
     P("docs/history/change-requests/2026-08-06-pre-compaction.md"): "85f284b0a08eba2a2f084672091cc9eedab261dc",
+    P("docs/history/c4-ii-b3-pre-closure/README.md"): "5098bb7967d22678cdb2565d9757b672a66e46fb",
+    P("docs/history/c4-ii-b3-pre-closure/current-lifecycle.md"): "163e5e12267f1f9fea406d1207b892bb1f12ca7f",
+    P("docs/history/c4-ii-b3-pre-closure/c4-ii-b-implementation-slices.md"): "80d463c534f8a3bb8fec7662028378df43615780",
+    P("docs/history/c4-ii-b3-pre-closure/deployment.md"): "4ece44f12b6736a03ecc03c6bf93671ccb278f21",
+    P("docs/history/c4-ii-b3-pre-closure/implementation-plan.md"): "2e53832ef72e92cbbe0625657932ff536f29ec09",
+    P("docs/history/c4-ii-b3-pre-closure/packaging.md"): "6981d45662506b491780479e1de1b9b39ecea45b",
+    P("docs/history/c4-ii-b3-pre-closure/restore-interaction-and-validation-session.md"): "9f9933dbab683bc3d9cbc4a680a590665d7b9b02",
+    P("docs/history/c4-ii-b3-pre-closure/change-requests.md"): "fb6cd6b452b3bf58384b7ad2d898b985d99ab670",
+    P("docs/history/c4-ii-b3-pre-closure/current-focus.md"): "346c3e9c9b1fe1609827748a07d3a2ab46b2cdd2",
+    P("docs/history/c4-ii-b3-pre-closure/handoff.md"): "d76d312b22aed6befad9b0cb82584917e2659fcd",
+    P("docs/history/c4-ii-b3-pre-closure/progress.md"): "0a918ca9a8db5ba0a813ef6d69b6b7cac2466399",
 }
 
 ERRORS: list[str] = []
 
-
 def fail(message: str) -> None:
     ERRORS.append(message)
-
 
 def read(path: Path) -> str:
     try:
@@ -150,24 +124,14 @@ def read(path: Path) -> str:
         fail(f"missing required file: {path.relative_to(ROOT)}")
         return ""
 
-
 def norm(value: str) -> str:
     return " ".join(value.split()).casefold()
-
 
 def require(path: Path, markers: tuple[str, ...]) -> None:
     text = norm(read(path))
     for marker in markers:
         if norm(marker) not in text:
             fail(f"{path.relative_to(ROOT)} is missing marker: {marker!r}")
-
-
-def forbid(path: Path, markers: tuple[str, ...]) -> None:
-    text = norm(read(path))
-    for marker in markers:
-        if norm(marker) in text:
-            fail(f"{path.relative_to(ROOT)} contains forbidden marker: {marker!r}")
-
 
 def blob(path: Path) -> str:
     try:
@@ -177,288 +141,60 @@ def blob(path: Path) -> str:
         return ""
     return sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
 
-
 def check_lifecycle_docs() -> None:
     for path in ACTIVE:
         require(path, CORE)
-
-    require(
-        CURRENT,
-        CORE + (
-            B1_REVIEWED_HEAD,
-            B1_MERGE_MAIN,
-            B2_AUTH_REVIEWED_HEAD,
-            B2_AUTH_MERGE_MAIN,
-            B2_REVIEWED_HEAD,
-            B2_MERGE_MAIN,
-            B3_AUTH_REVIEWED_HEAD,
-            B3_AUTH_MERGE_MAIN,
-            "B3 implementation changeset",
-            "same request ID, command sequence and generation",
-            "frontend/src/main.ts",
-        ),
-    )
-
-    require(
-        A_SLICES,
-        (
-            "CLOSED NORMATIVE IMPLEMENTATION PLAN",
-            "C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED",
-            "docs/c4-ii-b-implementation-slices.md",
-        ),
-    )
-
-    require(
-        B_SLICES,
-        CORE + (
-            "B3 — Browser explicit destructive confirmation — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-            B3_AUTH_REVIEWED_HEAD,
-            B3_AUTH_MERGE_MAIN,
-            "RestoreControlRuntime.execute()",
-            "same request ID, same command sequence and same generation",
-            "native semantic `<dialog>`",
-            "frontend/src/restore-control-contract.ts",
-            "frontend/src/restore-control-runtime.ts",
-            "frontend/src/restore-control-presentation.ts",
-            "frontend/src/restore-control-entry.ts",
-            "frontend/src/main.ts` and `frontend/src/app-navigation-routes.ts` remain byte-identical",
-            "No launcher/backend/migration/dependency/package-resource implementation is changed",
-        ),
-    )
-
-    require(
-        PROFILE,
-        CORE + (
-            "B3 implementation changeset — explicit browser confirmation",
-            "Execute generation ownership",
-            "Exact destructive replay",
-            "resend same request_id same command_seq same generation",
-            "Duplicate-submit prevention",
-            "frontend/src/main.ts",
-        ),
-    )
-
-    require(
-        PLAN,
-        CORE + (
-            "Current implementation changeset — C4-II-B3",
-            "retry resends same request_id + command_seq + generation",
-            "frontend/src/restore-control-contract.ts",
-            "frontend/src/main.ts` and `frontend/src/app-navigation-routes.ts` remain unchanged",
-        ),
-    )
-
-    require(
-        DEPLOYMENT,
-        COMPACT + (
-            "same ephemeral control port",
-            "current B3 changeset changes no deployment topology",
-        ),
-    )
-    require(
-        PACKAGING,
-        COMPACT + (
-            "current B3 changeset changes only existing frontend Restore assets/tests",
-            "No source path, source proof, digest",
-        ),
-    )
-
+    require(CURRENT, CORE + (B3_REVIEWED_HEAD, B3_MERGE_MAIN, B3_FAILED_AUDIT_HEAD, B3_SMOKE_SHA, "30/30", "P0 = 0", "P1 = 0", "P2 = 0", "C4-II-C authorization"))
+    require(B_SLICES, CORE + ("CLOSED NORMATIVE IMPLEMENTATION PLAN", B3_REVIEWED_HEAD, B3_MERGE_MAIN, "pending execute presentation", "same request ID, command sequence and generation"))
+    require(PROFILE, CORE + ("Truthful Restore completion/recovery/restart/support UX", "restore_completed", "restore_failed", "restore_blocked", "session/network uncertainty"))
+    require(PLAN, CORE + ("C4-II-C — Truthful Restore completion/recovery/restart/support UX", "frontend/src/restore-control-presentation.ts", "frontend/src/restore-control-contract.ts remains closed"))
+    require(DEPLOYMENT, CORE + ("no deployment topology change", "frontend-only"))
+    require(PACKAGING, CORE + ("no packaging change", "release readiness remains not claimed"))
     for path in ACTIVE + SUPPORTING:
         text = norm(read(path))
         for stale in STALE:
             if norm(stale) in text:
                 fail(f"{path.relative_to(ROOT)} retains stale/premature lifecycle phrase: {stale!r}")
 
-
-def check_authority_decisions_and_history() -> None:
+def check_authority_and_history() -> None:
     require(ADR16, ("before_restore", "replacement_intent", "recovery_blocked", "selected source", "immutable"))
-    require(
-        ADR18,
-        (
-            "127.0.0.1",
-            "/backups/restore",
-            "sessionStorage",
-            "command_seq",
-            "compare descriptor/path SourceIdentity",
-            "recompute and compare full SHA-256",
-        ),
-    )
-    for path in HISTORY:
-        if not path.exists():
-            fail(f"missing required history path: {path.relative_to(ROOT)}")
+    require(ADR18, ("127.0.0.1", "/backups/restore", "sessionStorage", "command_seq", "compare descriptor/path SourceIdentity", "recompute and compare full SHA-256"))
     for path, expected in HISTORY_BLOBS.items():
-        if path.exists() and blob(path) != expected:
-            fail(f"protected history blob changed: {path.relative_to(ROOT)}")
-
+        actual = blob(path)
+        if actual and actual != expected:
+            fail(f"protected history blob changed: {path.relative_to(ROOT)} expected {expected}, got {actual}")
 
 def check_closed_boundaries() -> None:
     for path, expected in PINNED_BLOBS.items():
         actual = blob(path)
         if actual and actual != expected:
-            fail(
-                f"closed B2/shell boundary changed: {path.relative_to(ROOT)} "
-                f"expected blob {expected}, got {actual}"
-            )
+            fail(f"closed Restore boundary changed: {path.relative_to(ROOT)} expected {expected}, got {actual}")
 
-
-def check_b3_implementation() -> None:
-    require(
-        FRONTEND_CONTRACT,
-        (
-            "| 'restoring'",
-            "| 'restore_completed'",
-            "| 'restore_failed'",
-            "| 'restore_blocked'",
-            "RestoreControlAction = 'select' | 'cancel' | 'execute'",
-            "export type RestoreExecutePendingCommand",
-            "action: 'execute'",
-            "generation: number",
-            "export function restoreCommandRequestBody",
-            "pending.action === 'execute'",
-            "candidate.pending.action === 'execute'",
-            "['action', 'requestId', 'commandSeq', 'generation']",
-        ),
-    )
-    forbid(
-        FRONTEND_CONTRACT,
-        (
-            "source_path",
-            "selected_source",
-            "ExpectedSourceProof",
-            "localStorage",
-            "/v1/restore/confirm",
-        ),
-    )
-
-    require(
-        FRONTEND_RUNTIME,
-        (
-            "async execute(): Promise<void>",
-            "accepted.state !== 'accepted'",
-            "await this.beginCommand('execute', accepted.generation)",
-            "'/v1/restore/execute'",
-            "restoreCommandRequestBody(pending)",
-            "['selecting', 'validating', 'restoring']",
-            "this.replay.pending",
-            "RETRY_GUIDANCE",
-        ),
-    )
-    forbid(
-        FRONTEND_RUNTIME,
-        (
-            "source_path",
-            "selected_source",
-            "ExpectedSourceProof",
-            "localStorage",
-            "/v1/restore/confirm",
-        ),
-    )
-
-    require(
-        FRONTEND_PRESENTATION,
-        (
-            "<dialog",
-            'data-restore-action="confirm-open"',
-            'data-restore-action="confirm-dismiss" autofocus',
-            'data-restore-action="confirm-execute"',
-            "защитную копию текущей базы данных",
-            "Восстановление уже запущено",
-            "Процент выполнения не показывается",
-            "restore_completed",
-            "restore_failed",
-            "restore_blocked",
-        ),
-    )
-    forbid(
-        FRONTEND_PRESENTATION,
-        (
-            "source_path",
-            "selected_source",
-            "ExpectedSourceProof",
-            "localStorage",
-            "/v1/restore/execute",
-            "/v1/restore/confirm",
-        ),
-    )
-
-    require(
-        FRONTEND_ENTRY,
-        (
-            "confirmationGeneration",
-            "confirmationMatchesCurrentView",
-            "dialog.showModal()",
-            "confirm-dismiss",
-            "confirm-execute",
-            "document.addEventListener('cancel'",
-            "void runtime.execute()",
-            "snapshot.generation === confirmationGeneration",
-        ),
-    )
-    forbid(
-        FRONTEND_ENTRY,
-        (
-            "source_path",
-            "selected_source",
-            "ExpectedSourceProof",
-            "localStorage",
-            "/v1/restore/execute",
-            "/v1/restore/confirm",
-        ),
-    )
-
-    require(
-        B3_TESTS,
-        (
-            "state DTO accepts exactly the four merged B2 execution states",
-            "B3 replay parser requires exact generation for execute",
-            "command request body is exact and execute adds only generation",
-            "B3 execute uses exact current accepted generation and enters restoring",
-            "network-uncertain execute retries exact request id sequence and generation",
-            "reload can safely preserve an ambiguous execute command",
-            "accepted presentation requires explicit destructive confirmation",
-            "confirmation dialog explains replacement protective copy",
-            "restoring presentation offers no select cancel or destructive duplicate",
-            "entry owns confirmation locally and Escape dismiss never becomes restore cancel",
-        ),
-    )
-    require(
-        B3_RACE_TESTS,
-        (
-            "double execute while first destructive request is in flight sends exactly one command",
-            "exactly one execute request",
-            "generation: 4",
-        ),
-    )
-
+def check_c4_ii_c_authorization() -> None:
+    markers = ("C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED", "Truthful Restore completion/recovery/restart/support UX", "frontend-only", "restore_completed", "restore_failed", "restore_blocked", "no new launcher state", "no new control endpoint", "no browser filesystem authority", "no destructive retry", "no destructive cancel", "C4-III — PLANNED — NOT AUTHORIZED", "Restore — NOT IMPLEMENTED")
+    for path in (CURRENT, PLAN, PROFILE, FOCUS, HANDOFF):
+        require(path, markers)
 
 def main() -> int:
     check_lifecycle_docs()
-    check_authority_decisions_and_history()
+    check_authority_and_history()
     check_closed_boundaries()
-    check_b3_implementation()
-
+    check_c4_ii_c_authorization()
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
         for error in ERRORS:
             print(f"- {error}")
         return 1
-
     print("Documentation lifecycle consistency: PASS")
     print(f"Checked {len(ACTIVE)} compact active files.")
-    print(f"Verified {len(HISTORY)} required history paths.")
-    print(f"Verified {len(HISTORY_BLOBS)} exact historical Git blob identities.")
-    print(f"Verified {len(PINNED_BLOBS)} exact closed B1/C4-I/B2/shell Git blob identities.")
-    print("Verified PR #185 merged / B3 authorization baseline.")
-    print("Verified C4-II-B3 is implemented in this changeset but not lifecycle-closed.")
-    print("Verified B3 parses only the four merged B2 execution states plus the closed A4 states.")
-    print("Verified execute generation comes from accepted runtime state and exact replay preserves ID + sequence + generation.")
-    print("Verified explicit confirmation is local presentation and Escape/dismiss are not destructive cancel authority.")
-    print("Verified restoring has no duplicate/destructive-cancel affordance and polling continues.")
-    print("Verified frontend main shell and all closed launcher B2/C4-I/B1 boundaries remain byte-identical.")
-    print("Verified C4-II-C/C4-III remain not authorized and Restore remains NOT IMPLEMENTED.")
-    print("Verified ADR 0016 / ADR 0018 authority and protected history remain unchanged.")
+    print(f"Verified {len(HISTORY_BLOBS)} exact protected history Git blob identities.")
+    print(f"Verified {len(PINNED_BLOBS)} exact closed B1/C4-I/B2/B3/shell Git blob identities.")
+    print("Verified PR #186 merged / B3 closed on exact reviewed head.")
+    print("Verified historical P1 failure is preserved and final B3 audit is P0=0 / P1=0 / P2=0.")
+    print("Verified C4-II-B is closed and C4-II-C is the only authorized next implementation slice.")
+    print("Verified C4-II-C is frontend-only and cannot reopen launcher/backend/contract/runtime authority.")
+    print("Verified C4-III remains not authorized, Restore remains NOT IMPLEMENTED, and release readiness is not claimed.")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
