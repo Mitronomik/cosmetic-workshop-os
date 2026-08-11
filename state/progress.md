@@ -5,6 +5,7 @@ Updated: `2026-08-11`
 ## Current lifecycle
 
 ```text
+PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
@@ -20,33 +21,28 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## 2026-08-11 — C4-II-B3 merged and closed
+## 2026-08-11 — C4-II-B3 closed / C4-II-C authorized
 
-PR #186:
+PR #187 reviewed head `48e245811af706bb666620c6dda8033ff200967a` merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7`. C4-II-B remains DONE and C4-II-C became the only authorized next implementation slice.
 
-- final reviewed head `316358c65a851b46090121c7a6bc877b980176ba`;
-- merge/new main `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`;
-- merged at `2026-08-11T11:14:15Z`;
-- exact-head lifecycle/build — PASS;
-- focused Restore control — **30/30 PASS**;
-- browser smoke v4 — PASS, execute_calls=1, cancel_calls=0, Chrome exit 0;
-- final independent audit — **P0=0 / P1=0 / P2=0 — PASS**;
-- final no-change exact-head/worktree gate — PASS.
+## 2026-08-11 — C4-II-C implementation changeset
 
-Historical audit evidence is preserved: earlier head `de827c5789f165949d0dbcd4fbbda4f5d368d71f` had **P1=1** for false `accepted + pending execute` unchanged/not-started copy. The correction was narrowly limited to presentation + focused regression test relative to that head, then independently re-audited.
+Implemented frontend-only truthful final-state UX in `restore-control-presentation.ts`:
 
-C4-II-B is now DONE — MERGED AND EXACT-HEAD VERIFIED.
+- completed provides successful completion and safe ordinary navigation;
+- failed avoids rollback/unchanged-data overclaims;
+- blocked removes normal-work navigation and gives restart/help guidance;
+- post-execute connection/session uncertainty remains unknown and suppresses normal navigation;
+- ambiguous execute retry is explicitly the same previous command, not a new Restore.
 
-## Next authorized slice
+Focused tests extend `restore-control-races.test.mjs`; expected focused Restore count is 34 before any later additions.
 
-**C4-II-C — Truthful Restore completion/recovery/restart/support UX** — AUTHORIZED NEXT — NOT IMPLEMENTED, frontend-only.
+No launcher/backend/contract/runtime/entry/main/navigation/dependency/ADR changes are part of this slice.
 
-No new launcher state, no new control endpoint, no browser filesystem authority, no destructive retry, no destructive cancel. Existing final states `restore_completed`, `restore_failed`, `restore_blocked` and session/network uncertainty are the only result inputs.
-
-C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+Exact-head build/tests/smoke/audit are still required. C4-III remains blocked. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

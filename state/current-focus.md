@@ -1,10 +1,11 @@
-# Current Focus — C4-II-C authorization after B3 closure
+# Current Focus — C4-II-C truthful Restore results implementation
 
 Updated: `2026-08-11`
 
 ## Current lifecycle
 
 ```text
+PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
@@ -20,26 +21,32 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Closed predecessor
+## Closed baseline
 
-PR #186 final reviewed head `316358c65a851b46090121c7a6bc877b980176ba` merged as `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`.
+PR #187 reviewed head `48e245811af706bb666620c6dda8033ff200967a` merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7` and authorized C4-II-C only.
 
-Accepted B3 evidence: lifecycle/build PASS, 30/30 focused Restore tests, browser smoke v4 PASS, final independent P0=0/P1=0/P2=0, and final no-change gate PASS. The earlier P1=1 audit on `de827c5789f165949d0dbcd4fbbda4f5d368d71f` remains historical evidence and was corrected before merge.
+B3 remains exact-head verified and closed.
 
-## Current authorized work
+## Current work
 
-**C4-II-C — Truthful Restore completion/recovery/restart/support UX** is the only authorized next implementation slice and is **frontend-only**.
+**C4-II-C — Truthful Restore completion/recovery/restart/support UX** is implemented in the current changeset but is not lifecycle-closed.
 
-Primary implementation surface: `frontend/src/restore-control-presentation.ts`; bounded `restore-control-entry.ts` wiring only if needed.
+Production scope is only `frontend/src/restore-control-presentation.ts`; focused result-state tests are in `frontend/test/restore-control-races.test.mjs`.
 
-No new launcher state, no new control endpoint, no browser filesystem authority, no destructive retry, no destructive cancel. Closed launcher/backend/contract/runtime/main-shell seams must remain byte-identical.
+Implemented semantics:
 
-The slice must distinguish `restore_completed`, `restore_failed`, `restore_blocked` and **session/network uncertainty** truthfully. Do not infer rollback, unchanged data or durable phases in browser.
+- completed → success + safe ordinary navigation;
+- failed → no rollback/unchanged-data inference;
+- blocked → restart/help, no normal-work navigation;
+- execute/restoring connection uncertainty → explicit unknown result, no false final truth;
+- existing exact ambiguous replay remains the same previous command only.
+
+Closed launcher/backend/contract/runtime/entry/main/navigation seams must remain byte-identical.
 
 C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

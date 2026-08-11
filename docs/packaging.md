@@ -5,6 +5,7 @@ Updated: `2026-08-11`
 ## Lifecycle
 
 ```text
+PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
@@ -20,20 +21,18 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## Restore closure / successor boundary
+## C4-II-C boundary
 
-PR #186/B3 merged without a packaging-resource or dependency change. This lifecycle closure makes **no packaging change**.
+PR #187 made no packaging change.
 
-C4-II-C is authorized as frontend-only truthful completion/recovery/restart/support UX over existing merged control states. It may not redesign packaging, updater behavior, helper executables, ports or installation topology.
+The current C4-II-C changeset is frontend presentation + focused tests + lifecycle/checker only. It makes **no packaging change**, updater change, helper-executable change, dependency change, port change or installation-topology change.
 
-macOS packaging, safe packaged update flow, installation verification and full release-candidate smoke remain separate future work. **release readiness remains not claimed**.
-
-No new launcher state, no new control endpoint, no browser filesystem authority, no destructive retry and no destructive cancel are authorized.
+macOS packaging, safe packaged update flow, installation verification and full release-candidate smoke remain separate future work. Release readiness remains not claimed.
 
 C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

@@ -8,6 +8,7 @@ Normative sources: ADR 0016 for destructive Restore; ADR 0018 for launcher contr
 ## Current lifecycle
 
 ```text
+PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
@@ -23,7 +24,7 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
@@ -32,52 +33,44 @@ Product release readiness — NOT CLAIMED
 ## Closed authority chain through B3
 
 ```text
-A3 native picker / A1 validation
-→ launcher-private retained source proof
-→ B1 exact source-proof binding into C4-I
+A3/A1 picker + validation
+→ B1 source-proof binding
 → B2 authenticated one-shot /v1/restore/execute
-→ C4-I destructive engine on launcher main runtime
-→ B3 explicit browser confirmation + exact replay
-→ pathless restoring/final launcher states
+→ C4-I sole destructive engine
+→ B3 explicit confirmation + exact replay
+→ pathless restoring/final state
 ```
 
-B3 final reviewed head `316358c65a851b46090121c7a6bc877b980176ba`, merged as `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`.
+PR #187 merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7` and authorized C4-II-C only.
 
-B3 preserves exact `request_id + command_seq + generation`; pending execute persists before HTTP; ambiguous retry reuses the same values; double submit emits at most one execute; dismiss/Escape are local; no browser path/proof/digest authority exists; no `/v1/restore/confirm` exists.
+## C4-II-C implementation changeset
 
-The final B3 browser states are:
+Status: **IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED**.
 
-```text
-restoring
-restore_completed
-restore_failed
-restore_blocked
-```
-
-## C4-II-C — Truthful Restore completion/recovery/restart/support UX
-
-Status: **AUTHORIZED NEXT — NOT IMPLEMENTED**.
-
-C4-II-C is **frontend-only** and consumes only the existing safe launcher state/message contract.
+C4-II-C consumes only existing safe browser-visible launcher state/message and changes presentation only.
 
 ### `restore_completed`
 
-May show clear successful completion and safe ordinary navigation only because merged B2 defines this state after successful Restore truth plus proved ordinary-backend readiness. No technical paths/phases.
+Shows successful completion, ordinary work availability and safe back navigation. This is allowed only because merged B2 publishes `restore_completed` after successful Restore truth and proved ordinary-backend readiness.
 
 ### `restore_failed`
 
-Must show only safe launcher-provided truth. It must not infer rollback, unchanged data, restored old data or absence of mutation. No blind **destructive retry**.
+Shows that the attempt did not complete successfully and that ordinary work is available. It explicitly avoids claiming rollback, unchanged data, restored old data or absence of mutation. It warns against blind new Restore.
 
 ### `restore_blocked`
 
-Must clearly state that ordinary work cannot safely continue in the current run. Provide restart/recovery/support guidance. Do not offer normal app navigation as known-safe and do not offer destructive retry.
+Says ordinary work in the current run is not confirmed safe, suppresses normal-work navigation, and tells the user to restart the app. If the blocked condition repeats after restart, the user is directed to the normal Help area rather than a technical console or destructive retry.
 
-### session/network uncertainty
+### session/network uncertainty after destructive execute
 
-If browser connectivity or authentication is lost after destructive execute may have started, preserve **session/network uncertainty**. Do not infer success, failure, unchanged data or rollback completion. Provide safe reconnect/restart guidance instead.
+If execute is pending/ambiguous or the browser loses control-session safety while `restoring`, the result is labelled **unknown**.
+
+The page does not infer success, failure, rollback or unchanged data. It suppresses normal-work navigation. When the exact pending execute still exists and the live session permits it, the existing B3 exact replay is labelled as **repeat only the previous command**, not a new Restore. Otherwise the user is directed to restart normally.
+
+An authenticated final B2 snapshot (`restore_completed`, `restore_failed`, or `restore_blocked`) remains authoritative even if same-tab replay metadata is missing. Missing replay metadata disables further Restore commands; it does not turn an already authenticated final result into unknown state.
 
 ### Closed architecture
 
-No new launcher state. No new control endpoint. No browser filesystem authority. No destructive cancel. No destructive retry. No operation ID/durable phase/SQL/traceback in browser. `launcher/**`, `backend/**`, `frontend/src/restore-control-contract.ts`, `frontend/src/restore-control-runtime.ts`, `frontend/src/main.ts` and app navigation remain closed.
+No new launcher state, endpoint, DTO field, browser filesystem authority, destructive cancel, new destructive sequence, operation ID, durable phase, SQL or traceback. Contract/runtime/entry, launcher/backend, main/navigation and ADRs remain closed.
 
 C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
