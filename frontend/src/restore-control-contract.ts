@@ -18,9 +18,13 @@ export type RestoreControlStateName =
   | 'accepted'
   | 'rejected'
   | 'cancelled'
-  | 'technical_failure';
+  | 'technical_failure'
+  | 'restoring'
+  | 'restore_completed'
+  | 'restore_failed'
+  | 'restore_blocked';
 
-export type RestoreControlAction = 'select' | 'cancel';
+export type RestoreControlAction = 'select' | 'cancel' | 'execute';
 
 export type RestoreControlSnapshot = {
   run_id: string;
@@ -57,11 +61,20 @@ export type RestoreStoredSession = {
   sessionToken: string;
 };
 
-export type RestorePendingCommand = {
-  action: RestoreControlAction;
+export type RestoreNonDestructivePendingCommand = {
+  action: 'select' | 'cancel';
   requestId: string;
   commandSeq: number;
 };
+
+export type RestoreExecutePendingCommand = {
+  action: 'execute';
+  requestId: string;
+  commandSeq: number;
+  generation: number;
+};
+
+export type RestorePendingCommand = RestoreNonDestructivePendingCommand | RestoreExecutePendingCommand;
 
 export type RestoreReplayState = {
   version: 1;
@@ -104,6 +117,10 @@ const CONTROL_STATES = new Set<RestoreControlStateName>([
   'rejected',
   'cancelled',
   'technical_failure',
+  'restoring',
+  'restore_completed',
+  'restore_failed',
+  'restore_blocked',
 ]);
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -118,6 +135,15 @@ function exactKeys(value: Record<string, unknown>, expected: readonly string[]):
 
 function boundedString(value: unknown, max: number): value is string {
   return typeof value === 'string' && value.length <= max;
+}
+
+function validRequestIdAndSeq(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.requestId === 'string'
+    && REQUEST_ID_PATTERN.test(value.requestId)
+    && Number.isInteger(value.commandSeq)
+    && Number(value.commandSeq) >= 1
+  );
 }
 
 export function exactLoopbackControlOrigin(value: unknown): value is string {
@@ -246,6 +272,13 @@ export function newRestoreRequestId(cryptoSource: Pick<Crypto, 'getRandomValues'
   return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
 }
 
+export function restoreCommandRequestBody(
+  pending: RestorePendingCommand,
+): { request_id: string; command_seq: number } | { request_id: string; command_seq: number; generation: number } {
+  const base = { request_id: pending.requestId, command_seq: pending.commandSeq };
+  return pending.action === 'execute' ? { ...base, generation: pending.generation } : base;
+}
+
 export function readRestoreReplayState(rawState: unknown, runId: string): RestoreReplayState | null {
   if (!plainObject(rawState)) return null;
   const candidate = rawState[RESTORE_HISTORY_STATE_KEY];
@@ -253,9 +286,26 @@ export function readRestoreReplayState(rawState: unknown, runId: string): Restor
   if (candidate.version !== 1 || candidate.runId !== runId || !Number.isInteger(candidate.nextCommandSeq) || Number(candidate.nextCommandSeq) < 1) return null;
   let pending: RestorePendingCommand | null = null;
   if (candidate.pending !== null) {
-    if (!plainObject(candidate.pending) || !exactKeys(candidate.pending, ['action', 'requestId', 'commandSeq'])) return null;
-    if ((candidate.pending.action !== 'select' && candidate.pending.action !== 'cancel') || typeof candidate.pending.requestId !== 'string' || !REQUEST_ID_PATTERN.test(candidate.pending.requestId) || !Number.isInteger(candidate.pending.commandSeq) || Number(candidate.pending.commandSeq) < 1) return null;
-    pending = { action: candidate.pending.action, requestId: candidate.pending.requestId, commandSeq: Number(candidate.pending.commandSeq) };
+    if (!plainObject(candidate.pending) || typeof candidate.pending.action !== 'string') return null;
+    if (candidate.pending.action === 'execute') {
+      if (!exactKeys(candidate.pending, ['action', 'requestId', 'commandSeq', 'generation']) || !validRequestIdAndSeq(candidate.pending)) return null;
+      if (!Number.isInteger(candidate.pending.generation) || Number(candidate.pending.generation) < 1) return null;
+      pending = {
+        action: 'execute',
+        requestId: String(candidate.pending.requestId),
+        commandSeq: Number(candidate.pending.commandSeq),
+        generation: Number(candidate.pending.generation),
+      };
+    } else if (candidate.pending.action === 'select' || candidate.pending.action === 'cancel') {
+      if (!exactKeys(candidate.pending, ['action', 'requestId', 'commandSeq']) || !validRequestIdAndSeq(candidate.pending)) return null;
+      pending = {
+        action: candidate.pending.action,
+        requestId: String(candidate.pending.requestId),
+        commandSeq: Number(candidate.pending.commandSeq),
+      };
+    } else {
+      return null;
+    }
   }
   return { version: 1, runId, nextCommandSeq: Number(candidate.nextCommandSeq), pending };
 }

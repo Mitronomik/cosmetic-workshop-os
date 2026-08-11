@@ -18,11 +18,14 @@ PR #183 reviewed B2-authorization head — fa922f56c19a2dd33b6307ae0a197d476f914
 PR #183 / B2-authorization merge — 4617b8c436eaa510fd545d863346595e2d808ea7
 PR #184 reviewed B2 head — 1ae8bfcdf0f1f1798ce85eac0931925d029379c4
 PR #184 / B2 merge — 266c50a77e5f353fa77701cb854629a99460667f
+PR #185 reviewed B3-authorization head — f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c
+PR #185 / B3-authorization merge — f6589bdd7c403b6d400e3f5b7a0daea75b14632a
 ```
 
 ## Current slice status
 
 ```text
+PR #185 — MERGED — B3 AUTHORIZED
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
@@ -36,14 +39,14 @@ C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-B2 is now lifecycle-closed on merged PR #184. B3 is the only authorized next implementation slice; C4-II-C and C4-III remain blocked.
+B2 is lifecycle-closed on merged PR #184. PR #185 authorized B3 only. B3 code exists in the current changeset but is not closed until exact-head build/tests/UI smoke/audit, merge and a separate lifecycle closure are complete.
 
 ## B1 — Bind retained source proof into C4-I intake — DONE — MERGED AND EXACT-HEAD VERIFIED
 
@@ -106,7 +109,7 @@ browser/session
 
 The earlier eight-hour run that required repeated manual `Ctrl+C` remains **INVALID / NOT A PASS**. The first external smoke runner remains **INCONCLUSIVE RUNNER** because it consumed the one-use bootstrap before the production A4 handoff; it is neither product PASS nor product failure evidence.
 
-The lifecycle checker now pins the accepted merged B2 production blobs as a closed boundary.
+The lifecycle checker pins the accepted merged B2 production blobs as a closed boundary.
 
 ### Why execution belongs to the main launcher runtime
 
@@ -195,7 +198,7 @@ restore_failed
 restore_blocked
 ```
 
-They are launcher/control protocol states only. Existing A4 frontend code remains byte-identical in B2 and therefore does not initiate or present B2 execution.
+They are launcher/control protocol states only. Existing A4 frontend code remained byte-identical in B2 and therefore did not initiate or present B2 execution.
 
 The existing snapshot shape remains pathless. B2 does not add operation ID, durable record content, absolute path, safety-copy path, SQL, migration ID or traceback to browser state.
 
@@ -305,7 +308,7 @@ launcher/restore/context.py
 launcher/restore/verification.py
 ```
 
-A3 picker, A4 browser handoff and pre-B3 frontend source remain protected by the closure gate.
+A3 picker and A4 browser handoff remain protected by the B3 implementation gate.
 
 ### B2 hard prohibitions — closed evidence
 
@@ -346,7 +349,7 @@ The following classes of tests are accepted on the reviewed head:
 - existing A1/A2/A3/A4/B1/C4-I regressions;
 - external isolated process smoke.
 
-## B3 — Browser explicit destructive confirmation — AUTHORIZED NEXT — NOT IMPLEMENTED
+## B3 — Browser explicit destructive confirmation — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 
 ### Goal
 
@@ -357,22 +360,46 @@ A4 browser Restore route
 → candidate state = accepted
 → explicit destructive confirmation
 → dismiss locally OR confirm
+→ frontend creates one pending execute command
 → authenticated POST /v1/restore/execute
+   exact request_id + command_seq + generation
 → B2 authority-transfer boundary
 → browser follows pathless launcher state
 ```
 
-B3 is frontend-only except focused frontend tests and lifecycle/checker/status docs. **No launcher/backend changes are authorized**.
+B3 is frontend-only except focused frontend tests and lifecycle/checker/status docs. **No launcher/backend changes are authorized or implemented**.
+
+### Implementation status in this changeset
+
+The current B3 production surface is exactly:
+
+```text
+frontend/src/restore-control-contract.ts
+frontend/src/restore-control-runtime.ts
+frontend/src/restore-control-presentation.ts
+frontend/src/restore-control-entry.ts
+```
+
+Focused tests are:
+
+```text
+frontend/test/restore-control.test.mjs
+frontend/test/restore-control-races.test.mjs
+```
+
+`frontend/src/main.ts` and `frontend/src/app-navigation-routes.ts` remain byte-identical to the PR #185 merge baseline. No launcher/backend/migration/dependency/package-resource implementation is changed.
+
+No test result is implied by implementation presence. Exact-head verification remains a separate merge gate.
 
 ### Browser authority boundary
 
-The browser may use the safe display filename and accepted control `generation`. It must never know, send or persist absolute source path, source identity, SHA-256, `ExpectedSourceProof`, working database path, backup directory, Restore workspace, safety-copy path, operation ID, durable operation record, lock path, SQL or traceback.
+The browser may use the safe display filename and accepted control `generation`. It never knows, sends or persists absolute source path, source identity, SHA-256, `ExpectedSourceProof`, working database path, backup directory, Restore workspace, safety-copy path, operation ID, durable operation record, lock path, SQL or traceback.
 
 Filename is display-only. `generation` is a stale-view guard, never source proof.
 
 ### Frontend control states
 
-B3 may add exactly these existing launcher states to TypeScript parsing:
+B3 adds exactly these existing launcher states to TypeScript parsing:
 
 ```text
 restoring
@@ -383,15 +410,17 @@ restore_blocked
 
 Unknown states continue to fail closed. The launcher snapshot shape is unchanged.
 
-### Execute command
+### Execute command and generation ownership
 
-B3 may add frontend action `execute`, calling only `POST /v1/restore/execute` with exact `request_id + command_seq + generation`. No additional request key is allowed. `/v1/restore/confirm` remains forbidden: confirmation is browser presentation, not a second authority endpoint.
+B3 adds frontend action `execute`, calling only `POST /v1/restore/execute` with exact `request_id + command_seq + generation`. No additional request key is emitted. `/v1/restore/confirm` remains forbidden: confirmation is browser presentation, not a second authority endpoint.
+
+The DOM confirmation layer does not provide generation. `RestoreControlRuntime.execute()` reads the current parsed snapshot and proceeds only when state is `accepted` with a valid positive generation. This prevents a stale or arbitrary DOM value from selecting destructive authority.
 
 ### Replay requirement — load-bearing
 
-Current select/cancel replay stores `action + requestId + commandSeq`. Execute additionally needs the accepted `generation`.
+Replay format remains version `1` for backward compatibility.
 
-B3 must represent pending commands semantically as:
+Pending commands are discriminated:
 
 ```text
 select/cancel:
@@ -406,46 +435,78 @@ execute:
   generation
 ```
 
-If the execute transport result is ambiguous, retry must send the **same request ID, command sequence and generation**. It must not allocate a new request ID or sequence. No filesystem authority may be stored in history/session replay state. Existing select/cancel replay must remain backward-safe.
+The historical select/cancel shape remains valid unchanged. Execute requires the accepted positive generation and exact keys.
+
+If the execute transport result is ambiguous, retry sends the **same request ID, same command sequence and same generation**. It does not allocate a new request ID or sequence. No filesystem authority is stored in history/session replay state.
+
+The pending execute is persisted before network I/O. A second near-simultaneous execute therefore sees an existing pending command and sends no second destructive request.
 
 ### Confirmation UX
 
-Confirmation is shown only for the current `accepted` candidate. It identifies the backup via safe display filename and explains in plain language that current workshop data will be replaced, the application may be temporarily unavailable, and existing C4-I creates a protective copy before replacement.
+Confirmation is shown only for the current `accepted` candidate while the exact-run session is ready, protocol-safe and has no pending command.
 
-Dismissing the dialog is local only and must not implicitly call `/v1/restore/cancel`. The destructive action uses existing danger language, accessible dialog/focus semantics, and must be protected against double-click/repeated confirm.
+The native semantic `<dialog>`:
+
+- identifies the backup via safe escaped display filename;
+- explains that current workshop data will be replaced;
+- explains temporary application unavailability;
+- explains that existing Restore safety logic creates a protective copy before replacement;
+- explains that an already started Restore cannot be cancelled from this screen;
+- focuses the safe `Вернуться` action first;
+- keeps `Восстановить данные` as the explicit danger action.
+
+Dismissing the dialog or pressing Escape is local-only and does not implicitly call `/v1/restore/cancel` or execute.
+
+The local confirmation is bound to the current accepted generation. Any runtime view/generation/pending change invalidates it.
 
 ### Restoring and minimal final presentation
 
-While `restoring`, show a clear non-technical in-progress state, disable duplicate destructive confirmation, offer no destructive cancellation, display no fake progress/phase, and continue heartbeat/state polling.
+While `restoring`, B3 shows a clear non-technical in-progress state, disables duplicate confirmation, offers no select/cancel/destructive cancellation, displays no fake progress/phase, and continues launcher-control polling.
 
-For `restore_completed`, `restore_failed`, `restore_blocked`, B3 may minimally display the safe launcher message. It must not infer durable phases or implement the richer completion/rollback/restart/support experience owned by C4-II-C.
+For `restore_completed`, `restore_failed`, `restore_blocked`, B3 minimally displays the safe launcher message. It does not infer durable phase or implement the richer completion/rollback/restart/support experience owned by C4-II-C.
 
-### Authorized implementation surface for the next PR
+Generic post-execute network guidance does not claim working data was unchanged because destructive work may already have started.
 
-Primarily:
+### Required B3 tests in this changeset
 
-```text
-frontend/src/restore-control-contract.ts
-frontend/src/main.ts                 # minimal wiring only
-frontend/src/<focused Restore B3 modules if needed>
-frontend/tests/<focused Restore B3 tests>
-docs/state/checker files required for implementation status
-```
+The focused suite is designed to prove:
 
-Prefer focused modules over growing `main.ts`. No launcher/backend changes are authorized. If they appear necessary, stop and open an architecture/lifecycle question.
+- existing A4 states still parse;
+- exactly four B2 execution states parse and unknown state fails closed;
+- snapshot exact-key validation still rejects path extras;
+- select/cancel replay remains backward-safe;
+- execute replay requires exact generation and rejects filesystem-authority extras;
+- execute request body contains exactly request ID, command sequence and generation;
+- generation comes from current `accepted` snapshot;
+- execute from non-accepted state sends nothing;
+- ambiguous execute retry preserves exact ID/sequence/generation and does not allocate another sequence;
+- reload preserves a pending execute safely;
+- two concurrent execute calls emit exactly one destructive request;
+- accepted presentation requires explicit confirmation;
+- dialog copy explains replacement/protective copy and safe action owns initial focus;
+- restoring presentation has no select/cancel/reconfirm/fake percentage;
+- final B2 states minimally render safe launcher messages;
+- entry handles Escape/dismiss locally rather than as Restore cancel;
+- no localStorage/browser file-input/path authority appears in Restore frontend source.
 
-### Required B3 tests
+### Verification still required before merge
 
-- existing A4 states remain valid; four B2 execution states parse; unknown state fails closed;
-- execute body is exactly `request_id + command_seq + generation`, with generation from current `accepted`;
-- accepted state alone does not execute; explicit confirm is required; dismiss sends neither execute nor cancel;
-- repeated confirmation cannot duplicate execute and keyboard/focus semantics remain accessible;
-- ambiguous execute retry preserves exact request ID, sequence and generation without allocating a second sequence;
-- select/cancel replay remains unchanged and no filesystem authority is persisted;
-- `restoring` disables duplicate/destructive-cancel actions while heartbeat/state polling continues;
-- completed/failed/blocked states safely present launcher messages without internal paths or C4-II-C semantics;
-- existing A4 bootstrap/session/select/cancel/replay and ordinary navigation remain green.
+The published B3 exact head must still run and record:
+
+- `git diff --check`;
+- lifecycle checker;
+- frontend build/type-check;
+- focused `test:restore-control` suite;
+- existing A4 regressions;
+- desktop `/backups/restore` smoke;
+- narrow-screen Restore smoke;
+- keyboard focus/Escape dialog smoke;
+- loading/network/restoring/final/disabled-state review;
+- clean exact head/worktree;
+- independent `P0=0 / P1=0 / P2=0` audit.
+
+Do not record these as PASS until actually observed on the published PR head.
 
 ## Successor discipline
 
-Each B slice is a separate PR with exact changed-path review, tests, appropriate smoke and independent P0/P1/P2 audit. B3 authorization does not authorize C4-II-C or C4-III. Product Restore remains NOT IMPLEMENTED.
+Each B slice is a separate PR with exact changed-path review, tests, appropriate smoke and independent P0/P1/P2 audit. B3 implementation does not authorize C4-II-C or C4-III. After B3 merges, a separate lifecycle closure is required before any C4-II-C authorization. Product Restore remains NOT IMPLEMENTED.

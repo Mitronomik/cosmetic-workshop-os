@@ -14,6 +14,7 @@ MVP is local-first. User mode must not require Git, terminal, Python, Node.js or
 ## Restore lifecycle
 
 ```text
+PR #185 — MERGED — B3 AUTHORIZED
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
@@ -21,7 +22,7 @@ C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -54,8 +55,10 @@ The destructive execution itself runs under the launcher main runtime owner path
 
 If C4-I permits ordinary startup, the retained maintenance lease is released only immediately before the exact owned child start. A restart is considered successful only after the existing canonical liveness-lock + listening-socket handshake. If restart cannot be proved, the launcher returns to maintenance exclusion and publishes `restore_blocked` without rewriting C4-I truth.
 
-## B3 deployment boundary
+## B3 deployment consequence
 
-B3 authorization changes no deployment topology, service, port, daemon, helper executable or backend runtime. B3 is frontend-only presentation/execute wiring on the already-existing launcher control plane.
+The current B3 changeset changes no deployment topology, service, port, daemon, helper executable or backend runtime. It adds frontend confirmation, parsing and same-tab replay data on the already-existing launcher control plane.
 
-No launcher/backend/deployment change is authorized by B3. Product Restore remains incomplete until later lifecycle slices close the user-visible result/recovery flow.
+Pending select/cancel replay remains action/request-id/command-sequence only. Pending destructive execute additionally stores the accepted control generation so an ambiguous transport retry can resend the exact same command. This remains non-secret browser history metadata and carries no filesystem authority.
+
+No launcher/backend/deployment change is included. No new port or `/v1/restore/confirm` endpoint is introduced. Product Restore remains incomplete until later lifecycle slices close richer user-visible result/recovery flow.

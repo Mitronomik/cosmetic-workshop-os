@@ -7,6 +7,7 @@ macOS `.app` / `.dmg` packaging is **NOT COMPLETED**.
 ## Restore lifecycle
 
 ```text
+PR #185 — MERGED — B3 AUTHORIZED
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
@@ -14,7 +15,7 @@ C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -35,12 +36,12 @@ B2 remains inside the same launcher process and same ephemeral loopback control 
 
 The same launcher process owns the ordinary backend across an intentional C4-I stop/restart using one bounded runtime owner loop. That is runtime coordination, not a packaging redesign.
 
-The pre-B3 frontend assets remain byte-identical in this closure/authorization PR.
+## B3 packaging consequence
 
-## B3 packaging boundary
+The current B3 changeset changes only existing frontend Restore assets/tests plus lifecycle documentation/checker state. It adds no dependency, entitlement, background service, helper executable, persistent filesystem authority or packaging topology.
 
-B3 may change frontend assets only. It adds no new dependency, entitlement, background service, helper executable, persistent filesystem authority or packaging topology.
+Pending execute replay may retain only action, request ID, command sequence and accepted control generation. No source path, source proof, digest, operation identity or internal database/backup/lock path may be packaged or persisted.
 
-Pending execute replay may retain only action, request ID, command sequence and accepted generation. No source path, proof or digest may be packaged or persisted.
+`restore-control-entry.js` remains the early browser entry before `main.js`; B3 extends its focused Restore confirmation wiring without moving Restore lifecycle into the giant application shell.
 
 macOS packaging work remains separately incomplete and is not authorized by B3.

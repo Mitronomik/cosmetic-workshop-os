@@ -14,6 +14,7 @@ import {
   readRestoreSession,
   restoreBootstrapDto,
   restoreCommandDto,
+  restoreCommandRequestBody,
   restoreStateDto,
   withRestoreReplayState,
   writeRestoreSession,
@@ -44,9 +45,10 @@ export interface RestoreControlEnvironment {
 const POLL_INTERVAL_MS = 250;
 const OPEN_RESTART_GUIDANCE = 'Восстановление сейчас недоступно. Закройте эту вкладку и откройте или перезапустите «Мастерскую косметолога» обычным способом.';
 const BOOTSTRAP_NETWORK_GUIDANCE = 'Не удалось подтвердить одноразовое подключение к локальному каналу восстановления. Рабочие данные не изменялись. Закройте эту вкладку и откройте или перезапустите «Мастерскую косметолога» обычным способом.';
-const NETWORK_GUIDANCE = 'Не удалось связаться с локальным каналом восстановления. Рабочие данные не изменялись. Проверьте, что приложение запущено, и повторите попытку.';
+const NETWORK_GUIDANCE = 'Не удалось связаться с локальным каналом восстановления. Не запускайте новое действие, пока связь не восстановлена. Проверьте, что приложение запущено, и повторите проверку соединения.';
 const RETRY_GUIDANCE = 'Ответ на последнее действие не получен. Не запускайте новое действие: безопасно повторите именно предыдущую команду.';
 const PROTOCOL_GUIDANCE = 'Сессия восстановления больше не может безопасно продолжать команды. Перезапустите «Мастерскую косметолога» и откройте восстановление снова.';
+const EXECUTE_NOT_READY_GUIDANCE = 'Сначала выберите резервную копию и дождитесь успешной проверки. Восстановление можно подтвердить только для текущей проверенной копии.';
 
 export class RestoreControlRuntime {
   private session: RestoreStoredSession | null = null;
@@ -109,6 +111,16 @@ export class RestoreControlRuntime {
 
   async select(): Promise<void> { await this.beginCommand('select'); }
   async cancel(): Promise<void> { await this.beginCommand('cancel'); }
+
+  async execute(): Promise<void> {
+    const accepted = this.snapshot;
+    if (!accepted || accepted.state !== 'accepted' || !Number.isInteger(accepted.generation) || accepted.generation < 1) {
+      this.notice = EXECUTE_NOT_READY_GUIDANCE;
+      this.emit();
+      return;
+    }
+    await this.beginCommand('execute', accepted.generation);
+  }
 
   async retryPending(): Promise<void> {
     if (!this.replay?.pending || !this.session || !this.protocolSafe || this.disposed) return;
@@ -233,7 +245,7 @@ export class RestoreControlRuntime {
     return false;
   }
 
-  private async beginCommand(action: RestoreControlAction): Promise<void> {
+  private async beginCommand(action: RestoreControlAction, generation?: number): Promise<void> {
     if (!this.session || !this.replay || !this.protocolSafe || this.disposed) {
       this.notice = this.session ? PROTOCOL_GUIDANCE : OPEN_RESTART_GUIDANCE;
       this.emit();
@@ -244,11 +256,28 @@ export class RestoreControlRuntime {
       this.emit();
       return;
     }
-    const pending: RestorePendingCommand = {
-      action,
-      requestId: newRestoreRequestId(this.env.crypto),
-      commandSeq: this.replay.nextCommandSeq,
-    };
+
+    let pending: RestorePendingCommand;
+    if (action === 'execute') {
+      if (typeof generation !== 'number' || !Number.isInteger(generation) || generation < 1) {
+        this.notice = EXECUTE_NOT_READY_GUIDANCE;
+        this.emit();
+        return;
+      }
+      pending = {
+        action: 'execute',
+        requestId: newRestoreRequestId(this.env.crypto),
+        commandSeq: this.replay.nextCommandSeq,
+        generation,
+      };
+    } else {
+      pending = {
+        action,
+        requestId: newRestoreRequestId(this.env.crypto),
+        commandSeq: this.replay.nextCommandSeq,
+      };
+    }
+
     this.replay = { ...this.replay, pending };
     this.notice = '';
     this.persistReplay();
@@ -259,13 +288,17 @@ export class RestoreControlRuntime {
   private async sendPendingCommand(pending: RestorePendingCommand): Promise<void> {
     const session = this.session;
     if (!session || !this.replay || this.replay.pending?.requestId !== pending.requestId) return;
-    const endpoint = pending.action === 'select' ? '/v1/restore/select' : '/v1/restore/cancel';
+    const endpoint = pending.action === 'select'
+      ? '/v1/restore/select'
+      : pending.action === 'cancel'
+        ? '/v1/restore/cancel'
+        : '/v1/restore/execute';
     let response: Response;
     try {
       response = await this.authFetch(session, endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: pending.requestId, command_seq: pending.commandSeq }),
+        body: JSON.stringify(restoreCommandRequestBody(pending)),
       });
     } catch {
       if (!this.sessionIsCurrent(session)) return;
@@ -396,7 +429,12 @@ export class RestoreControlRuntime {
 
   private schedulePollingIfNeeded(): void {
     this.stopPolling();
-    if (!this.snapshot || (this.snapshot.state !== 'selecting' && this.snapshot.state !== 'validating') || !this.session || this.disposed) return;
+    if (
+      !this.snapshot
+      || !['selecting', 'validating', 'restoring'].includes(this.snapshot.state)
+      || !this.session
+      || this.disposed
+    ) return;
     this.pollHandle = this.env.setTimeout(() => {
       this.pollHandle = null;
       void this.refreshState();
