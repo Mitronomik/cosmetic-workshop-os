@@ -7,11 +7,14 @@ Updated: `2026-08-09`
 ```text
 PR #182 reviewed B1 head — 27726058af4f373ab65225ecf4d1a945f1c53067
 PR #182 merge/new main — 5e13b50f1918dacbf8d54066c9156942a9adb895
+PR #183 reviewed B2-authorization head — fa922f56c19a2dd33b6307ae0a197d476f91489b
+PR #183 merge/new main — 4617b8c436eaa510fd545d863346595e2d808ea7
 ```
 
 ## Current lifecycle
 
 ```text
+PR #183 — MERGED — B2 AUTHORIZED
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
@@ -22,7 +25,7 @@ C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -30,18 +33,29 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## B1 closure
+## Current work — B2 verification only
 
-B1 exact head `27726058...` passed focused tests, privacy, full backend+launcher `2480/2480`, external exact-head substitution smoke and independent `P0=0/P1=0/P2=0`, then merged as `5e13b50...`.
+The B2 implementation changeset contains the authorized launcher-only bridge:
 
-The base request remains selected-source-only; B1 proof binding uses the same C4-I `HeldSource` descriptor and fails before `prepared` on mismatch.
+```text
+POST /v1/restore/execute(request_id, command_seq, generation)
+→ exact-next sequence consumed before business preconditions
+→ current accepted control generation + current retained A1 proof
+→ one-shot launcher-private RestoreExecutionIntent
+→ retained authority invalidated
+→ pathless restoring reply
+→ HTTP/session returns without C4-I
+→ main launcher runtime owner loop takes intent
+→ ProofBoundRestoreRequest
+→ existing C4-I execute_restore
+→ existing C4-I owns destructive semantics
+→ canonical owned-backend restart/result handoff
+```
 
-## Current work — B2 only
+The same control plane remains alive on the same ephemeral port. Session expiry cannot cancel accepted destructive execution or overwrite launcher-owned final state. Frontend remains byte-identical.
 
-B2 adds one authenticated `/v1/restore/execute` command. It consumes the current accepted control generation and current launcher-private retained proof into exactly one in-memory `RestoreExecutionIntent`, invalidates that source authority, and returns without running destructive work in the HTTP/session worker.
-
-The launcher main runtime owns the intent and calls existing C4-I with `ProofBoundRestoreRequest`. The same control plane stays alive while C4-I stops the ordinary backend. The main runtime then performs the safe ordinary-backend restart handoff and publishes a pathless final control state.
+Current work is now evidence gathering: focused/regression exact-head tests, external isolated process smoke, clean-head proof and independent audit. No test or smoke PASS is claimed here until actually run.
 
 ## Hard seams
 
-No browser confirmation/UI, no `/v1/restore/confirm`, no browser path/proof, no second Restore engine, no phase/recovery/safety-copy/AuditLog redesign, no new dependency/port/service, and no B3 authorization.
+No browser confirmation/UI, no `/v1/restore/confirm`, no browser path/proof/digest, no second Restore engine, no B1/C4-I phase/recovery/safety-copy/AuditLog redesign, no ordinary backend/migration/dependency/package-resource change, and no B3/C4-II-C/C4-III authorization.

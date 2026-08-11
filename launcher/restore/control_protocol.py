@@ -1,4 +1,4 @@
-"""Typed launcher-internal contracts for the C4-II-A Restore control flow.
+"""Typed launcher-internal contracts for the C4-II Restore control flow.
 
 The browser never owns a filesystem path. A source-selection adapter returns a
 path only inside the launcher process. The closed A2 unavailable adapter remains
@@ -72,6 +72,10 @@ class ControlViewState(str, Enum):
     REJECTED = "rejected"
     CANCELLED = "cancelled"
     TECHNICAL_FAILURE = "technical_failure"
+    RESTORING = "restoring"
+    RESTORE_COMPLETED = "restore_completed"
+    RESTORE_FAILED = "restore_failed"
+    RESTORE_BLOCKED = "restore_blocked"
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,7 @@ Current lifecycle authority: `docs/current-lifecycle.md`. Accepted Restore decis
 ## Current lifecycle
 
 ```text
+PR #183 — MERGED — B2 AUTHORIZED
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
@@ -17,7 +18,7 @@ C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -25,37 +26,50 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## B1 merged baseline
+## Merged B2 authorization baseline
 
 ```text
-reviewed head — 27726058af4f373ab65225ecf4d1a945f1c53067
-merge/new main — 5e13b50f1918dacbf8d54066c9156942a9adb895
-full backend+launcher — 2480/2480 PASS
-external exact-head substitution smoke — PASS
-independent audit — P0=0 / P1=0 / P2=0
+PR #183 reviewed head — fa922f56c19a2dd33b6307ae0a197d476f91489b
+PR #183 merge/new main — 4617b8c436eaa510fd545d863346595e2d808ea7
 ```
 
-## Authorized work — B2 only
+B1 remains closed on PR #182 with full regression `2480/2480`, external exact-head source-substitution smoke PASS and independent `P0=0 / P1=0 / P2=0`.
+
+## Current B2 implementation
 
 ```text
 browser/session
 → POST /v1/restore/execute(request_id, command_seq, generation)
-→ exact-next command consumed
-→ require current accepted generation + retained A1 proof
+→ exact-next command consumed before business preconditions
+→ require current accepted control generation + retained A1 proof
 → copy proof/path into one launcher-private in-memory intent
 → invalidate retained source authority
 → state = restoring
 → HTTP returns without running C4-I
-→ launcher main runtime takes intent
+→ launcher main runtime owner loop takes intent
 → ProofBoundRestoreRequest
 → existing C4-I execute_restore
-→ ordinary backend restart handoff if safe
+→ canonical ordinary-backend restart handoff if safe
 → pathless final control state
 ```
 
-The control plane stays alive on the same ephemeral port while ordinary backend is intentionally stopped/restarted. Heartbeat/state remain serviceable. Cancel/session expiry after execution acceptance cannot cancel destructive Restore.
+The control plane stays alive on the same ephemeral port while the ordinary backend is intentionally stopped/restarted. Heartbeat/state remain serviceable. Select/cancel/second execute during `restoring` consume valid sequences but cannot cancel or duplicate destructive Restore. Browser-session expiry invalidates authentication but cannot cancel accepted C4-I or overwrite launcher-owned final state.
 
-B2 must change the launcher runtime wait model so an intentional C4-I stop of the original backend is not treated as launcher termination and cannot cause cleanup to kill a newly restarted backend.
+Control generation and retained-proof generation are intentionally separate domains. Only the accepted control snapshot generation crosses HTTP; source authority comes from the current launcher-private proof.
+
+The runtime now uses a bounded main-owner loop rather than one stale initial `process.wait()`. C4-I still owns backend stop/exclusion and all destructive semantics. Restart uses existing `BackendProcessOwner` against canonical `context.database_path`; restart failure leaves C4-I truth unchanged and returns to safe maintenance exclusion before `restore_blocked`.
+
+## Verification still required
+
+Do not present B2 as closed until all of these are real exact-head evidence:
+
+- lifecycle checker + syntax;
+- focused B2 tests;
+- A1/A2/A3/A4/B1/C4-I regressions;
+- full backend+launcher regression;
+- external isolated process smoke on the published PR head;
+- clean exact head/worktree;
+- independent `P0=0/P1=0/P2=0` audit.
 
 ## Not B2
 
@@ -71,4 +85,4 @@ B2 must change the launcher runtime wait model so an intentional C4-I stop of th
 
 ## Successor gate
 
-B3 remains not authorized. B2 requires focused exact-head tests, full regressions, external isolated process smoke and independent `P0=0/P1=0/P2=0`, then merge and separate lifecycle closure before any B3 authorization.
+B3 remains not authorized. After B2 exact-head evidence is green and the B2 PR merges, a separate lifecycle closure is still required before any B3 authorization.

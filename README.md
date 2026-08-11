@@ -7,6 +7,7 @@ A local-first working system for a cosmetic workshop. The user product must run 
 ## Current product status
 
 ```text
+PR #183 — MERGED — B2 AUTHORIZED
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-I — DONE — MERGED AND EXACT-HEAD VERIFIED
 CR-011 — ACCEPTED — ADR 0018 NORMATIVE ON MAIN
@@ -17,7 +18,7 @@ C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -25,21 +26,30 @@ Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-PR #182 reviewed exact head `27726058af4f373ab65225ecf4d1a945f1c53067` merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`. Its final gate was full backend+launcher `2480/2480`, external exact-head source-substitution smoke PASS, and independent `P0=0 / P1=0 / P2=0`.
+PR #183 final reviewed authorization head `fa922f56c19a2dd33b6307ae0a197d476f91489b` merged as `4617b8c436eaa510fd545d863346595e2d808ea7`, authorizing B2 only.
 
 ## Closed B1 boundary
 
 B1 preserves historical base `RestoreRequest` as selected-source-only and adds launcher-private `ProofBoundRestoreRequest` carrying `ExpectedSourceProof(SourceIdentity, SHA-256)`. C4-I re-proves that evidence against the exact same held source descriptor that it later stages, before `prepared`, safety copy or working-database mutation.
 
-`launcher/restore/staging.py` remains byte-identical to the B1 baseline. No second Restore engine, staging algorithm or browser authority was introduced.
+The B1/C4-I source-proof, staging and destructive engine implementations remain closed and byte-protected in the B2 lifecycle gate.
 
-## Authorized next slice — C4-II-B2
+## B2 implementation changeset
 
-B2 is launcher-only destructive coordination. It may add exactly one authenticated control command, `/v1/restore/execute`, and a launcher-private one-shot execution intent consumed by the main launcher runtime loop. The HTTP/session thread must never run C4-I directly.
+B2 now implements the launcher-only destructive coordination seam authorized by PR #183:
 
-B2 must consume the current accepted browser generation, transfer the current launcher-private A1 proof into `ProofBoundRestoreRequest`, invalidate that proof before execution, and invoke the existing C4-I `execute_restore(...)` once. The existing control plane remains alive on the same exact-run ephemeral port while the ordinary backend is stopped/restarted.
+- authenticated `POST /v1/restore/execute` with exact `request_id + command_seq + generation` body;
+- one-shot transfer of the current launcher-private A1 retained path/proof into in-memory `RestoreExecutionIntent`;
+- immediate invalidation of retained source authority;
+- pathless `restoring`, `restore_completed`, `restore_failed` and `restore_blocked` launcher control states;
+- no C4-I execution in HTTP/session workers;
+- synchronous destructive execution on the main launcher runtime owner loop;
+- existing C4-I remains the only component that stops/excludes the backend and performs B1 re-proof, staging, validation, safety copy, durable phases, replacement, verification and rollback;
+- ordinary-backend restart handoff uses the existing `BackendProcessOwner` and canonical database path;
+- the same control-plane instance/ephemeral port stays alive through the destructive interval;
+- session expiry invalidates browser authentication but cannot cancel an accepted destructive Restore.
 
-The launcher main runtime owns backend stop/restart lifecycle. C4-I remains the only component that performs backend exclusion, safety copy, durable phases, replacement, verification and rollback. B2 adds no browser confirmation UI; B3 remains separately **NOT AUTHORIZED**.
+This changeset adds no browser confirmation or frontend support. B3 remains separately **NOT AUTHORIZED**, so product Restore is still incomplete.
 
 ## Restore authority
 
@@ -47,7 +57,7 @@ The launcher main runtime owns backend stop/restart lifecycle. C4-I remains the 
 - ADR 0018 — launcher control/picker/exact-run browser-session architecture;
 - `docs/current-lifecycle.md` — current lifecycle authority;
 - `docs/c4-ii-a-implementation-slices.md` — closed A1→A4 sequence;
-- `docs/c4-ii-b-implementation-slices.md` — bounded B1→B3 sequence and exact B2 authorization.
+- `docs/c4-ii-b-implementation-slices.md` — bounded B1→B3 sequence and B2 implementation contract.
 
 ## Architectural invariants
 

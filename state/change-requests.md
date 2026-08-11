@@ -8,6 +8,7 @@ The complete pre-compaction ledger remains byte-identical at `docs/history/chang
 ## Current lifecycle
 
 ```text
+PR #183 — MERGED — B2 AUTHORIZED
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C1 — COMPLETED
 C2 — COMPLETED
@@ -22,7 +23,7 @@ C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -46,37 +47,35 @@ Product release readiness — NOT CLAIMED
 | CR-010 | 2026-08-02 | Launcher-assisted Restore semantics | accepted; C4-I implemented; product Restore incomplete | ADR 0016. |
 | CR-011 | 2026-08-06 | Launcher Restore interaction and non-destructive validation-session boundary | **accepted — ADR 0018 normative on main** | launcher loopback control, native picker, exact-run browser session, non-destructive validation. |
 
-## B1 closure / B2 authorization under accepted decisions
+## B1 closure / B2 implementation under accepted decisions
 
-No new CR/ADR is required. B1 and B2 remain within ADR 0016 destructive authority and ADR 0018 exact-run launcher control architecture.
+No new CR/ADR is required. B1 and B2 remain inside ADR 0016 destructive authority and ADR 0018 exact-run launcher control architecture.
 
-PR #182 implemented B1 on exact head `27726058af4f373ab65225ecf4d1a945f1c53067`, passed full regression `2480/2480`, external exact-head substitution smoke and independent `P0=0/P1=0/P2=0`, then merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`.
+PR #182 implemented and closed B1 on exact head `27726058af4f373ab65225ecf4d1a945f1c53067`, then merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`.
 
-B1 is therefore closed:
+PR #183 reviewed B2 authorization at `fa922f56c19a2dd33b6307ae0a197d476f91489b` and merged as `4617b8c436eaa510fd545d863346595e2d808ea7`.
 
-- base `RestoreRequest` remains selected-source-only;
-- `ProofBoundRestoreRequest` carries launcher-private non-path expected proof;
-- proof is bound to the same held descriptor later staged;
-- mismatch stops before `prepared` with `SOURCE_CHANGED`;
-- C4-I destructive phase/recovery/safety-copy semantics remain unchanged.
+The current B2 changeset implements only that accepted coordinator contract:
 
-B2 is now authorized only with the exact coordinator contract in `docs/c4-ii-b-implementation-slices.md`:
-
-- one new authenticated `/v1/restore/execute` command;
-- exact `request_id` + `command_seq` + accepted `generation` body;
-- one-shot transfer of current retained A1 authority into launcher-private memory;
+- one authenticated `/v1/restore/execute` command;
+- exact `request_id + command_seq + generation` body;
+- browser generation used only as accepted-control stale-view guard;
+- current A1 path/proof transferred once into launcher-private memory and invalidated immediately;
 - no path/proof/digest from browser;
 - HTTP/session worker queues only and never runs C4-I;
-- launcher main runtime invokes existing C4-I exactly once;
+- main launcher runtime synchronously invokes existing C4-I exactly once;
 - same control plane stays alive across ordinary backend stop/restart;
 - browser/session expiry cannot cancel already accepted destructive execution;
-- safe restart/result handoff without reinterpreting C4-I truth.
+- restart/result handoff uses canonical `BackendProcessOwner` without reinterpreting C4-I truth;
+- B1/C4-I, A1/A3/A4 and frontend closed boundaries stay protected.
 
 - B1 — **DONE — MERGED AND EXACT-HEAD VERIFIED**;
-- B2 — **AUTHORIZED NEXT — NOT IMPLEMENTED**;
+- B2 — **IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED**;
 - B3 — planned, not authorized.
 
-If B2 cannot preserve the main-runtime ownership, exact-run control and C4-I boundaries above, stop and open a new change request instead of silently changing architecture.
+B2 still requires exact-head focused/regression tests, external isolated process smoke and independent audit before merge. Its merge will not authorize B3; a separate lifecycle closure is required.
+
+If verification reveals that B2 cannot preserve main-runtime ownership, exact-run control or the existing C4-I boundary, stop and open a new change request instead of silently changing architecture.
 
 ## History policy
 

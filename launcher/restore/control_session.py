@@ -1,19 +1,23 @@
-"""Exact-run Restore control-session coordination for C4-II-A2.
+"""Exact-run Restore control-session coordination for C4-II-A2/B2.
 
-This module owns authentication lifetime, command ordering and worker publication.
-It deliberately owns no HTTP parsing and no filesystem picker implementation.
-Long selection/validation work runs on one launcher-owned worker so heartbeat,
-state and cancel requests remain serviceable by the concurrent HTTP boundary.
+This module owns authentication lifetime, command ordering, non-destructive
+selection workers and the one-shot transfer of already-retained launcher source
+authority into B2 execution intent memory. It deliberately owns no HTTP parsing
+and never executes C4-I. Destructive execution is consumed synchronously by the
+main launcher runtime.
 """
 
 from __future__ import annotations
 
 import hmac
+from pathlib import Path
 import secrets
 import threading
 import time
 from typing import Callable
 
+from launcher.restore.contracts import ExpectedSourceProof
+from launcher.restore.execution_coordinator import RestoreExecutionIntent
 from launcher.restore.control_protocol import (
     CommandReply,
     ControlSessionError,
@@ -41,6 +45,25 @@ SELECTION_CANCELLED_MESSAGE = "Выбор резервной копии отме
 SESSION_EXPIRED_MESSAGE = "Сессия восстановления завершена. Данные мастерской не изменились."
 ACTION_IN_PROGRESS_MESSAGE = "Предыдущая операция выбора или проверки ещё выполняется."
 NOTHING_TO_CANCEL_MESSAGE = "Активной проверки резервной копии нет."
+CANDIDATE_NOT_ACCEPTED_MESSAGE = "Сначала выберите и проверьте резервную копию."
+SELECTION_GENERATION_STALE_MESSAGE = (
+    "Выбранная резервная копия уже изменилась. Выберите и проверьте её снова."
+)
+RESTORE_AUTHORITY_MISSING_MESSAGE = (
+    "Проверка резервной копии устарела. Выберите и проверьте её снова."
+)
+RESTORING_MESSAGE = "Восстановление выполняется. Не закрывайте приложение."
+RUNTIME_EXITING_MESSAGE = (
+    "Основная часть приложения завершила работу. Закройте и снова откройте приложение."
+)
+
+_FINAL_EXECUTION_STATES = frozenset(
+    {
+        ControlViewState.RESTORE_COMPLETED,
+        ControlViewState.RESTORE_FAILED,
+        ControlViewState.RESTORE_BLOCKED,
+    }
+)
 
 
 class RestoreControlSession:
@@ -73,6 +96,9 @@ class RestoreControlSession:
         self._last_command_reply: CommandReply | None = None
         self._worker: threading.Thread | None = None
         self._worker_cancel: threading.Event | None = None
+        self._execution_intent: RestoreExecutionIntent | None = None
+        self._execution_owner: RestoreExecutionIntent | None = None
+        self._runtime_exit_sealed = False
         self._closed = False
         self._expiry_stop = threading.Event()
         self._expiry_thread: threading.Thread | None = None
@@ -138,6 +164,17 @@ class RestoreControlSession:
         self._last_authenticated_at = None
         self._selection_generation += 1
         self._candidate_service.cancel()
+
+        # Browser/session lifetime stops being destructive authority the instant
+        # B2 accepts execution. Expiry still invalidates authentication and any
+        # stale A1 proof, but it may neither cancel C4-I nor overwrite the
+        # launcher-owned restoring/final result state.
+        if (
+            self._state.state is ControlViewState.RESTORING
+            or self._state.state in _FINAL_EXECUTION_STATES
+        ):
+            return True
+
         if self._worker_cancel is not None:
             self._worker_cancel.set()
         self._state = ControlStateSnapshot(
@@ -230,6 +267,27 @@ class RestoreControlSession:
         self._last_command_reply = reply
         return reply
 
+    def _execution_owned_reply_locked(self, command_seq: int) -> CommandReply | None:
+        if self._state.state is ControlViewState.RESTORING:
+            return self._record_reply_locked(
+                CommandReply(
+                    ok=False,
+                    code="restore_in_progress",
+                    command_seq=command_seq,
+                    state=self._state,
+                )
+            )
+        if self._state.state in _FINAL_EXECUTION_STATES:
+            return self._record_reply_locked(
+                CommandReply(
+                    ok=False,
+                    code="restore_result_final",
+                    command_seq=command_seq,
+                    state=self._state,
+                )
+            )
+        return None
+
     def select(
         self,
         presented_token: str,
@@ -246,6 +304,10 @@ class RestoreControlSession:
             )
             if retry is not None:
                 return retry
+
+            execution_reply = self._execution_owned_reply_locked(command_seq)
+            if execution_reply is not None:
+                return execution_reply
 
             if self._worker is not None and self._worker.is_alive():
                 return self._record_reply_locked(
@@ -310,6 +372,10 @@ class RestoreControlSession:
             if retry is not None:
                 return retry
 
+            execution_reply = self._execution_owned_reply_locked(command_seq)
+            if execution_reply is not None:
+                return execution_reply
+
             was_actionable = (
                 (self._worker is not None and self._worker.is_alive())
                 or self._state.state is ControlViewState.ACCEPTED
@@ -350,6 +416,231 @@ class RestoreControlSession:
                     state=self._state,
                 )
             )
+
+    def execute(
+        self,
+        presented_token: str,
+        *,
+        request_id: str,
+        command_seq: int,
+        generation: int,
+    ) -> CommandReply:
+        """Accept one destructive command and transfer authority to launcher memory.
+
+        Sequence consumption happens before every business precondition. No C4-I
+        call occurs here: the main launcher runtime later takes the intent.
+        """
+
+        with self._lock:
+            self._authenticate_locked(presented_token)
+            retry = self._consume_command_locked(
+                name="restore.execute",
+                request_id=request_id,
+                command_seq=command_seq,
+            )
+            if retry is not None:
+                return retry
+
+            if self._runtime_exit_sealed:
+                return self._record_reply_locked(
+                    CommandReply(
+                        ok=False,
+                        code="launcher_runtime_exiting",
+                        command_seq=command_seq,
+                        state=ControlStateSnapshot(
+                            run_id=self.run_id,
+                            state=self._state.state,
+                            generation=self._state.generation,
+                            filename=self._state.filename,
+                            message=RUNTIME_EXITING_MESSAGE,
+                            compatibility=self._state.compatibility,
+                            failure="launcher_runtime_exiting",
+                        ),
+                    )
+                )
+
+            execution_reply = self._execution_owned_reply_locked(command_seq)
+            if execution_reply is not None:
+                return execution_reply
+
+            if self._state.state is not ControlViewState.ACCEPTED:
+                return self._record_reply_locked(
+                    CommandReply(
+                        ok=False,
+                        code="candidate_not_accepted",
+                        command_seq=command_seq,
+                        state=ControlStateSnapshot(
+                            run_id=self.run_id,
+                            state=self._state.state,
+                            generation=self._state.generation,
+                            filename=self._state.filename,
+                            message=CANDIDATE_NOT_ACCEPTED_MESSAGE,
+                            compatibility=self._state.compatibility,
+                            failure="candidate_not_accepted",
+                        ),
+                    )
+                )
+
+            if generation != self._state.generation:
+                return self._record_reply_locked(
+                    CommandReply(
+                        ok=False,
+                        code="selection_generation_stale",
+                        command_seq=command_seq,
+                        state=ControlStateSnapshot(
+                            run_id=self.run_id,
+                            state=self._state.state,
+                            generation=self._state.generation,
+                            filename=self._state.filename,
+                            message=SELECTION_GENERATION_STALE_MESSAGE,
+                            compatibility=self._state.compatibility,
+                            failure="selection_generation_stale",
+                        ),
+                    )
+                )
+
+            if self._worker is not None and self._worker.is_alive():
+                return self._record_reply_locked(
+                    CommandReply(
+                        ok=False,
+                        code="action_in_progress",
+                        command_seq=command_seq,
+                        state=ControlStateSnapshot(
+                            run_id=self.run_id,
+                            state=self._state.state,
+                            generation=self._state.generation,
+                            filename=self._state.filename,
+                            message=ACTION_IN_PROGRESS_MESSAGE,
+                            compatibility=self._state.compatibility,
+                            failure="action_in_progress",
+                        ),
+                    )
+                )
+
+            proof = self._candidate_service.retained_proof
+            if proof is None:
+                return self._record_reply_locked(
+                    CommandReply(
+                        ok=False,
+                        code="restore_authority_missing",
+                        command_seq=command_seq,
+                        state=ControlStateSnapshot(
+                            run_id=self.run_id,
+                            state=self._state.state,
+                            generation=self._state.generation,
+                            filename=self._state.filename,
+                            message=RESTORE_AUTHORITY_MISSING_MESSAGE,
+                            compatibility=self._state.compatibility,
+                            failure="restore_authority_missing",
+                        ),
+                    )
+                )
+
+            intent = RestoreExecutionIntent(
+                run_id=self.run_id,
+                request_id=request_id,
+                command_seq=command_seq,
+                generation=generation,
+                selected_source=Path(proof.source_path),
+                expected_source_proof=ExpectedSourceProof(
+                    source_identity=proof.source_identity,
+                    sha256=proof.sha256,
+                ),
+            )
+            self._candidate_service.invalidate()
+            self._execution_intent = intent
+            self._execution_owner = intent
+            self._state = ControlStateSnapshot(
+                run_id=self.run_id,
+                state=ControlViewState.RESTORING,
+                generation=generation,
+                filename=self._state.filename,
+                message=RESTORING_MESSAGE,
+                compatibility=self._state.compatibility,
+            )
+            return self._record_reply_locked(
+                CommandReply(
+                    ok=True,
+                    code="restore_accepted",
+                    command_seq=command_seq,
+                    state=self._state,
+                )
+            )
+
+    def take_execution_intent(self) -> RestoreExecutionIntent | None:
+        """Main-runtime-only one-shot dequeue; it never grants new authority."""
+
+        with self._lock:
+            if self._closed:
+                return None
+            intent = self._execution_intent
+            self._execution_intent = None
+            return intent
+
+    def take_execution_intent_or_seal_runtime_exit(self) -> RestoreExecutionIntent | None:
+        """Atomically resolve the execute-vs-unexpected-backend-exit race.
+
+        The main runtime calls this only after it observed the ordinary backend
+        exit. If an execute landed after the loop's first queue check, that intent
+        wins and is returned for execution. Otherwise destructive intake is
+        sealed under the same lock used by :meth:`execute`; any later execute may
+        consume its valid command sequence but must refuse rather than enqueue an
+        intent the launcher is about to abandon.
+        """
+
+        with self._lock:
+            if self._closed:
+                return None
+            intent = self._execution_intent
+            if intent is not None:
+                self._execution_intent = None
+                return intent
+            self._runtime_exit_sealed = True
+            return None
+
+    def publish_execution_result(
+        self,
+        intent: RestoreExecutionIntent,
+        *,
+        state: ControlViewState,
+        message: str,
+        failure: str | None,
+    ) -> bool:
+        """Publish one launcher-owned final state, even after browser expiry."""
+
+        if state not in _FINAL_EXECUTION_STATES:
+            raise ValueError("execution result must be a final Restore control state")
+        with self._lock:
+            if self._closed:
+                return False
+            if self._execution_owner != intent:
+                return False
+            if self._state.state is not ControlViewState.RESTORING:
+                return False
+            if self._state.generation != intent.generation or self.run_id != intent.run_id:
+                return False
+
+            self._state = ControlStateSnapshot(
+                run_id=self.run_id,
+                state=state,
+                generation=intent.generation,
+                message=message,
+                failure=failure,
+            )
+            self._execution_owner = None
+
+            if (
+                self._highest_command_seq == intent.command_seq
+                and self._last_command_request_id == intent.request_id
+                and self._last_command_name == "restore.execute"
+            ):
+                self._last_command_reply = CommandReply(
+                    ok=state is ControlViewState.RESTORE_COMPLETED,
+                    code=state.value,
+                    command_seq=intent.command_seq,
+                    state=self._state,
+                )
+            return True
 
     def _worker_generation_current_locked(self, generation: int) -> bool:
         return (
@@ -550,6 +841,9 @@ class RestoreControlSession:
             self._last_authenticated_at = None
             self._selection_generation += 1
             self._candidate_service.cancel()
+            self._execution_intent = None
+            self._execution_owner = None
+            self._runtime_exit_sealed = True
             if self._worker_cancel is not None:
                 self._worker_cancel.set()
             worker = self._worker

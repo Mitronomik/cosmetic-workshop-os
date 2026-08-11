@@ -52,6 +52,6 @@ The A sequence must remain free of browser filesystem authority, query-token tra
 
 ## Successor
 
-C4-II-B is now sliced separately in `docs/c4-ii-b-implementation-slices.md`.
+C4-II-B is sliced separately in `docs/c4-ii-b-implementation-slices.md`.
 
-Only B1 is authorized. B2/B3 remain not authorized until predecessor merge/exact-head closure gates are complete.
+This closed A plan does not authorize or block current successor slices. Current B authorization and implementation status is governed by `docs/current-lifecycle.md` and `docs/c4-ii-b-implementation-slices.md`.
