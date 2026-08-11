@@ -8,6 +8,7 @@ Normative sources: ADR 0016 for destructive Restore; ADR 0018 for launcher contr
 ## Current lifecycle
 
 ```text
+PR #185 — MERGED — B3 AUTHORIZED
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
@@ -21,7 +22,7 @@ C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -68,15 +69,13 @@ PR #184 reviewed exact head `1ae8bfcdf0f1f1798ce85eac0931925d029379c4` merged as
 
 Accepted closure evidence includes focused B2/runtime **37 PASS**, launcher **636 PASS**, backend **1867 PASS**, full backend+launcher **2503/2503 PASS**, frontend Restore **16/16 PASS**, autonomous anti-hang PASS, corrected external exact-head isolated process smoke PASS, independent **P0=0 / P1=0 / P2=0**, and final no-change exact-head/clean-worktree PASS.
 
-The earlier eight-hour manually interrupted run remains invalid evidence. The first smoke runner remains `INCONCLUSIVE RUNNER` because bootstrap was consumed before the production A4 handoff.
-
-B2 adds one exact-run authenticated destructive command:
+B2 exposes one exact-run authenticated destructive command:
 
 ```text
 POST /v1/restore/execute
 ```
 
-Exact request keys:
+with exact request keys:
 
 ```text
 request_id
@@ -84,11 +83,9 @@ command_seq
 generation
 ```
 
-`generation` is only the safe accepted control selection generation. Browser never sends source path, proof, digest or operation identity. A1 retained-proof generation remains an independent launcher-internal generation domain and is not numerically compared with the browser/control generation.
+`generation` is only the accepted control selection generation and stale-view guard. Browser never sends source path, proof, digest or operation identity. A1 retained-proof generation remains a separate launcher-internal domain.
 
 ### One-shot authority transfer
-
-Under the control-session lock:
 
 ```text
 authenticate exact run
@@ -96,7 +93,6 @@ authenticate exact run
 → consume exactly-next sequence before business preconditions
 → require state == accepted
 → require submitted generation == current accepted control generation
-→ require no active picker/validation or destructive execution
 → require current launcher-private retained A1 proof
 → copy retained source path + identity + digest into one in-memory intent
 → invalidate retained candidate authority immediately
@@ -105,42 +101,11 @@ authenticate exact run
 → return safe command reply
 ```
 
-Retry of the same highest command sequence/request ID returns cached safe state and never queues/executes again. Stale/future/conflicting sequences remain refused exactly as ADR 0018 requires. A valid business refusal still consumes its exactly-next sequence.
+HTTP/session workers do not execute C4-I. The launcher main runtime consumes the intent and calls existing `execute_restore(..., LauncherLifecycleContext)` exactly once. The same control plane remains alive on the same ephemeral port while the ordinary backend is stopped/restarted.
 
-### Destructive work does not run in HTTP/session worker
+During `restoring`, heartbeat/state remain serviceable, there is no destructive cancel command, session expiry cannot cancel accepted C4-I, and launcher-owned final result publication may complete after browser authentication expires.
 
-The HTTP boundary is only an authenticated command/queue boundary. It does not call C4-I directly and does not import the C4-I engine as an HTTP execution path.
-
-The **main launcher runtime loop** takes the queued intent and synchronously constructs:
-
-```text
-ProofBoundRestoreRequest(
-    selected_source=<launcher-private retained path>,
-    expected_source_proof=ExpectedSourceProof(<retained identity>, <retained SHA-256>)
-)
-```
-
-It then calls existing `execute_restore(..., LauncherLifecycleContext)` exactly once.
-
-The runtime loop checks for a queued intent before treating the original backend process exit as launcher termination. No generic supervisor or destructive background worker is introduced.
-
-### Control-plane lifetime during destructive Restore
-
-The same loopback control plane remains alive and bound to the same ephemeral port while C4-I stops the ordinary backend and while ordinary-backend restart is attempted.
-
-During `restoring`:
-
-- authenticated heartbeat and `GET /v1/state` remain serviceable;
-- select/cancel/second execute consume their otherwise-valid next sequence and return `restore_in_progress`;
-- there is no destructive cancel command;
-- browser/tab close or session expiry does not cancel C4-I after the execution intent was accepted;
-- expiry invalidates browser authentication and stale candidate authority but does not overwrite launcher-owned `restoring` or final execution state;
-- launcher-owned final result publication may complete after browser authentication expired;
-- the control plane is not rebound and no new bootstrap capability is generated mid-execution.
-
-### B2 control result states
-
-B2 extends launcher control state with:
+B2 launcher states are exactly:
 
 ```text
 restoring
@@ -149,89 +114,147 @@ restore_failed
 restore_blocked
 ```
 
-These states were not added to frontend in B2. The pre-B3 frontend remains byte-identical in this closure/authorization change.
-
-The snapshot stays pathless. It exposes no source path, staged path, operation ID, durable record content, SQL, migration IDs or traceback.
+The snapshot stays pathless and exposes no source path, staged path, operation ID, durable record content, SQL, migration IDs or traceback.
 
 ### Backend restart handoff
 
-Existing C4-I remains the owner of backend stop/exclusion and all destructive work. B2 does not pre-stop or duplicate that logic.
+Existing C4-I remains the owner of backend stop/exclusion and all destructive work. When C4-I permits normal startup, launcher restart uses canonical `context.database_path` and the existing owned-process lock/socket handshake. Restart failure does not reinterpret C4-I truth and returns to safe maintenance exclusion before `restore_blocked`.
 
-When C4-I returns with `normal_startup_allowed=True`, the main launcher runtime requires the retained maintenance lease, releases it immediately before `BackendProcessOwner.start(...)`, and restarts ordinary service on canonical `context.database_path` through the existing lock/socket handshake.
+## B3 implementation changeset — explicit browser confirmation
 
-Only after that backend is proved ready may control state become:
-
-- `restore_completed` for successful completed C4-I truth;
-- `restore_failed` for a safe unsuccessful/aborted/rolled-back C4-I result with ordinary service restored.
-
-If restart fails:
-
-- C4-I truth is not reinterpreted or rolled back;
-- maintenance exclusion is re-acquired/retained when no backend owns the workspace;
-- `restore_blocked` is published with fixed safe guidance;
-- durable Restore truth remains untouched.
-
-When C4-I does not allow normal startup, or verification hits the existing retryable backend-port condition, B2 starts no ordinary backend and publishes `restore_blocked`. Startup recovery on the next launcher run remains authoritative.
-
-## B2 non-goals — closed evidence
-
-Merged B2 did not implement browser destructive confirmation/button, `/v1/restore/confirm`, frontend parser/presentation changes, browser-supplied source path/proof/digest, a second Restore engine, destructive cancellation after execution begins, phase/recovery/safety-copy/replacement/AuditLog redesign, persistence of proof/intent/result/session token, or any new dependency/helper executable/port/packaging architecture.
-
-## Authorized B3 browser confirmation contract
-
-B3 is frontend-only except focused frontend tests and lifecycle/checker/status docs.
+PR #185 reviewed B3 authorization head `f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c` and merged as `f6589bdd7c403b6d400e3f5b7a0daea75b14632a`. The current changeset implements only that frontend authorization.
 
 ```text
 accepted candidate
-→ explicit confirmation dialog
-→ local dismiss OR execute confirm
-→ POST /v1/restore/execute(request_id, command_seq, generation)
-→ B2 authority-transfer boundary
-→ pathless restoring/final launcher state
+→ browser shows explicit destructive confirmation dialog
+→ local dismiss/Escape OR explicit destructive confirm
+→ runtime creates one pending execute command
+   request_id + command_seq + accepted generation
+→ same-tab history replay stores only safe pending command metadata
+→ POST /v1/restore/execute
+→ B2 remains launcher authority-transfer boundary
+→ browser polls pathless restoring/final state
 ```
 
-B3 may parse exactly `restoring`, `restore_completed`, `restore_failed`, `restore_blocked`. Unknown states remain fail-closed. The launcher snapshot shape remains unchanged.
+No `/v1/restore/confirm` endpoint is introduced.
 
-The confirmation is presentation only. It adds no `/v1/restore/confirm` endpoint and never grants browser filesystem authority. Filename remains display-only; `generation` remains a stale-view guard.
+### Browser state parsing
+
+B3 TypeScript parsing now accepts the four B2 execution states already owned by the launcher:
+
+```text
+restoring
+restore_completed
+restore_failed
+restore_blocked
+```
+
+Unknown states continue to fail closed. The snapshot DTO exact-key shape is unchanged.
+
+### Execute generation ownership
+
+The DOM/confirmation layer does not submit or choose `generation` directly.
+
+`RestoreControlRuntime.execute()` reads only the current parsed snapshot. It proceeds only when that snapshot is `accepted` and has a positive integer generation. That generation is copied into the pending execute command.
+
+Therefore the browser UI cannot use an arbitrary stale generation injected by a button/data attribute or by a caller outside the runtime state machine.
 
 ### Exact destructive replay
 
-Current select/cancel replay persists only action, request ID and command sequence. Execute additionally requires the accepted generation.
+Replay state remains version `1` for backward compatibility.
 
-Pending execute must retain:
-- action = `execute`;
-- same request ID;
-- same command sequence;
-- accepted generation.
+The pending representation is now discriminated:
 
-An ambiguous transport retry resends the **same request ID, same command sequence and accepted generation**. It must not allocate a new request ID or sequence. Existing select/cancel replay remains backward-safe. No source path/proof/digest may enter `sessionStorage` or `history.state`.
+```text
+select/cancel pending:
+  action
+  requestId
+  commandSeq
 
-### UX boundary
+execute pending:
+  action
+  requestId
+  commandSeq
+  generation
+```
 
-Only an `accepted` candidate may open destructive confirmation. Dismissing the dialog is local and sends no `/v1/restore/cancel`. Repeated confirmation cannot produce multiple execute commands.
+The historical select/cancel shape remains valid unchanged.
 
-The dialog uses the safe display filename and explains in plain language that current workshop data will be replaced, the application may be temporarily unavailable, and existing Restore safety logic creates a protective copy before replacement. It uses existing danger visual language and accessible dialog/focus semantics.
+The execute parser requires exact fields and a valid positive generation. Extra source/path/proof/digest fields make replay state invalid.
 
-`restoring` shows a non-technical in-progress state, disables duplicate confirmation, offers no destructive cancellation and invents no fake phase/percentage. Heartbeat/state polling continues on the launcher control port.
+On ambiguous network result:
 
-Final B2 states may display only the safe launcher-provided message. C4-II-C remains responsible for richer truthful completion, rollback, restart and support-assisted presentation; B3 must not infer durable truth.
+```text
+first execute
+→ persist pending execute before fetch
+→ network outcome unknown
+→ keep exact pending request
+→ user chooses retry
+→ resend same request_id
+          same command_seq
+          same generation
+```
 
-## Authorized B3 implementation surface
+No second request ID or sequence is allocated while a pending execute exists.
 
-Primarily:
+### Explicit confirmation UX
+
+The destructive action is only available for the current `accepted` candidate when the exact-run session is ready, protocol-safe and has no pending command.
+
+Opening the confirmation is a local UI state transition. The dialog is a native semantic `<dialog>` and is tied to the accepted snapshot generation.
+
+The confirmation:
+
+- identifies only the safe escaped display filename;
+- explains that current workshop data will be replaced by the chosen backup;
+- explains that the application may be temporarily unavailable;
+- explains that the existing Restore engine automatically creates a protective copy of the current database before replacement;
+- says that already started Restore cannot be cancelled from this screen;
+- focuses the safe `Вернуться` action first;
+- keeps `Восстановить данные` as an explicit danger action.
+
+Dismiss button and Escape are local-only. They send neither execute nor `/v1/restore/cancel`.
+
+If the runtime snapshot, accepted generation, availability or pending state changes while confirmation is open, the local confirmation authority is discarded.
+
+### Duplicate-submit prevention
+
+`runtime.execute()` synchronously persists the pending command before awaiting the network request. A second execute call therefore sees the pending command and cannot allocate a second sequence or second destructive request.
+
+This protects both rapid repeated clicks and programmatic near-simultaneous calls.
+
+### `restoring` presentation
+
+While launcher state is `restoring`:
+
+- browser continues polling `/v1/state` on the launcher control port;
+- select/cancel/re-confirm controls are not shown;
+- no destructive cancel exists;
+- no fake percentage or internal phase is displayed;
+- safe launcher-provided message may be presented;
+- generic network guidance avoids claiming that working data was unchanged after destructive execute may have started.
+
+### Final B2 state presentation
+
+`restore_completed`, `restore_failed` and `restore_blocked` are no longer protocol errors. B3 minimally presents the safe launcher-provided state/message and does not infer durable phases or technical recovery facts.
+
+C4-II-C still owns richer truthful completion, rollback, restart and support-assisted UX.
+
+### B3 implementation surface
 
 ```text
 frontend/src/restore-control-contract.ts
-frontend/src/main.ts                 # minimal wiring only
-frontend/src/<focused Restore B3 modules if needed>
-frontend/tests/<focused Restore B3 tests>
-docs/state/checker files required for implementation status
+frontend/src/restore-control-runtime.ts
+frontend/src/restore-control-presentation.ts
+frontend/src/restore-control-entry.ts
+frontend/test/restore-control.test.mjs
+frontend/test/restore-control-races.test.mjs
 ```
 
-No launcher/backend changes are authorized. If implementation discovers that launcher/backend behavior must change, stop and open an architecture/lifecycle question instead of widening B3.
+`frontend/src/main.ts` and `frontend/src/app-navigation-routes.ts` remain unchanged. No launcher/backend/migration/dependency/package resource is changed.
 
-## Verification required for future B3
+## B3 verification still required
 
-Future B3 must prove contract parsing, exact execute schema/privacy, explicit confirmation, double-submit protection, replay of the exact request ID/sequence/generation, restoring-state behavior, minimal final-state presentation, existing A4 bootstrap/session/select/cancel/replay regression, and ordinary navigation regression.
+This document records implementation presence, not PASS claims. Before B3 may merge, the published exact head still requires frontend build, focused Restore tests, A4 regressions, lifecycle checker, desktop/narrow-screen/keyboard confirmation smoke, exact replay/duplicate-submit proof, clean head/worktree and independent `P0=0 / P1=0 / P2=0` audit.
 
 C4-II-C and C4-III remain separately blocked. Product Restore remains **NOT IMPLEMENTED**.

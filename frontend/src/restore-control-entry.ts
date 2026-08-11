@@ -16,6 +16,18 @@ const runtime = new RestoreControlRuntime({
 
 let syncQueued = false;
 let currentView = runtime.view;
+let confirmationGeneration: number | null = null;
+let focusConfirmationTriggerAfterRender = false;
+
+function confirmationMatchesCurrentView(): boolean {
+  return confirmationGeneration !== null
+    && currentView.availability === 'ready'
+    && currentView.hasSession
+    && currentView.protocolSafe
+    && currentView.pending === null
+    && currentView.snapshot?.state === 'accepted'
+    && currentView.snapshot.generation === confirmationGeneration;
+}
 
 function queueDomSync(): void {
   if (syncQueued) return;
@@ -32,20 +44,35 @@ function syncDom(): void {
     const content = document.querySelector<HTMLElement>('.content');
     const page = content?.querySelector<HTMLElement>('.page-grid');
     if (!content || !page) return;
-    const signature = JSON.stringify(currentView);
+    const confirmationOpen = confirmationMatchesCurrentView();
+    const signature = JSON.stringify({ view: currentView, confirmationOpen });
     if (!page.hasAttribute('data-restore-control-page') || page.dataset.restoreRenderKey !== signature) {
       const restoreFocusOwned = page.contains(document.activeElement);
-      page.outerHTML = restoreControlMarkup(currentView);
+      page.outerHTML = restoreControlMarkup(currentView, { confirmationOpen });
       const rendered = content.querySelector<HTMLElement>('[data-restore-control-page]');
       if (rendered) {
         rendered.dataset.restoreRenderKey = signature;
-        if (restoreFocusOwned) rendered.focus();
+        if (restoreFocusOwned && !confirmationOpen && !focusConfirmationTriggerAfterRender) rendered.focus();
       }
     }
     const heading = content.querySelector<HTMLElement>('.topbar h1');
     if (heading && heading.textContent !== 'Восстановление') heading.textContent = 'Восстановление';
+
+    if (confirmationOpen) {
+      const dialog = content.querySelector<HTMLDialogElement>('dialog[data-restore-confirmation]');
+      if (dialog && !dialog.open) {
+        dialog.showModal();
+        dialog.querySelector<HTMLElement>('[data-restore-action="confirm-dismiss"]')?.focus();
+      }
+    } else if (focusConfirmationTriggerAfterRender) {
+      focusConfirmationTriggerAfterRender = false;
+      content.querySelector<HTMLElement>('[data-restore-action="confirm-open"]')?.focus();
+    }
     return;
   }
+
+  confirmationGeneration = null;
+  focusConfirmationTriggerAfterRender = false;
 
   if (window.location.pathname === '/backups') {
     const actions = document.querySelector<HTMLElement>('.backup-page .dashboard-hero .actions');
@@ -56,6 +83,8 @@ function syncDom(): void {
 }
 
 function navigate(path: string): void {
+  confirmationGeneration = null;
+  focusConfirmationTriggerAfterRender = false;
   runtime.syncReplayToHistory();
   const state = window.history.state;
   window.history.pushState(state, '', path);
@@ -63,6 +92,40 @@ function navigate(path: string): void {
   window.setTimeout(() => {
     document.querySelector<HTMLElement>('[data-restore-focus]')?.focus();
   }, 0);
+}
+
+function openConfirmation(): void {
+  const snapshot = currentView.snapshot;
+  if (
+    currentView.availability !== 'ready'
+    || !currentView.hasSession
+    || !currentView.protocolSafe
+    || currentView.pending
+    || snapshot?.state !== 'accepted'
+    || !Number.isInteger(snapshot.generation)
+    || snapshot.generation < 1
+  ) return;
+  confirmationGeneration = snapshot.generation;
+  focusConfirmationTriggerAfterRender = false;
+  queueDomSync();
+}
+
+function dismissConfirmation(returnFocus = true): void {
+  if (confirmationGeneration === null) return;
+  confirmationGeneration = null;
+  focusConfirmationTriggerAfterRender = returnFocus;
+  queueDomSync();
+}
+
+function executeConfirmedRestore(): void {
+  if (!confirmationMatchesCurrentView()) {
+    dismissConfirmation(false);
+    return;
+  }
+  confirmationGeneration = null;
+  focusConfirmationTriggerAfterRender = false;
+  queueDomSync();
+  void runtime.execute();
 }
 
 document.addEventListener('click', (event) => {
@@ -76,10 +139,24 @@ document.addEventListener('click', (event) => {
   if (action === 'select') { void runtime.select(); return; }
   if (action === 'cancel') { void runtime.cancel(); return; }
   if (action === 'retry') { void runtime.retryPending(); return; }
-  if (action === 'refresh') { void runtime.refresh(); }
+  if (action === 'refresh') { void runtime.refresh(); return; }
+  if (action === 'confirm-open') { openConfirmation(); return; }
+  if (action === 'confirm-dismiss') { dismissConfirmation(); return; }
+  if (action === 'confirm-execute') { executeConfirmedRestore(); }
 });
 
-window.addEventListener('popstate', queueDomSync);
+document.addEventListener('cancel', (event) => {
+  const dialog = event.target instanceof HTMLDialogElement && event.target.matches('[data-restore-confirmation]') ? event.target : null;
+  if (!dialog) return;
+  event.preventDefault();
+  dismissConfirmation();
+}, { capture: true });
+
+window.addEventListener('popstate', () => {
+  confirmationGeneration = null;
+  focusConfirmationTriggerAfterRender = false;
+  queueDomSync();
+});
 window.addEventListener('pageshow', queueDomSync);
 window.addEventListener('beforeunload', () => runtime.dispose(), { once: true });
 
@@ -88,6 +165,10 @@ observer.observe(document.documentElement, { childList: true, subtree: true });
 
 runtime.subscribe((view) => {
   currentView = view;
+  if (confirmationGeneration !== null && !confirmationMatchesCurrentView()) {
+    confirmationGeneration = null;
+    focusConfirmationTriggerAfterRender = false;
+  }
   queueDomSync();
 });
 

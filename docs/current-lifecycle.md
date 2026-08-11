@@ -8,6 +8,7 @@ ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authori
 ## Current lifecycle
 
 ```text
+PR #185 — MERGED — B3 AUTHORIZED
 PR #184 — MERGED — C4-II-B2 EXACT-HEAD VERIFIED
 PR #183 — MERGED — B2 AUTHORIZATION BASELINE
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
@@ -24,7 +25,7 @@ C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B3 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
@@ -35,13 +36,15 @@ full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-## Merged baseline and B2 closure
+## Merged baseline through B3 authorization
 
 PR #182 reviewed B1 head `27726058af4f373ab65225ecf4d1a945f1c53067` merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`.
 
 PR #183 reviewed B2 authorization head `fa922f56c19a2dd33b6307ae0a197d476f91489b` merged as `4617b8c436eaa510fd545d863346595e2d808ea7`.
 
 PR #184 reviewed B2 implementation head `1ae8bfcdf0f1f1798ce85eac0931925d029379c4` merged as `266c50a77e5f353fa77701cb854629a99460667f`.
+
+PR #185 reviewed B2-closure/B3-authorization head `f206cf4896abcc7e8ecd0266cacd3f8a6d89e22c` merged as `f6589bdd7c403b6d400e3f5b7a0daea75b14632a`.
 
 ## Accepted B2 evidence
 
@@ -52,11 +55,10 @@ PR #184 reviewed B2 implementation head `1ae8bfcdf0f1f1798ce85eac0931925d029379c
 - frontend Restore regression: **16/16 PASS**;
 - anti-hang owner-loop gate: **PASS**, autonomous, no manual `Ctrl+C`;
 - corrected external exact-head isolated process smoke: **PASS**;
-- external smoke proved production A4 handoff before bootstrap, authenticated `select → accepted → execute`, `restore_accepted / restoring`, same control-plane port through ordinary-backend stop and real C4-I verification lifetimes, durable phase `completed`, safe ordinary-backend restart, `restore_completed`, and isolated cleanup;
 - independent audit: **P0=0 / P1=0 / P2=0 — AUDIT GATE PASS**;
 - final no-change exact-head / clean-worktree gate: **PASS**.
 
-The earlier eight-hour run that required repeated manual `Ctrl+C` is **INVALID / NOT A PASS**. The first external smoke runner is **INCONCLUSIVE RUNNER** because it consumed the one-use bootstrap before the production A4 handoff; it is neither product PASS nor product failure evidence.
+The earlier eight-hour run that required repeated manual `Ctrl+C` remains **INVALID / NOT A PASS**. The first external smoke runner remains **INCONCLUSIVE RUNNER**.
 
 ## Closed B2 boundary
 
@@ -76,25 +78,57 @@ browser/session
 → pathless restore_completed / restore_failed / restore_blocked
 ```
 
-The same `RestoreControlPlane` remains on the same ephemeral port while the ordinary backend is intentionally stopped. Session expiry cannot cancel accepted destructive work. Control generation and retained-proof generation remain separate domains. Browser `generation` is a stale-view guard only.
+The accepted B2 launcher implementation is a closed boundary. The same control plane survives the destructive interval; browser generation remains a stale-view guard and never source proof.
 
-The accepted B2 production implementation is now a closed boundary and must remain byte-identical until a separately authorized lifecycle change says otherwise.
+## B3 implementation changeset
 
-## Authorized successor — C4-II-B3
+The current B3 changeset implements only the authorized frontend confirmation/replay seam:
 
-B3 is the only authorized next implementation slice.
+```text
+accepted browser snapshot
+→ explicit human confirmation dialog
+→ local dismiss OR destructive confirm
+→ frontend creates one pending execute command
+   request_id + command_seq + accepted generation
+→ pending command is persisted in same-tab history replay state
+→ authenticated POST /v1/restore/execute
+→ ambiguous transport result keeps exact same request_id + command_seq + generation
+→ merged B2 remains the destructive authority boundary
+→ browser polls pathless restoring/final launcher state
+```
 
-B3 is **frontend-only** except focused frontend tests and lifecycle/checker/status documentation. It connects the accepted A4 browser session to the merged B2 `/v1/restore/execute` command through explicit human destructive confirmation.
+Implemented frontend behavior:
 
-B3 must:
-- parse exactly the additional launcher states `restoring`, `restore_completed`, `restore_failed`, `restore_blocked`;
-- add frontend action `execute` calling only `/v1/restore/execute`;
-- require explicit confirmation for the current `accepted` candidate;
-- send exact `request_id + command_seq + generation`;
-- preserve the same generation on ambiguous execute replay;
-- persist no source path/proof/digest/operation identity;
-- keep filename display-only;
-- provide no destructive cancellation once Restore is `restoring`;
-- keep C4-II-C result/recovery semantics out of B3.
+- TypeScript parsing accepts exactly the four merged B2 execution states: `restoring`, `restore_completed`, `restore_failed`, `restore_blocked`;
+- unknown control states remain fail-closed;
+- pending replay is a discriminated union: select/cancel retain the historical shape, while execute additionally requires `generation`;
+- `RestoreControlRuntime.execute()` derives generation only from the current parsed `accepted` snapshot; DOM code cannot supply filesystem authority or its own generation;
+- execute request body is centralized and contains exactly `request_id + command_seq + generation`;
+- ambiguous execute retry reuses the exact same request ID, command sequence and generation;
+- explicit confirmation is local browser presentation; dismiss/Escape sends neither execute nor `/v1/restore/cancel`;
+- repeated confirmation is blocked by the already-persisted pending command;
+- `restoring` continues launcher-control polling and offers no select/cancel/destructive-cancel action or fake percentage;
+- completed/failed/blocked states minimally present only the safe launcher-provided message;
+- generic post-execute network guidance no longer falsely promises that working data was unchanged;
+- `frontend/src/main.ts` is unchanged; B3 stays inside the focused Restore contract/runtime/presentation/entry modules.
 
-C4-II-C and C4-III remain **PLANNED — NOT AUTHORIZED**. Product Restore remains **NOT IMPLEMENTED**.
+No launcher, ordinary FastAPI backend, migration, dependency or domain behavior changes are included. No `/v1/restore/confirm` endpoint is added. Browser source path/proof/digest authority remains impossible.
+
+## B3 verification gate
+
+B3 is not lifecycle-closed merely because code exists. Before merge it still requires actual exact-head evidence for:
+
+1. `git diff --check` and lifecycle checker;
+2. frontend build/type-check;
+3. focused Restore control tests covering exact execute schema, confirmation, exact replay, duplicate-submit race and B2 state parsing/presentation;
+4. existing A4 bootstrap/session/select/cancel/replay regression;
+5. desktop Restore-route smoke;
+6. narrow-screen Restore-route smoke;
+7. keyboard/focus/Escape confirmation smoke;
+8. restoring/error/success/disabled-state review;
+9. clean exact head/worktree;
+10. independent `P0=0 / P1=0 / P2=0` audit.
+
+Do not record these as PASS until they actually run against the published B3 PR head.
+
+C4-II-C and C4-III remain **PLANNED — NOT AUTHORIZED**. Product Restore remains **NOT IMPLEMENTED** until later lifecycle closure adds the richer truthful result/restart/support experience and end-to-end product gate.
