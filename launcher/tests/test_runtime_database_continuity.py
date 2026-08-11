@@ -35,6 +35,12 @@ class RecordedPopen:
     over the inherited pipe; a stand-in that stayed silent would not be a
     simplified child, it would be a child the launcher is right to refuse — and
     every test here would fail on a bounded timeout that proves nothing.
+
+    B2 changed launcher lifetime from one blocking ``wait()`` to an owner loop
+    that polls the current backend. This double therefore models a bounded normal
+    lifetime: the first poll proves the child survived startup, and the second
+    reports a clean exit. Returning ``None`` forever would make every launcher
+    test using this shared double hang indefinitely instead of testing anything.
     """
 
     instances: list["RecordedPopen"] = []
@@ -44,6 +50,7 @@ class RecordedPopen:
         self.cwd = cwd
         self.env = dict(env or {})
         self.pass_fds = tuple(pass_fds)
+        self.poll_calls = 0
         self.handshake_written = self._complete_handshake()
         RecordedPopen.instances.append(self)
 
@@ -65,7 +72,8 @@ class RecordedPopen:
         return True
 
     def poll(self):
-        return None
+        self.poll_calls += 1
+        return None if self.poll_calls == 1 else 0
 
     def wait(self, timeout=None):
         return 0
@@ -109,7 +117,9 @@ def run_launcher(monkeypatch, mode: str):
     config = build_runtime_config(backend_port=free_port(), mode=mode, open_browser=False)
     runtime.run_local_runtime(config, resolve_runtime_paths())
     assert len(RecordedPopen.instances) == 1
-    return RecordedPopen.instances[0]
+    child = RecordedPopen.instances[0]
+    assert child.poll_calls >= 2, "the B2 owner loop must observe the bounded fake backend exit"
+    return child
 
 
 # --------------------------------------------------------------------------

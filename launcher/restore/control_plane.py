@@ -1,8 +1,8 @@
-"""Launcher-owned loopback HTTP boundary for C4-II-A2 Restore control.
+"""Launcher-owned loopback HTTP boundary for C4-II Restore control.
 
 The server is intentionally narrow: exact loopback bind, exact Host/Origin,
-one-use bootstrap, explicit bearer session, state/heartbeat/select/cancel only.
-There is no filesystem, shell, SQL, backend-proxy or destructive Restore route.
+one-use bootstrap, explicit bearer session, state/heartbeat/select/cancel and
+the B2 queue-only execute command. The HTTP worker never executes C4-I.
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ _PATH_METHODS: dict[str, tuple[str, tuple[str, ...]]] = {
     "/v1/heartbeat": ("POST", ("authorization", "content-type")),
     "/v1/restore/select": ("POST", ("authorization", "content-type")),
     "/v1/restore/cancel": ("POST", ("authorization", "content-type")),
+    "/v1/restore/execute": ("POST", ("authorization", "content-type")),
 }
 
 
@@ -265,21 +266,30 @@ class _ControlRequestHandler(BaseHTTPRequestHandler):
                 self._write_json(200, {"ok": True, "state": state.to_dict()}, cors=True)
                 return
 
-            request_id, command_seq = _parse_command_payload(payload)
-            if path == "/v1/restore/select":
-                reply = self.plane.session.select(
+            if path == "/v1/restore/execute":
+                request_id, command_seq, generation = _parse_execute_payload(payload)
+                reply = self.plane.session.execute(
                     token,
                     request_id=request_id,
                     command_seq=command_seq,
+                    generation=generation,
                 )
-            elif path == "/v1/restore/cancel":
-                reply = self.plane.session.cancel(
-                    token,
-                    request_id=request_id,
-                    command_seq=command_seq,
-                )
-            else:  # pragma: no cover - path is validated against the table above
-                raise ControlSessionError(404, "not_found")
+            else:
+                request_id, command_seq = _parse_command_payload(payload)
+                if path == "/v1/restore/select":
+                    reply = self.plane.session.select(
+                        token,
+                        request_id=request_id,
+                        command_seq=command_seq,
+                    )
+                elif path == "/v1/restore/cancel":
+                    reply = self.plane.session.cancel(
+                        token,
+                        request_id=request_id,
+                        command_seq=command_seq,
+                    )
+                else:  # pragma: no cover - path is validated against the table above
+                    raise ControlSessionError(404, "not_found")
             self._write_json(200, reply.to_dict(), cors=True)
         except ControlSessionError as exc:
             self._write_error(exc.status, exc.code, cors=cors)
@@ -397,8 +407,7 @@ def _require_exact_keys(payload: dict[str, object], expected: set[str]) -> None:
         raise ControlSessionError(400, "invalid_request_schema")
 
 
-def _parse_command_payload(payload: dict[str, object]) -> tuple[str, int]:
-    _require_exact_keys(payload, {"request_id", "command_seq"})
+def _parse_request_id_and_seq(payload: dict[str, object]) -> tuple[str, int]:
     request_id = payload.get("request_id")
     command_seq = payload.get("command_seq")
     if not isinstance(request_id, str) or REQUEST_ID_PATTERN.fullmatch(request_id) is None:
@@ -406,3 +415,17 @@ def _parse_command_payload(payload: dict[str, object]) -> tuple[str, int]:
     if isinstance(command_seq, bool) or not isinstance(command_seq, int) or command_seq < 1:
         raise ControlSessionError(400, "invalid_command_seq")
     return request_id, command_seq
+
+
+def _parse_command_payload(payload: dict[str, object]) -> tuple[str, int]:
+    _require_exact_keys(payload, {"request_id", "command_seq"})
+    return _parse_request_id_and_seq(payload)
+
+
+def _parse_execute_payload(payload: dict[str, object]) -> tuple[str, int, int]:
+    _require_exact_keys(payload, {"request_id", "command_seq", "generation"})
+    request_id, command_seq = _parse_request_id_and_seq(payload)
+    generation = payload.get("generation")
+    if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
+        raise ControlSessionError(400, "invalid_generation")
+    return request_id, command_seq, generation

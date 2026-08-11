@@ -14,8 +14,12 @@ BOOTSTRAP_TOKEN = "A" * 43
 
 
 class FakeProcess:
+    def __init__(self):
+        self.poll_calls = 0
+
     def poll(self):
-        return None
+        self.poll_calls += 1
+        return None if self.poll_calls == 1 else 0
 
     def wait(self, timeout=None):
         del timeout
@@ -44,11 +48,23 @@ class FakeContext:
         self.events.append(("lease_release", None))
 
 
+class FakeControlSession:
+    def take_execution_intent(self):
+        return None
+
+    def take_execution_intent_or_seal_runtime_exit(self):
+        return None
+
+    def publish_execution_result(self, *_args, **_kwargs):
+        return True
+
+
 class FakeControlPlane:
     def __init__(self, events, *, bootstrap_capability=BOOTSTRAP_TOKEN):
         self.events = events
         self.bound_port = 43123
         self.bootstrap_capability = bootstrap_capability
+        self.session = FakeControlSession()
 
     def close(self):
         self.events.append(("control_close", None))

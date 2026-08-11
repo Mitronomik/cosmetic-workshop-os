@@ -7,11 +7,12 @@ macOS `.app` / `.dmg` packaging is **NOT COMPLETED**.
 ## Restore lifecycle
 
 ```text
+PR #183 — MERGED — B2 AUTHORIZED
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C4-II-A — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
@@ -29,8 +30,8 @@ B1 is internal Python launcher/C4-I proof binding and adds no package resource o
 
 ## B2 packaging consequence
 
-B2 remains inside the existing launcher process and existing ephemeral loopback control plane. It may add Python launcher modules/tests only; it requires no new dependency, background service, port, helper executable, entitlement, persistent secret or package resource.
+B2 remains inside the same launcher process and same ephemeral loopback control plane. The current changeset adds only Python launcher coordination/tests plus lifecycle documentation; it adds no new dependency, background service, port, helper executable, entitlement, persistent secret or package resource.
 
-The same launcher process must survive the ordinary backend's intentional C4-I stop/restart. That is runtime coordination, not a packaging redesign.
+The same launcher process now owns the ordinary backend across an intentional C4-I stop/restart using one bounded runtime owner loop. That is runtime coordination, not a packaging redesign.
 
-Frontend assets remain byte-identical in B2. B3 later owns the browser confirmation/parser extension. macOS packaging work remains separately incomplete and not authorized by B2.
+Frontend assets remain byte-identical in B2. B3 later owns the browser confirmation/parser extension. macOS packaging work remains separately incomplete and is not authorized by B2.

@@ -26,6 +26,11 @@ BACKEND_ENTRYPOINT_MODULE = "app.launcher_backend_entrypoint"
 # tell "could not start" apart from "must not start".
 RESTORE_BLOCKED_EXIT_CODE = 3
 
+# The main launcher owns exactly one current backend and at most one B2 execution
+# intent. A small poll keeps that ownership on the main runtime path without
+# introducing a generic supervisor or a destructive background worker.
+RUNTIME_OWNER_POLL_SECONDS = 0.05
+
 
 class RuntimeLaunchError(RuntimeError):
     """Raised when local runtime cannot start safely."""
@@ -371,6 +376,62 @@ def start_restore_control_plane(config: RuntimeConfig, database_path: Path):
         ) from exc
 
 
+def _run_launcher_owner_loop(
+    runtime_config: RuntimeConfig,
+    runtime_paths: RuntimePaths,
+    context,
+    process,
+    control_plane,
+) -> int:
+    """Own one backend lifetime across an intentional B2 Restore stop/restart.
+
+    The old runtime blocked on the initial `process.wait()`, which made an
+    intentional C4-I backend stop indistinguishable from application shutdown.
+    This bounded owner loop checks the one launcher-private execution queue first,
+    then the currently owned backend. If an ordinary backend exit is observed,
+    the session atomically takes any execute accepted in that narrow race or seals
+    destructive intake before launcher shutdown. Destructive work still runs
+    synchronously on this main runtime thread; HTTP/session workers only enqueue.
+    """
+    from launcher.restore.execution_coordinator import execute_restore_intent
+
+    while True:
+        if control_plane is not None:
+            intent = control_plane.session.take_execution_intent()
+            if intent is not None:
+                process = execute_restore_intent(
+                    intent,
+                    context,
+                    runtime_config,
+                    runtime_paths,
+                    control_plane.session.publish_execution_result,
+                )
+                continue
+
+        if process is not None:
+            return_code = process.poll()
+            if return_code is not None:
+                if control_plane is not None:
+                    late_intent = (
+                        control_plane.session.take_execution_intent_or_seal_runtime_exit()
+                    )
+                    if late_intent is not None:
+                        process = execute_restore_intent(
+                            late_intent,
+                            context,
+                            runtime_config,
+                            runtime_paths,
+                            control_plane.session.publish_execution_result,
+                        )
+                        continue
+                return int(return_code)
+
+        # A None process is the deliberate no-backend `restore_blocked` state.
+        # Keep the same control plane alive so an authenticated browser may read
+        # the fixed final state; do not invent an automatic destructive retry.
+        time.sleep(RUNTIME_OWNER_POLL_SECONDS)
+
+
 def run_local_runtime(config: RuntimeConfig | None = None, paths: RuntimePaths | None = None) -> int:
     """Start the local runtime, or refuse — in that order of authority.
 
@@ -511,7 +572,13 @@ def _run_locked_runtime(
         if runtime_config.open_browser:
             open_runtime_browser(browser_config)
         print("Приложение запущено. Для остановки нажмите Ctrl+C в этом окне.")
-        return process.wait()
+        return _run_launcher_owner_loop(
+            runtime_config,
+            runtime_paths,
+            context,
+            process,
+            control_plane,
+        )
     except KeyboardInterrupt:
         print("Останавливаю локальное приложение…")
         return 0

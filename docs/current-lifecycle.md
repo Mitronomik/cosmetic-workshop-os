@@ -8,6 +8,7 @@ ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authori
 ## Current lifecycle
 
 ```text
+PR #183 — MERGED — B2 AUTHORIZED
 PR #182 — MERGED — C4-II-B1 EXACT-HEAD VERIFIED
 C1 — COMPLETED
 C2 — COMPLETED
@@ -21,7 +22,7 @@ C4-II-A3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-A4 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B — IN PROGRESS — SLICED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-B2 — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-B2 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
 C4-II-B3 — PLANNED — NOT AUTHORIZED
 C4-II-C — PLANNED — NOT AUTHORIZED
 C4-III — PLANNED — NOT AUTHORIZED
@@ -33,22 +34,13 @@ full release-candidate smoke — NOT COMPLETED
 Product release readiness — NOT CLAIMED
 ```
 
-## B1 closure evidence
+## Merged authorization baseline
 
-PR #182 reviewed head `27726058af4f373ab65225ecf4d1a945f1c53067` merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`.
+PR #182 reviewed head `27726058af4f373ab65225ecf4d1a945f1c53067` merged as `5e13b50f1918dacbf8d54066c9156942a9adb895`, closing B1.
 
-Accepted evidence:
+PR #183 final reviewed authorization head `fa922f56c19a2dd33b6307ae0a197d476f91489b` merged as `4617b8c436eaa510fd545d863346595e2d808ea7`, authorizing B2 only.
 
-- documentation lifecycle PASS;
-- base `RestoreRequest` selected-source-only contract PASS;
-- focused B1 10/10;
-- Restore privacy 10/10;
-- full backend + launcher 2480/2480;
-- external exact-head A1-source-substitution smoke PASS;
-- exact worktree/head remained clean;
-- independent audit `P0=0 / P1=0 / P2=0`.
-
-B1 is now closed. `launcher/restore/contracts.py`, `engine.py`, `source_proof.py`, `staging.py` and A1 form the merged source-proof boundary. C4-I remains the only destructive engine.
+B1 accepted evidence remains: documentation lifecycle PASS; focused proof binding 10/10; Restore privacy 10/10; full backend+launcher 2480/2480; external exact-head A1-source-substitution smoke PASS; clean exact head/worktree; independent `P0=0 / P1=0 / P2=0`.
 
 ## Closed A1→B1 boundary
 
@@ -60,24 +52,45 @@ A1 validates and retains launcher-private source path + SourceIdentity + SHA-256
 → same HeldSource enters unchanged C4-I staging
 ```
 
-Browser filename/session/generation are never source proof. Base `RestoreRequest` remains selected-source-only. The proof subtype contains no target path.
+Browser filename/session/generation are never source proof. Base `RestoreRequest` remains selected-source-only. The proof subtype contains no target path. C4-I remains the only destructive Restore engine.
 
-## Authorized B2 boundary
+## B2 implementation changeset
 
-Only **C4-II-B2 — launcher destructive coordinator/control command** is authorized next.
+The authorized B2 coordinator is implemented in the current changeset but is **not yet lifecycle-closed**.
 
-B2 must add a single authenticated `/v1/restore/execute` command with exact body `request_id`, `command_seq`, `generation`. The command may transfer only current launcher-private A1 authority into one in-memory execution intent. It may not accept a path/proof/digest from browser.
+Implemented flow:
 
-The HTTP/session layer must not call C4-I. The main launcher runtime loop owns the execution intent and invokes existing `execute_restore(ProofBoundRestoreRequest(...), context)` exactly once.
+```text
+POST /v1/restore/execute(request_id, command_seq, generation)
+→ exact-run Host/Origin/auth/schema/replay checks
+→ exactly-next sequence consumed before business preconditions
+→ accepted control generation checked
+→ current launcher-private A1 retained proof copied into one RestoreExecutionIntent
+→ retained source authority invalidated immediately
+→ pathless state = restoring
+→ HTTP returns without executing C4-I
+→ main launcher runtime loop takes the intent
+→ ProofBoundRestoreRequest from launcher-private path + ExpectedSourceProof
+→ existing C4-I execute_restore(..., LauncherLifecycleContext)
+→ existing C4-I owns backend stop/exclusion + destructive Restore semantics
+→ main launcher runtime performs ordinary-backend restart handoff when safe
+→ pathless restore_completed / restore_failed / restore_blocked result
+```
 
-The same loopback control plane remains alive on the same ephemeral port while C4-I intentionally stops the ordinary backend. Heartbeat/state remain serviceable. Browser/session cancellation or expiry after accepted execution cannot cancel destructive Restore.
+The same `RestoreControlPlane` instance remains alive on the same ephemeral port while C4-I intentionally stops the ordinary backend and while restart is attempted. Heartbeat/state stay serviceable. Valid select/cancel/second-execute commands during `restoring` consume their sequence and return `restore_in_progress` without cancelling or duplicating destructive work.
 
-After C4-I returns, the main launcher runtime owns ordinary-backend restart handoff. A safe C4-I result is not reinterpreted or rolled back merely because ordinary backend restart fails. B2 publishes only fixed pathless control state and leaves full outcome UX to later C4-II-C.
+Browser/session expiry after execution acceptance invalidates browser authentication and any stale candidate authority but does not cancel C4-I or overwrite launcher-owned `restoring`/final result state.
 
-Exact B2 semantics, allowed paths, tests and prohibitions are normative in `docs/c4-ii-b-implementation-slices.md`.
+Control selection generation and A1 retained-proof generation remain separate domains. Browser `generation` is compared only with the accepted control snapshot generation; source authority comes only from the current launcher-private retained proof.
+
+If C4-I allows normal startup, the main runtime releases the retained maintenance lease only immediately before the exact `BackendProcessOwner.start(...)` against canonical `context.database_path`. Only a child that proves the canonical liveness lock and listening socket permits `restore_completed` or `restore_failed` publication. Restart failure does not reinterpret or roll back C4-I truth and returns to safe maintenance exclusion before publishing `restore_blocked`.
+
+No frontend source, ordinary FastAPI backend, migration, dependency, packaging resource, C4-I/B1 engine or A1 validation implementation is changed by B2.
 
 ## Successor gate
 
-B3 remains **PLANNED — NOT AUTHORIZED**. B2 must be implemented in one bounded PR, exact-head tested, externally smoked, independently audited, merged and lifecycle-closed before B3 may be authorized.
+B2 is not closed merely because the code exists. Before merge it still requires focused/regression exact-head testing, external isolated process smoke, clean exact head/worktree and independent `P0=0 / P1=0 / P2=0` audit.
 
-C4-II-C and C4-III remain blocked. Product Restore is still **NOT IMPLEMENTED**.
+After merge, a separate lifecycle-closure change is required before any B3 authorization.
+
+B3 remains **PLANNED — NOT AUTHORIZED**. C4-II-C and C4-III remain blocked. Product Restore is still **NOT IMPLEMENTED**.
