@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard the bounded C4-II-C implementation and all closed Restore authority seams."""
+"""Guard merged C4-II-C closure and the bounded C4-III verification authorization."""
 
 from __future__ import annotations
 
@@ -22,15 +22,14 @@ PROGRESS = P("state/progress.md")
 HANDOFF = P("state/handoff.md")
 CHANGE_REQUESTS = P("state/change-requests.md")
 ADR16 = P("docs/decisions/0016-launcher-assisted-restore.md")
+ADR17 = P("docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md")
 ADR18 = P("docs/decisions/0018-launcher-restore-interaction-and-validation-session.md")
-
-FRONTEND_PRESENTATION = P("frontend/src/restore-control-presentation.ts")
-C4IIC_TESTS = P("frontend/test/restore-control-races.test.mjs")
 
 ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF, CHANGE_REQUESTS)
 SUPPORTING = (CURRENT, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
 
 CORE = (
+    "PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED",
     "PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE",
     "PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED",
     "PR #185 — MERGED — B3 AUTHORIZATION BASELINE",
@@ -47,27 +46,25 @@ CORE = (
     "C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "C4-III — PLANNED — NOT AUTHORIZED",
+    "C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED",
+    "C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "Restore — NOT IMPLEMENTED",
     "Product release readiness — NOT CLAIMED",
 )
 
 STALE = (
-    "C4-II-B — IN PROGRESS — SLICED",
-    "C4-II-B3 — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
-    "C4-II-B3 — AUTHORIZED NEXT",
+    "C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED",
     "C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-II-C — PLANNED — NOT AUTHORIZED",
-    "C4-II-C — DONE",
-    "C4-III — AUTHORIZED NEXT",
+    "C4-III — PLANNED — NOT AUTHORIZED",
     "C4-III — IN PROGRESS",
+    "C4-III — DONE",
     "Restore — IMPLEMENTED",
     "Product release readiness — READY",
 )
 
-PR187_REVIEWED_HEAD = "48e245811af706bb666620c6dda8033ff200967a"
-PR187_MERGE_MAIN = "7a746fbf98f50682b509c40a06335a2157f1a7b7"
+C4IIC_REVIEWED_HEAD = "1df21915fdcf4a708dc778a0e762d64830b5b880"
+C4IIC_MERGE_MAIN = "6294f0044c792ced3ac56d213ea5333e33062f12"
 
 PINNED_BLOBS = {
     P("launcher/restore/contracts.py"): "1b4adf345b2470e7c50987570e7848012aa15a95",
@@ -91,6 +88,7 @@ PINNED_BLOBS = {
     P("frontend/src/restore-control-contract.ts"): "15c50941998f38d441e1314f7227847bca11e3d0",
     P("frontend/src/restore-control-runtime.ts"): "3861dfd51ab3b146fb082133cf33a9cb24688b5c",
     P("frontend/src/restore-control-entry.ts"): "dfcec88d788d0e46dcc5cc9b53def89efb567ab6",
+    P("frontend/src/restore-control-presentation.ts"): "5dc9977fcd258c4366ea9bbfed6f6055acc9749e",
 }
 
 HISTORY_BLOBS = {
@@ -121,6 +119,17 @@ HISTORY_BLOBS = {
     P("docs/history/c4-ii-c-pre-implementation/current-focus.md"): "28b27cbd284c8332c932e9da9489dee3ecbcd5bc",
     P("docs/history/c4-ii-c-pre-implementation/handoff.md"): "e43d3bcdb0c3c51bee8fc068e679f004a8b713c4",
     P("docs/history/c4-ii-c-pre-implementation/progress.md"): "47d6f92b770600de084c543a00495c7ae23f231e",
+    P("docs/history/c4-ii-c-pre-closure/README.md"): "122bc86bae0313f5f82ceb5cd8ee402c489ac625",
+    P("docs/history/c4-ii-c-pre-closure/current-lifecycle.md"): "460a44b0bad7c6a68c468a847ef2bf56541f96be",
+    P("docs/history/c4-ii-c-pre-closure/c4-ii-b-implementation-slices.md"): "de64bc2cc5ddadc4d9b10cb2b9c8d8d8665cc798",
+    P("docs/history/c4-ii-c-pre-closure/deployment.md"): "bd1db7af743a687a08336ab415e536e52b171d70",
+    P("docs/history/c4-ii-c-pre-closure/implementation-plan.md"): "cf072337fc0ddc0a4b2493113c09b90b8fe44584",
+    P("docs/history/c4-ii-c-pre-closure/packaging.md"): "ea635365069d878242fdd26de6c40d93ddbfc4cf",
+    P("docs/history/c4-ii-c-pre-closure/restore-interaction-and-validation-session.md"): "3a6335c697ab49b580945a17bea8db092e7b5f59",
+    P("docs/history/c4-ii-c-pre-closure/change-requests.md"): "cba10b001ad412279a621d8a3211847978fa63ec",
+    P("docs/history/c4-ii-c-pre-closure/current-focus.md"): "ba706cd45ce2a4eb0ef34a30a2d0be86a3347d2e",
+    P("docs/history/c4-ii-c-pre-closure/handoff.md"): "e01e06754d0fb5dde4060c4f00e9231636916afc",
+    P("docs/history/c4-ii-c-pre-closure/progress.md"): "3075c538566752439c076edaf1c9315750c36542",
 }
 
 ERRORS: list[str] = []
@@ -161,12 +170,45 @@ def blob(path: Path) -> str:
 def check_lifecycle_docs() -> None:
     for path in ACTIVE:
         require(path, CORE)
-    require(CURRENT, CORE + (PR187_REVIEWED_HEAD, PR187_MERGE_MAIN, "C4-II-C implementation changeset", "34 tests"))
-    require(B_SLICES, CORE + ("CLOSED NORMATIVE IMPLEMENTATION PLAN", PR187_REVIEWED_HEAD, PR187_MERGE_MAIN))
-    require(PROFILE, CORE + ("session/network uncertainty after destructive execute", "restore_completed", "restore_failed", "restore_blocked", "authenticated final B2 snapshot"))
-    require(PLAN, CORE + ("frontend/src/restore-control-presentation.ts", "frontend/src/restore-control-contract.ts remains closed", "34 tests", "authenticated final launcher state remains authoritative"))
-    require(DEPLOYMENT, CORE + ("frontend presentation only", "no deployment topology change"))
-    require(PACKAGING, CORE + ("no packaging change", "release readiness remains not claimed"))
+    require(CURRENT, CORE + (
+        C4IIC_REVIEWED_HEAD,
+        C4IIC_MERGE_MAIN,
+        "C4-II-C closure baseline",
+        "C4-III — Restore end-to-end verification and lifecycle closure",
+        "current-schema Restore",
+        "supported older-schema Restore",
+    ))
+    require(B_SLICES, CORE + (
+        "CLOSED NORMATIVE IMPLEMENTATION PLAN",
+        C4IIC_REVIEWED_HEAD,
+        C4IIC_MERGE_MAIN,
+        "Closed C4-II-C successor",
+    ))
+    require(PROFILE, CORE + (
+        "Final-state truth",
+        "authenticated final B2 snapshot remains authoritative",
+        "C4-III authorization",
+    ))
+    require(PLAN, CORE + (
+        "C4-III — Restore end-to-end verification and lifecycle closure",
+        "current-schema Restore",
+        "supported older-schema Restore",
+        "interruption",
+        "rollback",
+        "repeated launch",
+        "source immutability",
+        "safety-copy retention",
+        "PASS / FAIL PRODUCT / INCONCLUSIVE RUNNER / INCONCLUSIVE ENVIRONMENT",
+    ))
+    require(DEPLOYMENT, CORE + (
+        "no deployment topology change",
+        "does not authorize deployment topology, packaging or updater redesign",
+    ))
+    require(PACKAGING, CORE + (
+        "no packaging",
+        "does not authorize packaging implementation or redesign",
+        "release readiness remains not claimed",
+    ))
     for path in ACTIVE + SUPPORTING:
         text = norm(read(path))
         for stale in STALE:
@@ -175,6 +217,7 @@ def check_lifecycle_docs() -> None:
 
 def check_authority_and_history() -> None:
     require(ADR16, ("before_restore", "replacement_intent", "recovery_blocked", "selected source", "immutable"))
+    require(ADR17, ("C4-III — end-to-end verification and lifecycle closure", "current-schema", "older-schema", "source immutability", "safety-copy retention"))
     require(ADR18, ("127.0.0.1", "/backups/restore", "sessionStorage", "command_seq", "compare descriptor/path SourceIdentity", "recompute and compare full SHA-256"))
     for path, expected in HISTORY_BLOBS.items():
         actual = blob(path)
@@ -187,16 +230,34 @@ def check_closed_boundaries() -> None:
         if actual and actual != expected:
             fail(f"closed Restore boundary changed: {path.relative_to(ROOT)} expected {expected}, got {actual}")
 
-def check_c4_ii_c_implementation() -> None:
-    require(FRONTEND_PRESENTATION, ("isFinalExecutionState", "authoritativeFinalState", "resultUnknownAfterExecute", "Итог восстановления пока неизвестен", "Обычная работа снова доступна", "не означает автоматически, что рабочие данные остались прежними", "Перезапустите «Мастерскую косметолога»", "Повторить только предыдущую команду", "finalBackAllowed", "heroBackAllowed", "snapshot?.state !== 'restoring'"))
-    forbid(FRONTEND_PRESENTATION, ("source_path", "ExpectedSourceProof", "operation_id", "traceback", "/v1/restore/confirm", "/v1/restore/execute", "localStorage"))
-    require(C4IIC_TESTS, ("resumeFinalWithoutReplay", "C4-II-C completed result is truthful and allows ordinary navigation", "C4-II-C failed result avoids rollback and unchanged-data inference", "C4-II-C blocked result requires restart and offers no normal-work action", "C4-II-C destructive-result uncertainty stays unknown after connection loss", "pending execute presentation never claims Restore has not started"))
+def check_c4_iii_authorization() -> None:
+    require(PLAN, (
+        "focused verification tests and test-only harnesses",
+        "isolated external exact-head smoke runners",
+        "no production behavior change unless separately authorized as a bounded defect fix",
+        "If verification reveals a product defect",
+    ))
+    require(FOCUS, (
+        "C4-III Restore end-to-end verification",
+        "only authorized next Restore slice",
+        "Any product defect requires a separate bounded fix PR",
+    ))
+    require(HANDOFF, (
+        "Authorized handoff",
+        "current-schema success",
+        "supported older-schema Restore",
+        "verified `before_restore` safety-copy retention",
+    ))
+    require(CHANGE_REQUESTS, (
+        "No new Change Request is needed for verification-only",
+        "STOP and open a separate decision/change request or bounded defect-fix PR",
+    ))
 
 def main() -> int:
     check_lifecycle_docs()
     check_authority_and_history()
     check_closed_boundaries()
-    check_c4_ii_c_implementation()
+    check_c4_iii_authorization()
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
         for error in ERRORS:
@@ -205,12 +266,12 @@ def main() -> int:
     print("Documentation lifecycle consistency: PASS")
     print(f"Checked {len(ACTIVE)} compact active files.")
     print(f"Verified {len(HISTORY_BLOBS)} exact protected history Git blob identities.")
-    print(f"Verified {len(PINNED_BLOBS)} exact closed B1/C4-I/B2/B3/shell Git blob identities.")
-    print("Verified PR #187 merged / C4-II-C authorization baseline.")
-    print("Verified C4-II-C is implemented in this changeset but not lifecycle-closed.")
-    print("Verified C4-II-C changes presentation only and keeps contract/runtime/entry/launcher/backend closed.")
-    print("Verified completed/failed/blocked/uncertainty truthfulness markers and focused tests.")
-    print("Verified C4-III remains not authorized, Restore remains NOT IMPLEMENTED, and release readiness is not claimed.")
+    print(f"Verified {len(PINNED_BLOBS)} exact closed B1/C4-I/B2/B3/C4-II-C/shell Git blob identities.")
+    print("Verified PR #188 merged / C4-II-C exact-head closure baseline.")
+    print("Verified C4-II-C is DONE — MERGED AND EXACT-HEAD VERIFIED.")
+    print("Verified final C4-II-C presentation is pinned as a closed production boundary.")
+    print("Verified C4-III is AUTHORIZED NEXT — NOT IMPLEMENTED and remains verification/lifecycle only.")
+    print("Verified Restore remains NOT IMPLEMENTED and product release readiness is not claimed.")
     return 0
 
 if __name__ == "__main__":

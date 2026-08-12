@@ -5,7 +5,6 @@ Updated: `2026-08-11`
 ## Lifecycle
 
 ```text
-PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
@@ -22,8 +21,8 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -32,8 +31,10 @@ Product release readiness — NOT CLAIMED
 
 The product remains local-first on the MacBook. Ordinary business work uses the local FastAPI backend; Restore control remains launcher-owned on `127.0.0.1:<ephemeral>` under ADR 0018.
 
-PR #188 / C4-II-C introduced no deployment topology change. The lifecycle-closure transition also introduces no service, port, cloud dependency, backend Restore endpoint or mandatory internet.
+PR #187 introduced no deployment topology change.
 
-C4-III is verification/lifecycle work. It does not authorize deployment topology, packaging or updater redesign. Exact-package verification required by ADR 0017 must use an authorized product artifact; if that prerequisite is unavailable, report the verification incomplete rather than changing packaging under C4-III.
+C4-II-C changes **frontend presentation only**. It introduces **no deployment topology change**, service, port, cloud dependency, backend Restore endpoint or mandatory internet.
 
-Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.
+No launcher state, control endpoint, browser filesystem authority, destructive retry sequence or destructive cancel is added.
+
+C4-III remains not authorized. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

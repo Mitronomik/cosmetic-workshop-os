@@ -1,10 +1,11 @@
-# Current Focus — C4-II-C truthful Restore results implementation
+# Current Focus — C4-III Restore end-to-end verification
 
 Updated: `2026-08-11`
 
 ## Current lifecycle
 
 ```text
+PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
@@ -21,32 +22,24 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-III — PLANNED — NOT AUTHORIZED
+C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
 ## Closed baseline
 
-PR #187 reviewed head `48e245811af706bb666620c6dda8033ff200967a` merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7` and authorized C4-II-C only.
+PR #188 reviewed exact C4-II-C head `1df21915fdcf4a708dc778a0e762d64830b5b880` and merged as `6294f0044c792ced3ac56d213ea5333e33062f12` at `2026-08-11T17:25:11Z`.
 
-B3 remains exact-head verified and closed.
+C4-II-C is closed on lifecycle PASS, frontend build PASS, focused Restore 34/34 PASS, browser smoke v5.4 PASS, fresh independent audit P0=0/P1=0/P2=0 and final no-change exact-head gate PASS.
 
 ## Current work
 
-**C4-II-C — Truthful Restore completion/recovery/restart/support UX** is implemented in the current changeset but is not lifecycle-closed.
+**C4-III — Restore end-to-end verification and lifecycle closure** is the only authorized next Restore slice. It is not implemented yet.
 
-Production scope is only `frontend/src/restore-control-presentation.ts`; focused result-state tests are in `frontend/test/restore-control-races.test.mjs`.
+Verification must cover current-schema + supported older-schema Restore, rejection, interruption, rollback, repeated launch/startup recovery, source immutability, mandatory safety-copy retention and end-to-end lifecycle closure.
 
-Implemented semantics:
+Production Restore authority is closed. Do not change launcher/backend/contract/runtime/entry/presentation/main/navigation/ADRs in C4-III. Tests, isolated smoke runners and verification/lifecycle documentation may change. Any product defect requires a separate bounded fix PR.
 
-- completed → success + safe ordinary navigation;
-- failed → no rollback/unchanged-data inference;
-- blocked → restart/help, no normal-work navigation;
-- execute/restoring connection uncertainty → explicit unknown result, no false final truth;
-- existing exact ambiguous replay remains the same previous command only.
-
-Closed launcher/backend/contract/runtime/entry/main/navigation seams must remain byte-identical.
-
-C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

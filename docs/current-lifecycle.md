@@ -3,11 +3,12 @@
 Status: **CURRENT — NORMATIVE LIFECYCLE PROFILE**
 Updated: `2026-08-11`
 
-ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authoritative for launcher control, picker and exact-run browser-session interaction.
+ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authoritative for launcher control, picker and exact-run browser-session interaction. ADR 0017 remains authoritative for the C4 slice split and C4-III verification/lifecycle-closure purpose.
 
 ## Current lifecycle
 
 ```text
+PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
@@ -24,22 +25,37 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-III — PLANNED — NOT AUTHORIZED
+C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
 macOS packaging, safe packaged update flow, installation verification and full release-candidate smoke remain incomplete.
 
-## Merged baseline through C4-II-C authorization
+## C4-II-C closure baseline
 
-- PR #186 reviewed B3 head `316358c65a851b46090121c7a6bc877b980176ba`, merged as `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`.
-- PR #187 reviewed B3-closure/C4-II-C-authorization head `48e245811af706bb666620c6dda8033ff200967a`, merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7` at `2026-08-11T11:54:33Z`.
+- PR #188 final independently reviewed and exact-head-tested implementation head: `1df21915fdcf4a708dc778a0e762d64830b5b880`.
+- PR #188 merge/new `main`: `6294f0044c792ced3ac56d213ea5333e33062f12`.
+- Merged at: `2026-08-11T17:25:11Z`.
+- The reviewed head is the C4-II-C parent of the merge commit; the merge introduced no additional product-file changes.
 
-B3 remains closed on accepted exact-head evidence: frontend build PASS, focused Restore 30/30 PASS, browser smoke v4 PASS, final independent audit P0=0/P1=0/P2=0, final no-change gate PASS. The earlier P1=1 audit remains historical evidence and was corrected before merge.
+Accepted C4-II-C evidence:
 
-## Closed authority chain through B3
+- `git diff --check` PASS;
+- documentation lifecycle checker PASS;
+- 27 then-protected history blobs and 21 then-closed B1/C4-I/B2/B3/shell blobs verified before merge;
+- frontend `npm ci` PASS with 0 vulnerabilities;
+- frontend build PASS;
+- focused Restore control suite **34 tests / 34 pass / 0 fail**;
+- browser smoke v5.4 PASS, including completed/failed/blocked resume without replay, true 401/409 invalidation, ambiguous execute and narrow layout;
+- fresh independent audit **P0=0 / P1=0 / P2=0 — AUDIT GATE PASS**;
+- final no-change exact-head gate PASS;
+- final local and remote head remained `1df21915fdcf4a708dc778a0e762d64830b5b880`.
+
+Earlier failed audits and the aborted checker-only gate remain historical evidence and are preserved in `docs/history/c4-ii-c-pre-closure/` and the PR record; they are not relabelled as PASS.
+
+## Closed authority chain through C4-II-C
 
 ```text
 A3/A1 source selection + validation
@@ -48,56 +64,39 @@ A3/A1 source selection + validation
 → C4-I sole destructive engine
 → B3 explicit browser confirmation + exact replay
 → pathless restoring/final launcher state
+→ C4-II-C truthful final/recovery/support presentation
 ```
 
-Closed seams remain byte-identical unless separately authorized: launcher/backend Restore authority, contract/runtime, `main.ts`, app navigation, ADR 0016 and ADR 0018.
+Closed production seams are now immutable unless separately authorized: launcher/backend Restore authority, `restore-control-contract.ts`, `restore-control-runtime.ts`, `restore-control-entry.ts`, final C4-II-C `restore-control-presentation.ts`, `main.ts`, app navigation, ADR 0016 and ADR 0018.
 
-## C4-II-C implementation changeset
+## C4-II-C final product truth
 
-C4-II-C is present in the current changeset but is **NOT YET CLOSED**.
+- `restore_completed` is authoritative success and may offer ordinary navigation because B2 publishes it only after ordinary-backend readiness is proved.
+- `restore_failed` is authoritative failed Restore truth with ordinary work available, without rollback/unchanged-data/old-data-restored inference.
+- `restore_blocked` is authoritative restart/help-only truth; ordinary work is not confirmed safe.
+- pending/restoring post-execute uncertainty without an authoritative final result remains unknown.
+- an authenticated final B2 snapshot remains authoritative if same-tab replay metadata is missing; replay loss blocks further Restore commands but does not erase the final result.
+- true session/protocol invalidation with cleared snapshot remains unknown + restart-only.
+- ambiguous pending execute replay remains the exact same request ID, command sequence and generation, never a new Restore.
 
-Authorized production surface used:
+## C4-III authorization
 
-```text
-frontend/src/restore-control-presentation.ts
-```
+**C4-III — Restore end-to-end verification and lifecycle closure** is **AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
-No `restore-control-entry.ts` change is needed.
+Reserved verification scope, from ADR 0017:
 
-### Truthful final states
+- current-schema Restore;
+- supported older-schema Restore;
+- rejection paths;
+- interruption;
+- rollback;
+- repeated launch / startup recovery;
+- selected-source immutability;
+- mandatory safety-copy retention;
+- end-to-end lifecycle closure.
 
-- `restore_completed`: presents successful completion and ordinary navigation only within merged B2 backend-ready semantics.
-- `restore_failed`: presents safe failure truth and ordinary availability without claiming rollback, unchanged data, restored old data or absence of mutation.
-- `restore_blocked`: clearly says ordinary work is not safely available in this run, removes normal-work navigation and gives restart/help guidance.
-- destructive-result session/network uncertainty remains unknown. It does not become success, failure, rollback or unchanged-data truth.
+C4-III is verification/lifecycle work, not authority redesign. It may add or refine focused tests, isolated external smoke runners, verification documentation and lifecycle/checker evidence. It must not silently change production behavior or reopen closed authority. Any product defect found by C4-III requires a separate bounded defect-fix PR before the verification gate can pass.
 
-### Interaction rules
+Exact-package verification required by ADR 0017 does not silently authorize packaging implementation. If the required packaged verification prerequisite is unavailable, classify that verification as incomplete rather than adding packaging/update work under C4-III.
 
-- normal-work `back` navigation is suppressed while `restoring`, while execute is pending/uncertain, and for `restore_blocked`;
-- completed/failed states may return to backups because merged B2 proves ordinary backend readiness for those final states;
-- an ambiguous pending execute may expose only the existing exact replay of the **same** command, with explicit wording that it is not a new Restore;
-- no destructive confirm/cancel/reselection is exposed in final states.
-
-### Closed architecture
-
-No new launcher state, control endpoint, DTO field, browser filesystem authority, operation ID, durable phase, backend Restore endpoint, destructive cancel, automatic retry or new destructive request sequence is added.
-
-`frontend/src/restore-control-contract.ts`, `frontend/src/restore-control-runtime.ts`, `frontend/src/restore-control-entry.ts`, launcher/backend, `main.ts`, navigation, migrations, dependencies, packaging resources and ADRs remain closed.
-
-## Verification still required
-
-Implementation presence does not imply PASS. The published PR head must still run:
-
-1. `git diff --check`;
-2. lifecycle checker;
-3. frontend `npm ci`;
-4. frontend build/type-check;
-5. focused Restore suite — expected **34 tests** if no later test is added;
-6. desktop + narrow browser smoke;
-7. final-state truthfulness smoke for completed/failed/blocked/uncertainty;
-8. keyboard/focus regression;
-9. exact changed-path/closed-blob review;
-10. clean head/worktree;
-11. independent P0/P1/P2 audit.
-
-C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.
