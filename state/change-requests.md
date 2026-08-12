@@ -5,6 +5,7 @@ Updated: `2026-08-11`
 ## Current lifecycle
 
 ```text
+PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
@@ -21,22 +22,22 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-III — PLANNED — NOT AUTHORIZED
+C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
 ## Restore decisions
 
-CR-011 remains **ACCEPTED**. ADR 0018 remains normative for launcher-owned loopback control, picker/session security and browser path privacy. ADR 0016 remains normative for destructive Restore durable truth.
+CR-011 remains **ACCEPTED**. ADR 0018 remains normative for launcher-owned loopback control, picker/session security and browser path privacy. ADR 0016 remains normative for destructive Restore durable truth. ADR 0017 defines C4-III as end-to-end verification and lifecycle closure.
 
-PR #187 merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7` and authorized C4-II-C only.
+PR #188 merged as `6294f0044c792ced3ac56d213ea5333e33062f12` and C4-II-C is now closed.
 
-## Current implementation
+## C4-III authorization
 
-C4-II-C implements the already-authorized **frontend-only** truthful completion/recovery/restart/support UX. No new Change Request is needed because it does not change launcher state, DTOs, endpoints, source authority or destructive semantics.
+C4-III verifies the already-decided and merged Restore architecture. No new Change Request is needed for verification-only tests, isolated smoke runners, evidence documentation or lifecycle closure.
 
-If implementation later appears to require a new launcher state, endpoint, DTO field, browser filesystem authority, durable phase, backend behavior or new destructive command, STOP and open a new architecture/lifecycle decision.
+If C4-III appears to require a new launcher state, endpoint, DTO field, browser filesystem authority, durable phase, backend behavior, destructive command, packaging architecture or other product/architecture change, STOP and open a separate decision/change request or bounded defect-fix PR as appropriate.
 
-C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

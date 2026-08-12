@@ -7,6 +7,7 @@ A local-first working system for a cosmetic workshop. The user product must run 
 ## Current product status
 
 ```text
+PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
@@ -23,54 +24,46 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-III — PLANNED — NOT AUTHORIZED
+C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-PR #187 reviewed the B3 closure / C4-II-C authorization head `48e245811af706bb666620c6dda8033ff200967a` and merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7`. C4-II-C is the only authorized implementation slice.
+PR #188 reviewed exact C4-II-C head `1df21915fdcf4a708dc778a0e762d64830b5b880` and merged as `6294f0044c792ced3ac56d213ea5333e33062f12` at `2026-08-11T17:25:11Z`.
 
-## Closed Restore authority through B3
+## Closed Restore implementation chain through C4-II-C
 
-C4-I remains the only destructive Restore engine. B1 binds launcher-private retained source proof to C4-I intake. B2 owns authenticated one-shot `/v1/restore/execute` authority transfer and ordinary-backend restart handoff. B3 owns explicit browser confirmation and exact destructive replay.
+C4-I remains the only destructive Restore engine. B1 binds launcher-private retained source proof to C4-I intake. B2 owns authenticated one-shot `/v1/restore/execute` authority transfer and ordinary-backend restart handoff. B3 owns explicit browser confirmation and exact destructive replay. C4-II-C owns truthful final/recovery presentation without changing Restore authority.
 
-The browser has no filesystem/source authority. No source path, proof, digest, operation ID, database path, backup path or lock path crosses the browser boundary. No `/v1/restore/confirm` endpoint exists.
+Accepted C4-II-C evidence on the reviewed head:
 
-## C4-II-C implementation changeset
+- `git diff --check` PASS;
+- lifecycle checker PASS;
+- frontend install/build PASS with 0 vulnerabilities;
+- focused Restore control suite **34/34 PASS**;
+- browser smoke v5.4 PASS, including real resume-without-replay final-state precedence, true 401/409 invalidation, ambiguous execute and narrow layout;
+- fresh independent audit **P0=0 / P1=0 / P2=0 — PASS**;
+- final no-change exact-head gate PASS;
+- final local and remote head unchanged.
 
-The current changeset implements **Truthful Restore completion/recovery/restart/support UX** without changing Restore authority or protocol.
+The browser still has no filesystem/source authority. No source path, proof, digest, operation ID, database path, backup path or lock path crosses the browser boundary. No `/v1/restore/confirm` endpoint exists.
 
-Production change is limited to:
+## Authorized next work
 
-```text
-frontend/src/restore-control-presentation.ts
-```
+**C4-III — Restore end-to-end verification and lifecycle closure** is the only authorized next Restore slice.
 
-Focused result-state tests are added to:
+Its purpose is verification and closure of the already-merged Restore chain: current-schema and supported older-schema Restore, rejection paths, interruption, rollback, repeated launch, source immutability, safety-copy retention and lifecycle closure.
 
-```text
-frontend/test/restore-control-races.test.mjs
-```
+C4-III does **not** authorize a new Restore engine, endpoint, browser filesystem authority, destructive command, packaging/update redesign or hidden product-behavior change. If verification finds a product defect, fix it in a separate bounded defect PR and rerun the affected exact-head verification before C4-III can close.
 
-Delivered presentation behavior:
-
-- `restore_completed` gives a clear successful result and ordinary navigation only because merged B2 semantics prove backend readiness;
-- `restore_failed` says ordinary work is available but does **not** infer rollback, unchanged data or automatically restored old data;
-- `restore_blocked` removes normal-work navigation and gives restart/help guidance;
-- connection/session loss after destructive execution may have begun is shown as **unknown**, never converted to success/failure/rollback/unchanged-data truth;
-- exact ambiguous execute replay remains available only as the same previous command;
-- `restoring`, pending execute and blocked/unknown states do not offer normal-work navigation;
-- no new state, DTO field, endpoint, destructive retry sequence or cancel authority is added.
-
-Closed byte-identical seams remain: `launcher/**`, `backend/**`, `frontend/src/restore-control-contract.ts`, `frontend/src/restore-control-runtime.ts`, `frontend/src/restore-control-entry.ts`, `frontend/src/main.ts`, app navigation, migrations, dependencies, package resources, ADR 0016 and ADR 0018.
-
-C4-III remains blocked. Restore remains **NOT IMPLEMENTED** until C4-II-C itself is exact-head verified, merged and lifecycle-closed. Product release readiness remains **NOT CLAIMED**.
+Restore remains **NOT IMPLEMENTED** until C4-III itself completes and lifecycle closure is accepted. Product release readiness remains **NOT CLAIMED**.
 
 ## Restore authority
 
 - ADR 0016 — destructive Restore safety/state machine;
 - ADR 0018 — launcher control/picker/exact-run browser-session architecture;
+- ADR 0017 — C4 split and C4-III verification/lifecycle-closure purpose;
 - `docs/current-lifecycle.md` — current lifecycle authority;
 - `docs/c4-ii-b-implementation-slices.md` — closed B1→B3 contract;
 - `docs/restore-interaction-and-validation-session.md` — active browser/control interaction profile.

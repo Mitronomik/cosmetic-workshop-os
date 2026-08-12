@@ -5,6 +5,7 @@ Updated: `2026-08-11`
 ## Current lifecycle
 
 ```text
+PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
@@ -21,28 +22,31 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-III — PLANNED — NOT AUTHORIZED
+C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-## 2026-08-11 — C4-II-B3 closed / C4-II-C authorized
+## 2026-08-11 — C4-II-C merged and exact-head verified
 
-PR #187 reviewed head `48e245811af706bb666620c6dda8033ff200967a` merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7`. C4-II-B remains DONE and C4-II-C became the only authorized next implementation slice.
+PR #188 reviewed head `1df21915fdcf4a708dc778a0e762d64830b5b880` merged as `6294f0044c792ced3ac56d213ea5333e33062f12` at `2026-08-11T17:25:11Z`.
 
-## 2026-08-11 — C4-II-C implementation changeset
+Accepted evidence:
 
-Implemented frontend-only truthful final-state UX in `restore-control-presentation.ts`:
+- lifecycle checker PASS;
+- frontend install/build PASS, 0 vulnerabilities;
+- focused Restore control suite 34/34 PASS;
+- browser smoke v5.4 PASS with real resume-without-replay final-state precedence and true invalidation paths;
+- fresh independent audit P0=0/P1=0/P2=0 — PASS;
+- final no-change exact-head gate PASS.
 
-- completed provides successful completion and safe ordinary navigation;
-- failed avoids rollback/unchanged-data overclaims;
-- blocked removes normal-work navigation and gives restart/help guidance;
-- post-execute connection/session uncertainty remains unknown and suppresses normal navigation;
-- ambiguous execute retry is explicitly the same previous command, not a new Restore.
+C4-II-C is now DONE — MERGED AND EXACT-HEAD VERIFIED.
 
-Focused tests extend `restore-control-races.test.mjs`; expected focused Restore count is 34 before any later additions.
+## 2026-08-11 — C4-III authorized next
 
-No launcher/backend/contract/runtime/entry/main/navigation/dependency/ADR changes are part of this slice.
+C4-III — Restore end-to-end verification and lifecycle closure — is the only authorized next Restore slice.
 
-Exact-head build/tests/smoke/audit are still required. C4-III remains blocked. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+No production change is authorized by this lifecycle transition. C4-III must verify the merged chain across current/older schema, rejection, interruption, rollback, repeated launch, source immutability and safety-copy retention. Product defects found by verification require separate bounded fixes.
+
+Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

@@ -3,12 +3,11 @@
 Status: **CLOSED NORMATIVE IMPLEMENTATION PLAN**
 Updated: `2026-08-11`
 
-This document records the closed C4-II-B slices and their closed C4-II-C successor. ADR 0016, ADR 0018 and current lifecycle authority remain controlling.
+This document records the closed C4-II-B slices. ADR 0016 and ADR 0018 remain authoritative.
 
 ## Current slice status
 
 ```text
-PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
@@ -25,8 +24,8 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
+C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
+C4-III — PLANNED — NOT AUTHORIZED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -37,18 +36,12 @@ B1 binds launcher-private source proof to C4-I intake. B2 owns one-shot launcher
 
 B3 final reviewed head `316358c65a851b46090121c7a6bc877b980176ba`; merge `b9ca2bd77d5f2be0ba406e9669c18f74e1955725`.
 
-## Closed C4-II-C successor
-
-PR #187 authorized C4-II-C. PR #188 reviewed exact C4-II-C head `1df21915fdcf4a708dc778a0e762d64830b5b880` and merged as `6294f0044c792ced3ac56d213ea5333e33062f12`.
-
-C4-II-C changes presentation only and is closed on frontend build PASS, focused Restore 34/34 PASS, browser smoke v5.4 PASS, fresh independent P0=0/P1=0/P2=0 audit PASS and final no-change gate PASS.
-
-The final C4-II-C presentation is now a closed production boundary. It does not reopen B1/B2/B3 authority, contract/runtime, launcher/backend, main/navigation or ADRs.
+Accepted B3 evidence remains: frontend build PASS; focused Restore 30/30 PASS; browser smoke v4 PASS; final independent P0=0/P1=0/P2=0; final no-change gate PASS. The historical P1=1 pre-fix audit remains preserved in project history.
 
 ## Successor
 
-**C4-III — Restore end-to-end verification and lifecycle closure** is **AUTHORIZED NEXT — NOT IMPLEMENTED**.
+PR #187 reviewed head `48e245811af706bb666620c6dda8033ff200967a` merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7` and authorized C4-II-C.
 
-It verifies the existing chain; it does not authorize new Restore authority or hidden product changes. Product defects discovered during verification require a separate bounded fix.
+C4-II-C is now implemented in the current changeset but not closed. It may change presentation only and must not reopen B1/B2/B3 authority, contract/runtime, launcher/backend, main/navigation or ADRs.
 
-Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.
+C4-III remains PLANNED — NOT AUTHORIZED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

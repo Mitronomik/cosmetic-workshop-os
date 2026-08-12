@@ -5,6 +5,7 @@ Updated: `2026-08-11`
 ## Current lifecycle
 
 ```text
+PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
 PR #185 — MERGED — B3 AUTHORIZATION BASELINE
@@ -21,67 +22,79 @@ C4-II-B — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-II-C — IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED
-C4-III — PLANNED — NOT AUTHORIZED
+C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
 ## Closed predecessor
 
-PR #187 reviewed exact head `48e245811af706bb666620c6dda8033ff200967a` and merged as `7a746fbf98f50682b509c40a06335a2157f1a7b7`, closing B3 lifecycle and authorizing C4-II-C only.
+PR #188 reviewed exact head `1df21915fdcf4a708dc778a0e762d64830b5b880` and merged as `6294f0044c792ced3ac56d213ea5333e33062f12` at `2026-08-11T17:25:11Z`, closing C4-II-C.
 
-B3 evidence remains accepted: frontend build PASS; focused Restore 30/30 PASS; browser smoke v4 PASS; final independent audit P0=0/P1=0/P2=0; final no-change gate PASS.
+Accepted C4-II-C evidence: lifecycle PASS; frontend install/build PASS; focused Restore **34/34 PASS**; browser smoke v5.4 PASS; fresh independent audit P0=0/P1=0/P2=0; final no-change exact-head gate PASS.
+
+Final C4-II-C production file `frontend/src/restore-control-presentation.ts` is now a closed boundary together with the already-closed contract/runtime/entry/launcher/backend/main/navigation seams.
 
 ## Current implementation window
 
-### C4-II-C — Truthful Restore completion/recovery/restart/support UX
+### C4-III — Restore end-to-end verification and lifecycle closure
 
-Status: **IMPLEMENTED IN CURRENT CHANGESET — NOT YET CLOSED**.
+Status: **AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
 Goal:
 
 ```text
-existing restoring/final launcher state
-→ truthful human-readable result
-→ safe next action
-→ restart/recovery/support guidance where appropriate
+merged launcher-assisted Restore chain
+→ verify current-schema Restore
+→ verify supported older-schema Restore
+→ verify rejection + interruption + rollback
+→ verify repeated launch / startup recovery
+→ prove source immutability + safety-copy retention
+→ exact end-to-end evidence
+→ lifecycle closure
 ```
 
-Production change:
+### Allowed scope
 
-```text
-frontend/src/restore-control-presentation.ts
-```
-
-Focused tests:
-
-```text
-frontend/test/restore-control-races.test.mjs
-```
-
-Expected focused Restore control suite on the published C4-II-C implementation head: **34 tests / 34 pass / 0 fail**.
-
-`frontend/src/restore-control-contract.ts remains closed`.
-`frontend/src/restore-control-runtime.ts` remains closed.
-`frontend/src/restore-control-entry.ts` remains closed in this implementation.
-Launcher/backend/main/navigation/migrations/dependencies/package resources/ADR 0016/ADR 0018 remain closed.
-
-### Required product truth
-
-- completed → explicit success + ordinary navigation;
-- failed → ordinary app availability without rollback/unchanged-data inference;
-- blocked → restart/help guidance, no normal-work navigation;
-- post-execute session/network uncertainty without a final launcher result → unknown result, no inferred success/failure/rollback/unchanged data;
-- authenticated final launcher state remains authoritative even when same-tab replay metadata is missing; replay loss disables further Restore commands but does not erase the final result;
-- exact replay of an ambiguous pending execute remains the same command only, never a new sequence or blind destructive retry.
-
-### Non-goals
-
-No new launcher state, endpoint, DTO field, browser source/path authority, operation ID, durable phase timeline, destructive cancel, automatic Restore retry, backend Restore ownership, packaging redesign or C4-III work.
+- focused verification tests and test-only harnesses;
+- isolated external exact-head smoke runners;
+- verification/checklist documentation;
+- lifecycle/state/checker updates required to record evidence;
+- no production behavior change unless separately authorized as a bounded defect fix.
 
 ### Required verification
 
-Run exact-head frontend build, focused Restore tests (**expected 34 tests / 34 pass / 0 fail**), lifecycle checker, desktop+narrow+keyboard browser smoke, closed-blob review, clean head/worktree and independent P0/P1/P2 audit before merge.
+At minimum, C4-III must cover the reserved ADR 0017 verification surface:
 
-C4-III remains not authorized. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+1. current-schema successful Restore;
+2. supported older-schema Restore through the existing migration/startup rules;
+3. invalid/rejected candidate paths before destructive mutation;
+4. interruption at safety-critical boundaries and conservative startup recovery;
+5. rollback and `restore_failed` truth;
+6. `restore_blocked` / recovery-blocked ordinary-startup refusal;
+7. repeated launch after completed, failed/rolled-back and blocked outcomes;
+8. immutable selected source / B1 proof binding;
+9. mandatory verified `before_restore` safety-copy retention;
+10. browser path/privacy and one-shot/exact-replay invariants;
+11. exact-head or exact-package evidence with autonomous timeouts/cleanup;
+12. independent P0/P1/P2 audit and final no-change gate.
+
+Use the project smoke classification exactly: PASS / FAIL PRODUCT / INCONCLUSIVE RUNNER / INCONCLUSIVE ENVIRONMENT. Manual `Ctrl+C` invalidates PASS.
+
+### Architecture constraints
+
+C4-III does not authorize:
+
+- a new Restore engine or second destructive path;
+- a new launcher/control/backend endpoint or DTO field;
+- browser filesystem/source authority;
+- destructive cancel, blind retry or new request sequence;
+- durable phase reconstruction in frontend;
+- production refactor hidden inside verification;
+- packaging or updater redesign;
+- C4 lifecycle completion without the required evidence.
+
+If verification reveals a product defect, STOP the verification claim, open a separate bounded defect-fix PR, rerun the affected exact-head checks, then resume C4-III.
+
+Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.
