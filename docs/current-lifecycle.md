@@ -8,6 +8,7 @@ ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authori
 ## Current lifecycle
 
 ```text
+PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
@@ -29,10 +30,10 @@ C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 D4 — Update safety — NOT AUTHORIZED BY CR-012
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
@@ -141,14 +142,16 @@ This checkpoint records the external verification result. It does not rerun, rel
 
 **C4-III — Restore end-to-end verification and lifecycle closure** is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
 
-Its remaining blocking condition is a prerequisite, not a defect:
+Its remaining condition is unexecuted verification, not a defect:
 
 ```text
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 ```
 
-The required packaged product artifact does not yet exist, so the exact-package half of the ADR 0017 evidence surface cannot be executed. C4-III must remain open and incomplete in that condition. It must not be closed on exact-head evidence alone, and packaging must not be implemented inside C4-III to unblock it. Producing that artifact is separate work under its own authorization, now recorded as `CR-012` below.
+The packaged product artifact that the exact-package half of the ADR 0017 evidence surface requires did not exist when the verifier ran, so that half could not be executed. D3 has since produced it, outside C4-III and under CR-012. What remains is for the independent external exact-package verifier to run against the packaged runtime and pass.
+
+C4-III must remain open until it does. It must not be closed on exact-head evidence alone, packaging must not be implemented inside C4-III, and a passing D3 package smoke is not exact-package verification — D3 proves the package/runtime delivery layer, while the C4-III verifier exercises the packaged Restore flow.
 
 Reserved verification scope, from ADR 0017:
 
@@ -175,7 +178,7 @@ The exact-package verifier correctly reported `INCONCLUSIVE — ENVIRONMENT` bec
 It authorizes the existing roadmap stage as the one bounded successor implementation task, outside C4-III:
 
 ```text
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 
 Current purpose:
 produce the packaged product artifact required for
@@ -188,6 +191,26 @@ That task packages the existing local-first architecture — launcher → local 
 
 The earlier blanket rule — that packaging implementation had no authorization at all — is now narrower and truthful: **CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization.** Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation, D4 update safety and D5 remote-install work remain NOT AUTHORIZED.
 
-No package exists. This decision does not create one, does not run exact-package verification, and does not advance C4-III lifecycle closure.
+The decision itself created no package. The D3 implementation then did.
+
+## D3 — implemented, exact-package verification pending
+
+```text
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
+```
+
+`make package-macos` produces `dist/CosmeticWorkshopOS-mac.zip` containing a user-openable `CosmeticWorkshopOS.app`. The package carries the unchanged launcher, the unchanged backend, a self-contained pinned CPython, the production frontend build, migrations and offline help. The end user needs no Git, Python, Node.js, npm, Docker, GitHub, Codex or terminal. User data stays in the existing external user-data directory. Build details are in [`packaging.md`](packaging.md).
+
+D3 changed no protected closed Restore production file. The backend remains a separate launcher-owned process started through `app.launcher_backend_entrypoint` with the existing lock/socket handshake, the launcher remains the Restore authority, and the ordinary browser remains the presentation surface.
+
+What D3 does **not** do:
+
+- it does not run C4-III exact-package verification;
+- it does not advance C4-III lifecycle closure;
+- it does not implement Restore;
+- it does not make the product release-ready;
+- it does not authorize D4, D5, signing, notarization, DMG, auto-update or App Store work.
+
+The D3 Level-5 package smoke proves the package/runtime delivery layer. The later independent C4-III exact-package verifier is a separate gate and must run against the packaged runtime before C4-III may close.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

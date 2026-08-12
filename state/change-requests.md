@@ -5,6 +5,7 @@ Updated: `2026-08-12`
 ## Current lifecycle
 
 ```text
+PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
@@ -26,10 +27,10 @@ C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 D4 — Update safety — NOT AUTHORIZED BY CR-012
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
@@ -61,7 +62,7 @@ The exact-package verifier correctly reported `INCONCLUSIVE — ENVIRONMENT` bec
 CR-012 authorizes the existing roadmap stage as the one bounded successor implementation task:
 
 ```text
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 
 Current purpose:
 produce the packaged product artifact required for
@@ -73,5 +74,11 @@ C4-III exact-package verification.
 Bounded authorization rule: **CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization.** Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation beyond testing this artifact, D4 update safety and D5 remote-install work all remain **NOT AUTHORIZED** by CR-012 — none of them belong to D3, and the roadmap's D3 non-goals stay authoritative. ADR 0019 holds the full artifact contract, package contents, exclusions, build-only-tool conditions and stop conditions.
 
 Producing the artifact is a verification prerequisite, never product release readiness. Exact-package verification stays `INCONCLUSIVE — ENVIRONMENT` and C4-III lifecycle closure stays NOT COMPLETED until the artifact actually exists and the external exact-package verifier runs and passes against it.
+
+### CR-012 implementation status
+
+D3 is implemented. `make package-macos` produces `dist/CosmeticWorkshopOS-mac.zip` containing `CosmeticWorkshopOS.app`, packaging the existing topology unchanged. No protected closed Restore production file changed, no desktop application shell was introduced, and the one build-only dependency — a pinned, checksum-verified relocatable CPython — satisfies the six ADR 0019 conditions. No stop condition was hit, so no new decision was required.
+
+This closes the artifact prerequisite and nothing else. Exact-package verification is now **runnable** but **NOT YET PASSED**; the recorded `INCONCLUSIVE — ENVIRONMENT` classification is preserved as history and never rewritten. Writing and running the exact-package verifier remains C4-III work under ADR 0017.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

@@ -5,6 +5,7 @@ Updated: `2026-08-12`
 ## Lifecycle
 
 ```text
+PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
@@ -26,10 +27,10 @@ C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 D4 — Update safety — NOT AUTHORIZED BY CR-012
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
@@ -42,13 +43,15 @@ The product remains local-first on the MacBook. Ordinary business work uses the 
 
 PR #188 / C4-II-C introduced no deployment topology change. The lifecycle-closure transition also introduces no service, port, cloud dependency, backend Restore endpoint or mandatory internet. The C4-III partial-verification checkpoint introduces none either — it records an already completed external verification result and nothing else.
 
-C4-III is verification/lifecycle work. It does not authorize deployment topology, packaging or updater redesign. Exact-package verification required by ADR 0017 must use an authorized product artifact; that prerequisite is currently unavailable, so the verification is reported incomplete (`INCONCLUSIVE — ENVIRONMENT`) rather than changing packaging under C4-III.
+C4-III is verification/lifecycle work. It does not authorize deployment topology, packaging or updater redesign. Exact-package verification required by ADR 0017 must use an authorized product artifact; when that prerequisite was unavailable the verification was reported incomplete (`INCONCLUSIVE — ENVIRONMENT`) rather than changing packaging under C4-III. The artifact was then produced by D3, under its own CR-012 authorization and outside the C4-III slice.
 
 ## CR-012 packaged-artifact prerequisite
 
-`CR-012` is ACCEPTED — [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md) — and authorizes one bounded successor task outside C4-III: `D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED`.
+`CR-012` is ACCEPTED — [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md) — and authorizes one bounded successor task outside C4-III: `D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING`.
 
 That task changes **no deployment topology**. The packaged product keeps the same shape it has today — launcher → local backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory — and adds no service, no port, no cloud dependency, no backend Restore endpoint, no mandatory internet and no desktop application shell. It only makes the existing runtime distributable as `CosmeticWorkshopOS-mac.zip`.
+
+As implemented, that remains exactly true. The package bundles a self-contained CPython so the end user needs no Python, and serves the production frontend through a standard-library localhost listener on the existing `http://127.0.0.1:5173` origin so the end user needs no Node. The backend is still a separate launcher-owned process on `127.0.0.1:8000`, started through the same `app.launcher_backend_entrypoint` with the same lock/socket handshake. The only new listener is the local frontend one, which replaces the Node development server in packaged mode and is owned by the packaged entrypoint for exactly one launcher run. See [`packaging.md`](packaging.md) for the build.
 
 CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization. Signing, notarization, mandatory DMG, auto-update, update download, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, D4 update safety and D5 remote-install work stay NOT AUTHORIZED.
 

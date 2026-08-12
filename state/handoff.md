@@ -5,6 +5,7 @@ Updated: `2026-08-12`
 ## Current lifecycle
 
 ```text
+PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
@@ -26,10 +27,10 @@ C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 D4 — Update safety — NOT AUTHORIZED BY CR-012
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
@@ -52,7 +53,7 @@ The exact-package half returned `INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE 
 
 C4-III — **Restore end-to-end verification and lifecycle closure** — is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
 
-The next agent inherits an open slice with one blocking prerequisite: no packaged product artifact exists to run exact-package verification against. Do not treat that INCONCLUSIVE as a PASS, do not close C4-III on exact-head evidence alone, and do not implement packaging to clear it inside C4-III. Producing a packaged artifact is separate work under its own authorization — now `CR-012`, described below.
+The next agent inherits an open slice. Its original blocking prerequisite — no packaged product artifact to run exact-package verification against — has been closed by D3, outside C4-III. Do not treat the recorded INCONCLUSIVE as a PASS, do not close C4-III on exact-head evidence alone, and do not implement packaging to clear it inside C4-III. What remains is to write and run the independent exact-package verifier against the packaged runtime; producing the artifact was separate work under its own authorization — `CR-012`, described below.
 
 Load-bearing verification targets:
 
@@ -68,24 +69,30 @@ Load-bearing verification targets:
 - browser privacy and exact replay;
 - lifecycle closure evidence.
 
-Exact-head evidence for these targets is recorded above; the exact-package evidence required alongside it is still missing.
+Exact-head evidence for these targets is recorded above; the exact-package evidence required alongside it is still missing. It is now *obtainable*: build the package with `make package-macos` and run the verifier against the extracted `CosmeticWorkshopOS.app`, never against a source-tree fallback.
 
 Closed production files must remain byte-identical, including launcher/backend Restore authority, contract/runtime/entry, final C4-II-C presentation, main/navigation and ADRs. C4-III may extend focused tests and external smoke runners.
 
 If a verification case exposes a product defect, do not patch it inside the verification claim. Open a separate bounded defect-fix PR, test exact head, then resume C4-III.
 
-## Authorized next task — D3 macOS package MVP
+## Completed task — D3 macOS package MVP
 
 ```text
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 ```
 
-`CR-012` is ACCEPTED; the normative decision is [`docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](../docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md). Read it before starting.
+`CR-012` is ACCEPTED; the normative decision is [`docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](../docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md).
 
-One bounded implementation task, outside C4-III: package the existing architecture unchanged — launcher → local backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory — as `CosmeticWorkshopOS-mac.zip`, preferably containing a simple `CosmeticWorkshopOS.app`. Package the launcher, a bundled backend runtime, the production frontend build, migrations, required configuration/resources and required offline help. Never package a user database, backups, exports, attachments, logs, credentials, secrets or repository working data. The packaged user must not need Git, Python, Node.js, npm, Docker, GitHub, Codex, a terminal or manual shell commands.
+One bounded implementation task, outside C4-III: it packaged the existing architecture unchanged — launcher → local backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory — as `CosmeticWorkshopOS-mac.zip` containing `CosmeticWorkshopOS.app`. The package carries the launcher, a bundled self-contained CPython runtime, the production frontend build, migrations, configuration/resources and offline help. It carries no user database, backups, exports, attachments, logs, credentials, secrets or repository working data. The packaged user needs no Git, Python, Node.js, npm, Docker, GitHub, Codex, terminal or manual shell command.
 
-Not authorized: Electron, Tauri, pywebview, a PyObjC shell, a second product UI, a WebView replacement for the browser UI, a new Restore transport, a backend Restore endpoint, or any change to ADR 0016/0018 Restore ownership and security semantics. CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization — signing, notarization, mandatory DMG, auto-update, App Store, sandbox migration, release-channel infrastructure, D4 and D5 stay NOT AUTHORIZED. A build-only packaging tool is allowed only under the six ADR 0019 conditions; anything larger means STOP and open a new decision.
+Not introduced: Electron, Tauri, pywebview, a PyObjC shell, a second product UI, a WebView replacement for the browser UI, a new Restore transport, a backend Restore endpoint, or any change to ADR 0016/0018 Restore ownership and security semantics. CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization — signing, notarization, mandatory DMG, auto-update, App Store, sandbox migration, release-channel infrastructure, D4 and D5 stay NOT AUTHORIZED. The one build-only dependency is a pinned, checksum-verified relocatable CPython, under the six ADR 0019 conditions.
 
-Building the artifact does not close C4-III and does not implement Restore. The external exact-package verifier must still run and pass against the packaged runtime afterwards.
+Build and run it with:
+
+```bash
+make package-macos
+```
+
+Building the artifact did not close C4-III and did not implement Restore. The external exact-package verifier must still run and pass against the packaged runtime. The D3 Level-5 package smoke covers the package/runtime delivery layer and is never reported as C4-III exact-package verification.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

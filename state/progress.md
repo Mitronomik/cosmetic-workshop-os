@@ -5,6 +5,7 @@ Updated: `2026-08-12`
 ## Current lifecycle
 
 ```text
+PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
@@ -26,10 +27,10 @@ C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 D4 — Update safety — NOT AUTHORIZED BY CR-012
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
@@ -110,7 +111,7 @@ The exact-package verifier correctly reported `INCONCLUSIVE — ENVIRONMENT` bec
 It authorizes the existing roadmap stage as the one bounded successor implementation task, with its current purpose recorded:
 
 ```text
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 
 Current purpose:
 produce the packaged product artifact required for
@@ -124,3 +125,27 @@ The older blanket statement — that packaging implementation had no authorizati
 This is a decision-only change. It changes no backend, frontend, launcher, packaging script, build script, dependency manifest, lockfile or CI workflow, and it creates no package. Product/runtime smoke is not applicable.
 
 C4-III stays IN PROGRESS — EXACT-HEAD VERIFICATION PASSED. Exact-package verification stays BLOCKED BY PACKAGED ARTIFACT PREREQUISITE and is never relabelled PASS. C4-III lifecycle closure stays NOT COMPLETED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+
+---
+
+## 2026-08-12 — D3 macOS package MVP implemented
+
+PR #191 merged as `9b2d3ffa243dfaba074e4cd48bf98b61e30ba952`, carrying the CR-012 / ADR 0019 authorization. On that baseline, `D3 — macOS package MVP` is **IMPLEMENTED**, outside C4-III.
+
+```text
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
+```
+
+`make package-macos` now performs a real macOS build and produces `dist/CosmeticWorkshopOS-mac.zip` containing a user-openable `CosmeticWorkshopOS.app`. The three placeholder scripts — `scripts/build_frontend.sh`, `scripts/build_backend.sh`, `scripts/package_macos.sh` — are real implementations. Build products are not committed.
+
+What the package contains: the unchanged launcher, the unchanged backend and its migrations, a self-contained relocatable CPython, the production frontend build, offline help and a build manifest. What it does not contain: any user database, backup, export, attachment, log, credential, secret, `.git`, `node_modules` or test suite. User data stays in the existing external user-data directory.
+
+Preserved architecture. The backend is still a separate launcher-owned OS process started as `sys.executable -m app.launcher_backend_entrypoint`, keeping the backend-liveness lock, the pre-import socket bind and the inherited one-run `pass_fds` handshake exactly as audited. The launcher still owns Restore, the ADR 0018 loopback control plane and macOS picker are unchanged, and the ordinary system browser is still the presentation surface on the existing `http://127.0.0.1:5173` origin. **No protected closed Restore production file changed.** A real interpreter is bundled rather than a frozen binary precisely because freezing would break the `-m` and `sys.executable` contracts the Restore engine depends on.
+
+New production-support code lives in `macos_package/`: the packaged entrypoint, a standard-library localhost frontend server that serves `frontend/dist` and proxies only `/api/*` to the local backend, fixed-catalogue macOS startup alerts for a Finder launch with no terminal, and the package-structure verifier that gates every build.
+
+Build-only dependency under the six ADR 0019 conditions: `astral-sh/python-build-standalone` release `20260807`, CPython `3.12.13`, downloaded over HTTPS with a per-architecture SHA-256 pinned and verified before use, failing closed on mismatch, cached outside the repository. The end user installs nothing; the packaged product refuses to run on a foreign interpreter. Built for the current Mac architecture; universal binaries are out of scope.
+
+No signing, notarization, DMG, installer, updater, release channel or upload was added. D4 and D5 remain NOT AUTHORIZED BY CR-012.
+
+C4-III stays IN PROGRESS — EXACT-HEAD VERIFICATION PASSED. The exact-package prerequisite is now closed, but exact-package verification is **NOT YET PASSED** and is never relabelled PASS; the recorded `INCONCLUSIVE — ENVIRONMENT` classification stands unchanged as history. C4-III lifecycle closure stays NOT COMPLETED. The D3 Level-5 package smoke proves the package/runtime delivery layer and is never reported as C4-III exact-package verification. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

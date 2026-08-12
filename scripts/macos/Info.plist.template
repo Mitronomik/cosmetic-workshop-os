@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The minimum metadata a valid simple macOS app bundle needs, and nothing more.
+
+  No signing entitlements, no sandbox entitlements, no App Store keys, no
+  updater keys. D3 produces an unsigned verification artifact; signing,
+  notarization and distribution are D4/D5 work and are not authorized here.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>CosmeticWorkshopOS</string>
+	<!-- What the user sees in Finder, the Dock and the menu bar. -->
+	<key>CFBundleDisplayName</key>
+	<string>Мастерская косметолога</string>
+	<key>CFBundleIdentifier</key>
+	<string>ru.cosmetic-workshop-os.app</string>
+	<key>CFBundleExecutable</key>
+	<string>CosmeticWorkshopOS</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__APP_VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__APP_VERSION__</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>
