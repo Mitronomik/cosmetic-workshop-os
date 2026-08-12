@@ -1,14 +1,13 @@
 # Current project lifecycle and documentation authority
 
 Status: **CURRENT — NORMATIVE LIFECYCLE PROFILE**
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authoritative for launcher control, picker and exact-run browser-session interaction. ADR 0017 remains authoritative for the C4 slice split and C4-III verification/lifecycle-closure purpose.
 
 ## Current lifecycle
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -27,9 +26,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -41,7 +38,6 @@ macOS packaging, safe packaged update flow, installation verification and full r
 - PR #188 final independently reviewed and exact-head-tested implementation head: `1df21915fdcf4a708dc778a0e762d64830b5b880`.
 - PR #188 merge/new `main`: `6294f0044c792ced3ac56d213ea5333e33062f12`.
 - Merged at: `2026-08-11T17:25:11Z`.
-- PR #189 closed the C4-II-C lifecycle and authorized C4-III verification; its merge/new `main` is `81e8193596709b0c16d0ecad598458b3ea95fd9c`.
 - The reviewed head is the C4-II-C parent of the merge commit; the merge introduced no additional product-file changes.
 
 Accepted C4-II-C evidence:
@@ -83,67 +79,9 @@ Closed production seams are now immutable unless separately authorized: launcher
 - true session/protocol invalidation with cleared snapshot remains unknown + restart-only.
 - ambiguous pending execute replay remains the exact same request ID, command sequence and generation, never a new Restore.
 
-## C4-III exact-head verification baseline
+## C4-III authorization
 
-An independently executed external C4-III exact-head verifier ran against merged `main` and produced the following outer gates:
-
-```text
-C4III EXACT-HEAD OUTER GATE: PASS
-C4III EXACT-PACKAGE OUTER GATE: INCONCLUSIVE — ENVIRONMENT
-C4III LIFECYCLE CLOSURE: BLOCKED — PACKAGE PREREQUISITE
-```
-
-Exact verification baseline:
-
-```text
-expected / observed merged main:
-81e8193596709b0c16d0ecad598458b3ea95fd9c
-
-runner SHA-256:
-4c5c09081d2dc1db45ee556777039f4d9802f026d717a194c88c15d6894e5f3a
-
-runner version:
-c4-iii-restore-exact-head-v1
-```
-
-Observed exact-head results:
-
-```text
-lifecycle PASS
-focused_restore_pytest PASS
-frontend_npm_ci PASS
-frontend_build PASS
-frontend_restore_tests PASS
-destructive_e2e_current_and_older PASS
-
-PASS — C4-III EXACT-HEAD VERIFICATION PASSED
-```
-
-Observed exact-package result:
-
-```text
-INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE
-
-C4-III LIFECYCLE CLOSURE GATE:
-BLOCKED — PACKAGE PREREQUISITE
-```
-
-The exact-package prerequisite was unavailable. Under the project smoke classification this is `INCONCLUSIVE — ENVIRONMENT`: it is not a product failure and not a runner failure, and it must never be recorded, summarized or inferred as a PASS. Exact-head PASS and exact-package INCONCLUSIVE remain separately labelled results.
-
-This checkpoint records the external verification result. It does not rerun, relabel or extend that verification, and it changes no product or runtime behavior.
-
-## C4-III status
-
-**C4-III — Restore end-to-end verification and lifecycle closure** is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
-
-Its remaining blocking condition is a prerequisite, not a defect:
-
-```text
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
-```
-
-The required packaged product artifact does not yet exist, so the exact-package half of the ADR 0017 evidence surface cannot be executed. C4-III must remain open and incomplete in that condition. It must not be closed on exact-head evidence alone, and packaging must not be implemented inside C4-III to unblock it. Producing that artifact is separate future work that requires its own authorization.
+**C4-III — Restore end-to-end verification and lifecycle closure** is **AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
 Reserved verification scope, from ADR 0017:
 
@@ -159,6 +97,6 @@ Reserved verification scope, from ADR 0017:
 
 C4-III is verification/lifecycle work, not authority redesign. It may add or refine focused tests, isolated external smoke runners, verification documentation and lifecycle/checker evidence. It must not silently change production behavior or reopen closed authority. Any product defect found by C4-III requires a separate bounded defect-fix PR before the verification gate can pass.
 
-Exact-package verification required by ADR 0017 does not silently authorize packaging implementation. That prerequisite is currently unavailable, so that verification is recorded as incomplete rather than being unblocked by adding packaging/update work under C4-III.
+Exact-package verification required by ADR 0017 does not silently authorize packaging implementation. If the required packaged verification prerequisite is unavailable, classify that verification as incomplete rather than adding packaging/update work under C4-III.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

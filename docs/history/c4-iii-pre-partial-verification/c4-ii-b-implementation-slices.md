@@ -1,14 +1,13 @@
 # C4-II-B implementation authorization and slice plan
 
 Status: **CLOSED NORMATIVE IMPLEMENTATION PLAN**
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 This document records the closed C4-II-B slices and their closed C4-II-C successor. ADR 0016, ADR 0018 and current lifecycle authority remain controlling.
 
 ## Current slice status
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -27,9 +26,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -50,10 +47,8 @@ The final C4-II-C presentation is now a closed production boundary. It does not 
 
 ## Successor
 
-**C4-III — Restore end-to-end verification and lifecycle closure** is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
+**C4-III — Restore end-to-end verification and lifecycle closure** is **AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
 It verifies the existing chain; it does not authorize new Restore authority or hidden product changes. Product defects discovered during verification require a separate bounded fix.
-
-External exact-head verification of this closed B1→C4-II-C chain PASSED on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`, including `focused_restore_pytest`, `frontend_restore_tests` and `destructive_e2e_current_and_older`. That evidence does not close C4-III: exact-package verification remains `INCONCLUSIVE — ENVIRONMENT` and `C4-III LIFECYCLE CLOSURE — NOT COMPLETED`.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

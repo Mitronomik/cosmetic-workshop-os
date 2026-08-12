@@ -1,11 +1,10 @@
 # Current Focus — C4-III Restore end-to-end verification
 
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 ## Current lifecycle
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -24,9 +23,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -39,33 +36,9 @@ C4-II-C is closed on lifecycle PASS, frontend build PASS, focused Restore 34/34 
 
 ## Current work
 
-**C4-III — Restore end-to-end verification and lifecycle closure** is the only authorized open Restore slice. It is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED** and is not closed.
+**C4-III — Restore end-to-end verification and lifecycle closure** is the only authorized next Restore slice. It is not implemented yet.
 
 Verification must cover current-schema + supported older-schema Restore, rejection, interruption, rollback, repeated launch/startup recovery, source immutability, mandatory safety-copy retention and end-to-end lifecycle closure.
-
-## Recorded external verification
-
-On merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`, runner `c4-iii-restore-exact-head-v1`:
-
-```text
-lifecycle PASS
-focused_restore_pytest PASS
-frontend_npm_ci PASS
-frontend_build PASS
-frontend_restore_tests PASS
-destructive_e2e_current_and_older PASS
-
-PASS — C4-III EXACT-HEAD VERIFICATION PASSED
-
-INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE
-
-C4-III LIFECYCLE CLOSURE GATE:
-BLOCKED — PACKAGE PREREQUISITE
-```
-
-## Blocking condition
-
-C4-III cannot close because no packaged product artifact exists to run exact-package verification against. That is an environment prerequisite, not a product failure and not a runner failure. Do not relabel it as PASS and do not build packaging to clear it — packaging is separate, unauthorized future work.
 
 Production Restore authority is closed. Do not change launcher/backend/contract/runtime/entry/presentation/main/navigation/ADRs in C4-III. Tests, isolated smoke runners and verification/lifecycle documentation may change. Any product defect requires a separate bounded fix PR.
 

@@ -1,11 +1,10 @@
 # cosmetic-workshop-os — Active implementation plan
 
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 ## Current lifecycle
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -24,9 +23,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -39,13 +36,11 @@ Accepted C4-II-C evidence: lifecycle PASS; frontend install/build PASS; focused 
 
 Final C4-II-C production file `frontend/src/restore-control-presentation.ts` is now a closed boundary together with the already-closed contract/runtime/entry/launcher/backend/main/navigation seams.
 
-PR #189 closed the C4-II-C lifecycle and authorized C4-III; it merged as `81e8193596709b0c16d0ecad598458b3ea95fd9c`.
-
 ## Current implementation window
 
 ### C4-III — Restore end-to-end verification and lifecycle closure
 
-Status: **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
+Status: **AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
 Goal:
 
@@ -87,32 +82,6 @@ At minimum, C4-III must cover the reserved ADR 0017 verification surface:
 
 Use the project smoke classification exactly: PASS / FAIL PRODUCT / INCONCLUSIVE RUNNER / INCONCLUSIVE ENVIRONMENT. Manual `Ctrl+C` invalidates PASS.
 
-### Recorded verification progress
-
-An external exact-head verifier (`c4-iii-restore-exact-head-v1`, SHA-256 `4c5c09081d2dc1db45ee556777039f4d9802f026d717a194c88c15d6894e5f3a`) ran on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`:
-
-```text
-C4III EXACT-HEAD OUTER GATE: PASS
-C4III EXACT-PACKAGE OUTER GATE: INCONCLUSIVE — ENVIRONMENT
-C4III LIFECYCLE CLOSURE: BLOCKED — PACKAGE PREREQUISITE
-```
-
-| Gate | Result |
-|---|---|
-| `lifecycle` | PASS |
-| `focused_restore_pytest` | PASS |
-| `frontend_npm_ci` | PASS |
-| `frontend_build` | PASS |
-| `frontend_restore_tests` | PASS |
-| `destructive_e2e_current_and_older` | PASS |
-| exact-head outer gate | **PASS — C4-III EXACT-HEAD VERIFICATION PASSED** |
-| exact-package outer gate | **INCONCLUSIVE — ENVIRONMENT** — prerequisite unavailable |
-| lifecycle closure gate | **BLOCKED — PACKAGE PREREQUISITE** |
-
-Item 11 of the required verification list asks for exact-head **or** exact-package evidence with autonomous timeouts/cleanup. Only the exact-head half is satisfied. The exact-package half stays `INCONCLUSIVE — ENVIRONMENT` and is never rewritten as PASS, FAIL PRODUCT or INCONCLUSIVE RUNNER. C4-III therefore stays open.
-
-The single remaining blocker is the missing packaged product artifact. Building one is not authorized here; see the constraints below.
-
 ### Architecture constraints
 
 C4-III does not authorize:
@@ -123,7 +92,7 @@ C4-III does not authorize:
 - destructive cancel, blind retry or new request sequence;
 - durable phase reconstruction in frontend;
 - production refactor hidden inside verification;
-- packaging or updater implementation or redesign, including producing a `.app`, `.dmg`, ZIP or packaged runtime to satisfy the missing exact-package prerequisite;
+- packaging or updater redesign;
 - C4 lifecycle completion without the required evidence.
 
 If verification reveals a product defect, STOP the verification claim, open a separate bounded defect-fix PR, rerun the affected exact-head checks, then resume C4-III.

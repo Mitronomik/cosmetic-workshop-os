@@ -1,11 +1,10 @@
 # Progress
 
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 ## Current lifecycle
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -24,9 +23,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -51,47 +48,5 @@ C4-II-C is now DONE — MERGED AND EXACT-HEAD VERIFIED.
 C4-III — Restore end-to-end verification and lifecycle closure — is the only authorized next Restore slice.
 
 No production change is authorized by this lifecycle transition. C4-III must verify the merged chain across current/older schema, rejection, interruption, rollback, repeated launch, source immutability and safety-copy retention. Product defects found by verification require separate bounded fixes.
-
-Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
-
-## 2026-08-12 — C4-III exact-head verification PASSED, exact-package INCONCLUSIVE
-
-PR #189 merged as `81e8193596709b0c16d0ecad598458b3ea95fd9c`. An independently executed external verifier, version `c4-iii-restore-exact-head-v1`, SHA-256 `4c5c09081d2dc1db45ee556777039f4d9802f026d717a194c88c15d6894e5f3a`, ran against that exact merged head.
-
-Outer gates:
-
-```text
-C4III EXACT-HEAD OUTER GATE: PASS
-C4III EXACT-PACKAGE OUTER GATE: INCONCLUSIVE — ENVIRONMENT
-C4III LIFECYCLE CLOSURE: BLOCKED — PACKAGE PREREQUISITE
-```
-
-Observed exact-head results:
-
-```text
-lifecycle PASS
-focused_restore_pytest PASS
-frontend_npm_ci PASS
-frontend_build PASS
-frontend_restore_tests PASS
-destructive_e2e_current_and_older PASS
-
-PASS — C4-III EXACT-HEAD VERIFICATION PASSED
-```
-
-Observed exact-package result:
-
-```text
-INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE
-
-C4-III LIFECYCLE CLOSURE GATE:
-BLOCKED — PACKAGE PREREQUISITE
-```
-
-The required packaged product artifact was unavailable, so the exact-package half could not run. That is an environment prerequisite gap — not a product failure and not a runner failure — and it is not recorded as PASS.
-
-This checkpoint records that external result only. It reruns nothing, relabels nothing and changes no product, runtime, dependency or migration file. The pre-change active documents are preserved byte-identically in `docs/history/c4-iii-pre-partial-verification/`.
-
-C4-III is now IN PROGRESS — EXACT-HEAD VERIFICATION PASSED. Exact-package verification is BLOCKED BY PACKAGED ARTIFACT PREREQUISITE and C4-III lifecycle closure is NOT COMPLETED.
 
 Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
