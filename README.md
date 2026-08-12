@@ -7,6 +7,7 @@ A local-first working system for a cosmetic workshop. The user product must run 
 ## Current product status
 
 ```text
+PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
@@ -29,6 +30,10 @@ C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
 C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -82,6 +87,18 @@ No packaged product artifact exists yet, so `C4-III EXACT-PACKAGE VERIFICATION �
 C4-III does **not** authorize a new Restore engine, endpoint, browser filesystem authority, destructive command, packaging/update implementation or redesign, or hidden product-behavior change. Packaging must not be built inside C4-III to unblock the missing artifact. If verification finds a product defect, fix it in a separate bounded defect PR and rerun the affected exact-head verification before C4-III can close.
 
 Restore remains **NOT IMPLEMENTED** until C4-III itself completes and lifecycle closure is accepted. Product release readiness remains **NOT CLAIMED**.
+
+## Authorized next task — D3 macOS package MVP
+
+```text
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+```
+
+`CR-012` is **ACCEPTED**. The normative decision is [`docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md). It authorizes exactly one bounded implementation task, run outside C4-III: package the existing architecture — launcher → local backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory — as `CosmeticWorkshopOS-mac.zip`, preferably containing a simple `CosmeticWorkshopOS.app`, so that exact-package verification becomes runnable against a real packaged runtime.
+
+The packaging task changes no product topology and authorizes no desktop application shell (Electron, Tauri, pywebview, PyObjC), no second product UI, no new Restore transport and no backend Restore endpoint. User data stays outside the package.
+
+CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization. Signing, notarization, mandatory DMG, auto-update, App Store, sandbox migration, cloud deployment/sync, D4 update safety and D5 remote-install work remain **NOT AUTHORIZED** — matching the roadmap's own D3 non-goals. No package exists yet, and building one is a verification prerequisite — never product release readiness.
 
 ## Restore authority
 

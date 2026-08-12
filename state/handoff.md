@@ -5,6 +5,7 @@ Updated: `2026-08-12`
 ## Current lifecycle
 
 ```text
+PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
@@ -27,6 +28,10 @@ C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
 C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -47,7 +52,7 @@ The exact-package half returned `INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE 
 
 C4-III — **Restore end-to-end verification and lifecycle closure** — is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
 
-The next agent inherits an open slice with one blocking prerequisite: no packaged product artifact exists to run exact-package verification against. Do not treat that INCONCLUSIVE as a PASS, do not close C4-III on exact-head evidence alone, and do not implement packaging to clear it. Producing a packaged artifact is separate work needing its own authorization.
+The next agent inherits an open slice with one blocking prerequisite: no packaged product artifact exists to run exact-package verification against. Do not treat that INCONCLUSIVE as a PASS, do not close C4-III on exact-head evidence alone, and do not implement packaging to clear it inside C4-III. Producing a packaged artifact is separate work under its own authorization — now `CR-012`, described below.
 
 Load-bearing verification targets:
 
@@ -68,5 +73,19 @@ Exact-head evidence for these targets is recorded above; the exact-package evide
 Closed production files must remain byte-identical, including launcher/backend Restore authority, contract/runtime/entry, final C4-II-C presentation, main/navigation and ADRs. C4-III may extend focused tests and external smoke runners.
 
 If a verification case exposes a product defect, do not patch it inside the verification claim. Open a separate bounded defect-fix PR, test exact head, then resume C4-III.
+
+## Authorized next task — D3 macOS package MVP
+
+```text
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+```
+
+`CR-012` is ACCEPTED; the normative decision is [`docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](../docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md). Read it before starting.
+
+One bounded implementation task, outside C4-III: package the existing architecture unchanged — launcher → local backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory — as `CosmeticWorkshopOS-mac.zip`, preferably containing a simple `CosmeticWorkshopOS.app`. Package the launcher, a bundled backend runtime, the production frontend build, migrations, required configuration/resources and required offline help. Never package a user database, backups, exports, attachments, logs, credentials, secrets or repository working data. The packaged user must not need Git, Python, Node.js, npm, Docker, GitHub, Codex, a terminal or manual shell commands.
+
+Not authorized: Electron, Tauri, pywebview, a PyObjC shell, a second product UI, a WebView replacement for the browser UI, a new Restore transport, a backend Restore endpoint, or any change to ADR 0016/0018 Restore ownership and security semantics. CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization — signing, notarization, mandatory DMG, auto-update, App Store, sandbox migration, release-channel infrastructure, D4 and D5 stay NOT AUTHORIZED. A build-only packaging tool is allowed only under the six ADR 0019 conditions; anything larger means STOP and open a new decision.
+
+Building the artifact does not close C4-III and does not implement Restore. The external exact-package verifier must still run and pass against the packaged runtime afterwards.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

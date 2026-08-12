@@ -1,12 +1,25 @@
 #!/usr/bin/env python3
-"""Guard merged C4-II-C closure and the open, partially verified C4-III slice.
+"""Guard merged C4-II-C closure, the open C4-III slice and the CR-012 boundary.
 
 C4-III exact-head verification PASSED. C4-III exact-package verification is
-INCONCLUSIVE — ENVIRONMENT because the packaged-artifact prerequisite is
-unavailable, so C4-III lifecycle closure stays BLOCKED. This checker keeps those
-two results distinguishable and refuses any document that upgrades the
-inconclusive half to a pass or claims closure, Restore implementation or release
-readiness.
+INCONCLUSIVE — ENVIRONMENT because no packaged product artifact exists yet, so
+C4-III lifecycle closure stays BLOCKED. This checker keeps those two results
+distinguishable and refuses any document that upgrades the inconclusive half to a
+pass or claims closure, Restore implementation or release readiness.
+
+Those two results are separate facts from the governance question. The verifier
+correctly classified the run as INCONCLUSIVE — ENVIRONMENT; CR-012 closes only
+the authorization gap that stopped the project producing the artifact. Documents
+must not reclassify the recorded result as something other than an environment
+outcome, so a small guard rejects the usual "not a missing environment" phrasings.
+
+CR-012 is ACCEPTED and authorizes the existing roadmap stage `D3 — macOS package
+MVP — AUTHORIZED NEXT — NOT IMPLEMENTED`, whose current purpose is producing that
+artifact. There is no separate pre-D3 packaging stage. The checker therefore no
+longer requires the globally false claim that no packaging implementation is
+authorized at all. Instead it enforces the narrower truth: D3 and nothing beyond
+it is authorized, D3 is not built yet, and CR-012 never widens into D4, D5,
+signing, notarization, auto-update, App Store or release readiness.
 """
 
 from __future__ import annotations
@@ -32,11 +45,13 @@ CHANGE_REQUESTS = P("state/change-requests.md")
 ADR16 = P("docs/decisions/0016-launcher-assisted-restore.md")
 ADR17 = P("docs/decisions/0017-c4-i-lifecycle-closure-and-c4-ii-decision-gate.md")
 ADR18 = P("docs/decisions/0018-launcher-restore-interaction-and-validation-session.md")
+ADR19 = P("docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md")
 
 ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF, CHANGE_REQUESTS)
 SUPPORTING = (CURRENT, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
 
 CORE = (
+    "PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT",
     "PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION",
     "PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED",
     "PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE",
@@ -59,6 +74,10 @@ CORE = (
     "C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED",
     "C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE",
     "C4-III LIFECYCLE CLOSURE — NOT COMPLETED",
+    "CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION",
+    "D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D4 — Update safety — NOT AUTHORIZED BY CR-012",
+    "D5 — Remote install checklist — NOT AUTHORIZED BY CR-012",
     "Restore — NOT IMPLEMENTED",
     "Product release readiness — NOT CLAIMED",
 )
@@ -79,6 +98,68 @@ STALE = (
     "C4-III LIFECYCLE CLOSURE: PASS",
     "Restore — IMPLEMENTED",
     "Product release readiness — READY",
+    # D3 is authorized but unbuilt; it must never be relabelled as already done.
+    "D3 — macOS package MVP — IMPLEMENTED",
+    "D3 — macOS package MVP — DONE",
+    "D3 — macOS package MVP — COMPLETE",
+    "D3 — macOS package MVP — MERGED",
+    "D3 — macOS package MVP — VERIFIED",
+    "D3 — IMPLEMENTED",
+    "D3 — DONE",
+    "D3 — COMPLETE",
+    "packaged artifact — IMPLEMENTED",
+    "packaged artifact — DONE",
+    "PACKAGED ARTIFACT — AVAILABLE",
+    "CR-012 — IMPLEMENTED",
+    "CR-012 — DONE",
+)
+
+# CR-012 authorizes roadmap D3 and stops there. These phrases would widen it into
+# D4, D5 or the wider release programme and are always false.
+BROADENING = (
+    "CR-012 authorizes signing",
+    "CR-012 authorizes notarization",
+    "CR-012 authorizes auto-update",
+    "CR-012 authorizes App Store",
+    "CR-012 authorizes a DMG",
+    "CR-012 authorizes D4",
+    "CR-012 authorizes D5",
+    "CR-012 authorizes release readiness",
+    "CR-012 authorizes Electron",
+    "CR-012 authorizes Tauri",
+    "CR-012 authorizes a desktop shell",
+    "CR-012 authorizes a new Restore transport",
+    "D4 — AUTHORIZED BY CR-012",
+    "D5 — AUTHORIZED BY CR-012",
+    "D4 — Update safety — AUTHORIZED",
+    "D5 — Remote install checklist — AUTHORIZED",
+    "signing — AUTHORIZED",
+    "notarization — AUTHORIZED",
+    "auto-update — AUTHORIZED",
+    "App Store — AUTHORIZED",
+    "mandatory DMG — AUTHORIZED",
+    "sandbox migration — AUTHORIZED",
+    "release-candidate certification — AUTHORIZED",
+    "D4 update-safety implementation — AUTHORIZED",
+    "D5 remote-install work — AUTHORIZED",
+)
+
+# PR #190 recorded a correct INCONCLUSIVE — ENVIRONMENT classification. CR-012
+# closes the separate authorization gap and must not be written up as though the
+# verifier had misclassified the run.
+RECLASSIFICATION = (
+    "not a missing environment",
+    "not an environment issue",
+    "not an environment problem",
+    "not an environment accident",
+    "rather than a missing environment",
+)
+
+# The bounded rule that replaced the previously blanket "no packaging
+# implementation is authorized" statement.
+CR012_BOUNDARY = (
+    "CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it",
+    "D4, D5 and later release/distribution work remain outside this authorization",
 )
 
 C4IIC_REVIEWED_HEAD = "1df21915fdcf4a708dc778a0e762d64830b5b880"
@@ -222,7 +303,7 @@ def blob(path: Path) -> str:
 def check_lifecycle_docs() -> None:
     for path in ACTIVE:
         require(path, CORE)
-    require(CURRENT, CORE + C4III_EXACT_HEAD_GATES + C4III_OUTER_GATES + (
+    require(CURRENT, CORE + C4III_EXACT_HEAD_GATES + C4III_OUTER_GATES + CR012_BOUNDARY + (
         C4IIC_REVIEWED_HEAD,
         C4IIC_MERGE_MAIN,
         C4III_VERIFIED_MAIN,
@@ -235,6 +316,8 @@ def check_lifecycle_docs() -> None:
         "supported older-schema Restore",
         "not a product failure",
         "not a runner failure",
+        "CR-012 — accepted D3 macOS package MVP authorization",
+        "No package exists.",
     ))
     require(B_SLICES, CORE + (
         "CLOSED NORMATIVE IMPLEMENTATION PLAN",
@@ -263,24 +346,41 @@ def check_lifecycle_docs() -> None:
         "Recorded verification progress",
         "Only the exact-head half is satisfied",
     ))
-    require(DEPLOYMENT, CORE + (
+    require(DEPLOYMENT, CORE + CR012_BOUNDARY + (
         "no deployment topology change",
         "does not authorize deployment topology, packaging or updater redesign",
         "that prerequisite is currently unavailable",
+        "changes **no deployment topology**",
+        "no desktop application shell",
     ))
-    require(PACKAGING, CORE + (
+    require(PACKAGING, CORE + CR012_BOUNDARY + (
         "no packaging",
         "does not authorize packaging implementation or redesign",
         "release readiness remains not claimed",
         "Active packaged-artifact prerequisite gap",
         "implement macOS packaging under C4-III",
         "relabel the exact-package result as PASS",
+        "CR-012 — D3 macOS package MVP authorization",
+        "0019-c4-iii-packaged-artifact-prerequisite.md",
+        "CosmeticWorkshopOS-mac.zip",
+        "No new desktop application shell is authorized",
+        "never a real user database",
+        "verification prerequisite and is never product release readiness",
     ))
-    for path in ACTIVE + SUPPORTING:
+    for path in ACTIVE + SUPPORTING + (ADR19,):
         text = norm(read(path))
         for stale in STALE:
             if norm(stale) in text:
                 fail(f"{path.relative_to(ROOT)} retains stale/premature lifecycle phrase: {stale!r}")
+        for broadening in BROADENING:
+            if norm(broadening) in text:
+                fail(f"{path.relative_to(ROOT)} broadens CR-012 beyond its bounded scope: {broadening!r}")
+        for reclassification in RECLASSIFICATION:
+            if norm(reclassification) in text:
+                fail(
+                    f"{path.relative_to(ROOT)} reclassifies the recorded "
+                    f"INCONCLUSIVE — ENVIRONMENT verification result: {reclassification!r}"
+                )
 
 def check_authority_and_history() -> None:
     require(ADR16, ("before_restore", "replacement_intent", "recovery_blocked", "selected source", "immutable"))
@@ -311,7 +411,8 @@ def check_c4_iii_authorization() -> None:
         C4III_VERIFIED_MAIN,
         C4III_RUNNER_VERSION,
         "Blocking condition",
-        "do not build packaging to clear it",
+        "do not build packaging inside C4-III",
+        "Next allowed task — D3 macOS package MVP",
     ))
     require(HANDOFF, (
         "Authorized handoff",
@@ -324,21 +425,87 @@ def check_c4_iii_authorization() -> None:
         "PASS — C4-III EXACT-HEAD VERIFICATION PASSED",
         "INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE",
         "BLOCKED — PACKAGE PREREQUISITE",
-        "do not implement packaging to clear it",
+        "do not implement packaging to clear it inside C4-III",
+        "Authorized next task — D3 macOS package MVP",
     ))
-    require(CHANGE_REQUESTS, (
+    require(CHANGE_REQUESTS, CR012_BOUNDARY + (
         "No new Change Request is needed for verification-only",
         "STOP and open a separate decision/change request or bounded defect-fix PR",
-        "Open prerequisite — packaged artifact for exact-package verification",
-        "not authorized under C4-III and no Change Request currently authorizes it",
-        "requires its own decision/change request",
+        "Building the packaged artifact is **not** C4-III work",
+        "CR-012 — D3 macOS package MVP authorization for C4-III exact-package verification",
+        "Status: **ACCEPTED**",
+        "0019-c4-iii-packaged-artifact-prerequisite.md",
     ))
+
+def check_cr012_authorization() -> None:
+    """CR-012 authorizes roadmap D3 and nothing wider, and reclassifies nothing."""
+    require(ADR19, CR012_BOUNDARY + (
+        "ADR 0019 — D3 macOS package MVP as the C4-III exact-package prerequisite",
+        "`ACCEPTED`",
+        "CR-012 — D3 macOS package MVP authorization for C4-III exact-package verification",
+        "D3 — macOS package MVP\n— AUTHORIZED NEXT — NOT IMPLEMENTED",
+        "produce the packaged product artifact required for\nC4-III exact-package verification",
+        "already defined in [`docs/roadmap.md`]",
+        "does not invent a new packaging stage, does not redefine D3",
+        "It contains no packaging implementation",
+        "No packaged artifact exists",
+        # the recorded verification result is preserved, not reinterpreted
+        "The exact-package verifier correctly reported",
+        "It does not reclassify or amend the previously recorded verification result",
+        # preserved topology and Restore architecture
+        "macOS packaged product",
+        "existing local launcher",
+        "local backend on 127.0.0.1",
+        "built frontend",
+        "ordinary system browser / SPA",
+        "external user-data directory",
+        "ADR 0016 remains authoritative",
+        "ADR 0018 remains authoritative",
+        # artifact contract
+        "CosmeticWorkshopOS-mac.zip",
+        "CosmeticWorkshopOS.app",
+        "must not need Git, Python, Node.js, npm, Docker, GitHub, Codex, a terminal",
+        "a real user database",
+        "User data remains **outside** the application/package directory",
+        # rejected shells / transports
+        "Electron",
+        "Tauri",
+        "pywebview",
+        "PyObjC application shell",
+        "a second native product UI",
+        "a WebView-based replacement for the existing browser UI",
+        "a new Restore transport",
+        "a new backend Restore endpoint",
+        # release programme stays out
+        "signing — NOT AUTHORIZED",
+        "notarization — NOT AUTHORIZED",
+        "mandatory DMG — NOT AUTHORIZED",
+        "auto-update — NOT AUTHORIZED",
+        "App Store — NOT AUTHORIZED",
+        "sandbox migration — NOT AUTHORIZED",
+        "D4 — Update safety — NOT AUTHORIZED BY CR-012",
+        "D5 — Remote install checklist — NOT AUTHORIZED BY CR-012",
+        "the roadmap's own D3 non-goals",
+        # testability + stop conditions
+        "Exact-package testability contract",
+        "never against a source-tree fallback",
+        "mandatory `before_restore` safety-copy semantics remain intact",
+        "Stop conditions",
+        "must **STOP** and require a new decision",
+    ))
+    # The bounded successor task must be visible and unbuilt on every active surface.
+    for path in ACTIVE + (CURRENT, DEPLOYMENT, PACKAGING):
+        require(path, ("D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED",))
+    # The old blanket claim is now globally false and must not be reinstated.
+    for path in ACTIVE + SUPPORTING:
+        forbid(path, ("no packaging implementation is authorized",))
 
 def main() -> int:
     check_lifecycle_docs()
     check_authority_and_history()
     check_closed_boundaries()
     check_c4_iii_authorization()
+    check_cr012_authorization()
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
         for error in ERRORS:
@@ -355,7 +522,12 @@ def main() -> int:
     print(f"Verified recorded C4-III exact-head baseline {C4III_VERIFIED_MAIN} / runner {C4III_RUNNER_VERSION}.")
     print("Verified C4-III exact-package verification stays INCONCLUSIVE — ENVIRONMENT and is never relabelled PASS.")
     print("Verified C4-III lifecycle closure remains BLOCKED — PACKAGE PREREQUISITE.")
-    print("Verified no packaging implementation is authorized to clear that prerequisite.")
+    print("Verified the recorded INCONCLUSIVE — ENVIRONMENT classification is preserved, not reinterpreted.")
+    print("Verified CR-012 is ACCEPTED and ADR 0019 records the bounded D3 authorization.")
+    print("Verified the only authorized successor is roadmap D3 — macOS package MVP,")
+    print("  labelled AUTHORIZED NEXT — NOT IMPLEMENTED, with no package built and no parallel stage.")
+    print("Verified CR-012 does not authorize D4, D5, signing, notarization, DMG, auto-update,")
+    print("  App Store, sandbox migration or any desktop application shell.")
     print("Verified Restore remains NOT IMPLEMENTED and product release readiness is not claimed.")
     return 0
 

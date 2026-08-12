@@ -5,6 +5,7 @@ Updated: `2026-08-12`
 ## Current lifecycle
 
 ```text
+PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
@@ -27,6 +28,10 @@ C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
 C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -95,3 +100,27 @@ This checkpoint records that external result only. It reruns nothing, relabels n
 C4-III is now IN PROGRESS — EXACT-HEAD VERIFICATION PASSED. Exact-package verification is BLOCKED BY PACKAGED ARTIFACT PREREQUISITE and C4-III lifecycle closure is NOT COMPLETED.
 
 Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
+
+## 2026-08-12 — CR-012 accepted, D3 macOS package MVP authorized
+
+PR #190 merged as `1a5061b236cf7f69bca9ba533553e21401b94ab8`. On that baseline, `CR-012 — D3 macOS package MVP authorization for C4-III exact-package verification` is **ACCEPTED**, recorded normatively in [`docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](../docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md).
+
+The exact-package verifier correctly reported `INCONCLUSIVE — ENVIRONMENT` because the required packaged artifact was unavailable. Separately, no packaging implementation had yet been authorized to produce that artifact. CR-012 closes only that authorization gap. It does not reclassify or amend the previously recorded verification result.
+
+It authorizes the existing roadmap stage as the one bounded successor implementation task, with its current purpose recorded:
+
+```text
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+
+Current purpose:
+produce the packaged product artifact required for
+C4-III exact-package verification.
+```
+
+D3 packages the existing local-first architecture — launcher → local backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory — as `CosmeticWorkshopOS-mac.zip`, preferably containing a simple `CosmeticWorkshopOS.app`. It preserves the browser-first product surface and the ADR 0016/0018 Restore architecture, and authorizes no desktop application shell (Electron, Tauri, pywebview, PyObjC), no second product UI, no WebView replacement, no new Restore transport and no backend Restore endpoint. User data stays outside the package.
+
+The older blanket statement — that packaging implementation had no authorization at all — is replaced by the narrower truthful rule: CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization. Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation, D4 and D5 remain NOT AUTHORIZED — consistent with the roadmap's own D3 non-goals.
+
+This is a decision-only change. It changes no backend, frontend, launcher, packaging script, build script, dependency manifest, lockfile or CI workflow, and it creates no package. Product/runtime smoke is not applicable.
+
+C4-III stays IN PROGRESS — EXACT-HEAD VERIFICATION PASSED. Exact-package verification stays BLOCKED BY PACKAGED ARTIFACT PREREQUISITE and is never relabelled PASS. C4-III lifecycle closure stays NOT COMPLETED. Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
