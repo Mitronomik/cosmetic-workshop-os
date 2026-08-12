@@ -8,7 +8,6 @@ This document records the closed C4-II-B slices and their closed C4-II-C success
 ## Current slice status
 
 ```text
-PR #192 — MERGED — D3 MACOS PACKAGE MVP
 PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
@@ -30,15 +29,14 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
-C4-III EXACT-HEAD VERIFICATION — PASS
-C4-III EXACT-PACKAGE VERIFICATION — PASS
-C4-III LIFECYCLE CLOSURE — COMPLETED BY THIS CHANGESET
+C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
+C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — IMPLEMENTED
-D4 — Update safety — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE
-D5 — Remote install checklist — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE
-Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
+Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
@@ -58,12 +56,10 @@ The final C4-II-C presentation is now a closed production boundary. It does not 
 
 ## Successor
 
-**C4-III — Restore end-to-end verification and lifecycle closure** is **DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED**.
+**C4-III — Restore end-to-end verification and lifecycle closure** is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
 
-It verified the existing chain; it authorized no new Restore authority and no hidden product changes, and no verification attempt found a product defect requiring a bounded fix.
+It verifies the existing chain; it does not authorize new Restore authority or hidden product changes. Product defects discovered during verification require a separate bounded fix.
 
-External exact-head verification of this closed B1→C4-II-C chain PASSED on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`, including `focused_restore_pytest`, `frontend_restore_tests` and `destructive_e2e_current_and_older`. That evidence alone did not close C4-III; the exact-package half of that run was `INCONCLUSIVE — ENVIRONMENT` because no packaged artifact existed then, and that classification is preserved unchanged.
+External exact-head verification of this closed B1→C4-II-C chain PASSED on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`, including `focused_restore_pytest`, `frontend_restore_tests` and `destructive_e2e_current_and_older`. That evidence does not close C4-III: exact-package verification remains `INCONCLUSIVE — ENVIRONMENT` and `C4-III LIFECYCLE CLOSURE — NOT COMPLETED`.
 
-External exact-package verification of the same closed chain then PASSED on the packaged runtime built from published `main` `0e1193264dc22979ca48e32a962aba916b6b520e`, runner `c4-iii-restore-exact-package-v1.2`. C4-III closes on the combination of both accepted halves, and `Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED` follows from that closure alone — the B1→C4-II-C production chain is byte-identical to what was verified.
-
-Product release readiness remains NOT CLAIMED.
+Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.
