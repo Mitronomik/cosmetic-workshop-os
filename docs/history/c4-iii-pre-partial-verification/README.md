@@ -7,7 +7,6 @@ A local-first working system for a cosmetic workshop. The user product must run 
 ## Current product status
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -26,14 +25,12 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
-PR #188 reviewed exact C4-II-C head `1df21915fdcf4a708dc778a0e762d64830b5b880` and merged as `6294f0044c792ced3ac56d213ea5333e33062f12` at `2026-08-11T17:25:11Z`. PR #189 closed the C4-II-C lifecycle and merged as `81e8193596709b0c16d0ecad598458b3ea95fd9c`.
+PR #188 reviewed exact C4-II-C head `1df21915fdcf4a708dc778a0e762d64830b5b880` and merged as `6294f0044c792ced3ac56d213ea5333e33062f12` at `2026-08-11T17:25:11Z`.
 
 ## Closed Restore implementation chain through C4-II-C
 
@@ -52,34 +49,13 @@ Accepted C4-II-C evidence on the reviewed head:
 
 The browser still has no filesystem/source authority. No source path, proof, digest, operation ID, database path, backup path or lock path crosses the browser boundary. No `/v1/restore/confirm` endpoint exists.
 
-## Current work
+## Authorized next work
 
-**C4-III — Restore end-to-end verification and lifecycle closure** is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**. It is the only open Restore slice.
+**C4-III — Restore end-to-end verification and lifecycle closure** is the only authorized next Restore slice.
 
 Its purpose is verification and closure of the already-merged Restore chain: current-schema and supported older-schema Restore, rejection paths, interruption, rollback, repeated launch, source immutability, safety-copy retention and lifecycle closure.
 
-An external exact-head verifier ran on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c` and reported:
-
-```text
-lifecycle PASS
-focused_restore_pytest PASS
-frontend_npm_ci PASS
-frontend_build PASS
-frontend_restore_tests PASS
-destructive_e2e_current_and_older PASS
-
-PASS — C4-III EXACT-HEAD VERIFICATION PASSED
-```
-
-The exact-package half of the same verification could not run:
-
-```text
-INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE
-```
-
-No packaged product artifact exists yet, so `C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE` and `C4-III LIFECYCLE CLOSURE — NOT COMPLETED`. That is an environment prerequisite, not a product failure and not a runner failure, and it is not counted as a PASS. Full evidence is in [`docs/current-lifecycle.md`](docs/current-lifecycle.md).
-
-C4-III does **not** authorize a new Restore engine, endpoint, browser filesystem authority, destructive command, packaging/update implementation or redesign, or hidden product-behavior change. Packaging must not be built inside C4-III to unblock the missing artifact. If verification finds a product defect, fix it in a separate bounded defect PR and rerun the affected exact-head verification before C4-III can close.
+C4-III does **not** authorize a new Restore engine, endpoint, browser filesystem authority, destructive command, packaging/update redesign or hidden product-behavior change. If verification finds a product defect, fix it in a separate bounded defect PR and rerun the affected exact-head verification before C4-III can close.
 
 Restore remains **NOT IMPLEMENTED** until C4-III itself completes and lifecycle closure is accepted. Product release readiness remains **NOT CLAIMED**.
 

@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Guard merged C4-II-C closure and the bounded C4-III verification authorization."""
+"""Guard merged C4-II-C closure and the open, partially verified C4-III slice.
+
+C4-III exact-head verification PASSED. C4-III exact-package verification is
+INCONCLUSIVE — ENVIRONMENT because the packaged-artifact prerequisite is
+unavailable, so C4-III lifecycle closure stays BLOCKED. This checker keeps those
+two results distinguishable and refuses any document that upgrades the
+inconclusive half to a pass or claims closure, Restore implementation or release
+readiness.
+"""
 
 from __future__ import annotations
 
@@ -29,6 +37,7 @@ ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF, CHANGE_REQUESTS)
 SUPPORTING = (CURRENT, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
 
 CORE = (
+    "PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION",
     "PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED",
     "PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE",
     "PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED",
@@ -47,7 +56,9 @@ CORE = (
     "C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED",
+    "C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE",
+    "C4-III LIFECYCLE CLOSURE — NOT COMPLETED",
     "Restore — NOT IMPLEMENTED",
     "Product release readiness — NOT CLAIMED",
 )
@@ -57,14 +68,44 @@ STALE = (
     "C4-II-C — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-II-C — PLANNED — NOT AUTHORIZED",
     "C4-III — PLANNED — NOT AUTHORIZED",
-    "C4-III — IN PROGRESS",
+    "C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "C4-III — DONE",
+    "C4-III — CLOSED",
+    "C4-III — COMPLETE",
+    "C4-III EXACT-PACKAGE VERIFICATION — PASS",
+    "C4-III EXACT-PACKAGE VERIFICATION PASSED",
+    "EXACT-PACKAGE OUTER GATE: PASS",
+    "C4-III LIFECYCLE CLOSURE — COMPLETED",
+    "C4-III LIFECYCLE CLOSURE: PASS",
     "Restore — IMPLEMENTED",
     "Product release readiness — READY",
 )
 
 C4IIC_REVIEWED_HEAD = "1df21915fdcf4a708dc778a0e762d64830b5b880"
 C4IIC_MERGE_MAIN = "6294f0044c792ced3ac56d213ea5333e33062f12"
+
+# Exact merged `main` the external C4-III verifier ran against.
+C4III_VERIFIED_MAIN = "81e8193596709b0c16d0ecad598458b3ea95fd9c"
+C4III_RUNNER_SHA256 = "4c5c09081d2dc1db45ee556777039f4d9802f026d717a194c88c15d6894e5f3a"
+C4III_RUNNER_VERSION = "c4-iii-restore-exact-head-v1"
+
+C4III_EXACT_HEAD_GATES = (
+    "lifecycle PASS",
+    "focused_restore_pytest PASS",
+    "frontend_npm_ci PASS",
+    "frontend_build PASS",
+    "frontend_restore_tests PASS",
+    "destructive_e2e_current_and_older PASS",
+    "PASS — C4-III EXACT-HEAD VERIFICATION PASSED",
+)
+
+C4III_OUTER_GATES = (
+    "C4III EXACT-HEAD OUTER GATE: PASS",
+    "C4III EXACT-PACKAGE OUTER GATE: INCONCLUSIVE — ENVIRONMENT",
+    "C4III LIFECYCLE CLOSURE: BLOCKED — PACKAGE PREREQUISITE",
+    "INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE",
+    "BLOCKED — PACKAGE PREREQUISITE",
+)
 
 PINNED_BLOBS = {
     P("launcher/restore/contracts.py"): "1b4adf345b2470e7c50987570e7848012aa15a95",
@@ -130,6 +171,17 @@ HISTORY_BLOBS = {
     P("docs/history/c4-ii-c-pre-closure/current-focus.md"): "ba706cd45ce2a4eb0ef34a30a2d0be86a3347d2e",
     P("docs/history/c4-ii-c-pre-closure/handoff.md"): "e01e06754d0fb5dde4060c4f00e9231636916afc",
     P("docs/history/c4-ii-c-pre-closure/progress.md"): "3075c538566752439c076edaf1c9315750c36542",
+    P("docs/history/c4-iii-pre-partial-verification/README.md"): "9603547b782acbc66ff9f933e003c9ae1d9f0bf9",
+    P("docs/history/c4-iii-pre-partial-verification/current-lifecycle.md"): "00e359342b8a146dedcbe4e1195255bf03a60658",
+    P("docs/history/c4-iii-pre-partial-verification/c4-ii-b-implementation-slices.md"): "cb6849135105c97f84c613ba0a46a0e7e563fe1e",
+    P("docs/history/c4-iii-pre-partial-verification/deployment.md"): "937cea437145589437dcb32bbb03ded76dab0bc1",
+    P("docs/history/c4-iii-pre-partial-verification/implementation-plan.md"): "64f8cde79984ec670d6fd886a1bbafa13ff9093a",
+    P("docs/history/c4-iii-pre-partial-verification/packaging.md"): "d4b016a5c4588f5cf4878817b186d7ccdd5d2120",
+    P("docs/history/c4-iii-pre-partial-verification/restore-interaction-and-validation-session.md"): "c47f6886da25de7020ef5f3572e4fa48e1fa7ce8",
+    P("docs/history/c4-iii-pre-partial-verification/change-requests.md"): "77df5f27b218b0d58b42b48afd3141ae569d2871",
+    P("docs/history/c4-iii-pre-partial-verification/current-focus.md"): "c7932d5aa86fc6946d4dfa48ab58626cbe227963",
+    P("docs/history/c4-iii-pre-partial-verification/handoff.md"): "f46c6f02913f326ca62f28b207a465af1d0e5d08",
+    P("docs/history/c4-iii-pre-partial-verification/progress.md"): "8ac34a9ef1676039bd0174f30994ae85ee496add",
 }
 
 ERRORS: list[str] = []
@@ -170,13 +222,19 @@ def blob(path: Path) -> str:
 def check_lifecycle_docs() -> None:
     for path in ACTIVE:
         require(path, CORE)
-    require(CURRENT, CORE + (
+    require(CURRENT, CORE + C4III_EXACT_HEAD_GATES + C4III_OUTER_GATES + (
         C4IIC_REVIEWED_HEAD,
         C4IIC_MERGE_MAIN,
+        C4III_VERIFIED_MAIN,
+        C4III_RUNNER_SHA256,
+        C4III_RUNNER_VERSION,
         "C4-II-C closure baseline",
+        "C4-III exact-head verification baseline",
         "C4-III — Restore end-to-end verification and lifecycle closure",
         "current-schema Restore",
         "supported older-schema Restore",
+        "not a product failure",
+        "not a runner failure",
     ))
     require(B_SLICES, CORE + (
         "CLOSED NORMATIVE IMPLEMENTATION PLAN",
@@ -199,15 +257,24 @@ def check_lifecycle_docs() -> None:
         "source immutability",
         "safety-copy retention",
         "PASS / FAIL PRODUCT / INCONCLUSIVE RUNNER / INCONCLUSIVE ENVIRONMENT",
+        C4III_VERIFIED_MAIN,
+        C4III_RUNNER_SHA256,
+        C4III_RUNNER_VERSION,
+        "Recorded verification progress",
+        "Only the exact-head half is satisfied",
     ))
     require(DEPLOYMENT, CORE + (
         "no deployment topology change",
         "does not authorize deployment topology, packaging or updater redesign",
+        "that prerequisite is currently unavailable",
     ))
     require(PACKAGING, CORE + (
         "no packaging",
         "does not authorize packaging implementation or redesign",
         "release readiness remains not claimed",
+        "Active packaged-artifact prerequisite gap",
+        "implement macOS packaging under C4-III",
+        "relabel the exact-package result as PASS",
     ))
     for path in ACTIVE + SUPPORTING:
         text = norm(read(path))
@@ -237,20 +304,34 @@ def check_c4_iii_authorization() -> None:
         "no production behavior change unless separately authorized as a bounded defect fix",
         "If verification reveals a product defect",
     ))
-    require(FOCUS, (
+    require(FOCUS, C4III_EXACT_HEAD_GATES + (
         "C4-III Restore end-to-end verification",
-        "only authorized next Restore slice",
+        "only authorized open Restore slice",
         "Any product defect requires a separate bounded fix PR",
+        C4III_VERIFIED_MAIN,
+        C4III_RUNNER_VERSION,
+        "Blocking condition",
+        "do not build packaging to clear it",
     ))
     require(HANDOFF, (
         "Authorized handoff",
         "current-schema success",
         "supported older-schema Restore",
         "verified `before_restore` safety-copy retention",
+        C4III_VERIFIED_MAIN,
+        C4III_RUNNER_SHA256,
+        C4III_RUNNER_VERSION,
+        "PASS — C4-III EXACT-HEAD VERIFICATION PASSED",
+        "INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE",
+        "BLOCKED — PACKAGE PREREQUISITE",
+        "do not implement packaging to clear it",
     ))
     require(CHANGE_REQUESTS, (
         "No new Change Request is needed for verification-only",
         "STOP and open a separate decision/change request or bounded defect-fix PR",
+        "Open prerequisite — packaged artifact for exact-package verification",
+        "not authorized under C4-III and no Change Request currently authorizes it",
+        "requires its own decision/change request",
     ))
 
 def main() -> int:
@@ -268,9 +349,13 @@ def main() -> int:
     print(f"Verified {len(HISTORY_BLOBS)} exact protected history Git blob identities.")
     print(f"Verified {len(PINNED_BLOBS)} exact closed B1/C4-I/B2/B3/C4-II-C/shell Git blob identities.")
     print("Verified PR #188 merged / C4-II-C exact-head closure baseline.")
-    print("Verified C4-II-C is DONE — MERGED AND EXACT-HEAD VERIFIED.")
+    print("Verified PR #189 merged and C4-II-C is DONE — MERGED AND EXACT-HEAD VERIFIED.")
     print("Verified final C4-II-C presentation is pinned as a closed production boundary.")
-    print("Verified C4-III is AUTHORIZED NEXT — NOT IMPLEMENTED and remains verification/lifecycle only.")
+    print("Verified C4-III is IN PROGRESS — EXACT-HEAD VERIFICATION PASSED and remains verification/lifecycle only.")
+    print(f"Verified recorded C4-III exact-head baseline {C4III_VERIFIED_MAIN} / runner {C4III_RUNNER_VERSION}.")
+    print("Verified C4-III exact-package verification stays INCONCLUSIVE — ENVIRONMENT and is never relabelled PASS.")
+    print("Verified C4-III lifecycle closure remains BLOCKED — PACKAGE PREREQUISITE.")
+    print("Verified no packaging implementation is authorized to clear that prerequisite.")
     print("Verified Restore remains NOT IMPLEMENTED and product release readiness is not claimed.")
     return 0
 

@@ -1,11 +1,10 @@
 # Handoff
 
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 ## Current lifecycle
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -24,9 +23,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -37,17 +34,9 @@ PR #188 reviewed exact C4-II-C head `1df21915fdcf4a708dc778a0e762d64830b5b880` a
 
 Accepted C4-II-C evidence: lifecycle/build PASS; Restore 34/34 PASS; browser smoke v5.4 PASS; fresh independent audit P0=0/P1=0/P2=0; final no-change gate PASS.
 
-## Recorded C4-III verification result
-
-An external verifier `c4-iii-restore-exact-head-v1` (SHA-256 `4c5c09081d2dc1db45ee556777039f4d9802f026d717a194c88c15d6894e5f3a`) ran on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c` and reported `lifecycle`, `focused_restore_pytest`, `frontend_npm_ci`, `frontend_build`, `frontend_restore_tests` and `destructive_e2e_current_and_older` all PASS — `PASS — C4-III EXACT-HEAD VERIFICATION PASSED`.
-
-The exact-package half returned `INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE`, leaving `C4-III LIFECYCLE CLOSURE GATE: BLOCKED — PACKAGE PREREQUISITE`.
-
 ## Authorized handoff
 
-C4-III — **Restore end-to-end verification and lifecycle closure** — is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
-
-The next agent inherits an open slice with one blocking prerequisite: no packaged product artifact exists to run exact-package verification against. Do not treat that INCONCLUSIVE as a PASS, do not close C4-III on exact-head evidence alone, and do not implement packaging to clear it. Producing a packaged artifact is separate work needing its own authorization.
+C4-III — **Restore end-to-end verification and lifecycle closure** — is **AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
 Load-bearing verification targets:
 
@@ -62,8 +51,6 @@ Load-bearing verification targets:
 - verified `before_restore` safety-copy retention;
 - browser privacy and exact replay;
 - lifecycle closure evidence.
-
-Exact-head evidence for these targets is recorded above; the exact-package evidence required alongside it is still missing.
 
 Closed production files must remain byte-identical, including launcher/backend Restore authority, contract/runtime/entry, final C4-II-C presentation, main/navigation and ADRs. C4-III may extend focused tests and external smoke runners.
 

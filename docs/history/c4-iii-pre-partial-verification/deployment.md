@@ -1,11 +1,10 @@
 # Deployment
 
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 ## Lifecycle
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -24,9 +23,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -35,8 +32,8 @@ Product release readiness — NOT CLAIMED
 
 The product remains local-first on the MacBook. Ordinary business work uses the local FastAPI backend; Restore control remains launcher-owned on `127.0.0.1:<ephemeral>` under ADR 0018.
 
-PR #188 / C4-II-C introduced no deployment topology change. The lifecycle-closure transition also introduces no service, port, cloud dependency, backend Restore endpoint or mandatory internet. The C4-III partial-verification checkpoint introduces none either — it records an already completed external verification result and nothing else.
+PR #188 / C4-II-C introduced no deployment topology change. The lifecycle-closure transition also introduces no service, port, cloud dependency, backend Restore endpoint or mandatory internet.
 
-C4-III is verification/lifecycle work. It does not authorize deployment topology, packaging or updater redesign. Exact-package verification required by ADR 0017 must use an authorized product artifact; that prerequisite is currently unavailable, so the verification is reported incomplete (`INCONCLUSIVE — ENVIRONMENT`) rather than changing packaging under C4-III.
+C4-III is verification/lifecycle work. It does not authorize deployment topology, packaging or updater redesign. Exact-package verification required by ADR 0017 must use an authorized product artifact; if that prerequisite is unavailable, report the verification incomplete rather than changing packaging under C4-III.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

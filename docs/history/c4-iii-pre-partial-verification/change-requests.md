@@ -1,11 +1,10 @@
 # Change Requests
 
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 ## Current lifecycle
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -24,9 +23,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -35,18 +32,12 @@ Product release readiness — NOT CLAIMED
 
 CR-011 remains **ACCEPTED**. ADR 0018 remains normative for launcher-owned loopback control, picker/session security and browser path privacy. ADR 0016 remains normative for destructive Restore durable truth. ADR 0017 defines C4-III as end-to-end verification and lifecycle closure.
 
-PR #188 merged as `6294f0044c792ced3ac56d213ea5333e33062f12` and C4-II-C is now closed. PR #189 merged as `81e8193596709b0c16d0ecad598458b3ea95fd9c` and authorized C4-III verification.
+PR #188 merged as `6294f0044c792ced3ac56d213ea5333e33062f12` and C4-II-C is now closed.
 
 ## C4-III authorization
 
 C4-III verifies the already-decided and merged Restore architecture. No new Change Request is needed for verification-only tests, isolated smoke runners, evidence documentation or lifecycle closure.
 
 If C4-III appears to require a new launcher state, endpoint, DTO field, browser filesystem authority, durable phase, backend behavior, destructive command, packaging architecture or other product/architecture change, STOP and open a separate decision/change request or bounded defect-fix PR as appropriate.
-
-## Open prerequisite — packaged artifact for exact-package verification
-
-C4-III exact-head verification PASSED on `81e8193596709b0c16d0ecad598458b3ea95fd9c`. Exact-package verification returned `INCONCLUSIVE — ENVIRONMENT` because no packaged product artifact exists to verify.
-
-Clearing that prerequisite means producing a packaged macOS artifact, which is packaging implementation. That is not authorized under C4-III and no Change Request currently authorizes it. It requires its own decision/change request before any `.app`, `.dmg`, ZIP or packaged runtime work begins. Until then C4-III lifecycle closure stays BLOCKED and the result stays labelled INCONCLUSIVE, never PASS.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

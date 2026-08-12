@@ -1,14 +1,13 @@
 # Restore interaction and validation-session profile
 
 Status: **CURRENT — NORMATIVE INTERACTION PROFILE**
-Updated: `2026-08-12`
+Updated: `2026-08-11`
 
 Normative sources: ADR 0016 for destructive Restore; ADR 0018 for launcher control, native picker and exact-run browser session; ADR 0017 for the C4 split and C4-III verification/closure purpose.
 
 ## Current lifecycle
 
 ```text
-PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
 PR #186 — MERGED — C4-II-B3 EXACT-HEAD VERIFIED
@@ -27,9 +26,7 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
-C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -64,12 +61,10 @@ No source path, proof, operation ID, database path, backup path, lock path, SQL,
 
 ## C4-III authorization
 
-C4-III — **Restore end-to-end verification and lifecycle closure** — is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
+C4-III — **Restore end-to-end verification and lifecycle closure** — is **AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
 C4-III must verify the already-merged interaction contract across success, supported older-schema, rejection, interruption, rollback, repeated launch, source immutability and safety-copy retention. It may extend tests/smoke evidence, but does not authorize new presentation semantics, command authority, endpoints or filesystem ownership.
 
 Any discovered product defect requires a separate bounded fix before verification can claim PASS.
-
-External exact-head verification of this interaction profile PASSED on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`; no product defect was reported and this profile is unchanged. Exact-package verification of the same profile is still `INCONCLUSIVE — ENVIRONMENT` because no packaged artifact exists, so `C4-III LIFECYCLE CLOSURE — NOT COMPLETED`.
 
 Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.
