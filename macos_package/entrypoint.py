@@ -8,7 +8,7 @@ What a packaged start adds to an ordinary start is small and deliberately so:
 3. start the local production-frontend listener (no Node)
 4. hand over to the existing launcher user-mode flow, unchanged
 5. stop the listener when the launcher returns, however it returns
-6. make a fatal refusal visible to a user who has no terminal
+6. make every fatal packaged outcome visible to a user who has no terminal
 ```
 
 Step 4 is the point of the whole module. Everything the product actually does —
@@ -17,9 +17,9 @@ mandatory backup before them, the Restore control plane and picker, the owner
 loop, the browser — belongs to `launcher.runtime.run_local_runtime`, and this
 module calls it rather than reproducing any of it. There is no second
 supervisor here, no second Restore path, and no business logic. When the
-launcher returns a non-zero code, that code is the packaged application's exit
-code; it is not reinterpreted, and a launcher refusal is never converted into a
-success.
+launcher returns a non-zero code, that exact code remains the packaged
+application's exit code; D3 adds only the fixed Finder-visible explanation that
+stdout/stderr alone cannot provide to a double-click user.
 
 `SIGTERM` is caught for one reason: Finder and the Dock stop an application by
 sending it, and the default action would kill this process outright, leaving the
@@ -173,9 +173,10 @@ def _refuse_incomplete_package(layout: PackageLayout) -> int | None:
 def _run_launcher(
     layout: PackageLayout, server: LocalFrontendServer, arguments: argparse.Namespace
 ) -> int:
-    """Call the existing launcher user-mode flow and report what it decided."""
+    """Call the existing launcher user-mode flow and make its verdict visible."""
     from launcher.config import build_runtime_config
     from launcher.runtime import (
+        RESTORE_BLOCKED_EXIT_CODE,
         BackendPortUnavailableError,
         RuntimeLaunchError,
         run_local_runtime,
@@ -198,7 +199,22 @@ def _run_launcher(
         return EXIT_UNEXPECTED
 
     try:
-        return run_local_runtime(config)
+        result = run_local_runtime(config)
+        if result == 0:
+            return 0
+        if result == RESTORE_BLOCKED_EXIT_CODE:
+            report_startup_failure(
+                StartupFailure.SAFE_START_BLOCKED,
+                packaged=layout.is_packaged,
+                detail=f"launcher returned {result}",
+            )
+            return result
+        report_startup_failure(
+            StartupFailure.RUNTIME_STOPPED,
+            packaged=layout.is_packaged,
+            detail=f"launcher returned {result}",
+        )
+        return result
     except KeyboardInterrupt:
         # Ctrl+C in developer mode, or Quit from the Dock in packaged mode. The
         # launcher's own `finally` has already stopped the backend child.

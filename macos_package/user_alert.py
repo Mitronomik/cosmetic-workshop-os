@@ -1,9 +1,9 @@
 """Make a packaged startup refusal visible to a user who has no terminal.
 
 An application opened from Finder has no console anybody reads. Without this,
-every fatal packaged startup failure — a missing resource, an occupied port, a
-backend that refused to start — is a Dock icon that appears and disappears, and
-the user's only information is that "nothing happened".
+every fatal packaged outcome — a missing resource, an occupied port, a blocked
+safe start, or a backend that stops — is a Dock icon that appears and
+disappears, and the user's only information is that "nothing happened".
 
 The mechanism is deliberately the smallest thing that works: one `display alert`
 through `/usr/bin/osascript`, which every supported macOS already has. It adds
@@ -59,13 +59,15 @@ ALERT_GIVE_UP_SECONDS = 120
 
 
 class StartupFailure(Enum):
-    """The packaged startup refusals a user can actually be told apart."""
+    """The packaged fatal outcomes a user can actually be told apart."""
 
     MISSING_RESOURCES = "missing_resources"
     RUNTIME_MISSING = "runtime_missing"
     FRONTEND_PORT_BUSY = "frontend_port_busy"
     BACKEND_PORT_BUSY = "backend_port_busy"
     LAUNCHER_REFUSED = "launcher_refused"
+    SAFE_START_BLOCKED = "safe_start_blocked"
+    RUNTIME_STOPPED = "runtime_stopped"
     UNEXPECTED = "unexpected"
 
 
@@ -130,6 +132,16 @@ STARTUP_FAILURE_MESSAGES: dict[StartupFailure, str] = {
         "Приложение не смогло продолжить запуск. "
         "Закройте другие окна приложения и попробуйте открыть его снова. "
         "Если ошибка повторяется, используйте резервную копию или обратитесь за помощью."
+    ),
+    StartupFailure.SAFE_START_BLOCKED: (
+        "Приложение не может безопасно продолжить запуск. "
+        "Не пытайтесь повторять восстановление. "
+        "Закройте приложение и обратитесь за помощью."
+    ),
+    StartupFailure.RUNTIME_STOPPED: (
+        "Рабочая часть приложения неожиданно остановилась. "
+        "Попробуйте открыть приложение снова. "
+        "Если ошибка повторяется, обратитесь за помощью."
     ),
     StartupFailure.UNEXPECTED: (
         "Во время запуска произошла непредвиденная ошибка. "
