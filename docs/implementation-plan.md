@@ -5,6 +5,7 @@ Updated: `2026-08-12`
 ## Current lifecycle
 
 ```text
+PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
@@ -26,10 +27,10 @@ C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
-C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 D4 — Update safety — NOT AUTHORIZED BY CR-012
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
@@ -118,9 +119,9 @@ Item 11 of the required verification list asks for exact-head **or** exact-packa
 
 The single remaining blocker is the missing packaged product artifact. Building one is not authorized inside C4-III; it is the separate authorized successor task below.
 
-### Authorized successor task — D3 macOS package MVP
+### Successor task — D3 macOS package MVP
 
-Status: **AUTHORIZED NEXT — NOT IMPLEMENTED**. Decided by `CR-012` / [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md). It runs **outside** C4-III and must not be merged into the C4-III verification claim.
+Status: **IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING**. Decided by `CR-012` / [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md). It ran **outside** C4-III and must not be merged into the C4-III verification claim.
 
 Goal:
 
@@ -137,6 +138,8 @@ Bounded scope: launcher, bundled backend runtime, production frontend build, mig
 CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization. Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation, D4 and D5 remain NOT AUTHORIZED — the roadmap D3 non-goals stay authoritative.
 
 The artifact is a verification prerequisite. It does not close C4-III, does not implement Restore and does not make the product release-ready. Exact-package verification stays `INCONCLUSIVE — ENVIRONMENT` until the artifact exists and the external exact-package verifier runs and passes against the packaged runtime.
+
+As built: `make package-macos` produces `dist/CosmeticWorkshopOS-mac.zip` containing `CosmeticWorkshopOS.app`, with a pinned checksum-verified self-contained CPython, the production frontend served by a standard-library localhost listener with an `/api/*` proxy, and the backend still a separate launcher-owned process using the unchanged `app.launcher_backend_entrypoint` handshake. No protected closed Restore production file changed. See [`packaging.md`](packaging.md). The remaining C4-III work is to write and run the exact-package verifier against that packaged runtime.
 
 ### Architecture constraints
 

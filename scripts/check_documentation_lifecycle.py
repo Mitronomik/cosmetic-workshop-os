@@ -1,25 +1,42 @@
 #!/usr/bin/env python3
 """Guard merged C4-II-C closure, the open C4-III slice and the CR-012 boundary.
 
-C4-III exact-head verification PASSED. C4-III exact-package verification is
-INCONCLUSIVE — ENVIRONMENT because no packaged product artifact exists yet, so
-C4-III lifecycle closure stays BLOCKED. This checker keeps those two results
-distinguishable and refuses any document that upgrades the inconclusive half to a
-pass or claims closure, Restore implementation or release readiness.
+C4-III exact-head verification PASSED. C4-III exact-package verification has
+still not passed, so C4-III lifecycle closure stays incomplete. This checker
+keeps those two results distinguishable and refuses any document that upgrades
+the unpassed half to a pass or claims closure, Restore implementation or release
+readiness.
 
-Those two results are separate facts from the governance question. The verifier
-correctly classified the run as INCONCLUSIVE — ENVIRONMENT; CR-012 closes only
-the authorization gap that stopped the project producing the artifact. Documents
-must not reclassify the recorded result as something other than an environment
-outcome, so a small guard rejects the usual "not a missing environment" phrasings.
+Those results are separate facts from the governance question. When the verifier
+ran it correctly classified the exact-package half as INCONCLUSIVE — ENVIRONMENT,
+because no packaged artifact existed; CR-012 closed only the authorization gap
+that stopped the project producing one. Documents must not reclassify that
+recorded result as something other than an environment outcome, so a small guard
+rejects the usual "not a missing environment" phrasings.
 
-CR-012 is ACCEPTED and authorizes the existing roadmap stage `D3 — macOS package
-MVP — AUTHORIZED NEXT — NOT IMPLEMENTED`, whose current purpose is producing that
-artifact. There is no separate pre-D3 packaging stage. The checker therefore no
-longer requires the globally false claim that no packaging implementation is
-authorized at all. Instead it enforces the narrower truth: D3 and nothing beyond
-it is authorized, D3 is not built yet, and CR-012 never widens into D4, D5,
-signing, notarization, auto-update, App Store or release readiness.
+D3 has since been implemented and the artifact now exists, which closes the
+**prerequisite** and nothing else. The distinction this checker exists to protect
+is therefore now three-way, and collapsing any two of these is a failure:
+
+```text
+the artifact exists                     ← true, D3 built it
+exact-package verification has passed   ← FALSE, the verifier has not run
+C4-III lifecycle closure is complete    ← FALSE
+```
+
+So `D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION
+PENDING` is the required status, while `DONE`, `CLOSED`, `COMPLETE`, `VERIFIED`
+and release-ready phrasings stay forbidden — as does describing the D3 package
+smoke as C4-III exact-package verification. `SUPERSEDED_BY_D3` retires the
+pre-build phrasing from the active surfaces while leaving it intact in ADR 0019
+and the dated history, where it is accurate as a record rather than a claim.
+
+CR-012 authorizes D3 and nothing beyond it, and never widens into D4, D5,
+signing, notarization, auto-update, App Store or release readiness. A set of
+required `D3_IMPLEMENTATION` phrases additionally pins the properties that make
+the build "packaging the product" rather than changing it: a real bundled
+interpreter, the unchanged launcher-managed backend entrypoint and liveness lock,
+the bounded loopback frontend listener, and no signing/notarization/DMG/updater.
 """
 
 from __future__ import annotations
@@ -51,6 +68,7 @@ ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF, CHANGE_REQUESTS)
 SUPPORTING = (CURRENT, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
 
 CORE = (
+    "PR #191 — MERGED — CR-012 / D3 AUTHORIZATION",
     "PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT",
     "PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION",
     "PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED",
@@ -72,10 +90,12 @@ CORE = (
     "C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED",
-    "C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE",
+    # The prerequisite is closed; the verification is not. These are different
+    # facts and the wording keeps them apart.
+    "C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED",
     "C4-III LIFECYCLE CLOSURE — NOT COMPLETED",
     "CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION",
-    "D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING",
     "D4 — Update safety — NOT AUTHORIZED BY CR-012",
     "D5 — Remote install checklist — NOT AUTHORIZED BY CR-012",
     "Restore — NOT IMPLEMENTED",
@@ -98,20 +118,43 @@ STALE = (
     "C4-III LIFECYCLE CLOSURE: PASS",
     "Restore — IMPLEMENTED",
     "Product release readiness — READY",
-    # D3 is authorized but unbuilt; it must never be relabelled as already done.
-    "D3 — macOS package MVP — IMPLEMENTED",
+    # D3 is built, but built is not verified and not released. The bare
+    # `IMPLEMENTED` forms are gone from this list because that is now the true
+    # status; what stays forbidden is every phrasing that would upgrade it into
+    # a closed, verified or release-ready claim.
     "D3 — macOS package MVP — DONE",
+    "D3 — macOS package MVP — CLOSED",
     "D3 — macOS package MVP — COMPLETE",
     "D3 — macOS package MVP — MERGED",
     "D3 — macOS package MVP — VERIFIED",
-    "D3 — IMPLEMENTED",
+    "D3 — macOS package MVP — RELEASE READY",
+    "D3 — macOS package MVP — EXACT-PACKAGE VERIFIED",
     "D3 — DONE",
+    "D3 — CLOSED",
     "D3 — COMPLETE",
-    "packaged artifact — IMPLEMENTED",
+    "D3 — VERIFIED",
+    "D3 — RELEASE READY",
+    # The package smoke proves the delivery layer. It is never the C4-III
+    # exact-package Restore verifier, and must never be written up as one.
+    "D3 package smoke — C4-III EXACT-PACKAGE VERIFICATION PASSED",
+    "D3 SMOKE PASS — C4-III EXACT-PACKAGE VERIFICATION",
+    "packaged artifact — VERIFIED",
     "packaged artifact — DONE",
     "PACKAGED ARTIFACT — AVAILABLE",
-    "CR-012 — IMPLEMENTED",
     "CR-012 — DONE",
+    "CR-012 — CLOSED",
+)
+
+# Phrases that were true before D3 was built and are false now. They stay
+# legitimate inside ADR 0019, which records the state at the time of the
+# decision, so they are forbidden on the active surfaces only and this tuple is
+# never scanned against the ADR or against the dated history journal entries.
+SUPERSEDED_BY_D3 = (
+    "D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE",
+    "No package exists.",
+    "no packaged product artifact exists",
+    "scripts/package_macos.sh is a placeholder",
 )
 
 # CR-012 authorizes roadmap D3 and stops there. These phrases would widen it into
@@ -153,6 +196,35 @@ RECLASSIFICATION = (
     "not an environment problem",
     "not an environment accident",
     "rather than a missing environment",
+)
+
+# What the built package must keep being described as. Each phrase pins a
+# property that, if it silently stopped being true, would turn D3 from
+# "packaging the product" into "changing it" — the exact drift ADR 0019's stop
+# conditions exist to catch.
+D3_IMPLEMENTATION = (
+    "make package-macos",
+    "CosmeticWorkshopOS.app",
+    # The self-contained runtime, and the reason it is a real interpreter.
+    "python-build-standalone",
+    "3.12.13",
+    "SHA-256 pinned per architecture",
+    "fail closed",
+    # The two things the end user must never need.
+    "the end user needs no Python",
+    "without Node",
+    # The preserved process architecture.
+    "app.launcher_backend_entrypoint",
+    "backend-liveness lock",
+    "No protected closed Restore production file was modified",
+    # The bounded frontend listener.
+    "binds `127.0.0.1` only",
+    "adds no CORS headers",
+    "only `/api/*`",
+    # What stays out.
+    "No signing, notarization, DMG, installer, updater or release upload is added",
+    # The gate this is not.
+    "never that it runs",
 )
 
 # The bounded rule that replaced the previously blanket "no packaging
@@ -303,6 +375,11 @@ def blob(path: Path) -> str:
 def check_lifecycle_docs() -> None:
     for path in ACTIVE:
         require(path, CORE)
+    # Superseded phrasing is rejected on the active surfaces only. ADR 0019 and
+    # the dated history keep it, because there it is an accurate record of the
+    # state at the time rather than a claim about the state now.
+    for path in ACTIVE + SUPPORTING:
+        forbid(path, SUPERSEDED_BY_D3)
     require(CURRENT, CORE + C4III_EXACT_HEAD_GATES + C4III_OUTER_GATES + CR012_BOUNDARY + (
         C4IIC_REVIEWED_HEAD,
         C4IIC_MERGE_MAIN,
@@ -317,7 +394,11 @@ def check_lifecycle_docs() -> None:
         "not a product failure",
         "not a runner failure",
         "CR-012 — accepted D3 macOS package MVP authorization",
-        "No package exists.",
+        # D3 built the artifact; that closes the prerequisite and nothing else.
+        "D3 — implemented, exact-package verification pending",
+        "it does not run C4-III exact-package verification",
+        "it does not advance C4-III lifecycle closure",
+        "The D3 Level-5 package smoke proves the package/runtime delivery layer",
     ))
     require(B_SLICES, CORE + (
         "CLOSED NORMATIVE IMPLEMENTATION PLAN",
@@ -349,15 +430,17 @@ def check_lifecycle_docs() -> None:
     require(DEPLOYMENT, CORE + CR012_BOUNDARY + (
         "no deployment topology change",
         "does not authorize deployment topology, packaging or updater redesign",
-        "that prerequisite is currently unavailable",
+        "when that prerequisite was unavailable",
         "changes **no deployment topology**",
         "no desktop application shell",
+        # The packaged product adds exactly one listener and no new topology.
+        "The only new listener is the local frontend one",
     ))
-    require(PACKAGING, CORE + CR012_BOUNDARY + (
+    require(PACKAGING, CORE + CR012_BOUNDARY + D3_IMPLEMENTATION + (
         "no packaging",
         "does not authorize packaging implementation or redesign",
         "release readiness remains not claimed",
-        "Active packaged-artifact prerequisite gap",
+        "Closed packaged-artifact prerequisite gap",
         "implement macOS packaging under C4-III",
         "relabel the exact-package result as PASS",
         "CR-012 — D3 macOS package MVP authorization",
@@ -411,8 +494,9 @@ def check_c4_iii_authorization() -> None:
         C4III_VERIFIED_MAIN,
         C4III_RUNNER_VERSION,
         "Blocking condition",
-        "do not build packaging inside C4-III",
-        "Next allowed task — D3 macOS package MVP",
+        "packaging was not built inside C4-III",
+        "Completed task — D3 macOS package MVP",
+        "The prerequisite is now closed. The verification is not.",
     ))
     require(HANDOFF, (
         "Authorized handoff",
@@ -426,7 +510,8 @@ def check_c4_iii_authorization() -> None:
         "INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE",
         "BLOCKED — PACKAGE PREREQUISITE",
         "do not implement packaging to clear it inside C4-III",
-        "Authorized next task — D3 macOS package MVP",
+        "Completed task — D3 macOS package MVP",
+        "never reported as C4-III exact-package verification",
     ))
     require(CHANGE_REQUESTS, CR012_BOUNDARY + (
         "No new Change Request is needed for verification-only",
@@ -493,9 +578,13 @@ def check_cr012_authorization() -> None:
         "Stop conditions",
         "must **STOP** and require a new decision",
     ))
-    # The bounded successor task must be visible and unbuilt on every active surface.
+    # The bounded successor task must be visible on every active surface, built
+    # but explicitly not yet exact-package verified.
     for path in ACTIVE + (CURRENT, DEPLOYMENT, PACKAGING):
-        require(path, ("D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED",))
+        require(
+            path,
+            ("D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING",),
+        )
     # The old blanket claim is now globally false and must not be reinstated.
     for path in ACTIVE + SUPPORTING:
         forbid(path, ("no packaging implementation is authorized",))
@@ -520,12 +609,16 @@ def main() -> int:
     print("Verified final C4-II-C presentation is pinned as a closed production boundary.")
     print("Verified C4-III is IN PROGRESS — EXACT-HEAD VERIFICATION PASSED and remains verification/lifecycle only.")
     print(f"Verified recorded C4-III exact-head baseline {C4III_VERIFIED_MAIN} / runner {C4III_RUNNER_VERSION}.")
-    print("Verified C4-III exact-package verification stays INCONCLUSIVE — ENVIRONMENT and is never relabelled PASS.")
-    print("Verified C4-III lifecycle closure remains BLOCKED — PACKAGE PREREQUISITE.")
+    print("Verified C4-III exact-package verification is NOT YET PASSED and is never relabelled PASS.")
+    print("Verified C4-III lifecycle closure remains NOT COMPLETED.")
     print("Verified the recorded INCONCLUSIVE — ENVIRONMENT classification is preserved, not reinterpreted.")
     print("Verified CR-012 is ACCEPTED and ADR 0019 records the bounded D3 authorization.")
-    print("Verified the only authorized successor is roadmap D3 — macOS package MVP,")
-    print("  labelled AUTHORIZED NEXT — NOT IMPLEMENTED, with no package built and no parallel stage.")
+    print("Verified the only authorized successor is roadmap D3 — macOS package MVP, labelled")
+    print("  IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING, with no parallel stage,")
+    print("  and never upgraded to DONE, CLOSED, VERIFIED or release-ready.")
+    print("Verified the built package is described as packaging the product, not changing it:")
+    print("  bundled interpreter, unchanged launcher-managed backend entrypoint and liveness lock,")
+    print("  loopback-only frontend listener, and no signing/notarization/DMG/updater work.")
     print("Verified CR-012 does not authorize D4, D5, signing, notarization, DMG, auto-update,")
     print("  App Store, sandbox migration or any desktop application shell.")
     print("Verified Restore remains NOT IMPLEMENTED and product release readiness is not claimed.")

@@ -14,3 +14,8 @@ frontend/dist/
 
 # Focused frontend TypeScript test output
 /frontend/dist-tests/
+
+# D3 macOS packaging output. Intermediate build work and the generated
+# .app / CosmeticWorkshopOS-mac.zip are build products and are never committed.
+/build/
+/dist/

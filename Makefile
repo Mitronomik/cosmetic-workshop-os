@@ -1,4 +1,4 @@
-.PHONY: setup setup-backend setup-frontend check-backend-test-deps dev run-local test build test-backend test-backend-with-setup build-frontend package-macos smoke
+.PHONY: setup setup-backend setup-frontend check-backend-test-deps dev run-local test build test-backend test-backend-with-setup test-package build-frontend build-backend-runtime package-macos verify-package smoke
 
 setup: setup-backend setup-frontend
 
@@ -18,10 +18,16 @@ dev:
 run-local:
 	python3 -m launcher.main --no-browser
 
-test: test-backend
+test: test-backend test-package
 
 test-backend:
 	python3 -m pytest backend/app/tests launcher/tests
+
+# D3 packaging/runtime-support tests. Kept as their own target so the existing
+# backend+launcher command that external verifiers already run stays exactly as
+# it is.
+test-package:
+	python3 -m pytest macos_package/tests
 
 test-backend-with-setup: setup-backend test-backend
 
@@ -30,8 +36,14 @@ build: build-frontend
 build-frontend:
 	cd frontend && npm run build
 
+build-backend-runtime:
+	bash scripts/build_backend.sh
+
 package-macos:
-	@echo "TODO: implement macOS packaging in a future PR"
+	bash scripts/package_macos.sh
+
+verify-package:
+	python3 scripts/verify_macos_package.py --source-root .
 
 smoke:
 	@echo "Run current smoke manually: backend health endpoints, database status/settings endpoints, temporary SQLite migrations, frontend build."
