@@ -282,6 +282,13 @@ class _FrontendRequestHandler(BaseHTTPRequestHandler):
         self._dispatch("OPTIONS")
 
     def _dispatch(self, method: str) -> None:
+        # One handler instance serves every request on a keep-alive connection,
+        # so any per-response state has to be cleared here rather than trusted
+        # to be fresh. `_headers_flushed` is the one that matters: left over
+        # `True` from a previous successful request, a later backend failure
+        # would look like "headers already sent for *this* response" and the
+        # connection would be dropped instead of returning the honest 502.
+        self._begin_response()
         path = urlsplit(self.path).path
         if path.startswith(API_PATH_PREFIX):
             self._proxy_to_backend(method)
@@ -480,8 +487,18 @@ class _FrontendRequestHandler(BaseHTTPRequestHandler):
             502, "text/plain; charset=utf-8", BACKEND_UNREACHABLE_BODY, method
         )
 
+    def _begin_response(self) -> None:
+        """Start a new response on this connection with no inherited state."""
+        self.__dict__["_headers_flushed"] = False
+
     @property
     def headers_flushed(self) -> bool:
+        """Whether **this** request's response headers are already on the wire.
+
+        Request-scoped by construction: reset at the top of every dispatch, set
+        by :meth:`end_headers`. It answers "can I still choose a status code?",
+        which is only meaningful about the response currently being written.
+        """
         return bool(self.__dict__.get("_headers_flushed"))
 
     def end_headers(self) -> None:

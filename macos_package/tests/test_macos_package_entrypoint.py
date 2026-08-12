@@ -29,7 +29,13 @@ from macos_package.package_paths import (
     missing_package_resources,
     resolve_package_layout,
 )
-from macos_package.user_alert import STARTUP_FAILURE_MESSAGES, StartupFailure, show_alert
+from macos_package.user_alert import (
+    DATA_UNCHANGED_SENTENCE,
+    PRE_MUTATION_FAILURES,
+    STARTUP_FAILURE_MESSAGES,
+    StartupFailure,
+    show_alert,
+)
 from packaging_fixtures import build_frontend_dist, free_loopback_port
 
 
@@ -373,11 +379,117 @@ def test_keyboard_interrupt_is_a_clean_shutdown(tmp_path, use_layout, monkeypatc
 
 
 def test_every_startup_message_is_non_technical_and_actionable():
+    """Readable, free of internals, and offering the user a next step."""
     for failure, message in STARTUP_FAILURE_MESSAGES.items():
         assert message.strip(), failure
-        for forbidden in ("Traceback", "Error", "Exception", "/Users/", "sys.", "None"):
+        for forbidden in (
+            "Traceback",
+            "Error",
+            "Exception",
+            "/Users/",
+            "sys.",
+            "None",
+            "sqlite",
+            "SQLite",
+            "migration",
+            "5173",
+            "8000",
+        ):
             assert forbidden not in message, (failure, forbidden)
-        assert "Ваши данные не изменились" in message
+        # Every message ends by telling the user what to do next.
+        assert any(word in message for word in ("Закройте", "Удалите", "Попробуйте")), failure
+
+
+def test_only_proven_pre_mutation_failures_promise_that_data_is_unchanged():
+    """The reassurance must track the control flow, not the mood of the message.
+
+    By the time a launcher-stage failure is reported, the launcher may already
+    have created the user-data directory, created the database, taken a
+    `before_migration` backup and applied migrations. Promising an untouched
+    database there would be a false statement about the user's records.
+    """
+    for failure, message in STARTUP_FAILURE_MESSAGES.items():
+        claims = DATA_UNCHANGED_SENTENCE in message
+        assert claims == (failure in PRE_MUTATION_FAILURES), (
+            f"{failure} {'claims' if claims else 'does not claim'} unchanged data "
+            f"but is {'' if failure in PRE_MUTATION_FAILURES else 'not '}a proven "
+            "pre-mutation refusal"
+        )
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [StartupFailure.LAUNCHER_REFUSED, StartupFailure.UNEXPECTED, StartupFailure.BACKEND_PORT_BUSY],
+)
+def test_post_launcher_failures_make_no_data_immutability_promise(failure):
+    """These are all reachable after `initialize_backend_startup()` has run.
+
+    `BACKEND_PORT_BUSY` is included deliberately. `BackendPortUnavailableError`
+    is raised both by the launcher's early probe (before anything is written)
+    and by the backend child losing a race for the port *after* migrations have
+    been applied. Both arrive here as the same exception type, so the packaged
+    entrypoint cannot tell them apart and must not promise what only one of them
+    guarantees.
+    """
+    message = STARTUP_FAILURE_MESSAGES[failure]
+    assert DATA_UNCHANGED_SENTENCE not in message
+    for forbidden in ("ничего не изменив", "база данных не", "не была изменена"):
+        assert forbidden not in message, (failure, forbidden)
+
+
+def test_pre_mutation_set_matches_the_entrypoint_paths_that_precede_the_launcher():
+    """The set is only trustworthy if it names refusals that really do precede it.
+
+    Each of these is returned by the packaged entrypoint before
+    `run_local_runtime` is called, so no launcher code has executed and the
+    user-data directory has not been opened.
+    """
+    assert PRE_MUTATION_FAILURES == {
+        StartupFailure.MISSING_RESOURCES,
+        StartupFailure.RUNTIME_MISSING,
+        StartupFailure.FRONTEND_PORT_BUSY,
+    }
+
+
+def test_a_generic_launcher_failure_is_presented_without_a_data_promise(
+    tmp_path, use_layout, monkeypatch
+):
+    """End-to-end regression: the message a real launcher crash would show.
+
+    Simulates a failure raised *after* the launcher would have completed startup
+    work, and asserts the text the user is shown neither reassures them falsely
+    nor leaks the internals of what went wrong.
+    """
+    import launcher.runtime as launcher_runtime
+
+    shown: list[str] = []
+    monkeypatch.setattr("macos_package.user_alert.show_alert", lambda message: shown.append(message))
+    monkeypatch.delenv("COSMETIC_WORKSHOP_PACKAGE_DISABLE_ALERTS", raising=False)
+
+    def _fail_after_startup_work(_config):
+        raise sqlite3_like_failure()
+
+    def sqlite3_like_failure():
+        return RuntimeError("database is locked: /Users/someone/Documents/data.sqlite")
+
+    monkeypatch.setattr(launcher_runtime, "run_local_runtime", _fail_after_startup_work)
+    root = make_application_root(tmp_path, packaged=True)
+    layout = resolve_package_layout(root)
+    monkeypatch.setattr(entrypoint, "resolve_package_layout", lambda: layout)
+    monkeypatch.setattr(
+        "macos_package.entrypoint.bundled_runtime_owns_interpreter", lambda _layout: True
+    )
+
+    code = entrypoint.run_packaged_application(
+        ["--no-browser", "--frontend-port", str(free_loopback_port())]
+    )
+    assert code == entrypoint.EXIT_UNEXPECTED
+    assert shown == [STARTUP_FAILURE_MESSAGES[StartupFailure.UNEXPECTED]]
+    displayed = shown[0]
+    assert DATA_UNCHANGED_SENTENCE not in displayed
+    # Nothing from the exception reaches the user-visible text.
+    for leaked in ("database is locked", "/Users/someone", ".sqlite", "RuntimeError"):
+        assert leaked not in displayed
 
 
 def test_only_catalogue_messages_can_ever_be_displayed(monkeypatch):

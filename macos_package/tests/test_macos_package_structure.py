@@ -108,6 +108,65 @@ def test_a_missing_bootstrap_fails(tmp_path):
     assert "bundle_executable" in failures_of(bundle)
 
 
+# -- packaged interpreter isolation ----------------------------------------
+
+
+def test_the_shipped_bootstrap_isolates_the_packaged_interpreter(tmp_path):
+    """The real template must pin the interpreter environment, not inherit it."""
+    bundle = build_app_bundle(tmp_path)
+    assert "bootstrap_interpreter_isolation" not in failures_of(bundle)
+    bootstrap = (bundle / "Contents/MacOS/CosmeticWorkshopOS").read_text(encoding="utf-8")
+    assert 'export PYTHONPATH="$APP_ROOT"' in bootstrap
+    assert "PYTHONNOUSERSITE=1" in bootstrap
+    assert "unset PYTHONHOME" in bootstrap
+    assert "PYTHONDONTWRITEBYTECODE=1" in bootstrap
+    assert "/runtime/bin/python3.12" in bootstrap
+    assert "macos_package.entrypoint" in bootstrap
+
+
+@pytest.mark.parametrize(
+    "corruption,expected_fragment",
+    [
+        # The regression this check exists for: the inherited-append form.
+        ('export PYTHONPATH="$APP_ROOT"', 'export PYTHONPATH="$APP_ROOT:$PYTHONPATH"'),
+        ('export PYTHONPATH="$APP_ROOT"', 'export PYTHONPATH="$APP_ROOT:${PYTHONPATH}"'),
+    ],
+)
+def test_an_inherited_external_pythonpath_is_rejected(tmp_path, corruption, expected_fragment):
+    bundle = build_app_bundle(tmp_path)
+    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOS"
+    bootstrap.write_text(
+        bootstrap.read_text(encoding="utf-8").replace(corruption, expected_fragment),
+        encoding="utf-8",
+    )
+    assert "bootstrap_interpreter_isolation" in failures_of(bundle)
+
+
+@pytest.mark.parametrize(
+    "removed",
+    ["PYTHONNOUSERSITE=1", "unset PYTHONHOME", "PYTHONDONTWRITEBYTECODE=1"],
+)
+def test_dropping_an_interpreter_isolation_setting_is_rejected(tmp_path, removed):
+    bundle = build_app_bundle(tmp_path)
+    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOS"
+    bootstrap.write_text(
+        bootstrap.read_text(encoding="utf-8").replace(removed, "true"), encoding="utf-8"
+    )
+    assert "bootstrap_interpreter_isolation" in failures_of(bundle)
+
+
+def test_a_bootstrap_that_runs_some_other_interpreter_is_rejected(tmp_path):
+    bundle = build_app_bundle(tmp_path)
+    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOS"
+    bootstrap.write_text(
+        bootstrap.read_text(encoding="utf-8").replace(
+            "$RESOURCES/runtime/bin/python3.12", "/usr/bin/python3"
+        ),
+        encoding="utf-8",
+    )
+    assert "bootstrap_interpreter_isolation" in failures_of(bundle)
+
+
 # -- self-contained runtime ------------------------------------------------
 
 

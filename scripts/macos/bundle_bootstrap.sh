@@ -40,7 +40,19 @@ fi
 # The application root is the import root, exactly as the repository root is in
 # development, so `launcher/config.py`'s existing `parents[1]` resolution finds
 # `backend/` and `frontend/` inside the bundle without any packaging-aware code.
-export PYTHONPATH="$APP_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+#
+# It is set to exactly that and nothing else. An inherited `PYTHONPATH` used to
+# be appended, which quietly let whatever happened to be in the launching
+# environment take part in resolving this product's modules — the opposite of
+# what a self-contained package is for, and a way for a developer checkout to
+# shadow packaged code on one machine and not another.
+export PYTHONPATH="$APP_ROOT"
+# A stray `PYTHONHOME` would point the bundled interpreter at some other
+# installation's standard library.
+unset PYTHONHOME
+# Ignore ~/Library/Python/*/lib/python/site-packages. The package ships the
+# dependencies it needs; a user-site copy of one of them must not win.
+export PYTHONNOUSERSITE=1
 # The app must never write bytecode into its own bundle.
 export PYTHONDONTWRITEBYTECODE=1
 

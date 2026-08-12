@@ -11,12 +11,22 @@ no dependency, and it is **not** a second product UI — it has no state, no
 navigation, no product data, and it only ever runs on a path that ends in the
 application exiting.
 
-Two rules make it safe to keep:
+Three rules make it safe to keep:
 
 ```text
 1. the dialog text is chosen from a fixed catalogue, never composed
 2. nothing user-, path- or exception-derived is ever passed to AppleScript
+3. a message never claims more about the user's data than the code path proves
 ```
+
+Rule 3 is the one that is easy to get wrong and expensive to get wrong. A
+reassuring "nothing changed" is exactly what a frightened user wants to read,
+which is why it must only appear where it is true. By the time a *launcher*
+failure is reported, the launcher may already have created the user-data
+directory, created the database, taken a `before_migration` backup and applied
+migrations — so telling that user their data is untouched is a false statement
+about their records. :data:`PRE_MUTATION_FAILURES` is the enforced boundary, and
+a test pins it so the two cannot drift.
 
 The catalogue is why. `osascript -e` compiles its argument as source, so any
 interpolated string is executable text; a filesystem path or an exception
@@ -59,6 +69,41 @@ class StartupFailure(Enum):
     UNEXPECTED = "unexpected"
 
 
+# The one sentence this module is not allowed to say casually.
+DATA_UNCHANGED_SENTENCE = "Ваши данные не изменились."
+
+# The only failure categories that may say it.
+#
+# Each of these is refused by the packaged entrypoint **before**
+# `launcher.runtime.run_local_runtime` is called at all, so no launcher code has
+# run, the user-data directory has not been opened, and nothing can have been
+# written. That is a fact about control flow, not a hope.
+#
+# Everything else is reachable *after* the launcher has already done real work.
+# The ordering in `_run_locked_runtime` is:
+#
+# ```text
+# assert_port_available()          ← early probe, nothing written yet
+# resolve_restore_recovery()
+# initialize_backend_startup()     ← user-data dirs, database, BACKUP, migrations
+# context.backend.start()          ← child binds; may refuse the port for real
+# ```
+#
+# `BACKEND_PORT_BUSY` is deliberately **not** in this set, even though the early
+# probe is pre-mutation. `BackendPortUnavailableError` has two raise sites — the
+# probe above, and the child's own bind losing a race for the port *after*
+# migrations have been applied — and both surface here as the same exception
+# type. The packaged entrypoint cannot tell them apart, so it must not promise
+# what only one of them guarantees. Claiming "nothing changed" to a user whose
+# database was just migrated would be worse than saying nothing.
+PRE_MUTATION_FAILURES = frozenset(
+    {
+        StartupFailure.MISSING_RESOURCES,
+        StartupFailure.RUNTIME_MISSING,
+        StartupFailure.FRONTEND_PORT_BUSY,
+    }
+)
+
 # Fixed, non-technical, and each one ends with something the user can do. No
 # entry contains a path, a port number, an exception message or a stack trace.
 STARTUP_FAILURE_MESSAGES: dict[StartupFailure, str] = {
@@ -79,18 +124,17 @@ STARTUP_FAILURE_MESSAGES: dict[StartupFailure, str] = {
     ),
     StartupFailure.BACKEND_PORT_BUSY: (
         "Не удалось запустить рабочую часть программы: нужный порт занят другой программой. "
-        "Закройте другое окно приложения или другую программу и откройте приложение снова. "
-        "Ваши данные не изменились."
+        "Закройте другое окно приложения или другую программу и откройте приложение снова."
     ),
     StartupFailure.LAUNCHER_REFUSED: (
-        "Приложение не смогло запуститься и остановилось, ничего не изменив. "
-        "Закройте другие окна приложения и попробуйте снова. "
-        "Ваши данные не изменились."
+        "Приложение не смогло продолжить запуск. "
+        "Закройте другие окна приложения и попробуйте открыть его снова. "
+        "Если ошибка повторяется, используйте резервную копию или обратитесь за помощью."
     ),
     StartupFailure.UNEXPECTED: (
-        "Приложение не смогло запуститься из-за непредвиденной ошибки и остановилось. "
-        "Попробуйте открыть приложение ещё раз. "
-        "Ваши данные не изменились."
+        "Во время запуска произошла непредвиденная ошибка. "
+        "Закройте приложение и попробуйте открыть его снова. "
+        "Если ошибка повторяется, обратитесь за помощью."
     ),
 }
 

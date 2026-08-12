@@ -55,6 +55,14 @@ def build_frontend_dist(root: Path) -> Path:
     return dist
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BOOTSTRAP_TEMPLATE = REPO_ROOT / "scripts" / "macos" / "bundle_bootstrap.sh"
+
+
+def bootstrap_template_source() -> str:
+    return BOOTSTRAP_TEMPLATE.read_text(encoding="utf-8")
+
+
 MIGRATIONS_MODULE_SOURCE = '''\
 MIGRATION_MODULES = [
     "app.migrations.versions.0001_infrastructure",
@@ -84,8 +92,12 @@ def build_app_bundle(root: Path, *, name: str = "CosmeticWorkshopOS.app") -> Pat
             }
         )
     )
+    # The real template, not a stub. The structure gate inspects the bootstrap
+    # that is actually inside a bundle, so the fixture has to carry the same
+    # script the build installs — otherwise these tests would validate a
+    # placeholder while the shipped script drifted.
     executable = macos / "CosmeticWorkshopOS"
-    executable.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
+    executable.write_text(bootstrap_template_source(), encoding="utf-8")
     executable.chmod(executable.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     runtime_bin = resources / "runtime" / "bin"

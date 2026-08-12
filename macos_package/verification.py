@@ -172,6 +172,9 @@ def verify_package(
 
     checks.append(_check_info_plist(contents / "Info.plist"))
     checks.append(_check_bundle_executable(contents / "MacOS" / BUNDLE_EXECUTABLE_NAME))
+    checks.append(
+        _check_bootstrap_interpreter_isolation(contents / "MacOS" / BUNDLE_EXECUTABLE_NAME)
+    )
     checks.append(_check_bundled_runtime(resources / "runtime"))
     checks.extend(_check_required_files(application_root))
     checks.append(_check_frontend_assets(application_root / "frontend" / "dist"))
@@ -228,6 +231,49 @@ def _check_bundle_executable(executable_path: Path) -> Check:
             "bundle_executable", False, "the bundle executable is not marked executable"
         )
     return Check("bundle_executable", True)
+
+
+def _check_bootstrap_interpreter_isolation(bootstrap_path: Path) -> Check:
+    """The bootstrap must not let the launching environment into the package.
+
+    A self-contained product that still honours an inherited `PYTHONPATH`,
+    `PYTHONHOME` or the user-site directory is not self-contained: whatever
+    happens to be configured on the machine can shadow packaged modules or
+    redirect the bundled interpreter at another installation's standard library.
+    That is precisely the class of difference that makes a package work on the
+    build machine and fail on the user's, and it would quietly undermine every
+    later exact-package verification.
+
+    Checked against the bootstrap actually inside the bundle rather than against
+    the template it was copied from, so an edit that never reached the artifact
+    cannot pass this.
+    """
+    if not bootstrap_path.is_file():
+        return Check("bootstrap_interpreter_isolation", False, "bootstrap script is missing")
+    text = bootstrap_path.read_text(encoding="utf-8", errors="replace")
+
+    problems: list[str] = []
+    if 'export PYTHONPATH="$APP_ROOT"' not in text:
+        problems.append("PYTHONPATH is not pinned to the packaged application root")
+    # The inherited-append form, in any spacing variant.
+    if ":$PYTHONPATH" in text or ":${PYTHONPATH}" in text:
+        problems.append("an inherited external PYTHONPATH is appended")
+    if "PYTHONNOUSERSITE=1" not in text:
+        problems.append("user-site packages are not disabled")
+    if "unset PYTHONHOME" not in text:
+        problems.append("PYTHONHOME is not cleared")
+    if "PYTHONDONTWRITEBYTECODE=1" not in text:
+        problems.append("the app may write bytecode into its own bundle")
+    # Matched on the bundle-relative tail, because the script reaches it through
+    # its own `$RESOURCES` variable rather than spelling out an absolute path.
+    if "/runtime/bin/python3.12" not in text:
+        problems.append("the bundled interpreter is not the one executed")
+    if "macos_package.entrypoint" not in text:
+        problems.append("the packaged entrypoint is not the module started")
+
+    if problems:
+        return Check("bootstrap_interpreter_isolation", False, "; ".join(problems))
+    return Check("bootstrap_interpreter_isolation", True)
 
 
 def _check_bundled_runtime(runtime_dir: Path) -> Check:

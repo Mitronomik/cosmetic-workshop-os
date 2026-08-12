@@ -19,6 +19,7 @@ an occupied port is a refusal, not a silent move elsewhere
 
 from __future__ import annotations
 
+from http.client import HTTPConnection, IncompleteRead
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import socket
@@ -433,6 +434,107 @@ def test_only_the_api_prefix_is_proxied(frontend_root):
         finally:
             server.stop()
     assert backend.received == []
+
+
+def test_backend_failure_after_a_success_on_the_same_connection_still_returns_502(
+    frontend_root,
+):
+    """The keep-alive regression: per-response state must not leak forward.
+
+    One handler instance serves every request on a keep-alive connection. The
+    "have this response's headers been sent?" flag was set by request 1 and
+    never cleared, so when request 2's backend call failed the handler believed
+    it had already committed a response and dropped the connection instead of
+    answering `502`. The SPA saw a transport error rather than the honest
+    status, on exactly the connection it had just been using successfully.
+
+    Driven through a single `HTTPConnection` on purpose — two `urlopen()` calls
+    would each get a fresh handler and could never reproduce it.
+    """
+    backend_port = free_loopback_port()
+    frontend_port = free_loopback_port()
+    server = LocalFrontendServer(
+        FrontendServerConfig(
+            root=frontend_root, port=frontend_port, backend_port=backend_port
+        )
+    )
+    server.start()
+    connection = HTTPConnection("127.0.0.1", frontend_port, timeout=15)
+    try:
+        with _StubBackend(backend_port):
+            connection.request("GET", "/api/settings/status")
+            first = connection.getresponse()
+            body = first.read()  # fully consumed, so the connection stays usable
+        assert first.status == 200
+        assert json.loads(body)["ok"] is True
+        # The backend is now gone; the frontend connection is deliberately kept.
+        connection.request("GET", "/api/settings/status")
+        second = connection.getresponse()
+        second_body = second.read()
+    finally:
+        connection.close()
+        server.stop()
+
+    assert second.status == 502, "the second request on the reused connection was not answered"
+    assert "Не удалось связаться" in second_body.decode("utf-8")
+
+
+def test_a_backend_that_dies_mid_body_does_not_get_a_fabricated_second_response(
+    frontend_root,
+):
+    """The inverse invariant, which the fix must not break.
+
+    Once this response's headers are on the wire the status is committed. A
+    backend that dies while its body is streaming cannot be retroactively turned
+    into a `502` — the client must see a truncated/aborted response, which is
+    what actually happened, rather than a second set of headers.
+    """
+    backend_port = free_loopback_port()
+    frontend_port = free_loopback_port()
+
+    def _truncating_backend(client: socket.socket) -> None:
+        client.recv(65536)
+        # Promises far more body than it delivers, then hangs up.
+        client.sendall(
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+            b"Content-Length: 100000\r\n\r\n" + b'{"partial":'
+        )
+        client.close()
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", backend_port))
+    listener.listen(1)
+
+    def _serve() -> None:
+        try:
+            client, _ = listener.accept()
+            _truncating_backend(client)
+        except OSError:
+            pass
+
+    thread = threading.Thread(target=_serve, daemon=True)
+    thread.start()
+
+    server = LocalFrontendServer(
+        FrontendServerConfig(
+            root=frontend_root, port=frontend_port, backend_port=backend_port
+        )
+    )
+    server.start()
+    connection = HTTPConnection("127.0.0.1", frontend_port, timeout=15)
+    try:
+        connection.request("GET", "/api/settings/status")
+        response = connection.getresponse()
+        # The committed status is the backend's own 200, never a rewritten 502.
+        assert response.status == 200
+        with pytest.raises((IncompleteRead, ConnectionError, OSError)):
+            response.read()
+    finally:
+        connection.close()
+        server.stop()
+        listener.close()
+        thread.join(timeout=5)
 
 
 def test_no_cors_headers_are_added(frontend_root):
