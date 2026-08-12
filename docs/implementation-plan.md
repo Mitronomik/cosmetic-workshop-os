@@ -149,7 +149,7 @@ C4-III does not authorize:
 - durable phase reconstruction in frontend;
 - production refactor hidden inside verification;
 - packaging or updater implementation or redesign inside the C4-III slice, including producing a `.app`, `.dmg`, ZIP or packaged runtime under the C4-III verification claim — that work belongs to the separate CR-012 successor task above;
-- D4, D5, signing, notarization, auto-update or App Store work under any authorization;
+- D4, D5, signing, notarization, auto-update or App Store work — not authorized by CR-012, and never to be performed inside C4-III;
 - C4 lifecycle completion without the required evidence.
 
 If verification reveals a product defect, STOP the verification claim, open a separate bounded defect-fix PR, rerun the affected exact-head checks, then resume C4-III.
