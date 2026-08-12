@@ -5,6 +5,7 @@ Updated: `2026-08-12`
 ## Current lifecycle
 
 ```text
+PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
 PR #188 — MERGED — C4-II-C EXACT-HEAD VERIFIED
 PR #187 — MERGED — C4-II-C AUTHORIZATION BASELINE
@@ -27,6 +28,8 @@ C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
 C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
+CR-012 — ACCEPTED — MINIMAL MACOS PACKAGED-ARTIFACT PREREQUISITE
+Minimal macOS packaged-artifact prerequisite — AUTHORIZED NEXT — NOT IMPLEMENTED
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -43,10 +46,24 @@ C4-III verifies the already-decided and merged Restore architecture. No new Chan
 
 If C4-III appears to require a new launcher state, endpoint, DTO field, browser filesystem authority, durable phase, backend behavior, destructive command, packaging architecture or other product/architecture change, STOP and open a separate decision/change request or bounded defect-fix PR as appropriate.
 
-## Open prerequisite — packaged artifact for exact-package verification
+Building the packaged artifact is **not** C4-III work. It is the separate CR-012 successor task recorded below, and it must not be performed inside the C4-III verification slice.
 
-C4-III exact-head verification PASSED on `81e8193596709b0c16d0ecad598458b3ea95fd9c`. Exact-package verification returned `INCONCLUSIVE — ENVIRONMENT` because no packaged product artifact exists to verify.
+## CR-012 — Minimal macOS packaged-artifact prerequisite for C4-III exact-package verification
 
-Clearing that prerequisite means producing a packaged macOS artifact, which is packaging implementation. That is not authorized under C4-III and no Change Request currently authorizes it. It requires its own decision/change request before any `.app`, `.dmg`, ZIP or packaged runtime work begins. Until then C4-III lifecycle closure stays BLOCKED and the result stays labelled INCONCLUSIVE, never PASS.
+Status: **ACCEPTED** — 2026-08-12. Normative decision: [`docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](../docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md).
+
+C4-III exact-head verification PASSED on `81e8193596709b0c16d0ecad598458b3ea95fd9c`. Exact-package verification returned `INCONCLUSIVE — ENVIRONMENT` because no packaged product artifact exists to verify. PR #190 recorded that result and merged as `1a5061b236cf7f69bca9ba533553e21401b94ab8`.
+
+CR-012 clears the decision half of that blocker and authorizes exactly one bounded successor implementation task:
+
+```text
+Minimal macOS packaged-artifact prerequisite — AUTHORIZED NEXT — NOT IMPLEMENTED
+```
+
+The successor task packages the existing local-first topology — launcher → localhost backend → built frontend → ordinary system browser → external user-data directory — into `CosmeticWorkshopOS-mac.zip`, preferably containing a simple `CosmeticWorkshopOS.app`. It packages the product; it does not replace it. ADR 0016 and ADR 0018 Restore semantics, the browser-first presentation surface and the external user-data rules stay unchanged. No desktop application shell — Electron, Tauri, pywebview, PyObjC — no second product UI, no WebView replacement for the browser UI, no new Restore transport and no backend Restore endpoint is authorized.
+
+Bounded authorization rule: **only the bounded minimal packaged-artifact prerequisite is authorized; full D3 / release packaging remains outside this authorization.** Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation beyond testing this artifact, full D4 update safety and D5 remote-install work all remain **NOT AUTHORIZED** by CR-012. ADR 0019 holds the full artifact contract, package contents, exclusions, build-only-tool conditions and stop conditions.
+
+Producing the artifact is a verification prerequisite, never product release readiness. Exact-package verification stays `INCONCLUSIVE — ENVIRONMENT` and C4-III lifecycle closure stays NOT COMPLETED until the artifact actually exists and the external exact-package verifier runs and passes against it.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.
