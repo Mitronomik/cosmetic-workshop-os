@@ -1,17 +1,23 @@
-# ADR 0019 — Minimal macOS packaged-artifact prerequisite for C4-III exact-package verification
+# ADR 0019 — D3 macOS package MVP as the C4-III exact-package prerequisite
 
 ## Status
 
 `ACCEPTED` — 2026-08-12.
 
-This ADR decides `CR-012 — Minimal macOS packaged-artifact prerequisite for C4-III exact-package verification`.
+This ADR decides `CR-012 — D3 macOS package MVP authorization for C4-III exact-package verification`.
 
-It authorizes exactly one bounded successor implementation task:
+It authorizes the existing roadmap stage, unchanged, as the one bounded successor implementation task:
 
 ```text
-Minimal macOS packaged-artifact prerequisite
+D3 — macOS package MVP
 — AUTHORIZED NEXT — NOT IMPLEMENTED
+
+Current purpose:
+produce the packaged product artifact required for
+C4-III exact-package verification.
 ```
+
+`D3 — macOS package MVP` is already defined in [`docs/roadmap.md`](../roadmap.md). This ADR does not invent a new packaging stage, does not redefine D3, and does not place a separate prerequisite phase before it. It gives the existing D3 stage its authorization and its current purpose, and it keeps D3's own roadmap scope, tests and non-goals authoritative.
 
 It contains no packaging implementation. No packaged artifact exists on `main` as a result of this decision.
 
@@ -33,9 +39,13 @@ PR #190 recorded that result and merged as `1a5061b236cf7f69bca9ba533553e21401b9
 
 The exact-package half did not fail. It could not run, because **no packaged product artifact exists**. `scripts/package_macos.sh` is a placeholder that prints `TODO: implement in a future PR`. The launcher runs from the repository working tree via `python3 -m launcher.main`. There is no `.app`, no ZIP, no bundled backend runtime and no packaged production frontend.
 
-Until PR #190, no Change Request authorized producing one, so the blocker was correctly recorded as a prerequisite rather than cleared by hiding packaging work inside the C4-III verification slice. That remains the correct handling of the slice boundary, but it leaves C4-III permanently unclosable: the missing prerequisite is a decision gap, not a defect and not an environment accident that will resolve itself.
+Two separate facts must stay separate here.
 
-This ADR closes that decision gap and nothing else.
+The exact-package verifier correctly reported `INCONCLUSIVE — ENVIRONMENT` because the required packaged artifact was unavailable. Separately, no packaging implementation had yet been authorized to produce that artifact. CR-012 closes only that authorization gap. It does not reclassify or amend the previously recorded verification result.
+
+That recorded result stands exactly as PR #190 captured it, and this ADR does not revisit it. What this ADR changes is governance: without an authorized packaging stage, C4-III had no route to the artifact, so it stayed unclosable by construction and Restore stayed frozen at `NOT IMPLEMENTED`.
+
+This ADR closes that authorization gap and nothing else.
 
 ## Decision drivers
 
@@ -44,7 +54,8 @@ This ADR closes that decision gap and nothing else.
 - The already-merged and audited Restore architecture must not be reopened, re-transported or re-owned in order to package it.
 - The product is browser-first and local-first by accepted architecture; packaging must deliver that product, not a different one.
 - The end user is non-technical and must not acquire developer tooling in order to run the product.
-- Full D3/D4/D5 release work is far larger than this prerequisite and must not be smuggled in behind it.
+- The roadmap already has a stage for exactly this artifact; a parallel packaging stage would fragment the plan.
+- D4, D5 and later release/distribution work are far larger than this stage and must not be smuggled in behind it.
 
 ## Considered alternatives
 
@@ -52,13 +63,19 @@ This ADR closes that decision gap and nothing else.
 
 Advantage: changes nothing and risks nothing.
 
-Rejected. The blocker is a missing decision, not a missing environment. Leaving it in place makes C4-III unclosable by construction and freezes Restore at `NOT IMPLEMENTED` forever.
+Rejected. Nothing about the recorded verification result needs revisiting; what is missing is an authorization to produce the artifact. Leaving that gap open makes C4-III unclosable by construction and freezes Restore at `NOT IMPLEMENTED` forever.
 
-### Option B — authorize full D3 macOS packaging and release readiness now
+### Option B — authorize D3 together with D4, D5 and release readiness now
 
 Advantage: one authorization would cover packaging, updates and release.
 
-Rejected. D3/D4/D5 include signing, notarization, DMG, update safety, remote-install automation and release-candidate certification. None of that is required to run one exact-package verification, and bundling it here would turn a prerequisite into an unbounded release programme and would let "package exists" be misread as "product is releasable".
+Rejected. D4 and D5 add update safety, remote-install automation and release-candidate certification, and the wider release programme adds signing, notarization and DMG/App Store distribution. None of that is required to run one exact-package verification, and bundling it here would turn a bounded stage into an unbounded release programme and would let "package exists" be misread as "product is releasable".
+
+### Option B2 — invent a new pre-D3 packaging stage for the verification artifact
+
+Advantage: a purpose-named stage would read as tightly scoped to C4-III.
+
+Rejected. The roadmap's `D3 — macOS package MVP` already has precisely this scope — build frontend, build/package backend runtime, include migrations, include launcher, create `CosmeticWorkshopOS-mac.zip` or a simple `.app` if feasible — and precisely these non-goals: no signing, no auto-update, no App Store, no mandatory `.dmg`. A parallel stage would duplicate D3, leave two competing packaging plans and make the roadmap wrong. Authorize D3 itself instead.
 
 ### Option C — adopt a desktop application shell (Electron, Tauri, pywebview, PyObjC)
 
@@ -66,15 +83,17 @@ Advantage: a native shell is a conventional way to obtain a double-clickable mac
 
 Rejected. Every such shell replaces or duplicates the accepted browser-first presentation surface, introduces a second product UI or a WebView substitute for it, adds a persistent runtime framework and dependency class, and — most importantly — would put a new host process between the browser and the launcher-owned loopback Restore control plane decided in ADR 0018. That is an architecture redesign, not a packaging prerequisite. ADR 0018 already rejected adding PyObjC, Electron, Tauri, pywebview or a WebSocket framework by assumption; this ADR does not reverse that.
 
-### Option D — package the existing architecture, unchanged, as a minimal distributable artifact
+### Option D — authorize the existing roadmap D3 stage, packaging the architecture unchanged
 
-Advantage: produces the artifact the verifier needs while leaving product topology, Restore ownership, browser surface and user-data rules byte-for-byte as decided.
+Advantage: produces the artifact the verifier needs, uses the stage the roadmap already defines, and leaves product topology, Restore ownership, browser surface and user-data rules byte-for-byte as decided.
 
 **Selected: Option D.**
 
 ## Decision
 
-Authorize one bounded successor implementation task that produces a minimal, self-contained, user-openable macOS product artifact by packaging the **existing** local-first architecture. The successor task packages the product; it does not redesign it.
+Authorize the existing roadmap stage `D3 — macOS package MVP` as the one bounded successor implementation task. Its current purpose is to produce the packaged product artifact required for C4-III exact-package verification. It produces a self-contained, user-openable macOS product artifact by packaging the **existing** local-first architecture. D3 packages the product; it does not redesign it.
+
+D3's roadmap scope, user scenario, tests and non-goals remain authoritative. The sections below record the architectural constraints that packaging must respect; they do not widen D3 and do not restate it as a different stage.
 
 ### Preserved product topology
 
@@ -196,10 +215,12 @@ CR-012 must not be read as authorizing the release programme. Explicitly outside
 - multi-user infrastructure — NOT AUTHORIZED;
 - full release-candidate certification — NOT AUTHORIZED;
 - general remote-install automation beyond what is required to test this artifact — NOT AUTHORIZED;
-- full D4 update-safety implementation — NOT AUTHORIZED;
-- D5 remote-install work — NOT AUTHORIZED.
+- D4 — Update safety — NOT AUTHORIZED BY CR-012;
+- D5 — Remote install checklist — NOT AUTHORIZED BY CR-012.
 
-Full D3 remains outside this authorization. Stated as the one rule that replaces the earlier blanket prohibition: **only the bounded minimal packaged-artifact prerequisite is authorized; full D3 / release packaging remains outside this authorization.** Producing the artifact is a verification prerequisite and is never product release readiness.
+None of the items above belong to D3. They are D4, D5 or later release/distribution work, and the roadmap's own D3 non-goals — no signing, no auto-update, no App Store, no mandatory `.dmg` — remain authoritative and are not widened here.
+
+Stated as the one rule that replaces the earlier blanket prohibition on packaging implementation: **CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization.** Producing the artifact is a verification prerequisite and is never product release readiness.
 
 ## Exact-package testability contract
 
@@ -239,8 +260,10 @@ PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
 C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
-CR-012 — ACCEPTED — MINIMAL MACOS PACKAGED-ARTIFACT PREREQUISITE
-Minimal macOS packaged-artifact prerequisite — AUTHORIZED NEXT — NOT IMPLEMENTED
+CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```

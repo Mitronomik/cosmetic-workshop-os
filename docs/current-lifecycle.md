@@ -3,7 +3,7 @@
 Status: **CURRENT — NORMATIVE LIFECYCLE PROFILE**
 Updated: `2026-08-12`
 
-ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authoritative for launcher control, picker and exact-run browser-session interaction. ADR 0017 remains authoritative for the C4 slice split and C4-III verification/lifecycle-closure purpose. ADR 0019 is authoritative for the bounded minimal macOS packaged-artifact prerequisite decided by `CR-012`; it amends none of the Restore ADRs.
+ADR 0016 remains authoritative for destructive Restore. ADR 0018 remains authoritative for launcher control, picker and exact-run browser-session interaction. ADR 0017 remains authoritative for the C4 slice split and C4-III verification/lifecycle-closure purpose. ADR 0019 is authoritative for the bounded `D3 — macOS package MVP` authorization decided by `CR-012`; it amends none of the Restore ADRs.
 
 ## Current lifecycle
 
@@ -31,8 +31,10 @@ C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
 C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
-CR-012 — ACCEPTED — MINIMAL MACOS PACKAGED-ARTIFACT PREREQUISITE
-Minimal macOS packaged-artifact prerequisite — AUTHORIZED NEXT — NOT IMPLEMENTED
+CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -164,19 +166,27 @@ C4-III is verification/lifecycle work, not authority redesign. It may add or ref
 
 Exact-package verification required by ADR 0017 does not silently authorize packaging implementation. That prerequisite is currently unavailable, so that verification is recorded as incomplete rather than being unblocked by adding packaging/update work under C4-III.
 
-## CR-012 — accepted packaged-artifact prerequisite
+## CR-012 — accepted D3 macOS package MVP authorization
 
-`CR-012 — Minimal macOS packaged-artifact prerequisite for C4-III exact-package verification` is **ACCEPTED**. The normative decision is [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md); this profile carries only the lifecycle reference.
+`CR-012 — D3 macOS package MVP authorization for C4-III exact-package verification` is **ACCEPTED**. The normative decision is [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md); this profile carries only the lifecycle reference.
 
-It authorizes exactly one bounded successor implementation task, outside C4-III:
+The exact-package verifier correctly reported `INCONCLUSIVE — ENVIRONMENT` because the required packaged artifact was unavailable. Separately, no packaging implementation had yet been authorized to produce that artifact. CR-012 closes only that authorization gap. It does not reclassify or amend the previously recorded verification result.
+
+It authorizes the existing roadmap stage as the one bounded successor implementation task, outside C4-III:
 
 ```text
-Minimal macOS packaged-artifact prerequisite — AUTHORIZED NEXT — NOT IMPLEMENTED
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+
+Current purpose:
+produce the packaged product artifact required for
+C4-III exact-package verification.
 ```
+
+`D3 — macOS package MVP` is the roadmap's own stage. CR-012 authorizes it rather than introducing a parallel packaging phase, and D3's roadmap scope, tests and non-goals stay authoritative.
 
 That task packages the existing local-first architecture — launcher → local backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory — as `CosmeticWorkshopOS-mac.zip`. It preserves the browser-first product surface and the ADR 0018 Restore architecture, introduces no desktop application shell, no second product UI, no new Restore transport and no backend Restore endpoint, and keeps user data outside the package.
 
-The earlier blanket rule — that packaging implementation had no authorization at all — is now narrower and truthful: **only the bounded minimal packaged-artifact prerequisite is authorized; full D3 / release packaging remains outside this authorization.** Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation, full D4 update safety and D5 remote-install work remain NOT AUTHORIZED.
+The earlier blanket rule — that packaging implementation had no authorization at all — is now narrower and truthful: **CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization.** Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation, D4 update safety and D5 remote-install work remain NOT AUTHORIZED.
 
 No package exists. This decision does not create one, does not run exact-package verification, and does not advance C4-III lifecycle closure.
 

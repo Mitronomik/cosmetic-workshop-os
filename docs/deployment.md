@@ -28,8 +28,10 @@ C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
 C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
-CR-012 — ACCEPTED — MINIMAL MACOS PACKAGED-ARTIFACT PREREQUISITE
-Minimal macOS packaged-artifact prerequisite — AUTHORIZED NEXT — NOT IMPLEMENTED
+CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -44,10 +46,10 @@ C4-III is verification/lifecycle work. It does not authorize deployment topology
 
 ## CR-012 packaged-artifact prerequisite
 
-`CR-012` is ACCEPTED — [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md) — and authorizes one bounded successor task outside C4-III: `Minimal macOS packaged-artifact prerequisite — AUTHORIZED NEXT — NOT IMPLEMENTED`.
+`CR-012` is ACCEPTED — [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md) — and authorizes one bounded successor task outside C4-III: `D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED`.
 
 That task changes **no deployment topology**. The packaged product keeps the same shape it has today — launcher → local backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory — and adds no service, no port, no cloud dependency, no backend Restore endpoint, no mandatory internet and no desktop application shell. It only makes the existing runtime distributable as `CosmeticWorkshopOS-mac.zip`.
 
-Only the bounded minimal packaged-artifact prerequisite is authorized; full D3 / release packaging remains outside this authorization. Signing, notarization, mandatory DMG, auto-update, update download, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, full D4 update safety and D5 remote-install work stay NOT AUTHORIZED.
+CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization. Signing, notarization, mandatory DMG, auto-update, update download, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, D4 update safety and D5 remote-install work stay NOT AUTHORIZED.
 
 Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

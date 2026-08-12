@@ -28,8 +28,10 @@ C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
 C4-III EXACT-PACKAGE VERIFICATION — BLOCKED BY PACKAGED ARTIFACT PREREQUISITE
 C4-III LIFECYCLE CLOSURE — NOT COMPLETED
-CR-012 — ACCEPTED — MINIMAL MACOS PACKAGED-ARTIFACT PREREQUISITE
-Minimal macOS packaged-artifact prerequisite — AUTHORIZED NEXT — NOT IMPLEMENTED
+CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
+D3 — macOS package MVP — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
 Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
@@ -116,7 +118,7 @@ Item 11 of the required verification list asks for exact-head **or** exact-packa
 
 The single remaining blocker is the missing packaged product artifact. Building one is not authorized inside C4-III; it is the separate authorized successor task below.
 
-### Authorized successor task — minimal macOS packaged-artifact prerequisite
+### Authorized successor task — D3 macOS package MVP
 
 Status: **AUTHORIZED NEXT — NOT IMPLEMENTED**. Decided by `CR-012` / [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md). It runs **outside** C4-III and must not be merged into the C4-III verification claim.
 
@@ -132,7 +134,7 @@ existing local-first architecture
 
 Bounded scope: launcher, bundled backend runtime, production frontend build, migrations, required configuration/resources and required offline help — packaged around the unchanged topology launcher → backend on `127.0.0.1` → built frontend → ordinary system browser → external user-data directory. No user database, backups, exports, attachments, logs, credentials, secrets or repository working data inside the package. User data stays external and survives replacement/restart. No desktop application shell, second product UI, WebView replacement, new Restore transport or backend Restore endpoint. A build-only packaging tool is allowed only under the six ADR 0019 conditions; otherwise STOP and open a new decision.
 
-Only the bounded minimal packaged-artifact prerequisite is authorized; full D3 / release packaging remains outside this authorization. Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation, full D4 and D5 remain NOT AUTHORIZED.
+CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization. Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation, D4 and D5 remain NOT AUTHORIZED — the roadmap D3 non-goals stay authoritative.
 
 The artifact is a verification prerequisite. It does not close C4-III, does not implement Restore and does not make the product release-ready. Exact-package verification stays `INCONCLUSIVE — ENVIRONMENT` until the artifact exists and the external exact-package verifier runs and passes against the packaged runtime.
 
@@ -147,7 +149,7 @@ C4-III does not authorize:
 - durable phase reconstruction in frontend;
 - production refactor hidden inside verification;
 - packaging or updater implementation or redesign inside the C4-III slice, including producing a `.app`, `.dmg`, ZIP or packaged runtime under the C4-III verification claim — that work belongs to the separate CR-012 successor task above;
-- full D3 / release packaging, signing, notarization, auto-update or App Store work under any authorization;
+- D4, D5, signing, notarization, auto-update or App Store work under any authorization;
 - C4 lifecycle completion without the required evidence.
 
 If verification reveals a product defect, STOP the verification claim, open a separate bounded defect-fix PR, rerun the affected exact-head checks, then resume C4-III.
