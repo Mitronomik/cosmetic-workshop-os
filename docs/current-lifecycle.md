@@ -226,7 +226,7 @@ Verified verification scope, from ADR 0017:
 - mandatory safety-copy retention;
 - end-to-end lifecycle closure.
 
-C4-III was verification/lifecycle work, not authority redesign. It added focused tests, isolated external smoke runners, verification documentation and lifecycle/checker evidence. It changed no production behavior and reopened no closed authority. No verification attempt reported a product defect, so no bounded defect-fix PR was required.
+C4-III was verification/lifecycle work, not authority redesign. It added focused tests, isolated external smoke runners, verification documentation and lifecycle/checker evidence. It changed no production behavior and reopened no closed authority. No accepted verification established a product defect, so no bounded defect-fix PR was required. The v1.1 runner emitted a textual `FAIL — PRODUCT`, but inspection proved that classification invalid as product evidence because it originated from the runner's own `UnboundLocalError`.
 
 Exact-package verification required by ADR 0017 never silently authorized packaging implementation. While the prerequisite was unavailable that verification was recorded as incomplete, and the artifact was produced later by D3 under its own authorization rather than by adding packaging/update work under C4-III.
 
