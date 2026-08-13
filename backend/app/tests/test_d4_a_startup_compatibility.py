@@ -137,7 +137,9 @@ def test_user_startup_rejects_unknown_existing_db_before_backup_or_migration(
     def forbidden(*_args, **_kwargs):
         raise AssertionError("mutation-capable startup helper was reached")
 
-    monkeypatch.setattr(startup_service, "backup_sqlite_database", forbidden)
+    monkeypatch.setattr(startup_service, "create_user_data_directories", forbidden)
+    monkeypatch.setattr(startup_service, "reconcile_interrupted_update", forbidden)
+    monkeypatch.setattr(startup_service, "execute_staged_update", forbidden)
     monkeypatch.setattr(startup_service, "initialize_database", forbidden)
 
     with pytest.raises(StartupSchemaCompatibilityError):

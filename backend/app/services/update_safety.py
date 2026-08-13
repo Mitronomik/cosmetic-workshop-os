@@ -451,12 +451,22 @@ def reconcile_interrupted_update(
     record = started[0]
     canonical_lineage = compatibility.applied_migration_ids
     if canonical_lineage == record.to_schema_identity:
+        _verify_database(
+            paths.database_path,
+            record.to_schema_identity,
+            category="interrupted-target-verification-failed",
+        )
         _cleanup_owned_stage_artifacts(paths.database_path, record.operation_id)
         completed = _completed_record(record)
         _persist_operation(journal_path, records, completed)
         return UpdateReconciliationResult(operation=completed, reconciled_to_completed=True)
 
     if canonical_lineage == record.from_schema_identity:
+        _verify_database(
+            paths.database_path,
+            record.from_schema_identity,
+            category="interrupted-source-verification-failed",
+        )
         _cleanup_owned_stage_artifacts(paths.database_path, record.operation_id)
         failed = _failed_record(
             record,

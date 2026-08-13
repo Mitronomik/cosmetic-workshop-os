@@ -18,6 +18,7 @@ from app.db.migrations import MIGRATION_MODULES, apply_migrations, expected_migr
 from app.db.paths import USER_DATA_DIR_ENV
 from app.services.database import initialize_database
 from app.services.startup import initialize_startup
+from app.services.update_safety import UpdateSafetyError
 
 MIGRATION_ID = "0019_production_batch_tax_rate_snapshots"
 SNAPSHOT_COLUMNS = ("tax_rate_percent_snapshot", "tax_rate_effective_at_snapshot")
@@ -212,15 +213,16 @@ def test_a_failed_0019_destroys_neither_the_user_database_nor_the_backup(monkeyp
 
     monkeypatch.setattr(migration, "upgrade", failing_upgrade)
 
-    with pytest.raises(RuntimeError, match="forced migration failure"):
+    with pytest.raises(UpdateSafetyError, match="staged-migration-failed"):
         initialize_startup("user")
 
     backups = sorted((user_data_dir / "backups").iterdir())
     assert len(backups) == 1
     assert snapshot(backups[0]) == before
     assert not set(SNAPSHOT_COLUMNS) & set(columns(backups[0]))
-    # No user value was lost, and the migration was not recorded as applied.
+    # D4-B runs the failing DDL only on the disposable stage. Canonical remains pre-0019.
     assert snapshot(database_path) == before
+    assert not set(SNAPSHOT_COLUMNS) & set(columns(database_path))
     assert MIGRATION_ID not in applied(database_path)
     assert pending_migration_ids(DatabaseConfig(path=database_path)) == pending_from_0019()
 
@@ -274,13 +276,12 @@ class RecordingConnection:
         return self._connection.execute(sql, *args)
 
 
-def test_recovery_from_a_real_one_column_partial_ddl_interruption(monkeypatch, tmp_path):
-    """Failure point: **between** the two `ALTER TABLE` statements.
+def test_stage_interruption_between_alters_never_partially_mutates_canonical(monkeypatch, tmp_path):
+    """Failure between ALTERs remains isolated to the disposable migration stage.
 
-    The genuinely partial state: the first snapshot column exists, the second
-    does not, and the migration is unrecorded. Recovery must add only the
-    missing column — re-issuing the first would raise `duplicate column name`
-    and leave the user stuck on every subsequent start.
+    The first ALTER may complete on the stage before the second raises, but canonical
+    must remain at the exact source schema. A later launch builds a fresh stage and
+    therefore executes both ALTERs normally.
     """
     user_data_dir = tmp_path / "user-data"
     database_path = user_data_dir / "data" / "cosmetic_workshop.sqlite"
@@ -301,13 +302,12 @@ def test_recovery_from_a_real_one_column_partial_ddl_interruption(monkeypatch, t
 
     monkeypatch.setattr(migration, "upgrade", interrupted_upgrade)
 
-    with pytest.raises(RuntimeError, match="between the two ALTER TABLE statements"):
+    with pytest.raises(UpdateSafetyError, match="staged-migration-failed"):
         initialize_startup("user")
 
-    # --- The interrupted state is exactly one column in, unrecorded.
+    assert len(interrupted["wrapper"].add_column_statements) == 2
     live_columns = set(columns(database_path))
-    assert "tax_rate_percent_snapshot" in live_columns
-    assert "tax_rate_effective_at_snapshot" not in live_columns
+    assert not set(SNAPSHOT_COLUMNS) & live_columns
     assert MIGRATION_ID not in applied(database_path)
     assert pending_migration_ids(DatabaseConfig(path=database_path)) == pending_from_0019()
     assert snapshot(database_path) == before
@@ -317,7 +317,7 @@ def test_recovery_from_a_real_one_column_partial_ddl_interruption(monkeypatch, t
     assert not set(SNAPSHOT_COLUMNS) & set(columns(backups[0]))
     assert snapshot(backups[0]) == before
 
-    # --- Recovery: only the missing column is added.
+    # --- Recovery starts from a fresh stage, so both columns are added there.
     recorded = {}
 
     def recording_upgrade(connection):
@@ -329,9 +329,9 @@ def test_recovery_from_a_real_one_column_partial_ddl_interruption(monkeypatch, t
     recovered = initialize_startup("user")
 
     issued = recorded["wrapper"].add_column_statements
-    assert len(issued) == 1, issued
-    assert "tax_rate_effective_at_snapshot" in issued[0]
-    assert "tax_rate_percent_snapshot" not in issued[0]
+    assert len(issued) == 2, issued
+    assert "tax_rate_percent_snapshot" in issued[0]
+    assert "tax_rate_effective_at_snapshot" in issued[1]
 
     assert recovered.applied_migrations == pending_from_0019()
     assert recovered.backup is not None and recovered.backup.reason == "before_migration"
