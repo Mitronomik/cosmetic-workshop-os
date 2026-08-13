@@ -1,0 +1,35 @@
+name: PR202 final D4 closure verifier
+on:
+  push:
+    branches: [verification/final-d4-closure-check]
+permissions:
+  contents: read
+env:
+  EXPECTED_BASE: ec88b09193c8ed041e17daef3e3ffc0193d1b559
+  EXPECTED_HEAD: 6b74e3546d909f1612f7c98af2bef8b8b2689bdd
+  PR_BRANCH: agent/d4-d-final-closure
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+      - name: Run external final closure verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin verification/final-d4-closure-check
+          git show origin/verification/final-d4-closure-check:verification/pr202_closure_verify.py > "$RUNNER_TEMP/pr202.py"
+          python3 -m py_compile "$RUNNER_TEMP/pr202.py"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python3 "$RUNNER_TEMP/pr202.py"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr202-final-d4-closure-evidence
+          path: ${{ runner.temp }}/pr202-final-closure-evidence
+          if-no-files-found: error
