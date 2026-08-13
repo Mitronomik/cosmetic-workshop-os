@@ -13,6 +13,7 @@ SettingsDefinitionStatus = Literal[
     "not_mvp",
 ]
 SettingsWarningSeverity = Literal["info", "warning"]
+UpdateStatusState = Literal["not_required", "completed", "attention_required"]
 
 
 class AppSettingResponse(BaseModel):
@@ -76,10 +77,19 @@ class SettingsWarning(BaseModel):
     severity: SettingsWarningSeverity = "info"
 
 
+class UpdateStatusSummary(BaseModel):
+    state: UpdateStatusState
+    to_app_version: str | None = None
+    updated_at: str | None = None
+    message: str
+    next_action: str
+
+
 class SettingsStatusResponse(BaseModel):
     generated_at: str
     app: AppSettingsInfo
     local_data: LocalDataStatus
+    update_status: UpdateStatusSummary
     capabilities: list[SettingsCapability]
     setting_groups: list[SettingsGroup]
     editable_settings_available: bool

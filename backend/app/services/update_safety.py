@@ -39,6 +39,8 @@ from app.services.backup import (
 )
 
 UpdateStatus = Literal["started", "completed", "failed"]
+UpdateUserStatusState = Literal["not_required", "completed", "attention_required"]
+UpdateUserFailureKind = Literal["before_commit", "completion_uncertain"]
 UPDATE_JOURNAL_FORMAT_VERSION = 1
 UPDATE_JOURNAL_FILENAME = "update-journal.json"
 STAGE_SUFFIX = ".stage"
@@ -51,6 +53,8 @@ SAFE_COMMIT_FAILURE = "Не удалось безопасно завершить
 SAFE_INTERRUPTED_FAILURE = "Предыдущее обновление было прервано до замены рабочей базы данных."
 SAFE_RECONCILIATION_FAILURE = "Состояние предыдущего обновления нельзя подтвердить автоматически."
 SAFE_JOURNAL_FAILURE = "Не удалось надёжно записать состояние обновления."
+SAFE_NO_UPDATE_STATUS = "Обновление данных для этой установки пока не требовалось."
+SAFE_COMPLETED_UPDATE_STATUS = "Данные успешно подготовлены для этой версии приложения."
 
 
 class UpdateSafetyError(RuntimeError):
@@ -73,6 +77,15 @@ class UpdatePostCommitError(UpdateSafetyError):
 
     def __init__(self, category: str) -> None:
         super().__init__(category, SAFE_RECONCILIATION_FAILURE, committed=True)
+
+
+def classify_update_failure_for_user(error: UpdateSafetyError) -> UpdateUserFailureKind:
+    """Collapse internal D4-B failures into the only two D4-C packaged outcomes."""
+    if error.committed or isinstance(error, (UpdateJournalError, UpdatePostCommitError)):
+        return "completion_uncertain"
+    if error.safe_message == SAFE_RECONCILIATION_FAILURE:
+        return "completion_uncertain"
+    return "before_commit"
 
 
 @dataclass(frozen=True)
@@ -102,6 +115,14 @@ class StagedUpdateResult:
 class UpdateReconciliationResult:
     operation: UpdateOperationRecord | None = None
     reconciled_to_completed: bool = False
+
+
+@dataclass(frozen=True)
+class UpdateUserStatus:
+    state: UpdateUserStatusState
+    to_app_version: str | None
+    updated_at: str | None
+    message: str
 
 
 def update_journal_path(paths: UserDataPaths) -> Path:
@@ -214,6 +235,47 @@ def load_update_journal(path: Path) -> list[UpdateOperationRecord]:
     if len(ids) != len(set(ids)):
         raise UpdateJournalError("update-journal-duplicate-operation-id")
     return records
+
+
+def read_user_update_status(paths: UserDataPaths) -> UpdateUserStatus:
+    """Read the durable journal as a bounded, non-technical D4-C status."""
+    try:
+        records = load_update_journal(update_journal_path(paths))
+    except UpdateJournalError:
+        return UpdateUserStatus(
+            state="attention_required",
+            to_app_version=None,
+            updated_at=None,
+            message=SAFE_RECONCILIATION_FAILURE,
+        )
+    if not records:
+        return UpdateUserStatus(
+            state="not_required",
+            to_app_version=None,
+            updated_at=None,
+            message=SAFE_NO_UPDATE_STATUS,
+        )
+    latest = records[-1]
+    if latest.status == "completed":
+        return UpdateUserStatus(
+            state="completed",
+            to_app_version=latest.to_app_version,
+            updated_at=latest.finished_at,
+            message=SAFE_COMPLETED_UPDATE_STATUS,
+        )
+    if latest.status == "failed":
+        return UpdateUserStatus(
+            state="attention_required",
+            to_app_version=latest.to_app_version,
+            updated_at=latest.finished_at,
+            message=latest.safe_failure_message or SAFE_RECONCILIATION_FAILURE,
+        )
+    return UpdateUserStatus(
+        state="attention_required",
+        to_app_version=latest.to_app_version,
+        updated_at=latest.started_at,
+        message=SAFE_RECONCILIATION_FAILURE,
+    )
 
 
 def _fsync_directory(directory: Path) -> None:

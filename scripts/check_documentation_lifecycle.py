@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Guard closed Restore plus the CR-013 / D4-A implementation boundary.
 
-D4-A and D4-B are closed. D4-C alone may implement bounded user-facing update
-status/failure UX; it may not authorize D4-D/D5, claim release readiness or reopen Restore.
+D4-A and D4-B are closed. D4-C is implemented but verification/lifecycle closure
+remain pending; D4-D/D5, release readiness and Restore changes remain forbidden.
 
 The complete pre-CR-013 checker is preserved byte-identically under
 ``docs/history/d4-pre-decision/``. Its 22 ``PINNED_BLOBS`` and 60
@@ -60,6 +60,15 @@ D4A_PREFLIGHT_TEST = P("backend/app/tests/test_d4_a_startup_compatibility.py")
 D4A_PACKAGE_TEST = P("macos_package/tests/test_d4_a_product_version_projection.py")
 D4B_SERVICE = P("backend/app/services/update_safety.py")
 D4B_TEST = P("backend/app/tests/test_d4_b_update_safety.py")
+D4C_SETTINGS_SCHEMA = P("backend/app/schemas/settings.py")
+D4C_SETTINGS_SERVICE = P("backend/app/services/settings.py")
+D4C_FRONTEND = P("frontend/src/settings-update-status.ts")
+D4C_BINDINGS = P("frontend/src/settings-tax-bindings.ts")
+D4C_PACKAGE_ENTRYPOINT = P("macos_package/entrypoint.py")
+D4C_USER_ALERT = P("macos_package/user_alert.py")
+D4C_BACKEND_TEST = P("backend/app/tests/test_d4_c_update_status.py")
+D4C_FRONTEND_TEST = P("frontend/test/settings-update-status.test.mjs")
+D4C_PACKAGE_TEST = P("macos_package/tests/test_d4_c_update_failure_alerts.py")
 
 DECISION_BASE = "dc2301f7d4e101ad0fba851325dae9274f02da0c"
 CR013_MERGE_BASE = "4dbb83b9da3f0945bffde3187a69054305e01b28"
@@ -72,6 +81,7 @@ D4B_MERGED_HEAD = "d60a3be993c76b59292cf27ee66bcbe856669fc4"
 D4B_PR_HEAD_RUN = "31716610699"
 D4B_MERGED_RUN = "31717705331"
 D4B_PRECLOSURE_MANIFEST_SHA = "e3c1bd273e3eb2f248c8497fd36bf920be3def99"
+D4C_IMPLEMENTATION_CODE_COMMIT = "adfe37a3f68a545635f173c22d4710eacde86e74"
 LEGACY_CHECKER_SHA = "0d637269f802796098d5e6e911ad4d6a325ba990"
 
 SNAPSHOT_BLOBS = {
@@ -92,10 +102,10 @@ SNAPSHOT_BLOBS = {
 
 D4_STATUS = (
     "CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT",
-    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT",
+    "D4 — Update safety — IN PROGRESS — D4-C IMPLEMENTED, VERIFICATION PENDING",
     "D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D4-C — User-facing update status and packaged failure UX — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
     "D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED",
     "D5 — Remote install checklist — NOT AUTHORIZED BY CR-013",
     "Product release readiness — NOT CLAIMED",
@@ -120,25 +130,31 @@ STATUS_SURFACES = (
 )
 
 FORBIDDEN_ACTIVE = (
+    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT",
+    "D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING",
     "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
     "D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED",
-    "D4 — Update safety — DONE",
-    "D4 — Update safety — CLOSED",
-    "D4-C — User-facing update status and packaged failure UX — IMPLEMENTED",
+    "D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING",
+    "D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
+    "D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED",
     "D4-C — User-facing update status and packaged failure UX — DONE",
+    "D4-C — User-facing update status and packaged failure UX — CLOSED",
     "D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT",
     "D4-D — Exact-package update verification and D4 lifecycle closure — IMPLEMENTED",
     "D5 — Remote install checklist — AUTHORIZED",
     "D5 — Remote install checklist — IMPLEMENTED",
     "Product release readiness — READY",
     "Product release readiness — CLAIMED",
+    "Product release readiness — ACHIEVED",
     "auto-update — AUTHORIZED",
+    "auto-update download — AUTHORIZED",
     "signing — AUTHORIZED",
     "notarization — AUTHORIZED",
     "DMG — AUTHORIZED",
     "App Store — AUTHORIZED",
     "release channels — AUTHORIZED",
+    "GitHub Releases integration — AUTHORIZED",
     "Restore — NOT IMPLEMENTED",
     "Restore — IN PROGRESS",
     "Restore — AUTHORIZED NEXT",
@@ -322,11 +338,11 @@ def check_current_lifecycle() -> None:
         forbid(path, FORBIDDEN_ACTIVE)
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
-    require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "D4-B closure truth", "D4-B closure evidence", "D4-C authorization boundary", "Restore remains closed"))
+    require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "D4-B closure truth", "D4-B closure evidence", "D4-C implementation truth", "D4-C verification boundary", D4C_IMPLEMENTATION_CODE_COMMIT, "Restore remains closed"))
     require(PLAN, ("Normative D4 decision", "D4-A", "D4-B", "D4-C", "D4-D"))
     require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
     require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
-    require(UPDATE_GUIDE, ("D4-A закрыт", "D4-B закрыт", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
+    require(UPDATE_GUIDE, ("D4-A и D4-B закрыты", "D4-C реализован", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
     require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md"))
 
 
@@ -465,6 +481,61 @@ def check_d4b_implementation() -> None:
         ))
 
 
+def check_d4c_implementation() -> None:
+    require(D4B_SERVICE, (
+        "UpdateUserStatus", "read_user_update_status",
+        "classify_update_failure_for_user", "error.committed",
+        "SAFE_NO_UPDATE_STATUS", "SAFE_COMPLETED_UPDATE_STATUS",
+    ))
+    require(D4C_SETTINGS_SCHEMA, (
+        "UpdateStatusSummary", "not_required", "completed",
+        "attention_required", "to_app_version", "updated_at", "next_action",
+    ))
+    forbid(D4C_SETTINGS_SCHEMA, (
+        "operation_id", "failure_category", "schema_identity",
+        "stage_identity", "backup_identity",
+    ))
+    require(D4C_SETTINGS_SERVICE, (
+        "read_user_update_status", "Можно продолжать работу.",
+        "Ничего делать не нужно.", "Закройте приложение и откройте его снова.",
+    ))
+    require(D4C_PACKAGE_ENTRYPOINT, (
+        "_classify_update_exception", "classify_update_failure_for_user",
+        "EXIT_UPDATE_STOPPED_BEFORE_COMMIT", "EXIT_UPDATE_COMPLETION_UNCERTAIN",
+        "D4-C classified startup-owned update failure",
+    ))
+    require(D4C_USER_ALERT, (
+        "UPDATE_STOPPED_BEFORE_COMMIT", "UPDATE_COMPLETION_UNCERTAIN",
+        "до замены рабочей базы данных",
+        "Не удалось подтвердить завершение обновления данных",
+        "Не пытайтесь вручную откатывать",
+    ))
+    require(D4C_FRONTEND, (
+        "mountSettingsUpdateStatus", "fetch('/api/settings/status')",
+        "Обновление завершено", "Нужно внимание", "Что делать:",
+    ))
+    forbid(D4C_FRONTEND, (
+        "method: 'POST'", 'method: "POST"', "method: 'PUT'",
+        "method: 'PATCH'", "method: 'DELETE'", "operation_id",
+        "failure_category", "schema_identity", "stage_identity", "backup_identity",
+    ))
+    require(D4C_BINDINGS, ("mountSettingsUpdateStatus",))
+    for path in (D4C_BACKEND_TEST, D4C_FRONTEND_TEST, D4C_PACKAGE_TEST):
+        if not path.is_file():
+            ERRORS.append(f"missing D4-C focused test: {path.relative_to(ROOT)}")
+    require(D4C_BACKEND_TEST, (
+        "test_no_journal_is_read_only_neutral_status",
+        "test_failure_classifier_has_only_two_user_outcomes",
+    ))
+    require(D4C_FRONTEND_TEST, (
+        "no update mutation", "caches the read for the UI session",
+    ))
+    require(D4C_PACKAGE_TEST, (
+        "test_packaged_update_failures_use_fixed_d4c_catalog",
+        "test_uncertain_message_never_suggests_manual_rollback",
+    ))
+
+
 def main() -> int:
     check_predecision_snapshot()
     check_legacy_protections()
@@ -475,6 +546,7 @@ def main() -> int:
     check_domain_clarification()
     check_d4a_implementation()
     check_d4b_implementation()
+    check_d4c_implementation()
 
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
@@ -488,7 +560,8 @@ def main() -> int:
     print("Carried forward 60 protected lifecycle/history blob protections.")
     print("Verified D4-A is lifecycle-closed on the exact merged-head evidence.")
     print("Verified D4-B is lifecycle-closed on exact PR-head and merged-head Level-5 evidence.")
-    print("Verified D4-C alone is authorized next; D4-D, D5 and product release readiness remain gated.")
+    print("Verified D4-C is implemented but exact-head/exact-package verification and lifecycle closure remain pending.")
+    print("Verified D4-D, D5 and product release readiness remain gated.")
     return 0
 
 

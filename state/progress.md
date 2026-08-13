@@ -37,10 +37,10 @@ D4-A exact merged-head verification passed on `89dd69dc1958e622146e01869cc34d4cd
 
 ```text
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-C IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-C — User-facing update status and packaged failure UX — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
@@ -48,6 +48,6 @@ Product release readiness — NOT CLAIMED
 
 ## D4-B closure
 
-D4-B is merged and verified on `d60a3be993c76b59292cf27ee66bcbe856669fc4`. PR-head Level-5 run `31716610699` and merged-head Level-5 run `31717705331` both passed; implementation head and merge commit are content-identical. D4-C is authorized next.
+D4-B remains closed. D4-C implementation code commit `adfe37a3f68a545635f173c22d4710eacde86e74` adds the redacted Settings status, read-only Settings presentation and two fixed packaged update-failure outcomes. Focused Python tests, frontend tests/build and lifecycle integrity passed before publication.
 
-D4-D, D5 and release readiness remain gated.
+Exact published-head/package verification and lifecycle closure are still required. D4-D, D5 and release readiness remain gated.

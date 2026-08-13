@@ -25,10 +25,10 @@ CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
 D3 — macOS package MVP — IMPLEMENTED
 
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-C IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-C — User-facing update status and packaged failure UX — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
@@ -65,7 +65,7 @@ Schema compatibility:
 - `pending_migration_ids()` is no longer used to decide ordinary startup compatibility before the gate;
 - D4-A itself originally stopped at the compatibility gate; the now-closed D4-B slice replaces the supported-older direct migration seam with staged migration after that gate.
 
-D4-A remains merged and exact-head verified. D4-B is now merged, exact-head/exact-package verified and lifecycle-closed; D4-C alone is authorized next.
+D4-A and D4-B remain closed. D4-C is implemented in the current branch; exact-head/exact-package verification and lifecycle closure remain pending, and D4-D remains unauthorized.
 
 ## D4-A closure evidence
 
@@ -96,7 +96,7 @@ read-only D4-A compatibility preflight
 
 `update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. D4-B records `from_app_version = null` because it cannot prove the immediately previous package version: a previous completed update identifies the last migration-producing app, not necessarily the last app that ran. Legacy mutable database `app.version` and SemVer inference are never promoted into authority.
 
-D4-B is **DONE — MERGED AND VERIFIED**. Exact PR-head Level-5 run `31716610699` and exact merged-head Level-5 run `31717705331` both passed; implementation head `8688fa3dba87205b4b4626ebab2902262fd4cd24` and merge commit `d60a3be993c76b59292cf27ee66bcbe856669fc4` are content-identical. D4-C is the only authorized next slice.
+D4-B is **DONE — MERGED AND VERIFIED**. Its accepted Level-5 evidence remains authoritative; D4-C adds presentation only and does not change D4-B migration semantics.
 
 ## D4-B closure evidence
 
@@ -106,13 +106,21 @@ D4-B is **DONE — MERGED AND VERIFIED**. Exact PR-head Level-5 run `31716610699
 - merged-head Level-5 verifier: run `31717705331`, artifact `9188228739`, digest `sha256:2a3e615e504e6c047b8f1b45690f3595a0ef4bb71dcd1d9fadf669ecd64af415`;
 - both runs ended `PASS — FULL AUTOMATED SMOKE PASSED`.
 
-## D4-C authorization boundary
+## D4-C implementation truth
 
-This closure authorizes **D4-C only**: bounded user-facing update status and packaged failure UX. It does not authorize D4-D, D5, auto-download/update checking, signing, notarization, DMG, App Store, release channels, release readiness or Restore changes.
+Implementation code commit: `adfe37a3f68a545635f173c22d4710eacde86e74`.
+
+D4-C projects D4-B startup truth into a bounded read-only Settings status and two fixed packaged failure outcomes. It exposes no raw update metadata, paths or tracebacks and creates no browser update command. The before-commit outcome claims only that canonical DB replacement did not occur; the uncertain outcome makes no rollback/data-unchanged claim. Closed Restore production blobs remain unchanged.
+
+D4-C is **IMPLEMENTED — VERIFICATION PENDING**, not lifecycle-closed.
+
+## D4-C verification boundary
+
+The exact published PR head still requires full regression, lifecycle integrity, frontend build, real macOS package and exact-package D4-C smoke. D4-D, D5, release/distribution work and Restore changes remain unauthorized.
 
 ## Closed Restore boundary
 
-Restore remains closed. D4-A changes no protected Restore production blob, no Restore state machine, picker, source proof, control plane, backend handshake, replacement or recovery semantics.
+Restore remains closed. D4-C changes no protected Restore production blob, no Restore state machine, picker, source proof, control plane, backend handshake, replacement or recovery semantics.
 
 ## Release boundary
 

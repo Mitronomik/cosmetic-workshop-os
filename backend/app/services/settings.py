@@ -10,6 +10,7 @@ from app.db.paths import resolve_user_data_paths
 from app.models.settings import AppSetting
 from app.repositories.audit import AuditLogRepository
 from app.repositories.settings import SettingsNotInitializedError, SettingsRepository
+from app.services.update_safety import read_user_update_status
 from app.schemas.settings import (
     AppSettingsInfo,
     LocalDataStatus,
@@ -18,6 +19,7 @@ from app.schemas.settings import (
     SettingsDefinitionStatus,
     SettingsGroup,
     SettingsStatusResponse,
+    UpdateStatusSummary,
     WorkshopProfile,
     WorkshopProfileResponse,
     WorkshopProfileUpdateRequest,
@@ -37,6 +39,14 @@ class SettingsService:
 
     def build_status(self) -> SettingsStatusResponse:
         user_paths = resolve_user_data_paths()
+        update = read_user_update_status(user_paths)
+        update_next_action = (
+            "Закройте приложение и откройте его снова. Если сообщение повторится, обратитесь за помощью."
+            if update.state == "attention_required"
+            else "Можно продолжать работу."
+            if update.state == "completed"
+            else "Ничего делать не нужно."
+        )
         return SettingsStatusResponse(
             generated_at=datetime.now(UTC).isoformat(),
             app=AppSettingsInfo(
@@ -46,6 +56,13 @@ class SettingsService:
                 local_first=True,
                 internet_required=False,
                 version=None,
+            ),
+            update_status=UpdateStatusSummary(
+                state=update.state,
+                to_app_version=update.to_app_version,
+                updated_at=update.updated_at,
+                message=update.message,
+                next_action=update_next_action,
             ),
             local_data=LocalDataStatus(
                 user_data_separate_from_code=True,
