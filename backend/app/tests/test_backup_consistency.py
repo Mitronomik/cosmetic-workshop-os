@@ -17,6 +17,7 @@ import threading
 import pytest
 
 from app.db.config import DatabaseConfig
+from app.db.migrations import MIGRATION_MODULES, apply_migrations
 from app.db.paths import USER_DATA_DIR_ENV
 from app.services.backup import (
     BACKUP_BUSY_TIMEOUT_SECONDS,
@@ -45,6 +46,18 @@ FIXED_TIME = datetime(2026, 8, 1, 10, 15, 0, 123456, tzinfo=UTC)
 def migrated_database(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     initialize_database(DatabaseConfig(path=path))
+    return path
+
+
+def supported_older_database(path: Path) -> Path:
+    """Build the exact known prefix immediately before current head."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    original = list(MIGRATION_MODULES)
+    try:
+        MIGRATION_MODULES[:] = original[:-1]
+        apply_migrations(DatabaseConfig(path=path))
+    finally:
+        MIGRATION_MODULES[:] = original
     return path
 
 
@@ -552,7 +565,7 @@ def test_automatic_startup_backup_uses_the_safe_engine(tmp_path, monkeypatch):
     user_data_dir = tmp_path / "user-data"
     database = user_data_dir / "data" / "cosmetic_workshop.sqlite"
     monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
-    database.parent.mkdir(parents=True)
+    supported_older_database(database)
     with sqlite3.connect(database) as connection:
         connection.execute("CREATE TABLE legacy_marker (value TEXT NOT NULL)")
         connection.execute("INSERT INTO legacy_marker (value) VALUES ('before migration')")
@@ -742,7 +755,7 @@ def test_startup_reconciles_manual_backups_after_migrations_and_after_exports(tm
     user_data_dir = tmp_path / "user-data"
     database = user_data_dir / "data" / "cosmetic_workshop.sqlite"
     monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
-    database.parent.mkdir(parents=True)
+    supported_older_database(database)
     with sqlite3.connect(database) as connection:
         connection.execute("CREATE TABLE legacy_marker (value TEXT NOT NULL)")
 

@@ -24,6 +24,11 @@ SNAPSHOT_COLUMNS = ("tax_rate_percent_snapshot", "tax_rate_effective_at_snapshot
 PREVIOUS_MIGRATION_ID = "0018_demo_data_tracking"
 
 
+def pending_from_0019() -> list[str]:
+    ids = expected_migration_ids()
+    return ids[ids.index(MIGRATION_ID):]
+
+
 def columns(database_path: Path, table: str = "production_batches") -> dict[str, sqlite3.Row]:
     with sqlite3.connect(database_path) as connection:
         connection.row_factory = sqlite3.Row
@@ -44,7 +49,8 @@ def build_pre_c2_ii_database(database_path: Path) -> dict[str, object]:
     database_path.parent.mkdir(parents=True, exist_ok=True)
     original = list(MIGRATION_MODULES)
     try:
-        MIGRATION_MODULES[:] = [name for name in original if not name.endswith(MIGRATION_ID)]
+        cutoff = next(index for index, name in enumerate(original) if name.endswith(MIGRATION_ID))
+        MIGRATION_MODULES[:] = original[:cutoff]
         apply_migrations(DatabaseConfig(path=database_path))
     finally:
         MIGRATION_MODULES[:] = original
@@ -101,11 +107,11 @@ def test_migration_0019_is_registered_last_in_the_existing_ordering():
     assert ids.count(MIGRATION_ID) == 1
 
 
-def test_a_database_at_0018_reports_exactly_one_pending_migration(tmp_path):
+def test_a_database_at_0018_reports_the_exact_remaining_ordered_suffix(tmp_path):
     database_path = tmp_path / "existing.sqlite"
     build_pre_c2_ii_database(database_path)
 
-    assert pending_migration_ids(DatabaseConfig(path=database_path)) == [MIGRATION_ID]
+    assert pending_migration_ids(DatabaseConfig(path=database_path)) == pending_from_0019()
 
 
 def test_upgrading_from_0018_adds_the_columns_and_preserves_every_existing_value(tmp_path):
@@ -131,7 +137,7 @@ def test_the_migration_applies_once_and_is_not_reapplied(tmp_path):
     first = apply_migrations(config)
     second = apply_migrations(config)
 
-    assert first == [MIGRATION_ID]
+    assert first == pending_from_0019()
     assert second == []
     assert applied(database_path).count(MIGRATION_ID) == 1
     assert pending_migration_ids(config) == []
@@ -158,7 +164,7 @@ def test_user_mode_startup_backs_up_before_applying_0019(monkeypatch, tmp_path):
 
     result = initialize_startup("user")
 
-    assert result.applied_migrations == [MIGRATION_ID]
+    assert result.applied_migrations == pending_from_0019()
     assert result.backup is not None
     assert result.backup.reason == "before_migration"
     assert result.backup.backup_path.parent == user_data_dir / "backups"
@@ -167,8 +173,7 @@ def test_user_mode_startup_backs_up_before_applying_0019(monkeypatch, tmp_path):
     assert snapshot(result.backup.backup_path) == before
     # The point is that the backup predates `0019`, which is what makes it a
     # genuine pre-migration copy. Asserting it directly rather than through the
-    # last element of an ID-sorted list, because `build_pre_c2_ii_database`
-    # removes only `0019` and later migrations legitimately sort after it.
+    # last element of an ID-sorted list, because `build_pre_c2_ii_database` ends at the exact ordered `0018` prefix.
     assert MIGRATION_ID not in applied(result.backup.backup_path)
     assert PREVIOUS_MIGRATION_ID in applied(result.backup.backup_path)
     # The live database received the columns and kept every existing value.
@@ -217,13 +222,13 @@ def test_a_failed_0019_destroys_neither_the_user_database_nor_the_backup(monkeyp
     # No user value was lost, and the migration was not recorded as applied.
     assert snapshot(database_path) == before
     assert MIGRATION_ID not in applied(database_path)
-    assert pending_migration_ids(DatabaseConfig(path=database_path)) == [MIGRATION_ID]
+    assert pending_migration_ids(DatabaseConfig(path=database_path)) == pending_from_0019()
 
     # Recovery: the next startup backs up again, completes it once, keeps data.
     monkeypatch.setattr(migration, "upgrade", original_upgrade)
     recovered = initialize_startup("user")
 
-    assert recovered.applied_migrations == [MIGRATION_ID]
+    assert recovered.applied_migrations == pending_from_0019()
     assert recovered.backup is not None and recovered.backup.reason == "before_migration"
     assert snapshot(database_path) == before
     assert applied(database_path).count(MIGRATION_ID) == 1
@@ -304,7 +309,7 @@ def test_recovery_from_a_real_one_column_partial_ddl_interruption(monkeypatch, t
     assert "tax_rate_percent_snapshot" in live_columns
     assert "tax_rate_effective_at_snapshot" not in live_columns
     assert MIGRATION_ID not in applied(database_path)
-    assert pending_migration_ids(DatabaseConfig(path=database_path)) == [MIGRATION_ID]
+    assert pending_migration_ids(DatabaseConfig(path=database_path)) == pending_from_0019()
     assert snapshot(database_path) == before
     # The pre-migration backup predates the DDL and holds neither column.
     backups = sorted((user_data_dir / "backups").iterdir())
@@ -328,7 +333,7 @@ def test_recovery_from_a_real_one_column_partial_ddl_interruption(monkeypatch, t
     assert "tax_rate_effective_at_snapshot" in issued[0]
     assert "tax_rate_percent_snapshot" not in issued[0]
 
-    assert recovered.applied_migrations == [MIGRATION_ID]
+    assert recovered.applied_migrations == pending_from_0019()
     assert recovered.backup is not None and recovered.backup.reason == "before_migration"
     assert set(SNAPSHOT_COLUMNS) <= set(columns(database_path))
     assert applied(database_path).count(MIGRATION_ID) == 1

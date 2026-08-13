@@ -11,7 +11,7 @@ from app.db.config import (
     DatabaseConfig,
     get_database_config,
 )
-from app.db.migrations import apply_migrations, current_migrations, expected_migration_ids
+from app.db.migrations import MIGRATION_MODULES, apply_migrations, current_migrations, expected_migration_ids
 from app.main import create_app
 from app.repositories.database import DatabaseRepository
 from app.repositories.settings import SettingsNotInitializedError
@@ -468,12 +468,22 @@ def test_backup_directory_is_created_only_through_explicit_backup_call(tmp_path)
     assert backup_dir.is_dir()
 
 
+def build_supported_older_database(database_path: Path) -> None:
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    original = list(MIGRATION_MODULES)
+    try:
+        MIGRATION_MODULES[:] = original[:-1]
+        apply_migrations(DatabaseConfig(path=database_path))
+    finally:
+        MIGRATION_MODULES[:] = original
+
+
 def test_user_mode_startup_creates_backup_before_migration_for_existing_database(monkeypatch, tmp_path):
     user_data_dir = tmp_path / "user-data"
     database_path = user_data_dir / "data" / "cosmetic_workshop.sqlite"
     monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_data_dir))
     monkeypatch.delenv(DATABASE_PATH_ENV, raising=False)
-    database_path.parent.mkdir(parents=True)
+    build_supported_older_database(database_path)
     with sqlite3.connect(database_path) as connection:
         connection.execute("CREATE TABLE legacy_marker (value TEXT NOT NULL)")
         connection.execute("INSERT INTO legacy_marker (value) VALUES ('before migration')")
@@ -487,8 +497,8 @@ def test_user_mode_startup_creates_backup_before_migration_for_existing_database
         marker = backup_connection.execute("SELECT value FROM legacy_marker").fetchone()[0]
         backup_tables = table_names(result.backup.backup_path)
     assert marker == "before migration"
-    assert "app_settings" not in backup_tables
-    assert result.applied_migrations == expected_migration_ids()
+    assert "artifact_audit_operations" not in backup_tables
+    assert result.applied_migrations == [expected_migration_ids()[-1]]
     tables = table_names(database_path)
     assert tables <= (CURRENT_ALLOWED_TABLES | {"legacy_marker"})
     assert_no_forbidden_future_tables(tables)
