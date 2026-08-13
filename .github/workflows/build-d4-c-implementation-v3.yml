@@ -1,0 +1,217 @@
+name: Build D4-C implementation v3
+
+on:
+  push:
+    branches:
+      - maintenance/d4-c-implementation-builder-v3
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_BASE: 20d7190ebd91012a58993bf02934d6f4459332a0
+  IMPLEMENTATION_BRANCH: agent/d4-c-user-update-status-failure-ux
+  TRANSFORM_SOURCE_BRANCH: maintenance/d4-c-implementation-builder
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact implementation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.IMPLEMENTATION_BRANCH }}
+          fetch-depth: 0
+
+      - name: Exact base and protected-blob gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_BASE"
+          test -z "$(git status --porcelain)"
+          git diff --check
+          test "$(git rev-parse HEAD:launcher/runtime.py)" = "7cca822944a335e03e196be6d9def8817267205e"
+          test "$(git rev-parse HEAD:frontend/src/main.ts)" = "ea98a76638bddcb5a92b9ba31941508f8a816d42"
+
+      - name: Apply Restore-safe bounded D4-C transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TRANSFORM_SOURCE_BRANCH"
+          python3 - <<'PY'
+          import re
+          import subprocess
+          from pathlib import Path
+          from textwrap import dedent
+
+          # Reuse the already-tested backend/status/catalogue transform, then
+          # explicitly remove the two edits rejected by the closed Restore guard.
+          yaml = subprocess.check_output(
+              ['git', 'show', 'origin/maintenance/d4-c-implementation-builder:.github/workflows/build-d4-c-implementation.yml'],
+              text=True,
+          )
+          tail = yaml[yaml.index('      - name: Apply bounded D4-C implementation\n'):]
+          match = re.search(r"python3 - <<'PY'\n(?P<body>.*?)^\s+PY\s*$", tail, re.MULTILINE | re.DOTALL)
+          if not match:
+              raise SystemExit('cannot locate D4-C transform')
+          exec(compile(dedent(match.group('body')), '<d4-c-transform>', 'exec'), {'__name__': '__main__'})
+
+          # Protected Restore blobs must remain byte-identical.
+          subprocess.run(['git', 'restore', '--source', 'HEAD', '--', 'launcher/runtime.py', 'frontend/src/main.ts'], check=True)
+          Path('launcher/tests/test_d4_c_update_failure_mapping.py').unlink(missing_ok=True)
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected one match for {old!r}, got {text.count(old)}')
+              file.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Start the package adapter again from its protected-independent base,
+          # then classify the backend-owned UpdateSafetyError directly at the
+          # existing Finder-visible package boundary. This is presentation only.
+          subprocess.run(['git', 'restore', '--source', 'HEAD', '--', 'macos_package/entrypoint.py'], check=True)
+          replace_once(
+              'macos_package/entrypoint.py',
+              'EXIT_LAUNCHER_REFUSED = 15\nEXIT_UNEXPECTED = 16\n',
+              'EXIT_LAUNCHER_REFUSED = 15\nEXIT_UNEXPECTED = 16\nEXIT_UPDATE_STOPPED_BEFORE_COMMIT = 17\nEXIT_UPDATE_COMPLETION_UNCERTAIN = 18\n',
+          )
+          replace_once(
+              'macos_package/entrypoint.py',
+              'def _run_launcher(\n',
+              '''def _classify_update_exception(exc: Exception) -> tuple[StartupFailure, int] | None:\n    """Map backend-owned update truth to the two fixed D4-C package outcomes."""\n    try:\n        from app.services.update_safety import UpdateSafetyError, classify_update_failure_for_user\n    except ImportError:\n        return None\n    if not isinstance(exc, UpdateSafetyError):\n        return None\n    if classify_update_failure_for_user(exc) == "before_commit":\n        return StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT, EXIT_UPDATE_STOPPED_BEFORE_COMMIT\n    return StartupFailure.UPDATE_COMPLETION_UNCERTAIN, EXIT_UPDATE_COMPLETION_UNCERTAIN\n\n\ndef _run_launcher(\n''',
+          )
+          replace_once(
+              'macos_package/entrypoint.py',
+              '    except Exception:  # noqa: BLE001 - a packaged crash must not be a silent exit\n        # The traceback is developer evidence and goes to stderr and the system\n        # log. The user gets the fixed non-technical message instead.\n        report_startup_failure(\n            StartupFailure.UNEXPECTED,\n            packaged=layout.is_packaged,\n            detail=traceback.format_exc(),\n        )\n        return EXIT_UNEXPECTED\n',
+              '''    except Exception as exc:  # noqa: BLE001 - a packaged crash must not be a silent exit\n        update_failure = _classify_update_exception(exc)\n        if update_failure is not None:\n            failure, exit_code = update_failure\n            report_startup_failure(\n                failure,\n                packaged=layout.is_packaged,\n                # Keep the developer log useful without leaking an internal\n                # category, filesystem path or traceback into the user dialogue.\n                detail="D4-C classified startup-owned update failure",\n            )\n            return exit_code\n        # The traceback is developer evidence and goes to stderr and the system\n        # log. The user gets the fixed non-technical message instead.\n        report_startup_failure(\n            StartupFailure.UNEXPECTED,\n            packaged=layout.is_packaged,\n            detail=traceback.format_exc(),\n        )\n        return EXIT_UNEXPECTED\n''',
+          )
+
+          # The failure classifier must respect the committed flag even for a
+          # future UpdateSafetyError subtype that is not UpdatePostCommitError.
+          replace_once(
+              'backend/app/services/update_safety.py',
+              '    if isinstance(error, (UpdateJournalError, UpdatePostCommitError)):\n        return "completion_uncertain"\n',
+              '    if error.committed or isinstance(error, (UpdateJournalError, UpdatePostCommitError)):\n        return "completion_uncertain"\n',
+          )
+
+          # Replace the transient package test with the final package-boundary test.
+          Path('macos_package/tests/test_d4_c_update_failure_alerts.py').write_text('''from types import SimpleNamespace\n\nimport pytest\n\nfrom app.services.update_safety import (\n    SAFE_MIGRATION_FAILURE,\n    SAFE_RECONCILIATION_FAILURE,\n    UpdatePostCommitError,\n    UpdateSafetyError,\n)\nfrom launcher import runtime\nfrom macos_package import entrypoint\nfrom macos_package.user_alert import DATA_UNCHANGED_SENTENCE, PRE_MUTATION_FAILURES, STARTUP_FAILURE_MESSAGES, StartupFailure\n\n\n@pytest.mark.parametrize(\n    ('error', 'failure', 'exit_code'),\n    [\n        (UpdateSafetyError('secret-precommit-category', SAFE_MIGRATION_FAILURE), StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT, entrypoint.EXIT_UPDATE_STOPPED_BEFORE_COMMIT),\n        (UpdateSafetyError('secret-ambiguous-category', SAFE_RECONCILIATION_FAILURE), StartupFailure.UPDATE_COMPLETION_UNCERTAIN, entrypoint.EXIT_UPDATE_COMPLETION_UNCERTAIN),\n        (UpdatePostCommitError('secret-postcommit-category'), StartupFailure.UPDATE_COMPLETION_UNCERTAIN, entrypoint.EXIT_UPDATE_COMPLETION_UNCERTAIN),\n        (UpdateSafetyError('future-committed-category', SAFE_MIGRATION_FAILURE, committed=True), StartupFailure.UPDATE_COMPLETION_UNCERTAIN, entrypoint.EXIT_UPDATE_COMPLETION_UNCERTAIN),\n    ],\n)\ndef test_packaged_update_failures_use_fixed_d4c_catalog(monkeypatch, error, failure, exit_code):\n    captured = []\n    monkeypatch.setattr(runtime, 'run_local_runtime', lambda _config: (_ for _ in ()).throw(error))\n    monkeypatch.setattr(entrypoint, 'report_startup_failure', lambda kind, *, packaged, detail=None: captured.append((kind, packaged, detail)))\n    layout = SimpleNamespace(is_packaged=True)\n    server = SimpleNamespace(origin='http://127.0.0.1:5173')\n    arguments = SimpleNamespace(backend_port=8000, no_browser=True)\n\n    assert entrypoint._run_launcher(layout, server, arguments) == exit_code\n    assert captured == [(failure, True, 'D4-C classified startup-owned update failure')]\n    message = STARTUP_FAILURE_MESSAGES[failure]\n    for forbidden in ('secret-', '/Users/', 'traceback', 'schema_identity', 'operation_id'):\n        assert forbidden not in message\n    assert DATA_UNCHANGED_SENTENCE not in message\n    assert failure not in PRE_MUTATION_FAILURES\n\n\ndef test_precommit_message_claim_is_bounded_to_database_commit_point():\n    message = STARTUP_FAILURE_MESSAGES[StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT]\n    assert 'до замены рабочей базы данных' in message\n    assert DATA_UNCHANGED_SENTENCE not in message\n\n\ndef test_uncertain_message_never_suggests_manual_rollback():\n    message = STARTUP_FAILURE_MESSAGES[StartupFailure.UPDATE_COMPLETION_UNCERTAIN]\n    assert 'Не удалось подтвердить завершение обновления данных' in message\n    assert 'Не пытайтесь вручную откатывать' in message\n''', encoding='utf-8')
+
+          # Final frontend integration: a standalone Settings presenter/loader is
+          # mounted from the existing settings binding seam. No main.ts change,
+          # no observer/router, no mutation endpoint, and the durable state cannot
+          # change during the already-running UI session.
+          Path('frontend/src/settings-update-status.ts').write_text('''export type UpdateStatusState = 'not_required' | 'completed' | 'attention_required';\nexport type UpdateStatusDto = {\n  state: UpdateStatusState;\n  to_app_version: string | null;\n  updated_at: string | null;\n  message: string;\n  next_action: string;\n};\n\ntype SettingsStatusEnvelope = { update_status: UpdateStatusDto };\ntype MountRoot = {\n  querySelector: <T = Element>(selector: string) => T | null;\n};\ntype Anchor = { insertAdjacentHTML: (position: 'afterend', html: string) => void };\ntype StatusCard = { outerHTML: string; isConnected?: boolean };\ntype FetchStatus = () => Promise<unknown>;\n\nlet cachedStatus: UpdateStatusDto | null | undefined;\nlet statusRequest: Promise<UpdateStatusDto | null> | null = null;\n\nfunction escapeHtml(value: string): string {\n  return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char] ?? char));\n}\n\nfunction stateLabel(state: UpdateStatusState): string {\n  if (state === 'completed') return 'Обновление завершено';\n  if (state === 'attention_required') return 'Нужно внимание';\n  return 'Обновление не требовалось';\n}\n\nfunction tone(state: UpdateStatusState): 'neutral' | 'success' | 'warning' {\n  if (state === 'completed') return 'success';\n  if (state === 'attention_required') return 'warning';\n  return 'neutral';\n}\n\nexport function isUpdateStatusDto(value: unknown): value is UpdateStatusDto {\n  if (!value || typeof value !== 'object') return false;\n  const item = value as Record<string, unknown>;\n  return (item.state === 'not_required' || item.state === 'completed' || item.state === 'attention_required')\n    && (item.to_app_version === null || typeof item.to_app_version === 'string')\n    && (item.updated_at === null || typeof item.updated_at === 'string')\n    && typeof item.message === 'string'\n    && typeof item.next_action === 'string';\n}\n\nexport function updateStatusFromSettingsEnvelope(value: unknown): UpdateStatusDto | null {\n  if (!value || typeof value !== 'object' || !('update_status' in value)) return null;\n  const candidate = (value as SettingsStatusEnvelope).update_status;\n  return isUpdateStatusDto(candidate) ? candidate : null;\n}\n\nexport function settingsUpdateStatusCardMarkup(status: UpdateStatusDto | null, unavailable = false): string {\n  if (!status) {\n    return `<section class="card data-card settings-card" data-update-status-card><p class="card-kicker">Безопасность данных</p><h2>Обновление данных</h2><p>${unavailable ? 'Не удалось показать состояние обновления. Другие настройки продолжают работать независимо.' : 'Проверяем состояние последнего обновления…'}</p></section>`;\n  }\n  const version = status.to_app_version ? `<p><strong>Версия:</strong> ${escapeHtml(status.to_app_version)}</p>` : '';\n  return `<section class="card data-card settings-card" data-update-status-card><p class="card-kicker">Безопасность данных</p><h2>Обновление данных</h2><div class="feedback-message feedback-message--${tone(status.state)}"><strong class="feedback-message__label">${stateLabel(status.state)}</strong><div class="feedback-message__body"><p>${escapeHtml(status.message)}</p></div></div>${version}<p><strong>Что делать:</strong> ${escapeHtml(status.next_action)}</p></section>`;\n}\n\nasync function defaultFetchStatus(): Promise<unknown> {\n  const response = await fetch('/api/settings/status');\n  if (!response.ok) throw new Error('settings update status unavailable');\n  return response.json();\n}\n\nexport function resetUpdateStatusCacheForTests(): void {\n  cachedStatus = undefined;\n  statusRequest = null;\n}\n\nexport function mountSettingsUpdateStatus(root: MountRoot, fetchStatus: FetchStatus = defaultFetchStatus): boolean {\n  if (root.querySelector<StatusCard>('[data-update-status-card]')) return true;\n  const anchor = root.querySelector<Anchor>('[data-tax-rate-section]');\n  if (!anchor) return false;\n\n  const initial = cachedStatus === undefined\n    ? settingsUpdateStatusCardMarkup(null)\n    : settingsUpdateStatusCardMarkup(cachedStatus, cachedStatus === null);\n  anchor.insertAdjacentHTML('afterend', initial);\n  if (cachedStatus !== undefined) return true;\n\n  if (statusRequest === null) {\n    statusRequest = fetchStatus()\n      .then((value) => updateStatusFromSettingsEnvelope(value))\n      .catch(() => null)\n      .then((status) => { cachedStatus = status; return status; });\n  }\n  const mounted = root.querySelector<StatusCard>('[data-update-status-card]');\n  statusRequest.then((status) => {\n    if (mounted && mounted.isConnected !== false) mounted.outerHTML = settingsUpdateStatusCardMarkup(status, status === null);\n  });\n  return true;\n}\n''', encoding='utf-8')
+
+          # The existing settings binding seam owns DOM binding only; invoking a
+          # read-only presenter here does not grant update authority to the browser.
+          replace_once(
+              'frontend/src/settings-tax-bindings.ts',
+              'export type SettingsTaxRateBindingCallbacks = {\n',
+              "import { mountSettingsUpdateStatus } from './settings-update-status.js';\n\nexport type SettingsTaxRateBindingCallbacks = {\n",
+          )
+          replace_once(
+              'frontend/src/settings-tax-bindings.ts',
+              'export function bindSettingsTaxRateControls(root: Root, callbacks: SettingsTaxRateBindingCallbacks) {\n  return {\n',
+              'export function bindSettingsTaxRateControls(root: Root, callbacks: SettingsTaxRateBindingCallbacks) {\n  mountSettingsUpdateStatus(root as Root & { querySelector: <T = Element>(selector: string) => T | null });\n  return {\n',
+          )
+          replace_once(
+              'frontend/src/settings-tax-bindings.ts',
+              'type Root = { querySelectorAll: <T = Element>(selector: string) => Iterable<T> };\n',
+              'type Root = { querySelectorAll: <T = Element>(selector: string) => Iterable<T>; querySelector?: <T = Element>(selector: string) => T | null };\n',
+          )
+          # Avoid unsafe cast against a root without querySelector in isolated unit tests.
+          replace_once(
+              'frontend/src/settings-tax-bindings.ts',
+              '  mountSettingsUpdateStatus(root as Root & { querySelector: <T = Element>(selector: string) => T | null });\n',
+              '  if (root.querySelector) mountSettingsUpdateStatus(root as Root & { querySelector: <T = Element>(selector: string) => T | null });\n',
+          )
+
+          Path('frontend/tsconfig.test.settings-update-status.json').write_text('''{\n  "extends": "./tsconfig.json",\n  "compilerOptions": {\n    "rootDir": "src",\n    "outDir": "dist-tests/settings-update-status",\n    "noEmit": false\n  },\n  "include": ["src/settings-update-status.ts", "src/settings-tax-bindings.ts"]\n}\n''', encoding='utf-8')
+          Path('frontend/test/settings-update-status.test.mjs').write_text('''import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { isUpdateStatusDto, mountSettingsUpdateStatus, resetUpdateStatusCacheForTests, settingsUpdateStatusCardMarkup, updateStatusFromSettingsEnvelope } from '../dist-tests/settings-update-status/settings-update-status.js';\nimport { readFileSync } from 'node:fs';\n\nconst flush = () => new Promise((resolve) => setImmediate(resolve));\n\ntest('completed update is presented as a compact human-facing status', () => {\n  const html = settingsUpdateStatusCardMarkup({ state: 'completed', to_app_version: '0.1.0', updated_at: '2026-08-13T20:00:00Z', message: 'Данные успешно подготовлены для этой версии приложения.', next_action: 'Можно продолжать работу.' });\n  assert.match(html, /Обновление завершено/);\n  assert.match(html, /Версия:<\\/strong> 0.1.0/);\n  assert.match(html, /Можно продолжать работу/);\n});\n\ntest('attention state stays actionable and does not invent technical details', () => {\n  const html = settingsUpdateStatusCardMarkup({ state: 'attention_required', to_app_version: null, updated_at: null, message: 'Состояние предыдущего обновления нельзя подтвердить автоматически.', next_action: 'Закройте приложение и откройте его снова.' });\n  assert.match(html, /Нужно внимание/);\n  for (const forbidden of ['operation_id', 'failure_category', 'schema_identity', 'stage_identity', 'backup_identity', 'traceback']) assert.doesNotMatch(html, new RegExp(forbidden));\n});\n\ntest('backend-provided text is escaped and no update control is rendered', () => {\n  const html = settingsUpdateStatusCardMarkup({ state: 'attention_required', to_app_version: '<script>', updated_at: null, message: '<img src=x onerror=alert(1)>', next_action: '<b>retry</b>' });\n  assert.doesNotMatch(html, /<script>|<img|<b>/);\n  assert.match(html, /&lt;script&gt;/);\n  assert.doesNotMatch(html, /<button|data-action=.*update|проверить обновления/i);\n});\n\ntest('DTO guard accepts only the bounded public contract', () => {\n  const status = { state: 'completed', to_app_version: '0.1.0', updated_at: null, message: 'ok', next_action: 'continue' };\n  assert.equal(isUpdateStatusDto(status), true);\n  assert.deepEqual(updateStatusFromSettingsEnvelope({ update_status: status, operation_id: 'hidden' }), status);\n  assert.equal(updateStatusFromSettingsEnvelope({ update_status: { ...status, state: 'started' } }), null);\n});\n\ntest('mount uses existing Settings binding seam and caches the read for the UI session', async () => {\n  resetUpdateStatusCacheForTests();\n  const cards = [];\n  let fetches = 0;\n  const anchor = { insertAdjacentHTML(_position, html) { cards.push({ html, outerHTML: html, isConnected: true }); } };\n  const root = { querySelector(selector) { if (selector === '[data-tax-rate-section]') return anchor; if (selector === '[data-update-status-card]') return cards.at(-1) ?? null; return null; } };\n  const fetchStatus = async () => { fetches += 1; return { update_status: { state: 'completed', to_app_version: '0.1.0', updated_at: null, message: 'Готово.', next_action: 'Можно продолжать работу.' } }; };\n  assert.equal(mountSettingsUpdateStatus(root, fetchStatus), true);\n  await flush();\n  assert.equal(fetches, 1);\n  assert.match(cards[0].outerHTML, /Обновление завершено/);\n  const secondRoot = { querySelector(selector) { if (selector === '[data-tax-rate-section]') return anchor; if (selector === '[data-update-status-card]') return null; return null; } };\n  mountSettingsUpdateStatus(secondRoot, fetchStatus);\n  assert.equal(fetches, 1);\n});\n\ntest('settings integration does not touch protected main.ts and exposes no update mutation', () => {\n  const bindings = readFileSync(new URL('../src/settings-tax-bindings.ts', import.meta.url), 'utf8');\n  const presenter = readFileSync(new URL('../src/settings-update-status.ts', import.meta.url), 'utf8');\n  assert.match(bindings, /mountSettingsUpdateStatus/);\n  assert.match(presenter, /fetch\('\/api\/settings\/status'\)/);\n  assert.doesNotMatch(presenter, /method:\s*['\"](?:POST|PUT|PATCH|DELETE)/i);\n});\n''', encoding='utf-8')
+          PY
+
+      - name: Prove protected Restore blobs unchanged after transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git diff -- launcher/runtime.py frontend/src/main.ts)"
+          test "$(git hash-object launcher/runtime.py)" = "7cca822944a335e03e196be6d9def8817267205e"
+          test "$(git hash-object frontend/src/main.ts)" = "ea98a76638bddcb5a92b9ba31941508f8a816d42"
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install backend test dependencies
+        shell: bash
+        run: python -m pip install --disable-pip-version-check './backend[test]'
+
+      - name: Backend and package focused tests
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python -m py_compile backend/app/services/update_safety.py backend/app/services/settings.py backend/app/schemas/settings.py macos_package/entrypoint.py macos_package/user_alert.py
+          python -m pytest -q \
+            backend/app/tests/test_d4_c_update_status.py \
+            backend/app/tests/test_settings.py \
+            backend/app/tests/test_settings_api.py \
+            macos_package/tests/test_d4_c_update_failure_alerts.py \
+            macos_package/tests/test_macos_package_entrypoint.py
+
+      - name: Frontend focused test and build
+        shell: bash
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run test:settings-update-status
+          npm run build
+
+      - name: Lifecycle and implementation scope gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check_documentation_lifecycle.py
+          git diff --check
+          git diff --name-only > /tmp/d4c-files.txt
+          test "$(wc -l < /tmp/d4c-files.txt | tr -d ' ')" = "12"
+          if grep -Ev '^(backend/app/(schemas/settings\.py|services/(settings|update_safety)\.py|tests/test_d4_c_update_status\.py)|macos_package/(entrypoint\.py|user_alert\.py|tests/test_d4_c_update_failure_alerts\.py)|frontend/(package\.json|src/(settings-tax-bindings|settings-update-status)\.ts|test/settings-update-status\.test\.mjs|tsconfig\.test\.settings-update-status\.json))$' /tmp/d4c-files.txt; then
+            echo 'D4-C implementation scope leak' >&2
+            cat /tmp/d4c-files.txt >&2
+            exit 1
+          fi
+          ! grep -Eq '^(launcher/|frontend/src/main\.ts|migrations/|docs/|state/|scripts/package_macos\.sh|requirements|backend/VERSION)' /tmp/d4c-files.txt
+
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            backend/app/schemas/settings.py \
+            backend/app/services/settings.py \
+            backend/app/services/update_safety.py \
+            backend/app/tests/test_d4_c_update_status.py \
+            macos_package/entrypoint.py \
+            macos_package/user_alert.py \
+            macos_package/tests/test_d4_c_update_failure_alerts.py \
+            frontend/package.json \
+            frontend/src/settings-tax-bindings.ts \
+            frontend/src/settings-update-status.ts \
+            frontend/test/settings-update-status.test.mjs \
+            frontend/tsconfig.test.settings-update-status.json
+          git diff --cached --check
+          git config user.name 'D4-C implementation builder'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-C add user-facing update status and packaged failure UX'
+          git push origin HEAD:"$IMPLEMENTATION_BRANCH"
