@@ -4,7 +4,6 @@
 
 ## Current index
 
-- `d4-a-pre-closure/` — exact active lifecycle/state/checker surfaces from merged head `89dd69dc1958e622146e01869cc34d4cd2ec859e` immediately before D4-A closure and D4-B authorization.
 - `d4-pre-decision/` — exact active lifecycle/state/checker surfaces from `main` `dc2301f7d4e101ad0fba851325dae9274f02da0c` immediately before CR-013 / ADR 0020.
 - `c4-iii-pre-closure/` — exact active surfaces immediately before C4-III lifecycle closure.
 - `c4-iii-pre-partial-verification/` — checkpoint before partial C4-III verification state was compacted.
