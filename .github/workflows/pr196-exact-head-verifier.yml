@@ -10,7 +10,6 @@ permissions:
 
 env:
   EXPECTED_HEAD: bbeb5c867e7dd8bc4381a967bb4fd0a93892196a
-  EVIDENCE_DIR: ${{ runner.temp }}/pr196-evidence
 
 jobs:
   verify:
@@ -28,7 +27,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/pr196-evidence"
           mkdir -p "$EVIDENCE_DIR"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
           ACTUAL_HEAD="$(git rev-parse HEAD)"
           printf '%s\n' "$ACTUAL_HEAD" > "$EVIDENCE_DIR/actual-head.txt"
           test "$ACTUAL_HEAD" = "$EXPECTED_HEAD"
@@ -82,11 +83,10 @@ jobs:
       - name: Build real macOS package
         id: package
         shell: bash
-        env:
-          COSMETIC_WORKSHOP_BUILD_DIR: ${{ runner.temp }}/pr196-build
-          COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR: ${{ runner.temp }}/pr196-dist
         run: |
           set -euo pipefail
+          export COSMETIC_WORKSHOP_BUILD_DIR="$RUNNER_TEMP/pr196-build"
+          export COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR="$RUNNER_TEMP/pr196-dist"
           bash scripts/package_macos.sh 2>&1 | tee "$EVIDENCE_DIR/package-build.log"
           test -x "$COSMETIC_WORKSHOP_BUILD_DIR/package/CosmeticWorkshopOS.app/Contents/MacOS/CosmeticWorkshopOS"
           test -f "$COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR/CosmeticWorkshopOS-mac.zip"
@@ -94,11 +94,9 @@ jobs:
       - name: Exact-package D4-A smoke
         id: smoke
         shell: bash
-        env:
-          COSMETIC_WORKSHOP_BUILD_DIR: ${{ runner.temp }}/pr196-build
         run: |
           set -euo pipefail
-          APP="$COSMETIC_WORKSHOP_BUILD_DIR/package/CosmeticWorkshopOS.app"
+          APP="$RUNNER_TEMP/pr196-build/package/CosmeticWorkshopOS.app"
           USER_DATA="$RUNNER_TEMP/pr196-user-data"
           CANONICAL_VERSION="$(cat backend/VERSION)"
           DB="$USER_DATA/data/cosmetic_workshop.sqlite"
@@ -165,7 +163,6 @@ jobs:
 
           cleanup_runtime
 
-          # Exact-package fail-closed proof for a database newer than this application.
           python3 - "$DB" <<'PY'
           import sqlite3, sys
           with sqlite3.connect(sys.argv[1]) as con:
@@ -214,7 +211,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Remove only build/test output created by this verifier; restore tracked source from exact head.
+          EVIDENCE_DIR="${EVIDENCE_DIR:-$RUNNER_TEMP/pr196-evidence}"
+          mkdir -p "$EVIDENCE_DIR"
           rm -rf frontend/node_modules frontend/dist frontend/dist-tests
           git restore --source="$EXPECTED_HEAD" --worktree -- frontend 2>/dev/null || true
           find backend -maxdepth 1 -type d -name '*.egg-info' -prune -exec rm -rf {} + 2>/dev/null || true
@@ -238,6 +236,7 @@ jobs:
           SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
           POSTFLIGHT_OUTCOME: ${{ steps.postflight.outcome }}
         run: |
+          EVIDENCE_DIR="${EVIDENCE_DIR:-$RUNNER_TEMP/pr196-evidence}"
           mkdir -p "$EVIDENCE_DIR"
           STATUS=passed
           if [ "$PREFLIGHT_OUTCOME" != success ] || [ "$DEPS_OUTCOME" != success ] || [ "$POSTFLIGHT_OUTCOME" != success ]; then
