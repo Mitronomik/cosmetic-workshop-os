@@ -25,9 +25,9 @@ CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
 D3 — macOS package MVP — IMPLEMENTED
 
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 
@@ -65,7 +65,7 @@ Schema compatibility:
 - `pending_migration_ids()` is no longer used to decide ordinary startup compatibility before the gate;
 - supported older lineage still uses the existing direct backup + migration execution after the gate. Replacing that execution with staged migration is D4-B and is not implemented here.
 
-D4-A is merged and exact-head verified. This lifecycle closure authorizes D4-B as the only next slice; D4-B remains not implemented.
+D4-A is merged and exact-head verified. D4-B is implemented in the current changeset, but exact-head verification and lifecycle closure are still pending; D4-C remains unauthorized.
 
 ## D4-A closure evidence
 
@@ -75,6 +75,28 @@ D4-A is merged and exact-head verified. This lifecycle closure authorizes D4-B a
 - verified PR head and merge commit are content-identical (`0` changed files);
 - external exact merged-head verifier run `31699624984`: PASS;
 - evidence artifact `9180924875`, digest `sha256:b2ac042fa2f6d239aebae931e1c93aa81a9b8b7e3c6b2b6a45304e0d113d7993`.
+
+## D4-B implementation truth
+
+For a supported older canonical database, ordinary user-mode startup now follows the ADR 0020 staged path:
+
+```text
+read-only D4-A compatibility preflight
+→ reconcile any durable interrupted started operation
+→ create + verify before_migration backup
+→ create consistent runner-owned stage
+→ migrate stage only
+→ verify stage target lineage
+→ prove canonical unchanged during staging
+→ atomically publish stage as canonical
+→ verify canonical target lineage
+→ durably record completed update
+→ continue ordinary post-migration startup
+```
+
+`update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. The first D4 operation may record `from_app_version = null` because no trusted previous D4 update record exists; legacy mutable database `app.version` is never promoted into authority.
+
+D4-B is **implementation-complete only in this changeset**. It is not lifecycle-closed, D4-C is not authorized, and exact-head + exact-package verification remain mandatory before any next-slice authorization.
 
 ## Closed Restore boundary
 

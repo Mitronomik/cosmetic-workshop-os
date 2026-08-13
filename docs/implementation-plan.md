@@ -12,9 +12,9 @@ C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
 Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
@@ -52,18 +52,34 @@ D4-A is merged, exact-head verified and lifecycle-closed. D4-B is now the only a
 
 ### D4-B — Safe migration execution and durable UpdateLog
 
-**AUTHORIZED NEXT — NOT IMPLEMENTED**.
+**IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING**.
 
-Authorized D4-B architecture from ADR 0020:
+Implemented D4-B architecture from ADR 0020:
 
 ```text
-consistent before_migration backup
+verified consistent before_migration backup
 → consistent runner-owned migration stage
 → migrate only stage
-→ verify target lineage
+→ verify source/target lineage and canonical stability
 → atomic canonical publication
+→ post-commit canonical verification
 → durable external UpdateLog
 ```
+
+Implemented scope:
+
+- external atomic `update-journal.json` with `started/completed/failed`;
+- conservative reconciliation of interrupted `started` records;
+- verified automatic backup as a hard staging prerequisite;
+- stage created through the accepted SQLite Online Backup primitive, never raw file copy;
+- migrations execute only against the stage;
+- exact target lineage + SQLite structural verification before commit;
+- same-directory atomic `os.replace` commit after canonical-change/sidecar guards;
+- post-commit failures remain distinct from pre-commit migration failure;
+- deterministic stage ownership validation before interrupted-artifact cleanup;
+- no D4-C frontend or packaged failure-UX work.
+
+D4-B cannot authorize D4-C until this implementation is merged, exact-head verified and lifecycle-closed.
 
 ### D4-C — User-facing update status and packaged failure UX
 

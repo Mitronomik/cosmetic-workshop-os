@@ -43,6 +43,10 @@ failed
 
 `started` is durable and non-terminal. A repeated launch reconciles it conservatively against the canonical migration lineage. It does not trigger an automatic destructive retry.
 
+## Application-version history semantics
+
+`from_app_version` records only a **durably known prior D4 update application version**. On the first D4 operation it may be `null` because no trusted D4 journal predates that operation. The implementation must not fill that gap from historical mutable `AppSettings.app_version`; inventing a value would create a false authority. `to_app_version` is always the current effective application version resolved by D4-A.
+
 ## Schema identity
 
 `from_schema_identity` and `to_schema_identity` represent the ordered `schema_migrations` lineage. A UI/log may abbreviate this to last-applied and target migration IDs, but no separately mutable `schema_version` counter is authoritative.
