@@ -64,6 +64,8 @@ EXIT_FRONTEND_FAILED = 13
 EXIT_BACKEND_PORT_UNAVAILABLE = 14
 EXIT_LAUNCHER_REFUSED = 15
 EXIT_UNEXPECTED = 16
+EXIT_UPDATE_STOPPED_BEFORE_COMMIT = 17
+EXIT_UPDATE_COMPLETION_UNCERTAIN = 18
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -170,6 +172,19 @@ def _refuse_incomplete_package(layout: PackageLayout) -> int | None:
     return None
 
 
+def _classify_update_exception(exc: Exception) -> tuple[StartupFailure, int] | None:
+    """Map backend-owned update truth to the two fixed D4-C package outcomes."""
+    try:
+        from app.services.update_safety import UpdateSafetyError, classify_update_failure_for_user
+    except ImportError:
+        return None
+    if not isinstance(exc, UpdateSafetyError):
+        return None
+    if classify_update_failure_for_user(exc) == "before_commit":
+        return StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT, EXIT_UPDATE_STOPPED_BEFORE_COMMIT
+    return StartupFailure.UPDATE_COMPLETION_UNCERTAIN, EXIT_UPDATE_COMPLETION_UNCERTAIN
+
+
 def _run_launcher(
     layout: PackageLayout, server: LocalFrontendServer, arguments: argparse.Namespace
 ) -> int:
@@ -229,7 +244,18 @@ def _run_launcher(
             StartupFailure.LAUNCHER_REFUSED, packaged=layout.is_packaged, detail=str(exc)
         )
         return EXIT_LAUNCHER_REFUSED
-    except Exception:  # noqa: BLE001 - a packaged crash must not be a silent exit
+    except Exception as exc:  # noqa: BLE001 - a packaged crash must not be a silent exit
+        update_failure = _classify_update_exception(exc)
+        if update_failure is not None:
+            failure, exit_code = update_failure
+            report_startup_failure(
+                failure,
+                packaged=layout.is_packaged,
+                # Keep the developer log useful without leaking an internal
+                # category, filesystem path or traceback into the user dialogue.
+                detail="D4-C classified startup-owned update failure",
+            )
+            return exit_code
         # The traceback is developer evidence and goes to stderr and the system
         # log. The user gets the fixed non-technical message instead.
         report_startup_failure(

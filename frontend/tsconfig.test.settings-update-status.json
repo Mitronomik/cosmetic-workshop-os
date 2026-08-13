@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist-tests/settings-update-status",
+    "noEmit": false
+  },
+  "include": ["src/settings-update-status.ts", "src/settings-tax-bindings.ts"]
+}

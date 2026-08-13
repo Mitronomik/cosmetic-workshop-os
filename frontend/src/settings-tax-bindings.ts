@@ -1,3 +1,5 @@
+import { mountSettingsUpdateStatus } from './settings-update-status.js';
+
 export type SettingsTaxRateBindingCallbacks = {
   submitTaxRate: (event: Event) => void;
   updateTaxRateDraft: (event: Event) => void;
@@ -8,7 +10,7 @@ export type SettingsTaxRateBindingCallbacks = {
   refreshTaxRate: () => void;
 };
 
-type Root = { querySelectorAll: <T = Element>(selector: string) => Iterable<T> };
+type Root = { querySelectorAll: <T = Element>(selector: string) => Iterable<T>; querySelector?: <T = Element>(selector: string) => T | null };
 type Target = { addEventListener: (type: string, listener: (event: Event) => void) => void };
 
 const bind = (root: Root, selector: string, type: string, listener: (event: Event) => void): number => {
@@ -21,6 +23,7 @@ const bind = (root: Root, selector: string, type: string, listener: (event: Even
 };
 
 export function bindSettingsTaxRateControls(root: Root, callbacks: SettingsTaxRateBindingCallbacks) {
+  if (root.querySelector) mountSettingsUpdateStatus(root as Root & { querySelector: <T = Element>(selector: string) => T | null });
   return {
     form: bind(root, '[data-form="settings-tax-rate"]', 'submit', callbacks.submitTaxRate),
     input: bind(root, '[data-tax-rate-input]', 'input', callbacks.updateTaxRateDraft),

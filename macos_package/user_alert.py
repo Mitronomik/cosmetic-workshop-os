@@ -68,6 +68,8 @@ class StartupFailure(Enum):
     LAUNCHER_REFUSED = "launcher_refused"
     SAFE_START_BLOCKED = "safe_start_blocked"
     RUNTIME_STOPPED = "runtime_stopped"
+    UPDATE_STOPPED_BEFORE_COMMIT = "update_stopped_before_commit"
+    UPDATE_COMPLETION_UNCERTAIN = "update_completion_uncertain"
     UNEXPECTED = "unexpected"
 
 
@@ -142,6 +144,17 @@ STARTUP_FAILURE_MESSAGES: dict[StartupFailure, str] = {
         "Рабочая часть приложения неожиданно остановилась. "
         "Попробуйте открыть приложение снова. "
         "Если ошибка повторяется, обратитесь за помощью."
+    ),
+    StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT: (
+        "Не удалось безопасно обновить данные. "
+        "Обновление остановлено до замены рабочей базы данных. "
+        "Закройте приложение и откройте его снова. "
+        "Если ошибка повторяется, обратитесь за помощью."
+    ),
+    StartupFailure.UPDATE_COMPLETION_UNCERTAIN: (
+        "Не удалось подтвердить завершение обновления данных. "
+        "Не пытайтесь вручную откатывать или заменять файлы данных. "
+        "Закройте приложение и обратитесь за помощью."
     ),
     StartupFailure.UNEXPECTED: (
         "Во время запуска произошла непредвиденная ошибка. "
