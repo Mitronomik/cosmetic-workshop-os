@@ -1,6 +1,6 @@
 # Packaging
 
-Status: **CURRENT — D3 IMPLEMENTED; D4 DECIDED; D4-A NEXT**
+Status: **CURRENT — D3 IMPLEMENTED; D4-A IMPLEMENTED; VERIFICATION PENDING**
 Updated: `2026-08-13`
 
 The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-decision/packaging.md`.
@@ -10,8 +10,8 @@ The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-dec
 ```text
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — AUTHORIZED — IMPLEMENTATION NOT STARTED
-D4-A — Version identity and compatibility preflight — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING
+D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED
 D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
@@ -23,46 +23,36 @@ Product release readiness — NOT CLAIMED
 
 The package remains `CosmeticWorkshopOS.app` distributed in `CosmeticWorkshopOS-mac.zip`, with a bundled Python runtime, built frontend, existing launcher/backend architecture and user data outside the application package. D4 does not introduce another desktop shell.
 
-## D4 manual update model
+## D4-A version projection contract
 
-D4 is safe manual package replacement:
+`backend/VERSION` is now the one editable repository-owned build-time product version. D4-A accepts a numeric `major.minor.patch` identity token only; it never orders application versions to decide schema compatibility.
+
+Generated/read-only projections:
 
 ```text
-close old package
-→ keep it temporarily
-→ place/open newer package
-→ use the same external user-data directory
-→ compatibility preflight
-→ safe schema migration when required
-→ successful ordinary startup
-→ only then consider discarding the previous package
+backend/VERSION
+→ backend pyproject dynamic version
+→ Info.plist CFBundleShortVersionString / CFBundleVersion
+→ package-runtime.json app_version
+→ effective backend Settings/status version
 ```
 
-The previous package is **not** a guaranteed rollback after the database update commit point. An older package must independently prove the canonical database lineage is compatible; otherwise it fails closed before mutation.
+The source `backend/VERSION` file is deliberately **not copied into the packaged application root**. Inside a built package the validated `package-runtime.json` value is the effective runtime identity. A present but malformed package manifest fails closed instead of falling back to a developer checkout value.
 
-## Version projection contract
-
-D4-A introduces one repository-owned build-time product version. `Info.plist`, `package-runtime.json` and backend/UI runtime status are projections of that same source. They are not independent version authorities.
+`scripts/verify_product_version.py` runs during package assembly and rejects a mismatch among `backend/VERSION`, backend package metadata configuration, Info.plist and package-runtime.json.
 
 The historical mutable database `app.version` placeholder is not used to decide package identity or compatibility.
 
+## D4 manual update model
+
+D4 remains safe manual package replacement. D4-A supplies the compatibility gate; D4-B migration execution is still gated.
+
+The previous package is **not** a guaranteed rollback after the database update commit point. An older package must independently prove the canonical database lineage is compatible; otherwise it fails closed before mutation.
+
 ## Packaged failure UX
 
-The existing Finder-visible fixed-message mechanism remains the packaging boundary for fatal pre-browser failures. D4-C may extend it with bounded update/migration failure categories. It must not expose paths, tracebacks, SQL, operation IDs or migration internals.
+The existing Finder-visible fixed-message mechanism remains unchanged in D4-A. D4-C may later extend it with bounded update/migration failure categories. D4-A adds no technical update admin UI and no new Finder error category.
 
 ## Explicit non-goals
 
-CR-013 does not authorize:
-
-- auto-update download;
-- internet update checking;
-- GitHub Releases integration;
-- release channels/background updater;
-- installer redesign;
-- signing/notarization;
-- DMG;
-- App Store;
-- sandbox migration;
-- D5;
-- release readiness;
-- Electron/Tauri/pywebview/new desktop shell.
+CR-013/D4-A do not authorize auto-update download, internet update checking, GitHub Releases integration, release channels, installer redesign, signing/notarization, DMG, App Store, sandbox migration, D5 or release readiness.

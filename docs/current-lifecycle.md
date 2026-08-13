@@ -10,9 +10,9 @@ For historical pre-D4 decision state, see `docs/history/d4-pre-decision/`. The e
 - ADR 0016 remains authoritative for destructive Restore.
 - ADR 0018 remains authoritative for Restore interaction/validation session semantics.
 - ADR 0019 remains authoritative for the bounded D3 macOS package decision.
-- ADR 0020 is authoritative for D4 Update Safety once CR-013 is merged.
+- ADR 0020 is authoritative for D4 Update Safety.
 - `docs/roadmap.md` remains the product-scope source for D4 and D5.
-- `docs/domain-model-d4-update-safety.md` is the bounded D4 companion clarification for the conceptual UpdateLog/AppSettings/BackupRecord fields.
+- `docs/domain-model-d4-update-safety.md` is the bounded D4 companion clarification.
 
 ## Current lifecycle
 
@@ -25,8 +25,8 @@ CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
 D3 — macOS package MVP — IMPLEMENTED
 
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — AUTHORIZED — IMPLEMENTATION NOT STARTED
-D4-A — Version identity and compatibility preflight — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING
+D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED
 D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
@@ -35,51 +35,42 @@ D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
-## What CR-013 decided
+## D4-A implementation truth
 
-D4 is a manual package-replacement safety programme. It does not add an updater downloader or release/distribution system.
-
-The accepted control model is:
+D4-A implements only the first ADR 0020 slice:
 
 ```text
-read-only compatibility preflight
-→ verified before_migration backup
-→ consistent SQLite migration stage
-→ migrate and verify stage
-→ atomic database commit
-→ durable external UpdateLog
-→ ordinary backend startup
+resolve one effective application version
+→ inspect canonical database lineage read-only
+→ fresh/current/supported-older classification
+→ fail closed on incompatible existing lineage
+→ only then enter the pre-existing startup backup/migration path
 ```
 
-The ordered `schema_migrations` lineage remains the schema source of truth. Existing `app_settings["app.version"]` is historical only. D4-A will introduce one repository-owned application-version source and propagate one effective runtime version.
+Version identity:
 
-An existing database that is newer than the running application, or whose lineage is unsupported/unreadable, fails closed **before mutation**. A pre-existing SQLite file without recognizable lineage is not treated as a fresh database.
+- `backend/VERSION` is the one editable build-time product-version source;
+- `backend/pyproject.toml` declares its version dynamically from `VERSION`;
+- `scripts/package_macos.sh` reads the same source and generates `Info.plist` and `package-runtime.json` projections;
+- `scripts/verify_product_version.py` rejects a package whose projections diverge;
+- packaged backend runtime reads `package-runtime.json`; source runtime reads `backend/VERSION`;
+- Settings/status receives the same effective runtime value;
+- the database `app.version` placeholder remains historical and non-authoritative.
 
-The previous application package is not a generic rollback after the database commit point. Any older package must independently pass the same lineage compatibility gate.
+Schema compatibility:
 
-## Authorization boundary
+- the existing backend migration-lineage classifier remains the one classifier;
+- D4-A adds a path-level startup wrapper that opens the canonical DB read-only and calls that classifier;
+- only a truly absent canonical path is `fresh`; a dangling symlink, non-file, missing migration history, newer schema, unknown/reordered/skipped history or unreadable DB fails closed;
+- `pending_migration_ids()` is no longer used to decide ordinary startup compatibility before the gate;
+- supported older lineage still uses the existing direct backup + migration execution after the gate. Replacing that execution with staged migration is D4-B and is not implemented here.
 
-Only D4-A may begin after this decision is merged.
-
-D4-A may implement:
-
-- one canonical app-version identity and generated package/runtime projections;
-- ordinary-startup read-only lineage compatibility preflight;
-- fail-closed newer/unsupported lineage refusal;
-- focused backend/launcher/package tests.
-
-D4-A may **not** implement:
-
-- staged migration execution;
-- UpdateLog persistence;
-- frontend update status;
-- new packaged update-failure UI;
-- D4-B/C/D;
-- D5;
-- signing, notarization, DMG, App Store, updater/download or release readiness.
+D4-A does not authorize D4-B. Exact-head verification and lifecycle closure are still required after merge before D4-B can become the next authorized slice.
 
 ## Closed Restore boundary
 
-Restore remains closed. CR-013 does not amend its twelve-phase state machine, source selection, source proof, browser control plane, backend handshake, replacement/recovery semantics or protected production files.
+Restore remains closed. D4-A changes no protected Restore production blob, no Restore state machine, picker, source proof, control plane, backend handshake, replacement or recovery semantics.
 
-If D4 implementation requires changing a closed Restore production boundary, work must stop for a separate decision.
+## Release boundary
+
+D5, auto-update/download, GitHub Releases integration, signing, notarization, DMG, App Store, release channels and release readiness remain outside CR-013/D4-A.

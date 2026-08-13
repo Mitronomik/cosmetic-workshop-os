@@ -2,11 +2,11 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.repositories.settings import SettingsNotInitializedError
 from app.schemas.settings import AppSettingsResponse, AppSettingResponse, SettingsStatusResponse, WorkshopProfileResponse, WorkshopProfileUpdateRequest
+from app.services.runtime_identity import get_runtime_settings_status
 from app.services.settings import (
     WorkshopProfilePersistenceError,
     WorkshopProfileSettingsService,
     WorkshopProfileValidationError,
-    get_settings_status,
     read_app_settings,
 )
 
@@ -27,7 +27,7 @@ def get_settings() -> AppSettingsResponse:
 
 @router.get("/status", response_model=SettingsStatusResponse)
 def get_settings_status_endpoint() -> SettingsStatusResponse:
-    return get_settings_status()
+    return get_runtime_settings_status()
 
 
 @router.get("/workshop-profile", response_model=WorkshopProfileResponse)

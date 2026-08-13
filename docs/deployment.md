@@ -10,8 +10,8 @@ The exact pre-CR-013 document is preserved in `docs/history/d4-pre-decision/depl
 ```text
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — AUTHORIZED — IMPLEMENTATION NOT STARTED
-D4-A — Version identity and compatibility preflight — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING
+D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED
 D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
@@ -21,7 +21,7 @@ Product release readiness — NOT CLAIMED
 
 ## Topology
 
-CR-013 changes **no deployment topology**.
+D4-A changes **no deployment topology**.
 
 The product remains:
 
@@ -35,10 +35,10 @@ packaged local application
 
 Ordinary work requires no cloud service and no mandatory internet connection.
 
-D4 adds a startup safety contract, not a deployment tier. The newer package reuses the same external user-data directory and must preflight schema compatibility before any migration or ordinary backend start.
+D4-A adds only a startup compatibility gate and product-version identity. The launcher and browser topology are unchanged; user data still lives in the same external user-data directory.
 
-The future D4-B migration stage and durable UpdateLog remain under the external user-data boundary and outside the package. They do not create a server deployment, cloud sync or multi-user topology.
+The future D4-B migration stage and durable UpdateLog remain unimplemented and unauthorized until D4-A is merged and verified.
 
 ## Authorization boundary
 
-Only D4-A is authorized next. D4-B/C/D and D5 remain gated. No signing, notarization, DMG, App Store, release channel, updater downloader, cloud deployment or cloud sync is authorized by CR-013.
+D4-A implementation does not authorize D4-B/C/D or D5. No signing, notarization, DMG, App Store, release channel, updater downloader, cloud deployment or cloud sync is authorized by CR-013.
