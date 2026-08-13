@@ -765,8 +765,7 @@ def test_startup_reconciles_manual_backups_after_migrations_and_after_exports(tm
     originals = {
         name: getattr(startup_module, name)
         for name in (
-            "backup_sqlite_database",
-            "initialize_database",
+            "execute_staged_update",
             "reconcile_report_documents",
             "reconcile_json_exports",
             "reconcile_manual_backups",
@@ -786,8 +785,7 @@ def test_startup_reconciles_manual_backups_after_migrations_and_after_exports(tm
     result = startup_module.initialize_startup("user")
 
     assert order == [
-        "backup_sqlite_database",
-        "initialize_database",
+        "execute_staged_update",
         "reconcile_report_documents",
         "reconcile_json_exports",
         "reconcile_manual_backups",
