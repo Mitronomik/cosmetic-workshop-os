@@ -1,0 +1,246 @@
+name: Build D4-C implementation
+
+on:
+  push:
+    branches:
+      - maintenance/d4-c-implementation-builder
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_BASE: 20d7190ebd91012a58993bf02934d6f4459332a0
+  IMPLEMENTATION_BRANCH: agent/d4-c-user-update-status-failure-ux
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact implementation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.IMPLEMENTATION_BRANCH }}
+          fetch-depth: 0
+
+      - name: Exact base gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_BASE"
+          test -z "$(git status --porcelain)"
+          git diff --check
+
+      - name: Apply bounded D4-C implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected one match for {old!r}, got {text.count(old)}')
+              file.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Backend API schema: one deliberately redacted update status projection.
+          replace_once(
+              'backend/app/schemas/settings.py',
+              'SettingsWarningSeverity = Literal["info", "warning"]\n',
+              'SettingsWarningSeverity = Literal["info", "warning"]\nUpdateStatusState = Literal["not_required", "completed", "attention_required"]\n',
+          )
+          replace_once(
+              'backend/app/schemas/settings.py',
+              'class SettingsStatusResponse(BaseModel):\n',
+              'class UpdateStatusSummary(BaseModel):\n    state: UpdateStatusState\n    to_app_version: str | None = None\n    updated_at: str | None = None\n    message: str\n    next_action: str\n\n\nclass SettingsStatusResponse(BaseModel):\n',
+          )
+          replace_once(
+              'backend/app/schemas/settings.py',
+              '    local_data: LocalDataStatus\n    capabilities: list[SettingsCapability]\n',
+              '    local_data: LocalDataStatus\n    update_status: UpdateStatusSummary\n    capabilities: list[SettingsCapability]\n',
+          )
+
+          # Backend startup-owned journal projection. It never returns operation ids,
+          # schema identities, backup/stage identities, digests, raw categories or paths.
+          replace_once(
+              'backend/app/services/update_safety.py',
+              'UpdateStatus = Literal["started", "completed", "failed"]\n',
+              'UpdateStatus = Literal["started", "completed", "failed"]\nUpdateUserStatusState = Literal["not_required", "completed", "attention_required"]\nUpdateUserFailureKind = Literal["before_commit", "completion_uncertain"]\n',
+          )
+          replace_once(
+              'backend/app/services/update_safety.py',
+              'SAFE_JOURNAL_FAILURE = "Не удалось надёжно записать состояние обновления."\n',
+              'SAFE_JOURNAL_FAILURE = "Не удалось надёжно записать состояние обновления."\nSAFE_NO_UPDATE_STATUS = "Обновление данных для этой установки пока не требовалось."\nSAFE_COMPLETED_UPDATE_STATUS = "Данные успешно подготовлены для этой версии приложения."\n',
+          )
+          replace_once(
+              'backend/app/services/update_safety.py',
+              'class UpdatePostCommitError(UpdateSafetyError):\n    """The database commit point was crossed but startup cannot continue yet."""\n\n    def __init__(self, category: str) -> None:\n        super().__init__(category, SAFE_RECONCILIATION_FAILURE, committed=True)\n\n\n@dataclass(frozen=True)\nclass UpdateOperationRecord:',
+              'class UpdatePostCommitError(UpdateSafetyError):\n    """The database commit point was crossed but startup cannot continue yet."""\n\n    def __init__(self, category: str) -> None:\n        super().__init__(category, SAFE_RECONCILIATION_FAILURE, committed=True)\n\n\ndef classify_update_failure_for_user(error: UpdateSafetyError) -> UpdateUserFailureKind:\n    """Collapse internal D4-B failures into the only two D4-C packaged outcomes."""\n    if isinstance(error, (UpdateJournalError, UpdatePostCommitError)):\n        return "completion_uncertain"\n    if error.safe_message == SAFE_RECONCILIATION_FAILURE:\n        return "completion_uncertain"\n    return "before_commit"\n\n\n@dataclass(frozen=True)\nclass UpdateOperationRecord:',
+          )
+          replace_once(
+              'backend/app/services/update_safety.py',
+              '@dataclass(frozen=True)\nclass UpdateReconciliationResult:\n    operation: UpdateOperationRecord | None = None\n    reconciled_to_completed: bool = False\n\n\ndef update_journal_path',
+              '@dataclass(frozen=True)\nclass UpdateReconciliationResult:\n    operation: UpdateOperationRecord | None = None\n    reconciled_to_completed: bool = False\n\n\n@dataclass(frozen=True)\nclass UpdateUserStatus:\n    state: UpdateUserStatusState\n    to_app_version: str | None\n    updated_at: str | None\n    message: str\n\n\ndef update_journal_path',
+          )
+          replace_once(
+              'backend/app/services/update_safety.py',
+              'def _fsync_directory(directory: Path) -> None:\n',
+              '''def read_user_update_status(paths: UserDataPaths) -> UpdateUserStatus:\n    """Read the durable journal as a bounded, non-technical D4-C status."""\n    try:\n        records = load_update_journal(update_journal_path(paths))\n    except UpdateJournalError:\n        return UpdateUserStatus(\n            state="attention_required",\n            to_app_version=None,\n            updated_at=None,\n            message=SAFE_RECONCILIATION_FAILURE,\n        )\n    if not records:\n        return UpdateUserStatus(\n            state="not_required",\n            to_app_version=None,\n            updated_at=None,\n            message=SAFE_NO_UPDATE_STATUS,\n        )\n    latest = records[-1]\n    if latest.status == "completed":\n        return UpdateUserStatus(\n            state="completed",\n            to_app_version=latest.to_app_version,\n            updated_at=latest.finished_at,\n            message=SAFE_COMPLETED_UPDATE_STATUS,\n        )\n    if latest.status == "failed":\n        return UpdateUserStatus(\n            state="attention_required",\n            to_app_version=latest.to_app_version,\n            updated_at=latest.finished_at,\n            message=latest.safe_failure_message or SAFE_RECONCILIATION_FAILURE,\n        )\n    return UpdateUserStatus(\n        state="attention_required",\n        to_app_version=latest.to_app_version,\n        updated_at=latest.started_at,\n        message=SAFE_RECONCILIATION_FAILURE,\n    )\n\n\ndef _fsync_directory(directory: Path) -> None:\n''',
+          )
+
+          # Settings service owns human next-action copy and exposes only the redacted projection.
+          replace_once(
+              'backend/app/services/settings.py',
+              '    SettingsStatusResponse,\n',
+              '    SettingsStatusResponse,\n    UpdateStatusSummary,\n',
+          )
+          replace_once(
+              'backend/app/services/settings.py',
+              'from app.repositories.settings import SettingsNotInitializedError, SettingsRepository\n',
+              'from app.repositories.settings import SettingsNotInitializedError, SettingsRepository\nfrom app.services.update_safety import read_user_update_status\n',
+          )
+          replace_once(
+              'backend/app/services/settings.py',
+              '    def build_status(self) -> SettingsStatusResponse:\n        user_paths = resolve_user_data_paths()\n        return SettingsStatusResponse(\n',
+              '''    def build_status(self) -> SettingsStatusResponse:\n        user_paths = resolve_user_data_paths()\n        update = read_user_update_status(user_paths)\n        update_next_action = (\n            "Закройте приложение и откройте его снова. Если сообщение повторится, обратитесь за помощью."\n            if update.state == "attention_required"\n            else "Можно продолжать работу."\n            if update.state == "completed"\n            else "Ничего делать не нужно."\n        )\n        return SettingsStatusResponse(\n''',
+          )
+          replace_once(
+              'backend/app/services/settings.py',
+              '            local_data=LocalDataStatus(\n',
+              '            update_status=UpdateStatusSummary(\n                state=update.state,\n                to_app_version=update.to_app_version,\n                updated_at=update.updated_at,\n                message=update.message,\n                next_action=update_next_action,\n            ),\n            local_data=LocalDataStatus(\n',
+          )
+
+          # Launcher converts backend D4-B internals into two package-safe typed outcomes.
+          replace_once(
+              'launcher/runtime.py',
+              'class BackendPortUnavailableError(RuntimeLaunchError):\n',
+              '''class UpdateBeforeCommitLaunchError(RuntimeLaunchError):\n    """A guarded update stopped before the canonical database commit point."""\n\n\nclass UpdateCompletionUncertainLaunchError(RuntimeLaunchError):\n    """Startup cannot safely claim whether the previous update fully completed."""\n\n\nclass BackendPortUnavailableError(RuntimeLaunchError):\n''',
+          )
+          replace_once(
+              'launcher/runtime.py',
+              'def initialize_backend_startup(mode: str, paths: RuntimePaths):\n    ensure_backend_import_path(paths)\n    from app.services.startup import initialize_startup\n\n    return initialize_startup(mode)\n',
+              '''def initialize_backend_startup(mode: str, paths: RuntimePaths):\n    ensure_backend_import_path(paths)\n    from app.services.startup import initialize_startup\n    from app.services.update_safety import UpdateSafetyError, classify_update_failure_for_user\n\n    try:\n        return initialize_startup(mode)\n    except UpdateSafetyError as exc:\n        if classify_update_failure_for_user(exc) == "before_commit":\n            raise UpdateBeforeCommitLaunchError(\n                "Обновление остановлено до замены рабочей базы данных."\n            ) from exc\n        raise UpdateCompletionUncertainLaunchError(\n            "Завершение обновления нельзя подтвердить автоматически."\n        ) from exc\n''',
+          )
+
+          # Finder-visible catalogue: fixed strings only, no exception/path/category interpolation.
+          replace_once(
+              'macos_package/user_alert.py',
+              '    RUNTIME_STOPPED = "runtime_stopped"\n    UNEXPECTED = "unexpected"\n',
+              '    RUNTIME_STOPPED = "runtime_stopped"\n    UPDATE_STOPPED_BEFORE_COMMIT = "update_stopped_before_commit"\n    UPDATE_COMPLETION_UNCERTAIN = "update_completion_uncertain"\n    UNEXPECTED = "unexpected"\n',
+          )
+          replace_once(
+              'macos_package/user_alert.py',
+              '    StartupFailure.RUNTIME_STOPPED: (\n        "Рабочая часть приложения неожиданно остановилась. "\n        "Попробуйте открыть приложение снова. "\n        "Если ошибка повторяется, обратитесь за помощью."\n    ),\n    StartupFailure.UNEXPECTED:',
+              '''    StartupFailure.RUNTIME_STOPPED: (\n        "Рабочая часть приложения неожиданно остановилась. "\n        "Попробуйте открыть приложение снова. "\n        "Если ошибка повторяется, обратитесь за помощью."\n    ),\n    StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT: (\n        "Не удалось безопасно обновить данные. "\n        "Обновление остановлено до замены рабочей базы данных. "\n        "Закройте приложение и откройте его снова. "\n        "Если ошибка повторяется, обратитесь за помощью."\n    ),\n    StartupFailure.UPDATE_COMPLETION_UNCERTAIN: (\n        "Не удалось подтвердить завершение обновления данных. "\n        "Не пытайтесь вручную откатывать или заменять файлы данных. "\n        "Закройте приложение и обратитесь за помощью."\n    ),\n    StartupFailure.UNEXPECTED:''',
+          )
+
+          replace_once(
+              'macos_package/entrypoint.py',
+              'EXIT_LAUNCHER_REFUSED = 15\nEXIT_UNEXPECTED = 16\n',
+              'EXIT_LAUNCHER_REFUSED = 15\nEXIT_UNEXPECTED = 16\nEXIT_UPDATE_STOPPED_BEFORE_COMMIT = 17\nEXIT_UPDATE_COMPLETION_UNCERTAIN = 18\n',
+          )
+          replace_once(
+              'macos_package/entrypoint.py',
+              '        BackendPortUnavailableError,\n        RuntimeLaunchError,\n',
+              '        BackendPortUnavailableError,\n        RuntimeLaunchError,\n        UpdateBeforeCommitLaunchError,\n        UpdateCompletionUncertainLaunchError,\n',
+          )
+          replace_once(
+              'macos_package/entrypoint.py',
+              '    except BackendPortUnavailableError as exc:\n',
+              '''    except UpdateBeforeCommitLaunchError as exc:\n        report_startup_failure(\n            StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT,\n            packaged=layout.is_packaged,\n            detail=str(exc),\n        )\n        return EXIT_UPDATE_STOPPED_BEFORE_COMMIT\n    except UpdateCompletionUncertainLaunchError as exc:\n        report_startup_failure(\n            StartupFailure.UPDATE_COMPLETION_UNCERTAIN,\n            packaged=layout.is_packaged,\n            detail=str(exc),\n        )\n        return EXIT_UPDATE_COMPLETION_UNCERTAIN\n    except BackendPortUnavailableError as exc:\n''',
+          )
+
+          # Small frontend presentation module; no update controls and no technical fields.
+          Path('frontend/src/settings-update-status.ts').write_text('''export type UpdateStatusState = 'not_required' | 'completed' | 'attention_required';\nexport type UpdateStatusDto = {\n  state: UpdateStatusState;\n  to_app_version: string | null;\n  updated_at: string | null;\n  message: string;\n  next_action: string;\n};\n\nfunction escapeHtml(value: string): string {\n  return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char] ?? char));\n}\n\nfunction stateLabel(state: UpdateStatusState): string {\n  if (state === 'completed') return 'Обновление завершено';\n  if (state === 'attention_required') return 'Нужно внимание';\n  return 'Обновление не требовалось';\n}\n\nfunction tone(state: UpdateStatusState): 'neutral' | 'success' | 'warning' {\n  if (state === 'completed') return 'success';\n  if (state === 'attention_required') return 'warning';\n  return 'neutral';\n}\n\nexport function settingsUpdateStatusCardMarkup(\n  status: UpdateStatusDto | null,\n  unavailable = false,\n): string {\n  if (!status) {\n    return `<section class="card data-card settings-card" data-update-status-card><p class="card-kicker">Безопасность данных</p><h2>Обновление данных</h2><p>${unavailable ? 'Не удалось показать состояние обновления. Другие данные настроек можно использовать отдельно.' : 'Проверяем состояние последнего обновления…'}</p></section>`;\n  }\n  const version = status.to_app_version ? `<p><strong>Версия:</strong> ${escapeHtml(status.to_app_version)}</p>` : '';\n  return `<section class="card data-card settings-card" data-update-status-card><p class="card-kicker">Безопасность данных</p><h2>Обновление данных</h2><div class="feedback-message feedback-message--${tone(status.state)}"><strong class="feedback-message__label">${stateLabel(status.state)}</strong><div class="feedback-message__body"><p>${escapeHtml(status.message)}</p></div></div>${version}<p><strong>Что делать:</strong> ${escapeHtml(status.next_action)}</p></section>`;\n}\n''', encoding='utf-8')
+
+          replace_once(
+              'frontend/src/main.ts',
+              "import { isWorkshopProfileDirty as isWorkshopProfileDirtyState, isWorkshopProfileFormAvailable as isWorkshopProfileFormAvailableState, workshopProfileCardMarkup } from './settings-profile-presentation.js';\n",
+              "import { isWorkshopProfileDirty as isWorkshopProfileDirtyState, isWorkshopProfileFormAvailable as isWorkshopProfileFormAvailableState, workshopProfileCardMarkup } from './settings-profile-presentation.js';\nimport { settingsUpdateStatusCardMarkup, type UpdateStatusDto } from './settings-update-status.js';\n",
+          )
+          replace_once(
+              'frontend/src/main.ts',
+              'type SettingsStatusResponse = { generated_at: string; app: AppSettingsInfo; local_data: LocalDataStatus; capabilities: SettingsCapability[]; setting_groups: SettingsGroup[]; editable_settings_available: boolean; message: string; warnings: SettingsWarning[] };',
+              'type SettingsStatusResponse = { generated_at: string; app: AppSettingsInfo; local_data: LocalDataStatus; update_status: UpdateStatusDto; capabilities: SettingsCapability[]; setting_groups: SettingsGroup[]; editable_settings_available: boolean; message: string; warnings: SettingsWarning[] };',
+          )
+          replace_once(
+              'frontend/src/main.ts',
+              '  return `<div class="settings-layout"><section class="card data-card settings-hero"><p>Здесь можно сохранить данные мастерской для новых документов и перейти к безопасной работе с локальными файлами.</p></section>${settingsWorkshopProfileCard()}${settingsTaxRateCard()}${settingsLocalDataSection()}</div>`;\n',
+              '  return `<div class="settings-layout"><section class="card data-card settings-hero"><p>Здесь можно сохранить данные мастерской для новых документов и перейти к безопасной работе с локальными файлами.</p></section>${settingsWorkshopProfileCard()}${settingsTaxRateCard()}${settingsUpdateStatusCardMarkup(settingsUiState.data?.update_status ?? null, settingsUiState.status === \'error\')}${settingsLocalDataSection()}</div>`;\n',
+          )
+
+          Path('frontend/tsconfig.test.settings-update-status.json').write_text('''{\n  "extends": "./tsconfig.json",\n  "compilerOptions": {\n    "rootDir": "src",\n    "outDir": "dist-tests/settings-update-status",\n    "noEmit": false\n  },\n  "include": ["src/settings-update-status.ts"]\n}\n''', encoding='utf-8')
+          Path('frontend/test/settings-update-status.test.mjs').write_text('''import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport { settingsUpdateStatusCardMarkup } from '../dist-tests/settings-update-status/settings-update-status.js';\n\ntest('completed update is presented as a compact human-facing status', () => {\n  const html = settingsUpdateStatusCardMarkup({ state: 'completed', to_app_version: '0.1.0', updated_at: '2026-08-13T20:00:00Z', message: 'Данные успешно подготовлены для этой версии приложения.', next_action: 'Можно продолжать работу.' });\n  assert.match(html, /Обновление завершено/);\n  assert.match(html, /Версия:<\\/strong> 0.1.0/);\n  assert.match(html, /Можно продолжать работу/);\n});\n\ntest('attention state stays actionable and does not invent technical details', () => {\n  const html = settingsUpdateStatusCardMarkup({ state: 'attention_required', to_app_version: null, updated_at: null, message: 'Состояние предыдущего обновления нельзя подтвердить автоматически.', next_action: 'Закройте приложение и откройте его снова.' });\n  assert.match(html, /Нужно внимание/);\n  assert.match(html, /Закройте приложение/);\n  for (const forbidden of ['operation_id', 'failure_category', 'schema_identity', 'stage_identity', 'backup_identity', 'traceback']) assert.doesNotMatch(html, new RegExp(forbidden));\n});\n\ntest('backend-provided text is escaped and no update control is rendered', () => {\n  const html = settingsUpdateStatusCardMarkup({ state: 'attention_required', to_app_version: '<script>', updated_at: null, message: '<img src=x onerror=alert(1)>', next_action: '<b>retry</b>' });\n  assert.doesNotMatch(html, /<script>|<img|<b>/);\n  assert.match(html, /&lt;script&gt;/);\n  assert.doesNotMatch(html, /<button|data-action=.*update|проверить обновления/i);\n});\n\ntest('loading and unavailable states remain bounded', () => {\n  assert.match(settingsUpdateStatusCardMarkup(null), /Проверяем состояние/);\n  assert.match(settingsUpdateStatusCardMarkup(null, true), /Не удалось показать состояние обновления/);\n});\n''', encoding='utf-8')
+
+          package = Path('frontend/package.json')
+          package_text = package.read_text(encoding='utf-8')
+          needle = '    "test:settings-tax-feedback": "rm -rf dist-tests/settings-tax-feedback && tsc -p tsconfig.test.settings-tax-feedback.json && node --test test/settings-tax-feedback.test.mjs",\n'
+          if package_text.count(needle) != 1:
+              raise SystemExit('frontend package script anchor mismatch')
+          package.write_text(package_text.replace(needle, needle + '    "test:settings-update-status": "rm -rf dist-tests/settings-update-status && tsc -p tsconfig.test.settings-update-status.json && node --test test/settings-update-status.test.mjs",\n', 1), encoding='utf-8')
+
+          # Focused backend/launcher/package tests.
+          Path('backend/app/tests/test_d4_c_update_status.py').write_text('''import json\n\nfrom app.db.paths import resolve_user_data_paths\nfrom app.services.settings import SettingsService\nfrom app.services.update_safety import (\n    SAFE_MIGRATION_FAILURE,\n    SAFE_RECONCILIATION_FAILURE,\n    UpdateJournalError,\n    UpdateOperationRecord,\n    UpdatePostCommitError,\n    UpdateSafetyError,\n    _write_update_journal,\n    classify_update_failure_for_user,\n    read_user_update_status,\n    update_journal_path,\n)\n\n\ndef record(*, status='completed', message=None):\n    return UpdateOperationRecord(\n        operation_id='a' * 32, from_app_version=None, to_app_version='0.1.0',\n        from_schema_identity=('0001',), to_schema_identity=('0001', '0002'),\n        before_migration_backup_identity='backup.sqlite', stage_identity='.db.update-' + 'a' * 32 + '.stage',\n        started_at='2026-08-13T10:00:00Z', finished_at=None if status == 'started' else '2026-08-13T10:01:00Z',\n        status=status, failure_category='internal-category' if status == 'failed' else None, safe_failure_message=message,\n    )\n\n\ndef test_no_journal_is_read_only_neutral_status(monkeypatch, tmp_path):\n    monkeypatch.setenv('COSMETIC_WORKSHOP_USER_DATA_DIR', str(tmp_path / 'user-data'))\n    paths = resolve_user_data_paths()\n    status = read_user_update_status(paths)\n    assert status.state == 'not_required'\n    assert status.to_app_version is None\n    assert not paths.base_dir.exists()\n\n\ndef test_completed_and_failed_journal_project_only_safe_status(monkeypatch, tmp_path):\n    monkeypatch.setenv('COSMETIC_WORKSHOP_USER_DATA_DIR', str(tmp_path / 'user-data'))\n    paths = resolve_user_data_paths()\n    paths.data_dir.mkdir(parents=True)\n    _write_update_journal(update_journal_path(paths), [record(status='completed')])\n    completed = SettingsService().build_status().update_status\n    assert completed.state == 'completed'\n    assert completed.to_app_version == '0.1.0'\n    assert completed.next_action == 'Можно продолжать работу.'\n\n    _write_update_journal(update_journal_path(paths), [record(status='failed', message=SAFE_MIGRATION_FAILURE)])\n    failed = SettingsService().build_status().update_status\n    assert failed.state == 'attention_required'\n    assert failed.message == SAFE_MIGRATION_FAILURE\n    serialized = failed.model_dump_json()\n    for forbidden in ('operation_id', 'failure_category', 'schema_identity', 'stage_identity', 'backup_identity', 'internal-category'):\n        assert forbidden not in serialized\n\n\ndef test_unreadable_or_started_journal_becomes_bounded_attention(monkeypatch, tmp_path):\n    monkeypatch.setenv('COSMETIC_WORKSHOP_USER_DATA_DIR', str(tmp_path / 'user-data'))\n    paths = resolve_user_data_paths()\n    paths.data_dir.mkdir(parents=True)\n    update_journal_path(paths).write_text('{broken', encoding='utf-8')\n    unreadable = SettingsService().build_status().update_status\n    assert unreadable.state == 'attention_required'\n    assert unreadable.message == SAFE_RECONCILIATION_FAILURE\n\n    _write_update_journal(update_journal_path(paths), [record(status='started')])\n    started = SettingsService().build_status().update_status\n    assert started.state == 'attention_required'\n    assert started.message == SAFE_RECONCILIATION_FAILURE\n\n\ndef test_failure_classifier_has_only_two_user_outcomes():\n    assert classify_update_failure_for_user(UpdateSafetyError('migration', SAFE_MIGRATION_FAILURE)) == 'before_commit'\n    assert classify_update_failure_for_user(UpdateSafetyError('ambiguous', SAFE_RECONCILIATION_FAILURE)) == 'completion_uncertain'\n    assert classify_update_failure_for_user(UpdateJournalError()) == 'completion_uncertain'\n    assert classify_update_failure_for_user(UpdatePostCommitError('post-commit')) == 'completion_uncertain'\n''', encoding='utf-8')
+
+          Path('launcher/tests/test_d4_c_update_failure_mapping.py').write_text('''import pytest\n\nfrom launcher.config import resolve_runtime_paths\nfrom launcher.runtime import (\n    UpdateBeforeCommitLaunchError,\n    UpdateCompletionUncertainLaunchError,\n    ensure_backend_import_path,\n    initialize_backend_startup,\n)\n\n\ndef test_launcher_maps_precommit_update_failure_without_exposing_category(monkeypatch):\n    paths = resolve_runtime_paths()\n    ensure_backend_import_path(paths)\n    from app.services import startup as startup_service\n    from app.services.update_safety import SAFE_MIGRATION_FAILURE, UpdateSafetyError\n\n    def fail(_mode):\n        raise UpdateSafetyError('secret-internal-category', SAFE_MIGRATION_FAILURE)\n\n    monkeypatch.setattr(startup_service, 'initialize_startup', fail)\n    with pytest.raises(UpdateBeforeCommitLaunchError) as caught:\n        initialize_backend_startup('user', paths)\n    assert 'secret-internal-category' not in str(caught.value)\n\n\ndef test_launcher_maps_ambiguous_update_failure_to_uncertain_outcome(monkeypatch):\n    paths = resolve_runtime_paths()\n    ensure_backend_import_path(paths)\n    from app.services import startup as startup_service\n    from app.services.update_safety import SAFE_RECONCILIATION_FAILURE, UpdateSafetyError\n\n    monkeypatch.setattr(startup_service, 'initialize_startup', lambda _mode: (_ for _ in ()).throw(UpdateSafetyError('secret-ambiguous', SAFE_RECONCILIATION_FAILURE)))\n    with pytest.raises(UpdateCompletionUncertainLaunchError) as caught:\n        initialize_backend_startup('user', paths)\n    assert 'secret-ambiguous' not in str(caught.value)\n''', encoding='utf-8')
+
+          Path('macos_package/tests/test_d4_c_update_failure_alerts.py').write_text('''from types import SimpleNamespace\n\nimport pytest\n\nfrom launcher import runtime\nfrom macos_package import entrypoint\nfrom macos_package.user_alert import DATA_UNCHANGED_SENTENCE, PRE_MUTATION_FAILURES, STARTUP_FAILURE_MESSAGES, StartupFailure\n\n\n@pytest.mark.parametrize(\n    ('exception_type', 'failure', 'exit_code'),\n    [\n        (runtime.UpdateBeforeCommitLaunchError, StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT, entrypoint.EXIT_UPDATE_STOPPED_BEFORE_COMMIT),\n        (runtime.UpdateCompletionUncertainLaunchError, StartupFailure.UPDATE_COMPLETION_UNCERTAIN, entrypoint.EXIT_UPDATE_COMPLETION_UNCERTAIN),\n    ],\n)\ndef test_packaged_update_failures_use_fixed_d4c_catalog(monkeypatch, exception_type, failure, exit_code):\n    captured = []\n    monkeypatch.setattr(runtime, 'run_local_runtime', lambda _config: (_ for _ in ()).throw(exception_type('/Users/private/secret.sqlite traceback')))\n    monkeypatch.setattr(entrypoint, 'report_startup_failure', lambda kind, *, packaged, detail=None: captured.append((kind, packaged, detail)))\n    layout = SimpleNamespace(is_packaged=True)\n    server = SimpleNamespace(origin='http://127.0.0.1:5173')\n    arguments = SimpleNamespace(backend_port=8000, no_browser=True)\n\n    assert entrypoint._run_launcher(layout, server, arguments) == exit_code\n    assert captured[0][0] is failure\n    assert captured[0][1] is True\n    message = STARTUP_FAILURE_MESSAGES[failure]\n    assert '/Users/private' not in message\n    assert 'traceback' not in message.casefold()\n    assert DATA_UNCHANGED_SENTENCE not in message\n    assert failure not in PRE_MUTATION_FAILURES\n\n\ndef test_precommit_message_claim_is_bounded_to_database_commit_point():\n    message = STARTUP_FAILURE_MESSAGES[StartupFailure.UPDATE_STOPPED_BEFORE_COMMIT]\n    assert 'до замены рабочей базы данных' in message\n    assert DATA_UNCHANGED_SENTENCE not in message\n\n\ndef test_uncertain_message_never_suggests_manual_rollback():\n    message = STARTUP_FAILURE_MESSAGES[StartupFailure.UPDATE_COMPLETION_UNCERTAIN]\n    assert 'Не удалось подтвердить завершение обновления данных' in message\n    assert 'Не пытайтесь вручную откатывать' in message\n''', encoding='utf-8')
+          PY
+
+      - name: Backend and launcher focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile backend/app/services/update_safety.py backend/app/services/settings.py backend/app/schemas/settings.py launcher/runtime.py macos_package/entrypoint.py macos_package/user_alert.py
+          python3 -m pytest -q \
+            backend/app/tests/test_d4_c_update_status.py \
+            backend/app/tests/test_settings.py \
+            backend/app/tests/test_settings_api.py \
+            launcher/tests/test_d4_c_update_failure_mapping.py \
+            macos_package/tests/test_d4_c_update_failure_alerts.py \
+            macos_package/tests/test_macos_package_entrypoint.py
+
+      - name: Frontend focused test and build
+        shell: bash
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run test:settings-update-status
+          npm run build
+
+      - name: Existing lifecycle and diff gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check_documentation_lifecycle.py
+          git diff --check
+          test -z "$(git diff --name-only "$EXPECTED_BASE"...HEAD)"
+          git diff --check
+
+      - name: Commit implementation only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            backend/app/schemas/settings.py \
+            backend/app/services/settings.py \
+            backend/app/services/update_safety.py \
+            backend/app/tests/test_d4_c_update_status.py \
+            launcher/runtime.py \
+            launcher/tests/test_d4_c_update_failure_mapping.py \
+            macos_package/entrypoint.py \
+            macos_package/user_alert.py \
+            macos_package/tests/test_d4_c_update_failure_alerts.py \
+            frontend/package.json \
+            frontend/src/main.ts \
+            frontend/src/settings-update-status.ts \
+            frontend/test/settings-update-status.test.mjs \
+            frontend/tsconfig.test.settings-update-status.json
+          git diff --cached --check
+          git config user.name 'D4-C implementation builder'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-C add user-facing update status and packaged failure UX'
+          git push origin HEAD:"$IMPLEMENTATION_BRANCH"
