@@ -25,11 +25,11 @@ CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
 D3 — macOS package MVP — IMPLEMENTED
 
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-C IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-C — User-facing update status and packaged failure UX — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
+D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
@@ -65,7 +65,7 @@ Schema compatibility:
 - `pending_migration_ids()` is no longer used to decide ordinary startup compatibility before the gate;
 - D4-A itself originally stopped at the compatibility gate; the now-closed D4-B slice replaces the supported-older direct migration seam with staged migration after that gate.
 
-D4-A, D4-B and D4-C are closed. D4-D is the only authorized next slice.
+D4-A and D4-B remain closed. D4-C is implemented in the current branch; exact-head/exact-package verification and lifecycle closure remain pending, and D4-D remains unauthorized.
 
 ## D4-A closure evidence
 
@@ -106,22 +106,17 @@ D4-B is **DONE — MERGED AND VERIFIED**. Its accepted Level-5 evidence remains 
 - merged-head Level-5 verifier: run `31717705331`, artifact `9188228739`, digest `sha256:2a3e615e504e6c047b8f1b45690f3595a0ef4bb71dcd1d9fadf669ecd64af415`;
 - both runs ended `PASS — FULL AUTOMATED SMOKE PASSED`.
 
-## D4-C closure truth
+## D4-C implementation truth
 
-D4-C is **DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED**. Its implementation remains presentation-only over the D4-B startup authority: bounded read-only Settings status, exactly two packaged update-failure outcomes, no browser update authority, no raw update metadata and no protected Restore changes.
+Implementation code commit: `adfe37a3f68a545635f173c22d4710eacde86e74`.
 
-## D4-C closure evidence
+D4-C projects D4-B startup truth into a bounded read-only Settings status and two fixed packaged failure outcomes. It exposes no raw update metadata, paths or tracebacks and creates no browser update command. The before-commit outcome claims only that canonical DB replacement did not occur; the uncertain outcome makes no rollback/data-unchanged claim. Closed Restore production blobs remain unchanged.
 
-- verified PR head: `ba577f1151e041c11019525862d9bb76eeb1404e`;
-- PR-head Level-5 verifier: run `31747841343`, artifact `9199930504`, digest `sha256:a034cf7daa3416c18e73bec328f4c1d78adce240213ceff0ccef47be969f3de3`;
-- merged head/current main: `3d69df192b5bdff9c7df067d8c8fde40154ebac9`;
-- verified PR head → merge compare: `0` changed files;
-- merged-head Level-5 verifier: run `31749503618`, artifact `9200580412`, digest `sha256:02f93910e6a6b1e1390c9782d89af320a244d1f6cb379bb5496a0c8e11dd8f78`;
-- both trustworthy exact-package runs ended `PASS — FULL AUTOMATED SMOKE PASSED`.
+D4-C is **IMPLEMENTED — VERIFICATION PENDING**, not lifecycle-closed.
 
-## D4-D authorization boundary
+## D4-C verification boundary
 
-D4-D alone is **AUTHORIZED NEXT — NOT IMPLEMENTED**. It may perform the final exact-package D4 verification and D4 lifecycle closure required by ADR 0020. It may not introduce new update runtime authority, downloader/checking, D5, signing, notarization, DMG, App Store, release channels/readiness, cloud sync or Restore changes.
+The exact published PR head still requires full regression, lifecycle integrity, frontend build, real macOS package and exact-package D4-C smoke. D4-D, D5, release/distribution work and Restore changes remain unauthorized.
 
 ## Closed Restore boundary
 

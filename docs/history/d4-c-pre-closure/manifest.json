@@ -1,0 +1,21 @@
+{
+  "source_commit": "3d69df192b5bdff9c7df067d8c8fde40154ebac9",
+  "verified_pr_head": "ba577f1151e041c11019525862d9bb76eeb1404e",
+  "pr_head_verification_run": "31747841343",
+  "merged_head_verification_run": "31749503618",
+  "verified_head_to_merge_changed_files": 0,
+  "files": {
+    "README.md": "65f6e42884ee7b96ae0dc711a1254625da361386",
+    "current-lifecycle.md": "f7046d690fd053de6e13fb193be2571204e55f5c",
+    "implementation-plan.md": "0cad43c8d4e4daa7b8b6d893f98925c0f2034209",
+    "packaging.md": "639f39c4b5be10d39f34c7f9c15320666cc84aee",
+    "deployment.md": "56cccc1fcdf52ecb4217cb6edb8643be0eae00cb",
+    "update-guide.md": "5591e8ff7e6d90a53871ee2b74444f47f0b3305a",
+    "current-focus.md": "a0725c033e7ecf13894ce4cc07b7d4815364ce63",
+    "progress.md": "6e135e211595f87539aab14b2e0ce4d6860de3b1",
+    "handoff.md": "8577e1268b75732256a2ff2e64c7a59003877ff1",
+    "change-requests.md": "f4b783ebcd483bd049bbde0a3e0a5278d87baae8",
+    "check_documentation_lifecycle.py": "6be5362a21deb4a5b8bb6e670ebbd4b89b309ff7",
+    "history-README.md": "982844230525c6817d5a44e462f781875c598e73"
+  }
+}

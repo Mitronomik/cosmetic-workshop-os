@@ -4,7 +4,6 @@
 
 ## Current index
 
-- `d4-c-pre-closure/` — exact active lifecycle/state/checker surfaces from merged head `3d69df192b5bdff9c7df067d8c8fde40154ebac9` immediately before D4-C closure and D4-D authorization.
 - `d4-b-pre-closure/` — exact active lifecycle/state/checker surfaces from merged head `d60a3be993c76b59292cf27ee66bcbe856669fc4` immediately before D4-B closure and D4-C authorization.
 - `d4-a-pre-closure/` — exact active lifecycle/state/checker surfaces from merged head `89dd69dc1958e622146e01869cc34d4cd2ec859e` immediately before D4-A closure and D4-B authorization.
 - `d4-pre-decision/` — exact active lifecycle/state/checker surfaces from `main` `dc2301f7d4e101ad0fba851325dae9274f02da0c` immediately before CR-013 / ADR 0020.
