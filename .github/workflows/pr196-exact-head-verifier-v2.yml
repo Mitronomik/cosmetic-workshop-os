@@ -1,0 +1,318 @@
+name: PR196 exact-head verifier v2
+
+on:
+  push:
+    branches:
+      - verification/pr196-2b1540b1
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HEAD: 2b1540b15ddb5f8a364b32dcb1ce578a9fad43c0
+
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact tested head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 1
+
+      - name: Exact-head preflight
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/pr196-v2-evidence"
+          mkdir -p "$EVIDENCE_DIR"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          printf '%s\n' "$ACTUAL_HEAD" > "$EVIDENCE_DIR/actual-head.txt"
+          test "$ACTUAL_HEAD" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install backend test dependencies
+        id: deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check './backend[test]' 2>&1 | tee "$EVIDENCE_DIR/backend-deps.log"
+
+      - name: Full Python regression suite
+        id: pytest
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python -m pytest backend/app/tests launcher/tests macos_package/tests -q 2>&1 | tee "$EVIDENCE_DIR/pytest.log"
+
+      - name: Lifecycle and integrity checker
+        id: lifecycle
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check_documentation_lifecycle.py 2>&1 | tee "$EVIDENCE_DIR/lifecycle.log"
+
+      - name: Frontend reproducible build
+        id: frontend
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd frontend
+            npm ci
+            npm run build
+          ) 2>&1 | tee "$EVIDENCE_DIR/frontend-build.log"
+
+      - name: Build real macOS package
+        id: package
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          export COSMETIC_WORKSHOP_BUILD_DIR="$RUNNER_TEMP/pr196-v2-build"
+          export COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR="$RUNNER_TEMP/pr196-v2-dist"
+          bash scripts/package_macos.sh 2>&1 | tee "$EVIDENCE_DIR/package-build.log"
+          test -x "$COSMETIC_WORKSHOP_BUILD_DIR/package/CosmeticWorkshopOS.app/Contents/MacOS/CosmeticWorkshopOS"
+          test -f "$COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR/CosmeticWorkshopOS-mac.zip"
+
+      - name: Exact-package D4-A smoke
+        id: smoke
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/pr196-v2-build/package/CosmeticWorkshopOS.app"
+          test -x "$APP/Contents/MacOS/CosmeticWorkshopOS"
+          USER_DATA="$RUNNER_TEMP/pr196-v2-user-data"
+          CANONICAL_VERSION="$(cat backend/VERSION)"
+          DB="$USER_DATA/data/cosmetic_workshop.sqlite"
+          PID=''
+
+          free_port() {
+            python3 - <<'PY'
+          import socket
+          with socket.socket() as sock:
+              sock.bind(('127.0.0.1', 0))
+              print(sock.getsockname()[1])
+          PY
+          }
+
+          cleanup_runtime() {
+            if [ -n "${PID:-}" ] && kill -0 "$PID" 2>/dev/null; then
+              kill -TERM "$PID" 2>/dev/null || true
+              wait "$PID" 2>/dev/null || true
+            fi
+            PID=''
+          }
+          trap cleanup_runtime EXIT INT TERM
+
+          FRONTEND_PORT="$(free_port)"
+          BACKEND_PORT="$(free_port)"
+          while [ "$BACKEND_PORT" = "$FRONTEND_PORT" ]; do BACKEND_PORT="$(free_port)"; done
+          COSMETIC_WORKSHOP_USER_DATA_DIR="$USER_DATA" \
+            "$APP/Contents/MacOS/CosmeticWorkshopOS" \
+            --no-browser --frontend-port "$FRONTEND_PORT" --backend-port "$BACKEND_PORT" \
+            >"$EVIDENCE_DIR/package-fresh.log" 2>&1 &
+          PID=$!
+
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl -fsS "http://127.0.0.1:${FRONTEND_PORT}/api/health" > "$EVIDENCE_DIR/health.json"; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$PID" 2>/dev/null; then
+              cat "$EVIDENCE_DIR/package-fresh.log"
+              exit 1
+            fi
+            sleep 0.5
+          done
+          test "$ready" -eq 1
+          curl -fsS "http://127.0.0.1:${FRONTEND_PORT}/api/settings/status" > "$EVIDENCE_DIR/settings-status.json"
+
+          python3 - "$EVIDENCE_DIR/health.json" "$EVIDENCE_DIR/settings-status.json" "$CANONICAL_VERSION" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding='utf-8') as f: health = json.load(f)
+          with open(sys.argv[2], encoding='utf-8') as f: settings = json.load(f)
+          expected = sys.argv[3]
+          assert health['version'] == expected, (health['version'], expected)
+          assert settings['app']['version'] == expected, (settings['app']['version'], expected)
+          PY
+
+          test -f "$DB"
+          python3 - "$DB" <<'PY'
+          import sqlite3, sys
+          with sqlite3.connect(sys.argv[1]) as con:
+              ids = [row[0] for row in con.execute('SELECT migration_id FROM schema_migrations ORDER BY rowid')]
+          assert len(ids) == 20, ids
+          assert ids[-1] == '0020_artifact_audit_operations', ids[-1]
+          PY
+          cleanup_runtime
+
+          # Make the exact canonical DB newer than the packaged application.
+          python3 - "$DB" <<'PY'
+          import sqlite3, sys
+          with sqlite3.connect(sys.argv[1]) as con:
+              con.execute("INSERT INTO schema_migrations (migration_id) VALUES ('0021_future')")
+          PY
+          BEFORE_SHA="$(shasum -a 256 "$DB" | awk '{print $1}')"
+          BEFORE_BACKUPS="$(find "$USER_DATA/backups" -type f 2>/dev/null | wc -l | tr -d ' ')"
+
+          FRONTEND_PORT="$(free_port)"
+          BACKEND_PORT="$(free_port)"
+          while [ "$BACKEND_PORT" = "$FRONTEND_PORT" ]; do BACKEND_PORT="$(free_port)"; done
+          set +e
+          COSMETIC_WORKSHOP_USER_DATA_DIR="$USER_DATA" \
+            "$APP/Contents/MacOS/CosmeticWorkshopOS" \
+            --no-browser --frontend-port "$FRONTEND_PORT" --backend-port "$BACKEND_PORT" \
+            >"$EVIDENCE_DIR/package-newer-schema.log" 2>&1 &
+          PID=$!
+          EXIT_CODE=''
+          for _ in $(seq 1 60); do
+            if ! kill -0 "$PID" 2>/dev/null; then
+              wait "$PID"
+              EXIT_CODE=$?
+              PID=''
+              break
+            fi
+            sleep 0.5
+          done
+          set -e
+          if [ -n "${PID:-}" ]; then
+            cleanup_runtime
+            echo 'newer-schema package start did not fail within bound' >&2
+            exit 1
+          fi
+          test -n "$EXIT_CODE"
+          test "$EXIT_CODE" -ne 0
+          AFTER_SHA="$(shasum -a 256 "$DB" | awk '{print $1}')"
+          AFTER_BACKUPS="$(find "$USER_DATA/backups" -type f 2>/dev/null | wc -l | tr -d ' ')"
+          test "$AFTER_SHA" = "$BEFORE_SHA"
+          test "$AFTER_BACKUPS" = "$BEFORE_BACKUPS"
+          printf '%s\n' "$EXIT_CODE" > "$EVIDENCE_DIR/newer-schema-exit-code.txt"
+
+      - name: Repository postflight
+        id: postflight
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${EVIDENCE_DIR:-$RUNNER_TEMP/pr196-v2-evidence}"
+          mkdir -p "$EVIDENCE_DIR"
+          rm -rf frontend/node_modules frontend/dist frontend/dist-tests backend/build
+          find backend -maxdepth 1 -type d -name '*.egg-info' -prune -exec rm -rf {} + 2>/dev/null || true
+          git restore --source="$EXPECTED_HEAD" --worktree -- frontend backend 2>/dev/null || true
+          git diff --check
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          STATUS="$(git status --porcelain)"
+          printf '%s\n' "$STATUS" > "$EVIDENCE_DIR/final-git-status.txt"
+          test -z "$STATUS"
+
+      - name: Final classification and report
+        id: classify
+        if: always()
+        shell: bash
+        env:
+          PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+          DEPS_OUTCOME: ${{ steps.deps.outcome }}
+          PYTEST_OUTCOME: ${{ steps.pytest.outcome }}
+          LIFECYCLE_OUTCOME: ${{ steps.lifecycle.outcome }}
+          FRONTEND_OUTCOME: ${{ steps.frontend.outcome }}
+          PACKAGE_OUTCOME: ${{ steps.package.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          POSTFLIGHT_OUTCOME: ${{ steps.postflight.outcome }}
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${EVIDENCE_DIR:-$RUNNER_TEMP/pr196-v2-evidence}"
+          mkdir -p "$EVIDENCE_DIR"
+          STATUS=passed
+          if [ "$PREFLIGHT_OUTCOME" != success ] || [ "$DEPS_OUTCOME" != success ] || [ "$POSTFLIGHT_OUTCOME" != success ]; then
+            STATUS=environment_inconclusive
+          elif [ "$PYTEST_OUTCOME" != success ]; then
+            STATUS=product_failed
+          elif [ "$LIFECYCLE_OUTCOME" != success ] || [ "$FRONTEND_OUTCOME" != success ] || [ "$PACKAGE_OUTCOME" != success ] || [ "$SMOKE_OUTCOME" != success ]; then
+            STATUS=runner_inconclusive
+          fi
+
+          python3 - "$EVIDENCE_DIR/results.json" "$STATUS" <<'PY'
+          import json, os, sys
+          payload = {
+              'pr': 196,
+              'expected_head': os.environ['EXPECTED_HEAD'],
+              'actual_head': os.popen('git rev-parse HEAD').read().strip(),
+              'status': sys.argv[2],
+              'checks': {
+                  'preflight': os.environ['PREFLIGHT_OUTCOME'],
+                  'dependencies': os.environ['DEPS_OUTCOME'],
+                  'python_regression': os.environ['PYTEST_OUTCOME'],
+                  'lifecycle': os.environ['LIFECYCLE_OUTCOME'],
+                  'frontend_build': os.environ['FRONTEND_OUTCOME'],
+                  'package_build': os.environ['PACKAGE_OUTCOME'],
+                  'exact_package_smoke': os.environ['SMOKE_OUTCOME'],
+                  'postflight': os.environ['POSTFLIGHT_OUTCOME'],
+              },
+          }
+          with open(sys.argv[1], 'w', encoding='utf-8') as handle:
+              json.dump(payload, handle, ensure_ascii=False, indent=2)
+          PY
+
+          {
+            echo '# PR #196 exact-head verification v2'
+            echo
+            echo "Expected head: \`$EXPECTED_HEAD\`"
+            echo "Result: **$STATUS**"
+            echo
+            echo '| Check | Outcome |'
+            echo '|---|---|'
+            echo "| exact-head preflight | $PREFLIGHT_OUTCOME |"
+            echo "| dependencies | $DEPS_OUTCOME |"
+            echo "| full Python regression | $PYTEST_OUTCOME |"
+            echo "| lifecycle checker | $LIFECYCLE_OUTCOME |"
+            echo "| frontend build | $FRONTEND_OUTCOME |"
+            echo "| real macOS package build | $PACKAGE_OUTCOME |"
+            echo "| exact-package D4-A smoke | $SMOKE_OUTCOME |"
+            echo "| repository postflight | $POSTFLIGHT_OUTCOME |"
+            echo
+            if [ "$STATUS" = passed ]; then
+              echo 'PASS — FULL AUTOMATED SMOKE PASSED'
+            elif [ "$STATUS" = product_failed ]; then
+              echo 'FAIL — PRODUCT REGRESSION CONFIRMED'
+            else
+              echo 'INCONCLUSIVE — SMOKE EVIDENCE IS NOT RELIABLE'
+            fi
+          } > "$EVIDENCE_DIR/PR196_SMOKE_REPORT.md"
+          cat "$EVIDENCE_DIR/PR196_SMOKE_REPORT.md" >> "$GITHUB_STEP_SUMMARY"
+          test "$STATUS" = passed
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr196-exact-head-v2-evidence
+          path: ${{ runner.temp }}/pr196-v2-evidence
+          if-no-files-found: error
