@@ -37,17 +37,17 @@ D4-A exact merged-head verification passed on `89dd69dc1958e622146e01869cc34d4cd
 
 ```text
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
+D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
-## D4-B closure
+## D4-B implementation pending verification
 
-D4-B is merged and verified on `d60a3be993c76b59292cf27ee66bcbe856669fc4`. PR-head Level-5 run `31716610699` and merged-head Level-5 run `31717705331` both passed; implementation head and merge commit are content-identical. D4-C is authorized next.
+The current D4-B changeset implements staged migration, verified `before_migration` backup, atomic canonical publication, durable external UpdateLog and conservative interruption reconciliation. Full exact-head and exact-package verification are still required before lifecycle closure.
 
-D4-D, D5 and release readiness remain gated.
+D4-C/D, D5 and release readiness remain gated.

@@ -12,10 +12,10 @@ C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
 Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
+D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
@@ -43,16 +43,16 @@ Implemented scope:
 
 Intentionally unchanged:
 
-- D4-A originally left supported-older migration execution unchanged; the closed D4-B slice now owns staged execution after preflight;
-- D4-A itself introduced no UpdateLog; D4-B now owns the durable external UpdateLog;
+- supported older schemas still enter the existing `before_migration` backup and direct migration path after preflight;
+- no UpdateLog exists yet;
 - no frontend update presentation or new Finder error category exists;
 - no protected Restore production file changes.
 
-D4-A remains merged, exact-head verified and lifecycle-closed. D4-B is also merged, verified and closed; D4-C is now the only authorized next slice.
+D4-A is merged, exact-head verified and lifecycle-closed. D4-B is now the only authorized next slice and remains not implemented.
 
 ### D4-B — Safe migration execution and durable UpdateLog
 
-**DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED**.
+**IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING**.
 
 Implemented D4-B architecture from ADR 0020:
 
@@ -79,11 +79,11 @@ Implemented scope:
 - deterministic stage ownership validation before interrupted-artifact cleanup;
 - no D4-C frontend or packaged failure-UX work.
 
-D4-B closure conditions are satisfied on merged head `d60a3be993c76b59292cf27ee66bcbe856669fc4`. D4-C is authorized next as a separate bounded PR.
+D4-B cannot authorize D4-C until this implementation is merged, exact-head verified and lifecycle-closed.
 
 ### D4-C — User-facing update status and packaged failure UX
 
-**AUTHORIZED NEXT — NOT IMPLEMENTED**.
+**PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED**.
 
 ### D4-D — Exact-package update verification and lifecycle closure
 

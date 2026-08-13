@@ -25,10 +25,10 @@ CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
 D3 — macOS package MVP — IMPLEMENTED
 
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
+D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
@@ -63,9 +63,9 @@ Schema compatibility:
 - D4-A adds a path-level startup wrapper that opens the canonical DB read-only and calls that classifier;
 - only a truly absent canonical path is `fresh`; a dangling symlink, non-file, missing migration history, newer schema, unknown/reordered/skipped history or unreadable DB fails closed;
 - `pending_migration_ids()` is no longer used to decide ordinary startup compatibility before the gate;
-- D4-A itself originally stopped at the compatibility gate; the now-closed D4-B slice replaces the supported-older direct migration seam with staged migration after that gate.
+- supported older lineage still uses the existing direct backup + migration execution after the gate. Replacing that execution with staged migration is D4-B and is not implemented here.
 
-D4-A remains merged and exact-head verified. D4-B is now merged, exact-head/exact-package verified and lifecycle-closed; D4-C alone is authorized next.
+D4-A is merged and exact-head verified. D4-B is implemented in the current changeset, but exact-head verification and lifecycle closure are still pending; D4-C remains unauthorized.
 
 ## D4-A closure evidence
 
@@ -76,7 +76,7 @@ D4-A remains merged and exact-head verified. D4-B is now merged, exact-head/exac
 - external exact merged-head verifier run `31699624984`: PASS;
 - evidence artifact `9180924875`, digest `sha256:b2ac042fa2f6d239aebae931e1c93aa81a9b8b7e3c6b2b6a45304e0d113d7993`.
 
-## D4-B closure truth
+## D4-B implementation truth
 
 For a supported older canonical database, ordinary user-mode startup now follows the ADR 0020 staged path:
 
@@ -96,19 +96,7 @@ read-only D4-A compatibility preflight
 
 `update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. D4-B records `from_app_version = null` because it cannot prove the immediately previous package version: a previous completed update identifies the last migration-producing app, not necessarily the last app that ran. Legacy mutable database `app.version` and SemVer inference are never promoted into authority.
 
-D4-B is **DONE — MERGED AND VERIFIED**. Exact PR-head Level-5 run `31716610699` and exact merged-head Level-5 run `31717705331` both passed; implementation head `8688fa3dba87205b4b4626ebab2902262fd4cd24` and merge commit `d60a3be993c76b59292cf27ee66bcbe856669fc4` are content-identical. D4-C is the only authorized next slice.
-
-## D4-B closure evidence
-
-- verified implementation head: `8688fa3dba87205b4b4626ebab2902262fd4cd24`;
-- PR-head Level-5 verifier: run `31716610699`, artifact `9187785415`, digest `sha256:fbbaa56a173929f41e18aa49adad40854210806433de2309052cffda8a4c7012`;
-- merge/current main: `d60a3be993c76b59292cf27ee66bcbe856669fc4`; verified-head → merge compare: `0` changed files;
-- merged-head Level-5 verifier: run `31717705331`, artifact `9188228739`, digest `sha256:2a3e615e504e6c047b8f1b45690f3595a0ef4bb71dcd1d9fadf669ecd64af415`;
-- both runs ended `PASS — FULL AUTOMATED SMOKE PASSED`.
-
-## D4-C authorization boundary
-
-This closure authorizes **D4-C only**: bounded user-facing update status and packaged failure UX. It does not authorize D4-D, D5, auto-download/update checking, signing, notarization, DMG, App Store, release channels, release readiness or Restore changes.
+D4-B is **implementation-complete only in this changeset**. It is not lifecycle-closed, D4-C is not authorized, and exact-head + exact-package verification remain mandatory before any next-slice authorization.
 
 ## Closed Restore boundary
 
