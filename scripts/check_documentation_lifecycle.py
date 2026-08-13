@@ -1,42 +1,47 @@
 #!/usr/bin/env python3
-"""Guard merged C4-II-C closure, the open C4-III slice and the CR-012 boundary.
+"""Guard the closed C4-III Restore lifecycle and the bounds it did not widen.
 
-C4-III exact-head verification PASSED. C4-III exact-package verification has
-still not passed, so C4-III lifecycle closure stays incomplete. This checker
-keeps those two results distinguishable and refuses any document that upgrades
-the unpassed half to a pass or claims closure, Restore implementation or release
-readiness.
-
-Those results are separate facts from the governance question. When the verifier
-ran it correctly classified the exact-package half as INCONCLUSIVE — ENVIRONMENT,
-because no packaged artifact existed; CR-012 closed only the authorization gap
-that stopped the project producing one. Documents must not reclassify that
-recorded result as something other than an environment outcome, so a small guard
-rejects the usual "not a missing environment" phrasings.
-
-D3 has since been implemented and the artifact now exists, which closes the
-**prerequisite** and nothing else. The distinction this checker exists to protect
-is therefore now three-way, and collapsing any two of these is a failure:
+C4-III is closed. Both required halves of the ADR 0017 evidence surface passed,
+independently, against two different exact baselines:
 
 ```text
-the artifact exists                     ← true, D3 built it
-exact-package verification has passed   ← FALSE, the verifier has not run
-C4-III lifecycle closure is complete    ← FALSE
+exact-head    PASS   81e8193596709b0c16d0ecad598458b3ea95fd9c
+exact-package PASS   0e1193264dc22979ca48e32a962aba916b6b520e
 ```
 
-So `D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION
-PENDING` is the required status, while `DONE`, `CLOSED`, `COMPLETE`, `VERIFIED`
-and release-ready phrasings stay forbidden — as does describing the D3 package
-smoke as C4-III exact-package verification. `SUPERSEDED_BY_D3` retires the
-pre-build phrasing from the active surfaces while leaving it intact in ADR 0019
-and the dated history, where it is accurate as a record rather than a claim.
+Closure follows from the **combination** and from nothing else, so this checker
+pins both baselines, both runners and both runner SHA-256s. It also pins the
+load-bearing packaged evidence — the real `replacement_intent -> rolled_back`
+hard-interruption recovery, source immutability, mandatory `before_restore`
+retention, older-schema migration, `recovery_blocked` failing closed, and a run
+that left no owned processes or ports — because a closure claim that no longer
+carries its evidence is just an assertion.
 
-CR-012 authorizes D3 and nothing beyond it, and never widens into D4, D5,
-signing, notarization, auto-update, App Store or release readiness. A set of
-required `D3_IMPLEMENTATION` phrases additionally pins the properties that make
-the build "packaging the product" rather than changing it: a real bundled
-interpreter, the unchanged launcher-managed backend entrypoint and liveness lock,
-the bounded loopback frontend listener, and no signing/notarization/DMG/updater.
+Two things this checker protects that pull in opposite directions:
+
+1. **The old open state must not survive.** `C4-III — IN PROGRESS`, `EXACT-PACKAGE
+   VERIFICATION — NOT YET PASSED`, `LIFECYCLE CLOSURE — NOT COMPLETED`, the D3
+   `EXACT-PACKAGE VERIFICATION PENDING` suffix and `Restore — NOT IMPLEMENTED`
+   are now false on the active surfaces and are rejected there.
+2. **The old history must survive.** The earlier `INCONCLUSIVE — ENVIRONMENT`
+   exact-package result was correct when it was produced — no packaged artifact
+   existed yet — and it is neither rewritten as a PASS nor reclassified as
+   something other than an environment outcome. The same applies to the two
+   external runner attempts that preceded acceptance: one `INCONCLUSIVE — RUNNER`
+   and one `v1.1` textual `FAIL — PRODUCT` that inspection traced to a runner
+   `UnboundLocalError`. Neither is product evidence, and neither is erased.
+
+Those two pull apart cleanly because the superseded phrasings are forbidden on
+the **active** surfaces only. ADR 0019 and the dated history keep them, where
+they are accurate records rather than claims about now.
+
+Closing C4-III grants nothing downstream. `Restore — IMPLEMENTED` is a
+consequence of the lifecycle closure, not of any runtime change, and it is the
+end of the Restore programme rather than the start of a release one. Product
+release readiness stays NOT CLAIMED; D4, D5, signing, notarization, DMG,
+auto-update, App Store, sandbox migration and cloud/sync stay NOT AUTHORIZED —
+by CR-012 and by the closure alike. A dedicated guard rejects the specific
+overclaim that exact-package verification proves release readiness.
 """
 
 from __future__ import annotations
@@ -68,6 +73,7 @@ ACTIVE = (README, PLAN, FOCUS, PROGRESS, HANDOFF, CHANGE_REQUESTS)
 SUPPORTING = (CURRENT, B_SLICES, PROFILE, DEPLOYMENT, PACKAGING)
 
 CORE = (
+    "PR #192 — MERGED — D3 MACOS PACKAGE MVP",
     "PR #191 — MERGED — CR-012 / D3 AUTHORIZATION",
     "PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT",
     "PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION",
@@ -89,16 +95,19 @@ CORE = (
     "C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED",
-    # The prerequisite is closed; the verification is not. These are different
-    # facts and the wording keeps them apart.
-    "C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED",
-    "C4-III LIFECYCLE CLOSURE — NOT COMPLETED",
+    # C4-III closes on both halves. The two PASS lines stay separately labelled
+    # so neither can be read as standing in for the other.
+    "C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED",
+    "C4-III EXACT-HEAD VERIFICATION — PASS",
+    "C4-III EXACT-PACKAGE VERIFICATION — PASS",
+    "C4-III LIFECYCLE CLOSURE — COMPLETED BY THIS CHANGESET",
     "CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION",
-    "D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING",
-    "D4 — Update safety — NOT AUTHORIZED BY CR-012",
-    "D5 — Remote install checklist — NOT AUTHORIZED BY CR-012",
-    "Restore — NOT IMPLEMENTED",
+    # Conservative and final. Built, not released.
+    "D3 — macOS package MVP — IMPLEMENTED",
+    # Closure is not an authorization event for anything downstream.
+    "D4 — Update safety — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE",
+    "D5 — Remote install checklist — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE",
+    "Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED",
     "Product release readiness — NOT CLAIMED",
 )
 
@@ -108,20 +117,8 @@ STALE = (
     "C4-II-C — PLANNED — NOT AUTHORIZED",
     "C4-III — PLANNED — NOT AUTHORIZED",
     "C4-III — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "C4-III — DONE",
-    "C4-III — CLOSED",
-    "C4-III — COMPLETE",
-    "C4-III EXACT-PACKAGE VERIFICATION — PASS",
-    "C4-III EXACT-PACKAGE VERIFICATION PASSED",
-    "EXACT-PACKAGE OUTER GATE: PASS",
-    "C4-III LIFECYCLE CLOSURE — COMPLETED",
-    "C4-III LIFECYCLE CLOSURE: PASS",
-    "Restore — IMPLEMENTED",
-    "Product release readiness — READY",
-    # D3 is built, but built is not verified and not released. The bare
-    # `IMPLEMENTED` forms are gone from this list because that is now the true
-    # status; what stays forbidden is every phrasing that would upgrade it into
-    # a closed, verified or release-ready claim.
+    # D3 is built. Built is neither verified-as-a-release nor released, so every
+    # phrasing that upgrades it stays forbidden.
     "D3 — macOS package MVP — DONE",
     "D3 — macOS package MVP — CLOSED",
     "D3 — macOS package MVP — COMPLETE",
@@ -129,6 +126,10 @@ STALE = (
     "D3 — macOS package MVP — VERIFIED",
     "D3 — macOS package MVP — RELEASE READY",
     "D3 — macOS package MVP — EXACT-PACKAGE VERIFIED",
+    "D3 — macOS package MVP — NOTARIZED",
+    "D3 — macOS package MVP — SIGNED",
+    "D3 — macOS package MVP — APP STORE READY",
+    "D3 — macOS package MVP — UNIVERSAL",
     "D3 — DONE",
     "D3 — CLOSED",
     "D3 — COMPLETE",
@@ -157,8 +158,30 @@ SUPERSEDED_BY_D3 = (
     "scripts/package_macos.sh is a placeholder",
 )
 
-# CR-012 authorizes roadmap D3 and stops there. These phrases would widen it into
-# D4, D5 or the wider release programme and are always false.
+# Phrases that were true while C4-III was open and are false now that both
+# halves have passed. Same rule as SUPERSEDED_BY_D3: forbidden on the active
+# surfaces, preserved in ADR 0019 and in `docs/history/c4-iii-pre-closure/`,
+# where they record what was accurate at the time rather than what is true now.
+SUPERSEDED_BY_CLOSURE = (
+    "C4-III — IN PROGRESS",
+    "C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED",
+    "C4-III EXACT-PACKAGE VERIFICATION — BLOCKED",
+    "C4-III LIFECYCLE CLOSURE — NOT COMPLETED",
+    "C4-III LIFECYCLE CLOSURE — BLOCKED",
+    "D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING",
+    "EXACT-PACKAGE VERIFICATION PENDING",
+    "Restore — NOT IMPLEMENTED",
+    "Restore remains NOT IMPLEMENTED",
+    "Restore is NOT IMPLEMENTED",
+    "Restore stays NOT IMPLEMENTED",
+    "C4-III stays open",
+    "C4-III must remain open",
+    "C4-III cannot close",
+)
+
+# CR-012 authorizes roadmap D3 and stops there, and the C4-III closure widens
+# nothing either. These phrases would push either one into D4, D5 or the wider
+# release programme and are always false.
 BROADENING = (
     "CR-012 authorizes signing",
     "CR-012 authorizes notarization",
@@ -172,30 +195,90 @@ BROADENING = (
     "CR-012 authorizes Tauri",
     "CR-012 authorizes a desktop shell",
     "CR-012 authorizes a new Restore transport",
+    "C4-III closure authorizes D4",
+    "C4-III closure authorizes D5",
+    "C4-III closure authorizes signing",
+    "C4-III closure authorizes notarization",
+    "C4-III closure authorizes auto-update",
+    "C4-III closure authorizes App Store",
+    "C4-III closure authorizes a DMG",
+    "C4-III closure authorizes cloud sync",
+    "C4-III closure authorizes release",
+    "C4-III closure authorizes a new Restore transport",
+    "closing C4-III authorizes",
     "D4 — AUTHORIZED BY CR-012",
     "D5 — AUTHORIZED BY CR-012",
+    "D4 — AUTHORIZED BY C4-III",
+    "D5 — AUTHORIZED BY C4-III",
     "D4 — Update safety — AUTHORIZED",
     "D5 — Remote install checklist — AUTHORIZED",
+    "D4 is authorized",
+    "D5 is authorized",
     "signing — AUTHORIZED",
     "notarization — AUTHORIZED",
     "auto-update — AUTHORIZED",
     "App Store — AUTHORIZED",
     "mandatory DMG — AUTHORIZED",
+    "DMG — AUTHORIZED",
     "sandbox migration — AUTHORIZED",
+    "cloud sync — AUTHORIZED",
+    "cloud deployment — AUTHORIZED",
+    "release-channel infrastructure — AUTHORIZED",
     "release-candidate certification — AUTHORIZED",
     "D4 update-safety implementation — AUTHORIZED",
     "D5 remote-install work — AUTHORIZED",
+    "signing is authorized",
+    "notarization is authorized",
+    "auto-update is authorized",
+    "App Store work is authorized",
 )
 
-# PR #190 recorded a correct INCONCLUSIVE — ENVIRONMENT classification. CR-012
-# closes the separate authorization gap and must not be written up as though the
-# verifier had misclassified the run.
+# The exact-package PASS proves packaged Restore behavior. It is not a release
+# gate, and the product is not releasable because a verification passed.
+RELEASE_OVERCLAIM = (
+    "Product release readiness — READY",
+    "Product release readiness — CLAIMED",
+    "Product release readiness — ACHIEVED",
+    "release readiness — READY",
+    "is release-ready",
+    "now release-ready",
+    "release-ready product",
+    "release-ready build",
+    "release-ready artifact",
+    "exact-package verification proves release readiness",
+    "exact-package PASS proves release readiness",
+    "exact-package verification makes the product release-ready",
+    "exact-package verification means the product is releasable",
+    "C4-III closure proves release readiness",
+    "C4-III closure makes the product release-ready",
+    "the product is releasable",
+    "release-candidate certification — PASS",
+    "full release-candidate smoke — PASS",
+)
+
+# PR #190 recorded a correct INCONCLUSIVE — ENVIRONMENT classification. Neither
+# CR-012, nor D3, nor the later exact-package PASS may be written up as though
+# the verifier had misclassified that run.
 RECLASSIFICATION = (
     "not a missing environment",
     "not an environment issue",
     "not an environment problem",
     "not an environment accident",
     "rather than a missing environment",
+    "the recorded INCONCLUSIVE — ENVIRONMENT result was wrong",
+    "the earlier INCONCLUSIVE was really a PASS",
+    "reclassify the INCONCLUSIVE — ENVIRONMENT result",
+)
+
+# The two pre-acceptance runner attempts are runner faults. Recording either as
+# a real product failure would invent a defect the product never had.
+RUNNER_FAULT_MISCLASSIFICATION = (
+    "the v1.1 FAIL — PRODUCT verdict was a real product failure",
+    "C4-III exact-package verification found a product defect",
+    "the hard-interruption probe found a product defect",
+    "a Restore product defect was found",
+    "a Restore product defect was fixed",
+    "FAIL — PRODUCT — C4-III EXACT-PACKAGE",
 )
 
 # What the built package must keep being described as. Each phrase pins a
@@ -237,10 +320,16 @@ CR012_BOUNDARY = (
 C4IIC_REVIEWED_HEAD = "1df21915fdcf4a708dc778a0e762d64830b5b880"
 C4IIC_MERGE_MAIN = "6294f0044c792ced3ac56d213ea5333e33062f12"
 
-# Exact merged `main` the external C4-III verifier ran against.
+# Exact merged `main` the external C4-III exact-head verifier ran against.
 C4III_VERIFIED_MAIN = "81e8193596709b0c16d0ecad598458b3ea95fd9c"
 C4III_RUNNER_SHA256 = "4c5c09081d2dc1db45ee556777039f4d9802f026d717a194c88c15d6894e5f3a"
 C4III_RUNNER_VERSION = "c4-iii-restore-exact-head-v1"
+
+# Exact published `main` the packaged runtime was built from, and the accepted
+# external exact-package verifier that ran against it.
+C4III_PACKAGE_MAIN = "0e1193264dc22979ca48e32a962aba916b6b520e"
+C4III_PACKAGE_RUNNER_SHA256 = "2e2abad2e10030faecc43ff5d95d55d2a384791d88099f18a3cb8ee6b6506694"
+C4III_PACKAGE_RUNNER_VERSION = "c4-iii-restore-exact-package-v1.2"
 
 C4III_EXACT_HEAD_GATES = (
     "lifecycle PASS",
@@ -252,12 +341,63 @@ C4III_EXACT_HEAD_GATES = (
     "PASS — C4-III EXACT-HEAD VERIFICATION PASSED",
 )
 
+# The historical outer gates of the exact-head run, preserved verbatim. The
+# INCONCLUSIVE — ENVIRONMENT line belongs here permanently: it is the record of
+# a run made before any packaged artifact existed.
 C4III_OUTER_GATES = (
     "C4III EXACT-HEAD OUTER GATE: PASS",
     "C4III EXACT-PACKAGE OUTER GATE: INCONCLUSIVE — ENVIRONMENT",
     "C4III LIFECYCLE CLOSURE: BLOCKED — PACKAGE PREREQUISITE",
     "INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE",
     "BLOCKED — PACKAGE PREREQUISITE",
+)
+
+C4III_EXACT_PACKAGE_GATES = (
+    "PASS — C4-III EXACT-PACKAGE RESTORE VERIFICATION PASSED",
+    "PASS — FULL AUTOMATED SMOKE PASSED",
+)
+
+# The eight accepted packaged scenarios, reduced to the invariants that make the
+# closure meaningful. Losing any of these turns the PASS into an unbacked claim.
+C4III_EXACT_PACKAGE_EVIDENCE = (
+    # current-schema and older-schema success
+    "restore_completed",
+    "migration to the current schema succeeded",
+    "backend restarted successfully",
+    # source immutability, both spellings the scenarios use
+    "selected source SHA-256 unchanged",
+    "selected source unchanged",
+    # mandatory safety copy, retained on success and absent where nothing ran
+    "`before_restore` safety copy retained",
+    "no `before_restore` safety copy",
+    # rejection before any destructive mutation
+    "rejected before destructive execution",
+    "stale retained source proof rejected",
+    "restore_failed",
+    # interruption, real crash, rollback. The crash must stay described as a
+    # real durable one: a simulated phase would not be evidence.
+    "source_staged",
+    "aborted",
+    "real durable crash phase",
+    "replacement_intent",
+    "rolled_back",
+    "rollback_in_progress",
+    # fail-closed refusal
+    "replacement_committed",
+    "recovery_blocked",
+    "packaged exit code `3`",
+    "ordinary startup refused",
+    # autonomous cleanup
+    "owned processes left: none",
+    "owned ports still held: none",
+)
+
+# The pre-acceptance runner attempts, preserved as runner faults.
+C4III_RUNNER_HISTORY = (
+    "INCONCLUSIVE — RUNNER",
+    "incorrect fixture `PYTHONPATH`",
+    "UnboundLocalError",
+    "invalid as product evidence",
 )
 
 PINNED_BLOBS = {
@@ -335,6 +475,19 @@ HISTORY_BLOBS = {
     P("docs/history/c4-iii-pre-partial-verification/current-focus.md"): "c7932d5aa86fc6946d4dfa48ab58626cbe227963",
     P("docs/history/c4-iii-pre-partial-verification/handoff.md"): "f46c6f02913f326ca62f28b207a465af1d0e5d08",
     P("docs/history/c4-iii-pre-partial-verification/progress.md"): "8ac34a9ef1676039bd0174f30994ae85ee496add",
+    # Pre-closure snapshots, byte-identical to published main
+    # 0e1193264dc22979ca48e32a962aba916b6b520e.
+    P("docs/history/c4-iii-pre-closure/README.md"): "3943271a4b0cb7de301708212438236612ff63a2",
+    P("docs/history/c4-iii-pre-closure/current-lifecycle.md"): "870d582d27db1874ec7ed8b8bf00d846c95b2424",
+    P("docs/history/c4-iii-pre-closure/c4-ii-b-implementation-slices.md"): "cd6dd3fc72a1a939f73ebeb4ac3f362bd870dbcc",
+    P("docs/history/c4-iii-pre-closure/deployment.md"): "b2bebb9e4f614ecf5bec23af5320cf20d68eda8c",
+    P("docs/history/c4-iii-pre-closure/implementation-plan.md"): "11102c48ac4afd16603b47aca8b34c99d07d9aff",
+    P("docs/history/c4-iii-pre-closure/packaging.md"): "cedb4deeac0059148e1f425882e8e44ad298c50c",
+    P("docs/history/c4-iii-pre-closure/restore-interaction-and-validation-session.md"): "3edf50a5d518ddea482dba81d2ee9199febe5fec",
+    P("docs/history/c4-iii-pre-closure/change-requests.md"): "d7862c9cc5ce2b695c0d52d7ec807bb98a84ad52",
+    P("docs/history/c4-iii-pre-closure/current-focus.md"): "307563a1944780f68ec38c2caa27c05153d27636",
+    P("docs/history/c4-iii-pre-closure/handoff.md"): "b64bc5ba6959d633ca2b8c728a4c1743c6f329f8",
+    P("docs/history/c4-iii-pre-closure/progress.md"): "85eb9e017056d98a9eb9bab75f9b0faaf21fc751",
 }
 
 ERRORS: list[str] = []
@@ -380,38 +533,58 @@ def check_lifecycle_docs() -> None:
     # state at the time rather than a claim about the state now.
     for path in ACTIVE + SUPPORTING:
         forbid(path, SUPERSEDED_BY_D3)
-    require(CURRENT, CORE + C4III_EXACT_HEAD_GATES + C4III_OUTER_GATES + CR012_BOUNDARY + (
+        forbid(path, SUPERSEDED_BY_CLOSURE)
+    require(CURRENT, CORE + C4III_EXACT_HEAD_GATES + C4III_OUTER_GATES
+            + C4III_EXACT_PACKAGE_GATES + C4III_EXACT_PACKAGE_EVIDENCE
+            + C4III_RUNNER_HISTORY + CR012_BOUNDARY + (
         C4IIC_REVIEWED_HEAD,
         C4IIC_MERGE_MAIN,
         C4III_VERIFIED_MAIN,
         C4III_RUNNER_SHA256,
         C4III_RUNNER_VERSION,
+        C4III_PACKAGE_MAIN,
+        C4III_PACKAGE_RUNNER_SHA256,
+        C4III_PACKAGE_RUNNER_VERSION,
         "C4-II-C closure baseline",
         "C4-III exact-head verification baseline",
+        "C4-III exact-package verification baseline",
+        "C4-III lifecycle closure",
         "C4-III — Restore end-to-end verification and lifecycle closure",
         "current-schema Restore",
         "supported older-schema Restore",
+        # the historical classification, preserved rather than reinterpreted
         "not a product failure",
         "not a runner failure",
+        "not rewritten and not reclassified",
+        # closure follows from the combination and from nothing else
+        "only their combination closes the slice",
+        "as a consequence of this lifecycle closure",
+        "return code: 0",
         "CR-012 — accepted D3 macOS package MVP authorization",
-        # D3 built the artifact; that closes the prerequisite and nothing else.
-        "D3 — implemented, exact-package verification pending",
-        "it does not run C4-III exact-package verification",
-        "it does not advance C4-III lifecycle closure",
+        "D3 — implemented",
+        "D3 did not run C4-III exact-package verification",
+        "D3 did not by itself advance C4-III lifecycle closure",
         "The D3 Level-5 package smoke proves the package/runtime delivery layer",
+        # the verifier stays outside the product repository
+        "not committed to this repository",
     ))
     require(B_SLICES, CORE + (
         "CLOSED NORMATIVE IMPLEMENTATION PLAN",
         C4IIC_REVIEWED_HEAD,
         C4IIC_MERGE_MAIN,
         "Closed C4-II-C successor",
+        C4III_VERIFIED_MAIN,
+        C4III_PACKAGE_MAIN,
     ))
     require(PROFILE, CORE + (
         "Final-state truth",
         "authenticated final B2 snapshot remains authoritative",
         "C4-III authorization",
+        C4III_PACKAGE_MAIN,
+        C4III_PACKAGE_RUNNER_VERSION,
+        "replacement_intent -> rolled_back",
     ))
-    require(PLAN, CORE + (
+    require(PLAN, CORE + C4III_EXACT_PACKAGE_GATES + (
         "C4-III — Restore end-to-end verification and lifecycle closure",
         "current-schema Restore",
         "supported older-schema Restore",
@@ -424,8 +597,12 @@ def check_lifecycle_docs() -> None:
         C4III_VERIFIED_MAIN,
         C4III_RUNNER_SHA256,
         C4III_RUNNER_VERSION,
+        C4III_PACKAGE_MAIN,
+        C4III_PACKAGE_RUNNER_SHA256,
+        C4III_PACKAGE_RUNNER_VERSION,
         "Recorded verification progress",
-        "Only the exact-head half is satisfied",
+        "Both required halves are satisfied",
+        "C4-III closes only on their combination",
     ))
     require(DEPLOYMENT, CORE + CR012_BOUNDARY + (
         "no deployment topology change",
@@ -435,8 +612,12 @@ def check_lifecycle_docs() -> None:
         "no desktop application shell",
         # The packaged product adds exactly one listener and no new topology.
         "The only new listener is the local frontend one",
+        # closure changed no topology either
+        C4III_PACKAGE_MAIN,
+        "Restore is verified and lifecycle-closed on the same topology it always had",
     ))
-    require(PACKAGING, CORE + CR012_BOUNDARY + D3_IMPLEMENTATION + (
+    require(PACKAGING, CORE + CR012_BOUNDARY + D3_IMPLEMENTATION
+            + C4III_EXACT_PACKAGE_GATES + (
         "no packaging",
         "does not authorize packaging implementation or redesign",
         "release readiness remains not claimed",
@@ -449,6 +630,11 @@ def check_lifecycle_docs() -> None:
         "No new desktop application shell is authorized",
         "never a real user database",
         "verification prerequisite and is never product release readiness",
+        C4III_PACKAGE_MAIN,
+        C4III_PACKAGE_RUNNER_SHA256,
+        C4III_PACKAGE_RUNNER_VERSION,
+        "never against a source-tree fallback",
+        "It is not evidence of release readiness",
     ))
     for path in ACTIVE + SUPPORTING + (ADR19,):
         text = norm(read(path))
@@ -457,12 +643,21 @@ def check_lifecycle_docs() -> None:
                 fail(f"{path.relative_to(ROOT)} retains stale/premature lifecycle phrase: {stale!r}")
         for broadening in BROADENING:
             if norm(broadening) in text:
-                fail(f"{path.relative_to(ROOT)} broadens CR-012 beyond its bounded scope: {broadening!r}")
+                fail(f"{path.relative_to(ROOT)} broadens CR-012 or the C4-III closure beyond its bounded scope: {broadening!r}")
+        for overclaim in RELEASE_OVERCLAIM:
+            if norm(overclaim) in text:
+                fail(f"{path.relative_to(ROOT)} claims release readiness that no evidence supports: {overclaim!r}")
         for reclassification in RECLASSIFICATION:
             if norm(reclassification) in text:
                 fail(
                     f"{path.relative_to(ROOT)} reclassifies the recorded "
                     f"INCONCLUSIVE — ENVIRONMENT verification result: {reclassification!r}"
+                )
+        for misclassification in RUNNER_FAULT_MISCLASSIFICATION:
+            if norm(misclassification) in text:
+                fail(
+                    f"{path.relative_to(ROOT)} records a runner fault as a product "
+                    f"defect: {misclassification!r}"
                 )
 
 def check_authority_and_history() -> None:
@@ -480,46 +675,76 @@ def check_closed_boundaries() -> None:
         if actual and actual != expected:
             fail(f"closed Restore boundary changed: {path.relative_to(ROOT)} expected {expected}, got {actual}")
 
-def check_c4_iii_authorization() -> None:
+def check_c4_iii_closure() -> None:
     require(PLAN, (
         "focused verification tests and test-only harnesses",
         "isolated external exact-head smoke runners",
         "no production behavior change unless separately authorized as a bounded defect fix",
-        "If verification reveals a product defect",
+        "No verification attempt revealed a product defect",
     ))
-    require(FOCUS, C4III_EXACT_HEAD_GATES + (
-        "C4-III Restore end-to-end verification",
-        "only authorized open Restore slice",
-        "Any product defect requires a separate bounded fix PR",
+    require(FOCUS, C4III_EXACT_HEAD_GATES + C4III_EXACT_PACKAGE_GATES
+            + C4III_EXACT_PACKAGE_EVIDENCE + C4III_RUNNER_HISTORY + (
+        "C4-III Restore lifecycle closed",
+        "Closure condition",
         C4III_VERIFIED_MAIN,
         C4III_RUNNER_VERSION,
-        "Blocking condition",
+        C4III_PACKAGE_MAIN,
+        C4III_PACKAGE_RUNNER_SHA256,
+        C4III_PACKAGE_RUNNER_VERSION,
         "packaging was not built inside C4-III",
         "Completed task — D3 macOS package MVP",
-        "The prerequisite is now closed. The verification is not.",
+        "C4-III closes on the combination",
+        "Exact-head evidence alone was never sufficient",
+        "as a consequence of this closure only",
     ))
     require(HANDOFF, (
         "Authorized handoff",
         "current-schema success",
         "supported older-schema Restore",
-        "verified `before_restore` safety-copy retention",
+        "`before_restore` safety copy retained",
         C4III_VERIFIED_MAIN,
         C4III_RUNNER_SHA256,
         C4III_RUNNER_VERSION,
+        C4III_PACKAGE_MAIN,
+        C4III_PACKAGE_RUNNER_SHA256,
+        C4III_PACKAGE_RUNNER_VERSION,
         "PASS — C4-III EXACT-HEAD VERIFICATION PASSED",
+        "PASS — C4-III EXACT-PACKAGE RESTORE VERIFICATION PASSED",
+        "PASS — FULL AUTOMATED SMOKE PASSED",
         "INCONCLUSIVE — ENVIRONMENT — EXACT-PACKAGE VERIFICATION PREREQUISITE UNAVAILABLE",
         "BLOCKED — PACKAGE PREREQUISITE",
-        "do not implement packaging to clear it inside C4-III",
+        "packaging was never implemented inside C4-III to clear it",
         "Completed task — D3 macOS package MVP",
         "never reported as C4-III exact-package verification",
+        "never counted as product defects",
+        "closed by this changeset on the combination of both accepted halves",
+        "inherits a **closed** Restore lifecycle",
+        "Do not read this closure as a release gate",
+        "owned processes left: none",
+        "owned ports still held: none",
+    ))
+    require(PROGRESS, C4III_EXACT_PACKAGE_GATES + C4III_EXACT_PACKAGE_EVIDENCE
+            + C4III_RUNNER_HISTORY + (
+        C4III_PACKAGE_MAIN,
+        C4III_PACKAGE_RUNNER_SHA256,
+        C4III_PACKAGE_RUNNER_VERSION,
+        "C4-III exact-package verification PASSED, Restore lifecycle closed",
+        "Runner history is preserved truthfully and is not counted against the product",
+        "is not rewritten, reclassified or upgraded by this closure",
+        "documentation, state and lifecycle-checker only",
+        "docs/history/c4-iii-pre-closure/",
     ))
     require(CHANGE_REQUESTS, CR012_BOUNDARY + (
         "No new Change Request is needed for verification-only",
         "STOP and open a separate decision/change request or bounded defect-fix PR",
-        "Building the packaged artifact is **not** C4-III work",
+        "Building the packaged artifact was **not** C4-III work",
         "CR-012 — D3 macOS package MVP authorization for C4-III exact-package verification",
         "Status: **ACCEPTED**",
         "0019-c4-iii-packaged-artifact-prerequisite.md",
+        C4III_PACKAGE_MAIN,
+        C4III_PACKAGE_RUNNER_SHA256,
+        C4III_PACKAGE_RUNNER_VERSION,
+        "That closure authorizes no further stage",
     ))
 
 def check_cr012_authorization() -> None:
@@ -578,13 +803,10 @@ def check_cr012_authorization() -> None:
         "Stop conditions",
         "must **STOP** and require a new decision",
     ))
-    # The bounded successor task must be visible on every active surface, built
-    # but explicitly not yet exact-package verified.
+    # The bounded successor task is built, and `IMPLEMENTED` is its final status
+    # on every active surface. It is never inflated beyond a built package.
     for path in ACTIVE + (CURRENT, DEPLOYMENT, PACKAGING):
-        require(
-            path,
-            ("D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING",),
-        )
+        require(path, ("D3 — macOS package MVP — IMPLEMENTED",))
     # The old blanket claim is now globally false and must not be reinstated.
     for path in ACTIVE + SUPPORTING:
         forbid(path, ("no packaging implementation is authorized",))
@@ -593,7 +815,7 @@ def main() -> int:
     check_lifecycle_docs()
     check_authority_and_history()
     check_closed_boundaries()
-    check_c4_iii_authorization()
+    check_c4_iii_closure()
     check_cr012_authorization()
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
@@ -607,21 +829,31 @@ def main() -> int:
     print("Verified PR #188 merged / C4-II-C exact-head closure baseline.")
     print("Verified PR #189 merged and C4-II-C is DONE — MERGED AND EXACT-HEAD VERIFIED.")
     print("Verified final C4-II-C presentation is pinned as a closed production boundary.")
-    print("Verified C4-III is IN PROGRESS — EXACT-HEAD VERIFICATION PASSED and remains verification/lifecycle only.")
+    print("Verified C4-III is DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED, and that it")
+    print("  closes only on the combination of both accepted independent halves.")
     print(f"Verified recorded C4-III exact-head baseline {C4III_VERIFIED_MAIN} / runner {C4III_RUNNER_VERSION}.")
-    print("Verified C4-III exact-package verification is NOT YET PASSED and is never relabelled PASS.")
-    print("Verified C4-III lifecycle closure remains NOT COMPLETED.")
-    print("Verified the recorded INCONCLUSIVE — ENVIRONMENT classification is preserved, not reinterpreted.")
+    print(f"Verified recorded C4-III exact-package baseline {C4III_PACKAGE_MAIN} /")
+    print(f"  runner {C4III_PACKAGE_RUNNER_VERSION} / SHA-256 {C4III_PACKAGE_RUNNER_SHA256}.")
+    print("Verified the accepted exact-package evidence is carried, not merely asserted:")
+    print("  current-schema and older-schema Restore, pre-mutation rejection, source immutability,")
+    print("  mandatory before_restore retention, a real replacement_intent -> rolled_back recovery,")
+    print("  interrupted rollback, recovery_blocked failing closed with packaged exit code 3,")
+    print("  and zero owned processes or ports left behind.")
+    print("Verified the earlier INCONCLUSIVE — ENVIRONMENT classification is preserved, not")
+    print("  reinterpreted, and that the two pre-acceptance runner faults are preserved as")
+    print("  runner faults rather than as product defects.")
     print("Verified CR-012 is ACCEPTED and ADR 0019 records the bounded D3 authorization.")
-    print("Verified the only authorized successor is roadmap D3 — macOS package MVP, labelled")
-    print("  IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING, with no parallel stage,")
-    print("  and never upgraded to DONE, CLOSED, VERIFIED or release-ready.")
+    print("Verified roadmap D3 — macOS package MVP is labelled IMPLEMENTED on every active")
+    print("  surface, with no parallel stage, and never upgraded to DONE, CLOSED, VERIFIED,")
+    print("  signed, notarized, App Store ready or release-ready.")
     print("Verified the built package is described as packaging the product, not changing it:")
     print("  bundled interpreter, unchanged launcher-managed backend entrypoint and liveness lock,")
     print("  loopback-only frontend listener, and no signing/notarization/DMG/updater work.")
-    print("Verified CR-012 does not authorize D4, D5, signing, notarization, DMG, auto-update,")
-    print("  App Store, sandbox migration or any desktop application shell.")
-    print("Verified Restore remains NOT IMPLEMENTED and product release readiness is not claimed.")
+    print("Verified neither CR-012 nor the C4-III closure authorizes D4, D5, signing,")
+    print("  notarization, DMG, auto-update, App Store, sandbox migration, cloud sync or any")
+    print("  desktop application shell.")
+    print("Verified Restore is IMPLEMENTED only as a consequence of C4-III lifecycle closure,")
+    print("  and that product release readiness is still not claimed.")
     return 0
 
 if __name__ == "__main__":

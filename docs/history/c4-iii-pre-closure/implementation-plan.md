@@ -5,7 +5,6 @@ Updated: `2026-08-12`
 ## Current lifecycle
 
 ```text
-PR #192 — MERGED — D3 MACOS PACKAGE MVP
 PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
@@ -27,15 +26,14 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
-C4-III EXACT-HEAD VERIFICATION — PASS
-C4-III EXACT-PACKAGE VERIFICATION — PASS
-C4-III LIFECYCLE CLOSURE — COMPLETED BY THIS CHANGESET
+C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
+C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — IMPLEMENTED
-D4 — Update safety — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE
-D5 — Remote install checklist — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE
-Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
+Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
@@ -53,7 +51,7 @@ PR #189 closed the C4-II-C lifecycle and authorized C4-III; it merged as `81e819
 
 ### C4-III — Restore end-to-end verification and lifecycle closure
 
-Status: **DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED**. Lifecycle closure is carried by this changeset.
+Status: **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
 
 Goal:
 
@@ -95,7 +93,7 @@ At minimum, C4-III must cover the reserved ADR 0017 verification surface:
 
 Use the project smoke classification exactly: PASS / FAIL PRODUCT / INCONCLUSIVE RUNNER / INCONCLUSIVE ENVIRONMENT. Manual `Ctrl+C` invalidates PASS.
 
-### Recorded verification progress — exact-head half
+### Recorded verification progress
 
 An external exact-head verifier (`c4-iii-restore-exact-head-v1`, SHA-256 `4c5c09081d2dc1db45ee556777039f4d9802f026d717a194c88c15d6894e5f3a`) ran on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`:
 
@@ -117,36 +115,13 @@ C4III LIFECYCLE CLOSURE: BLOCKED — PACKAGE PREREQUISITE
 | exact-package outer gate | **INCONCLUSIVE — ENVIRONMENT** — prerequisite unavailable |
 | lifecycle closure gate | **BLOCKED — PACKAGE PREREQUISITE** |
 
-At the time of that run only the exact-head half was satisfied. The exact-package half stayed `INCONCLUSIVE — ENVIRONMENT` because the packaged product artifact did not exist, and it is never rewritten as PASS, FAIL PRODUCT or INCONCLUSIVE RUNNER. Building one was not authorized inside C4-III; it was the separate authorized D3 successor task below.
+Item 11 of the required verification list asks for exact-head **or** exact-package evidence with autonomous timeouts/cleanup. Only the exact-head half is satisfied. The exact-package half stays `INCONCLUSIVE — ENVIRONMENT` and is never rewritten as PASS, FAIL PRODUCT or INCONCLUSIVE RUNNER. C4-III therefore stays open.
 
-### Recorded verification progress — exact-package half
-
-The independent external test-only verifier (`c4-iii-restore-exact-package-v1.2`, SHA-256 `2e2abad2e10030faecc43ff5d95d55d2a384791d88099f18a3cb8ee6b6506694`) ran against the packaged runtime built from exact published `main` `0e1193264dc22979ca48e32a962aba916b6b520e` and returned code `0`:
-
-```text
-PASS — C4-III EXACT-PACKAGE RESTORE VERIFICATION PASSED
-PASS — FULL AUTOMATED SMOKE PASSED
-```
-
-| Accepted packaged scenario | Result |
-|---|---|
-| current-schema Restore | `restore_completed`, source SHA-256 unchanged, `before_restore` retained, backend restarted |
-| supported older-schema Restore | migration to the current schema succeeded, then `restore_completed`, source unchanged, `before_restore` retained |
-| invalid source rejection | rejected before destructive execution; database, source and durable state untouched; no safety copy |
-| source changed after validation | stale retained source proof rejected; `restore_failed`; database unchanged; no durable operation |
-| pre-replacement interruption | `source_staged` → `aborted`; workspace unchanged; ordinary startup allowed |
-| actual hard interruption after accepted execute | real durable `replacement_intent` → recovered `rolled_back`; workspace restored; source unchanged; `before_restore` retained |
-| interrupted rollback | `rollback_in_progress` → `rolled_back`; safety copy retained; repeated launch safe |
-| missing safety copy after replacement | `replacement_committed` → `recovery_blocked`; packaged exit code `3`; ordinary startup refused |
-| runner cleanup | `owned processes left: none`; `owned ports still held: none` |
-
-Item 11 of the required verification list asks for exact-head **or** exact-package evidence with autonomous timeouts/cleanup. Both required halves are satisfied, and C4-III closes only on their combination.
-
-Runner attempts before acceptance are preserved as runner faults and are **not product defects**: one `INCONCLUSIVE — RUNNER` caused by an incorrect fixture `PYTHONPATH`, and a `v1.1` textual `FAIL — PRODUCT` traced to a runner `UnboundLocalError`, which is invalid as product evidence. `v1.2` corrected the probe/classification boundary. The verifier stays external, identified by version and SHA-256, and is not committed here.
+The single remaining blocker is the missing packaged product artifact. Building one is not authorized inside C4-III; it is the separate authorized successor task below.
 
 ### Successor task — D3 macOS package MVP
 
-Status: **IMPLEMENTED**. Decided by `CR-012` / [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md). It ran **outside** C4-III and was never merged into the C4-III verification claim. `IMPLEMENTED` claims a built macOS package MVP only — not release readiness, App Store readiness, notarization, signing, a DMG, an updater or universal packaging.
+Status: **IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING**. Decided by `CR-012` / [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md). It ran **outside** C4-III and must not be merged into the C4-III verification claim.
 
 Goal:
 
@@ -162,13 +137,13 @@ Bounded scope: launcher, bundled backend runtime, production frontend build, mig
 
 CR-012 authorizes the existing roadmap stage D3 — macOS package MVP and nothing beyond it; D4, D5 and later release/distribution work remain outside this authorization. Signing, notarization, mandatory DMG, installer redesign, auto-update, update download, GitHub Releases redesign, release-channel infrastructure, App Store, sandbox migration, cloud deployment, cloud sync, multi-user infrastructure, full release-candidate certification, general remote-install automation, D4 and D5 remain NOT AUTHORIZED — the roadmap D3 non-goals stay authoritative.
 
-The artifact was a verification prerequisite. It did not close C4-III by itself, did not implement Restore and did not make the product release-ready. The stated condition — artifact exists **and** the external exact-package verifier runs and passes against the packaged runtime — has since been met, and only then did C4-III close.
+The artifact is a verification prerequisite. It does not close C4-III, does not implement Restore and does not make the product release-ready. Exact-package verification stays `INCONCLUSIVE — ENVIRONMENT` until the artifact exists and the external exact-package verifier runs and passes against the packaged runtime.
 
-As built: `make package-macos` produces `dist/CosmeticWorkshopOS-mac.zip` containing `CosmeticWorkshopOS.app`, with a pinned checksum-verified self-contained CPython, the production frontend served by a standard-library localhost listener with an `/api/*` proxy, and the backend still a separate launcher-owned process using the unchanged `app.launcher_backend_entrypoint` handshake. No protected closed Restore production file changed. See [`packaging.md`](packaging.md).
+As built: `make package-macos` produces `dist/CosmeticWorkshopOS-mac.zip` containing `CosmeticWorkshopOS.app`, with a pinned checksum-verified self-contained CPython, the production frontend served by a standard-library localhost listener with an `/api/*` proxy, and the backend still a separate launcher-owned process using the unchanged `app.launcher_backend_entrypoint` handshake. No protected closed Restore production file changed. See [`packaging.md`](packaging.md). The remaining C4-III work is to write and run the exact-package verifier against that packaged runtime.
 
 ### Architecture constraints
 
-C4-III did not authorize, and its closure does not authorize:
+C4-III does not authorize:
 
 - a new Restore engine or second destructive path;
 - a new launcher/control/backend endpoint or DTO field;
@@ -180,8 +155,6 @@ C4-III did not authorize, and its closure does not authorize:
 - D4, D5, signing, notarization, auto-update or App Store work — not authorized by CR-012, and never to be performed inside C4-III;
 - C4 lifecycle completion without the required evidence.
 
-No verification attempt revealed a product defect, so no bounded defect-fix PR was needed. Had one appeared, the rule was to STOP the verification claim, fix it separately, rerun the affected checks and only then resume C4-III.
+If verification reveals a product defect, STOP the verification claim, open a separate bounded defect-fix PR, rerun the affected exact-head checks, then resume C4-III.
 
-C4 lifecycle completion required the full evidence surface and got it: accepted exact-head PASS **and** accepted exact-package PASS. `Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED`, as a consequence of that closure only.
-
-Closure ends the Restore implementation programme. It starts no new one: `D4 — Update safety` and `D5 — Remote install checklist` remain NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE, and product release readiness remains NOT CLAIMED. Safe packaged update flow, installation verification and full release-candidate smoke still need separate authorization.
+Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.

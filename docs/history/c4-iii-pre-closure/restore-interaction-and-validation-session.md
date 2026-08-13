@@ -8,7 +8,6 @@ Normative sources: ADR 0016 for destructive Restore; ADR 0018 for launcher contr
 ## Current lifecycle
 
 ```text
-PR #192 — MERGED — D3 MACOS PACKAGE MVP
 PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
@@ -30,15 +29,14 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
-C4-III EXACT-HEAD VERIFICATION — PASS
-C4-III EXACT-PACKAGE VERIFICATION — PASS
-C4-III LIFECYCLE CLOSURE — COMPLETED BY THIS CHANGESET
+C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
+C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — IMPLEMENTED
-D4 — Update safety — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE
-D5 — Remote install checklist — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE
-Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
+Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
@@ -70,16 +68,14 @@ PR #188 reviewed `1df21915fdcf4a708dc778a0e762d64830b5b880` and merged as `6294f
 
 No source path, proof, operation ID, database path, backup path, lock path, SQL, traceback or durable phase is browser authority. No `/v1/restore/confirm` exists. Launcher/backend/contract/runtime/entry/main/navigation/ADRs and the final C4-II-C presentation are closed.
 
-## C4-III authorization — closed
+## C4-III authorization
 
-C4-III — **Restore end-to-end verification and lifecycle closure** — is **DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED**.
+C4-III — **Restore end-to-end verification and lifecycle closure** — is **IN PROGRESS — EXACT-HEAD VERIFICATION PASSED**.
 
-C4-III verified the already-merged interaction contract across success, supported older-schema, rejection, interruption, rollback, repeated launch, source immutability and safety-copy retention. It extended tests/smoke evidence only; it authorized no new presentation semantics, command authority, endpoints or filesystem ownership, and its closure authorizes none either.
+C4-III must verify the already-merged interaction contract across success, supported older-schema, rejection, interruption, rollback, repeated launch, source immutability and safety-copy retention. It may extend tests/smoke evidence, but does not authorize new presentation semantics, command authority, endpoints or filesystem ownership.
 
-No discovered product defect required a bounded fix: none of the three external runner attempts reported a real product failure.
+Any discovered product defect requires a separate bounded fix before verification can claim PASS.
 
-External exact-head verification of this interaction profile PASSED on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`; no product defect was reported and this profile is unchanged. The exact-package half of that same run was `INCONCLUSIVE — ENVIRONMENT` because no packaged artifact existed then; that classification is preserved unchanged.
+External exact-head verification of this interaction profile PASSED on merged `main` `81e8193596709b0c16d0ecad598458b3ea95fd9c`; no product defect was reported and this profile is unchanged. Exact-package verification of the same profile is still `INCONCLUSIVE — ENVIRONMENT` because no packaged artifact exists, so `C4-III LIFECYCLE CLOSURE — NOT COMPLETED`.
 
-External exact-package verification of the same profile then PASSED on the packaged runtime built from published `main` `0e1193264dc22979ca48e32a962aba916b6b520e`, runner `c4-iii-restore-exact-package-v1.2`, including packaged `restore_completed`, `restore_failed`, `aborted`, `rolled_back` and `recovery_blocked` outcomes and a real `replacement_intent -> rolled_back` recovery. The interaction profile is unchanged by that evidence: no new transport, endpoint, presentation semantic or browser authority was added.
-
-`Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED`. Product release readiness remains NOT CLAIMED.
+Restore remains NOT IMPLEMENTED. Product release readiness remains NOT CLAIMED.

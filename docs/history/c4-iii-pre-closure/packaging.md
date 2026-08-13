@@ -5,7 +5,6 @@ Updated: `2026-08-12`
 ## Lifecycle
 
 ```text
-PR #192 — MERGED — D3 MACOS PACKAGE MVP
 PR #191 — MERGED — CR-012 / D3 AUTHORIZATION
 PR #190 — MERGED — C4-III PARTIAL VERIFICATION CHECKPOINT
 PR #189 — MERGED — C4-II-C LIFECYCLE CLOSURE AND C4-III AUTHORIZATION
@@ -27,25 +26,24 @@ C4-II-B1 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B2 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-B3 — DONE — MERGED AND EXACT-HEAD VERIFIED
 C4-II-C — DONE — MERGED AND EXACT-HEAD VERIFIED
-C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
-C4-III EXACT-HEAD VERIFICATION — PASS
-C4-III EXACT-PACKAGE VERIFICATION — PASS
-C4-III LIFECYCLE CLOSURE — COMPLETED BY THIS CHANGESET
+C4-III — IN PROGRESS — EXACT-HEAD VERIFICATION PASSED
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
+C4-III LIFECYCLE CLOSURE — NOT COMPLETED
 CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
-D3 — macOS package MVP — IMPLEMENTED
-D4 — Update safety — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE
-D5 — Remote install checklist — NOT AUTHORIZED BY CR-012 OR C4-III CLOSURE
-Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
+D4 — Update safety — NOT AUTHORIZED BY CR-012
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-012
+Restore — NOT IMPLEMENTED
 Product release readiness — NOT CLAIMED
 ```
 
 ## C4-II-C closure / C4-III boundary
 
-PR #188 / C4-II-C made no packaging, updater, helper-executable, dependency, port or installation-topology change. Its closure changes documentation/state/checker only. PR #189, the C4-III partial-verification checkpoint and the C4-III lifecycle closure likewise change no packaging surface.
+PR #188 / C4-II-C made no packaging, updater, helper-executable, dependency, port or installation-topology change. Its closure changes documentation/state/checker only. PR #189 and the C4-III partial-verification checkpoint likewise change no packaging surface.
 
-C4-III was authorized for Restore end-to-end verification and lifecycle closure. ADR 0017 includes exact-package verification in that evidence, but this authorization does not authorize packaging implementation or redesign.
+C4-III is authorized for Restore end-to-end verification and lifecycle closure. ADR 0017 includes exact-package verification in that evidence, but this authorization does not authorize packaging implementation or redesign.
 
-If a required packaged verification artifact is not yet available, C4-III must remain incomplete or report an environment/prerequisite gap. It must not hide packaging work inside the Restore verification slice. That rule held throughout: the artifact came from D3 under CR-012, never from inside C4-III.
+If a required packaged verification artifact is not yet available, C4-III must remain incomplete or report an environment/prerequisite gap. It must not hide packaging work inside the Restore verification slice.
 
 ## Closed packaged-artifact prerequisite gap
 
@@ -53,21 +51,15 @@ The external C4-III verifier reported `PASS — C4-III EXACT-HEAD VERIFICATION P
 
 That classification stands exactly as recorded. It was an environment prerequisite — not a product failure and not a runner failure — and it is never rewritten as a PASS.
 
-D3 then built the missing artifact, which closed the **prerequisite** and nothing else. The **verification** was closed separately and later, by the independent external verifier:
+D3 has since built the missing artifact, so the **prerequisite** is closed while the **verification** is not:
 
 ```text
-runner: c4-iii-restore-exact-package-v1.2
-SHA-256: 2e2abad2e10030faecc43ff5d95d55d2a384791d88099f18a3cb8ee6b6506694
-packaged main: 0e1193264dc22979ca48e32a962aba916b6b520e
-return code: 0
-
-PASS — C4-III EXACT-PACKAGE RESTORE VERIFICATION PASSED
-PASS — FULL AUTOMATED SMOKE PASSED
+C4-III EXACT-PACKAGE VERIFICATION — NOT YET PASSED
 ```
 
-`make package-macos` produces the artifact; the verifier ran against the packaged runtime built from that exact published `main`, never against a source-tree fallback. Full scenario evidence is in [`current-lifecycle.md`](current-lifecycle.md).
+The artifact now exists and `make package-macos` produces it. What has not happened is the independent external C4-III exact-package verifier running against it and passing. Until that runs, exact-package verification stays unpassed and C4-III lifecycle closure stays incomplete.
 
-The C4-III slice never entered packaging, and its closure grants packaging nothing. The standing rules still hold — do **not**:
+C4-III itself stays open and stays out of packaging. Inside the C4-III verification slice, do **not**:
 
 - implement macOS packaging under C4-III;
 - create a `.app`, `.dmg`, ZIP or packaged runtime to satisfy the gate;
@@ -75,20 +67,18 @@ The C4-III slice never entered packaging, and its closure grants packaging nothi
 - relabel the exact-package result as PASS, FAIL PRODUCT or INCONCLUSIVE RUNNER;
 - treat the passing exact-head half as sufficient for lifecycle closure.
 
-A passing exact-package verification proves packaged Restore behavior. It is not evidence of release readiness, and it authorizes no signing, notarization, DMG, installer, updater, release-channel or App Store work.
-
 ## CR-012 — D3 macOS package MVP authorization
 
 `CR-012` is **ACCEPTED**. The normative decision is [`decisions/0019-c4-iii-packaged-artifact-prerequisite.md`](decisions/0019-c4-iii-packaged-artifact-prerequisite.md).
 
 The exact-package verifier correctly reported `INCONCLUSIVE — ENVIRONMENT` because the required packaged artifact was unavailable. Separately, no packaging implementation had yet been authorized to produce that artifact. CR-012 closes only that authorization gap. It does not reclassify or amend the previously recorded verification result.
 
-It authorized the existing roadmap stage as the one bounded successor implementation task, outside C4-III:
+It authorizes the existing roadmap stage as the one bounded successor implementation task, outside C4-III:
 
 ```text
-D3 — macOS package MVP — IMPLEMENTED
+D3 — macOS package MVP — IMPLEMENTED — C4-III EXACT-PACKAGE VERIFICATION PENDING
 
-Original purpose:
+Current purpose:
 produce the packaged product artifact required for
 C4-III exact-package verification.
 ```
@@ -114,7 +104,7 @@ The bounded rule replaces the older blanket statement: **CR-012 authorizes the e
 
 A future implementation PR may add a build-only packaging dependency or tool only under the six ADR 0019 conditions, and must STOP for a new decision if the artifact contract turns out to require a persistent runtime framework, desktop shell, sandbox model or Restore architecture change.
 
-Producing the artifact is a verification prerequisite and is never product release readiness. Safe packaged update flow, installation verification and full release-candidate smoke remain separate future work needing separate authorization. `IMPLEMENTED` is D3's final status and claims a built macOS package MVP only — not release readiness, App Store readiness, notarization, signing, a DMG, an updater or universal packaging. Product release readiness remains NOT CLAIMED.
+Producing the artifact is a verification prerequisite and is never product release readiness. Safe packaged update flow, installation verification and full release-candidate smoke remain separate future work needing separate authorization. Restore remains NOT IMPLEMENTED until C4-III closes. Product release readiness remains NOT CLAIMED.
 
 ## D3 implementation — how the package is built
 
@@ -188,4 +178,4 @@ No signing, notarization, DMG, installer, updater or release upload is added.
 
 `scripts/verify_macos_package.py` runs automatically at the end of every build and fails it on a bad artifact. It proves bundle structure, an executable entrypoint, the bundled interpreter, backend modules, every declared migration, the production frontend, offline help — and the exclusions: no database, no backups/exports/attachments/logs, no `.git`, no `node_modules`, no secret-looking files, and no reference to the build checkout.
 
-This is a **structure** gate. It proves what the artifact contains, never that it runs. Live behaviour is the Level-5 external package smoke, which remains a separate merge gate, and the C4-III exact-package Restore verifier is separate again — it has since run and passed against the packaged runtime, and its PASS is Restore evidence, not a packaging or release claim.
+This is a **structure** gate. It proves what the artifact contains, never that it runs. Live behaviour is the Level-5 external package smoke, which remains a separate merge gate, and the C4-III exact-package Restore verifier remains separate again.
