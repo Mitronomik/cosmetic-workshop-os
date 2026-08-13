@@ -1,0 +1,292 @@
+name: D4-B lifecycle transition runner
+
+on:
+  push:
+    branches:
+      - maintenance/d4-b-lifecycle-transition-runner
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_HEAD: a720a67c7aa6f73c62b91d7a91837bbbe4eb1c7b
+  TARGET_BRANCH: agent/d4-b-staged-update-safety
+
+jobs:
+  transition:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact implementation head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+      - name: Exact-head preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+      - name: Apply D4-B implementation lifecycle transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          OLD_D4 = "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT"
+          NEW_D4 = "D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING"
+          OLD_B = "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED"
+          NEW_B = "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING"
+          STATUS_FILES = [
+              Path('README.md'),
+              Path('docs/current-lifecycle.md'),
+              Path('docs/implementation-plan.md'),
+              Path('docs/packaging.md'),
+              Path('docs/deployment.md'),
+              Path('state/current-focus.md'),
+              Path('state/progress.md'),
+              Path('state/handoff.md'),
+              Path('state/change-requests.md'),
+          ]
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, got {count}: {old[:80]}')
+              path.write_text(text.replace(old, new), encoding='utf-8')
+
+          for path in STATUS_FILES:
+              replace_once(path, OLD_D4, NEW_D4)
+              replace_once(path, OLD_B, NEW_B)
+
+          # README: preserve D4-A closure truth and add the bounded D4-B implementation truth.
+          replace_once(
+              Path('README.md'),
+              'D4-B is now the only authorized next slice and is not implemented. D4-C/D remain gated.',
+              'D4-B is implemented in the current changeset but is not lifecycle-closed. Exact-head verification is required before D4-C may become authorized. D4-C/D remain gated.',
+          )
+          replace_once(
+              Path('README.md'),
+              'D4-A closure evidence: verified PR head `f294b15365fcf651790e2dc5638ed1551f616c3d` merged as `89dd69dc1958e622146e01869cc34d4cd2ec859e`; exact merged-head verifier `31699624984` passed.\n\n## Core product invariants',
+              '''D4-A closure evidence: verified PR head `f294b15365fcf651790e2dc5638ed1551f616c3d` merged as `89dd69dc1958e622146e01869cc34d4cd2ec859e`; exact merged-head verifier `31699624984` passed.\n\n## D4-B implementation pending verification\n\nThe current D4-B changeset replaces only the supported-older direct migration seam:\n\n- `before_migration` backup remains the ADR 0015 SQLite Online Backup snapshot and is verified before staging;\n- a runner-owned `.stage` snapshot is created beside the canonical DB with the same consistent SQLite primitive;\n- migrations execute only against the stage;\n- stage and target lineage are verified before atomic publication;\n- the canonical DB is checked unchanged during staging and is replaced only at the commit point;\n- durable `update-journal.json` lives outside the working DB and records `started/completed/failed`;\n- interrupted `started` operations reconcile conservatively and never blindly resume a stage;\n- stage cleanup requires deterministic operation ownership and removes runner-owned SQLite sidecars;\n- D4-C UI/failure UX remains out of scope and unauthorized.\n\n## Core product invariants''',
+          )
+
+          # Current lifecycle: keep D4-A evidence and state D4-B truth without closing it.
+          replace_once(
+              Path('docs/current-lifecycle.md'),
+              'D4-A is merged and exact-head verified. This lifecycle closure authorizes D4-B as the only next slice; D4-B remains not implemented.',
+              'D4-A is merged and exact-head verified. D4-B is implemented in the current changeset, but exact-head verification and lifecycle closure are still pending; D4-C remains unauthorized.',
+          )
+          replace_once(
+              Path('docs/current-lifecycle.md'),
+              '## Closed Restore boundary',
+              '''## D4-B implementation truth\n\nFor a supported older canonical database, ordinary user-mode startup now follows the ADR 0020 staged path:\n\n```text\nread-only D4-A compatibility preflight\n→ reconcile any durable interrupted started operation\n→ create + verify before_migration backup\n→ create consistent runner-owned stage\n→ migrate stage only\n→ verify stage target lineage\n→ prove canonical unchanged during staging\n→ atomically publish stage as canonical\n→ verify canonical target lineage\n→ durably record completed update\n→ continue ordinary post-migration startup\n```\n\n`update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. The first D4 operation may record `from_app_version = null` because no trusted previous D4 update record exists; legacy mutable database `app.version` is never promoted into authority.\n\nD4-B is **implementation-complete only in this changeset**. It is not lifecycle-closed, D4-C is not authorized, and exact-head + exact-package verification remain mandatory before any next-slice authorization.\n\n## Closed Restore boundary''',
+          )
+
+          # Implementation plan: transition the authorized section into implementation-pending-verification.
+          plan = Path('docs/implementation-plan.md')
+          old = '''### D4-B — Safe migration execution and durable UpdateLog\n\n**AUTHORIZED NEXT — NOT IMPLEMENTED**.\n\nAuthorized D4-B architecture from ADR 0020:\n\n```text\nconsistent before_migration backup\n→ consistent runner-owned migration stage\n→ migrate only stage\n→ verify target lineage\n→ atomic canonical publication\n→ durable external UpdateLog\n```\n'''
+          new = '''### D4-B — Safe migration execution and durable UpdateLog\n\n**IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING**.\n\nImplemented D4-B architecture from ADR 0020:\n\n```text\nverified consistent before_migration backup\n→ consistent runner-owned migration stage\n→ migrate only stage\n→ verify source/target lineage and canonical stability\n→ atomic canonical publication\n→ post-commit canonical verification\n→ durable external UpdateLog\n```\n\nImplemented scope:\n\n- external atomic `update-journal.json` with `started/completed/failed`;\n- conservative reconciliation of interrupted `started` records;\n- verified automatic backup as a hard staging prerequisite;\n- stage created through the accepted SQLite Online Backup primitive, never raw file copy;\n- migrations execute only against the stage;\n- exact target lineage + SQLite structural verification before commit;\n- same-directory atomic `os.replace` commit after canonical-change/sidecar guards;\n- post-commit failures remain distinct from pre-commit migration failure;\n- deterministic stage ownership validation before interrupted-artifact cleanup;\n- no D4-C frontend or packaged failure-UX work.\n\nD4-B cannot authorize D4-C until this implementation is merged, exact-head verified and lifecycle-closed.\n'''
+          text = plan.read_text(encoding='utf-8')
+          if text.count(old) != 1:
+              raise SystemExit('implementation plan D4-B section did not match exactly once')
+          plan.write_text(text.replace(old, new), encoding='utf-8')
+
+          # Packaging/deployment remain topology-preserving.
+          replace_once(
+              Path('docs/packaging.md'),
+              'Status: **CURRENT — D3 IMPLEMENTED; D4-A CLOSED; D4-B AUTHORIZED NEXT**',
+              'Status: **CURRENT — D3 IMPLEMENTED; D4-A CLOSED; D4-B IMPLEMENTED, VERIFICATION PENDING**',
+          )
+          replace_once(
+              Path('docs/packaging.md'),
+              'D4 remains safe manual package replacement. D4-A supplies the closed compatibility gate; D4-B migration execution is now authorized next but remains unimplemented.',
+              'D4 remains safe manual package replacement. D4-A supplies the closed compatibility gate; D4-B now implements staged migration and durable external UpdateLog on the same ordinary packaged startup path, but exact-package verification and lifecycle closure are still pending.',
+          )
+          replace_once(
+              Path('docs/deployment.md'),
+              'The D4-B migration stage and durable UpdateLog are now authorized next but remain unimplemented.',
+              'D4-B now implements the migration stage and durable UpdateLog under the existing external user-data boundary. It adds no service, cloud dependency or second launcher topology; verification and lifecycle closure are still pending.',
+          )
+          replace_once(
+              Path('docs/deployment.md'),
+              'D4-A closure authorizes D4-B only. D4-C/D and D5 remain unauthorized.',
+              'D4-B implementation does not authorize D4-C. D4-C/D and D5 remain unauthorized.',
+          )
+
+          # Current focus moves from coding to exact-head verification only.
+          focus = Path('state/current-focus.md')
+          old = '''## Current task\n\n**Implement D4-B only, in a separate bounded PR.**\n\nD4-A implementation now provides:\n\n- one version authority (`backend/VERSION`) and generated package/runtime projections;\n- backend read-only Settings/status version identity;\n- ordinary-startup read-only migration-lineage preflight before backup/migration;\n- fail-closed newer/unsupported/unreadable existing lineage;\n- first-run only for a genuinely absent canonical DB path;\n- focused backend/package tests.\n\nD4-A is merged and exact-head verified. D4-B is now the only authorized next slice and remains not implemented.\n'''
+          new = '''## Current task\n\n**Verify the D4-B implementation only; do not start D4-C.**\n\nD4-A remains the closed pre-mutation authority. The current D4-B changeset adds only the supported-older update execution seam:\n\n- verified `before_migration` backup;\n- runner-owned consistent stage;\n- staged migration + exact target verification;\n- canonical stability/sidecar guards and atomic commit;\n- durable external UpdateLog;\n- conservative interrupted-operation reconciliation;\n- ownership-proven cleanup of stage and stage sidecars.\n\nD4-B is implemented but not merged/verified/lifecycle-closed. D4-C remains unauthorized.\n'''
+          text = focus.read_text(encoding='utf-8')
+          if text.count(old) != 1:
+              raise SystemExit('current-focus task block did not match exactly once')
+          focus.write_text(text.replace(old, new), encoding='utf-8')
+
+          # Progress: record implementation without declaring closure.
+          progress = Path('state/progress.md')
+          replace_once(
+              progress,
+              '## Next authorized slice\n\nD4-B is authorized next and not implemented. D4-C/D, D5 and release readiness remain gated.',
+              '''## D4-B implementation pending verification\n\nThe current D4-B changeset implements staged migration, verified `before_migration` backup, atomic canonical publication, durable external UpdateLog and conservative interruption reconciliation. Full exact-head and exact-package verification are still required before lifecycle closure.\n\nD4-C/D, D5 and release readiness remain gated.''',
+          )
+
+          # Handoff: describe the new seams and preserve the closed Restore stop condition.
+          replace_once(Path('state/handoff.md'), '- D4-B is AUTHORIZED NEXT — NOT IMPLEMENTED.', '- D4-B is IMPLEMENTED — exact-head verification and lifecycle closure pending.')
+          replace_once(Path('state/handoff.md'), '## D4-A closed handoff / D4-B next', '## D4-B implementation handoff')
+          replace_once(
+              Path('state/handoff.md'),
+              'Supported older schemas still reach the pre-existing direct backup/migration seam after the closed D4-A gate. D4-B is now authorized to replace that seam with the ADR 0020 staged-migration/verified-commit contract while keeping Restore closed.',
+              'Supported older schemas now enter `backend/app/services/update_safety.py` after the closed D4-A gate. That service owns verified backup, consistent stage creation, stage-only migration, target verification, atomic canonical publication and external UpdateLog reconciliation; current/fresh/development paths retain their bounded existing behavior.',
+          )
+          replace_once(
+              Path('state/handoff.md'),
+              'If verification reveals a need to change a protected Restore production blob, stop and open a separate decision rather than widening D4-A.',
+              'If D4-B verification reveals a need to change a protected Restore production blob or authorize D4-C behavior, stop and open the appropriate separate decision/lifecycle step rather than widening this implementation PR.',
+          )
+
+          # CR ledger: implementation is not closure or next-slice authorization.
+          replace_once(
+              Path('state/change-requests.md'),
+              'Status: **ACCEPTED — D4-A CLOSED; D4-B AUTHORIZED NEXT**.',
+              'Status: **ACCEPTED — D4-A CLOSED; D4-B IMPLEMENTED, VERIFICATION PENDING**.',
+          )
+          replace_once(
+              Path('state/change-requests.md'),
+              'D4-A has implemented the version-identity and compatibility-preflight slice only. It has not implemented staged migrations, durable UpdateLog, update UI/failure UX or exact-package D4 closure.',
+              'D4-A remains closed. The current D4-B changeset implements staged migrations, verified backup, atomic canonical publication, durable external UpdateLog and interruption reconciliation. It does not implement D4-C update UI/failure UX or D4-D lifecycle closure.',
+          )
+          replace_once(
+              Path('state/change-requests.md'),
+              'D4-A closure conditions are satisfied on merged head `89dd69dc1958e622146e01869cc34d4cd2ec859e`. D4-B is authorized next but remains not implemented.',
+              'D4-A closure conditions are satisfied on merged head `89dd69dc1958e622146e01869cc34d4cd2ec859e`. D4-B implementation now requires exact-head verification, merge verification and separate lifecycle closure before D4-C can become authorized.',
+          )
+
+          # Update guide remains explicitly not a ready end-user update instruction.
+          replace_once(
+              Path('docs/update-guide.md'),
+              'Статус: **D4-A закрыт после merged exact-head проверки; безопасная миграция D4-B авторизована следующей, но ещё не реализована**.',
+              'Статус: **D4-A закрыт; безопасная миграция D4-B реализована в текущем changeset, но exact-head проверка и lifecycle closure ещё не завершены**.',
+          )
+          replace_once(
+              Path('docs/update-guide.md'),
+              'Этот файл пока **не является инструкцией о готовом обновлении продукта**. D4-A закрыт и умеет определить версию приложения и до изменений проверить совместимость схемы, но D4-B/C/D ещё не реализованы и не проверены.',
+              'Этот файл пока **не является инструкцией о готовом обновлении продукта**. D4-A закрыт; D4-B реализует безопасный staged migration + durable UpdateLog, но ещё не прошёл обязательную exact-head/exact-package проверку и lifecycle closure. D4-C/D также не реализованы и не авторизованы.',
+          )
+
+          # Domain clarification: make the first-operation null explicit instead of inventing an authority.
+          domain = Path('docs/domain-model-d4-update-safety.md')
+          replace_once(
+              domain,
+              '## Schema identity',
+              '''## Application-version history semantics\n\n`from_app_version` records only a **durably known prior D4 update application version**. On the first D4 operation it may be `null` because no trusted D4 journal predates that operation. The implementation must not fill that gap from historical mutable `AppSettings.app_version`; inventing a value would create a false authority. `to_app_version` is always the current effective application version resolved by D4-A.\n\n## Schema identity''',
+          )
+
+          # Lifecycle checker: move the gate from "authorized/not implemented" to "implemented/pending verification".
+          checker = Path('scripts/check_documentation_lifecycle.py')
+          text = checker.read_text(encoding='utf-8')
+          text = text.replace(
+              'D4-A may establish application-version identity and a read-only ordinary-startup\nschema compatibility gate. It may not authorize D4-B/C/D or reopen Restore.',
+              'D4-A is closed. D4-B may implement staged migration safety and durable external\nUpdateLog, but it may not claim verification/closure, authorize D4-C/D or reopen Restore.',
+          )
+          text = text.replace(
+              'D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED',
+              'D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING',
+          )
+          text = text.replace(
+              'D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT',
+              'D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING',
+          )
+          # The old substring prohibition would reject the newly required status.
+          text = text.replace(
+              '    "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED",\n',
+              '    "D4-B — Safe migration execution and durable UpdateLog — DONE",\n    "D4-B — Safe migration execution and durable UpdateLog — CLOSED",\n',
+          )
+          # Add explicit old-status prohibitions so lifecycle cannot regress.
+          marker = 'FORBIDDEN_ACTIVE = (\n'
+          if text.count(marker) != 1:
+              raise SystemExit('checker FORBIDDEN_ACTIVE marker mismatch')
+          text = text.replace(marker, marker + '    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT",\n    "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED",\n', 1)
+
+          # Add implementation surfaces.
+          marker = 'D4A_PACKAGE_TEST = P("macos_package/tests/test_d4_a_product_version_projection.py")\n'
+          if text.count(marker) != 1:
+              raise SystemExit('checker D4-A constants marker mismatch')
+          text = text.replace(marker, marker + 'D4B_SERVICE = P("backend/app/services/update_safety.py")\nD4B_TEST = P("backend/app/tests/test_d4_b_update_safety.py")\n', 1)
+
+          text = text.replace(
+              'require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "Restore remains closed"))',
+              'require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "D4-B implementation truth", "Restore remains closed"))',
+          )
+          text = text.replace(
+              '        "ADR 0020",\n    ))',
+              '        "ADR 0020",\n        "from_app_version",\n        "may be `null`",\n    ))',
+              1,
+          )
+
+          old = '''    require(STARTUP_SERVICE, (\n        "resolve_effective_app_version",\n        "inspect_startup_schema_compatibility",\n        "schema_compatibility.migrations_pending",\n        "reason=\\\"before_migration\\\"",\n        "D4-B alone is authorized",\n    ))\n'''
+          new = '''    require(STARTUP_SERVICE, (\n        "resolve_effective_app_version",\n        "inspect_startup_schema_compatibility",\n        "schema_compatibility.migrations_pending",\n        "reconcile_interrupted_update",\n        "execute_staged_update",\n        "initialize_database(config)",\n    ))\n'''
+          if text.count(old) != 1:
+              raise SystemExit('checker startup D4-A block mismatch')
+          text = text.replace(old, new)
+
+          anchor = '''\n\ndef main() -> int:\n'''
+          if text.count(anchor) != 1:
+              raise SystemExit('checker main anchor mismatch')
+          d4b_check = '''\n\ndef check_d4b_implementation() -> None:\n    require(D4B_SERVICE, (\n        "update-journal.json",\n        "backup_sqlite_database",\n        "_verify_before_migration_backup",\n        "_create_consistent_stage_snapshot",\n        "apply_migrations(DatabaseConfig(path=stage_path))",\n        "_commit_verified_stage",\n        "os.replace(stage_path, canonical_path)",\n        "reconcile_interrupted_update",\n        "interrupted-stage-identity-mismatch",\n        "canonical-changed-during-staging",\n        "post-commit-journal-write-failed",\n    ))\n    forbid(D4B_SERVICE, ("rolled_back", "shutil.copy", "shutil.copy2"))\n    if not D4B_TEST.is_file():\n        ERRORS.append(f"missing D4-B focused test: {D4B_TEST.relative_to(ROOT)}")\n    else:\n        require(D4B_TEST, (\n            "test_supported_older_user_startup_migrates_stage_then_commits",\n            "test_staged_migration_failure_keeps_canonical_unchanged",\n            "test_post_commit_journal_failure_reconciles_completed_next_launch",\n            "test_tampered_interrupted_stage_identity_fails_closed_without_cleanup",\n            "test_canonical_sidecar_refuses_before_backup_or_stage",\n        ))\n'''
+          text = text.replace(anchor, d4b_check + anchor)
+          text = text.replace(
+              '    check_d4a_implementation()\n',
+              '    check_d4a_implementation()\n    check_d4b_implementation()\n',
+              1,
+          )
+          text = text.replace(
+              '    print("Verified D4-B alone is authorized next and remains not implemented.")',
+              '    print("Verified D4-B is implemented but exact-head verification/lifecycle closure remain pending.")',
+          )
+          checker.write_text(text, encoding='utf-8')
+          PY
+          python3 -m py_compile scripts/check_documentation_lifecycle.py backend/app/services/update_safety.py
+          git diff --check
+      - name: Run lifecycle checker
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/check_documentation_lifecycle.py
+      - name: Negative lifecycle probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp state/current-focus.md "$RUNNER_TEMP/current-focus.md"
+          cp backend/app/services/update_safety.py "$RUNNER_TEMP/update_safety.py"
+          probe() {
+            name="$1"
+            shift
+            "$@"
+            if python3 scripts/check_documentation_lifecycle.py >"$RUNNER_TEMP/${name}.log" 2>&1; then
+              echo "negative probe unexpectedly passed: $name" >&2
+              cat "$RUNNER_TEMP/${name}.log" >&2
+              exit 1
+            fi
+            cp "$RUNNER_TEMP/current-focus.md" state/current-focus.md
+            cp "$RUNNER_TEMP/update_safety.py" backend/app/services/update_safety.py
+          }
+          probe d4b_done python3 -c "from pathlib import Path; p=Path('state/current-focus.md'); t=p.read_text(); p.write_text(t.replace('D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING','D4-B — Safe migration execution and durable UpdateLog — DONE'))"
+          probe d4c_authorized python3 -c "from pathlib import Path; p=Path('state/current-focus.md'); t=p.read_text(); p.write_text(t.replace('D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED','D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT'))"
+          probe restore_reopened python3 -c "from pathlib import Path; p=Path('state/current-focus.md'); t=p.read_text(); p.write_text(t.replace('Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED','Restore — IN PROGRESS'))"
+          probe ownership_guard_removed python3 -c "from pathlib import Path; p=Path('backend/app/services/update_safety.py'); t=p.read_text(); p.write_text(t.replace('interrupted-stage-identity-mismatch','interrupted-stage-check-removed'))"
+          git diff --check
+      - name: Commit and push lifecycle transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'D4-B lifecycle transition'
+          git config user.email 'actions@users.noreply.github.com'
+          git add README.md docs/current-lifecycle.md docs/implementation-plan.md docs/packaging.md docs/deployment.md docs/update-guide.md docs/domain-model-d4-update-safety.md state/current-focus.md state/progress.md state/handoff.md state/change-requests.md scripts/check_documentation_lifecycle.py
+          git diff --cached --check
+          git commit -m 'D4-B record implementation pending verification'
+          git push origin HEAD:"$TARGET_BRANCH"
