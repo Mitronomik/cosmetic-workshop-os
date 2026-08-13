@@ -109,7 +109,7 @@ jobs:
           git add README.md docs/current-lifecycle.md docs/implementation-plan.md docs/packaging.md docs/deployment.md docs/update-guide.md docs/history/README.md docs/history/d4-a-pre-closure state/current-focus.md state/progress.md state/handoff.md state/change-requests.md scripts/check_documentation_lifecycle.py
           git diff --cached --check
           git diff --cached --name-only > /tmp/closure-files.txt
-          if grep -Ev '^(README\.md|docs/(current-lifecycle|implementation-plan|packaging|deployment|update-guide)\.md|docs/history/README\.md|docs/history/d4-a-pre-closure/|state/(current-focus|progress|handoff|change-requests)\.md|scripts/check_documentation_lifecycle\.py)$' /tmp/closure-files.txt; then
+          if grep -Ev '^(README\.md|docs/(current-lifecycle|implementation-plan|packaging|deployment|update-guide)\.md|docs/history/README\.md|docs/history/d4-a-pre-closure/.*|state/(current-focus|progress|handoff|change-requests)\.md|scripts/check_documentation_lifecycle\.py)$' /tmp/closure-files.txt; then
             echo 'closure scope leak' >&2
             exit 1
           fi
