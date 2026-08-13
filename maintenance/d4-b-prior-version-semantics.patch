@@ -1,0 +1,135 @@
+diff --git a/backend/app/services/update_safety.py b/backend/app/services/update_safety.py
+--- a/backend/app/services/update_safety.py
++++ b/backend/app/services/update_safety.py
+@@ -265,17 +265,6 @@ def _persist_operation(
+     _write_update_journal(journal_path, records)
+ 
+ 
+-def _previous_completed_app_version(records: list[UpdateOperationRecord]) -> str | None:
+-    """Return only a durably known prior update app version.
+-
+-    The first D4 operation legitimately returns ``None`` because no trusted D4
+-    journal predates it. The historical database ``app.version`` placeholder is
+-    deliberately not consulted or promoted into application identity.
+-    """
+-    for record in reversed(records):
+-        if record.status == "completed":
+-            return record.to_app_version
+-    return None
+-
+-
+ def _stage_filename(database_path: Path, operation_id: str) -> str:
+     return f".{database_path.stem}.update-{operation_id}{STAGE_SUFFIX}"
+@@ -490,7 +479,12 @@ def execute_staged_update(
+     stage_path = _stage_path(config.path, operation_id)
+     record = UpdateOperationRecord(
+         operation_id=operation_id,
+-        from_app_version=_previous_completed_app_version(records),
++        # D4-B cannot prove the immediately previous package version. A prior
++        # completed update only proves which app last *migrated* this database;
++        # another package version may have run later without changing schema.
++        # Keep the metadata explicitly unknown instead of fabricating identity
++        # from prior journal entries or legacy mutable AppSettings.
++        from_app_version=None,
+         to_app_version=app_version,
+         from_schema_identity=compatibility.applied_migration_ids,
+         to_schema_identity=compatibility.target_migration_ids,
+diff --git a/backend/app/tests/test_d4_b_update_safety.py b/backend/app/tests/test_d4_b_update_safety.py
+--- a/backend/app/tests/test_d4_b_update_safety.py
++++ b/backend/app/tests/test_d4_b_update_safety.py
+@@ -113,6 +113,38 @@ def test_supported_older_user_startup_migrates_stage_then_commits(tmp_path, monk
+     assert "marker-secret" not in raw_journal
+ 
+ 
++def test_previous_completed_update_is_not_misreported_as_immediate_from_app_version(
++    tmp_path, monkeypatch
++):
++    paths = build_user_prefix(tmp_path, monkeypatch)
++    previous = UpdateOperationRecord(
++        operation_id="d" * 32,
++        from_app_version=None,
++        to_app_version="0.0.9",
++        from_schema_identity=tuple(expected_migration_ids()[:-2]),
++        to_schema_identity=tuple(expected_migration_ids()[:-1]),
++        before_migration_backup_identity=None,
++        stage_identity=".cosmetic_workshop.update-" + "d" * 32 + ".stage",
++        started_at="2026-08-12T10:00:00.000000Z",
++        finished_at="2026-08-12T10:01:00.000000Z",
++        status="completed",
++        failure_category=None,
++        safe_failure_message=None,
++    )
++    _write_update_journal(update_journal_path(paths), [previous])
++
++    result = initialize_startup("user")
++
++    assert result.applied_migrations == expected_migration_ids()[-1:]
++    records = load_update_journal(update_journal_path(paths))
++    assert len(records) == 2
++    assert records[0] == previous
++    assert records[1].status == "completed"
++    assert records[1].from_app_version is None
++    assert records[1].to_app_version == read_repository_app_version()
++
++
+ def test_staged_migration_failure_keeps_canonical_unchanged(tmp_path, monkeypatch):
+     paths = build_user_prefix(tmp_path, monkeypatch)
+     before = digest(paths.database_path)
+diff --git a/docs/domain-model-d4-update-safety.md b/docs/domain-model-d4-update-safety.md
+--- a/docs/domain-model-d4-update-safety.md
++++ b/docs/domain-model-d4-update-safety.md
+@@ -43,7 +43,7 @@ failed
+ 
+ ## Application-version history semantics
+ 
+-`from_app_version` records only a **durably known prior D4 update application version**. On the first D4 operation it may be `null` because no trusted D4 journal predates that operation. The implementation must not fill that gap from historical mutable `AppSettings.app_version`; inventing a value would create a false authority. `to_app_version` is always the current effective application version resolved by D4-A.
++`from_app_version` is currently recorded as `null` because D4-B has no durable proof of the **immediately previous package version**. A prior completed UpdateLog record proves only which application version last performed a schema migration; one or more later package versions may have run without changing schema. The implementation therefore must not infer `from_app_version` from a previous UpdateLog, historical mutable `AppSettings.app_version`, SemVer ordering or any other indirect signal. A future non-null value requires a separately defined trustworthy prior-package identity source. `to_app_version` is always the current effective application version resolved by D4-A.
+ 
+ ## Schema identity
+ 
+diff --git a/docs/current-lifecycle.md b/docs/current-lifecycle.md
+--- a/docs/current-lifecycle.md
++++ b/docs/current-lifecycle.md
+@@ -91,7 +91,7 @@ read-only D4-A compatibility preflight
+ → continue ordinary post-migration startup
+ ```
+ 
+-`update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. The first D4 operation may record `from_app_version = null` because no trusted previous D4 update record exists; legacy mutable database `app.version` is never promoted into authority.
++`update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. D4-B records `from_app_version = null` because it cannot prove the immediately previous package version: a previous completed update identifies the last migration-producing app, not necessarily the last app that ran. Legacy mutable database `app.version` and SemVer inference are never promoted into authority.
+ 
+ D4-B is **implementation-complete only in this changeset**. It is not lifecycle-closed, D4-C is not authorized, and exact-head + exact-package verification remain mandatory before any next-slice authorization.
+ 
+diff --git a/scripts/check_documentation_lifecycle.py b/scripts/check_documentation_lifecycle.py
+--- a/scripts/check_documentation_lifecycle.py
++++ b/scripts/check_documentation_lifecycle.py
+@@ -342,7 +342,7 @@ def check_domain_clarification() -> None:
+         "ordered `schema_migrations` lineage",
+         "ADR 0020",
+         "from_app_version",
+-        "may be `null`",
++        "currently recorded as `null`",
+     ))
+@@ -409,8 +409,16 @@ def check_d4b_implementation() -> None:
+         "interrupted-stage-identity-mismatch",
+         "canonical-changed-during-staging",
+         "post-commit-journal-write-failed",
++        "from_app_version=None",
++        "cannot prove the immediately previous package version",
+     ))
+-    forbid(D4B_SERVICE, ("rolled_back", "shutil.copy", "shutil.copy2"))
++    forbid(D4B_SERVICE, (
++        "rolled_back",
++        "shutil.copy",
++        "shutil.copy2",
++        "_previous_completed_app_version",
++    ))
+     if not D4B_TEST.is_file():
+         ERRORS.append(f"missing D4-B focused test: {D4B_TEST.relative_to(ROOT)}")
+     else:
+@@ -421,6 +429,7 @@ def check_d4b_implementation() -> None:
+             "test_staged_migration_failure_keeps_canonical_unchanged",
+             "test_post_commit_journal_failure_reconciles_completed_next_launch",
+             "test_tampered_interrupted_stage_identity_fails_closed_without_cleanup",
++            "test_previous_completed_update_is_not_misreported_as_immediate_from_app_version",
+             "test_canonical_sidecar_refuses_before_backup_or_stage",
+         ))
