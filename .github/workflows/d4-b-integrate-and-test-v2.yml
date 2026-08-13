@@ -1,0 +1,112 @@
+name: D4-B integration runner v2
+
+on:
+  push:
+    branches:
+      - maintenance/d4-b-integration-builder-v2
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_HEAD: 3fd997a7c36783f5d4d1d72019e769386c14ae22
+  TARGET_BRANCH: agent/d4-b-staged-migration-update-log
+
+jobs:
+  integrate:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact D4-B head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify exact source and fetch maintenance helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+          git fetch origin maintenance/d4-b-integration-builder maintenance/d4-b-integration-builder-v2
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install backend test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check './backend[test]'
+
+      - name: Reapply validated D4-B integration transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          import subprocess
+          from textwrap import dedent
+
+          workflow = subprocess.check_output([
+              'git', 'show',
+              'origin/maintenance/d4-b-integration-builder:.github/workflows/d4-b-integrate-and-test.yml',
+          ], text=True)
+          section = workflow.split('      - name: Apply bounded startup and test integration', 1)[1]
+          section = section.split('      - name: Syntax and focused D4-B verification', 1)[0]
+          matches = list(re.finditer(r"python3 - <<'PY'\n(?P<body>.*?)^\s+PY\s*$", section, re.MULTILINE | re.DOTALL))
+          if len(matches) != 1:
+              raise SystemExit(f'expected one integration transform, got {len(matches)}')
+          exec(compile(dedent(matches[0].group('body')), '<d4-b-integration>', 'exec'), {'__name__': '__main__'})
+          PY
+          git show origin/maintenance/d4-b-integration-builder-v2:tools/d4b_patch_0019_tests.py > /tmp/d4b_patch_0019_tests.py
+          python3 /tmp/d4b_patch_0019_tests.py
+
+      - name: Focused D4-B verification
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            backend/app/services/update_safety.py \
+            backend/app/services/startup.py \
+            backend/app/tests/test_d4_b_update_safety.py \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py
+          git diff --check
+          python -m pytest \
+            backend/app/tests/test_d4_b_update_safety.py \
+            backend/app/tests/test_d4_a_startup_compatibility.py \
+            backend/app/tests/test_backup_consistency.py \
+            backend/app/tests/test_database_foundation.py \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py \
+            launcher/tests/test_runtime.py \
+            -q
+
+      - name: Commit and fast-forward D4-B branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f backend/app/services/startup_d4b_tmp.py
+          git add \
+            backend/app/services/update_safety.py \
+            backend/app/services/startup.py \
+            backend/app/tests/test_d4_b_update_safety.py \
+            backend/app/tests/test_d4_a_startup_compatibility.py \
+            backend/app/tests/test_backup_consistency.py \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py
+          git rm --cached --ignore-unmatch backend/app/services/startup_d4b_tmp.py >/dev/null 2>&1 || true
+          git diff --cached --check
+          changed="$(git diff --cached --name-only)"
+          if printf '%s\n' "$changed" | grep -Ev '^(backend/app/services/(update_safety|startup|startup_d4b_tmp)\.py|backend/app/tests/(test_d4_b_update_safety|test_d4_a_startup_compatibility|test_backup_consistency|test_production_batch_tax_snapshot_migration)\.py)$'; then
+            echo 'D4-B integration scope leak' >&2
+            exit 1
+          fi
+          git config user.name 'D4-B integration runner'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-B integrate staged update safety'
+          git push origin HEAD:"$TARGET_BRANCH"
