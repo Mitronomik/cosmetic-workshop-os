@@ -1,0 +1,46 @@
+name: Build D4-D final lifecycle closure
+on:
+  push:
+    branches: [verification/d4-d-final-closure-builder]
+permissions:
+  contents: write
+env:
+  TARGET: agent/d4-d-final-closure
+  BUILDER: verification/d4-d-final-closure-builder
+  D4D_VERIFIED_HEAD: ec88b09193c8ed041e17daef3e3ffc0193d1b559
+  D4D_RUN: '31751386881'
+  D4D_ARTIFACT: '9201217317'
+  D4D_DIGEST: sha256:0dc707f8823eb69934a5bc3b3b6824557533bafa3e1e86a7f13fc29c19a1af7d
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET }}
+          fetch-depth: 0
+      - name: Build and publish final D4 closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$TARGET" "$BUILDER"
+          test "$(git rev-parse HEAD)" = "$D4D_VERIFIED_HEAD"
+          test "$(git rev-parse origin/main)" = "$D4D_VERIFIED_HEAD"
+          test "$(git rev-parse origin/$TARGET)" = "$D4D_VERIFIED_HEAD"
+          test -z "$(git status --porcelain)"
+          for s in d4d_snapshot.py d4d_close_docs.py d4d_close_checker.py d4d_narrative_fix.py; do
+            git show "origin/$BUILDER:verification/$s" > "$RUNNER_TEMP/$s"
+            python3 "$RUNNER_TEMP/$s"
+          done
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+          git diff --check
+          git show "origin/$BUILDER:verification/d4d_scope.py" > "$RUNNER_TEMP/scope.py"
+          python3 "$RUNNER_TEMP/scope.py"
+          git add README.md docs/current-lifecycle.md docs/deployment.md docs/implementation-plan.md docs/packaging.md docs/update-guide.md docs/history/README.md docs/history/d4-d-pre-closure scripts/check_documentation_lifecycle.py state/change-requests.md state/current-focus.md state/handoff.md state/progress.md
+          git diff --cached --check
+          git config user.name 'D4-D final closure builder'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-D verify exact package and close D4 lifecycle'
+          git push origin HEAD:"$TARGET"
