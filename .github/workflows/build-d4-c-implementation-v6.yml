@@ -1,0 +1,35 @@
+name: Build D4-C implementation v6
+
+on:
+  push:
+    branches:
+      - maintenance/d4-c-implementation-builder-v4
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact implementation branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: agent/d4-c-user-update-status-failure-ux
+          fetch-depth: 0
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Run clean-scope D4-C publisher
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin maintenance/d4-c-implementation-builder-v4
+          git show origin/maintenance/d4-c-implementation-builder-v4:verification/d4c_publish_runner_v3.py > "$RUNNER_TEMP/d4c_publish_runner_v3.py"
+          python "$RUNNER_TEMP/d4c_publish_runner_v3.py"
