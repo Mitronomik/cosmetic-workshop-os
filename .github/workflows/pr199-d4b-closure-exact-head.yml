@@ -1,0 +1,158 @@
+name: PR199 D4-B closure exact-head verifier
+
+on:
+  push:
+    branches: [verification/pr199-8e341976]
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_BASE: d60a3be993c76b59292cf27ee66bcbe856669fc4
+  EXPECTED_HEAD: 8e3419762c18be04e57a277b24a57a9013628f29
+  PR_BRANCH: agent/d4-b-lifecycle-closure
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact published closure head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+
+      - name: Exact-head and base preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/pr199-closure-evidence"
+          mkdir -p "$EVIDENCE_DIR"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          git fetch origin main "$PR_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse origin/$PR_BRANCH)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE"
+          test -z "$(git status --porcelain)"
+          git diff --check
+          git rev-parse HEAD > "$EVIDENCE_DIR/actual-head.txt"
+          git diff --name-only "$EXPECTED_BASE"..."$EXPECTED_HEAD" > "$EVIDENCE_DIR/changed-files.txt"
+
+      - name: Lifecycle checker and exact history integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py | tee "$EVIDENCE_DIR/lifecycle.log"
+
+      - name: Negative authorization and history probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          def checker_fails() -> bool:
+              return subprocess.run(
+                  ['python3','scripts/check_documentation_lifecycle.py'],
+                  stdout=subprocess.DEVNULL,
+                  stderr=subprocess.STDOUT,
+              ).returncode != 0
+
+          surface = Path('state/current-focus.md')
+          good = surface.read_text(encoding='utf-8')
+          probes = [
+              ('D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED',
+               'D4-C — User-facing update status and packaged failure UX — IMPLEMENTED'),
+              ('D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED',
+               'D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT'),
+              ('D5 — Remote install checklist — NOT AUTHORIZED BY CR-013',
+               'D5 — Remote install checklist — AUTHORIZED'),
+              ('Product release readiness — NOT CLAIMED',
+               'Product release readiness — READY'),
+              ('Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED',
+               'Restore — IN PROGRESS'),
+              ('D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED',
+               'D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING'),
+          ]
+          for old, new in probes:
+              if old not in good:
+                  raise SystemExit(f'probe source missing: {old}')
+              surface.write_text(good.replace(old,new,1), encoding='utf-8')
+              if not checker_fails():
+                  raise SystemExit(f'checker did not catch lifecycle probe: {new}')
+              surface.write_text(good, encoding='utf-8')
+
+          snapshot = Path('docs/history/d4-b-pre-closure/README.md')
+          original = snapshot.read_bytes()
+          snapshot.write_bytes(original + b'\nverification-mutation-probe\n')
+          if not checker_fails():
+              raise SystemExit('checker did not catch D4-B pre-closure snapshot mutation')
+          snapshot.write_bytes(original)
+
+          checker = Path('scripts/check_documentation_lifecycle.py')
+          original_checker = checker.read_text(encoding='utf-8')
+          marker = '"stage_owned = True",'
+          if marker not in original_checker:
+              raise SystemExit('stage ownership checker marker missing')
+          checker.write_text(original_checker.replace(marker, '', 1), encoding='utf-8')
+          if not checker_fails():
+              raise SystemExit('checker did not catch dropped D4-B ownership guard requirement')
+          checker.write_text(original_checker, encoding='utf-8')
+          PY
+          python3 scripts/check_documentation_lifecycle.py
+          test -z "$(git status --porcelain)"
+
+      - name: Lifecycle-only scope gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -l < "$EVIDENCE_DIR/changed-files.txt" | tr -d ' ')" = "26"
+          if grep -Ev '^(README\.md|docs/(current-lifecycle|implementation-plan|packaging|deployment|update-guide)\.md|docs/history/README\.md|docs/history/d4-b-pre-closure/.*|state/(current-focus|progress|handoff|change-requests)\.md|scripts/check_documentation_lifecycle\.py)$' "$EVIDENCE_DIR/changed-files.txt"; then
+            echo 'scope leak outside lifecycle/docs/state/checker/history' >&2
+            exit 1
+          fi
+          ! grep -Eq '^(backend/|launcher/|frontend/|macos_package/|migrations/|scripts/package_macos\.sh|requirements|pyproject)' "$EVIDENCE_DIR/changed-files.txt"
+
+      - name: Repository postflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --check
+          STATUS="$(git status --porcelain)"
+          printf '%s\n' "$STATUS" > "$EVIDENCE_DIR/final-git-status.txt"
+          test -z "$STATUS"
+
+      - name: Final report
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$EVIDENCE_DIR/PR199_SMOKE_REPORT.md" <<EOF
+          # PR #199 D4-B lifecycle closure exact-head verification
+
+          Expected head: \`$EXPECTED_HEAD\`
+          Base main: \`$EXPECTED_BASE\`
+
+          - exact published PR head: PASS
+          - main/base unchanged: PASS
+          - lifecycle checker syntax: PASS
+          - lifecycle/integrity checker: PASS
+          - D4-B pre-closure exact blob snapshot: PASS
+          - D4-C/D4-D/D5/release/Restore negative probes: PASS
+          - D4-B ownership-guard checker probe: PASS
+          - 26-file lifecycle-only scope: PASS
+          - clean exact-head postflight: PASS
+
+          PASS — FULL AUTOMATED SMOKE PASSED
+          EOF
+          cat "$EVIDENCE_DIR/PR199_SMOKE_REPORT.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr199-d4b-closure-exact-head-evidence
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
