@@ -12,11 +12,11 @@ C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
 Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED
+D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
+D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
@@ -38,7 +38,7 @@ D4-A establishes the pre-mutation safety gate without implementing D4-B migratio
 - current lineage continues normally, supported older lineage keeps the existing backup-before-migration path, and newer/unsupported/unreadable lineage fails closed;
 - no protected Restore production file changes.
 
-D4-A, D4-B, D4-C and D4-D are closed. D4 is complete; D5 and product release readiness remain gated.
+D4-A, D4-B and D4-C are closed. D4-D is the only authorized next slice; D5 and release readiness remain gated.
 
 D4-A closure evidence: verified PR head `f294b15365fcf651790e2dc5638ed1551f616c3d` merged as `89dd69dc1958e622146e01869cc34d4cd2ec859e`; exact merged-head verifier `31699624984` passed.
 
@@ -58,21 +58,16 @@ The current D4-B changeset replaces only the supported-older direct migration se
 
 D4-B closure evidence: verified PR head `8688fa3dba87205b4b4626ebab2902262fd4cd24`, PR-head Level-5 run `31716610699`; merged head `d60a3be993c76b59292cf27ee66bcbe856669fc4`, merged-head Level-5 run `31717705331`. Both exact-package runs passed and the verified PR head is content-identical to the merge commit.
 
-## D4 final closure
+## D4-C closed baseline / D4-D next
 
-D4 Update Safety is **DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED**.
+D4-C is merged, exact-head/exact-package verified and lifecycle-closed.
 
-Final D4-D evidence:
+- verified PR head: `ba577f1151e041c11019525862d9bb76eeb1404e`; Level-5 run `31747841343`; artifact `9199930504`; digest `sha256:a034cf7daa3416c18e73bec328f4c1d78adce240213ceff0ccef47be969f3de3`;
+- merged head: `3d69df192b5bdff9c7df067d8c8fde40154ebac9`; Level-5 run `31749503618`; artifact `9200580412`; digest `sha256:02f93910e6a6b1e1390c9782d89af320a244d1f6cb379bb5496a0c8e11dd8f78`;
+- verified PR head → merge: `0` changed files;
+- redacted Settings update status, fixed packaged update-failure outcomes and closed Restore protections are preserved.
 
-- exact tested main/head: `ec88b09193c8ed041e17daef3e3ffc0193d1b559`;
-- final exact-package verifier run: `31751386881`;
-- evidence artifact: `9201217317`;
-- artifact digest: `sha256:0dc707f8823eb69934a5bc3b3b6824557533bafa3e1e86a7f13fc29c19a1af7d`;
-- final report: `PASS — FULL AUTOMATED SMOKE PASSED`;
-- one exact current-main `.app` was reused across the D4-C human-status/failure matrix and the accepted D4-B staging/interruption/newer-lineage matrix;
-- isolated user-data remained outside the repository/package and the repository postflight was clean.
-
-D5 is not authorized by CR-013 and product release readiness is not claimed.
+D4-D is authorized next only for exact-package D4 verification and D4 lifecycle closure. D5 and product release readiness remain unauthorized/not claimed.
 
 ## Core product invariants
 
@@ -90,4 +85,4 @@ D5 is not authorized by CR-013 and product release readiness is not claimed.
 
 ## Development authority
 
-Read `AGENTS.md`, `docs/current-lifecycle.md`, relevant ADRs and the focused product/domain/test docs before changing behavior. D4 is closed; any future update/distribution work requires a new authorized lifecycle step and must not reopen the closed Restore boundary.
+Read `AGENTS.md`, `docs/current-lifecycle.md`, relevant ADRs and the focused product/domain/test docs before changing behavior. Current D4 work must follow ADR 0020 and must not reopen the closed Restore boundary.

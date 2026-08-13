@@ -37,17 +37,17 @@ D4-A exact merged-head verification passed on `89dd69dc1958e622146e01869cc34d4cd
 
 ```text
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED
+D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
+D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
-## D4 closure
+## D4-B closure
 
-D4-A/B/C remain closed. D4-D final exact-package verification passed on `ec88b09193c8ed041e17daef3e3ffc0193d1b559` in run `31751386881`; D4 is now lifecycle-closed.
+D4-B remains closed. D4-C is now merged, exact-head/exact-package verified and lifecycle-closed. Verified PR head `ba577f1151e041c11019525862d9bb76eeb1404e` and merged head `3d69df192b5bdff9c7df067d8c8fde40154ebac9` are content-identical; Level-5 runs `31747841343` and `31749503618` both passed.
 
-D5 remains unauthorized by CR-013 and product release readiness remains not claimed.
+D4-D alone is authorized next. D5 and release readiness remain gated.
