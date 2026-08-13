@@ -92,15 +92,15 @@ jobs:
               raise SystemExit('checker did not catch D4-B pre-closure snapshot mutation')
           snapshot.write_bytes(original)
 
-          checker = Path('scripts/check_documentation_lifecycle.py')
-          original_checker = checker.read_text(encoding='utf-8')
-          marker = '"stage_owned = True",'
-          if marker not in original_checker:
-              raise SystemExit('stage ownership checker marker missing')
-          checker.write_text(original_checker.replace(marker, '', 1), encoding='utf-8')
+          service = Path('backend/app/services/update_safety.py')
+          original_service = service.read_text(encoding='utf-8')
+          marker = '        stage_owned = True\n'
+          if original_service.count(marker) != 1:
+              raise SystemExit('runtime stage ownership marker missing or ambiguous')
+          service.write_text(original_service.replace(marker, '', 1), encoding='utf-8')
           if not checker_fails():
-              raise SystemExit('checker did not catch dropped D4-B ownership guard requirement')
-          checker.write_text(original_checker, encoding='utf-8')
+              raise SystemExit('checker did not catch dropped D4-B ownership guard')
+          service.write_text(original_service, encoding='utf-8')
           PY
           python3 scripts/check_documentation_lifecycle.py
           test -z "$(git status --porcelain)"
@@ -142,7 +142,7 @@ jobs:
           - lifecycle/integrity checker: PASS
           - D4-B pre-closure exact blob snapshot: PASS
           - D4-C/D4-D/D5/release/Restore negative probes: PASS
-          - D4-B ownership-guard checker probe: PASS
+          - D4-B runtime ownership-guard negative probe: PASS
           - 26-file lifecycle-only scope: PASS
           - clean exact-head postflight: PASS
 
