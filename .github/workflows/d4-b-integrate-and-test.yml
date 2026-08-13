@@ -1,0 +1,588 @@
+name: D4-B integrate startup and focused tests
+
+on:
+  push:
+    branches:
+      - maintenance/d4-b-integration-builder
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_HEAD: 3fd997a7c36783f5d4d1d72019e769386c14ae22
+  TARGET_BRANCH: agent/d4-b-staged-migration-update-log
+
+jobs:
+  integrate:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact D4-B branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Exact starting head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install backend test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check './backend[test]'
+
+      - name: Apply bounded startup and test integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          temp = root / 'backend/app/services/startup_d4b_tmp.py'
+          if temp.exists():
+              temp.unlink()
+
+          startup = '''from dataclasses import dataclass
+          from pathlib import Path
+          from typing import Literal, cast
+
+          from app.db.config import DatabaseConfig, get_database_config
+          from app.db.paths import UserDataPaths, create_user_data_directories, resolve_user_data_paths
+          from app.db.startup_compatibility import (
+              StartupSchemaCompatibility,
+              inspect_startup_schema_compatibility,
+          )
+          from app.services.backup import BackupResult
+          from app.services.backup_audit import BackupReconciliationResult, reconcile_manual_backups
+          from app.services.database import initialize_database
+          from app.services.export_audit import ExportReconciliationResult, reconcile_json_exports
+          from app.services.report_document_audit import ReportDocumentReconciliationResult, reconcile_report_documents
+          from app.services.update_safety import execute_staged_update, reconcile_interrupted_update
+          from app.version import resolve_effective_app_version
+
+          StartupMode = Literal["development", "user"]
+          ALLOWED_STARTUP_MODES: tuple[StartupMode, ...] = ("development", "user")
+
+
+          @dataclass(frozen=True)
+          class StartupInitializationResult:
+              mode: StartupMode
+              database_path: Path
+              user_data_paths: UserDataPaths | None
+              app_version: str
+              schema_compatibility: StartupSchemaCompatibility
+              applied_migrations: list[str]
+              backup: BackupResult | None = None
+              report_document_audit_reconciliation: ReportDocumentReconciliationResult | None = None
+              json_export_audit_reconciliation: ExportReconciliationResult | None = None
+              manual_backup_audit_reconciliation: BackupReconciliationResult | None = None
+
+
+          def validate_startup_mode(mode: str) -> StartupMode:
+              if mode not in ALLOWED_STARTUP_MODES:
+                  allowed = ", ".join(ALLOWED_STARTUP_MODES)
+                  raise ValueError(f"Unsupported startup mode {mode!r}. Allowed modes: {allowed}.")
+              return cast(StartupMode, mode)
+
+
+          def startup_database_config(mode: str = "development") -> DatabaseConfig:
+              validated_mode = validate_startup_mode(mode)
+              if validated_mode == "user":
+                  return DatabaseConfig(path=resolve_user_data_paths().database_path)
+              return get_database_config()
+
+
+          def initialize_startup(mode: str = "development") -> StartupInitializationResult:
+              validated_mode = validate_startup_mode(mode)
+              user_data_paths = resolve_user_data_paths() if validated_mode == "user" else None
+              config = (
+                  DatabaseConfig(path=user_data_paths.database_path)
+                  if user_data_paths is not None
+                  else get_database_config()
+              )
+
+              # D4-A remains the pre-mutation authority. Unsupported existing lineage stops
+              # before user directories, backup files, update metadata, stages or migrations.
+              app_version = resolve_effective_app_version()
+              schema_compatibility = inspect_startup_schema_compatibility(config)
+
+              backup = None
+              if user_data_paths is not None:
+                  create_user_data_directories(user_data_paths)
+                  # D4-B always reconciles one durable interrupted `started` record before a
+                  # new attempt. It never resumes or promotes an old stage blindly.
+                  reconcile_interrupted_update(user_data_paths, schema_compatibility)
+                  if schema_compatibility.migrations_pending:
+                      update = execute_staged_update(
+                          config=config,
+                          paths=user_data_paths,
+                          app_version=app_version,
+                          compatibility=schema_compatibility,
+                      )
+                      applied_migrations = update.applied_migrations
+                      backup = update.backup
+                  else:
+                      # Fresh creation and an already-current DB keep the existing path.
+                      applied_migrations = initialize_database(config)
+              else:
+                  # D4 is packaged/user-mode update safety, not a second development mode.
+                  applied_migrations = initialize_database(config)
+
+              # CR-009 reconciliation runs only after the canonical DB is current. For a
+              # D4-B migration this is after verified atomic stage publication, never on stage.
+              reconciliation = reconcile_report_documents(config)
+              export_reconciliation = reconcile_json_exports(config)
+              backup_reconciliation = reconcile_manual_backups(config)
+              return StartupInitializationResult(
+                  mode=validated_mode,
+                  database_path=config.path,
+                  user_data_paths=user_data_paths,
+                  app_version=app_version,
+                  schema_compatibility=schema_compatibility,
+                  applied_migrations=applied_migrations,
+                  backup=backup,
+                  report_document_audit_reconciliation=reconciliation,
+                  json_export_audit_reconciliation=export_reconciliation,
+                  manual_backup_audit_reconciliation=backup_reconciliation,
+              )
+          '''
+          from textwrap import dedent
+          (root / 'backend/app/services/startup.py').write_text(dedent(startup), encoding='utf-8')
+
+          update_path = root / 'backend/app/services/update_safety.py'
+          update_text = update_path.read_text(encoding='utf-8')
+          old = '''    if canonical_lineage == record.to_schema_identity:\n        _cleanup_owned_stage_artifacts(paths.database_path, record.operation_id)\n        completed = _completed_record(record)\n'''
+          new = '''    if canonical_lineage == record.to_schema_identity:\n        _verify_database(\n            paths.database_path,\n            record.to_schema_identity,\n            category="interrupted-target-verification-failed",\n        )\n        _cleanup_owned_stage_artifacts(paths.database_path, record.operation_id)\n        completed = _completed_record(record)\n'''
+          if update_text.count(old) != 1:
+              raise SystemExit('target reconciliation anchor mismatch')
+          update_text = update_text.replace(old, new, 1)
+          old = '''    if canonical_lineage == record.from_schema_identity:\n        _cleanup_owned_stage_artifacts(paths.database_path, record.operation_id)\n        failed = _failed_record(\n'''
+          new = '''    if canonical_lineage == record.from_schema_identity:\n        _verify_database(\n            paths.database_path,\n            record.from_schema_identity,\n            category="interrupted-source-verification-failed",\n        )\n        _cleanup_owned_stage_artifacts(paths.database_path, record.operation_id)\n        failed = _failed_record(\n'''
+          if update_text.count(old) != 1:
+              raise SystemExit('source reconciliation anchor mismatch')
+          update_path.write_text(update_text.replace(old, new, 1), encoding='utf-8')
+
+          d4a = root / 'backend/app/tests/test_d4_a_startup_compatibility.py'
+          d4a_text = d4a.read_text(encoding='utf-8')
+          old = '''    monkeypatch.setattr(startup_service, "backup_sqlite_database", forbidden)\n    monkeypatch.setattr(startup_service, "initialize_database", forbidden)\n'''
+          new = '''    monkeypatch.setattr(startup_service, "create_user_data_directories", forbidden)\n    monkeypatch.setattr(startup_service, "reconcile_interrupted_update", forbidden)\n    monkeypatch.setattr(startup_service, "execute_staged_update", forbidden)\n    monkeypatch.setattr(startup_service, "initialize_database", forbidden)\n'''
+          if d4a_text.count(old) != 1:
+              raise SystemExit('D4-A startup guard anchor mismatch')
+          d4a.write_text(d4a_text.replace(old, new, 1), encoding='utf-8')
+
+          backup_test = root / 'backend/app/tests/test_backup_consistency.py'
+          backup_text = backup_test.read_text(encoding='utf-8')
+          old = '''        for name in (\n            "backup_sqlite_database",\n            "initialize_database",\n            "reconcile_report_documents",\n            "reconcile_json_exports",\n            "reconcile_manual_backups",\n        )\n'''
+          new = '''        for name in (\n            "execute_staged_update",\n            "reconcile_report_documents",\n            "reconcile_json_exports",\n            "reconcile_manual_backups",\n        )\n'''
+          if backup_text.count(old) != 1:
+              raise SystemExit('backup startup ordering tuple anchor mismatch')
+          backup_text = backup_text.replace(old, new, 1)
+          old = '''    assert order == [\n        "backup_sqlite_database",\n        "initialize_database",\n        "reconcile_report_documents",\n        "reconcile_json_exports",\n        "reconcile_manual_backups",\n    ]\n'''
+          new = '''    assert order == [\n        "execute_staged_update",\n        "reconcile_report_documents",\n        "reconcile_json_exports",\n        "reconcile_manual_backups",\n    ]\n'''
+          if backup_text.count(old) != 1:
+              raise SystemExit('backup startup ordering assertion anchor mismatch')
+          backup_test.write_text(backup_text.replace(old, new, 1), encoding='utf-8')
+
+          tests = r'''from __future__ import annotations
+
+          from importlib import import_module
+          from pathlib import Path
+          import hashlib
+          import json
+          import os
+          import sqlite3
+
+          import pytest
+
+          from app.db.config import DATABASE_PATH_ENV, DatabaseConfig
+          from app.db.migrations import MIGRATION_MODULES, apply_migrations, expected_migration_ids
+          from app.db.paths import USER_DATA_DIR_ENV, resolve_user_data_paths
+          from app.db.startup_compatibility import inspect_startup_schema_compatibility
+          from app.services import update_safety
+          from app.services.startup import initialize_startup
+          from app.services.update_safety import (
+              SAFE_BACKUP_FAILURE,
+              SAFE_COMMIT_FAILURE,
+              SAFE_RECONCILIATION_FAILURE,
+              UpdateJournalError,
+              UpdateOperationRecord,
+              UpdatePostCommitError,
+              UpdateSafetyError,
+              _stage_path,
+              _write_update_journal,
+              execute_staged_update,
+              load_update_journal,
+              update_journal_path,
+          )
+          from app.version import read_repository_app_version
+
+
+          def digest(path: Path) -> str:
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+          def lineage(path: Path) -> list[str]:
+              with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
+                  return [
+                      row[0]
+                      for row in connection.execute(
+                          "SELECT migration_id FROM schema_migrations ORDER BY rowid"
+                      )
+                  ]
+
+
+          def marker(path: Path) -> str:
+              with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as connection:
+                  return connection.execute("SELECT value FROM d4b_marker").fetchone()[0]
+
+
+          def build_prefix(path: Path, *, exclude_last: int = 1) -> Path:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              original = list(MIGRATION_MODULES)
+              try:
+                  MIGRATION_MODULES[:] = original[:-exclude_last] if exclude_last else original
+                  apply_migrations(DatabaseConfig(path=path))
+              finally:
+                  MIGRATION_MODULES[:] = original
+              with sqlite3.connect(path) as connection:
+                  connection.execute("CREATE TABLE d4b_marker (value TEXT NOT NULL)")
+                  connection.execute("INSERT INTO d4b_marker (value) VALUES ('marker-secret')")
+              return path
+
+
+          def build_user_prefix(tmp_path, monkeypatch, *, exclude_last: int = 1):
+              base = tmp_path / "user-data"
+              monkeypatch.setenv(USER_DATA_DIR_ENV, str(base))
+              monkeypatch.delenv(DATABASE_PATH_ENV, raising=False)
+              paths = resolve_user_data_paths()
+              build_prefix(paths.database_path, exclude_last=exclude_last)
+              return paths
+
+
+          def stage_artifacts(paths) -> list[Path]:
+              if not paths.data_dir.exists():
+                  return []
+              return [
+                  path
+                  for path in paths.data_dir.iterdir()
+                  if path.name.endswith(".stage") or path.name.endswith(".partial")
+              ]
+
+
+          def test_supported_older_user_startup_migrates_stage_then_commits(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch)
+              old_lineage = expected_migration_ids()[:-1]
+
+              result = initialize_startup("user")
+
+              assert result.applied_migrations == expected_migration_ids()[-1:]
+              assert result.backup is not None
+              assert lineage(result.backup.backup_path) == old_lineage
+              assert lineage(paths.database_path) == expected_migration_ids()
+              assert marker(paths.database_path) == "marker-secret"
+              assert marker(result.backup.backup_path) == "marker-secret"
+              records = load_update_journal(update_journal_path(paths))
+              assert len(records) == 1
+              operation = records[0]
+              assert operation.status == "completed"
+              assert operation.from_schema_identity == tuple(old_lineage)
+              assert operation.to_schema_identity == tuple(expected_migration_ids())
+              assert operation.before_migration_backup_identity == result.backup.backup_path.name
+              assert Path(operation.stage_identity).name == operation.stage_identity
+              assert operation.stage_identity.endswith(".stage")
+              assert not stage_artifacts(paths)
+              raw_journal = update_journal_path(paths).read_text(encoding="utf-8")
+              assert str(paths.base_dir) not in raw_journal
+              assert "marker-secret" not in raw_journal
+
+
+          def test_staged_migration_failure_keeps_canonical_unchanged(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch)
+              before = digest(paths.database_path)
+              migration = import_module(MIGRATION_MODULES[-1])
+              original_upgrade = migration.upgrade
+
+              def failing_upgrade(connection):
+                  connection.execute("CREATE TABLE d4b_stage_only (id INTEGER PRIMARY KEY)")
+                  raise RuntimeError("forced staged migration failure")
+
+              monkeypatch.setattr(migration, "upgrade", failing_upgrade)
+              with pytest.raises(UpdateSafetyError) as caught:
+                  initialize_startup("user")
+              monkeypatch.setattr(migration, "upgrade", original_upgrade)
+
+              assert caught.value.category == "staged-migration-failed"
+              assert digest(paths.database_path) == before
+              assert lineage(paths.database_path) == expected_migration_ids()[:-1]
+              with sqlite3.connect(paths.database_path) as connection:
+                  assert connection.execute(
+                      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='d4b_stage_only'"
+                  ).fetchone() is None
+              backups = list(paths.backups_dir.iterdir())
+              assert len(backups) == 1
+              assert lineage(backups[0]) == expected_migration_ids()[:-1]
+              records = load_update_journal(update_journal_path(paths))
+              assert records[-1].status == "failed"
+              assert records[-1].failure_category == "staged-migration-failed"
+              assert not stage_artifacts(paths)
+
+
+          def test_backup_verification_failure_prevents_stage(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch)
+              before = digest(paths.database_path)
+
+              def reject_backup(*_args, **_kwargs):
+                  raise UpdateSafetyError("backup-verification-failed", SAFE_BACKUP_FAILURE)
+
+              monkeypatch.setattr(update_safety, "_verify_before_migration_backup", reject_backup)
+              with pytest.raises(UpdateSafetyError) as caught:
+                  initialize_startup("user")
+
+              assert caught.value.category == "backup-verification-failed"
+              assert digest(paths.database_path) == before
+              assert len(list(paths.backups_dir.iterdir())) == 1
+              assert load_update_journal(update_journal_path(paths))[-1].status == "failed"
+              assert not stage_artifacts(paths)
+
+
+          def test_commit_failure_never_replaces_canonical(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch)
+              before = digest(paths.database_path)
+
+              def fail_commit(*_args, **_kwargs):
+                  raise UpdateSafetyError("database-commit-failed", SAFE_COMMIT_FAILURE)
+
+              monkeypatch.setattr(update_safety, "_replace_stage_file", fail_commit)
+              with pytest.raises(UpdateSafetyError) as caught:
+                  initialize_startup("user")
+
+              assert caught.value.category == "database-commit-failed"
+              assert digest(paths.database_path) == before
+              assert lineage(paths.database_path) == expected_migration_ids()[:-1]
+              assert len(list(paths.backups_dir.iterdir())) == 1
+              record = load_update_journal(update_journal_path(paths))[-1]
+              assert record.status == "failed"
+              assert record.failure_category == "database-commit-failed"
+              assert not stage_artifacts(paths)
+
+
+          def test_post_commit_journal_failure_reconciles_completed_next_launch(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch)
+              original_persist = update_safety._persist_operation
+
+              def fail_completed(path, records, record):
+                  if record.status == "completed":
+                      raise UpdateJournalError("forced-terminal-write-failure")
+                  return original_persist(path, records, record)
+
+              monkeypatch.setattr(update_safety, "_persist_operation", fail_completed)
+              with pytest.raises(UpdatePostCommitError) as caught:
+                  initialize_startup("user")
+
+              assert caught.value.category == "post-commit-journal-write-failed"
+              assert lineage(paths.database_path) == expected_migration_ids()
+              records = load_update_journal(update_journal_path(paths))
+              assert records[-1].status == "started"
+              backup_count = len(list(paths.backups_dir.iterdir()))
+
+              monkeypatch.setattr(update_safety, "_persist_operation", original_persist)
+              result = initialize_startup("user")
+
+              assert result.applied_migrations == []
+              records = load_update_journal(update_journal_path(paths))
+              assert records[-1].status == "completed"
+              assert len(list(paths.backups_dir.iterdir())) == backup_count
+
+
+          def test_interrupted_source_lineage_stops_same_launch_without_blind_retry(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch)
+              operation_id = "a" * 32
+              stage = _stage_path(paths.database_path, operation_id)
+              stage.write_text("owned interrupted stage", encoding="utf-8")
+              record = UpdateOperationRecord(
+                  operation_id=operation_id,
+                  from_app_version=None,
+                  to_app_version=read_repository_app_version(),
+                  from_schema_identity=tuple(expected_migration_ids()[:-1]),
+                  to_schema_identity=tuple(expected_migration_ids()),
+                  before_migration_backup_identity=None,
+                  stage_identity=stage.name,
+                  started_at="2026-08-13T10:00:00.000000Z",
+                  finished_at=None,
+                  status="started",
+                  failure_category=None,
+                  safe_failure_message=None,
+              )
+              _write_update_journal(update_journal_path(paths), [record])
+
+              with pytest.raises(UpdateSafetyError) as caught:
+                  initialize_startup("user")
+
+              assert caught.value.category == "interrupted-before-commit"
+              assert not stage.exists()
+              assert list(paths.backups_dir.iterdir()) == []
+              records = load_update_journal(update_journal_path(paths))
+              assert records[0].status == "failed"
+              assert lineage(paths.database_path) == expected_migration_ids()[:-1]
+
+              result = initialize_startup("user")
+              assert result.applied_migrations == expected_migration_ids()[-1:]
+              records = load_update_journal(update_journal_path(paths))
+              assert [record.status for record in records] == ["failed", "completed"]
+
+
+          def test_ambiguous_interrupted_record_fails_closed_and_keeps_stage(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch, exclude_last=2)
+              operation_id = "b" * 32
+              stage = _stage_path(paths.database_path, operation_id)
+              stage.write_text("owned ambiguous stage", encoding="utf-8")
+              record = UpdateOperationRecord(
+                  operation_id=operation_id,
+                  from_app_version=None,
+                  to_app_version=read_repository_app_version(),
+                  from_schema_identity=tuple(expected_migration_ids()[:-1]),
+                  to_schema_identity=tuple(expected_migration_ids()),
+                  before_migration_backup_identity=None,
+                  stage_identity=stage.name,
+                  started_at="2026-08-13T10:00:00.000000Z",
+                  finished_at=None,
+                  status="started",
+                  failure_category=None,
+                  safe_failure_message=None,
+              )
+              _write_update_journal(update_journal_path(paths), [record])
+              before = digest(paths.database_path)
+
+              with pytest.raises(UpdateSafetyError) as caught:
+                  initialize_startup("user")
+
+              assert caught.value.category == "interrupted-update-ambiguous"
+              assert digest(paths.database_path) == before
+              assert stage.exists()
+              assert load_update_journal(update_journal_path(paths))[0].status == "started"
+              assert list(paths.backups_dir.iterdir()) == []
+
+
+          def test_canonical_sidecar_refuses_before_backup_or_stage(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch)
+              config = DatabaseConfig(path=paths.database_path)
+              compatibility = inspect_startup_schema_compatibility(config)
+              sidecar = paths.database_path.parent / f"{paths.database_path.name}-journal"
+              sidecar.write_bytes(b"foreign sidecar evidence")
+              before = digest(paths.database_path)
+
+              with pytest.raises(UpdateSafetyError) as caught:
+                  execute_staged_update(
+                      config,
+                      paths,
+                      read_repository_app_version(),
+                      compatibility,
+                  )
+
+              assert caught.value.category == "canonical-sidecar-present"
+              assert digest(paths.database_path) == before
+              assert sidecar.read_bytes() == b"foreign sidecar evidence"
+              assert not paths.backups_dir.exists()
+              record = load_update_journal(update_journal_path(paths))[-1]
+              assert record.status == "failed"
+              assert not stage_artifacts(paths)
+
+
+          def test_current_user_schema_creates_no_update_journal(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch, exclude_last=0)
+
+              result = initialize_startup("user")
+
+              assert result.applied_migrations == []
+              assert result.backup is None
+              assert not update_journal_path(paths).exists()
+              assert marker(paths.database_path) == "marker-secret"
+
+
+          def test_development_mode_keeps_direct_migration_and_no_user_journal(tmp_path, monkeypatch):
+              database = build_prefix(tmp_path / "development.sqlite")
+              user_base = tmp_path / "unused-user-data"
+              monkeypatch.setenv(DATABASE_PATH_ENV, str(database))
+              monkeypatch.setenv(USER_DATA_DIR_ENV, str(user_base))
+
+              result = initialize_startup("development")
+
+              assert result.applied_migrations == expected_migration_ids()[-1:]
+              assert lineage(database) == expected_migration_ids()
+              assert not (user_base / "data" / "update-journal.json").exists()
+              assert not user_base.exists()
+
+
+          def test_malformed_update_journal_fails_closed_before_current_startup(tmp_path, monkeypatch):
+              paths = build_user_prefix(tmp_path, monkeypatch, exclude_last=0)
+              journal = update_journal_path(paths)
+              journal.write_text("{", encoding="utf-8")
+              before = digest(paths.database_path)
+
+              with pytest.raises(UpdateJournalError):
+                  initialize_startup("user")
+
+              assert digest(paths.database_path) == before
+              assert list(paths.backups_dir.iterdir()) == []
+              assert marker(paths.database_path) == "marker-secret"
+          '''
+          (root / 'backend/app/tests/test_d4_b_update_safety.py').write_text(
+              dedent(tests), encoding='utf-8'
+          )
+          PY
+
+      - name: Syntax and focused D4-B verification
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            backend/app/services/update_safety.py \
+            backend/app/services/startup.py \
+            backend/app/tests/test_d4_b_update_safety.py
+          git diff --check
+          python -m pytest \
+            backend/app/tests/test_d4_b_update_safety.py \
+            backend/app/tests/test_d4_a_startup_compatibility.py \
+            backend/app/tests/test_backup_consistency.py \
+            backend/app/tests/test_database_foundation.py \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py \
+            launcher/tests/test_runtime.py \
+            -q
+
+      - name: Commit only bounded D4-B integration files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            backend/app/services/update_safety.py \
+            backend/app/services/startup.py \
+            backend/app/tests/test_d4_b_update_safety.py \
+            backend/app/tests/test_d4_a_startup_compatibility.py \
+            backend/app/tests/test_backup_consistency.py
+          git rm --cached --ignore-unmatch backend/app/services/startup_d4b_tmp.py >/dev/null 2>&1 || true
+          rm -f backend/app/services/startup_d4b_tmp.py
+          git diff --cached --check
+          changed="$(git diff --cached --name-only)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -Ev '^(backend/app/services/(update_safety|startup)\.py|backend/app/tests/(test_d4_b_update_safety|test_d4_a_startup_compatibility|test_backup_consistency)\.py|backend/app/services/startup_d4b_tmp\.py)$'; then
+            echo 'D4-B integration scope leak' >&2
+            exit 1
+          fi
+          git config user.name 'D4-B integration builder'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-B integrate staged update safety'
+          git push origin HEAD:"$TARGET_BRANCH"
