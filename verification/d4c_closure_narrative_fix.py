@@ -1,5 +1,13 @@
 from pathlib import Path
 
+current = Path('docs/current-lifecycle.md')
+text = current.read_text(encoding='utf-8')
+old = 'D4-A and D4-B remain closed. D4-C is implemented in the current branch; exact-head/exact-package verification and lifecycle closure remain pending, and D4-D remains unauthorized.'
+new = 'D4-A, D4-B and D4-C are closed. D4-D is the only authorized next slice.'
+if text.count(old) != 1:
+    raise SystemExit(f'current-lifecycle stale D4-C marker mismatch: {text.count(old)}')
+current.write_text(text.replace(old, new, 1), encoding='utf-8')
+
 plan = Path('docs/implementation-plan.md')
 text = plan.read_text(encoding='utf-8')
 old = '**PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED**.'
