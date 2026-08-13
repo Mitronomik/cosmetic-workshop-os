@@ -1,0 +1,196 @@
+name: PR196 repair obsolete D4-A fixtures
+
+on:
+  push:
+    branches:
+      - maintenance/pr196-fixture-repair
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_HEAD: bbeb5c867e7dd8bc4381a967bb4fd0a93892196a
+  TARGET_BRANCH: agent/d4-a-version-truth-defect-fix-2
+
+jobs:
+  repair:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact starting head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install backend test dependencies
+        shell: bash
+        run: python -m pip install --disable-pip-version-check './backend[test]'
+
+      - name: Repair only obsolete D4-A test fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str, *, count: int = 1) -> None:
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f'{path}: expected {count} exact matches, found {actual}')
+              file.write_text(text.replace(old, new), encoding='utf-8')
+
+          # 1) Backup tests: existing startup DB must now be a real supported older prefix,
+          # not an arbitrary SQLite file without schema_migrations.
+          path = 'backend/app/tests/test_backup_consistency.py'
+          replace_exact(
+              path,
+              'from app.db.config import DatabaseConfig\n',
+              'from app.db.config import DatabaseConfig\nfrom app.db.migrations import MIGRATION_MODULES, apply_migrations\n',
+          )
+          replace_exact(
+              path,
+              '''def migrated_database(path: Path) -> Path:\n    path.parent.mkdir(parents=True, exist_ok=True)\n    initialize_database(DatabaseConfig(path=path))\n    return path\n\n\n''',
+              '''def migrated_database(path: Path) -> Path:\n    path.parent.mkdir(parents=True, exist_ok=True)\n    initialize_database(DatabaseConfig(path=path))\n    return path\n\n\ndef supported_older_database(path: Path) -> Path:\n    """Build the exact known prefix immediately before current head."""\n    path.parent.mkdir(parents=True, exist_ok=True)\n    original = list(MIGRATION_MODULES)\n    try:\n        MIGRATION_MODULES[:] = original[:-1]\n        apply_migrations(DatabaseConfig(path=path))\n    finally:\n        MIGRATION_MODULES[:] = original\n    return path\n\n\n''',
+          )
+          replace_exact(
+              path,
+              '''    database.parent.mkdir(parents=True)\n    with sqlite3.connect(database) as connection:\n''',
+              '''    supported_older_database(database)\n    with sqlite3.connect(database) as connection:\n''',
+              count=2,
+          )
+
+          # 2) Database foundation: the backup-before-migration case uses a valid
+          # older prefix and asserts the head-only table is absent in the backup.
+          path = 'backend/app/tests/test_database_foundation.py'
+          replace_exact(
+              path,
+              'from app.db.migrations import apply_migrations, current_migrations, expected_migration_ids\n',
+              'from app.db.migrations import MIGRATION_MODULES, apply_migrations, current_migrations, expected_migration_ids\n',
+          )
+          replace_exact(
+              path,
+              '''def test_user_mode_startup_creates_backup_before_migration_for_existing_database(monkeypatch, tmp_path):\n''',
+              '''def build_supported_older_database(database_path: Path) -> None:\n    database_path.parent.mkdir(parents=True, exist_ok=True)\n    original = list(MIGRATION_MODULES)\n    try:\n        MIGRATION_MODULES[:] = original[:-1]\n        apply_migrations(DatabaseConfig(path=database_path))\n    finally:\n        MIGRATION_MODULES[:] = original\n\n\ndef test_user_mode_startup_creates_backup_before_migration_for_existing_database(monkeypatch, tmp_path):\n''',
+          )
+          replace_exact(
+              path,
+              '''    database_path.parent.mkdir(parents=True)\n    with sqlite3.connect(database_path) as connection:\n        connection.execute("CREATE TABLE legacy_marker (value TEXT NOT NULL)")\n''',
+              '''    build_supported_older_database(database_path)\n    with sqlite3.connect(database_path) as connection:\n        connection.execute("CREATE TABLE legacy_marker (value TEXT NOT NULL)")\n''',
+          )
+          replace_exact(
+              path,
+              '''    assert marker == "before migration"\n    assert "app_settings" not in backup_tables\n    assert result.applied_migrations == expected_migration_ids()\n''',
+              '''    assert marker == "before migration"\n    assert "artifact_audit_operations" not in backup_tables\n    assert result.applied_migrations == [expected_migration_ids()[-1]]\n''',
+          )
+
+          # 3) Launcher integration uses the same supported older prefix contract.
+          path = 'launcher/tests/test_runtime.py'
+          replace_exact(
+              path,
+              'from launcher.runtime import RuntimeLaunchError, initialize_backend_startup\n',
+              'from launcher.runtime import RuntimeLaunchError, initialize_backend_startup\nfrom app.db.config import DatabaseConfig\nfrom app.db.migrations import MIGRATION_MODULES, apply_migrations\n',
+          )
+          replace_exact(
+              path,
+              '''def test_launcher_startup_creates_backup_before_migration(monkeypatch, tmp_path):\n''',
+              '''def build_supported_older_database(database_path: Path) -> None:\n    database_path.parent.mkdir(parents=True, exist_ok=True)\n    original = list(MIGRATION_MODULES)\n    try:\n        MIGRATION_MODULES[:] = original[:-1]\n        apply_migrations(DatabaseConfig(path=database_path))\n    finally:\n        MIGRATION_MODULES[:] = original\n\n\ndef test_launcher_startup_creates_backup_before_migration(monkeypatch, tmp_path):\n''',
+          )
+          replace_exact(
+              path,
+              '''    database_path.parent.mkdir(parents=True)\n    monkeypatch.setenv("COSMETIC_WORKSHOP_USER_DATA_DIR", str(user_data_dir))\n    monkeypatch.delenv("COSMETIC_WORKSHOP_DB_PATH", raising=False)\n    with sqlite3.connect(database_path) as connection:\n''',
+              '''    build_supported_older_database(database_path)\n    monkeypatch.setenv("COSMETIC_WORKSHOP_USER_DATA_DIR", str(user_data_dir))\n    monkeypatch.delenv("COSMETIC_WORKSHOP_DB_PATH", raising=False)\n    with sqlite3.connect(database_path) as connection:\n''',
+          )
+
+          # 4) 0019 fixture must be the real ordered prefix through 0018.
+          # Previously it removed only 0019 while leaving 0020 applied, producing
+          # the impossible lineage 0018 -> 0020 that D4-A correctly rejects.
+          path = 'backend/app/tests/test_production_batch_tax_snapshot_migration.py'
+          replace_exact(
+              path,
+              '''PREVIOUS_MIGRATION_ID = "0018_demo_data_tracking"\n\n\n''',
+              '''PREVIOUS_MIGRATION_ID = "0018_demo_data_tracking"\n\n\ndef pending_from_0019() -> list[str]:\n    ids = expected_migration_ids()\n    return ids[ids.index(MIGRATION_ID):]\n\n\n''',
+          )
+          replace_exact(
+              path,
+              '''    original = list(MIGRATION_MODULES)\n    try:\n        MIGRATION_MODULES[:] = [name for name in original if not name.endswith(MIGRATION_ID)]\n        apply_migrations(DatabaseConfig(path=database_path))\n    finally:\n        MIGRATION_MODULES[:] = original\n''',
+              '''    original = list(MIGRATION_MODULES)\n    try:\n        cutoff = next(index for index, name in enumerate(original) if name.endswith(MIGRATION_ID))\n        MIGRATION_MODULES[:] = original[:cutoff]\n        apply_migrations(DatabaseConfig(path=database_path))\n    finally:\n        MIGRATION_MODULES[:] = original\n''',
+          )
+          replace_exact(
+              path,
+              'def test_a_database_at_0018_reports_exactly_one_pending_migration(tmp_path):\n',
+              'def test_a_database_at_0018_reports_the_exact_remaining_ordered_suffix(tmp_path):\n',
+          )
+          text = Path(path).read_text(encoding='utf-8')
+          count = text.count('== [MIGRATION_ID]')
+          if count != 7:
+              raise SystemExit(f'{path}: expected 7 [MIGRATION_ID] expectations, found {count}')
+          text = text.replace('== [MIGRATION_ID]', '== pending_from_0019()')
+          text = text.replace(
+              '`build_pre_c2_ii_database`\n    # removes only `0019` and later migrations legitimately sort after it.',
+              '`build_pre_c2_ii_database` ends at the exact ordered `0018` prefix.',
+          )
+          Path(path).write_text(text, encoding='utf-8')
+          PY
+
+          python -m py_compile \
+            backend/app/tests/test_backup_consistency.py \
+            backend/app/tests/test_database_foundation.py \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py \
+            launcher/tests/test_runtime.py
+          git diff --check
+
+      - name: Run previously failing tests and D4-A regressions
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            backend/app/tests/test_backup_consistency.py::test_automatic_startup_backup_uses_the_safe_engine \
+            backend/app/tests/test_backup_consistency.py::test_startup_reconciles_manual_backups_after_migrations_and_after_exports \
+            backend/app/tests/test_database_foundation.py::test_user_mode_startup_creates_backup_before_migration_for_existing_database \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py::test_user_mode_startup_backs_up_before_applying_0019 \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py::test_a_failed_0019_destroys_neither_the_user_database_nor_the_backup \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py::test_recovery_from_a_real_one_column_partial_ddl_interruption \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py::test_a_fully_migrated_user_database_starts_up_without_another_backup \
+            launcher/tests/test_runtime.py::test_launcher_startup_creates_backup_before_migration \
+            backend/app/tests/test_d4_a_app_version.py \
+            backend/app/tests/test_d4_a_startup_compatibility.py \
+            backend/app/tests/test_d4_a_version_truth_surfaces.py \
+            backend/app/tests/test_health.py \
+            macos_package/tests/test_d4_a_product_version_projection.py
+
+      - name: Commit and fast-forward PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --check
+          git add \
+            backend/app/tests/test_backup_consistency.py \
+            backend/app/tests/test_database_foundation.py \
+            backend/app/tests/test_production_batch_tax_snapshot_migration.py \
+            launcher/tests/test_runtime.py
+          test -n "$(git diff --cached --name-only)"
+          test "$(git diff --cached --name-only | wc -l | tr -d ' ')" = 4
+          git config user.name 'D4-A verification repair'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-A repair obsolete migration test fixtures'
+          git push origin HEAD:"refs/heads/$TARGET_BRANCH"
