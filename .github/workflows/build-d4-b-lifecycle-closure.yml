@@ -1,0 +1,455 @@
+name: Build D4-B lifecycle closure
+
+on:
+  push:
+    branches:
+      - maintenance/d4-b-lifecycle-closure-builder
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_BASE: d60a3be993c76b59292cf27ee66bcbe856669fc4
+  VERIFIED_PR_HEAD: 8688fa3dba87205b4b4626ebab2902262fd4cd24
+  PR_HEAD_RUN: '31716610699'
+  PR_HEAD_ARTIFACT: '9187785415'
+  PR_HEAD_DIGEST: sha256:fbbaa56a173929f41e18aa49adad40854210806433de2309052cffda8a4c7012
+  MERGED_RUN: '31717705331'
+  MERGED_ARTIFACT: '9188228739'
+  MERGED_DIGEST: sha256:2a3e615e504e6c047b8f1b45690f3595a0ef4bb71dcd1d9fadf669ecd64af415
+  CLOSURE_BRANCH: agent/d4-b-lifecycle-closure
+
+jobs:
+  build-closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact closure base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.CLOSURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify exact untouched merged head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_BASE"
+          test -z "$(git status --porcelain)"
+          git diff --check
+          test -z "$(git diff --name-only "$VERIFIED_PR_HEAD"..."$EXPECTED_BASE")"
+
+      - name: Build immutable pre-closure snapshot and active closure truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          import subprocess
+          from hashlib import sha1
+          from pathlib import Path
+
+          ROOT = Path('.')
+          BASE = os.environ['EXPECTED_BASE']
+          VERIFIED_PR_HEAD = os.environ['VERIFIED_PR_HEAD']
+          PR_HEAD_RUN = os.environ['PR_HEAD_RUN']
+          PR_HEAD_ARTIFACT = os.environ['PR_HEAD_ARTIFACT']
+          PR_HEAD_DIGEST = os.environ['PR_HEAD_DIGEST']
+          MERGED_RUN = os.environ['MERGED_RUN']
+          MERGED_ARTIFACT = os.environ['MERGED_ARTIFACT']
+          MERGED_DIGEST = os.environ['MERGED_DIGEST']
+
+          snapshot_sources = {
+              'README.md': 'README.md',
+              'current-lifecycle.md': 'docs/current-lifecycle.md',
+              'implementation-plan.md': 'docs/implementation-plan.md',
+              'packaging.md': 'docs/packaging.md',
+              'deployment.md': 'docs/deployment.md',
+              'update-guide.md': 'docs/update-guide.md',
+              'current-focus.md': 'state/current-focus.md',
+              'progress.md': 'state/progress.md',
+              'handoff.md': 'state/handoff.md',
+              'change-requests.md': 'state/change-requests.md',
+              'check_documentation_lifecycle.py': 'scripts/check_documentation_lifecycle.py',
+              'history-README.md': 'docs/history/README.md',
+          }
+          snapshot_dir = ROOT / 'docs/history/d4-b-pre-closure'
+          snapshot_dir.mkdir(parents=True, exist_ok=False)
+          manifest_files: dict[str, str] = {}
+          for name, source in snapshot_sources.items():
+              data = subprocess.check_output(['git', 'show', f'{BASE}:{source}'])
+              (snapshot_dir / name).write_bytes(data)
+              manifest_files[name] = subprocess.check_output(
+                  ['git', 'rev-parse', f'{BASE}:{source}'], text=True
+              ).strip()
+
+          manifest = {
+              'source_commit': BASE,
+              'verified_pr_head': VERIFIED_PR_HEAD,
+              'pr_head_verification_run': PR_HEAD_RUN,
+              'merged_head_verification_run': MERGED_RUN,
+              'files': manifest_files,
+          }
+          manifest_bytes = (json.dumps(manifest, indent=2, sort_keys=True) + '\n').encode()
+          (snapshot_dir / 'manifest.json').write_bytes(manifest_bytes)
+          manifest_blob = sha1(f'blob {len(manifest_bytes)}\0'.encode() + manifest_bytes).hexdigest()
+          (snapshot_dir / 'ABOUT.md').write_text(
+              '# D4-B pre-closure snapshot\n\n'
+              f'Source merged head: `{BASE}`.\n\n'
+              f'Exact implementation head verified before merge: `{VERIFIED_PR_HEAD}`.\n\n'
+              f'Exact PR-head verification run: `{PR_HEAD_RUN}`; evidence artifact `{PR_HEAD_ARTIFACT}`; digest `{PR_HEAD_DIGEST}`.\n\n'
+              f'Exact merged-head verification run: `{MERGED_RUN}`; evidence artifact `{MERGED_ARTIFACT}`; digest `{MERGED_DIGEST}`.\n\n'
+              'Git compare from the verified implementation head to the merge commit contains `0` changed files.\n\n'
+              'Every listed snapshot file preserves the exact Git blob identity from the source merged head. '
+              'These files are historical evidence only; current authority remains `docs/current-lifecycle.md`.\n',
+              encoding='utf-8',
+          )
+
+          old_d4 = 'D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING'
+          new_d4 = 'D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT'
+          old_d4b = 'D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING'
+          new_d4b = 'D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED'
+          old_d4c = 'D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED'
+          new_d4c = 'D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED'
+
+          status_surfaces = [
+              'README.md', 'docs/current-lifecycle.md', 'docs/implementation-plan.md',
+              'docs/packaging.md', 'docs/deployment.md', 'state/current-focus.md',
+              'state/progress.md', 'state/handoff.md', 'state/change-requests.md',
+          ]
+          for filename in status_surfaces:
+              path = ROOT / filename
+              text = path.read_text(encoding='utf-8')
+              for old, new in ((old_d4, new_d4), (old_d4b, new_d4b), (old_d4c, new_d4c)):
+                  if old not in text:
+                      raise SystemExit(f'{filename}: lifecycle source missing: {old}')
+                  text = text.replace(old, new)
+              path.write_text(text, encoding='utf-8')
+
+          def replace_once(filename: str, old: str, new: str) -> None:
+              path = ROOT / filename
+              text = path.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'{filename}: expected exactly one replacement source: {old!r}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # README: retire pending-verification truth and record closure evidence.
+          replace_once(
+              'README.md',
+              'D4-B is implemented in the current changeset but is not lifecycle-closed. Exact-head verification is required before D4-C may become authorized. D4-C/D remain gated.',
+              'D4-B is merged, exact-head/exact-package verified and lifecycle-closed by the current closure changeset. D4-C is now the only authorized next slice; D4-D remains gated.',
+          )
+          replace_once('README.md', '## D4-B implementation pending verification', '## D4-B closed baseline / D4-C next')
+          replace_once(
+              'README.md',
+              '- D4-C UI/failure UX remains out of scope and unauthorized.\n',
+              '- D4-C UI/failure UX was not implemented by D4-B; this closure authorizes it as the next separate slice.\n\n'
+              f'D4-B closure evidence: verified PR head `{VERIFIED_PR_HEAD}`; PR-head Level-5 run `{PR_HEAD_RUN}`; '
+              f'merged head `{BASE}`; merged-head Level-5 run `{MERGED_RUN}`. Both exact-package runs passed, and the verified PR head is content-identical to the merge commit.\n',
+          )
+
+          # Current lifecycle: make the D4-A narrative historically accurate after D4-B landed.
+          replace_once(
+              'docs/current-lifecycle.md',
+              '- supported older lineage still uses the existing direct backup + migration execution after the gate. Replacing that execution with staged migration is D4-B and is not implemented here.',
+              '- D4-A itself originally stopped at the compatibility gate; the now-closed D4-B slice replaces the supported-older direct migration seam with staged migration after that gate.',
+          )
+          replace_once(
+              'docs/current-lifecycle.md',
+              'D4-A is merged and exact-head verified. D4-B is implemented in the current changeset, but exact-head verification and lifecycle closure are still pending; D4-C remains unauthorized.',
+              'D4-A remains merged and exact-head verified. D4-B is now merged, exact-head/exact-package verified and lifecycle-closed; D4-C alone is authorized next.',
+          )
+          replace_once('docs/current-lifecycle.md', '## D4-B implementation truth', '## D4-B closure truth')
+          replace_once(
+              'docs/current-lifecycle.md',
+              'D4-B is **implementation-complete only in this changeset**. It is not lifecycle-closed, D4-C is not authorized, and exact-head + exact-package verification remain mandatory before any next-slice authorization.',
+              f'D4-B is **DONE — MERGED AND VERIFIED**. Exact PR-head Level-5 verification run `{PR_HEAD_RUN}` and exact merged-head Level-5 verification run `{MERGED_RUN}` both passed; the implementation head `{VERIFIED_PR_HEAD}` and merge commit `{BASE}` are content-identical. D4-C is the only authorized next slice.',
+          )
+          current = ROOT / 'docs/current-lifecycle.md'
+          current_text = current.read_text(encoding='utf-8')
+          anchor = '## Closed Restore boundary\n'
+          evidence = (
+              '## D4-B closure evidence\n\n'
+              f'- verified implementation head: `{VERIFIED_PR_HEAD}`;\n'
+              f'- PR-head Level-5 verifier: run `{PR_HEAD_RUN}`, artifact `{PR_HEAD_ARTIFACT}`, digest `{PR_HEAD_DIGEST}`;\n'
+              f'- merge/current main: `{BASE}`; verified-head → merge compare: `0` changed files;\n'
+              f'- merged-head Level-5 verifier: run `{MERGED_RUN}`, artifact `{MERGED_ARTIFACT}`, digest `{MERGED_DIGEST}`;\n'
+              '- both runs ended `PASS — FULL AUTOMATED SMOKE PASSED`.\n\n'
+              '## D4-C authorization boundary\n\n'
+              'This closure authorizes **D4-C only**: bounded user-facing update status and packaged failure UX. '
+              'It does not authorize D4-D, D5, auto-download/update checking, signing, notarization, DMG, App Store, release channels, release readiness or Restore changes.\n\n'
+          )
+          if current_text.count(anchor) != 1:
+              raise SystemExit('current lifecycle closed Restore anchor mismatch')
+          current.write_text(current_text.replace(anchor, evidence + anchor, 1), encoding='utf-8')
+
+          # Implementation plan: D4-A is closed history; D4-B is closed; D4-C is now next.
+          replace_once(
+              'docs/implementation-plan.md',
+              '- supported older schemas still enter the existing `before_migration` backup and direct migration path after preflight;\n- no UpdateLog exists yet;',
+              '- D4-A originally left supported-older migration execution unchanged; the closed D4-B slice now owns staged execution after preflight;\n- D4-A itself introduced no UpdateLog; D4-B now owns the durable external UpdateLog;',
+          )
+          replace_once(
+              'docs/implementation-plan.md',
+              'D4-A is merged, exact-head verified and lifecycle-closed. D4-B is now the only authorized next slice and remains not implemented.',
+              'D4-A remains merged, exact-head verified and lifecycle-closed. D4-B is also merged, verified and closed; D4-C is now the only authorized next slice.',
+          )
+          replace_once(
+              'docs/implementation-plan.md',
+              '**IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING**.',
+              '**DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED**.',
+          )
+          replace_once(
+              'docs/implementation-plan.md',
+              'D4-B cannot authorize D4-C until this implementation is merged, exact-head verified and lifecycle-closed.',
+              f'D4-B closure conditions are satisfied on merged head `{BASE}`. D4-C is authorized next as a separate bounded PR.',
+          )
+          replace_once(
+              'docs/implementation-plan.md',
+              '**PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED**.',
+              '**AUTHORIZED NEXT — NOT IMPLEMENTED**.',
+          )
+
+          # Packaging / deployment / update guide: retire pending verification language without claiming release readiness.
+          replace_once(
+              'docs/packaging.md',
+              'Status: **CURRENT — D3 IMPLEMENTED; D4-A CLOSED; D4-B IMPLEMENTED, VERIFICATION PENDING**',
+              'Status: **CURRENT — D3 IMPLEMENTED; D4-A/B CLOSED; D4-C AUTHORIZED NEXT**',
+          )
+          replace_once(
+              'docs/packaging.md',
+              'D4 remains safe manual package replacement. D4-A supplies the closed compatibility gate; D4-B now implements staged migration and durable external UpdateLog on the same ordinary packaged startup path, but exact-package verification and lifecycle closure are still pending.',
+              'D4 remains safe manual package replacement. D4-A supplies the closed compatibility gate; closed D4-B supplies staged migration and durable external UpdateLog on the same ordinary packaged startup path. D4-C is now authorized to add only bounded user-facing status/failure presentation.',
+          )
+          replace_once(
+              'docs/packaging.md',
+              'CR-013/D4-A do not authorize auto-update download, internet update checking, GitHub Releases integration, release channels, installer redesign, signing/notarization, DMG, App Store, sandbox migration, D5 or release readiness.',
+              'D4-B closure authorizes D4-C only. It does not authorize auto-update download, internet update checking, GitHub Releases integration, release channels, installer redesign, signing/notarization, DMG, App Store, sandbox migration, D5 or release readiness.',
+          )
+          replace_once(
+              'docs/deployment.md',
+              'D4-B now implements the migration stage and durable UpdateLog under the existing external user-data boundary. It adds no service, cloud dependency or second launcher topology; verification and lifecycle closure are still pending.',
+              'Closed D4-B implements the migration stage and durable UpdateLog under the existing external user-data boundary. It adds no service, cloud dependency or second launcher topology; exact PR-head and merged-head Level-5 verification passed.',
+          )
+          replace_once(
+              'docs/deployment.md',
+              'D4-B implementation does not authorize D4-C. D4-C/D and D5 remain unauthorized. No signing, notarization, DMG, App Store, release channel, updater downloader, cloud deployment or cloud sync is authorized by CR-013.',
+              'D4-B closure authorizes D4-C only. D4-D and D5 remain unauthorized. No signing, notarization, DMG, App Store, release channel, updater downloader, cloud deployment or cloud sync is authorized by CR-013.',
+          )
+          replace_once(
+              'docs/update-guide.md',
+              'Статус: **D4-A закрыт; безопасная миграция D4-B реализована в текущем changeset, но exact-head проверка и lifecycle closure ещё не завершены**.',
+              'Статус: **D4-A и D4-B закрыты и проверены; D4-C авторизован следующим, но пользовательский update UX ещё не реализован**.',
+          )
+          replace_once(
+              'docs/update-guide.md',
+              'Этот файл пока **не является инструкцией о готовом обновлении продукта**. D4-A закрыт; D4-B реализует безопасный staged migration + durable UpdateLog, но ещё не прошёл обязательную exact-head/exact-package проверку и lifecycle closure. D4-C/D также не реализованы и не авторизованы.',
+              'Этот файл пока **не является инструкцией о готовом обновлении продукта**. D4-A и D4-B закрыты; безопасный staged migration + durable UpdateLog прошли exact-head/exact-package проверку. D4-C теперь авторизован следующим, но пользовательский update status/failure UX ещё не реализован; D4-D остаётся неавторизован.',
+          )
+
+          # State files: close D4-B and hand off only D4-C.
+          focus = ROOT / 'state/current-focus.md'
+          focus.write_text(
+              '# Current focus\n\nUpdated: `2026-08-13`\n\n## Current lifecycle\n\n```text\n'
+              'C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED\n'
+              'Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED\n'
+              'D3 — macOS package MVP — IMPLEMENTED\n'
+              'CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT\n'
+              f'{new_d4}\n'
+              'D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED\n'
+              f'{new_d4b}\n{new_d4c}\n'
+              'D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED\n'
+              'D5 — Remote install checklist — NOT AUTHORIZED BY CR-013\n'
+              'Product release readiness — NOT CLAIMED\n```\n\n'
+              '## Current task\n\n**Implement D4-C only, in a separate bounded PR.**\n\n'
+              'D4-A and D4-B are closed. D4-C may add only human-facing update status and bounded packaged failure UX on top of the existing startup-owned truth. It must not create a technical update admin dashboard or move update authority into the browser.\n\n'
+              '## D4-B closure evidence\n\n'
+              f'- verified PR head: `{VERIFIED_PR_HEAD}`; run `{PR_HEAD_RUN}`; artifact `{PR_HEAD_ARTIFACT}`;\n'
+              f'- merged head/current main: `{BASE}`; run `{MERGED_RUN}`; artifact `{MERGED_ARTIFACT}`;\n'
+              '- verified-head → merged-head compare: `0` changed files;\n'
+              '- both Level-5 reports ended `PASS — FULL AUTOMATED SMOKE PASSED`.\n\n'
+              '## Do not start\n\n- D4-D exact-package closure;\n- D5;\n- auto-update/download;\n- signing/notarization/DMG/App Store;\n- release readiness;\n- Restore changes.\n\n'
+              'Normative decision: `docs/decisions/0020-d4-update-safety-contract.md`.\n',
+              encoding='utf-8',
+          )
+          replace_once('state/progress.md', '## D4-B implementation pending verification', '## D4-B closure')
+          replace_once(
+              'state/progress.md',
+              'The current D4-B changeset implements staged migration, verified `before_migration` backup, atomic canonical publication, durable external UpdateLog and conservative interruption reconciliation. Full exact-head and exact-package verification are still required before lifecycle closure.\n\nD4-C/D, D5 and release readiness remain gated.',
+              f'D4-B is merged and verified on `{BASE}`. PR-head Level-5 run `{PR_HEAD_RUN}` and merged-head Level-5 run `{MERGED_RUN}` both passed; the implementation head and merge commit are content-identical. D4-C is authorized next.\n\nD4-D, D5 and release readiness remain gated.',
+          )
+          replace_once(
+              'state/handoff.md',
+              '- D4-B is IMPLEMENTED — exact-head verification and lifecycle closure pending.',
+              '- D4-B is DONE — merged, exact-head/exact-package verified and lifecycle-closed.',
+          )
+          replace_once('state/handoff.md', '## D4-B implementation handoff', '## D4-B closed handoff / D4-C next')
+          replace_once(
+              'state/handoff.md',
+              'If D4-B verification reveals a need to change a protected Restore production blob or authorize D4-C behavior, stop and open the appropriate separate decision/lifecycle step rather than widening this implementation PR.',
+              'D4-C may now be implemented only within its bounded user-facing status/failure UX scope. If it requires a protected Restore production change, new update authority, D4-D behavior or release/distribution work, stop rather than widening D4-C.',
+          )
+          replace_once(
+              'state/handoff.md',
+              'Verification evidence: merged head `89dd69dc1958e622146e01869cc34d4cd2ec859e`, run `31699624984`, artifact `9180924875`.',
+              f'D4-A evidence remains recorded above. D4-B evidence: verified PR head `{VERIFIED_PR_HEAD}`, run `{PR_HEAD_RUN}`, artifact `{PR_HEAD_ARTIFACT}`; merged head `{BASE}`, run `{MERGED_RUN}`, artifact `{MERGED_ARTIFACT}`; compare `0` changed files.',
+          )
+          replace_once(
+              'state/change-requests.md',
+              'Status: **ACCEPTED — D4-A CLOSED; D4-B IMPLEMENTED, VERIFICATION PENDING**.',
+              'Status: **ACCEPTED — D4-A/B CLOSED; D4-C AUTHORIZED NEXT**.',
+          )
+          replace_once(
+              'state/change-requests.md',
+              'D4-A remains closed. The current D4-B changeset implements staged migrations, verified backup, atomic canonical publication, durable external UpdateLog and interruption reconciliation. It does not implement D4-C update UI/failure UX or D4-D lifecycle closure.',
+              'D4-A and D4-B are closed. D4-B provides staged migrations, verified backup, atomic canonical publication, durable external UpdateLog and interruption reconciliation. D4-C update status/failure UX is authorized next but remains unimplemented; D4-D remains unauthorized.',
+          )
+          replace_once(
+              'state/change-requests.md',
+              'D4-A closure conditions are satisfied on merged head `89dd69dc1958e622146e01869cc34d4cd2ec859e`. D4-B implementation now requires exact-head verification, merge verification and separate lifecycle closure before D4-C can become authorized.',
+              f'D4-A closure remains satisfied. D4-B closure conditions are satisfied on verified implementation head `{VERIFIED_PR_HEAD}` and merged head `{BASE}` with full Level-5 PASS evidence. D4-C alone is authorized next.',
+          )
+
+          # History index: point current readers to the exact D4-B pre-closure evidence.
+          history = ROOT / 'docs/history/README.md'
+          history_text = history.read_text(encoding='utf-8')
+          marker = '## Current index\n\n'
+          entry = f'- `d4-b-pre-closure/` — exact active lifecycle/state/checker surfaces from merged head `{BASE}` immediately before D4-B closure and D4-C authorization.\n'
+          if history_text.count(marker) != 1:
+              raise SystemExit('history index marker mismatch')
+          history.write_text(history_text.replace(marker, marker + entry, 1), encoding='utf-8')
+
+          # Lifecycle checker: add immutable D4-B evidence and move the authorization boundary exactly one slice.
+          checker_path = ROOT / 'scripts/check_documentation_lifecycle.py'
+          checker = checker_path.read_text(encoding='utf-8')
+          checker = checker.replace(
+              'D4-A is closed. D4-B may implement staged migration safety and durable external\nUpdateLog, but it may not claim verification/closure, authorize D4-C/D or reopen Restore.',
+              'D4-A and D4-B are closed. D4-C alone may implement bounded user-facing update\nstatus/failure UX; it may not authorize D4-D/D5, claim release readiness or reopen Restore.',
+              1,
+          )
+          anchor = 'D4A_PRECLOSURE_ABOUT = P("docs/history/d4-a-pre-closure/ABOUT.md")\n'
+          addition = (
+              'D4B_PRECLOSURE_MANIFEST = P("docs/history/d4-b-pre-closure/manifest.json")\n'
+              'D4B_PRECLOSURE_ABOUT = P("docs/history/d4-b-pre-closure/ABOUT.md")\n'
+          )
+          if checker.count(anchor) != 1:
+              raise SystemExit('checker D4A snapshot constants anchor mismatch')
+          checker = checker.replace(anchor, anchor + addition, 1)
+
+          constants_anchor = 'D4A_PRECLOSURE_MANIFEST_SHA = "7debfd4b40c1b32a00fe3417564fd97480f8f043"\n'
+          constants = (
+              f'D4B_VERIFIED_PR_HEAD = "{VERIFIED_PR_HEAD}"\n'
+              f'D4B_MERGED_HEAD = "{BASE}"\n'
+              f'D4B_PR_HEAD_RUN = "{PR_HEAD_RUN}"\n'
+              f'D4B_MERGED_RUN = "{MERGED_RUN}"\n'
+              f'D4B_PRECLOSURE_MANIFEST_SHA = "{manifest_blob}"\n'
+          )
+          if checker.count(constants_anchor) != 1:
+              raise SystemExit('checker D4A manifest constant anchor mismatch')
+          checker = checker.replace(constants_anchor, constants_anchor + constants, 1)
+
+          old_status = '''D4_STATUS = (\n    "CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT",\n    "D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING",\n    "D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED",\n    "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",\n    "D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED",\n    "D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED",\n    "D5 — Remote install checklist — NOT AUTHORIZED BY CR-013",\n    "Product release readiness — NOT CLAIMED",\n)'''
+          new_status = f'''D4_STATUS = (\n    "CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT",\n    "{new_d4}",\n    "D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED",\n    "{new_d4b}",\n    "{new_d4c}",\n    "D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED",\n    "D5 — Remote install checklist — NOT AUTHORIZED BY CR-013",\n    "Product release readiness — NOT CLAIMED",\n)'''
+          if checker.count(old_status) != 1:
+              raise SystemExit('checker D4_STATUS block mismatch')
+          checker = checker.replace(old_status, new_status, 1)
+
+          old_forbidden_start = checker.index('FORBIDDEN_ACTIVE = (\n')
+          old_forbidden_end = checker.index('\n)\n\nADR20_SECTIONS', old_forbidden_start) + 2
+          new_forbidden = '''FORBIDDEN_ACTIVE = (\n    "D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING",\n    "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",\n    "D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED",\n    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT",\n    "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED",\n    "D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING",\n    "D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",\n    "D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED",\n    "D4 — Update safety — DONE",\n    "D4 — Update safety — CLOSED",\n    "D4-B — Safe migration execution and durable UpdateLog — CLOSED",\n    "D4-C — User-facing update status and packaged failure UX — IMPLEMENTED",\n    "D4-C — User-facing update status and packaged failure UX — DONE",\n    "D4-C — User-facing update status and packaged failure UX — CLOSED",\n    "D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT",\n    "D4-D — Exact-package update verification and D4 lifecycle closure — IMPLEMENTED",\n    "D5 — Remote install checklist — AUTHORIZED",\n    "D5 — Remote install checklist — IMPLEMENTED",\n    "Product release readiness — READY",\n    "Product release readiness — CLAIMED",\n    "Product release readiness — ACHIEVED",\n    "auto-update — AUTHORIZED",\n    "auto-update download — AUTHORIZED",\n    "signing — AUTHORIZED",\n    "notarization — AUTHORIZED",\n    "DMG — AUTHORIZED",\n    "App Store — AUTHORIZED",\n    "release channels — AUTHORIZED",\n    "GitHub Releases integration — AUTHORIZED",\n    "Restore — NOT IMPLEMENTED",\n    "Restore — IN PROGRESS",\n    "Restore — AUTHORIZED NEXT",\n)'''
+          checker = checker[:old_forbidden_start] + new_forbidden + checker[old_forbidden_end:]
+
+          snapshot_function_anchor = 'def check_legacy_protections() -> None:\n'
+          snapshot_function = '''def check_d4b_preclosure_snapshot() -> None:\n    verify_blob(D4B_PRECLOSURE_MANIFEST, D4B_PRECLOSURE_MANIFEST_SHA, "D4-B pre-closure manifest")\n    try:\n        payload = json.loads(read(D4B_PRECLOSURE_MANIFEST))\n    except json.JSONDecodeError as exc:\n        ERRORS.append(f"D4-B pre-closure manifest does not parse: {exc}")\n        return\n    if payload.get("source_commit") != D4B_MERGED_HEAD:\n        ERRORS.append("D4-B pre-closure manifest source commit changed")\n    if payload.get("verified_pr_head") != D4B_VERIFIED_PR_HEAD:\n        ERRORS.append("D4-B pre-closure verified PR head changed")\n    if payload.get("pr_head_verification_run") != D4B_PR_HEAD_RUN:\n        ERRORS.append("D4-B pre-closure PR-head verification run changed")\n    if payload.get("merged_head_verification_run") != D4B_MERGED_RUN:\n        ERRORS.append("D4-B pre-closure merged-head verification run changed")\n    files = payload.get("files", {})\n    expected_names = ('README.md', 'current-lifecycle.md', 'implementation-plan.md', 'packaging.md', 'deployment.md', 'update-guide.md', 'current-focus.md', 'progress.md', 'handoff.md', 'change-requests.md', 'check_documentation_lifecycle.py', 'history-README.md')\n    if set(files) != set(expected_names):\n        ERRORS.append(f"D4-B pre-closure manifest file set changed: {sorted(files)}")\n    for name in expected_names:\n        expected = files.get(name)\n        if isinstance(expected, str):\n            verify_blob(P(f"docs/history/d4-b-pre-closure/{name}"), expected, "D4-B pre-closure snapshot blob")\n    require(D4B_PRECLOSURE_ABOUT, (D4B_MERGED_HEAD, D4B_VERIFIED_PR_HEAD, D4B_PR_HEAD_RUN, D4B_MERGED_RUN, "0` changed files", "exact Git blob identity"))\n    require(HISTORY_INDEX, ("d4-b-pre-closure/", D4B_MERGED_HEAD))\n\n\n'''
+          if checker.count(snapshot_function_anchor) != 1:
+              raise SystemExit('checker legacy protection function anchor mismatch')
+          checker = checker.replace(snapshot_function_anchor, snapshot_function + snapshot_function_anchor, 1)
+
+          checker = checker.replace(
+              'require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "D4-B implementation truth", "Restore remains closed"))',
+              'require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "D4-B closure truth", "D4-B closure evidence", "D4-C authorization boundary", "Restore remains closed"))',
+              1,
+          )
+          checker = checker.replace(
+              '    check_d4a_preclosure_snapshot()\n    check_current_lifecycle()',
+              '    check_d4a_preclosure_snapshot()\n    check_d4b_preclosure_snapshot()\n    check_current_lifecycle()',
+              1,
+          )
+          checker = checker.replace(
+              '    print("Verified D4-B is implemented but exact-head verification/lifecycle closure remain pending.")\n    print("Verified D4-C/D, D5 and product release readiness remain gated.")',
+              '    print("Verified D4-B is lifecycle-closed on exact PR-head and merged-head Level-5 evidence.")\n    print("Verified D4-C alone is authorized next; D4-D, D5 and product release readiness remain gated.")',
+              1,
+          )
+          checker_path.write_text(checker, encoding='utf-8')
+          PY
+
+      - name: Validate closure checker and active truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+          git diff --check
+
+      - name: Negative lifecycle and history probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          target = Path('state/current-focus.md')
+          intended = target.read_text(encoding='utf-8')
+          probes = [
+              ('D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED', 'D4-C — User-facing update status and packaged failure UX — IMPLEMENTED'),
+              ('D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED', 'D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT'),
+              ('D5 — Remote install checklist — NOT AUTHORIZED BY CR-013', 'D5 — Remote install checklist — AUTHORIZED'),
+              ('Product release readiness — NOT CLAIMED', 'Product release readiness — READY'),
+              ('Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED', 'Restore — IN PROGRESS'),
+              ('D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED', 'D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING'),
+          ]
+          for old, new in probes:
+              if old not in intended:
+                  raise SystemExit(f'probe source missing: {old}')
+              target.write_text(intended.replace(old, new, 1), encoding='utf-8')
+              result = subprocess.run(['python3', 'scripts/check_documentation_lifecycle.py'], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+              target.write_text(intended, encoding='utf-8')
+              if result.returncode == 0:
+                  raise SystemExit(f'negative lifecycle probe was not caught: {new}')
+
+          snapshot = Path('docs/history/d4-b-pre-closure/README.md')
+          original = snapshot.read_bytes()
+          snapshot.write_bytes(original + b'\nmutation-probe\n')
+          result = subprocess.run(['python3', 'scripts/check_documentation_lifecycle.py'], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+          snapshot.write_bytes(original)
+          if result.returncode == 0:
+              raise SystemExit('D4-B pre-closure history mutation probe was not caught')
+          PY
+          python3 scripts/check_documentation_lifecycle.py
+
+      - name: Enforce lifecycle-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add README.md docs/current-lifecycle.md docs/implementation-plan.md docs/packaging.md docs/deployment.md docs/update-guide.md docs/history/README.md docs/history/d4-b-pre-closure state/current-focus.md state/progress.md state/handoff.md state/change-requests.md scripts/check_documentation_lifecycle.py
+          git diff --cached --check
+          git diff --cached --name-only > /tmp/closure-files.txt
+          if grep -Ev '^(README\.md|docs/(current-lifecycle|implementation-plan|packaging|deployment|update-guide)\.md|docs/history/README\.md|docs/history/d4-b-pre-closure/.*|state/(current-focus|progress|handoff|change-requests)\.md|scripts/check_documentation_lifecycle\.py)$' /tmp/closure-files.txt; then
+            echo 'closure scope leak' >&2
+            exit 1
+          fi
+          test -s /tmp/closure-files.txt
+
+      - name: Commit and fast-forward closure branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'D4-B lifecycle closure'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-B close lifecycle and authorize D4-C next'
+          git push origin HEAD:"$CLOSURE_BRANCH"
