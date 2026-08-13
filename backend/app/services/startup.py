@@ -4,12 +4,16 @@ from typing import Literal, cast
 
 from app.db.config import DatabaseConfig, get_database_config
 from app.db.paths import UserDataPaths, create_user_data_directories, resolve_user_data_paths
-from app.db.migrations import pending_migration_ids
+from app.db.startup_compatibility import (
+    StartupSchemaCompatibility,
+    inspect_startup_schema_compatibility,
+)
 from app.services.backup import BackupResult, backup_sqlite_database
 from app.services.backup_audit import BackupReconciliationResult, reconcile_manual_backups
 from app.services.database import initialize_database
 from app.services.export_audit import ExportReconciliationResult, reconcile_json_exports
 from app.services.report_document_audit import ReportDocumentReconciliationResult, reconcile_report_documents
+from app.version import resolve_effective_app_version
 
 StartupMode = Literal["development", "user"]
 ALLOWED_STARTUP_MODES: tuple[StartupMode, ...] = ("development", "user")
@@ -20,6 +24,8 @@ class StartupInitializationResult:
     mode: StartupMode
     database_path: Path
     user_data_paths: UserDataPaths | None
+    app_version: str
+    schema_compatibility: StartupSchemaCompatibility
     applied_migrations: list[str]
     backup: BackupResult | None = None
     # CR-009 B1. Internal reconciliation counters, exposed to startup code for
@@ -49,24 +55,32 @@ def startup_database_config(mode: str = "development") -> DatabaseConfig:
 def initialize_startup(mode: str = "development") -> StartupInitializationResult:
     validated_mode = validate_startup_mode(mode)
     user_data_paths = resolve_user_data_paths() if validated_mode == "user" else None
+    config = (
+        DatabaseConfig(path=user_data_paths.database_path)
+        if user_data_paths is not None
+        else get_database_config()
+    )
+
+    # D4-A: application identity and schema compatibility are resolved before any
+    # mutation-capable startup helper. A malformed packaged version projection or
+    # unsupported existing lineage therefore cannot create directories, create a
+    # backup, create/repair schema_migrations, run migrations or start the backend.
+    app_version = resolve_effective_app_version()
+    schema_compatibility = inspect_startup_schema_compatibility(config)
+
     backup = None
     if user_data_paths is not None:
-        database_existed_before_startup = user_data_paths.database_path.exists()
-        migrations_pending = (
-            bool(pending_migration_ids(DatabaseConfig(path=user_data_paths.database_path)))
-            if database_existed_before_startup
-            else False
-        )
         create_user_data_directories(user_data_paths)
-        config = DatabaseConfig(path=user_data_paths.database_path)
-        if database_existed_before_startup and migrations_pending:
+        if schema_compatibility.migrations_pending:
             backup = backup_sqlite_database(
                 source_path=config.path,
                 backup_dir=user_data_paths.backups_dir,
                 reason="before_migration",
             )
-    else:
-        config = get_database_config()
+
+    # D4-A intentionally leaves execution semantics unchanged after the gate.
+    # Supported older databases still take the existing direct migration path;
+    # D4-B alone is authorized to replace it with staged migration + commit.
     applied_migrations = initialize_database(config)
     # CR-009 B1: bounded report-document reconciliation, strictly after
     # successful initialization and migrations — the ledger table may not exist
@@ -90,6 +104,8 @@ def initialize_startup(mode: str = "development") -> StartupInitializationResult
         mode=validated_mode,
         database_path=config.path,
         user_data_paths=user_data_paths,
+        app_version=app_version,
+        schema_compatibility=schema_compatibility,
         applied_migrations=applied_migrations,
         backup=backup,
         report_document_audit_reconciliation=reconciliation,

@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-"""Guard the closed Restore lifecycle and the CR-013 / D4 authorization boundary.
+"""Guard closed Restore plus the CR-013 / D4-A implementation boundary.
 
-CR-013 is a decision-only lifecycle change. It accepts ADR 0020, authorizes D4 as
-an architecture programme, and authorizes only D4-A as the next runtime slice.
-D4-B/C/D, D5 and release/distribution work remain gated.
+D4-A may establish application-version identity and a read-only ordinary-startup
+schema compatibility gate. It may not authorize D4-B/C/D or reopen Restore.
 
-The checker deliberately carries forward the exact protections from the checker
-that closed C4-III. The complete pre-CR-013 checker is preserved byte-identically
-under ``docs/history/d4-pre-decision/``. We parse its ``PINNED_BLOBS`` and
-``HISTORY_BLOBS`` dictionaries and continue verifying every one of those exact
-Git blob identities before checking the new D4 state. This prevents a lifecycle
-compaction from weakening the already-accepted Restore/history integrity gate.
+The complete pre-CR-013 checker is preserved byte-identically under
+``docs/history/d4-pre-decision/``. Its 22 ``PINNED_BLOBS`` and 60
+``HISTORY_BLOBS`` entries remain authoritative and are re-verified here so D4-A
+cannot weaken previously accepted Restore/history integrity.
 """
 
 from __future__ import annotations
@@ -20,6 +17,7 @@ from hashlib import sha1
 from pathlib import Path
 import re
 import sys
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 P = lambda value: ROOT / value
@@ -43,7 +41,21 @@ ADR20 = P("docs/decisions/0020-d4-update-safety-contract.md")
 HISTORY_INDEX = P("docs/history/README.md")
 LEGACY_CHECKER = P("docs/history/d4-pre-decision/check_documentation_lifecycle.py")
 
+VERSION_SOURCE = P("backend/VERSION")
+VERSION_MODULE = P("backend/app/version.py")
+STARTUP_COMPATIBILITY = P("backend/app/db/startup_compatibility.py")
+STARTUP_SERVICE = P("backend/app/services/startup.py")
+RUNTIME_IDENTITY = P("backend/app/services/runtime_identity.py")
+SETTINGS_API = P("backend/app/api/settings.py")
+BACKEND_PYPROJECT = P("backend/pyproject.toml")
+PACKAGE_SCRIPT = P("scripts/package_macos.sh")
+VERSION_VERIFIER = P("scripts/verify_product_version.py")
+D4A_VERSION_TEST = P("backend/app/tests/test_d4_a_app_version.py")
+D4A_PREFLIGHT_TEST = P("backend/app/tests/test_d4_a_startup_compatibility.py")
+D4A_PACKAGE_TEST = P("macos_package/tests/test_d4_a_product_version_projection.py")
+
 DECISION_BASE = "dc2301f7d4e101ad0fba851325dae9274f02da0c"
+CR013_MERGE_BASE = "4dbb83b9da3f0945bffde3187a69054305e01b28"
 LEGACY_CHECKER_SHA = "0d637269f802796098d5e6e911ad4d6a325ba990"
 
 SNAPSHOT_BLOBS = {
@@ -64,8 +76,8 @@ SNAPSHOT_BLOBS = {
 
 D4_STATUS = (
     "CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT",
-    "D4 — Update safety — AUTHORIZED — IMPLEMENTATION NOT STARTED",
-    "D4-A — Version identity and compatibility preflight — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING",
+    "D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
     "D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED",
     "D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED",
     "D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED",
@@ -91,14 +103,11 @@ STATUS_SURFACES = (
     CHANGE_REQUESTS,
 )
 
-# These are authorization/lifecycle overclaims, not general semantic prose bans.
-# "NOT AUTHORIZED" wording remains valid and is intentionally not caught.
 FORBIDDEN_ACTIVE = (
-    "D4 — Update safety — IMPLEMENTED",
     "D4 — Update safety — DONE",
     "D4 — Update safety — CLOSED",
-    "D4-A — Version identity and compatibility preflight — IMPLEMENTED",
     "D4-A — Version identity and compatibility preflight — DONE",
+    "D4-A — Version identity and compatibility preflight — MERGED AND VERIFIED",
     "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT",
     "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED",
     "D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT",
@@ -148,38 +157,6 @@ ADR20_SECTIONS = (
     "## Non-goals",
 )
 
-ADR20_CONTRACT = (
-    DECISION_BASE,
-    "one canonical build-time product-version source in the repository",
-    "generated projections",
-    "not authoritative",
-    "complete ordered `schema_migrations` lineage",
-    "schema-newer-than-application",
-    "existing SQLite DB with no recognizable migration lineage",
-    "SQLite Online Backup API",
-    "Raw copying of the live `.sqlite` file",
-    "STAGED MIGRATION + VERIFIED COMMIT",
-    "transactionally consistent SQLite snapshot",
-    "same filesystem",
-    "atomic publication",
-    "old canonical working database remains authoritative",
-    "launcher/startup-owned durable update metadata outside the working database",
-    "`started` is the durable non-terminal status",
-    "not automatically equivalent to `failed`",
-    "never trigger a blind destructive retry",
-    "database update commit point",
-    "later backend/listener/runtime failure is **not** recorded as \"migration failed\"",
-    "previous package is **not a generic rollback mechanism after the database commit point**",
-    "D4 implements no schema downgrade migrations",
-    "Only D4-A is authorized by this decision",
-    "Direct in-place migrations with backup only",
-    "Second numeric schema-version field",
-    "Database-only UpdateLog",
-    "Reuse Restore as the update mechanism",
-    "Staged migration before atomic commit",
-    "Auto-updater/download mechanism",
-)
-
 ERRORS: list[str] = []
 
 
@@ -227,7 +204,6 @@ def verify_blob(path: Path, expected: str, label: str) -> None:
 
 
 def _extract_legacy_blob_map(variable_name: str) -> dict[Path, str]:
-    """Extract ``P('path'): 'sha'`` entries from the exact preserved old checker."""
     source = read(LEGACY_CHECKER)
     if not source:
         return {}
@@ -236,19 +212,17 @@ def _extract_legacy_blob_map(variable_name: str) -> dict[Path, str]:
     except SyntaxError as exc:
         ERRORS.append(f"preserved legacy checker does not parse: {exc}")
         return {}
-
     assignment: ast.Dict | None = None
     for node in tree.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if any(isinstance(target, ast.Name) and target.id == variable_name for target in node.targets):
-            if isinstance(node.value, ast.Dict):
-                assignment = node.value
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == variable_name
+            for target in node.targets
+        ) and isinstance(node.value, ast.Dict):
+            assignment = node.value
             break
     if assignment is None:
         ERRORS.append(f"preserved legacy checker missing {variable_name}")
         return {}
-
     result: dict[Path, str] = {}
     for key_node, value_node in zip(assignment.keys, assignment.values, strict=True):
         if not (
@@ -275,7 +249,6 @@ def check_predecision_snapshot() -> None:
 
 
 def check_legacy_protections() -> None:
-    # The preserved checker itself is pinned before trusting any dictionaries in it.
     verify_blob(LEGACY_CHECKER, LEGACY_CHECKER_SHA, "legacy lifecycle checker snapshot")
     pinned = _extract_legacy_blob_map("PINNED_BLOBS")
     history = _extract_legacy_blob_map("HISTORY_BLOBS")
@@ -293,31 +266,29 @@ def check_current_lifecycle() -> None:
     for path in STATUS_SURFACES:
         require(path, D4_STATUS)
         forbid(path, FORBIDDEN_ACTIVE)
-
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
-
-    require(CURRENT, (DECISION_BASE, "ADR 0020", "Only D4-A may begin", "Restore remains closed"))
+    require(CURRENT, ("ADR 0020", "D4-A implementation truth", "Restore remains closed"))
     require(PLAN, ("Normative D4 decision", "D4-A", "D4-B", "D4-C", "D4-D"))
-    require(PACKAGING, ("manual package replacement", "is **not** a guaranteed rollback", "projections of that same source"))
-    require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "Only D4-A is authorized next"))
-    require(UPDATE_GUIDE, ("реализация ещё не начата", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
+    require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
+    require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
+    require(UPDATE_GUIDE, ("D4-A реализован", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
     require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md"))
 
 
 def check_adr20() -> None:
-    require(ADR20, ADR20_SECTIONS + ADR20_CONTRACT + (
-        "CR-013 — D4 Update Safety contract and bounded implementation authorization",
-        "D4-A — Version identity and compatibility preflight",
-        "D4-B — Safe migration execution and durable UpdateLog",
-        "D4-C — User-facing update status and packaged failure UX",
-        "D4-D — Exact-package update verification and lifecycle closure",
-        "Product release readiness",
+    require(ADR20, ADR20_SECTIONS + (
+        DECISION_BASE,
+        "one canonical build-time product-version source in the repository",
+        "complete ordered `schema_migrations` lineage",
+        "schema-newer-than-application",
+        "STAGED MIGRATION + VERIFIED COMMIT",
+        "launcher/startup-owned durable update metadata outside the working database",
+        "previous package is **not a generic rollback mechanism after the database commit point**",
+        "Only D4-A is authorized by this decision",
     ))
-    # The accepted decision cannot silently claim it implemented the thing it only authorizes.
     forbid(ADR20, (
         "D4 — Update safety — IMPLEMENTED",
-        "D4-A — Version identity and compatibility preflight — IMPLEMENTED",
         "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT",
         "D5 — Remote install checklist — AUTHORIZED",
         "Product release readiness — READY",
@@ -335,12 +306,68 @@ def check_domain_clarification() -> None:
         "is **not** a second numeric schema authority",
         "UpdateLog.backup_id",
         "outside the working database",
-        "started",
-        "completed",
-        "failed",
         "ordered `schema_migrations` lineage",
         "ADR 0020",
     ))
+
+
+def check_d4a_implementation() -> None:
+    version = read(VERSION_SOURCE)
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+\n", version):
+        ERRORS.append("backend/VERSION is not one canonical major.minor.patch token")
+
+    try:
+        with BACKEND_PYPROJECT.open("rb") as handle:
+            pyproject = tomllib.load(handle)
+    except (FileNotFoundError, tomllib.TOMLDecodeError) as exc:
+        ERRORS.append(f"backend/pyproject.toml cannot be checked: {exc}")
+    else:
+        project = pyproject.get("project", {})
+        if "version" in project:
+            ERRORS.append("backend pyproject retains an independent project.version literal")
+        if "version" not in project.get("dynamic", []):
+            ERRORS.append("backend pyproject does not declare dynamic version")
+        projection = (
+            pyproject.get("tool", {})
+            .get("setuptools", {})
+            .get("dynamic", {})
+            .get("version", {})
+            .get("file")
+        )
+        if projection != ["VERSION"]:
+            ERRORS.append("backend pyproject dynamic version is not projected from VERSION")
+
+    require(VERSION_MODULE, (
+        "resolve_effective_app_version",
+        "read_repository_app_version",
+        "read_packaged_app_version",
+        "package-runtime.json",
+    ))
+    require(STARTUP_COMPATIBILITY, (
+        "inspect_startup_schema_compatibility",
+        "mode=ro",
+        "inspect_migration_lineage",
+        "migration-history-unreadable",
+        "supported_older",
+    ))
+    require(STARTUP_SERVICE, (
+        "resolve_effective_app_version",
+        "inspect_startup_schema_compatibility",
+        "schema_compatibility.migrations_pending",
+        "reason=\"before_migration\"",
+        "D4-B alone is authorized",
+    ))
+    forbid(STARTUP_SERVICE, ("pending_migration_ids",))
+    require(RUNTIME_IDENTITY, ("get_runtime_settings_status", "resolve_effective_app_version"))
+    require(SETTINGS_API, ("get_runtime_settings_status",))
+    require(PACKAGE_SCRIPT, ("read_repository_app_version", "verify_product_version.py", "\"app_version\": \"$APP_VERSION\""))
+    package_script_text = read(PACKAGE_SCRIPT)
+    if re.search(r'APP_VERSION=[\"\'][0-9]+\.[0-9]+\.[0-9]+[\"\']', package_script_text):
+        ERRORS.append("scripts/package_macos.sh contains an independent APP_VERSION semver literal")
+    require(VERSION_VERIFIER, ("verify_product_version", "CFBundleShortVersionString", "package-runtime.json", "backend"))
+    for test_file in (D4A_VERSION_TEST, D4A_PREFLIGHT_TEST, D4A_PACKAGE_TEST):
+        if not test_file.is_file():
+            ERRORS.append(f"missing D4-A focused test: {test_file.relative_to(ROOT)}")
 
 
 def main() -> int:
@@ -349,6 +376,7 @@ def main() -> int:
     check_current_lifecycle()
     check_adr20()
     check_domain_clarification()
+    check_d4a_implementation()
 
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
@@ -360,9 +388,8 @@ def main() -> int:
     print("Verified exact pre-CR-013 lifecycle/state/checker snapshot.")
     print("Carried forward 22 closed Restore production blob protections.")
     print("Carried forward 60 protected lifecycle/history blob protections.")
-    print("Verified CR-013 accepted D4 architecture and authorizes only D4-A next.")
+    print("Verified D4-A implementation remains bounded to version identity + read-only compatibility preflight.")
     print("Verified D4-B/C/D, D5 and product release readiness remain gated.")
-    print("Verified ADR 0020 staged-migration, external UpdateLog and downgrade boundaries.")
     return 0
 
 
