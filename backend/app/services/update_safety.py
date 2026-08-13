@@ -268,19 +268,6 @@ def _persist_operation(
     _write_update_journal(journal_path, records)
 
 
-def _previous_completed_app_version(records: list[UpdateOperationRecord]) -> str | None:
-    """Return only a durably known prior update app version.
-
-    The first D4 operation legitimately returns ``None`` because no trusted D4
-    journal predates it. The historical database ``app.version`` placeholder is
-    deliberately not consulted or promoted into application identity.
-    """
-    for record in reversed(records):
-        if record.status == "completed":
-            return record.to_app_version
-    return None
-
-
 def _stage_filename(database_path: Path, operation_id: str) -> str:
     return f".{database_path.stem}.update-{operation_id}{STAGE_SUFFIX}"
 
@@ -526,7 +513,12 @@ def execute_staged_update(
     stage_path = _stage_path(config.path, operation_id)
     record = UpdateOperationRecord(
         operation_id=operation_id,
-        from_app_version=_previous_completed_app_version(records),
+        # D4-B cannot prove the immediately previous package version. A prior
+        # completed update only proves which app last *migrated* this database;
+        # another package version may have run later without changing schema.
+        # Keep the metadata explicitly unknown instead of fabricating identity
+        # from prior journal entries or legacy mutable AppSettings.
+        from_app_version=None,
         to_app_version=app_version,
         from_schema_identity=compatibility.applied_migration_ids,
         to_schema_identity=compatibility.target_migration_ids,

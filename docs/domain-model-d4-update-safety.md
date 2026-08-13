@@ -45,7 +45,7 @@ failed
 
 ## Application-version history semantics
 
-`from_app_version` records only a **durably known prior D4 update application version**. On the first D4 operation it may be `null` because no trusted D4 journal predates that operation. The implementation must not fill that gap from historical mutable `AppSettings.app_version`; inventing a value would create a false authority. `to_app_version` is always the current effective application version resolved by D4-A.
+`from_app_version` is currently recorded as `null` because D4-B has no durable proof of the **immediately previous package version**. A prior completed UpdateLog record proves only which application version last performed a schema migration; one or more later package versions may have run without changing schema. The implementation therefore must not infer `from_app_version` from a previous UpdateLog, historical mutable `AppSettings.app_version`, SemVer ordering or any other indirect signal. A future non-null value requires a separately defined trustworthy prior-package identity source. `to_app_version` is always the current effective application version resolved by D4-A.
 
 ## Schema identity
 

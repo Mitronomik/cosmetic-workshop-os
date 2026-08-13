@@ -94,7 +94,7 @@ read-only D4-A compatibility preflight
 → continue ordinary post-migration startup
 ```
 
-`update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. The first D4 operation may record `from_app_version = null` because no trusted previous D4 update record exists; legacy mutable database `app.version` is never promoted into authority.
+`update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. D4-B records `from_app_version = null` because it cannot prove the immediately previous package version: a previous completed update identifies the last migration-producing app, not necessarily the last app that ran. Legacy mutable database `app.version` and SemVer inference are never promoted into authority.
 
 D4-B is **implementation-complete only in this changeset**. It is not lifecycle-closed, D4-C is not authorized, and exact-head + exact-package verification remain mandatory before any next-slice authorization.
 

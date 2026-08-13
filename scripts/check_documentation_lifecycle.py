@@ -342,7 +342,7 @@ def check_domain_clarification() -> None:
         "ordered `schema_migrations` lineage",
         "ADR 0020",
         "from_app_version",
-        "may be `null`",
+        "currently recorded as `null`",
     ))
 
 
@@ -419,8 +419,15 @@ def check_d4b_implementation() -> None:
         "interrupted-stage-identity-mismatch",
         "canonical-changed-during-staging",
         "post-commit-journal-write-failed",
+        "from_app_version=None",
+        "cannot prove the immediately previous package version",
     ))
-    forbid(D4B_SERVICE, ("rolled_back", "shutil.copy", "shutil.copy2"))
+    forbid(D4B_SERVICE, (
+        "rolled_back",
+        "shutil.copy",
+        "shutil.copy2",
+        "_previous_completed_app_version",
+    ))
     if not D4B_TEST.is_file():
         ERRORS.append(f"missing D4-B focused test: {D4B_TEST.relative_to(ROOT)}")
     else:
@@ -429,6 +436,7 @@ def check_d4b_implementation() -> None:
             "test_staged_migration_failure_keeps_canonical_unchanged",
             "test_post_commit_journal_failure_reconciles_completed_next_launch",
             "test_tampered_interrupted_stage_identity_fails_closed_without_cleanup",
+            "test_previous_completed_update_is_not_misreported_as_immediate_from_app_version",
             "test_canonical_sidecar_refuses_before_backup_or_stage",
         ))
 

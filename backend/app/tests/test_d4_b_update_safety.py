@@ -112,6 +112,37 @@ def test_supported_older_user_startup_migrates_stage_then_commits(tmp_path, monk
     assert "marker-secret" not in raw_journal
 
 
+def test_previous_completed_update_is_not_misreported_as_immediate_from_app_version(
+    tmp_path, monkeypatch
+):
+    paths = build_user_prefix(tmp_path, monkeypatch)
+    previous = UpdateOperationRecord(
+        operation_id="d" * 32,
+        from_app_version=None,
+        to_app_version="0.0.9",
+        from_schema_identity=tuple(expected_migration_ids()[:-2]),
+        to_schema_identity=tuple(expected_migration_ids()[:-1]),
+        before_migration_backup_identity=None,
+        stage_identity=".cosmetic_workshop.update-" + "d" * 32 + ".stage",
+        started_at="2026-08-12T10:00:00.000000Z",
+        finished_at="2026-08-12T10:01:00.000000Z",
+        status="completed",
+        failure_category=None,
+        safe_failure_message=None,
+    )
+    _write_update_journal(update_journal_path(paths), [previous])
+
+    result = initialize_startup("user")
+
+    assert result.applied_migrations == expected_migration_ids()[-1:]
+    records = load_update_journal(update_journal_path(paths))
+    assert len(records) == 2
+    assert records[0] == previous
+    assert records[1].status == "completed"
+    assert records[1].from_app_version is None
+    assert records[1].to_app_version == read_repository_app_version()
+
+
 def test_staged_migration_failure_keeps_canonical_unchanged(tmp_path, monkeypatch):
     paths = build_user_prefix(tmp_path, monkeypatch)
     before = digest(paths.database_path)
