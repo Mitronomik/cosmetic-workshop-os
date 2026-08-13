@@ -59,6 +59,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BOOTSTRAP_TEMPLATE = REPO_ROOT / "scripts" / "macos" / "bundle_bootstrap.sh"
 
 
+def canonical_product_version() -> str:
+    """Read the same repository authority used by the real package build."""
+    return (REPO_ROOT / "backend" / "VERSION").read_text(encoding="utf-8").strip()
+
+
 def bootstrap_template_source() -> str:
     return BOOTSTRAP_TEMPLATE.read_text(encoding="utf-8")
 
@@ -73,6 +78,7 @@ MIGRATION_MODULES = [
 
 def build_app_bundle(root: Path, *, name: str = "CosmeticWorkshopOS.app") -> Path:
     """A complete, passing `.app` skeleton the negative tests then break."""
+    version = canonical_product_version()
     bundle = root / name
     contents = bundle / "Contents"
     macos = contents / "MacOS"
@@ -88,7 +94,8 @@ def build_app_bundle(root: Path, *, name: str = "CosmeticWorkshopOS.app") -> Pat
                 "CFBundleIdentifier": "ru.cosmetic-workshop-os.app",
                 "CFBundleExecutable": "CosmeticWorkshopOS",
                 "CFBundlePackageType": "APPL",
-                "CFBundleShortVersionString": "0.1.0",
+                "CFBundleShortVersionString": version,
+                "CFBundleVersion": version,
             }
         )
     )
@@ -142,7 +149,7 @@ def build_app_bundle(root: Path, *, name: str = "CosmeticWorkshopOS.app") -> Pat
             {
                 "product": "Мастерская косметолога",
                 "artifact": name,
-                "app_version": "0.1.0",
+                "app_version": version,
                 "python_version": "3.12.13",
                 "architecture": "arm64",
                 "runtime_root_relative_to_app": "../runtime",

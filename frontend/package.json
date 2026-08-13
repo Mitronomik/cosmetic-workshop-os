@@ -1,7 +1,6 @@
 {
   "name": "cosmetic-workshop-os-frontend",
   "private": true,
-  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "npm run build && node scripts/dev-server.mjs dist",
