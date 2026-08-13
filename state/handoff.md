@@ -4,8 +4,12 @@ Updated: `2026-08-13`
 
 ## Current authority
 
-- Restore is closed and unchanged.
-- D3 package MVP is implemented.
+```text
+C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
+Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
+D3 — macOS package MVP — IMPLEMENTED
+```
+
 - CR-013 / ADR 0020 decides D4 Update Safety.
 - D4-A is implemented but not lifecycle-closed.
 - D4-B remains unauthorized until D4-A is merged and exact-head verified.

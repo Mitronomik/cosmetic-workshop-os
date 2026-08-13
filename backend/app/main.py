@@ -42,10 +42,11 @@ from app.domain.production_tax_context import (
     EXPECTED_PERCENT_FIELD,
     missing_tax_rate_context_error,
 )
+from app.version import resolve_effective_app_version
 
 APP_NAME = "cosmetic-workshop-os"
 PRODUCT_NAME = "Мастерская косметолога"
-APP_VERSION = "0.1.0"
+APP_VERSION = resolve_effective_app_version()
 
 TAX_RATE_CONTEXT_BODY_FIELDS = frozenset({EXPECTED_PERCENT_FIELD, EXPECTED_EFFECTIVE_AT_FIELD})
 

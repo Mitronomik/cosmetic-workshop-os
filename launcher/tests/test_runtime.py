@@ -7,6 +7,8 @@ import pytest
 from launcher.config import build_runtime_config, resolve_runtime_paths, RuntimeConfigError
 from launcher import runtime
 from launcher.runtime import RuntimeLaunchError, initialize_backend_startup
+from app.db.config import DatabaseConfig
+from app.db.migrations import MIGRATION_MODULES, apply_migrations
 
 # The single shared table guard, so the launcher's expectation of the migrated
 # schema cannot drift away from the backend's own. The previous local copy was
@@ -68,10 +70,20 @@ def test_launcher_startup_respects_user_data_override(monkeypatch, tmp_path):
     assert "artifact_audit_operations" in tables
 
 
+def build_supported_older_database(database_path: Path) -> None:
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    original = list(MIGRATION_MODULES)
+    try:
+        MIGRATION_MODULES[:] = original[:-1]
+        apply_migrations(DatabaseConfig(path=database_path))
+    finally:
+        MIGRATION_MODULES[:] = original
+
+
 def test_launcher_startup_creates_backup_before_migration(monkeypatch, tmp_path):
     user_data_dir = tmp_path / "user-data"
     database_path = user_data_dir / "data" / "cosmetic_workshop.sqlite"
-    database_path.parent.mkdir(parents=True)
+    build_supported_older_database(database_path)
     monkeypatch.setenv("COSMETIC_WORKSHOP_USER_DATA_DIR", str(user_data_dir))
     monkeypatch.delenv("COSMETIC_WORKSHOP_DB_PATH", raising=False)
     with sqlite3.connect(database_path) as connection:

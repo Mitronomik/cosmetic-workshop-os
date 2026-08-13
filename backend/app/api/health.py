@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.schemas.health import HealthResponse
+from app.version import resolve_effective_app_version
 
 router = APIRouter(tags=["health"])
 
@@ -11,7 +12,7 @@ def health_payload() -> dict[str, str]:
         "app": "cosmetic-workshop-os",
         "product_name": "Мастерская косметолога",
         "mode": "local-first",
-        "version": "0.1.0",
+        "version": resolve_effective_app_version(),
     }
 
 
