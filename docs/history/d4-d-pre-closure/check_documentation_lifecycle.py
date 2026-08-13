@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Guard closed Restore plus the CR-013 / D4-A implementation boundary.
 
-D4-A, D4-B, D4-C and D4-D are lifecycle-closed. D4 is complete;
+D4-A, D4-B and D4-C are lifecycle-closed. D4-D alone is authorized next;
 D5, release readiness and Restore changes remain forbidden.
 
 The complete pre-CR-013 checker is preserved byte-identically under
@@ -47,8 +47,6 @@ D4B_PRECLOSURE_MANIFEST = P("docs/history/d4-b-pre-closure/manifest.json")
 D4B_PRECLOSURE_ABOUT = P("docs/history/d4-b-pre-closure/ABOUT.md")
 D4C_PRECLOSURE_MANIFEST = P("docs/history/d4-c-pre-closure/manifest.json")
 D4C_PRECLOSURE_ABOUT = P("docs/history/d4-c-pre-closure/ABOUT.md")
-D4D_PRECLOSURE_MANIFEST = P("docs/history/d4-d-pre-closure/manifest.json")
-D4D_PRECLOSURE_ABOUT = P("docs/history/d4-d-pre-closure/ABOUT.md")
 
 VERSION_SOURCE = P("backend/VERSION")
 VERSION_MODULE = P("backend/app/version.py")
@@ -91,9 +89,6 @@ D4C_MERGED_HEAD = "3d69df192b5bdff9c7df067d8c8fde40154ebac9"
 D4C_PR_HEAD_RUN = "31747841343"
 D4C_MERGED_RUN = "31749503618"
 D4C_PRECLOSURE_MANIFEST_SHA = "22271c8327e3af235c52de88f6654a1f3808e54f"
-D4D_VERIFIED_HEAD = "ec88b09193c8ed041e17daef3e3ffc0193d1b559"
-D4D_FINAL_RUN = "31751386881"
-D4D_PRECLOSURE_MANIFEST_SHA = "b403263c95c24aa02b884e97bc593d3d1aec9b58"
 LEGACY_CHECKER_SHA = "0d637269f802796098d5e6e911ad4d6a325ba990"
 
 SNAPSHOT_BLOBS = {
@@ -114,11 +109,11 @@ SNAPSHOT_BLOBS = {
 
 D4_STATUS = (
     "CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT",
-    "D4 — Update safety — DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED",
+    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT",
     "D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED",
-    "D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED",
+    "D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "D5 — Remote install checklist — NOT AUTHORIZED BY CR-013",
     "Product release readiness — NOT CLAIMED",
 )
@@ -142,18 +137,23 @@ STATUS_SURFACES = (
 )
 
 FORBIDDEN_ACTIVE = (
-    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT",
-    "D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "D4-D alone is authorized next",
-    "D4-D is the only authorized next slice",
-    "D4-D may now perform only final exact-package D4 verification",
-    "D4-D авторизован следующим",
-    "remain outside CR-013/D4-A",
     "D4 — Update safety — IN PROGRESS — D4-C IMPLEMENTED, VERIFICATION PENDING",
+    "D4-A and D4-B remain closed. D4-C is implemented in the current branch; exact-head/exact-package verification and lifecycle closure remain pending, and D4-D remains unauthorized.",
+    "**PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED**.",
     "D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING",
+    "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
     "D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING",
+    "D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
+    "D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED",
+    "D4-C — User-facing update status and packaged failure UX — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
+    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT",
+    "D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED",
     "D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED",
+    "D4 — Update safety — DONE",
+    "D4 — Update safety — CLOSED",
     "D4-D — Exact-package update verification and D4 lifecycle closure — IMPLEMENTED",
+    "D4-D — Exact-package update verification and D4 lifecycle closure — DONE",
     "D4-D — Exact-package update verification and D4 lifecycle closure — CLOSED",
     "D5 — Remote install checklist — AUTHORIZED",
     "D5 — Remote install checklist — IMPLEMENTED",
@@ -353,24 +353,6 @@ def check_d4c_preclosure_snapshot() -> None:
     require(HISTORY_INDEX, ("d4-c-pre-closure/", D4C_MERGED_HEAD))
 
 
-def check_d4d_preclosure_snapshot() -> None:
-    verify_blob(D4D_PRECLOSURE_MANIFEST, D4D_PRECLOSURE_MANIFEST_SHA, "D4-D pre-closure manifest")
-    try: payload=json.loads(read(D4D_PRECLOSURE_MANIFEST))
-    except json.JSONDecodeError as exc:
-        ERRORS.append(f"D4-D pre-closure manifest does not parse: {exc}")
-        return
-    if payload.get("source_commit") != D4D_VERIFIED_HEAD: ERRORS.append("D4-D pre-closure source commit changed")
-    if payload.get("d4d_final_verification_run") != D4D_FINAL_RUN: ERRORS.append("D4-D final verification run changed")
-    files=payload.get("files", {})
-    expected_names=('README.md','current-lifecycle.md','implementation-plan.md','packaging.md','deployment.md','update-guide.md','current-focus.md','progress.md','handoff.md','change-requests.md','check_documentation_lifecycle.py','history-README.md')
-    if set(files) != set(expected_names): ERRORS.append(f"D4-D pre-closure manifest file set changed: {sorted(files)}")
-    for name in expected_names:
-        expected=files.get(name)
-        if isinstance(expected,str): verify_blob(P(f"docs/history/d4-d-pre-closure/{name}"),expected,"D4-D pre-closure snapshot blob")
-    require(D4D_PRECLOSURE_ABOUT,(D4D_VERIFIED_HEAD,D4D_FINAL_RUN,"PASS — FULL AUTOMATED SMOKE PASSED","exact Git blob identity"))
-    require(HISTORY_INDEX,("d4-d-pre-closure/",D4D_VERIFIED_HEAD))
-
-
 def check_legacy_protections() -> None:
     verify_blob(LEGACY_CHECKER, LEGACY_CHECKER_SHA, "legacy lifecycle checker snapshot")
     pinned = _extract_legacy_blob_map("PINNED_BLOBS")
@@ -391,13 +373,12 @@ def check_current_lifecycle() -> None:
         forbid(path, FORBIDDEN_ACTIVE)
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
-    require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-B closure truth", "D4-C closure truth", "D4-D closure truth", "D4-D closure evidence", "D4 closure truth", D4D_VERIFIED_HEAD, D4D_FINAL_RUN, "Restore remains closed"))
-    require(PLAN, ("Normative D4 decision", "D4-A", "D4-B", "D4-C", "D4-D", "**DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED**"))
+    require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "D4-B closure truth", "D4-B closure evidence", "D4-C closure truth", "D4-C closure evidence", "D4-D authorization boundary", D4C_VERIFIED_PR_HEAD, D4C_MERGED_HEAD, "Restore remains closed"))
+    require(PLAN, ("Normative D4 decision", "D4-A", "D4-B", "D4-C", "D4-D", "**AUTHORIZED NEXT — NOT IMPLEMENTED**"))
     require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
     require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
-    require(UPDATE_GUIDE, ("D4 Update Safety закрыт", "D5 всё ещё не авторизован", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
+    require(UPDATE_GUIDE, ("D4-A, D4-B и D4-C закрыты", "D4-D", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
     require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md"))
-    require(FOCUS, ("No further implementation slice is authorized by CR-013", "Starting D5 requires a separate authorization decision/change request"))
 
 
 def check_adr20() -> None:
@@ -596,7 +577,6 @@ def main() -> int:
     check_d4a_preclosure_snapshot()
     check_d4b_preclosure_snapshot()
     check_d4c_preclosure_snapshot()
-    check_d4d_preclosure_snapshot()
     check_current_lifecycle()
     check_adr20()
     check_domain_clarification()
@@ -616,8 +596,8 @@ def main() -> int:
     print("Carried forward 60 protected lifecycle/history blob protections.")
     print("Verified D4-A is lifecycle-closed on the exact merged-head evidence.")
     print("Verified D4-B is lifecycle-closed on exact PR-head and merged-head Level-5 evidence.")
-    print("Verified D4 is lifecycle-closed on final D4-D exact-package evidence.")
-    print("Verified D5 remains unauthorized and product release readiness remains not claimed.")
+    print("Verified D4-C is lifecycle-closed on exact PR-head and merged-head Level-5 evidence.")
+    print("Verified D4-D alone is authorized next; D5 and product release readiness remain gated.")
     return 0
 
 

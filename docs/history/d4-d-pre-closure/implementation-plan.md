@@ -12,11 +12,11 @@ C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
 Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED
+D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
+D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
@@ -48,7 +48,7 @@ Intentionally unchanged:
 - no frontend update presentation or new Finder error category exists;
 - no protected Restore production file changes.
 
-D4-A, D4-B, D4-C and D4-D are closed. D4 is complete.
+D4-A, D4-B and D4-C are closed. D4-D is the only authorized next slice.
 
 ### D4-B — Safe migration execution and durable UpdateLog
 
@@ -89,9 +89,9 @@ Verified PR head `ba577f1151e041c11019525862d9bb76eeb1404e` and merged head `3d6
 
 ### D4-D — Exact-package update verification and lifecycle closure
 
-**DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED**.
+**AUTHORIZED NEXT — NOT IMPLEMENTED**.
 
-Exact current main `ec88b09193c8ed041e17daef3e3ffc0193d1b559` passed final D4-D run `31751386881` with the complete D4 package safety matrix. D4 is lifecycle-closed. No D5 or release work is authorized by this closure.
+D4-D is limited to final exact-package verification of the complete ADR 0020 D4 manual-update safety contract and D4 lifecycle closure. It must not introduce new update runtime authority, downloader/checking, D5, release/distribution work or Restore changes.
 
 ## D5 and release boundary
 

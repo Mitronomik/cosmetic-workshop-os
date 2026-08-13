@@ -1,0 +1,20 @@
+{
+  "source_commit": "ec88b09193c8ed041e17daef3e3ffc0193d1b559",
+  "d4d_final_verification_run": "31751386881",
+  "artifact_id": "9201217317",
+  "artifact_digest": "sha256:0dc707f8823eb69934a5bc3b3b6824557533bafa3e1e86a7f13fc29c19a1af7d",
+  "files": {
+    "README.md": "06f98ac94182ba37f3cdefe648c743d80f212808",
+    "current-lifecycle.md": "a66cc67a2885cb37f0adf358d41e711b3bc05783",
+    "implementation-plan.md": "d4d9002da4afb9418ad67401c1fd02286e519d6b",
+    "packaging.md": "6c373883ef7850080434085a2ccbf0959dd8f85e",
+    "deployment.md": "c9d889cd2d8fd61ee13efb1d3652a3c3e637ac1a",
+    "update-guide.md": "42c2048d292929835c96d5be460b0061d4e804f8",
+    "current-focus.md": "50a70f49c8123499f365c3342709e53e6e3ba088",
+    "progress.md": "56611c8fe90a087b0c5830d5c3b3f2b5d4acaba0",
+    "handoff.md": "9290016580faa8495b853b83eb27c75a8adba48b",
+    "change-requests.md": "d0321ba4db6901cecddbb1aa0f6407e96ede846b",
+    "check_documentation_lifecycle.py": "2378de6aa90ba2a5e54d3570fcba9809b933c318",
+    "history-README.md": "469d9158900cee289eaf6d7fba2a39fd5c6b8d05"
+  }
+}

@@ -14,23 +14,23 @@ CR-012 did not authorize D4, D5, signing, notarization, DMG, updater/download, A
 
 ## CR-013 — D4 Update Safety contract and bounded implementation authorization
 
-Status: **ACCEPTED — D4 CLOSED; NO D5 AUTHORIZATION**.
+Status: **ACCEPTED — D4-A/B/C CLOSED; D4-D AUTHORIZED NEXT**.
 
 Durable decision: `docs/decisions/0020-d4-update-safety-contract.md`.
 
-D4-A/B/C remain closed. D4-D final exact-package verification passed on exact main `ec88b09193c8ed041e17daef3e3ffc0193d1b559` in run `31751386881`. D4 is lifecycle-closed; CR-013 provides no D5 authorization.
+D4-A, D4-B and D4-C are closed. D4-C verified PR head `ba577f1151e041c11019525862d9bb76eeb1404e` and merged head `3d69df192b5bdff9c7df067d8c8fde40154ebac9` passed Level-5 exact-package verification and are content-identical. D4-D alone is authorized next.
 
 Authorization remains:
 
 ```text
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED
+D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
+D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
-D4-A/B/C/D closure is satisfied. D5 remains unauthorized and product release readiness remains not claimed.
+D4-A/B/C closure remains satisfied. D4-D only is authorized next; D5 and release readiness remain unauthorized/not claimed.

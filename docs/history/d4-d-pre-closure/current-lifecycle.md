@@ -25,11 +25,11 @@ CR-012 — ACCEPTED — D3 MACOS PACKAGE MVP AUTHORIZATION
 D3 — macOS package MVP — IMPLEMENTED
 
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED
+D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
+D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED
 
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
@@ -65,7 +65,7 @@ Schema compatibility:
 - `pending_migration_ids()` is no longer used to decide ordinary startup compatibility before the gate;
 - D4-A itself originally stopped at the compatibility gate; the now-closed D4-B slice replaces the supported-older direct migration seam with staged migration after that gate.
 
-D4-A, D4-B, D4-C and D4-D are closed. D4 is lifecycle-closed.
+D4-A, D4-B and D4-C are closed. D4-D is the only authorized next slice.
 
 ## D4-A closure evidence
 
@@ -119,21 +119,9 @@ D4-C is **DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED**. Its implement
 - merged-head Level-5 verifier: run `31749503618`, artifact `9200580412`, digest `sha256:02f93910e6a6b1e1390c9782d89af320a244d1f6cb379bb5496a0c8e11dd8f78`;
 - both trustworthy exact-package runs ended `PASS — FULL AUTOMATED SMOKE PASSED`.
 
-## D4-D closure truth
+## D4-D authorization boundary
 
-D4-D is **DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED**. It introduced no runtime implementation. It re-verified the complete D4 manual-update safety contract on exact current main `ec88b09193c8ed041e17daef3e3ffc0193d1b559` using one real packaged `.app`, the full regression/lifecycle/frontend/package path, the D4-C human status/failure scenarios, and the accepted D4-B staged-migration/interruption/newer-lineage matrix.
-
-## D4-D closure evidence
-
-- exact tested main/head: `ec88b09193c8ed041e17daef3e3ffc0193d1b559`;
-- final D4-D verifier run: `31751386881`;
-- evidence artifact: `9201217317`;
-- artifact digest: `sha256:0dc707f8823eb69934a5bc3b3b6824557533bafa3e1e86a7f13fc29c19a1af7d`;
-- final result: `PASS — FULL AUTOMATED SMOKE PASSED`.
-
-## D4 closure truth
-
-D4 Update Safety is **DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED**. CR-013 authorizes no further implementation slice. D5 remains **NOT AUTHORIZED BY CR-013**, and product release readiness remains **NOT CLAIMED**. A future D5 start requires a separate authorization decision/change request.
+D4-D alone is **AUTHORIZED NEXT — NOT IMPLEMENTED**. It may perform the final exact-package D4 verification and D4 lifecycle closure required by ADR 0020. It may not introduce new update runtime authority, downloader/checking, D5, signing, notarization, DMG, App Store, release channels/readiness, cloud sync or Restore changes.
 
 ## Closed Restore boundary
 
@@ -141,4 +129,4 @@ Restore remains closed. D4-C changes no protected Restore production blob, no Re
 
 ## Release boundary
 
-D4 is closed. D5, auto-update/download, GitHub Releases integration, signing, notarization, DMG, App Store, release channels and release readiness remain unauthorized or not claimed and require separate future authorization.
+D5, auto-update/download, GitHub Releases integration, signing, notarization, DMG, App Store, release channels and release readiness remain outside CR-013/D4-A.

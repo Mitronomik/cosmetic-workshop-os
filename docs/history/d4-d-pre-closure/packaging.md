@@ -1,6 +1,6 @@
 # Packaging
 
-Status: **CURRENT — D3 IMPLEMENTED; D4 CLOSED AND FINAL EXACT-PACKAGE VERIFIED**
+Status: **CURRENT — D3 IMPLEMENTED; D4-A/B/C CLOSED; D4-D AUTHORIZED NEXT**
 Updated: `2026-08-13`
 
 The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-decision/packaging.md`.
@@ -10,11 +10,11 @@ The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-dec
 ```text
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED
+D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
+D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
@@ -55,4 +55,4 @@ D4-C extends the existing Finder-visible fixed-message catalogue with two update
 
 ## Explicit non-goals
 
-D4 is closed and final exact-package verified. This closure does not authorize auto-update download, internet update checking, GitHub Releases integration, release channels, installer redesign, signing/notarization, DMG, App Store, sandbox migration, D5 or release readiness.
+D4-C closure authorizes D4-D only. It does not authorize auto-update download, internet update checking, GitHub Releases integration, release channels, installer redesign, signing/notarization, DMG, App Store, sandbox migration, D5 or release readiness.
