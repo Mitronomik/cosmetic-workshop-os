@@ -1,0 +1,86 @@
+name: Build D4-C lifecycle closure v2
+on:
+  push:
+    branches: [verification/d4-c-closure-builder]
+permissions:
+  contents: write
+env:
+  TARGET_BRANCH: agent/d4-c-lifecycle-closure
+  BUILDER_BRANCH: verification/d4-c-closure-builder
+  D4C_VERIFIED_PR_HEAD: ba577f1151e041c11019525862d9bb76eeb1404e
+  D4C_MERGED_HEAD: 3d69df192b5bdff9c7df067d8c8fde40154ebac9
+  D4C_PR_HEAD_RUN: '31747841343'
+  D4C_MERGED_RUN: '31749503618'
+  D4C_PR_ARTIFACT: '9199930504'
+  D4C_PR_DIGEST: sha256:a034cf7daa3416c18e73bec328f4c1d78adce240213ceff0ccef47be969f3de3
+  D4C_MERGED_ARTIFACT: '9200580412'
+  D4C_MERGED_DIGEST: sha256:02f93910e6a6b1e1390c9782d89af320a244d1f6cb379bb5496a0c8e11dd8f78
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+      - name: Exact base gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$TARGET_BRANCH" "$BUILDER_BRANCH"
+          test "$(git rev-parse HEAD)" = "$D4C_MERGED_HEAD"
+          test "$(git rev-parse origin/main)" = "$D4C_MERGED_HEAD"
+          test "$(git rev-parse origin/$TARGET_BRANCH)" = "$D4C_MERGED_HEAD"
+          test -z "$(git status --porcelain)"
+          test -z "$(git diff --name-only "$D4C_VERIFIED_PR_HEAD" "$D4C_MERGED_HEAD")"
+      - name: Build and validate closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          for s in d4c_closure_snapshot.py d4c_closure_docs.py d4c_closure_checker.py d4c_closure_checker_carryforward.py; do
+            git show "origin/$BUILDER_BRANCH:verification/$s" > "$RUNNER_TEMP/$s"
+            python3 "$RUNNER_TEMP/$s"
+          done
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+          git diff --check
+      - name: Lifecycle negative probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          def must_fail(label):
+              result=subprocess.run(['python3','scripts/check_documentation_lifecycle.py'],stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+              if result.returncode==0: raise SystemExit(f'negative probe not caught: {label}')
+          focus=Path('state/current-focus.md'); good=focus.read_text(encoding='utf-8')
+          for old,new in [
+              ('D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED','D4-D — Exact-package update verification and D4 lifecycle closure — IMPLEMENTED'),
+              ('D5 — Remote install checklist — NOT AUTHORIZED BY CR-013','D5 — Remote install checklist — AUTHORIZED'),
+              ('Product release readiness — NOT CLAIMED','Product release readiness — READY'),
+              ('Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED','Restore — IN PROGRESS'),
+          ]:
+              if old not in good: raise SystemExit(f'probe source missing: {old}')
+              focus.write_text(good.replace(old,new,1),encoding='utf-8'); must_fail(new); focus.write_text(good,encoding='utf-8')
+          history=Path('docs/history/d4-c-pre-closure/README.md'); raw=history.read_bytes(); history.write_bytes(raw+b'\nprobe\n'); must_fail('history'); history.write_bytes(raw)
+          PY
+          python3 scripts/check_documentation_lifecycle.py
+          git diff --check
+      - name: Exact scope gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "origin/$BUILDER_BRANCH:verification/d4c_closure_scope.py" > "$RUNNER_TEMP/scope.py"
+          python3 "$RUNNER_TEMP/scope.py"
+      - name: Publish closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add README.md docs/current-lifecycle.md docs/deployment.md docs/implementation-plan.md docs/packaging.md docs/update-guide.md docs/history/README.md docs/history/d4-c-pre-closure scripts/check_documentation_lifecycle.py state/change-requests.md state/current-focus.md state/handoff.md state/progress.md
+          git diff --cached --check
+          git config user.name 'D4-C lifecycle closure builder'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-C close lifecycle and authorize D4-D next'
+          git push origin HEAD:"$TARGET_BRANCH"
