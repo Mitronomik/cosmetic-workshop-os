@@ -1,0 +1,37 @@
+name: PR197 read-only exact-head verifier
+
+on:
+  push:
+    branches:
+      - maintenance/d4-a-lifecycle-closure-builder-v3
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HEAD: c51d35a503a2ef6ed43f4547ee9aa690dad3c4d8
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact published head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 1
+      - name: Verify exact closure head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+          rm -rf scripts/__pycache__
+          git diff --check
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          echo 'PASS — PR197 READ-ONLY EXACT-HEAD VERIFICATION PASSED' >> "$GITHUB_STEP_SUMMARY"
