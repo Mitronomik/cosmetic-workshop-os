@@ -4,9 +4,12 @@ Updated: `2026-08-13`
 
 ## Closed baseline
 
-- C4-III exact-head and exact-package verification passed and the Restore lifecycle is closed.
-- Restore is `IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED`.
-- D3 macOS package MVP is implemented.
+```text
+C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
+Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
+D3 — macOS package MVP — IMPLEMENTED
+```
+
 - CR-013 / ADR 0020 is accepted.
 - Product release readiness is not claimed.
 
