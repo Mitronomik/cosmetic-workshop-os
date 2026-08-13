@@ -12,9 +12,9 @@ C4-III — DONE — EXACT-HEAD AND EXACT-PACKAGE VERIFIED
 Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT
-D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING
+D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
+D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED
 D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
@@ -27,7 +27,7 @@ Normative D4 decision: `docs/decisions/0020-d4-update-safety-contract.md`.
 
 ### D4-A — Version identity and compatibility preflight
 
-**DONE — MERGED AND EXACT-HEAD VERIFIED**.
+**IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING**.
 
 Implemented scope:
 
@@ -48,13 +48,13 @@ Intentionally unchanged:
 - no frontend update presentation or new Finder error category exists;
 - no protected Restore production file changes.
 
-D4-A is merged, exact-head verified and lifecycle-closed. D4-B is now the only authorized next slice and remains not implemented.
+D4-A does **not** authorize D4-B by implementation alone. It must be merged, exact-head verified and lifecycle-closed first.
 
 ### D4-B — Safe migration execution and durable UpdateLog
 
-**AUTHORIZED NEXT — NOT IMPLEMENTED**.
+**PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED**.
 
-Authorized D4-B architecture from ADR 0020:
+Planned architecture from ADR 0020:
 
 ```text
 consistent before_migration backup

@@ -1,6 +1,6 @@
 # Packaging
 
-Status: **CURRENT — D3 IMPLEMENTED; D4-A CLOSED; D4-B AUTHORIZED NEXT**
+Status: **CURRENT — D3 IMPLEMENTED; D4-A IMPLEMENTED; VERIFICATION PENDING**
 Updated: `2026-08-13`
 
 The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-decision/packaging.md`.
@@ -10,9 +10,9 @@ The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-dec
 ```text
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT
-D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING
+D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
+D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED
 D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
@@ -45,7 +45,7 @@ The historical mutable database `app.version` placeholder is not used to decide 
 
 ## D4 manual update model
 
-D4 remains safe manual package replacement. D4-A supplies the closed compatibility gate; D4-B migration execution is now authorized next but remains unimplemented.
+D4 remains safe manual package replacement. D4-A supplies the compatibility gate; D4-B migration execution is still gated.
 
 The previous package is **not** a guaranteed rollback after the database update commit point. An older package must independently prove the canonical database lineage is compatible; otherwise it fails closed before mutation.
 

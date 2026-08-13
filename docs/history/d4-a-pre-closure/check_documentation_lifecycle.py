@@ -13,7 +13,6 @@ cannot weaken previously accepted Restore/history integrity.
 from __future__ import annotations
 
 import ast
-import json
 from hashlib import sha1
 from pathlib import Path
 import re
@@ -41,8 +40,6 @@ ADR19 = P("docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md")
 ADR20 = P("docs/decisions/0020-d4-update-safety-contract.md")
 HISTORY_INDEX = P("docs/history/README.md")
 LEGACY_CHECKER = P("docs/history/d4-pre-decision/check_documentation_lifecycle.py")
-D4A_PRECLOSURE_MANIFEST = P("docs/history/d4-a-pre-closure/manifest.json")
-D4A_PRECLOSURE_ABOUT = P("docs/history/d4-a-pre-closure/ABOUT.md")
 
 VERSION_SOURCE = P("backend/VERSION")
 VERSION_MODULE = P("backend/app/version.py")
@@ -59,10 +56,6 @@ D4A_PACKAGE_TEST = P("macos_package/tests/test_d4_a_product_version_projection.p
 
 DECISION_BASE = "dc2301f7d4e101ad0fba851325dae9274f02da0c"
 CR013_MERGE_BASE = "4dbb83b9da3f0945bffde3187a69054305e01b28"
-D4A_VERIFIED_PR_HEAD = "f294b15365fcf651790e2dc5638ed1551f616c3d"
-D4A_MERGED_HEAD = "89dd69dc1958e622146e01869cc34d4cd2ec859e"
-D4A_MERGED_RUN = "31699624984"
-D4A_PRECLOSURE_MANIFEST_SHA = "7debfd4b40c1b32a00fe3417564fd97480f8f043"
 LEGACY_CHECKER_SHA = "0d637269f802796098d5e6e911ad4d6a325ba990"
 
 SNAPSHOT_BLOBS = {
@@ -83,9 +76,9 @@ SNAPSHOT_BLOBS = {
 
 D4_STATUS = (
     "CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT",
-    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT",
-    "D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING",
+    "D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
+    "D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED",
     "D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED",
     "D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED",
     "D5 — Remote install checklist — NOT AUTHORIZED BY CR-013",
@@ -111,11 +104,11 @@ STATUS_SURFACES = (
 )
 
 FORBIDDEN_ACTIVE = (
-    "D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING",
-    "D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
-    "D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED",
     "D4 — Update safety — DONE",
     "D4 — Update safety — CLOSED",
+    "D4-A — Version identity and compatibility preflight — DONE",
+    "D4-A — Version identity and compatibility preflight — MERGED AND VERIFIED",
+    "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT",
     "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED",
     "D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT",
     "D4-C — User-facing update status and packaged failure UX — IMPLEMENTED",
@@ -255,27 +248,6 @@ def check_predecision_snapshot() -> None:
     require(HISTORY_INDEX, ("d4-pre-decision/", DECISION_BASE))
 
 
-
-def check_d4a_preclosure_snapshot() -> None:
-    verify_blob(D4A_PRECLOSURE_MANIFEST, D4A_PRECLOSURE_MANIFEST_SHA, "D4-A pre-closure manifest")
-    try:
-        payload = json.loads(read(D4A_PRECLOSURE_MANIFEST))
-    except json.JSONDecodeError as exc:
-        ERRORS.append(f"D4-A pre-closure manifest does not parse: {exc}")
-        return
-    if payload.get("source_commit") != D4A_MERGED_HEAD:
-        ERRORS.append("D4-A pre-closure manifest source commit changed")
-    files = payload.get("files", {})
-    expected_names = ('README.md', 'current-lifecycle.md', 'implementation-plan.md', 'packaging.md', 'deployment.md', 'update-guide.md', 'current-focus.md', 'progress.md', 'handoff.md', 'change-requests.md', 'check_documentation_lifecycle.py', 'history-README.md')
-    if set(files) != set(expected_names):
-        ERRORS.append(f"D4-A pre-closure manifest file set changed: {sorted(files)}")
-    for name in expected_names:
-        expected = files.get(name)
-        if isinstance(expected, str):
-            verify_blob(P(f"docs/history/d4-a-pre-closure/{name}"), expected, "D4-A pre-closure snapshot blob")
-    require(D4A_PRECLOSURE_ABOUT, (D4A_MERGED_HEAD, D4A_VERIFIED_PR_HEAD, D4A_MERGED_RUN, "exact Git blob identity"))
-    require(HISTORY_INDEX, ("d4-a-pre-closure/", D4A_MERGED_HEAD))
-
 def check_legacy_protections() -> None:
     verify_blob(LEGACY_CHECKER, LEGACY_CHECKER_SHA, "legacy lifecycle checker snapshot")
     pinned = _extract_legacy_blob_map("PINNED_BLOBS")
@@ -296,11 +268,11 @@ def check_current_lifecycle() -> None:
         forbid(path, FORBIDDEN_ACTIVE)
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
-    require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "Restore remains closed"))
+    require(CURRENT, ("ADR 0020", "D4-A implementation truth", "Restore remains closed"))
     require(PLAN, ("Normative D4 decision", "D4-A", "D4-B", "D4-C", "D4-D"))
     require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
     require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
-    require(UPDATE_GUIDE, ("D4-A закрыт", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
+    require(UPDATE_GUIDE, ("D4-A реализован", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
     require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md"))
 
 
@@ -401,7 +373,6 @@ def check_d4a_implementation() -> None:
 def main() -> int:
     check_predecision_snapshot()
     check_legacy_protections()
-    check_d4a_preclosure_snapshot()
     check_current_lifecycle()
     check_adr20()
     check_domain_clarification()
@@ -417,9 +388,8 @@ def main() -> int:
     print("Verified exact pre-CR-013 lifecycle/state/checker snapshot.")
     print("Carried forward 22 closed Restore production blob protections.")
     print("Carried forward 60 protected lifecycle/history blob protections.")
-    print("Verified D4-A is lifecycle-closed on the exact merged-head evidence.")
-    print("Verified D4-B alone is authorized next and remains not implemented.")
-    print("Verified D4-C/D, D5 and product release readiness remain gated.")
+    print("Verified D4-A implementation remains bounded to version identity + read-only compatibility preflight.")
+    print("Verified D4-B/C/D, D5 and product release readiness remain gated.")
     return 0
 
 
