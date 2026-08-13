@@ -1,0 +1,20 @@
+{
+  "files": {
+    "README.md": "88505c436984b9e4b0b77b34606749062f101581",
+    "change-requests.md": "bc27b0712e523563944a1f884150bd072e456e86",
+    "check_documentation_lifecycle.py": "931710028fd19e5a65c266357985cf0e6d937236",
+    "current-focus.md": "598addc583aa2019377cf91c121142745293e713",
+    "current-lifecycle.md": "d56945c70e89446e3c655e855d04fe9420a44daa",
+    "deployment.md": "0977076663e4b0dfe7ac05fab6e2ef6ed629df01",
+    "handoff.md": "35fa01948291c01b9fdf1ba23c3e720fcd859fe4",
+    "history-README.md": "6f603af7a00cc0e34495a859395722948e71419f",
+    "implementation-plan.md": "fb010f5543d38bf01335ddf93eea8c5c72bb391d",
+    "packaging.md": "18386aae83f78dfe4cd53255ee93290e5880bd24",
+    "progress.md": "29cccd9d51439834401a020ace7d5e1c00c9b95c",
+    "update-guide.md": "5aa14d01ddfe06bb1240c392331c21be1854eb6e"
+  },
+  "merged_head_verification_run": "31717705331",
+  "pr_head_verification_run": "31716610699",
+  "source_commit": "d60a3be993c76b59292cf27ee66bcbe856669fc4",
+  "verified_pr_head": "8688fa3dba87205b4b4626ebab2902262fd4cd24"
+}
