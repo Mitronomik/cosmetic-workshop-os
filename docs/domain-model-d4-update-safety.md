@@ -43,6 +43,10 @@ failed
 
 `started` is durable and non-terminal. A repeated launch reconciles it conservatively against the canonical migration lineage. It does not trigger an automatic destructive retry.
 
+## Application-version history semantics
+
+`from_app_version` is currently recorded as `null` because D4-B has no durable proof of the **immediately previous package version**. A prior completed UpdateLog record proves only which application version last performed a schema migration; one or more later package versions may have run without changing schema. The implementation therefore must not infer `from_app_version` from a previous UpdateLog, historical mutable `AppSettings.app_version`, SemVer ordering or any other indirect signal. A future non-null value requires a separately defined trustworthy prior-package identity source. `to_app_version` is always the current effective application version resolved by D4-A.
+
 ## Schema identity
 
 `from_schema_identity` and `to_schema_identity` represent the ordered `schema_migrations` lineage. A UI/log may abbreviate this to last-applied and target migration IDs, but no separately mutable `schema_version` counter is authoritative.

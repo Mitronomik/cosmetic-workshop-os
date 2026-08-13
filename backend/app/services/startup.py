@@ -8,11 +8,12 @@ from app.db.startup_compatibility import (
     StartupSchemaCompatibility,
     inspect_startup_schema_compatibility,
 )
-from app.services.backup import BackupResult, backup_sqlite_database
+from app.services.backup import BackupResult
 from app.services.backup_audit import BackupReconciliationResult, reconcile_manual_backups
 from app.services.database import initialize_database
 from app.services.export_audit import ExportReconciliationResult, reconcile_json_exports
 from app.services.report_document_audit import ReportDocumentReconciliationResult, reconcile_report_documents
+from app.services.update_safety import execute_staged_update, reconcile_interrupted_update
 from app.version import resolve_effective_app_version
 
 StartupMode = Literal["development", "user"]
@@ -28,13 +29,8 @@ class StartupInitializationResult:
     schema_compatibility: StartupSchemaCompatibility
     applied_migrations: list[str]
     backup: BackupResult | None = None
-    # CR-009 B1. Internal reconciliation counters, exposed to startup code for
-    # logging and tests only; never rendered in ordinary launcher output.
     report_document_audit_reconciliation: ReportDocumentReconciliationResult | None = None
-    # CR-009 B2. The same, for JSON exports.
     json_export_audit_reconciliation: ExportReconciliationResult | None = None
-    # CR-009 B3. The same, for user-created manual SQLite backups. The automatic
-    # `before_migration` backup below is deliberately not covered by it.
     manual_backup_audit_reconciliation: BackupReconciliationResult | None = None
 
 
@@ -61,44 +57,37 @@ def initialize_startup(mode: str = "development") -> StartupInitializationResult
         else get_database_config()
     )
 
-    # D4-A: application identity and schema compatibility are resolved before any
-    # mutation-capable startup helper. A malformed packaged version projection or
-    # unsupported existing lineage therefore cannot create directories, create a
-    # backup, create/repair schema_migrations, run migrations or start the backend.
+    # D4-A remains the pre-mutation authority. Unsupported existing lineage stops
+    # before user directories, backup files, update metadata, stages or migrations.
     app_version = resolve_effective_app_version()
     schema_compatibility = inspect_startup_schema_compatibility(config)
 
     backup = None
     if user_data_paths is not None:
         create_user_data_directories(user_data_paths)
+        # D4-B always reconciles one durable interrupted `started` record before a
+        # new attempt. It never resumes or promotes an old stage blindly.
+        reconcile_interrupted_update(user_data_paths, schema_compatibility)
         if schema_compatibility.migrations_pending:
-            backup = backup_sqlite_database(
-                source_path=config.path,
-                backup_dir=user_data_paths.backups_dir,
-                reason="before_migration",
+            update = execute_staged_update(
+                config=config,
+                paths=user_data_paths,
+                app_version=app_version,
+                compatibility=schema_compatibility,
             )
+            applied_migrations = update.applied_migrations
+            backup = update.backup
+        else:
+            # Fresh creation and an already-current DB keep the existing path.
+            applied_migrations = initialize_database(config)
+    else:
+        # D4 is packaged/user-mode update safety, not a second development mode.
+        applied_migrations = initialize_database(config)
 
-    # D4-A intentionally leaves execution semantics unchanged after the gate.
-    # Supported older databases still take the existing direct migration path;
-    # D4-B alone is authorized to replace it with staged migration + commit.
-    applied_migrations = initialize_database(config)
-    # CR-009 B1: bounded report-document reconciliation, strictly after
-    # successful initialization and migrations — the ledger table may not exist
-    # until `0020` has run — and strictly before the API is served. It is not a
-    # background task: it completes here, once, and then startup continues.
-    #
-    # It never raises, so a pending Journal event cannot make the application
-    # unusable. That deliberately does not extend to migration or database
-    # failures above: those still propagate untouched.
+    # CR-009 reconciliation runs only after the canonical DB is current. For a
+    # D4-B migration this is after verified atomic stage publication, never on stage.
     reconciliation = reconcile_report_documents(config)
-    # CR-009 B2: JSON exports reconcile next, in this fixed order, on the same
-    # config. Neither pass raises, so one artifact kind failing cannot prevent
-    # the other from being reconciled or the application from starting.
     export_reconciliation = reconcile_json_exports(config)
-    # CR-009 B3: manual backups reconcile last, in this fixed order, on the same
-    # config. It also never raises. The automatic `before_migration` backup taken
-    # above stays outside this pass entirely: it runs before migrations, is not a
-    # user action, has no ledger row, and is never audited.
     backup_reconciliation = reconcile_manual_backups(config)
     return StartupInitializationResult(
         mode=validated_mode,

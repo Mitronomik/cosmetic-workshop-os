@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Guard closed Restore plus the CR-013 / D4-A implementation boundary.
 
-D4-A may establish application-version identity and a read-only ordinary-startup
-schema compatibility gate. It may not authorize D4-B/C/D or reopen Restore.
+D4-A is closed. D4-B may implement staged migration safety and durable external
+UpdateLog, but it may not claim verification/closure, authorize D4-C/D or reopen Restore.
 
 The complete pre-CR-013 checker is preserved byte-identically under
 ``docs/history/d4-pre-decision/``. Its 22 ``PINNED_BLOBS`` and 60
@@ -56,6 +56,8 @@ VERSION_VERIFIER = P("scripts/verify_product_version.py")
 D4A_VERSION_TEST = P("backend/app/tests/test_d4_a_app_version.py")
 D4A_PREFLIGHT_TEST = P("backend/app/tests/test_d4_a_startup_compatibility.py")
 D4A_PACKAGE_TEST = P("macos_package/tests/test_d4_a_product_version_projection.py")
+D4B_SERVICE = P("backend/app/services/update_safety.py")
+D4B_TEST = P("backend/app/tests/test_d4_b_update_safety.py")
 
 DECISION_BASE = "dc2301f7d4e101ad0fba851325dae9274f02da0c"
 CR013_MERGE_BASE = "4dbb83b9da3f0945bffde3187a69054305e01b28"
@@ -83,9 +85,9 @@ SNAPSHOT_BLOBS = {
 
 D4_STATUS = (
     "CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT",
-    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT",
+    "D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING",
     "D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED",
-    "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
     "D4-C — User-facing update status and packaged failure UX — PLANNED — NOT AUTHORIZED UNTIL D4-B IS MERGED AND VERIFIED",
     "D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED",
     "D5 — Remote install checklist — NOT AUTHORIZED BY CR-013",
@@ -111,12 +113,15 @@ STATUS_SURFACES = (
 )
 
 FORBIDDEN_ACTIVE = (
+    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B AUTHORIZED NEXT",
+    "D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED",
     "D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING",
     "D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING",
     "D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED",
     "D4 — Update safety — DONE",
     "D4 — Update safety — CLOSED",
-    "D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED",
+    "D4-B — Safe migration execution and durable UpdateLog — DONE",
+    "D4-B — Safe migration execution and durable UpdateLog — CLOSED",
     "D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT",
     "D4-C — User-facing update status and packaged failure UX — IMPLEMENTED",
     "D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT",
@@ -296,7 +301,7 @@ def check_current_lifecycle() -> None:
         forbid(path, FORBIDDEN_ACTIVE)
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
-    require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "Restore remains closed"))
+    require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-A closure evidence", "D4-B implementation truth", "Restore remains closed"))
     require(PLAN, ("Normative D4 decision", "D4-A", "D4-B", "D4-C", "D4-D"))
     require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
     require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
@@ -336,6 +341,8 @@ def check_domain_clarification() -> None:
         "outside the working database",
         "ordered `schema_migrations` lineage",
         "ADR 0020",
+        "from_app_version",
+        "currently recorded as `null`",
     ))
 
 
@@ -382,8 +389,9 @@ def check_d4a_implementation() -> None:
         "resolve_effective_app_version",
         "inspect_startup_schema_compatibility",
         "schema_compatibility.migrations_pending",
-        "reason=\"before_migration\"",
-        "D4-B alone is authorized",
+        "reconcile_interrupted_update",
+        "execute_staged_update",
+        "initialize_database(config)",
     ))
     forbid(STARTUP_SERVICE, ("pending_migration_ids",))
     require(RUNTIME_IDENTITY, ("get_runtime_settings_status", "resolve_effective_app_version"))
@@ -398,6 +406,44 @@ def check_d4a_implementation() -> None:
             ERRORS.append(f"missing D4-A focused test: {test_file.relative_to(ROOT)}")
 
 
+def check_d4b_implementation() -> None:
+    require(D4B_SERVICE, (
+        "update-journal.json",
+        "backup_sqlite_database",
+        "_verify_before_migration_backup",
+        "_create_consistent_stage_snapshot",
+        "apply_migrations(DatabaseConfig(path=stage_path))",
+        "_commit_verified_stage",
+        "os.replace(stage_path, canonical_path)",
+        "reconcile_interrupted_update",
+        "interrupted-stage-identity-mismatch",
+        "canonical-changed-during-staging",
+        "post-commit-journal-write-failed",
+        "from_app_version=None",
+        "cannot prove the immediately previous package version",
+        "stage_owned = False",
+        "stage_owned = True",
+    ))
+    forbid(D4B_SERVICE, (
+        "rolled_back",
+        "shutil.copy",
+        "shutil.copy2",
+        "_previous_completed_app_version",
+    ))
+    if not D4B_TEST.is_file():
+        ERRORS.append(f"missing D4-B focused test: {D4B_TEST.relative_to(ROOT)}")
+    else:
+        require(D4B_TEST, (
+            "test_supported_older_user_startup_migrates_stage_then_commits",
+            "test_staged_migration_failure_keeps_canonical_unchanged",
+            "test_post_commit_journal_failure_reconciles_completed_next_launch",
+            "test_tampered_interrupted_stage_identity_fails_closed_without_cleanup",
+            "test_previous_completed_update_is_not_misreported_as_immediate_from_app_version",
+            "test_preexisting_stage_collision_is_preserved",
+            "test_canonical_sidecar_refuses_before_backup_or_stage",
+        ))
+
+
 def main() -> int:
     check_predecision_snapshot()
     check_legacy_protections()
@@ -406,6 +452,7 @@ def main() -> int:
     check_adr20()
     check_domain_clarification()
     check_d4a_implementation()
+    check_d4b_implementation()
 
     if ERRORS:
         print("Documentation lifecycle consistency: FAIL")
@@ -418,7 +465,7 @@ def main() -> int:
     print("Carried forward 22 closed Restore production blob protections.")
     print("Carried forward 60 protected lifecycle/history blob protections.")
     print("Verified D4-A is lifecycle-closed on the exact merged-head evidence.")
-    print("Verified D4-B alone is authorized next and remains not implemented.")
+    print("Verified D4-B is implemented but exact-head verification/lifecycle closure remain pending.")
     print("Verified D4-C/D, D5 and product release readiness remain gated.")
     return 0
 
