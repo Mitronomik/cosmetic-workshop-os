@@ -1,0 +1,486 @@
+name: PR198 D4-B exact-head verifier
+
+on:
+  push:
+    branches:
+      - verification/pr198-c50f3128
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_HEAD: c50f31287b4a5126f387f072afcd0ea9d819ba63
+
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact tested head
+        id: checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 1
+
+      - name: Exact-head preflight
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/pr198-d4b-evidence"
+          mkdir -p "$EVIDENCE_DIR"
+          echo "EVIDENCE_DIR=$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          ACTUAL_HEAD="$(git rev-parse HEAD)"
+          printf '%s\n' "$ACTUAL_HEAD" > "$EVIDENCE_DIR/actual-head.txt"
+          test "$ACTUAL_HEAD" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+
+      - name: Set up Python 3.12
+        id: python_setup
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node 22
+        id: node_setup
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install backend test dependencies
+        id: deps
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check './backend[test]' 2>&1 | tee "$EVIDENCE_DIR/backend-deps.log"
+
+      - name: Full Python regression suite
+        id: pytest
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python -m pytest backend/app/tests launcher/tests macos_package/tests -q 2>&1 | tee "$EVIDENCE_DIR/pytest.log"
+
+      - name: Lifecycle and integrity checker
+        id: lifecycle
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/check_documentation_lifecycle.py 2>&1 | tee "$EVIDENCE_DIR/lifecycle.log"
+
+      - name: Frontend reproducible build
+        id: frontend
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd frontend
+            npm ci
+            npm run build
+          ) 2>&1 | tee "$EVIDENCE_DIR/frontend-build.log"
+
+      - name: Build real macOS package
+        id: package
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          export COSMETIC_WORKSHOP_BUILD_DIR="$RUNNER_TEMP/pr198-d4b-build"
+          export COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR="$RUNNER_TEMP/pr198-d4b-dist"
+          bash scripts/package_macos.sh 2>&1 | tee "$EVIDENCE_DIR/package-build.log"
+          test -x "$COSMETIC_WORKSHOP_BUILD_DIR/package/CosmeticWorkshopOS.app/Contents/MacOS/CosmeticWorkshopOS"
+          test -f "$COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR/CosmeticWorkshopOS-mac.zip"
+
+      - name: Exact-package D4-B Level-5 smoke
+        id: smoke
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import socket
+          import sqlite3
+          import subprocess
+          import sys
+          import time
+          import urllib.request
+
+          from app.db.config import DatabaseConfig
+          from app.db.migrations import MIGRATION_MODULES, apply_migrations, expected_migration_ids
+
+          runner_temp = Path(os.environ['RUNNER_TEMP'])
+          evidence = Path(os.environ['EVIDENCE_DIR'])
+          app = runner_temp / 'pr198-d4b-build/package/CosmeticWorkshopOS.app'
+          executable = app / 'Contents/MacOS/CosmeticWorkshopOS'
+          expected_version = Path('backend/VERSION').read_text(encoding='utf-8').strip()
+          expected_lineage = expected_migration_ids()
+          results = {
+              'expected_head': os.environ['EXPECTED_HEAD'],
+              'expected_version': expected_version,
+              'status': 'running',
+              'scenarios': {},
+          }
+          owned: list[tuple[subprocess.Popen, object]] = []
+
+          def sha256(path: Path) -> str:
+              h = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          def lineage(path: Path) -> list[str]:
+              with sqlite3.connect(f'file:{path}?mode=ro', uri=True) as con:
+                  return [row[0] for row in con.execute('SELECT migration_id FROM schema_migrations ORDER BY rowid')]
+
+          def marker(path: Path) -> str:
+              with sqlite3.connect(f'file:{path}?mode=ro', uri=True) as con:
+                  return con.execute('SELECT value FROM d4b_package_marker').fetchone()[0]
+
+          def free_port() -> int:
+              with socket.socket() as sock:
+                  sock.bind(('127.0.0.1', 0))
+                  return int(sock.getsockname()[1])
+
+          def port_closed(port: int) -> bool:
+              with socket.socket() as sock:
+                  sock.settimeout(0.3)
+                  return sock.connect_ex(('127.0.0.1', port)) != 0
+
+          def start_app(user_data: Path, log_name: str):
+              frontend = free_port()
+              backend = free_port()
+              while backend == frontend:
+                  backend = free_port()
+              log = (evidence / log_name).open('w', encoding='utf-8')
+              env = os.environ.copy()
+              env['COSMETIC_WORKSHOP_USER_DATA_DIR'] = str(user_data)
+              env['COSMETIC_WORKSHOP_PACKAGE_DISABLE_ALERTS'] = '1'
+              proc = subprocess.Popen(
+                  [
+                      str(executable),
+                      '--no-browser',
+                      '--frontend-port', str(frontend),
+                      '--backend-port', str(backend),
+                  ],
+                  env=env,
+                  stdout=log,
+                  stderr=subprocess.STDOUT,
+                  text=True,
+              )
+              owned.append((proc, log))
+              return proc, log, frontend, backend
+
+          def stop_app(proc, log, frontend: int, backend: int):
+              if proc.poll() is None:
+                  proc.terminate()
+                  try:
+                      proc.wait(timeout=10)
+                  except subprocess.TimeoutExpired:
+                      proc.kill()
+                      proc.wait(timeout=10)
+              log.flush()
+              log.close()
+              for item in list(owned):
+                  if item[0] is proc:
+                      owned.remove(item)
+                      break
+              deadline = time.time() + 10
+              while time.time() < deadline and (not port_closed(frontend) or not port_closed(backend)):
+                  time.sleep(0.1)
+              assert port_closed(frontend), f'frontend port still open: {frontend}'
+              assert port_closed(backend), f'backend port still open: {backend}'
+
+          def wait_json(proc, url: str, timeout: float = 60.0):
+              deadline = time.time() + timeout
+              last = None
+              while time.time() < deadline:
+                  if proc.poll() is not None:
+                      raise AssertionError(f'app exited before readiness: {proc.returncode}')
+                  try:
+                      with urllib.request.urlopen(url, timeout=1.0) as response:
+                          return json.load(response)
+                  except Exception as exc:
+                      last = exc
+                      time.sleep(0.25)
+              raise AssertionError(f'endpoint did not become ready: {url}: {last!r}')
+
+          def seed_prefix(user_data: Path, *, exclude_last: int):
+              db = user_data / 'data/cosmetic_workshop.sqlite'
+              db.parent.mkdir(parents=True, exist_ok=True)
+              original = list(MIGRATION_MODULES)
+              try:
+                  MIGRATION_MODULES[:] = original[:-exclude_last] if exclude_last else original
+                  apply_migrations(DatabaseConfig(path=db))
+              finally:
+                  MIGRATION_MODULES[:] = original
+              with sqlite3.connect(db) as con:
+                  con.execute('CREATE TABLE d4b_package_marker (value TEXT NOT NULL)')
+                  con.execute("INSERT INTO d4b_package_marker (value) VALUES ('package-marker-secret')")
+              return db
+
+          def no_stage_artifacts(data_dir: Path) -> bool:
+              if not data_dir.exists():
+                  return True
+              for path in data_dir.iterdir():
+                  name = path.name
+                  if '.update-' in name and (
+                      name.endswith('.stage')
+                      or name.endswith('.partial')
+                      or name.endswith('.stage-wal')
+                      or name.endswith('.stage-shm')
+                      or name.endswith('.stage-journal')
+                  ):
+                      return False
+              return True
+
+          try:
+              assert executable.is_file() and os.access(executable, os.X_OK)
+
+              # Scenario A: fresh exact package, version identity and no update artifacts.
+              fresh = runner_temp / 'pr198-fresh-user-data'
+              proc, log, front, back = start_app(fresh, 'package-fresh.log')
+              health = wait_json(proc, f'http://127.0.0.1:{front}/api/health')
+              settings = wait_json(proc, f'http://127.0.0.1:{front}/api/settings/status')
+              assert health['version'] == expected_version
+              assert settings['app']['version'] == expected_version
+              fresh_db = fresh / 'data/cosmetic_workshop.sqlite'
+              assert lineage(fresh_db) == expected_lineage
+              assert not (fresh / 'data/update-journal.json').exists()
+              assert not list((fresh / 'backups').iterdir())
+              stop_app(proc, log, front, back)
+              results['scenarios']['fresh'] = 'passed'
+
+              # Scenario B: supported older exact package update, verified backup + stage + UpdateLog.
+              older = runner_temp / 'pr198-older-user-data'
+              older_db = seed_prefix(older, exclude_last=1)
+              source_lineage = expected_lineage[:-1]
+              before_marker = marker(older_db)
+              assert before_marker == 'package-marker-secret'
+              proc, log, front, back = start_app(older, 'package-older-update.log')
+              health = wait_json(proc, f'http://127.0.0.1:{front}/api/health')
+              assert health['version'] == expected_version
+              assert lineage(older_db) == expected_lineage
+              assert marker(older_db) == before_marker
+              stop_app(proc, log, front, back)
+
+              journal_path = older / 'data/update-journal.json'
+              raw_journal = journal_path.read_text(encoding='utf-8')
+              journal = json.loads(raw_journal)
+              assert journal['format_version'] == 1
+              assert len(journal['operations']) == 1
+              operation = journal['operations'][0]
+              assert operation['status'] == 'completed'
+              assert operation['from_app_version'] is None
+              assert operation['to_app_version'] == expected_version
+              assert operation['from_schema_identity'] == source_lineage
+              assert operation['to_schema_identity'] == expected_lineage
+              assert operation['finished_at']
+              assert operation['failure_category'] is None
+              assert operation['safe_failure_message'] is None
+              backup_identity = operation['before_migration_backup_identity']
+              stage_identity = operation['stage_identity']
+              assert isinstance(backup_identity, str) and Path(backup_identity).name == backup_identity
+              assert isinstance(stage_identity, str) and Path(stage_identity).name == stage_identity
+              assert stage_identity.endswith('.stage')
+              assert str(older) not in raw_journal
+              assert 'package-marker-secret' not in raw_journal
+
+              backups = list((older / 'backups').iterdir())
+              assert len(backups) == 1
+              backup = backups[0]
+              assert backup.name == backup_identity
+              assert lineage(backup) == source_lineage
+              assert marker(backup) == before_marker
+              assert no_stage_artifacts(older / 'data')
+
+              # Scenario C: repeated launch after completed update must not create another operation/backup.
+              backup_count = len(backups)
+              journal_count = len(journal['operations'])
+              proc, log, front, back = start_app(older, 'package-older-repeat.log')
+              wait_json(proc, f'http://127.0.0.1:{front}/api/health')
+              stop_app(proc, log, front, back)
+              assert len(list((older / 'backups').iterdir())) == backup_count
+              journal2 = json.loads(journal_path.read_text(encoding='utf-8'))
+              assert len(journal2['operations']) == journal_count
+              assert journal2['operations'][0]['status'] == 'completed'
+              assert lineage(older_db) == expected_lineage
+              assert marker(older_db) == before_marker
+              assert no_stage_artifacts(older / 'data')
+              results['scenarios']['supported_older_update'] = 'passed'
+              results['scenarios']['repeat_after_update'] = 'passed'
+
+              # Scenario D: newer schema must fail before journal/backup/migration and leave DB bytes unchanged.
+              newer = runner_temp / 'pr198-newer-user-data'
+              newer_db = seed_prefix(newer, exclude_last=0)
+              with sqlite3.connect(newer_db) as con:
+                  con.execute("INSERT INTO schema_migrations (migration_id) VALUES ('0021_future')")
+              before_sha = sha256(newer_db)
+              assert not (newer / 'backups').exists()
+              assert not (newer / 'data/update-journal.json').exists()
+              proc, log, front, back = start_app(newer, 'package-newer-refusal.log')
+              try:
+                  exit_code = proc.wait(timeout=25)
+              except subprocess.TimeoutExpired as exc:
+                  raise AssertionError('newer-schema packaged start did not fail within bound') from exc
+              log.flush()
+              log.close()
+              for item in list(owned):
+                  if item[0] is proc:
+                      owned.remove(item)
+                      break
+              assert exit_code != 0
+              assert sha256(newer_db) == before_sha
+              assert not (newer / 'data/update-journal.json').exists()
+              assert not (newer / 'backups').exists()
+              assert port_closed(front)
+              assert port_closed(back)
+              results['scenarios']['newer_schema_refusal'] = 'passed'
+
+              results['status'] = 'passed'
+          except Exception as exc:
+              results['status'] = 'product_failed'
+              results['error'] = f'{type(exc).__name__}: {exc}'
+              raise
+          finally:
+              for proc, log in list(owned):
+                  if proc.poll() is None:
+                      proc.terminate()
+                      try:
+                          proc.wait(timeout=5)
+                      except subprocess.TimeoutExpired:
+                          proc.kill()
+                          proc.wait(timeout=5)
+                  try:
+                      log.flush()
+                      log.close()
+                  except Exception:
+                      pass
+              evidence.mkdir(parents=True, exist_ok=True)
+              (evidence / 'package-smoke-results.json').write_text(
+                  json.dumps(results, ensure_ascii=False, indent=2) + '\n',
+                  encoding='utf-8',
+              )
+          PY
+
+      - name: Repository postflight
+        id: postflight
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${EVIDENCE_DIR:-$RUNNER_TEMP/pr198-d4b-evidence}"
+          mkdir -p "$EVIDENCE_DIR"
+          rm -rf frontend/node_modules frontend/dist frontend/dist-tests backend/build
+          find backend -maxdepth 1 -type d -name '*.egg-info' -prune -exec rm -rf {} + 2>/dev/null || true
+          git restore --source="$EXPECTED_HEAD" --worktree -- frontend backend 2>/dev/null || true
+          git diff --check
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          STATUS="$(git status --porcelain)"
+          printf '%s\n' "$STATUS" > "$EVIDENCE_DIR/final-git-status.txt"
+          test -z "$STATUS"
+
+      - name: Final classification and report
+        id: classify
+        if: always()
+        shell: bash
+        env:
+          PREFLIGHT_OUTCOME: ${{ steps.preflight.outcome }}
+          DEPS_OUTCOME: ${{ steps.deps.outcome }}
+          PYTEST_OUTCOME: ${{ steps.pytest.outcome }}
+          LIFECYCLE_OUTCOME: ${{ steps.lifecycle.outcome }}
+          FRONTEND_OUTCOME: ${{ steps.frontend.outcome }}
+          PACKAGE_OUTCOME: ${{ steps.package.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          POSTFLIGHT_OUTCOME: ${{ steps.postflight.outcome }}
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${EVIDENCE_DIR:-$RUNNER_TEMP/pr198-d4b-evidence}"
+          mkdir -p "$EVIDENCE_DIR"
+          STATUS=passed
+          if [ "$PREFLIGHT_OUTCOME" != success ] || [ "$DEPS_OUTCOME" != success ] || [ "$POSTFLIGHT_OUTCOME" != success ]; then
+            STATUS=environment_inconclusive
+          elif [ "$PYTEST_OUTCOME" != success ] || [ "$LIFECYCLE_OUTCOME" != success ] || [ "$FRONTEND_OUTCOME" != success ] || [ "$PACKAGE_OUTCOME" != success ] || [ "$SMOKE_OUTCOME" != success ]; then
+            STATUS=product_failed
+          fi
+
+          python3 - "$EVIDENCE_DIR/results.json" "$STATUS" <<'PY'
+          import json, os, sys
+          payload = {
+              'pr': 198,
+              'expected_head': os.environ['EXPECTED_HEAD'],
+              'actual_head': os.popen('git rev-parse HEAD').read().strip(),
+              'status': sys.argv[2],
+              'checks': {
+                  'preflight': os.environ['PREFLIGHT_OUTCOME'],
+                  'dependencies': os.environ['DEPS_OUTCOME'],
+                  'python_regression': os.environ['PYTEST_OUTCOME'],
+                  'lifecycle': os.environ['LIFECYCLE_OUTCOME'],
+                  'frontend_build': os.environ['FRONTEND_OUTCOME'],
+                  'package_build': os.environ['PACKAGE_OUTCOME'],
+                  'exact_package_d4b_smoke': os.environ['SMOKE_OUTCOME'],
+                  'postflight': os.environ['POSTFLIGHT_OUTCOME'],
+              },
+          }
+          with open(sys.argv[1], 'w', encoding='utf-8') as handle:
+              json.dump(payload, handle, ensure_ascii=False, indent=2)
+          PY
+
+          {
+            echo '# PR #198 D4-B exact-head verification'
+            echo
+            echo "Expected head: \`$EXPECTED_HEAD\`"
+            echo "Result: **$STATUS**"
+            echo
+            echo '| Check | Outcome |'
+            echo '|---|---|'
+            echo "| exact-head preflight | $PREFLIGHT_OUTCOME |"
+            echo "| dependencies | $DEPS_OUTCOME |"
+            echo "| full Python regression | $PYTEST_OUTCOME |"
+            echo "| lifecycle checker | $LIFECYCLE_OUTCOME |"
+            echo "| frontend build | $FRONTEND_OUTCOME |"
+            echo "| real macOS package build | $PACKAGE_OUTCOME |"
+            echo "| exact-package D4-B Level-5 smoke | $SMOKE_OUTCOME |"
+            echo "| repository postflight | $POSTFLIGHT_OUTCOME |"
+            echo
+            if [ "$STATUS" = passed ]; then
+              echo 'PASS — FULL AUTOMATED SMOKE PASSED'
+              echo 'PR may proceed to final head verification before merge.'
+            elif [ "$STATUS" = product_failed ]; then
+              echo 'FAIL — PRODUCT REGRESSION CONFIRMED'
+              echo 'Do not merge.'
+            else
+              echo 'INCONCLUSIVE — SMOKE EVIDENCE IS NOT RELIABLE'
+              echo 'Do not merge based on this run.'
+            fi
+          } > "$EVIDENCE_DIR/PR198_SMOKE_REPORT.md"
+          cat "$EVIDENCE_DIR/PR198_SMOKE_REPORT.md" >> "$GITHUB_STEP_SUMMARY"
+          test "$STATUS" = passed
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr198-d4b-exact-head-evidence
+          path: ${{ runner.temp }}/pr198-d4b-evidence
+          if-no-files-found: error
