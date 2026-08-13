@@ -1,6 +1,6 @@
 # Packaging
 
-Status: **CURRENT — D3 IMPLEMENTED; D4-A/B CLOSED; D4-C AUTHORIZED NEXT**
+Status: **CURRENT — D3 IMPLEMENTED; D4-A/B CLOSED; D4-C IMPLEMENTED, VERIFICATION PENDING**
 Updated: `2026-08-13`
 
 The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-decision/packaging.md`.
@@ -10,10 +10,10 @@ The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-dec
 ```text
 D3 — macOS package MVP — IMPLEMENTED
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-C IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-C — User-facing update status and packaged failure UX — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
@@ -45,13 +45,13 @@ The historical mutable database `app.version` placeholder is not used to decide 
 
 ## D4 manual update model
 
-D4 remains safe manual package replacement. D4-A supplies the closed compatibility gate; closed D4-B supplies staged migration and durable external UpdateLog on the same ordinary packaged startup path. D4-C is now authorized to add only bounded user-facing status/failure presentation.
+D4 remains safe manual package replacement. D4-A supplies the closed compatibility gate; D4-B owns staged migration and UpdateLog; D4-C adds only bounded read-only status/failure presentation on top of that startup truth.
 
 The previous package is **not** a guaranteed rollback after the database update commit point. An older package must independently prove the canonical database lineage is compatible; otherwise it fails closed before mutation.
 
 ## Packaged failure UX
 
-The existing Finder-visible fixed-message mechanism remains unchanged in D4-A. D4-C may later extend it with bounded update/migration failure categories. D4-A adds no technical update admin UI and no new Finder error category.
+D4-C extends the existing Finder-visible fixed-message catalogue with two update outcomes only: stopped before canonical DB replacement, or completion cannot be confirmed automatically. Messages are fixed, non-technical and never interpolate exception text, paths or migration internals.
 
 ## Explicit non-goals
 

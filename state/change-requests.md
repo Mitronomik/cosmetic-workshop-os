@@ -14,23 +14,23 @@ CR-012 did not authorize D4, D5, signing, notarization, DMG, updater/download, A
 
 ## CR-013 — D4 Update Safety contract and bounded implementation authorization
 
-Status: **ACCEPTED — D4-A/B CLOSED; D4-C AUTHORIZED NEXT**.
+Status: **ACCEPTED — D4-A/B CLOSED; D4-C IMPLEMENTED, VERIFICATION PENDING**.
 
 Durable decision: `docs/decisions/0020-d4-update-safety-contract.md`.
 
-D4-A and D4-B are closed. D4-B provides staged migrations, verified backup, atomic canonical publication, durable external UpdateLog and interruption reconciliation. D4-C update status/failure UX is authorized next but remains unimplemented; D4-D remains unauthorized.
+D4-A and D4-B are closed. D4-C implementation code commit `adfe37a3f68a545635f173c22d4710eacde86e74` adds only the bounded read-only status and packaged failure UX authorized by CR-013. D4-C is not yet exact-head/exact-package verified or lifecycle-closed; D4-D remains unauthorized.
 
 Authorization remains:
 
 ```text
 CR-013 — ACCEPTED — D4 UPDATE SAFETY CONTRACT
-D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C AUTHORIZED NEXT
+D4 — Update safety — IN PROGRESS — D4-C IMPLEMENTED, VERIFICATION PENDING
 D4-A — Version identity and compatibility preflight — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
-D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT — NOT IMPLEMENTED
+D4-C — User-facing update status and packaged failure UX — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING
 D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED
 D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
-D4-A closure remains satisfied. D4-B closure conditions are satisfied on verified implementation head `8688fa3dba87205b4b4626ebab2902262fd4cd24` and merged head `d60a3be993c76b59292cf27ee66bcbe856669fc4` with full Level-5 PASS evidence. D4-C alone is authorized next.
+D4-A and D4-B closure remain satisfied. D4-C is implementation-complete in the current branch; only D4-C verification and lifecycle closure are authorized next. D4-D is not authorized.
