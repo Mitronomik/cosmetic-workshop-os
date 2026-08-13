@@ -1,7 +1,7 @@
 # Current project lifecycle and documentation authority
 
 Status: **CURRENT — NORMATIVE LIFECYCLE PROFILE**
-Updated: `2026-08-13`
+Updated: `2026-08-14`
 
 For historical pre-D4 decision state, see `docs/history/d4-pre-decision/`. The exact pre-decision `docs/current-lifecycle.md` is preserved there byte-identically from base `dc2301f7d4e101ad0fba851325dae9274f02da0c`.
 
@@ -65,7 +65,7 @@ Schema compatibility:
 - `pending_migration_ids()` is no longer used to decide ordinary startup compatibility before the gate;
 - D4-A itself originally stopped at the compatibility gate; the now-closed D4-B slice replaces the supported-older direct migration seam with staged migration after that gate.
 
-D4-A and D4-B remain closed. D4-C is implemented in the current branch; exact-head/exact-package verification and lifecycle closure remain pending, and D4-D remains unauthorized.
+D4-A, D4-B and D4-C are closed. D4-D is the only authorized next slice.
 
 ## D4-A closure evidence
 
@@ -129,4 +129,4 @@ Restore remains closed. D4-C changes no protected Restore production blob, no Re
 
 ## Release boundary
 
-D5, auto-update/download, GitHub Releases integration, signing, notarization, DMG, App Store, release channels and release readiness remain outside CR-013/D4-A.
+D5, auto-update/download, GitHub Releases integration, signing, notarization, DMG, App Store, release channels and release readiness remain outside the current D4 authorization.
