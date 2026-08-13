@@ -1,0 +1,35 @@
+name: PR201 D4-C closure verifier
+on:
+  push:
+    branches: [verification/pr201-be733a8e]
+permissions:
+  contents: read
+env:
+  EXPECTED_BASE: 3d69df192b5bdff9c7df067d8c8fde40154ebac9
+  EXPECTED_HEAD: be733a8e096d76e0c681d005d66a9c1b7c34b2fa
+  PR_BRANCH: agent/d4-c-lifecycle-closure-v2
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+      - name: Run external closure verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin verification/pr201-be733a8e
+          git show origin/verification/pr201-be733a8e:verification/pr201_closure_verify.py > "$RUNNER_TEMP/pr201_closure_verify.py"
+          python3 -m py_compile "$RUNNER_TEMP/pr201_closure_verify.py"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python3 "$RUNNER_TEMP/pr201_closure_verify.py"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr201-d4c-closure-be733a8e-evidence
+          path: ${{ runner.temp }}/pr201-be733a8e-evidence
+          if-no-files-found: error
