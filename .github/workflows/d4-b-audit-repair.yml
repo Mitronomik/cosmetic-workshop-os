@@ -1,0 +1,114 @@
+name: D4-B audit repair runner
+
+on:
+  push:
+    branches:
+      - maintenance/d4-b-audit-repair-runner
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_HEAD: ad7228545ee8f838fb114ba072524fc5174acaba
+  TARGET_BRANCH: maintenance/d4-b-audit-candidate
+
+jobs:
+  repair:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+      - name: Verify exact starting head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Apply bounded audit repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          safety = Path('backend/app/services/update_safety.py')
+          text = safety.read_text(encoding='utf-8')
+
+          old = '''def _stage_path(database_path: Path, operation_id: str) -> Path:\n    return database_path.parent / _stage_filename(database_path, operation_id)\n\n\ndef _cleanup_owned_stage_artifacts(database_path: Path, operation_id: str) -> None:\n    stage = _stage_path(database_path, operation_id)\n    with contextlib.suppress(OSError):\n        stage.unlink(missing_ok=True)\n    pattern = f".{stage.name}.*{PARTIAL_BACKUP_SUFFIX}"\n    for candidate in database_path.parent.glob(pattern):\n        if candidate.parent == database_path.parent and candidate.is_file():\n            with contextlib.suppress(OSError):\n                candidate.unlink(missing_ok=True)\n'''
+          new = '''def _stage_path(database_path: Path, operation_id: str) -> Path:\n    return database_path.parent / _stage_filename(database_path, operation_id)\n\n\ndef _require_recorded_stage_ownership(\n    database_path: Path, record: UpdateOperationRecord\n) -> None:\n    \"\"\"Prove a persisted stage identity before deleting runner-owned artifacts.\"\"\"\n    expected = _stage_filename(database_path, record.operation_id)\n    if record.stage_identity != expected:\n        raise UpdateSafetyError(\n            \"interrupted-stage-identity-mismatch\", SAFE_RECONCILIATION_FAILURE\n        )\n\n\ndef _cleanup_owned_stage_artifacts(database_path: Path, operation_id: str) -> None:\n    stage = _stage_path(database_path, operation_id)\n    for candidate in (\n        stage,\n        stage.parent / f"{stage.name}-wal",\n        stage.parent / f"{stage.name}-shm",\n        stage.parent / f"{stage.name}-journal",\n    ):\n        with contextlib.suppress(OSError):\n            candidate.unlink(missing_ok=True)\n    pattern = f".{stage.name}.*{PARTIAL_BACKUP_SUFFIX}"\n    for candidate in database_path.parent.glob(pattern):\n        if candidate.parent == database_path.parent and candidate.is_file():\n            with contextlib.suppress(OSError):\n                candidate.unlink(missing_ok=True)\n'''
+          if text.count(old) != 1:
+              raise SystemExit('stage helper replacement did not match exactly once')
+          text = text.replace(old, new)
+
+          old = '''def _previous_completed_app_version(records: list[UpdateOperationRecord]) -> str | None:\n    for record in reversed(records):\n        if record.status == \"completed\":\n            return record.to_app_version\n    return None\n'''
+          new = '''def _previous_completed_app_version(records: list[UpdateOperationRecord]) -> str | None:\n    \"\"\"Return only a durably known prior update app version.\n\n    The first D4 operation legitimately returns ``None`` because no trusted D4\n    journal predates it. The historical database ``app.version`` placeholder is\n    deliberately not consulted or promoted into application identity.\n    \"\"\"\n    for record in reversed(records):\n        if record.status == \"completed\":\n            return record.to_app_version\n    return None\n'''
+          if text.count(old) != 1:
+              raise SystemExit('previous version replacement did not match exactly once')
+          text = text.replace(old, new)
+
+          old = '''    record = started[0]\n    canonical_lineage = compatibility.applied_migration_ids\n'''
+          new = '''    record = started[0]\n    _require_recorded_stage_ownership(paths.database_path, record)\n    canonical_lineage = compatibility.applied_migration_ids\n'''
+          if text.count(old) != 1:
+              raise SystemExit('reconciliation ownership insertion did not match exactly once')
+          text = text.replace(old, new)
+          safety.write_text(text, encoding='utf-8')
+
+          tests = Path('backend/app/tests/test_d4_b_update_safety.py')
+          text = tests.read_text(encoding='utf-8')
+
+          old = '''    operation = records[0]\n    assert operation.status == \"completed\"\n'''
+          new = '''    operation = records[0]\n    assert operation.status == \"completed\"\n    assert operation.from_app_version is None\n'''
+          if text.count(old) != 1:
+              raise SystemExit('first operation assertion replacement did not match exactly once')
+          text = text.replace(old, new)
+
+          old = '''    stage = _stage_path(paths.database_path, operation_id)\n    stage.write_text(\"owned interrupted stage\", encoding=\"utf-8\")\n    record = UpdateOperationRecord(\n'''
+          new = '''    stage = _stage_path(paths.database_path, operation_id)\n    stage.write_text(\"owned interrupted stage\", encoding=\"utf-8\")\n    sidecars = [\n        stage.parent / f"{stage.name}-wal",\n        stage.parent / f"{stage.name}-shm",\n        stage.parent / f"{stage.name}-journal",\n    ]\n    for sidecar in sidecars:\n        sidecar.write_bytes(b\"runner-owned interrupted sidecar\")\n    record = UpdateOperationRecord(\n'''
+          if text.count(old) != 1:
+              raise SystemExit('sidecar setup replacement did not match exactly once')
+          text = text.replace(old, new, 1)
+
+          old = '''    assert caught.value.category == \"interrupted-before-commit\"\n    assert not stage.exists()\n    assert list(paths.backups_dir.iterdir()) == []\n'''
+          new = '''    assert caught.value.category == \"interrupted-before-commit\"\n    assert not stage.exists()\n    assert all(not sidecar.exists() for sidecar in sidecars)\n    assert list(paths.backups_dir.iterdir()) == []\n'''
+          if text.count(old) != 1:
+              raise SystemExit('sidecar cleanup assertion replacement did not match exactly once')
+          text = text.replace(old, new)
+
+          anchor = '''def test_ambiguous_interrupted_record_fails_closed_and_keeps_stage(tmp_path, monkeypatch):\n'''
+          addition = '''def test_tampered_interrupted_stage_identity_fails_closed_without_cleanup(tmp_path, monkeypatch):\n    paths = build_user_prefix(tmp_path, monkeypatch)\n    operation_id = \"c\" * 32\n    expected_stage = _stage_path(paths.database_path, operation_id)\n    expected_stage.write_text(\"expected owned stage evidence\", encoding=\"utf-8\")\n    foreign_stage = paths.data_dir / \"foreign-owned.stage\"\n    foreign_stage.write_text(\"foreign file\", encoding=\"utf-8\")\n    record = UpdateOperationRecord(\n        operation_id=operation_id,\n        from_app_version=None,\n        to_app_version=read_repository_app_version(),\n        from_schema_identity=tuple(expected_migration_ids()[:-1]),\n        to_schema_identity=tuple(expected_migration_ids()),\n        before_migration_backup_identity=None,\n        stage_identity=foreign_stage.name,\n        started_at=\"2026-08-13T10:00:00.000000Z\",\n        finished_at=None,\n        status=\"started\",\n        failure_category=None,\n        safe_failure_message=None,\n    )\n    _write_update_journal(update_journal_path(paths), [record])\n    before = digest(paths.database_path)\n\n    with pytest.raises(UpdateSafetyError) as caught:\n        initialize_startup(\"user\")\n\n    assert caught.value.category == \"interrupted-stage-identity-mismatch\"\n    assert digest(paths.database_path) == before\n    assert expected_stage.read_text(encoding=\"utf-8\") == \"expected owned stage evidence\"\n    assert foreign_stage.read_text(encoding=\"utf-8\") == \"foreign file\"\n    assert load_update_journal(update_journal_path(paths))[0].status == \"started\"\n    assert list(paths.backups_dir.iterdir()) == []\n\n\n'''
+          if text.count(anchor) != 1:
+              raise SystemExit('tampered-stage test anchor did not match exactly once')
+          text = text.replace(anchor, addition + anchor)
+          tests.write_text(text, encoding='utf-8')
+          PY
+          python3 -m py_compile backend/app/services/update_safety.py backend/app/tests/test_d4_b_update_safety.py
+          git diff --check
+      - name: Install backend test dependencies
+        shell: bash
+        run: python -m pip install --disable-pip-version-check './backend[test]'
+      - name: Run focused D4-B safety tests
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python -m pytest backend/app/tests/test_d4_b_update_safety.py backend/app/tests/test_d4_a_startup_compatibility.py -q
+      - name: Commit and push repaired candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'D4-B audit repair'
+          git config user.email 'actions@users.noreply.github.com'
+          git add backend/app/services/update_safety.py backend/app/tests/test_d4_b_update_safety.py
+          git diff --cached --check
+          git commit -m 'D4-B harden interrupted stage ownership cleanup'
+          git push origin HEAD:"$TARGET_BRANCH"
