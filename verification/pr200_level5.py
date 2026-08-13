@@ -101,6 +101,7 @@ run_logged("dependencies", [[sys.executable, "-m", "pip", "install", "--disable-
 
 env = os.environ.copy()
 env["PYTHONPATH"] = f"{ROOT / 'backend'}:{ROOT}"
+env["EVIDENCE_DIR"] = str(EVIDENCE)
 run_logged("python_regression", [[sys.executable, "-m", "pytest", "backend/app/tests", "launcher/tests", "macos_package/tests", "-q"]], env=env)
 run_logged("lifecycle", [[sys.executable, "-m", "py_compile", "scripts/check_documentation_lifecycle.py"], [sys.executable, "scripts/check_documentation_lifecycle.py"]])
 run_logged("frontend", [["npm", "ci"], ["npm", "run", "test:settings-update-status"], ["npm", "run", "build"]], cwd=ROOT / "frontend")
