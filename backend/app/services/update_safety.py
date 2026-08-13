@@ -269,6 +269,12 @@ def _persist_operation(
 
 
 def _previous_completed_app_version(records: list[UpdateOperationRecord]) -> str | None:
+    """Return only a durably known prior update app version.
+
+    The first D4 operation legitimately returns ``None`` because no trusted D4
+    journal predates it. The historical database ``app.version`` placeholder is
+    deliberately not consulted or promoted into application identity.
+    """
     for record in reversed(records):
         if record.status == "completed":
             return record.to_app_version
@@ -283,10 +289,27 @@ def _stage_path(database_path: Path, operation_id: str) -> Path:
     return database_path.parent / _stage_filename(database_path, operation_id)
 
 
+def _require_recorded_stage_ownership(
+    database_path: Path, record: UpdateOperationRecord
+) -> None:
+    """Prove a persisted stage identity before deleting runner-owned artifacts."""
+    expected = _stage_filename(database_path, record.operation_id)
+    if record.stage_identity != expected:
+        raise UpdateSafetyError(
+            "interrupted-stage-identity-mismatch", SAFE_RECONCILIATION_FAILURE
+        )
+
+
 def _cleanup_owned_stage_artifacts(database_path: Path, operation_id: str) -> None:
     stage = _stage_path(database_path, operation_id)
-    with contextlib.suppress(OSError):
-        stage.unlink(missing_ok=True)
+    for candidate in (
+        stage,
+        stage.parent / f"{stage.name}-wal",
+        stage.parent / f"{stage.name}-shm",
+        stage.parent / f"{stage.name}-journal",
+    ):
+        with contextlib.suppress(OSError):
+            candidate.unlink(missing_ok=True)
     pattern = f".{stage.name}.*{PARTIAL_BACKUP_SUFFIX}"
     for candidate in database_path.parent.glob(pattern):
         if candidate.parent == database_path.parent and candidate.is_file():
@@ -449,6 +472,7 @@ def reconcile_interrupted_update(
         raise UpdateSafetyError("multiple-interrupted-updates", SAFE_RECONCILIATION_FAILURE)
 
     record = started[0]
+    _require_recorded_stage_ownership(paths.database_path, record)
     canonical_lineage = compatibility.applied_migration_ids
     if canonical_lineage == record.to_schema_identity:
         _verify_database(

@@ -100,6 +100,7 @@ def test_supported_older_user_startup_migrates_stage_then_commits(tmp_path, monk
     assert len(records) == 1
     operation = records[0]
     assert operation.status == "completed"
+    assert operation.from_app_version is None
     assert operation.from_schema_identity == tuple(old_lineage)
     assert operation.to_schema_identity == tuple(expected_migration_ids())
     assert operation.before_migration_backup_identity == result.backup.backup_path.name
@@ -214,6 +215,13 @@ def test_interrupted_source_lineage_stops_same_launch_without_blind_retry(tmp_pa
     operation_id = "a" * 32
     stage = _stage_path(paths.database_path, operation_id)
     stage.write_text("owned interrupted stage", encoding="utf-8")
+    sidecars = [
+        stage.parent / f"{stage.name}-wal",
+        stage.parent / f"{stage.name}-shm",
+        stage.parent / f"{stage.name}-journal",
+    ]
+    for sidecar in sidecars:
+        sidecar.write_bytes(b"runner-owned interrupted sidecar")
     record = UpdateOperationRecord(
         operation_id=operation_id,
         from_app_version=None,
@@ -235,6 +243,7 @@ def test_interrupted_source_lineage_stops_same_launch_without_blind_retry(tmp_pa
 
     assert caught.value.category == "interrupted-before-commit"
     assert not stage.exists()
+    assert all(not sidecar.exists() for sidecar in sidecars)
     assert list(paths.backups_dir.iterdir()) == []
     records = load_update_journal(update_journal_path(paths))
     assert records[0].status == "failed"
@@ -244,6 +253,41 @@ def test_interrupted_source_lineage_stops_same_launch_without_blind_retry(tmp_pa
     assert result.applied_migrations == expected_migration_ids()[-1:]
     records = load_update_journal(update_journal_path(paths))
     assert [record.status for record in records] == ["failed", "completed"]
+
+
+def test_tampered_interrupted_stage_identity_fails_closed_without_cleanup(tmp_path, monkeypatch):
+    paths = build_user_prefix(tmp_path, monkeypatch)
+    operation_id = "c" * 32
+    expected_stage = _stage_path(paths.database_path, operation_id)
+    expected_stage.write_text("expected owned stage evidence", encoding="utf-8")
+    foreign_stage = paths.data_dir / "foreign-owned.stage"
+    foreign_stage.write_text("foreign file", encoding="utf-8")
+    record = UpdateOperationRecord(
+        operation_id=operation_id,
+        from_app_version=None,
+        to_app_version=read_repository_app_version(),
+        from_schema_identity=tuple(expected_migration_ids()[:-1]),
+        to_schema_identity=tuple(expected_migration_ids()),
+        before_migration_backup_identity=None,
+        stage_identity=foreign_stage.name,
+        started_at="2026-08-13T10:00:00.000000Z",
+        finished_at=None,
+        status="started",
+        failure_category=None,
+        safe_failure_message=None,
+    )
+    _write_update_journal(update_journal_path(paths), [record])
+    before = digest(paths.database_path)
+
+    with pytest.raises(UpdateSafetyError) as caught:
+        initialize_startup("user")
+
+    assert caught.value.category == "interrupted-stage-identity-mismatch"
+    assert digest(paths.database_path) == before
+    assert expected_stage.read_text(encoding="utf-8") == "expected owned stage evidence"
+    assert foreign_stage.read_text(encoding="utf-8") == "foreign file"
+    assert load_update_journal(update_journal_path(paths))[0].status == "started"
+    assert list(paths.backups_dir.iterdir()) == []
 
 
 def test_ambiguous_interrupted_record_fails_closed_and_keeps_stage(tmp_path, monkeypatch):
