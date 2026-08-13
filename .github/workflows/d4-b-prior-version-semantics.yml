@@ -1,0 +1,141 @@
+name: D4-B prior-version semantics repair runner
+
+on:
+  push:
+    branches:
+      - maintenance/d4-b-prior-version-semantics-runner
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_HEAD: c50f31287b4a5126f387f072afcd0ea9d819ba63
+  TARGET_BRANCH: agent/d4-b-staged-update-safety
+
+jobs:
+  repair:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+      - name: Exact-head preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+          git diff --check
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Apply bounded prior-version semantics repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          service = Path('backend/app/services/update_safety.py')
+          text = service.read_text(encoding='utf-8')
+
+          old = '''def _previous_completed_app_version(records: list[UpdateOperationRecord]) -> str | None:\n    \"\"\"Return only a durably known prior update app version.\n\n    The first D4 operation legitimately returns ``None`` because no trusted D4\n    journal predates it. The historical database ``app.version`` placeholder is\n    deliberately not consulted or promoted into application identity.\n    \"\"\"\n    for record in reversed(records):\n        if record.status == \"completed\":\n            return record.to_app_version\n    return None\n\n\n'''
+          if text.count(old) != 1:
+              raise SystemExit('previous completed app-version helper did not match exactly once')
+          text = text.replace(old, '')
+
+          old = '''        from_app_version=_previous_completed_app_version(records),\n        to_app_version=app_version,\n'''
+          new = '''        # D4-B cannot prove the immediately previous package version. A prior\n        # completed update only proves which app last *migrated* this database;\n        # another package version may have run later without changing schema.\n        # Keep the metadata explicitly unknown instead of fabricating identity\n        # from prior journal entries or legacy mutable AppSettings.\n        from_app_version=None,\n        to_app_version=app_version,\n'''
+          if text.count(old) != 1:
+              raise SystemExit('record from_app_version expression did not match exactly once')
+          text = text.replace(old, new)
+          service.write_text(text, encoding='utf-8')
+
+          tests = Path('backend/app/tests/test_d4_b_update_safety.py')
+          text = tests.read_text(encoding='utf-8')
+          anchor = '''def test_staged_migration_failure_keeps_canonical_unchanged(tmp_path, monkeypatch):\n'''
+          addition = '''def test_previous_completed_update_is_not_misreported_as_immediate_from_app_version(\n    tmp_path, monkeypatch\n):\n    paths = build_user_prefix(tmp_path, monkeypatch)\n    previous = UpdateOperationRecord(\n        operation_id=\"d\" * 32,\n        from_app_version=None,\n        to_app_version=\"0.0.9\",\n        from_schema_identity=tuple(expected_migration_ids()[:-2]),\n        to_schema_identity=tuple(expected_migration_ids()[:-1]),\n        before_migration_backup_identity=None,\n        stage_identity=\".cosmetic_workshop.update-\" + \"d\" * 32 + \".stage\",\n        started_at=\"2026-08-12T10:00:00.000000Z\",\n        finished_at=\"2026-08-12T10:01:00.000000Z\",\n        status=\"completed\",\n        failure_category=None,\n        safe_failure_message=None,\n    )\n    _write_update_journal(update_journal_path(paths), [previous])\n\n    result = initialize_startup(\"user\")\n\n    assert result.applied_migrations == expected_migration_ids()[-1:]\n    records = load_update_journal(update_journal_path(paths))\n    assert len(records) == 2\n    assert records[0] == previous\n    assert records[1].status == \"completed\"\n    assert records[1].from_app_version is None\n    assert records[1].to_app_version == read_repository_app_version()\n\n\n'''
+          if text.count(anchor) != 1:
+              raise SystemExit('D4-B prior-version test anchor did not match exactly once')
+          text = text.replace(anchor, addition + anchor)
+          tests.write_text(text, encoding='utf-8')
+
+          domain = Path('docs/domain-model-d4-update-safety.md')
+          text = domain.read_text(encoding='utf-8')
+          old = '''`from_app_version` records only a **durably known prior D4 update application version**. On the first D4 operation it may be `null` because no trusted D4 journal predates that operation. The implementation must not fill that gap from historical mutable `AppSettings.app_version`; inventing a value would create a false authority. `to_app_version` is always the current effective application version resolved by D4-A.\n'''
+          new = '''`from_app_version` is currently recorded as `null` because D4-B has no durable proof of the **immediately previous package version**. A prior completed UpdateLog record proves only which application version last performed a schema migration; one or more later package versions may have run without changing schema. The implementation therefore must not infer `from_app_version` from a previous UpdateLog, historical mutable `AppSettings.app_version`, SemVer ordering or any other indirect signal. A future non-null value requires a separately defined trustworthy prior-package identity source. `to_app_version` is always the current effective application version resolved by D4-A.\n'''
+          if text.count(old) != 1:
+              raise SystemExit('domain from_app_version paragraph did not match exactly once')
+          domain.write_text(text.replace(old, new), encoding='utf-8')
+
+          current = Path('docs/current-lifecycle.md')
+          text = current.read_text(encoding='utf-8')
+          old = '''`update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. The first D4 operation may record `from_app_version = null` because no trusted previous D4 update record exists; legacy mutable database `app.version` is never promoted into authority.\n'''
+          new = '''`update-journal.json` is external startup-owned metadata under the user-data boundary, not inside the working SQLite database or package. D4-B records `from_app_version = null` because it cannot prove the immediately previous package version: a previous completed update identifies the last migration-producing app, not necessarily the last app that ran. Legacy mutable database `app.version` and SemVer inference are never promoted into authority.\n'''
+          if text.count(old) != 1:
+              raise SystemExit('current-lifecycle from_app_version paragraph did not match exactly once')
+          current.write_text(text.replace(old, new), encoding='utf-8')
+
+          checker = Path('scripts/check_documentation_lifecycle.py')
+          text = checker.read_text(encoding='utf-8')
+          old = '''    require(D4B_SERVICE, (\n        \"update-journal.json\",\n        \"backup_sqlite_database\",\n        \"_verify_before_migration_backup\",\n        \"_create_consistent_stage_snapshot\",\n        \"apply_migrations(DatabaseConfig(path=stage_path))\",\n        \"_commit_verified_stage\",\n        \"os.replace(stage_path, canonical_path)\",\n        \"reconcile_interrupted_update\",\n        \"interrupted-stage-identity-mismatch\",\n        \"canonical-changed-during-staging\",\n        \"post-commit-journal-write-failed\",\n    ))\n    forbid(D4B_SERVICE, (\"rolled_back\", \"shutil.copy\", \"shutil.copy2\"))\n'''
+          new = '''    require(D4B_SERVICE, (\n        \"update-journal.json\",\n        \"backup_sqlite_database\",\n        \"_verify_before_migration_backup\",\n        \"_create_consistent_stage_snapshot\",\n        \"apply_migrations(DatabaseConfig(path=stage_path))\",\n        \"_commit_verified_stage\",\n        \"os.replace(stage_path, canonical_path)\",\n        \"reconcile_interrupted_update\",\n        \"interrupted-stage-identity-mismatch\",\n        \"canonical-changed-during-staging\",\n        \"post-commit-journal-write-failed\",\n        \"from_app_version=None\",\n        \"cannot prove the immediately previous package version\",\n    ))\n    forbid(D4B_SERVICE, (\n        \"rolled_back\",\n        \"shutil.copy\",\n        \"shutil.copy2\",\n        \"_previous_completed_app_version\",\n    ))\n'''
+          if text.count(old) != 1:
+              raise SystemExit('checker D4-B service block did not match exactly once')
+          text = text.replace(old, new)
+          old = '''            \"test_tampered_interrupted_stage_identity_fails_closed_without_cleanup\",\n            \"test_canonical_sidecar_refuses_before_backup_or_stage\",\n'''
+          new = '''            \"test_tampered_interrupted_stage_identity_fails_closed_without_cleanup\",\n            \"test_previous_completed_update_is_not_misreported_as_immediate_from_app_version\",\n            \"test_canonical_sidecar_refuses_before_backup_or_stage\",\n'''
+          if text.count(old) != 1:
+              raise SystemExit('checker D4-B test list did not match exactly once')
+          checker.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          python3 -m py_compile backend/app/services/update_safety.py backend/app/tests/test_d4_b_update_safety.py scripts/check_documentation_lifecycle.py
+          git diff --check
+      - name: Install backend test dependencies
+        shell: bash
+        run: python -m pip install --disable-pip-version-check './backend[test]'
+      - name: Run focused tests and lifecycle checker
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend:${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python -m pytest backend/app/tests/test_d4_b_update_safety.py -q
+          python scripts/check_documentation_lifecycle.py
+      - name: Negative prior-version inference probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp backend/app/services/update_safety.py "$RUNNER_TEMP/update_safety.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('backend/app/services/update_safety.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              'from_app_version=None,',
+              'from_app_version=records[-1].to_app_version if records else None,',
+              1,
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
+          if python scripts/check_documentation_lifecycle.py >"$RUNNER_TEMP/prior-version-probe.log" 2>&1; then
+            echo 'checker failed to catch prior-version inference regression' >&2
+            cat "$RUNNER_TEMP/prior-version-probe.log" >&2
+            exit 1
+          fi
+          cp "$RUNNER_TEMP/update_safety.py" backend/app/services/update_safety.py
+          git diff --check
+      - name: Commit and push repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'D4-B prior-version semantics'
+          git config user.email 'actions@users.noreply.github.com'
+          git add backend/app/services/update_safety.py backend/app/tests/test_d4_b_update_safety.py docs/domain-model-d4-update-safety.md docs/current-lifecycle.md scripts/check_documentation_lifecycle.py
+          git diff --cached --check
+          git commit -m 'D4-B keep unproven prior package version unknown'
+          git push origin HEAD:"$TARGET_BRANCH"
