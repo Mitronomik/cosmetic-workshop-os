@@ -143,6 +143,47 @@ def test_previous_completed_update_is_not_misreported_as_immediate_from_app_vers
     assert records[1].to_app_version == read_repository_app_version()
 
 
+def test_preexisting_stage_collision_is_preserved(tmp_path, monkeypatch):
+    paths = build_user_prefix(tmp_path, monkeypatch)
+    operation_id = "a" * 32
+    stage = _stage_path(paths.database_path, operation_id)
+    stage.parent.mkdir(parents=True, exist_ok=True)
+    stage_bytes = b"preexisting stage must survive"
+    stage.write_bytes(stage_bytes)
+    sidecars = [
+        stage.parent / f"{stage.name}-wal",
+        stage.parent / f"{stage.name}-shm",
+        stage.parent / f"{stage.name}-journal",
+    ]
+    sidecar_bytes = {}
+    for index, sidecar in enumerate(sidecars):
+        payload = f"preexisting-sidecar-{index}".encode()
+        sidecar.write_bytes(payload)
+        sidecar_bytes[sidecar] = payload
+
+    class FixedUuid:
+        hex = operation_id
+
+    monkeypatch.setattr(update_safety.uuid, "uuid4", lambda: FixedUuid())
+    before = digest(paths.database_path)
+
+    with pytest.raises(UpdateSafetyError) as caught:
+        initialize_startup("user")
+
+    assert caught.value.category == "stage-identity-already-exists"
+    assert digest(paths.database_path) == before
+    assert lineage(paths.database_path) == expected_migration_ids()[:-1]
+    assert stage.read_bytes() == stage_bytes
+    for sidecar, payload in sidecar_bytes.items():
+        assert sidecar.read_bytes() == payload
+    backups = list(paths.backups_dir.iterdir())
+    assert len(backups) == 1
+    assert lineage(backups[0]) == expected_migration_ids()[:-1]
+    record = load_update_journal(update_journal_path(paths))[-1]
+    assert record.status == "failed"
+    assert record.failure_category == "stage-identity-already-exists"
+
+
 def test_staged_migration_failure_keeps_canonical_unchanged(tmp_path, monkeypatch):
     paths = build_user_prefix(tmp_path, monkeypatch)
     before = digest(paths.database_path)

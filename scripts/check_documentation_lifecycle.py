@@ -421,6 +421,8 @@ def check_d4b_implementation() -> None:
         "post-commit-journal-write-failed",
         "from_app_version=None",
         "cannot prove the immediately previous package version",
+        "stage_owned = False",
+        "stage_owned = True",
     ))
     forbid(D4B_SERVICE, (
         "rolled_back",
@@ -437,6 +439,7 @@ def check_d4b_implementation() -> None:
             "test_post_commit_journal_failure_reconciles_completed_next_launch",
             "test_tampered_interrupted_stage_identity_fails_closed_without_cleanup",
             "test_previous_completed_update_is_not_misreported_as_immediate_from_app_version",
+            "test_preexisting_stage_collision_is_preserved",
             "test_canonical_sidecar_refuses_before_backup_or_stage",
         ))
 

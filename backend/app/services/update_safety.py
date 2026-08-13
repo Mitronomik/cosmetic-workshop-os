@@ -533,6 +533,7 @@ def execute_staged_update(
     _persist_operation(journal_path, records, record)
 
     backup: BackupResult | None = None
+    stage_owned = False
     committed = False
     try:
         # A stale WAL/journal means the old package did not leave one closed main
@@ -554,6 +555,7 @@ def execute_staged_update(
         _persist_operation(journal_path, records, record)
 
         _create_consistent_stage_snapshot(config.path, stage_path)
+        stage_owned = True
         _verify_database(
             stage_path,
             compatibility.applied_migration_ids,
@@ -601,14 +603,16 @@ def execute_staged_update(
     except UpdateSafetyError as exc:
         if committed or exc.committed:
             raise UpdatePostCommitError(exc.category) from exc
-        _cleanup_owned_stage_artifacts(config.path, operation_id)
+        if stage_owned:
+            _cleanup_owned_stage_artifacts(config.path, operation_id)
         failed = _failed_record(record, exc.category, exc.safe_message)
         _persist_operation(journal_path, records, failed)
         raise
     except Exception as exc:
         if committed:
             raise UpdatePostCommitError("post-commit-unexpected-failure") from exc
-        _cleanup_owned_stage_artifacts(config.path, operation_id)
+        if stage_owned:
+            _cleanup_owned_stage_artifacts(config.path, operation_id)
         failed = _failed_record(record, "update-unexpected-failure", SAFE_MIGRATION_FAILURE)
         _persist_operation(journal_path, records, failed)
         raise UpdateSafetyError("update-unexpected-failure", SAFE_MIGRATION_FAILURE) from exc
