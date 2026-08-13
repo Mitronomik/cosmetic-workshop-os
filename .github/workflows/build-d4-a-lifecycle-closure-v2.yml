@@ -1,0 +1,125 @@
+name: Build D4-A lifecycle closure v2
+
+on:
+  push:
+    branches:
+      - maintenance/d4-a-lifecycle-closure-builder-v2
+
+permissions:
+  contents: write
+
+env:
+  EXPECTED_BASE: 89dd69dc1958e622146e01869cc34d4cd2ec859e
+  CLOSURE_BRANCH: agent/d4-a-lifecycle-closure
+
+jobs:
+  build-closure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout clean closure branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.CLOSURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify exact untouched base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_BASE"
+          test -z "$(git status --porcelain)"
+          git diff --check
+
+      - name: Execute corrected deterministic closure transform
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import subprocess
+          from textwrap import dedent
+
+          original_yaml = subprocess.check_output([
+              'git', 'show',
+              'origin/maintenance/d4-a-lifecycle-closure-builder:.github/workflows/build-d4-a-lifecycle-closure.yml',
+          ], text=True)
+          start_marker = "          python3 - <<'PY'\n"
+          end_marker = "\n          PY\n\n      - name: Validate closure checker and lifecycle"
+          if original_yaml.count(start_marker) != 1 or original_yaml.count(end_marker) != 1:
+              raise SystemExit('cannot locate original deterministic closure transform')
+          body = original_yaml.split(start_marker, 1)[1].split(end_marker, 1)[0]
+          script = dedent(body)
+
+          block_start = script.index('for forbidden_line in (\n')
+          block_end = script.index('required_snapshots = tuple(snapshot_sources.values())')
+          corrected = '''old_forbidden_block = """FORBIDDEN_ACTIVE = (\n    \"D4 — Update safety — DONE\",\n    \"D4 — Update safety — CLOSED\",\n    \"D4-A — Version identity and compatibility preflight — DONE\",\n    \"D4-A — Version identity and compatibility preflight — MERGED AND VERIFIED\",\n    \"D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT\",\n    \"D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED\",\n    \"D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT\",\n    \"D4-C — User-facing update status and packaged failure UX — IMPLEMENTED\",\n    \"D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT\",\n    \"D4-D — Exact-package update verification and D4 lifecycle closure — IMPLEMENTED\",\n    \"D5 — Remote install checklist — AUTHORIZED\",\n    \"D5 — Remote install checklist — IMPLEMENTED\",\n    \"Product release readiness — READY\",\n    \"Product release readiness — CLAIMED\",\n    \"Product release readiness — ACHIEVED\",\n    \"auto-update — AUTHORIZED\",\n    \"auto-update download — AUTHORIZED\",\n    \"signing — AUTHORIZED\",\n    \"notarization — AUTHORIZED\",\n    \"DMG — AUTHORIZED\",\n    \"App Store — AUTHORIZED\",\n    \"release channels — AUTHORIZED\",\n    \"GitHub Releases integration — AUTHORIZED\",\n    \"Restore — NOT IMPLEMENTED\",\n    \"Restore — IN PROGRESS\",\n    \"Restore — AUTHORIZED NEXT\",\n)"""\nnew_forbidden_block = """FORBIDDEN_ACTIVE = (\n    \"D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING\",\n    \"D4-A — Version identity and compatibility preflight — IMPLEMENTED — EXACT-HEAD VERIFICATION AND LIFECYCLE CLOSURE PENDING\",\n    \"D4-B — Safe migration execution and durable UpdateLog — PLANNED — NOT AUTHORIZED UNTIL D4-A IS MERGED AND VERIFIED\",\n    \"D4 — Update safety — DONE\",\n    \"D4 — Update safety — CLOSED\",\n    \"D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED\",\n    \"D4-C — User-facing update status and packaged failure UX — AUTHORIZED NEXT\",\n    \"D4-C — User-facing update status and packaged failure UX — IMPLEMENTED\",\n    \"D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT\",\n    \"D4-D — Exact-package update verification and D4 lifecycle closure — IMPLEMENTED\",\n    \"D5 — Remote install checklist — AUTHORIZED\",\n    \"D5 — Remote install checklist — IMPLEMENTED\",\n    \"Product release readiness — READY\",\n    \"Product release readiness — CLAIMED\",\n    \"Product release readiness — ACHIEVED\",\n    \"auto-update — AUTHORIZED\",\n    \"auto-update download — AUTHORIZED\",\n    \"signing — AUTHORIZED\",\n    \"notarization — AUTHORIZED\",\n    \"DMG — AUTHORIZED\",\n    \"App Store — AUTHORIZED\",\n    \"release channels — AUTHORIZED\",\n    \"GitHub Releases integration — AUTHORIZED\",\n    \"Restore — NOT IMPLEMENTED\",\n    \"Restore — IN PROGRESS\",\n    \"Restore — AUTHORIZED NEXT\",\n)"""\nif checker.count(old_forbidden_block) != 1:\n    raise SystemExit('checker FORBIDDEN_ACTIVE block mismatch')\nchecker = checker.replace(old_forbidden_block, new_forbidden_block, 1)\n\n'''
+          script = script[:block_start] + corrected + script[block_end:]
+          exec(compile(script, '<d4-a-closure-transform-v2>', 'exec'), {'__name__': '__main__'})
+          PY
+
+      - name: Validate closure checker and lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+          git diff --check
+
+      - name: Negative lifecycle and history probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          target = Path('state/current-focus.md')
+          intended = target.read_text(encoding='utf-8')
+          probes = [
+              ('D4-B — Safe migration execution and durable UpdateLog — AUTHORIZED NEXT — NOT IMPLEMENTED', 'D4-B — Safe migration execution and durable UpdateLog — IMPLEMENTED'),
+              ('D5 — Remote install checklist — NOT AUTHORIZED BY CR-013', 'D5 — Remote install checklist — AUTHORIZED'),
+              ('Product release readiness — NOT CLAIMED', 'Product release readiness — READY'),
+              ('Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED', 'Restore — IN PROGRESS'),
+          ]
+          for old, new in probes:
+              if old not in intended:
+                  raise SystemExit(f'probe source missing: {old}')
+              target.write_text(intended.replace(old, new, 1), encoding='utf-8')
+              result = subprocess.run(['python3', 'scripts/check_documentation_lifecycle.py'], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+              target.write_text(intended, encoding='utf-8')
+              if result.returncode == 0:
+                  raise SystemExit(f'negative lifecycle probe was not caught: {new}')
+
+          snapshot = Path('docs/history/d4-a-pre-closure/README.md')
+          original = snapshot.read_bytes()
+          snapshot.write_bytes(original + b'\nmutation-probe\n')
+          result = subprocess.run(['python3', 'scripts/check_documentation_lifecycle.py'], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+          snapshot.write_bytes(original)
+          if result.returncode == 0:
+              raise SystemExit('pre-closure history mutation probe was not caught')
+          PY
+          python3 scripts/check_documentation_lifecycle.py
+
+      - name: Enforce docs-state-checker-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add README.md docs/current-lifecycle.md docs/implementation-plan.md docs/packaging.md docs/deployment.md docs/update-guide.md docs/history/README.md docs/history/d4-a-pre-closure state/current-focus.md state/progress.md state/handoff.md state/change-requests.md scripts/check_documentation_lifecycle.py
+          git diff --cached --check
+          git diff --cached --name-only > /tmp/closure-files.txt
+          if grep -Ev '^(README\.md|docs/(current-lifecycle|implementation-plan|packaging|deployment|update-guide)\.md|docs/history/README\.md|docs/history/d4-a-pre-closure/|state/(current-focus|progress|handoff|change-requests)\.md|scripts/check_documentation_lifecycle\.py)$' /tmp/closure-files.txt; then
+            echo 'closure scope leak' >&2
+            exit 1
+          fi
+          test -s /tmp/closure-files.txt
+
+      - name: Commit and fast-forward closure branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'D4-A lifecycle closure'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'D4-A close lifecycle and authorize D4-B next'
+          git push origin HEAD:"$CLOSURE_BRANCH"
