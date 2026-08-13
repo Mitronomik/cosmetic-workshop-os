@@ -1,7 +1,7 @@
 # Implementation plan
 
 Status: **CURRENT**
-Updated: `2026-08-13`
+Updated: `2026-08-14`
 
 The exact pre-CR-013 plan is preserved in `docs/history/d4-pre-decision/implementation-plan.md` from base `dc2301f7d4e101ad0fba851325dae9274f02da0c`.
 
@@ -89,7 +89,9 @@ Verified PR head `ba577f1151e041c11019525862d9bb76eeb1404e` and merged head `3d6
 
 ### D4-D — Exact-package update verification and lifecycle closure
 
-**PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED**.
+**AUTHORIZED NEXT — NOT IMPLEMENTED**.
+
+D4-D is limited to final exact-package verification of the complete ADR 0020 D4 manual-update safety contract and D4 lifecycle closure. It must not introduce new update runtime authority, downloader/checking, D5, release/distribution work or Restore changes.
 
 ## D5 and release boundary
 
