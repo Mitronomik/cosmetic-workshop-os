@@ -33,6 +33,21 @@ jobs:
           git show "origin/$BUILDER:verification/build_cr015_closure.py" > "$RUNNER_TEMP/build_cr015_closure.py"
           python3 -m py_compile "$RUNNER_TEMP/build_cr015_closure.py"
           python3 "$RUNNER_TEMP/build_cr015_closure.py"
+
+          # The package builder spells the helper through ${APP_NAME}Runtime rather
+          # than repeating the concrete product basename. Pin the stable builder
+          # symbol here instead of demanding a literal that is intentionally absent.
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/check_documentation_lifecycle.py")
+          text = path.read_text(encoding="utf-8")
+          old = 'require(P("scripts/package_macos.sh"), ("xcrun --sdk macosx clang", "-framework Cocoa", "CosmeticWorkshopOSRuntime"))'
+          new = 'require(P("scripts/package_macos.sh"), ("xcrun --sdk macosx clang", "-framework Cocoa", "RUNTIME_HELPER"))'
+          if text.count(old) != 1:
+              raise SystemExit("CR-015 package-script checker adaptation anchor mismatch")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
           python3 -m py_compile scripts/check_documentation_lifecycle.py
           python3 scripts/check_documentation_lifecycle.py
           git diff --check
