@@ -1,0 +1,62 @@
+name: PR206 CR-015 decision exact-head verification
+
+on:
+  push:
+    branches:
+      - verification/pr206-990ca9fb
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    env:
+      EXPECTED_BASE: c91e62930915da357a2f9c74b9a054fe98e9df14
+      EXPECTED_HEAD: 990ca9fb3eadfd8dafb11244d01125b15df33aed
+      PR_BRANCH: docs/cr-015-native-macos-lifecycle
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ env.EXPECTED_HEAD }}
+          fetch-depth: 0
+      - name: Verify exact decision changeset
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$PR_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE"
+          test "$(git rev-parse origin/$PR_BRANCH)" = "$EXPECTED_HEAD"
+          test "$(git rev-list --count "$EXPECTED_BASE..$EXPECTED_HEAD")" = 1
+          test -z "$(git status --porcelain)"
+          git diff --check "$EXPECTED_BASE...$EXPECTED_HEAD"
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+
+          mapfile -t changed < <(git diff --name-only "$EXPECTED_BASE...$EXPECTED_HEAD" | sort)
+          expected=(
+            README.md
+            docs/current-lifecycle.md
+            docs/decisions/0022-native-macos-application-lifecycle.md
+            docs/deployment.md
+            docs/implementation-plan.md
+            docs/packaging.md
+            scripts/check_documentation_lifecycle.py
+            state/change-requests.md
+            state/current-focus.md
+            state/handoff.md
+            state/progress.md
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          diff -u <(printf '%s\n' "${expected_sorted[@]}") <(printf '%s\n' "${changed[@]}")
+          ! printf '%s\n' "${changed[@]}" | grep -E '^(backend/|frontend/|launcher/|macos_package/|migrations/)'
+
+          grep -Fq 'D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL' docs/current-lifecycle.md
+          grep -Fq 'CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX' docs/current-lifecycle.md
+          grep -Fq 'D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED' docs/current-lifecycle.md
+          grep -Fq 'Only the **D5 blocker fix — Native macOS application lifecycle** is authorized next' docs/decisions/0022-native-macos-application-lifecycle.md
+          grep -Fq 'no Electron, Tauri or new desktop UI framework' docs/decisions/0022-native-macos-application-lifecycle.md
+          grep -Fq 'Product release readiness — NOT CLAIMED' docs/current-lifecycle.md
+          test -z "$(git status --porcelain)"
+          echo 'PASS — CR-015 DECISION EXACT-HEAD VERIFIED'
