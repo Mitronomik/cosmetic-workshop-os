@@ -10,8 +10,7 @@ Restore — IMPLEMENTED — C4-III VERIFIED AND LIFECYCLE-CLOSED
 D3 — macOS package MVP — IMPLEMENTED
 ```
 
-- CR-013 / ADR 0020 is accepted and D4 is closed.
-- CR-014 / ADR 0021 is accepted; D5 alone is authorized next.
+- CR-013 / ADR 0020 is accepted.
 - Product release readiness is not claimed.
 
 The exact pre-CR-013 progress file is preserved in `docs/history/d4-pre-decision/progress.md`.
@@ -43,10 +42,7 @@ D4-A — Version identity and compatibility preflight — DONE — MERGED AND EX
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
-CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
@@ -54,4 +50,4 @@ Product release readiness — NOT CLAIMED
 
 D4-A/B/C remain closed. D4-D final exact-package verification passed on `ec88b09193c8ed041e17daef3e3ffc0193d1b559` in run `31751386881`; D4 is now lifecycle-closed.
 
-CR-014 authorizes D5 only as documentation + exact-package assisted-install rehearsal. D5 is not implemented or verified yet; Phase 12 and product release readiness remain gated.
+D5 remains unauthorized by CR-013 and product release readiness remains not claimed.

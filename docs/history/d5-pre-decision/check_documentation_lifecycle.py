@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Guard closed Restore plus the CR-013 / D4-A implementation boundary.
 
-D4-A, D4-B, D4-C and D4-D are lifecycle-closed. D4 is complete.
-CR-014 authorizes D5 only as documentation + exact-package assisted-install rehearsal;
-release/Phase-12/runtime expansion and Restore changes remain forbidden.
+D4-A, D4-B, D4-C and D4-D are lifecycle-closed. D4 is complete;
+D5, release readiness and Restore changes remain forbidden.
 
 The complete pre-CR-013 checker is preserved byte-identically under
 ``docs/history/d4-pre-decision/``. Its 22 ``PINNED_BLOBS`` and 60
@@ -31,8 +30,6 @@ PLAN = P("docs/implementation-plan.md")
 PACKAGING = P("docs/packaging.md")
 DEPLOYMENT = P("docs/deployment.md")
 UPDATE_GUIDE = P("docs/update-guide.md")
-USER_INSTALL = P("docs/user-install.md")
-REMOTE_INSTALL = P("docs/remote-install-checklist.md")
 DOMAIN_D4 = P("docs/domain-model-d4-update-safety.md")
 FOCUS = P("state/current-focus.md")
 PROGRESS = P("state/progress.md")
@@ -42,7 +39,6 @@ ADR16 = P("docs/decisions/0016-launcher-assisted-restore.md")
 ADR18 = P("docs/decisions/0018-launcher-restore-interaction-and-validation-session.md")
 ADR19 = P("docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md")
 ADR20 = P("docs/decisions/0020-d4-update-safety-contract.md")
-ADR21 = P("docs/decisions/0021-d5-remote-install-rehearsal-contract.md")
 HISTORY_INDEX = P("docs/history/README.md")
 LEGACY_CHECKER = P("docs/history/d4-pre-decision/check_documentation_lifecycle.py")
 D4A_PRECLOSURE_MANIFEST = P("docs/history/d4-a-pre-closure/manifest.json")
@@ -53,8 +49,6 @@ D4C_PRECLOSURE_MANIFEST = P("docs/history/d4-c-pre-closure/manifest.json")
 D4C_PRECLOSURE_ABOUT = P("docs/history/d4-c-pre-closure/ABOUT.md")
 D4D_PRECLOSURE_MANIFEST = P("docs/history/d4-d-pre-closure/manifest.json")
 D4D_PRECLOSURE_ABOUT = P("docs/history/d4-d-pre-closure/ABOUT.md")
-D5_PREDECISION_MANIFEST = P("docs/history/d5-pre-decision/manifest.json")
-D5_PREDECISION_ABOUT = P("docs/history/d5-pre-decision/ABOUT.md")
 
 VERSION_SOURCE = P("backend/VERSION")
 VERSION_MODULE = P("backend/app/version.py")
@@ -100,8 +94,6 @@ D4C_PRECLOSURE_MANIFEST_SHA = "22271c8327e3af235c52de88f6654a1f3808e54f"
 D4D_VERIFIED_HEAD = "ec88b09193c8ed041e17daef3e3ffc0193d1b559"
 D4D_FINAL_RUN = "31751386881"
 D4D_PRECLOSURE_MANIFEST_SHA = "b403263c95c24aa02b884e97bc593d3d1aec9b58"
-D5_DECISION_BASE = "a8a28672a6fd807cd59342a02a102b8e09128fff"
-D5_PREDECISION_MANIFEST_SHA = "10376047c51c663c6d8042ae0983fea03c1b5a31"
 LEGACY_CHECKER_SHA = "0d637269f802796098d5e6e911ad4d6a325ba990"
 
 SNAPSHOT_BLOBS = {
@@ -127,13 +119,7 @@ D4_STATUS = (
     "D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED",
     "D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED",
     "D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED",
-)
-
-D5_STATUS = (
-    "CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT",
-    "D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "D5 verification — NOT STARTED",
-    "PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014",
+    "D5 — Remote install checklist — NOT AUTHORIZED BY CR-013",
     "Product release readiness — NOT CLAIMED",
 )
 
@@ -156,20 +142,21 @@ STATUS_SURFACES = (
 )
 
 FORBIDDEN_ACTIVE = (
-    "D5 — Remote install checklist — NOT AUTHORIZED BY CR-013",
-    "No further implementation slice is authorized by CR-013",
-    "Starting D5 requires a separate authorization decision/change request",
-    "D5 remains unauthorized",
-    "D5 is not authorized",
+    "D4 — Update safety — IN PROGRESS — D4-A DONE; D4-B DONE; D4-C DONE; D4-D AUTHORIZED NEXT",
+    "D4-D — Exact-package update verification and D4 lifecycle closure — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D4-D alone is authorized next",
+    "D4-D is the only authorized next slice",
+    "D4-D may now perform only final exact-package D4 verification",
+    "D4-D авторизован следующим",
+    "remain outside CR-013/D4-A",
+    "D4 — Update safety — IN PROGRESS — D4-C IMPLEMENTED, VERIFICATION PENDING",
+    "D4 — Update safety — IN PROGRESS — D4-B IMPLEMENTED, VERIFICATION PENDING",
+    "D4 — Update safety — IN PROGRESS — D4-A IMPLEMENTED, VERIFICATION PENDING",
+    "D4-D — Exact-package update verification and D4 lifecycle closure — PLANNED — NOT AUTHORIZED UNTIL D4-C IS MERGED AND VERIFIED",
+    "D4-D — Exact-package update verification and D4 lifecycle closure — IMPLEMENTED",
+    "D4-D — Exact-package update verification and D4 lifecycle closure — CLOSED",
+    "D5 — Remote install checklist — AUTHORIZED",
     "D5 — Remote install checklist — IMPLEMENTED",
-    "D5 — Remote install checklist — DONE",
-    "D5 — Remote install checklist — CLOSED",
-    "D5 verification — PASSED",
-    "D5 verification — COMPLETE",
-    "PASS — D5 REMOTE INSTALL REHEARSAL PASSED",
-    "PHASE 12 — MVP release preparation — AUTHORIZED",
-    "PR28 — AUTHORIZED",
-    "PR29 — AUTHORIZED",
     "Product release readiness — READY",
     "Product release readiness — CLAIMED",
     "Product release readiness — ACHIEVED",
@@ -178,13 +165,9 @@ FORBIDDEN_ACTIVE = (
     "signing — AUTHORIZED",
     "notarization — AUTHORIZED",
     "DMG — AUTHORIZED",
-    "PKG — AUTHORIZED",
     "App Store — AUTHORIZED",
     "release channels — AUTHORIZED",
     "GitHub Releases integration — AUTHORIZED",
-    "public release hosting — AUTHORIZED",
-    "MDM — AUTHORIZED",
-    "remote-management integration — AUTHORIZED",
     "Restore — NOT IMPLEMENTED",
     "Restore — IN PROGRESS",
     "Restore — AUTHORIZED NEXT",
@@ -388,32 +371,6 @@ def check_d4d_preclosure_snapshot() -> None:
     require(HISTORY_INDEX,("d4-d-pre-closure/",D4D_VERIFIED_HEAD))
 
 
-def check_d5_predecision_snapshot() -> None:
-    verify_blob(D5_PREDECISION_MANIFEST, D5_PREDECISION_MANIFEST_SHA, "D5 pre-decision manifest")
-    try:
-        payload = json.loads(read(D5_PREDECISION_MANIFEST))
-    except json.JSONDecodeError as exc:
-        ERRORS.append(f"D5 pre-decision manifest does not parse: {exc}")
-        return
-    if payload.get("source_commit") != D5_DECISION_BASE:
-        ERRORS.append("D5 pre-decision source commit changed")
-    files = payload.get("files", {})
-    expected_names = (
-        "README.md", "current-lifecycle.md", "implementation-plan.md", "packaging.md",
-        "deployment.md", "update-guide.md", "user-install.md", "remote-install-checklist.md",
-        "docs-AGENTS.md", "decisions-AGENTS.md", "current-focus.md", "progress.md", "handoff.md",
-        "change-requests.md", "check_documentation_lifecycle.py", "history-README.md",
-    )
-    if set(files) != set(expected_names):
-        ERRORS.append(f"D5 pre-decision manifest file set changed: {sorted(files)}")
-    for name in expected_names:
-        expected = files.get(name)
-        if isinstance(expected, str):
-            verify_blob(P(f"docs/history/d5-pre-decision/{name}"), expected, "D5 pre-decision snapshot blob")
-    require(D5_PREDECISION_ABOUT, (D5_DECISION_BASE, "exact Git blob identity"))
-    require(HISTORY_INDEX, ("d5-pre-decision/", D5_DECISION_BASE))
-
-
 def check_legacy_protections() -> None:
     verify_blob(LEGACY_CHECKER, LEGACY_CHECKER_SHA, "legacy lifecycle checker snapshot")
     pinned = _extract_legacy_blob_map("PINNED_BLOBS")
@@ -431,20 +388,16 @@ def check_legacy_protections() -> None:
 def check_current_lifecycle() -> None:
     for path in STATUS_SURFACES:
         require(path, D4_STATUS)
-        require(path, D5_STATUS)
         forbid(path, FORBIDDEN_ACTIVE)
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
-    require(CURRENT, ("ADR 0020", "ADR 0021", "D4-A closure truth", "D4-B closure truth", "D4-C closure truth", "D4-D closure truth", "D4 closure truth", "D5 decision truth", D4D_VERIFIED_HEAD, D4D_FINAL_RUN, "Restore remains closed"))
-    require(PLAN, ("Normative D4 decision", "Normative D5 decision", "D4-A", "D4-B", "D4-C", "D4-D", "## D5 — Remote install checklist", "**AUTHORIZED NEXT — NOT IMPLEMENTED**"))
+    require(CURRENT, ("ADR 0020", "D4-A closure truth", "D4-B closure truth", "D4-C closure truth", "D4-D closure truth", "D4-D closure evidence", "D4 closure truth", D4D_VERIFIED_HEAD, D4D_FINAL_RUN, "Restore remains closed"))
+    require(PLAN, ("Normative D4 decision", "D4-A", "D4-B", "D4-C", "D4-D", "**DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED**"))
     require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
     require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
-    require(UPDATE_GUIDE, ("D4 Update Safety закрыт", "CR-014", "D5", "ещё не реализован/проверен", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
-    require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md", "ADR 0021", "documentation + exact-package assisted-install rehearsal"))
-    require(P("docs/decisions/AGENTS.md"), ("ADR 0021", "documentation + exact-package assisted-install rehearsal only", "not runtime changes"))
-    require(FOCUS, ("Implement D5 Remote Install Checklist only", "documentation + exact-package assisted-install rehearsal", "Do not modify backend/frontend/launcher/migrations/package runtime"))
-    require(USER_INSTALL, ("DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED", "Terminal/Git/Python/Node/Docker"))
-    require(REMOTE_INSTALL, ("DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED", "ADR 0021"))
+    require(UPDATE_GUIDE, ("D4 Update Safety закрыт", "D5 всё ещё не авторизован", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
+    require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md"))
+    require(FOCUS, ("No further implementation slice is authorized by CR-013", "Starting D5 requires a separate authorization decision/change request"))
 
 
 def check_adr20() -> None:
@@ -467,42 +420,6 @@ def check_adr20() -> None:
     require(ADR16, ("before_restore", "replacement_intent", "recovery_blocked"))
     require(ADR18, ("127.0.0.1", "/backups/restore", "sessionStorage"))
     require(ADR19, ("D3 — macOS package MVP", "CR-012"))
-
-
-def check_adr21() -> None:
-    require(ADR21, (
-        "ADR 0021 — D5 Remote Install Rehearsal contract",
-        "Decision base: `a8a28672a6fd807cd59342a02a102b8e09128fff`",
-        "documentation + exact-package assisted-install rehearsal stage",
-        "clean Mac or clean macOS user profile",
-        "Finder",
-        "System Settings",
-        "xattr",
-        "spctl",
-        "disable Gatekeeper globally",
-        "exact Git commit SHA",
-        "archive SHA-256 digest",
-        "tested Mac hardware architecture",
-        "exact macOS version",
-        "synthetic test client",
-        "synthetic test component",
-        "synthetic test recipe",
-        "PASS — D5 REMOTE INSTALL REHEARSAL PASSED",
-        "INCONCLUSIVE — RUNNER",
-        "INCONCLUSIVE — ENVIRONMENT",
-        "does **not** equal product release readiness",
-        "PHASE 12 — MVP release preparation",
-        "Only D5 is authorized next",
-    ))
-    forbid(ADR21, (
-        "Product release readiness — READY",
-        "signing — AUTHORIZED",
-        "notarization — AUTHORIZED",
-        "DMG — AUTHORIZED",
-        "App Store — AUTHORIZED",
-        "auto-update — AUTHORIZED",
-        "PHASE 12 — MVP release preparation — AUTHORIZED",
-    ))
 
 
 def check_domain_clarification() -> None:
@@ -680,10 +597,8 @@ def main() -> int:
     check_d4b_preclosure_snapshot()
     check_d4c_preclosure_snapshot()
     check_d4d_preclosure_snapshot()
-    check_d5_predecision_snapshot()
     check_current_lifecycle()
     check_adr20()
-    check_adr21()
     check_domain_clarification()
     check_d4a_implementation()
     check_d4b_implementation()
@@ -702,8 +617,7 @@ def main() -> int:
     print("Verified D4-A is lifecycle-closed on the exact merged-head evidence.")
     print("Verified D4-B is lifecycle-closed on exact PR-head and merged-head Level-5 evidence.")
     print("Verified D4 is lifecycle-closed on final D4-D exact-package evidence.")
-    print("Verified CR-014 authorizes D5 only as documentation + exact-package assisted-install rehearsal.")
-    print("Verified D5 is not implemented/verified and Phase 12/product release readiness remain gated.")
+    print("Verified D5 remains unauthorized and product release readiness remains not claimed.")
     return 0
 
 

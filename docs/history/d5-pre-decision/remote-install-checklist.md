@@ -1,7 +1,5 @@
 # Remote Install Checklist
 
-Status: **DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED**. ADR 0021 defines the required final checklist and evidence; do not treat the unchecked skeleton below as a completed install certification.
-
 - [ ] Download app package
 - [ ] Unzip package
 - [ ] Open app

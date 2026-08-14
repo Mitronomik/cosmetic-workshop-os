@@ -11,7 +11,6 @@ For historical pre-D4 decision state, see `docs/history/d4-pre-decision/`. The e
 - ADR 0018 remains authoritative for Restore interaction/validation session semantics.
 - ADR 0019 remains authoritative for the bounded D3 macOS package decision.
 - ADR 0020 is authoritative for D4 Update Safety.
-- ADR 0021 is authoritative for D5 Remote Install Rehearsal once CR-014 is merged.
 - `docs/roadmap.md` remains the product-scope source for D4 and D5.
 - `docs/domain-model-d4-update-safety.md` is the bounded D4 companion clarification.
 
@@ -32,10 +31,7 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 
-CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
@@ -139,20 +135,10 @@ D4-D is **DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED**. It introduced no r
 
 D4 Update Safety is **DONE — EXACT-PACKAGE VERIFIED AND LIFECYCLE-CLOSED**. CR-013 authorizes no further implementation slice. D5 remains **NOT AUTHORIZED BY CR-013**, and product release readiness remains **NOT CLAIMED**. A future D5 start requires a separate authorization decision/change request.
 
-## D5 decision truth
-
-CR-014 / ADR 0021 defines D5 as a **documentation + exact-package assisted-install rehearsal**, not a release/distribution programme and not a runtime feature.
-
-D5 may update the non-technical install/checklist documents and verify one exact packaged artifact on an explicitly recorded clean Mac or clean macOS user profile. A full D5 PASS requires both automated exact-package evidence and a human Finder/System Settings rehearsal. User steps may not require Terminal, Git, Python, Node.js, Docker, direct SQLite access or repository knowledge.
-
-The current package is unsigned and un-notarized. D5 may document only the normal macOS user-interface approval path actually observed during rehearsal; it may not use `xattr`, `spctl`, `sudo`, global Gatekeeper disabling or any other terminal/security bypass. A D5 PASS is bounded to the exact tested artifact, architecture and macOS environment; it does not imply untested Intel/Apple-Silicon/macOS support.
-
-D5 itself authorizes no backend/frontend/launcher/migration/package-runtime change. A product defect discovered during rehearsal blocks D5 closure and requires its own bounded fix. Signing, notarization, DMG/PKG, App Store, public release hosting, GitHub Releases, release channels, auto-update, MDM/remote-management integration, Phase 12 and product release readiness remain outside CR-014.
-
 ## Closed Restore boundary
 
 Restore remains closed. D4-C changes no protected Restore production blob, no Restore state machine, picker, source proof, control plane, backend handshake, replacement or recovery semantics.
 
 ## Release boundary
 
-D4 is closed. D5 alone is authorized next under ADR 0021 for documentation + assisted-install rehearsal. Auto-update/download, GitHub Releases integration, signing, notarization, DMG/PKG, App Store, release channels, Phase 12 and release readiness remain unauthorized or not claimed.
+D4 is closed. D5, auto-update/download, GitHub Releases integration, signing, notarization, DMG, App Store, release channels and release readiness remain unauthorized or not claimed and require separate future authorization.

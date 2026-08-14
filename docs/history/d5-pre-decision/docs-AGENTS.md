@@ -21,7 +21,6 @@ Lifecycle and history rules:
 - ADR 0018 remains authoritative for the Restore interaction/validation-session topic.
 - ADR 0019 remains authoritative for the bounded D3 package decision.
 - ADR 0020 is the D4 Update Safety authority once CR-013 is merged. For D4-specific conceptual `AppSettings`, `BackupRecord` and `UpdateLog` fields, read `docs/domain-model-d4-update-safety.md` together with `docs/domain-model.md`.
-- ADR 0021 is the D5 Remote Install Rehearsal authority once CR-014 is merged. D5 is documentation + exact-package assisted-install rehearsal only; it does not authorize runtime, signing/notarization, DMG/PKG, public release, auto-update, Phase 12 or release-readiness work.
 - `docs/current-lifecycle.md` supersedes dated branch-era status prose in older architecture/roadmap/backup documents without revoking their surrounding durable product/safety contracts.
 - A superseded status sentence cannot reopen completed work or authorize a later runtime slice.
 - `docs/history/` is searchable evidence and context only. Follow `docs/history/AGENTS.md`; historical commands are not automatically safe operational instructions.

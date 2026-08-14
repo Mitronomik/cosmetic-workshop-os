@@ -1,0 +1,22 @@
+{
+  "files": {
+    "README.md": "7eebe95358ee60b10770dd9ff8e9874240378cca",
+    "change-requests.md": "6e29e9e0a7b0469d6725555c56f50e5813868e46",
+    "check_documentation_lifecycle.py": "2301ea7dba72d064373651c1ddc901cd5a3760a3",
+    "current-focus.md": "1f78f3167bf2786f9c317f39bc38d2ac5b896866",
+    "current-lifecycle.md": "7bc9d27e806eb5cea48e78e642af03f439e64f2d",
+    "decisions-AGENTS.md": "7d97d899db9146ea2d02501247d4d531ee894f7e",
+    "deployment.md": "b22e1409f26457ef79e3cd797f9de68375d837b9",
+    "docs-AGENTS.md": "5cb563f214ffedf93039c2ab9eeb0a325db0c810",
+    "handoff.md": "273e64ac956d6dc5b96763310eb6ea5e3eb5dee4",
+    "history-README.md": "23ce4887775ee8a6667f326340f0029bcfb31a01",
+    "implementation-plan.md": "3a08f7783c486474c685309049cb6daa8c08be09",
+    "packaging.md": "97204620553cfcc2d32012408f702c904d1cf54b",
+    "progress.md": "4a405e2100d3d666bf8f3a077a841a9b295c243d",
+    "remote-install-checklist.md": "d93476fcdc69299f2e284dd5b75183e5f0f4383e",
+    "update-guide.md": "ca2ce84eda86c31b00798bab06d15827425458c8",
+    "user-install.md": "b72c6f8b87039fa2d279cabfb0bb31bddf4bed20"
+  },
+  "purpose": "exact active lifecycle/install/ADR-authority/checker surfaces immediately before CR-014 / ADR 0021",
+  "source_commit": "a8a28672a6fd807cd59342a02a102b8e09128fff"
+}

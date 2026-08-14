@@ -29,21 +29,8 @@ D4-A — Version identity and compatibility preflight — DONE — MERGED AND EX
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
-CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
-D4-A/B/C/D closure is satisfied. CR-013 itself authorizes no D5 work.
-
-## CR-014 — D5 Remote Install Rehearsal contract
-
-Status: **ACCEPTED — D5 AUTHORIZED NEXT; NOT IMPLEMENTED**.
-
-Durable decision: `docs/decisions/0021-d5-remote-install-rehearsal-contract.md`.
-
-CR-014 defines D5 as documentation + exact-package assisted-install rehearsal on a clean Mac or clean macOS user profile. It authorizes no runtime change and no signing/notarization/DMG/PKG/App Store/public release/GitHub Releases/auto-update/release-channel/MDM/Phase-12 work. A full D5 PASS requires both automated exact-package evidence and a human non-technical Finder/System Settings rehearsal.
-
-D5 is the only authorized next stage. Product release readiness remains not claimed.
+D4-A/B/C/D closure is satisfied. D5 remains unauthorized and product release readiness remains not claimed.

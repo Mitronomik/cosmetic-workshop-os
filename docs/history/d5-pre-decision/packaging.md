@@ -1,6 +1,6 @@
 # Packaging
 
-Status: **CURRENT — D3 IMPLEMENTED; D4 CLOSED; D5 DECIDED AND AUTHORIZED NEXT; RELEASE NOT CLAIMED**
+Status: **CURRENT — D3 IMPLEMENTED; D4 CLOSED AND FINAL EXACT-PACKAGE VERIFIED**
 Updated: `2026-08-13`
 
 The exact pre-CR-013 packaging document is preserved in `docs/history/d4-pre-decision/packaging.md`.
@@ -15,10 +15,7 @@ D4-A — Version identity and compatibility preflight — DONE — MERGED AND EX
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
-CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
@@ -58,4 +55,4 @@ D4-C extends the existing Finder-visible fixed-message catalogue with two update
 
 ## Explicit non-goals
 
-D4 is closed and final exact-package verified. CR-014 authorizes D5 only to document and rehearse assisted installation of the existing ZIP/.app. It does not authorize package-runtime redesign, auto-update/download, internet update checking, GitHub Releases, release channels, signing/notarization, DMG/PKG, App Store, sandbox migration, Phase 12 or release readiness.
+D4 is closed and final exact-package verified. This closure does not authorize auto-update download, internet update checking, GitHub Releases integration, release channels, installer redesign, signing/notarization, DMG, App Store, sandbox migration, D5 or release readiness.
