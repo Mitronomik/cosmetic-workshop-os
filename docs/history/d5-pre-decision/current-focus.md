@@ -14,20 +14,15 @@ D4-A — Version identity and compatibility preflight — DONE — MERGED AND EX
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
-CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
 ## Current task
 
-**Implement D5 Remote Install Checklist only, under CR-014 / ADR 0021.**
+**No further implementation slice is authorized by CR-013.**
 
-D5 is the only authorized next stage. It is documentation + exact-package assisted-install rehearsal over the existing D3/D4 package, with mandatory clean-Mac/clean-profile human UI evidence before D5 closure. Do not modify backend/frontend/launcher/migrations/package runtime under this authorization. If rehearsal finds a product defect, stop and authorize/fix it separately.
-
-Do not start signing/notarization, DMG/PKG, public release hosting, GitHub Releases, auto-update/download, release channels, MDM/remote-management integration, Phase 12, product release readiness claims or Restore changes.
+D4 is complete and lifecycle-closed. Starting D5 requires a separate authorization decision/change request. Until then, do not implement remote-install work, auto-update/download, signing/notarization/DMG/App Store/release channels, product release readiness claims or Restore changes.
 
 ## Final D4 evidence
 

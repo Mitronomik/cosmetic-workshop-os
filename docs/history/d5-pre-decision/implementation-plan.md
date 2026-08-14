@@ -17,15 +17,11 @@ D4-A — Version identity and compatibility preflight — DONE — MERGED AND EX
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
-CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
 Normative D4 decision: `docs/decisions/0020-d4-update-safety-contract.md`.
-Normative D5 decision: `docs/decisions/0021-d5-remote-install-rehearsal-contract.md`.
 
 ## D4 programme
 
@@ -97,14 +93,6 @@ Verified PR head `ba577f1151e041c11019525862d9bb76eeb1404e` and merged head `3d6
 
 Exact current main `ec88b09193c8ed041e17daef3e3ffc0193d1b559` passed final D4-D run `31751386881` with the complete D4 package safety matrix. D4 is lifecycle-closed. No D5 or release work is authorized by this closure.
 
-## D5 — Remote install checklist
+## D5 and release boundary
 
-**AUTHORIZED NEXT — NOT IMPLEMENTED** under CR-014 / ADR 0021.
-
-D5 is documentation + exact-package assisted-install rehearsal only. It must turn the existing install skeletons into a repeatable non-technical Finder/System Settings flow, then prove the roadmap client/component/recipe/restart scenario on a clean Mac or clean macOS user profile with exact artifact/environment evidence. Automated package smoke alone is insufficient for D5 closure; the human UI rehearsal is mandatory.
-
-D5 may not change product runtime behavior. If rehearsal exposes a product defect, stop and authorize/fix that defect separately before closure.
-
-## Release boundary
-
-Product release readiness remains **NOT CLAIMED**. Signing, notarization, DMG/PKG, App Store, public release hosting, GitHub Releases, release channels, auto-update/download, MDM/remote-management integration and `PHASE 12 — MVP release preparation` remain out of CR-014 scope.
+`D5 — Remote install checklist` remains **NOT AUTHORIZED BY CR-013**. Product release readiness remains **NOT CLAIMED**. Signing, notarization, DMG, App Store, release channels and auto-download remain out of scope.

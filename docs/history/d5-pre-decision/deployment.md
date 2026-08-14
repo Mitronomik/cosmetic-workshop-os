@@ -15,10 +15,7 @@ D4-A — Version identity and compatibility preflight — DONE — MERGED AND EX
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
-CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
@@ -44,4 +41,4 @@ Closed D4-B implements the migration stage and durable UpdateLog under the exist
 
 ## Authorization boundary
 
-D4 is closed with no deployment-topology change. CR-014 authorizes D5 only as documentation + exact-package assisted-install rehearsal over the same local topology. Release/distribution infrastructure, cloud work and runtime topology changes remain unauthorized.
+D4 is closed with no deployment-topology change: Settings uses the existing local API and packaged failures use the existing package entrypoint. D5 and release/distribution/cloud work remain unauthorized.

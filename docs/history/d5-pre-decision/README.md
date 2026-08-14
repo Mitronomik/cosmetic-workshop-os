@@ -17,16 +17,12 @@ D4-A — Version identity and compatibility preflight — DONE — MERGED AND EX
 D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND EXACT-HEAD VERIFIED
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
-CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — NOT AUTHORIZED BY CR-013
 Product release readiness — NOT CLAIMED
 ```
 
 Normative lifecycle: `docs/current-lifecycle.md`.
 D4 decision: `docs/decisions/0020-d4-update-safety-contract.md`.
-D5 decision: `docs/decisions/0021-d5-remote-install-rehearsal-contract.md`.
 
 The exact pre-CR-013 README is preserved in `docs/history/d4-pre-decision/README.md`.
 
@@ -42,7 +38,7 @@ D4-A establishes the pre-mutation safety gate without implementing D4-B migratio
 - current lineage continues normally, supported older lineage keeps the existing backup-before-migration path, and newer/unsupported/unreadable lineage fails closed;
 - no protected Restore production file changes.
 
-D4-A, D4-B, D4-C and D4-D are closed. D4 is complete. CR-014 authorizes D5 only as a documentation + exact-package assisted-install rehearsal; Phase 12 and product release readiness remain gated.
+D4-A, D4-B, D4-C and D4-D are closed. D4 is complete; D5 and product release readiness remain gated.
 
 D4-A closure evidence: verified PR head `f294b15365fcf651790e2dc5638ed1551f616c3d` merged as `89dd69dc1958e622146e01869cc34d4cd2ec859e`; exact merged-head verifier `31699624984` passed.
 
@@ -76,7 +72,7 @@ Final D4-D evidence:
 - one exact current-main `.app` was reused across the D4-C human-status/failure matrix and the accepted D4-B staging/interruption/newer-lineage matrix;
 - isolated user-data remained outside the repository/package and the repository postflight was clean.
 
-CR-014 authorizes D5 as the only next stage. D5 is not implemented or verified yet; signing/notarization/DMG/App Store/public release/auto-update, Phase 12 and product release readiness remain unauthorized or not claimed.
+D5 is not authorized by CR-013 and product release readiness is not claimed.
 
 ## Core product invariants
 
@@ -94,4 +90,4 @@ CR-014 authorizes D5 as the only next stage. D5 is not implemented or verified y
 
 ## Development authority
 
-Read `AGENTS.md`, `docs/current-lifecycle.md`, relevant ADRs and the focused product/domain/test docs before changing behavior. D4 is closed. D5 work must follow ADR 0021 and remain documentation/rehearsal-only; any release/distribution/runtime expansion requires a separate decision and must not reopen the closed Restore boundary.
+Read `AGENTS.md`, `docs/current-lifecycle.md`, relevant ADRs and the focused product/domain/test docs before changing behavior. D4 is closed; any future update/distribution work requires a new authorized lifecycle step and must not reopen the closed Restore boundary.

@@ -36,10 +36,7 @@ Authority and lifecycle rules:
   contract.
 - ADR 0018 does **not** amend ADR 0016's durable Restore state machine or safety
   semantics and does **not** authorize C4-II-A runtime implementation by itself.
-- ADR 0019 remains the bounded D3 package authority; package existence is not release readiness.
-- ADR 0020 remains the D4 Update Safety authority; D4 is closed.
-- ADR 0021 is the newer bounded authority for D5 Remote Install Rehearsal once CR-014 merges. It authorizes documentation + exact-package assisted-install rehearsal only, not runtime changes, signing/notarization, DMG/PKG, public release, auto-update, Phase 12 or release readiness.
-- For current lifecycle and runtime authorization, read
+- For current C4 lifecycle and runtime authorization, read
   `docs/current-lifecycle.md` before acting on branch-era status tables in older
   ADRs.
 - A historical `NOT MERGED`, `NOT STARTED`, `NOT DECIDED`, `BLOCKED BY CR-011`,
