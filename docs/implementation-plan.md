@@ -18,9 +18,11 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL
+CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
+D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
 Product release readiness — NOT CLAIMED
 ```
 
@@ -99,11 +101,17 @@ Exact current main `ec88b09193c8ed041e17daef3e3ffc0193d1b559` passed final D4-D 
 
 ## D5 — Remote install checklist
 
-**AUTHORIZED NEXT — NOT IMPLEMENTED** under CR-014 / ADR 0021.
+**BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL** under CR-014 / ADR 0021.
 
-D5 is documentation + exact-package assisted-install rehearsal only. It must turn the existing install skeletons into a repeatable non-technical Finder/System Settings flow, then prove the roadmap client/component/recipe/restart scenario on a clean Mac or clean macOS user profile with exact artifact/environment evidence. Automated package smoke alone is insufficient for D5 closure; the human UI rehearsal is mandatory.
+The D5 documentation/exact-package rehearsal branch reached the mandatory clean-Mac human step and exposed a runtime blocker in the packaged `.app`: the browser UI could be used, but the application did not provide a healthy native macOS lifecycle for ordinary Dock Quit and verified Finder restart. Automated direct-process SIGTERM smoke is not sufficient evidence for that user path.
 
-D5 may not change product runtime behavior. If rehearsal exposes a product defect, stop and authorize/fix that defect separately before closure.
+D5 remains open and may not claim PASS until the blocker is fixed, a fresh exact package is built, automated verification is repeated, and the human clean-Mac/clean-profile rehearsal is repeated on that same artifact.
+
+## D5 blocker — Native macOS application lifecycle
+
+**AUTHORIZED NEXT — NOT IMPLEMENTED** under CR-015 / ADR 0022.
+
+Implement only a minimal native AppKit lifecycle wrapper that owns macOS application responsiveness, ordinary Quit and restart handoff while delegating all product runtime work to the existing packaged bootstrap/launcher. The browser remains the UI. No business logic, database ownership, Restore/update semantics, signing/notarization or release/distribution feature is authorized by this repair.
 
 ## Release boundary
 

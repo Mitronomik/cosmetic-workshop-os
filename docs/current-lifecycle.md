@@ -11,7 +11,8 @@ For historical pre-D4 decision state, see `docs/history/d4-pre-decision/`. The e
 - ADR 0018 remains authoritative for Restore interaction/validation session semantics.
 - ADR 0019 remains authoritative for the bounded D3 macOS package decision.
 - ADR 0020 is authoritative for D4 Update Safety.
-- ADR 0021 is authoritative for D5 Remote Install Rehearsal once CR-014 is merged.
+- ADR 0021 is authoritative for D5 Remote Install Rehearsal.
+- ADR 0022 is authoritative for the bounded CR-015 native macOS lifecycle blocker fix discovered by that rehearsal.
 - `docs/roadmap.md` remains the product-scope source for D4 and D5.
 - `docs/domain-model-d4-update-safety.md` is the bounded D4 companion clarification.
 
@@ -33,9 +34,11 @@ D4-C — User-facing update status and packaged failure UX — DONE — MERGED A
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL
+CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
+D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
 Product release readiness — NOT CLAIMED
 ```
 
@@ -156,3 +159,13 @@ Restore remains closed. D4-C changes no protected Restore production blob, no Re
 ## Release boundary
 
 D4 is closed. D5 alone is authorized next under ADR 0021 for documentation + assisted-install rehearsal. Auto-update/download, GitHub Releases integration, signing, notarization, DMG/PKG, App Store, release channels, Phase 12 and release readiness remain unauthorized or not claimed.
+
+## D5 blocker truth
+
+The mandatory human D5 rehearsal on a clean Mac produced a product-level stop condition after successful first launch and normal Gatekeeper approval: the packaged app did not expose a healthy native macOS application lifecycle. The Dock reported the application as not responding; closing the browser did not own or complete application shutdown; and a subsequent Finder launch could not be accepted as a valid restart. This is classified `FAIL — PRODUCT` for the D5 human layer, not a runner failure.
+
+Current code explains the boundary: `CFBundleExecutable` points to a shell bootstrap which `exec`s the bundled Python entrypoint. That Python process owns the local frontend/backend launcher but does not itself run an AppKit application event loop. The previous automated D5 smoke sent SIGTERM directly to that process and therefore did not prove the user-level Dock Quit contract.
+
+CR-015 / ADR 0022 authorizes one bounded repair: make a minimal native AppKit executable the `.app` lifecycle owner; have it launch the existing self-contained bootstrap/runtime as a child; translate ordinary macOS Quit into graceful child termination; remain responsive while shutdown completes; and allow a clean subsequent Finder launch. The native wrapper owns no business logic, domain service, database transaction, migration, backup, Restore or update-safety decision. Browser UI, backend API, launcher, Restore, D4 update safety and external user-data semantics remain authoritative and unchanged.
+
+D5 closure remains blocked until a fresh exact package containing the fix passes both automated package verification and the mandatory clean-Mac/clean-profile human rehearsal. `PHASE 12` and product release readiness remain unauthorized/not claimed.

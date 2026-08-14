@@ -15,19 +15,23 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL
+CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
+D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
 Product release readiness — NOT CLAIMED
 ```
 
 ## Current task
 
-**Implement D5 Remote Install Checklist only, under CR-014 / ADR 0021.**
+**Implement only the CR-015 native macOS application lifecycle blocker fix.**
 
-D5 is the only authorized next stage. It is documentation + exact-package assisted-install rehearsal over the existing D3/D4 package, with mandatory clean-Mac/clean-profile human UI evidence before D5 closure. Do not modify backend/frontend/launcher/migrations/package runtime under this authorization. If rehearsal finds a product defect, stop and authorize/fix it separately.
+A clean-Mac human D5 rehearsal confirmed that the current packaged `.app` can start and serve the browser UI, but it does not behave as a healthy native macOS application lifecycle owner: the Dock reports the app as not responding, ordinary Quit is not available as a reliable graceful shutdown path, and a subsequent Finder launch cannot be accepted as a verified restart. D5 closure is blocked.
 
-Do not start signing/notarization, DMG/PKG, public release hosting, GitHub Releases, auto-update/download, release channels, MDM/remote-management integration, Phase 12, product release readiness claims or Restore changes.
+CR-015 authorizes one bounded runtime repair: a minimal native AppKit lifecycle wrapper around the existing packaged bootstrap/launcher. The browser remains the product UI; backend/domain/data ownership does not move into the native wrapper. Do not modify business logic, database semantics, Restore semantics, D4 update semantics, frontend product flows or migrations except where a focused test harness must observe lifecycle behavior.
+
+Do not start signing/notarization, DMG/PKG, public release hosting, GitHub Releases, auto-update/download, release channels, MDM/remote-management integration, Phase 12 or product release readiness claims.
 
 ## Final D4 evidence
 

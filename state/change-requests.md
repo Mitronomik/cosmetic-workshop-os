@@ -30,9 +30,11 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
+D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL
+CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
+D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
 Product release readiness — NOT CLAIMED
 ```
 
@@ -47,3 +49,11 @@ Durable decision: `docs/decisions/0021-d5-remote-install-rehearsal-contract.md`.
 CR-014 defines D5 as documentation + exact-package assisted-install rehearsal on a clean Mac or clean macOS user profile. It authorizes no runtime change and no signing/notarization/DMG/PKG/App Store/public release/GitHub Releases/auto-update/release-channel/MDM/Phase-12 work. A full D5 PASS requires both automated exact-package evidence and a human non-technical Finder/System Settings rehearsal.
 
 D5 is the only authorized next stage. Product release readiness remains not claimed.
+
+## CR-015 — Native macOS application lifecycle blocker fix
+
+Status: **ACCEPTED — BOUNDED FIX AUTHORIZED NEXT**.
+
+Durable decision: `docs/decisions/0022-native-macos-application-lifecycle.md`.
+
+The mandatory D5 human rehearsal confirmed a product blocker: first launch and browser workflows worked, but the `.app` did not provide a healthy responsive native macOS lifecycle for ordinary Dock Quit and verified Finder restart. CR-015 authorizes only a minimal native AppKit lifecycle owner around the existing packaged bootstrap/launcher. It does not authorize business-logic changes, frontend redesign, database or migration changes, Restore/D4 semantic changes, signing, notarization, DMG/PKG, App Store, auto-update, public release hosting, MDM, Phase 12 or product release readiness.
