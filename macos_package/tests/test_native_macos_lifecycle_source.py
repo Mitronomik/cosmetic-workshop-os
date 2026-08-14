@@ -23,6 +23,15 @@ def test_native_lifecycle_source_owns_appkit_quit_without_product_logic():
         assert token not in lowered
 
 
+def test_native_lifecycle_timeout_fails_closed_instead_of_orphaning_backend():
+    text = SOURCE.read_text(encoding="utf-8")
+    assert "CWShutdownTimeoutSeconds" in text
+    assert "replyToApplicationShouldTerminate:NO" in text
+    assert "осталось открытым" in text
+    assert "SIGKILL" not in text
+    assert "kill(" not in text
+
+
 def test_package_script_compiles_native_main_and_keeps_runtime_helper():
     text = PACKAGE_SCRIPT.read_text(encoding="utf-8")
     assert "xcrun --sdk macosx clang" in text
