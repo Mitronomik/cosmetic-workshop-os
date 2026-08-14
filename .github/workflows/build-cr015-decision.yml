@@ -33,6 +33,7 @@ jobs:
           git show "origin/$BUILDER:verification/build_cr015_decision.py" > "$RUNNER_TEMP/build_cr015_decision.py"
           python3 -m py_compile "$RUNNER_TEMP/build_cr015_decision.py"
           python3 "$RUNNER_TEMP/build_cr015_decision.py"
+          sed -i 's/[[:space:]]\+$//' docs/decisions/0022-native-macos-application-lifecycle.md
 
           python3 -m py_compile scripts/check_documentation_lifecycle.py
           python3 scripts/check_documentation_lifecycle.py
