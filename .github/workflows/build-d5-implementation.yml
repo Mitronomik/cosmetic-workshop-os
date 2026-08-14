@@ -32,6 +32,16 @@ jobs:
 
           git show "origin/$BUILDER:verification/build_d5_impl.py" > "$RUNNER_TEMP/build_d5_impl.py"
           python3 "$RUNNER_TEMP/build_d5_impl.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/remote-install-checklist.md')
+          t = p.read_text(encoding='utf-8')
+          old = 'Normative contract: `docs/decisions/0021-d5-remote-install-rehearsal-contract.md`.'
+          new = 'Normative contract: **ADR 0021**, `docs/decisions/0021-d5-remote-install-rehearsal-contract.md`.'
+          if t.count(old) != 1:
+              raise SystemExit('remote checklist ADR label anchor mismatch')
+          p.write_text(t.replace(old, new, 1), encoding='utf-8')
+          PY
 
           python3 -m py_compile scripts/check_documentation_lifecycle.py
           python3 scripts/check_documentation_lifecycle.py
