@@ -104,6 +104,13 @@ D4D_PRECLOSURE_MANIFEST_SHA = "b403263c95c24aa02b884e97bc593d3d1aec9b58"
 D5_DECISION_BASE = "a8a28672a6fd807cd59342a02a102b8e09128fff"
 D5_PREDECISION_MANIFEST_SHA = "10376047c51c663c6d8042ae0983fea03c1b5a31"
 LEGACY_CHECKER_SHA = "0d637269f802796098d5e6e911ad4d6a325ba990"
+CR015_VERIFIED_HEAD = "d7f95141e5f41c7a806c3fafb71e942fe5892dd8"
+CR015_MERGED_HEAD = "c38940349a80d345f3e833b61e4bf4e5e761c0eb"
+CR015_VERIFY_RUN = "31780899805"
+CR015_PACKAGE_SHA256 = "85f993a93082c4b3a36771318cf8c0c3abf02be56b1374a32a62d1a6b9279ee6"
+CR015_APP_LIFECYCLE_BLOB = "0ec3ff6941227cd84e8eaf16bd4ea7a6b2281834"
+CR015_PACKAGE_SCRIPT_BLOB = "fdf8f01cc16db43320e5621a4a1f8a895ce65c56"
+CR015_PACKAGE_VERIFIER_BLOB = "19bd0bcd04ca98c39fed1c8dad9c50a3b142cc47"
 
 SNAPSHOT_BLOBS = {
     P("docs/history/d4-pre-decision/README.md"): "4e89b95a62d6b17b1a65d3dfeb8803c1b80733ee",
@@ -132,10 +139,10 @@ D4_STATUS = (
 
 D5_STATUS = (
     "CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT",
-    "D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL",
+    "D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED",
     "CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX",
-    "D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL",
+    "D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED",
+    "D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED",
     "PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015",
     "Product release readiness — NOT CLAIMED",
 )
@@ -164,6 +171,9 @@ FORBIDDEN_ACTIVE = (
     "Starting D5 requires a separate authorization decision/change request",
     "D5 remains unauthorized",
     "D5 is not authorized",
+    "D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL",
+    "D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL",
     "D5 — Remote install checklist — IMPLEMENTED",
     "D5 — Remote install checklist — DONE",
     "D5 — Remote install checklist — CLOSED",
@@ -438,14 +448,14 @@ def check_current_lifecycle() -> None:
         forbid(path, FORBIDDEN_ACTIVE)
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
-    require(CURRENT, ("ADR 0020", "ADR 0021", "ADR 0022", "D4-A closure truth", "D4-B closure truth", "D4-C closure truth", "D4-D closure truth", "D4 closure truth", "D5 decision truth", "D5 blocker truth", D4D_VERIFIED_HEAD, D4D_FINAL_RUN, "Restore remains closed"))
-    require(PLAN, ("Normative D4 decision", "Normative D5 decision", "D4-A", "D4-B", "D4-C", "D4-D", "## D5 — Remote install checklist", "BLOCKED — PRODUCT DEFECT CONFIRMED", "## D5 blocker — Native macOS application lifecycle", "AUTHORIZED NEXT — NOT IMPLEMENTED"))
+    require(CURRENT, ("ADR 0020", "ADR 0021", "ADR 0022", "D4-A closure truth", "D4-B closure truth", "D4-C closure truth", "D4-D closure truth", "D4 closure truth", "D5 decision truth", "D5 blocker truth", "CR-015 closure truth", CR015_VERIFIED_HEAD, CR015_MERGED_HEAD, CR015_VERIFY_RUN, CR015_PACKAGE_SHA256, "Restore remains closed"))
+    require(PLAN, ("Normative D4 decision", "Normative D5 decision", "D4-A", "D4-B", "D4-C", "D4-D", "## D5 — Remote install checklist", "BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED", "## D5 blocker — Native macOS application lifecycle", "DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED", CR015_VERIFY_RUN, CR015_PACKAGE_SHA256))
     require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
     require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
     require(UPDATE_GUIDE, ("D4 Update Safety закрыт", "CR-014", "D5", "ещё не реализован/проверен", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
     require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md", "ADR 0021", "documentation + exact-package assisted-install rehearsal"))
     require(P("docs/decisions/AGENTS.md"), ("ADR 0021", "documentation + exact-package assisted-install rehearsal only", "not runtime changes"))
-    require(FOCUS, ("Implement only the CR-015 native macOS application lifecycle blocker fix", "minimal native AppKit lifecycle wrapper", "Do not modify business logic, database semantics, Restore semantics, D4 update semantics"))
+    require(FOCUS, ("Repeat the D5 human clean-Mac/clean-profile rehearsal on the fixed exact package", CR015_VERIFIED_HEAD, CR015_MERGED_HEAD, CR015_VERIFY_RUN, CR015_PACKAGE_SHA256, "No new runtime implementation slice is authorized now"))
     require(USER_INSTALL, ("DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED", "Terminal/Git/Python/Node/Docker"))
     require(REMOTE_INSTALL, ("DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED", "ADR 0021"))
 
@@ -511,7 +521,7 @@ def check_adr21() -> None:
 def check_adr22() -> None:
     require(ADR22, (
         "ADR 0022 — Native macOS application lifecycle blocker fix",
-        "Status: **ACCEPTED — CR-015 BOUNDED FIX AUTHORIZED NEXT**",
+        "Status: **ACCEPTED — IMPLEMENTED AND EXACT-PACKAGE VERIFIED**",
         "Decision base: `c91e62930915da357a2f9c74b9a054fe98e9df14`",
         "FAIL — PRODUCT",
         "AppKit",
@@ -523,7 +533,8 @@ def check_adr22() -> None:
         "Objective-C",
         "no Electron",
         "fresh human clean-Mac/clean-profile rehearsal",
-        "Only the **D5 blocker fix — Native macOS application lifecycle** is authorized next",
+        "CR-015 authorizes no further runtime slice after this closure",
+        CR015_VERIFIED_HEAD, CR015_MERGED_HEAD, CR015_VERIFY_RUN, CR015_PACKAGE_SHA256,
     ))
     forbid(ADR22, (
         "Product release readiness — READY",
@@ -534,6 +545,18 @@ def check_adr22() -> None:
         "auto-update — AUTHORIZED",
         "PHASE 12 — MVP release preparation — AUTHORIZED",
     ))
+
+
+def check_cr015_implementation_closure() -> None:
+    verify_blob(P("scripts/macos/app_lifecycle.m"), CR015_APP_LIFECYCLE_BLOB, "CR-015 native lifecycle source")
+    verify_blob(P("scripts/package_macos.sh"), CR015_PACKAGE_SCRIPT_BLOB, "CR-015 package builder")
+    verify_blob(P("macos_package/verification.py"), CR015_PACKAGE_VERIFIER_BLOB, "CR-015 package verifier")
+    require(P("scripts/macos/app_lifecycle.m"), (
+        "<NSApplicationDelegate>", "applicationShouldTerminate:", "NSTerminateLater",
+        "replyToApplicationShouldTerminate:NO", "CosmeticWorkshopOSRuntime",
+        "applicationShouldHandleReopen:",
+    ))
+    require(P("scripts/package_macos.sh"), ("xcrun --sdk macosx clang", "-framework Cocoa", "RUNTIME_HELPER"))
 
 
 def check_domain_clarification() -> None:
@@ -716,6 +739,7 @@ def main() -> int:
     check_adr20()
     check_adr21()
     check_adr22()
+    check_cr015_implementation_closure()
     check_domain_clarification()
     check_d4a_implementation()
     check_d4b_implementation()
@@ -734,8 +758,8 @@ def main() -> int:
     print("Verified D4-A is lifecycle-closed on the exact merged-head evidence.")
     print("Verified D4-B is lifecycle-closed on exact PR-head and merged-head Level-5 evidence.")
     print("Verified D4 is lifecycle-closed on final D4-D exact-package evidence.")
-    print("Verified CR-014 D5 human rehearsal is blocked by a confirmed product lifecycle defect.")
-    print("Verified CR-015 authorizes only the native macOS application lifecycle blocker fix.")
+    print("Verified CR-015 native macOS lifecycle blocker fix is merged and exact-package verified.")
+    print("Verified D5 still requires a fresh human clean-Mac/clean-profile rehearsal on the fixed exact package.")
     print("Verified D5 closure, Phase 12 and product release readiness remain gated.")
     return 0
 

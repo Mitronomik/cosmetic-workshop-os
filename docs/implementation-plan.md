@@ -18,10 +18,10 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL
+D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
-D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL
+D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
+D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
 PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
 Product release readiness — NOT CLAIMED
 ```
@@ -101,17 +101,17 @@ Exact current main `ec88b09193c8ed041e17daef3e3ffc0193d1b559` passed final D4-D 
 
 ## D5 — Remote install checklist
 
-**BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL** under CR-014 / ADR 0021.
+**BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED** under CR-014 / ADR 0021.
 
-The D5 documentation/exact-package rehearsal branch reached the mandatory clean-Mac human step and exposed a runtime blocker in the packaged `.app`: the browser UI could be used, but the application did not provide a healthy native macOS lifecycle for ordinary Dock Quit and verified Finder restart. Automated direct-process SIGTERM smoke is not sufficient evidence for that user path.
-
-D5 remains open and may not claim PASS until the blocker is fixed, a fresh exact package is built, automated verification is repeated, and the human clean-Mac/clean-profile rehearsal is repeated on that same artifact.
+The first clean-Mac rehearsal correctly exposed the native application lifecycle product defect. CR-015 has now repaired that blocker, but the earlier human failure is not converted into a PASS retroactively. D5 remains open until a fresh clean-Mac/clean-profile rehearsal runs the fixed exact package and the D5 documentation/checklist evidence is completed.
 
 ## D5 blocker — Native macOS application lifecycle
 
-**AUTHORIZED NEXT — NOT IMPLEMENTED** under CR-015 / ADR 0022.
+**DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED** under CR-015 / ADR 0022.
 
-Implement only a minimal native AppKit lifecycle wrapper that owns macOS application responsiveness, ordinary Quit and restart handoff while delegating all product runtime work to the existing packaged bootstrap/launcher. The browser remains the UI. No business logic, database ownership, Restore/update semantics, signing/notarization or release/distribution feature is authorized by this repair.
+Verified implementation head `d7f95141e5f41c7a806c3fafb71e942fe5892dd8` merged as `c38940349a80d345f3e833b61e4bf4e5e761c0eb` with `0` changed files. External run `31780899805` passed the full Python regression (`2692 passed, 1 skipped`) and a real macOS exact-package lifecycle path: LaunchServices first start → synthetic backup/client/component/recipe → application Quit Apple event → no packaged processes/occupied ports → LaunchServices restart → persistence → second application-level Quit. Exact tested ZIP SHA-256: `85f993a93082c4b3a36771318cf8c0c3abf02be56b1374a32a62d1a6b9279ee6`.
+
+The native AppKit executable owns only macOS application lifecycle; the existing packaged helper/Python launcher remains the runtime owner. No business logic, database, Restore or D4 update semantics moved into native code. A shutdown timeout fails closed by cancelling Quit rather than killing the runtime owner and risking an orphan backend.
 
 ## Release boundary
 

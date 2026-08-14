@@ -29,10 +29,10 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL
+D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
-D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL
+D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
+D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
 PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
 Product release readiness — NOT CLAIMED
 ```
@@ -58,3 +58,7 @@ D4-A evidence remains recorded above. D4-B evidence: verified PR head `8688fa3db
 ## CR-015 handoff
 
 Next implementation work is only the native macOS application lifecycle blocker fix from ADR 0022. Preserve the existing browser UI, Python packaged entrypoint, launcher/backend ownership, external user-data boundary, Restore and D4 update semantics. Required acceptance proof includes a real packaged `.app` launched through LaunchServices, responsive application-level Quit (not direct SIGTERM as the sole proof), released ports/processes, repeat Finder launch and persistence, followed by a fresh human clean-Mac D5 rehearsal.
+
+## CR-015 closure handoff
+
+Do not implement more runtime work now. The next action is the mandatory D5 human clean-Mac/clean-profile rehearsal using the fixed exact package verified by run `31780899805` (ZIP SHA-256 `85f993a93082c4b3a36771318cf8c0c3abf02be56b1374a32a62d1a6b9279ee6`). Ordinary Quit must be performed through the macOS application lifecycle; closing the browser is not application shutdown. On success, complete D5 documentation/checklist evidence and lifecycle closure separately. On failure, stop and classify before changing code.

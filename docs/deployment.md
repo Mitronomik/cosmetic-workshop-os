@@ -16,10 +16,10 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL
+D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
-D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL
+D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
+D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
 PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
 Product release readiness — NOT CLAIMED
 ```
@@ -51,3 +51,7 @@ D4 is closed with no deployment-topology change. CR-014 authorizes D5 only as do
 ## CR-015 lifecycle repair boundary
 
 CR-015 changes no deployment topology: the application remains local-first, the browser remains the UI, and user data remain external to the `.app`. The only authorized runtime change is the native macOS application lifecycle wrapper required for responsive Dock Quit and repeat launch. No cloud, remote management or release-channel work is authorized.
+
+## CR-015 closure deployment truth
+
+The merged native lifecycle repair changes no deployment topology. The browser remains the product UI, the backend remains local, and user data remain external to the `.app`. The fixed package now participates correctly in the macOS application lifecycle for ordinary Quit/restart. D5 still requires a fresh human clean-Mac rehearsal; no remote-management or release topology is authorized.

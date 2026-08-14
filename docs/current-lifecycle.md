@@ -34,10 +34,10 @@ D4-C — User-facing update status and packaged failure UX — DONE — MERGED A
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL
+D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
-D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL
+D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
+D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
 PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
 Product release readiness — NOT CLAIMED
 ```
@@ -169,3 +169,21 @@ Current code explains the boundary: `CFBundleExecutable` points to a shell boots
 CR-015 / ADR 0022 authorizes one bounded repair: make a minimal native AppKit executable the `.app` lifecycle owner; have it launch the existing self-contained bootstrap/runtime as a child; translate ordinary macOS Quit into graceful child termination; remain responsive while shutdown completes; and allow a clean subsequent Finder launch. The native wrapper owns no business logic, domain service, database transaction, migration, backup, Restore or update-safety decision. Browser UI, backend API, launcher, Restore, D4 update safety and external user-data semantics remain authoritative and unchanged.
 
 D5 closure remains blocked until a fresh exact package containing the fix passes both automated package verification and the mandatory clean-Mac/clean-profile human rehearsal. `PHASE 12` and product release readiness remain unauthorized/not claimed.
+
+## CR-015 closure truth
+
+CR-015 native macOS application lifecycle blocker fix is **DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED**.
+
+Evidence:
+
+- verified implementation head: `d7f95141e5f41c7a806c3fafb71e942fe5892dd8`;
+- merge commit/current implementation merge: `c38940349a80d345f3e833b61e4bf4e5e761c0eb`;
+- verified head → merge: `0` changed files;
+- external macOS exact-package run: `31780899805`;
+- full Python regression: `2692 passed, 1 skipped`;
+- exact ZIP SHA-256: `85f993a93082c4b3a36771318cf8c0c3abf02be56b1374a32a62d1a6b9279ee6`;
+- evidence artifact: `9211850165`, digest `sha256:ee76ad8dd1bd404c577f2ce730471e5c73114939cd2d3ba119366b3d6f40aec2`;
+- package artifact: `9211850871`, wrapper digest `sha256:3076e886ef1c17c247df5e1911273a87c23b325840f19810fe4da0e2fa94e888`;
+- application-level Quit proof used a macOS Quit Apple event after LaunchServices start; direct child SIGTERM was not accepted as the proof.
+
+D5 itself is **not** complete. The fixed exact package still requires the mandatory fresh human clean-Mac/clean-profile rehearsal and final D5 evidence. Phase 12 and product release readiness remain unauthorized/not claimed.
