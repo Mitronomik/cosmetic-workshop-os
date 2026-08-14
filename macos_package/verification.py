@@ -35,6 +35,7 @@ import zipfile
 APP_BUNDLE_NAME = "CosmeticWorkshopOS.app"
 ZIP_NAME = "CosmeticWorkshopOS-mac.zip"
 BUNDLE_EXECUTABLE_NAME = "CosmeticWorkshopOS"
+BUNDLE_RUNTIME_HELPER_NAME = "CosmeticWorkshopOSRuntime"
 BUNDLE_DISPLAY_NAME = "Мастерская косметолога"
 PACKAGE_MANIFEST_NAME = "package-runtime.json"
 
@@ -171,10 +172,12 @@ def verify_package(
     application_root = resources / "app"
 
     checks.append(_check_info_plist(contents / "Info.plist"))
-    checks.append(_check_bundle_executable(contents / "MacOS" / BUNDLE_EXECUTABLE_NAME))
-    checks.append(
-        _check_bootstrap_interpreter_isolation(contents / "MacOS" / BUNDLE_EXECUTABLE_NAME)
-    )
+    native_executable = contents / "MacOS" / BUNDLE_EXECUTABLE_NAME
+    runtime_helper = contents / "MacOS" / BUNDLE_RUNTIME_HELPER_NAME
+    checks.append(_check_bundle_executable(native_executable))
+    checks.append(_check_native_lifecycle_executable(native_executable))
+    checks.append(_check_runtime_helper(runtime_helper))
+    checks.append(_check_bootstrap_interpreter_isolation(runtime_helper))
     checks.append(_check_bundled_runtime(resources / "runtime"))
     checks.extend(_check_required_files(application_root))
     checks.append(_check_frontend_assets(application_root / "frontend" / "dist"))
@@ -231,6 +234,39 @@ def _check_bundle_executable(executable_path: Path) -> Check:
             "bundle_executable", False, "the bundle executable is not marked executable"
         )
     return Check("bundle_executable", True)
+
+
+MACHO_MAGICS = {
+    b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
+    b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",
+    b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+    b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca",
+}
+
+
+def _check_native_lifecycle_executable(executable_path: Path) -> Check:
+    if not executable_path.is_file():
+        return Check("native_lifecycle_executable", False, "native lifecycle executable is missing")
+    try:
+        magic = executable_path.read_bytes()[:4]
+    except OSError as exc:
+        return Check("native_lifecycle_executable", False, f"native executable is unreadable: {exc}")
+    if magic not in MACHO_MAGICS:
+        return Check(
+            "native_lifecycle_executable", False,
+            "CFBundleExecutable is not a Mach-O native application lifecycle binary",
+        )
+    return Check("native_lifecycle_executable", True)
+
+
+def _check_runtime_helper(helper_path: Path) -> Check:
+    if not helper_path.is_file():
+        return Check("bundle_runtime_helper", False, "CosmeticWorkshopOSRuntime is missing")
+    if not helper_path.stat().st_mode & stat.S_IXUSR:
+        return Check("bundle_runtime_helper", False, "runtime helper is not executable")
+    if not helper_path.read_bytes().startswith(b"#!"):
+        return Check("bundle_runtime_helper", False, "runtime helper is not the expected script")
+    return Check("bundle_runtime_helper", True)
 
 
 def _check_bootstrap_interpreter_isolation(bootstrap_path: Path) -> Check:
@@ -452,7 +488,11 @@ def _check_no_source_root_reference(
         return Check("no_source_repository_reference", True, "skipped: no source root supplied")
     needle = str(source_root.resolve())
     offenders: list[str] = []
-    candidates = [contents / "Info.plist", contents / "MacOS" / BUNDLE_EXECUTABLE_NAME]
+    candidates = [
+        contents / "Info.plist",
+        contents / "MacOS" / BUNDLE_EXECUTABLE_NAME,
+        contents / "MacOS" / BUNDLE_RUNTIME_HELPER_NAME,
+    ]
     candidates.extend(
         path
         for path in application_root.rglob("*")
