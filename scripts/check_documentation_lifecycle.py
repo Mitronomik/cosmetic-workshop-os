@@ -43,6 +43,7 @@ ADR18 = P("docs/decisions/0018-launcher-restore-interaction-and-validation-sessi
 ADR19 = P("docs/decisions/0019-c4-iii-packaged-artifact-prerequisite.md")
 ADR20 = P("docs/decisions/0020-d4-update-safety-contract.md")
 ADR21 = P("docs/decisions/0021-d5-remote-install-rehearsal-contract.md")
+ADR22 = P("docs/decisions/0022-native-macos-application-lifecycle.md")
 HISTORY_INDEX = P("docs/history/README.md")
 LEGACY_CHECKER = P("docs/history/d4-pre-decision/check_documentation_lifecycle.py")
 D4A_PRECLOSURE_MANIFEST = P("docs/history/d4-a-pre-closure/manifest.json")
@@ -131,9 +132,11 @@ D4_STATUS = (
 
 D5_STATUS = (
     "CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT",
-    "D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "D5 verification — NOT STARTED",
-    "PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014",
+    "D5 — Remote install checklist — BLOCKED — PRODUCT DEFECT CONFIRMED IN HUMAN REHEARSAL",
+    "CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX",
+    "D5 blocker fix — Native macOS application lifecycle — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D5 verification — BLOCKED UNTIL FIX + FRESH EXACT-PACKAGE/HUMAN REHEARSAL",
+    "PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015",
     "Product release readiness — NOT CLAIMED",
 )
 
@@ -435,14 +438,14 @@ def check_current_lifecycle() -> None:
         forbid(path, FORBIDDEN_ACTIVE)
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
-    require(CURRENT, ("ADR 0020", "ADR 0021", "D4-A closure truth", "D4-B closure truth", "D4-C closure truth", "D4-D closure truth", "D4 closure truth", "D5 decision truth", D4D_VERIFIED_HEAD, D4D_FINAL_RUN, "Restore remains closed"))
-    require(PLAN, ("Normative D4 decision", "Normative D5 decision", "D4-A", "D4-B", "D4-C", "D4-D", "## D5 — Remote install checklist", "**AUTHORIZED NEXT — NOT IMPLEMENTED**"))
+    require(CURRENT, ("ADR 0020", "ADR 0021", "ADR 0022", "D4-A closure truth", "D4-B closure truth", "D4-C closure truth", "D4-D closure truth", "D4 closure truth", "D5 decision truth", "D5 blocker truth", D4D_VERIFIED_HEAD, D4D_FINAL_RUN, "Restore remains closed"))
+    require(PLAN, ("Normative D4 decision", "Normative D5 decision", "D4-A", "D4-B", "D4-C", "D4-D", "## D5 — Remote install checklist", "BLOCKED — PRODUCT DEFECT CONFIRMED", "## D5 blocker — Native macOS application lifecycle", "AUTHORIZED NEXT — NOT IMPLEMENTED"))
     require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
     require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
     require(UPDATE_GUIDE, ("D4 Update Safety закрыт", "CR-014", "D5", "ещё не реализован/проверен", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
     require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md", "ADR 0021", "documentation + exact-package assisted-install rehearsal"))
     require(P("docs/decisions/AGENTS.md"), ("ADR 0021", "documentation + exact-package assisted-install rehearsal only", "not runtime changes"))
-    require(FOCUS, ("Implement D5 Remote Install Checklist only", "documentation + exact-package assisted-install rehearsal", "Do not modify backend/frontend/launcher/migrations/package runtime"))
+    require(FOCUS, ("Implement only the CR-015 native macOS application lifecycle blocker fix", "minimal native AppKit lifecycle wrapper", "Do not modify business logic, database semantics, Restore semantics, D4 update semantics"))
     require(USER_INSTALL, ("DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED", "Terminal/Git/Python/Node/Docker"))
     require(REMOTE_INSTALL, ("DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED", "ADR 0021"))
 
@@ -495,6 +498,34 @@ def check_adr21() -> None:
         "Only D5 is authorized next",
     ))
     forbid(ADR21, (
+        "Product release readiness — READY",
+        "signing — AUTHORIZED",
+        "notarization — AUTHORIZED",
+        "DMG — AUTHORIZED",
+        "App Store — AUTHORIZED",
+        "auto-update — AUTHORIZED",
+        "PHASE 12 — MVP release preparation — AUTHORIZED",
+    ))
+
+
+def check_adr22() -> None:
+    require(ADR22, (
+        "ADR 0022 — Native macOS application lifecycle blocker fix",
+        "Status: **ACCEPTED — CR-015 BOUNDED FIX AUTHORIZED NEXT**",
+        "Decision base: `c91e62930915da357a2f9c74b9a054fe98e9df14`",
+        "FAIL — PRODUCT",
+        "AppKit",
+        "ordinary macOS Quit",
+        "LaunchServices",
+        "existing packaged bootstrap",
+        "browser remains",
+        "no business logic",
+        "Objective-C",
+        "no Electron",
+        "fresh human clean-Mac/clean-profile rehearsal",
+        "Only the **D5 blocker fix — Native macOS application lifecycle** is authorized next",
+    ))
+    forbid(ADR22, (
         "Product release readiness — READY",
         "signing — AUTHORIZED",
         "notarization — AUTHORIZED",
@@ -684,6 +715,7 @@ def main() -> int:
     check_current_lifecycle()
     check_adr20()
     check_adr21()
+    check_adr22()
     check_domain_clarification()
     check_d4a_implementation()
     check_d4b_implementation()
@@ -702,8 +734,9 @@ def main() -> int:
     print("Verified D4-A is lifecycle-closed on the exact merged-head evidence.")
     print("Verified D4-B is lifecycle-closed on exact PR-head and merged-head Level-5 evidence.")
     print("Verified D4 is lifecycle-closed on final D4-D exact-package evidence.")
-    print("Verified CR-014 authorizes D5 only as documentation + exact-package assisted-install rehearsal.")
-    print("Verified D5 is not implemented/verified and Phase 12/product release readiness remain gated.")
+    print("Verified CR-014 D5 human rehearsal is blocked by a confirmed product lifecycle defect.")
+    print("Verified CR-015 authorizes only the native macOS application lifecycle blocker fix.")
+    print("Verified D5 closure, Phase 12 and product release readiness remain gated.")
     return 0
 
 
