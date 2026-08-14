@@ -58,6 +58,13 @@ jobs:
             --zip "$COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR/CosmeticWorkshopOS-mac.zip" \
             --source-root "$PWD"
 
+          # Tests/builds are allowed to create runner-owned output in tracked source
+          # directories. Remove/restore only areas CR-015 never changes before the
+          # exact implementation scope comparison.
+          rm -rf backend/build frontend/node_modules frontend/dist frontend/dist-tests
+          find backend -maxdepth 1 -type d -name '*.egg-info' -exec rm -rf {} + 2>/dev/null || true
+          git restore --source="$EXPECTED_BASE" --worktree -- backend frontend
+
           { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > "$RUNNER_TEMP/changed.txt"
           cat > "$RUNNER_TEMP/expected.txt" <<'EOF'
           macos_package/tests/packaging_fixtures.py
