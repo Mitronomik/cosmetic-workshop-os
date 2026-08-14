@@ -1,0 +1,65 @@
+name: Build CR-015 lifecycle closure
+
+on:
+  push:
+    branches:
+      - verification/cr015-closure-builder
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      TARGET: docs/cr015-lifecycle-closure
+      BUILDER: verification/cr015-closure-builder
+      EXPECTED_BASE: c38940349a80d345f3e833b61e4bf4e5e761c0eb
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: docs/cr015-lifecycle-closure
+          fetch-depth: 0
+      - name: Build validate and publish CR-015 closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$TARGET" "$BUILDER"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_BASE"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE"
+          test "$(git rev-parse origin/$TARGET)" = "$EXPECTED_BASE"
+          test -z "$(git status --porcelain)"
+
+          git show "origin/$BUILDER:verification/build_cr015_closure.py" > "$RUNNER_TEMP/build_cr015_closure.py"
+          python3 -m py_compile "$RUNNER_TEMP/build_cr015_closure.py"
+          python3 "$RUNNER_TEMP/build_cr015_closure.py"
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+          git diff --check
+
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > "$RUNNER_TEMP/changed.txt"
+          cat > "$RUNNER_TEMP/expected.txt" <<'EOF'
+          README.md
+          docs/current-lifecycle.md
+          docs/decisions/0022-native-macos-application-lifecycle.md
+          docs/deployment.md
+          docs/implementation-plan.md
+          docs/packaging.md
+          scripts/check_documentation_lifecycle.py
+          state/change-requests.md
+          state/current-focus.md
+          state/handoff.md
+          state/progress.md
+          EOF
+          sed -i 's/^          //' "$RUNNER_TEMP/expected.txt"
+          sort -o "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/expected.txt"
+          diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/changed.txt"
+          ! grep -E '^(backend/|frontend/|launcher/|macos_package/|migrations/|scripts/macos/app_lifecycle\.m$|scripts/package_macos\.sh$)' "$RUNNER_TEMP/changed.txt"
+
+          git add $(cat "$RUNNER_TEMP/expected.txt")
+          git diff --cached --check
+          test -z "$(git status --porcelain | grep '^??' || true)"
+          git config user.name 'CR-015 closure builder'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'Close CR-015 blocker fix and resume D5 rehearsal'
+          git push origin HEAD:"$TARGET"
