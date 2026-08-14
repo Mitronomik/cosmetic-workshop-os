@@ -58,24 +58,27 @@ jobs:
             --zip "$COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR/CosmeticWorkshopOS-mac.zip" \
             --source-root "$PWD"
 
-          mapfile_compat() { while IFS= read -r line; do changed+=("$line"); done; }
-          changed=()
-          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u | mapfile_compat
-          expected=(
-            macos_package/tests/packaging_fixtures.py
-            macos_package/tests/test_macos_package_structure.py
-            macos_package/tests/test_native_macos_lifecycle_source.py
-            macos_package/verification.py
-            scripts/macos/app_lifecycle.m
-            scripts/package_macos.sh
-          )
-          printf '%s\n' "${changed[@]}" > "$RUNNER_TEMP/changed.txt"
-          printf '%s\n' "${expected[@]}" | sort > "$RUNNER_TEMP/expected.txt"
-          sort -o "$RUNNER_TEMP/changed.txt" "$RUNNER_TEMP/changed.txt"
+          { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u > "$RUNNER_TEMP/changed.txt"
+          cat > "$RUNNER_TEMP/expected.txt" <<'EOF'
+          macos_package/tests/packaging_fixtures.py
+          macos_package/tests/test_macos_package_structure.py
+          macos_package/tests/test_native_macos_lifecycle_source.py
+          macos_package/verification.py
+          scripts/macos/app_lifecycle.m
+          scripts/package_macos.sh
+          EOF
+          sed -i '' 's/^          //' "$RUNNER_TEMP/expected.txt"
+          sort -o "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/expected.txt"
           diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/changed.txt"
-          ! printf '%s\n' "${changed[@]}" | grep -E '^(backend/|frontend/|launcher/|migrations/)'
+          ! grep -E '^(backend/|frontend/|launcher/|migrations/)' "$RUNNER_TEMP/changed.txt"
 
-          git add "${expected[@]}"
+          git add \
+            macos_package/tests/packaging_fixtures.py \
+            macos_package/tests/test_macos_package_structure.py \
+            macos_package/tests/test_native_macos_lifecycle_source.py \
+            macos_package/verification.py \
+            scripts/macos/app_lifecycle.m \
+            scripts/package_macos.sh
           git diff --cached --check
           test -z "$(git status --porcelain | grep '^??' || true)"
           git config user.name 'CR-015 lifecycle builder'
