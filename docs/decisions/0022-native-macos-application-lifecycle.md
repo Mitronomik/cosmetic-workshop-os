@@ -1,6 +1,6 @@
 # ADR 0022 — Native macOS application lifecycle blocker fix
 
-Status: **ACCEPTED — CR-015 BOUNDED FIX AUTHORIZED NEXT**
+Status: **ACCEPTED — IMPLEMENTED AND EXACT-PACKAGE VERIFIED**
 Decision base: `c91e62930915da357a2f9c74b9a054fe98e9df14`
 Date: `2026-08-14`
 
@@ -143,6 +143,12 @@ CR-015 does not authorize:
 - frontend redesign;
 - Restore or D4 update-safety redesign.
 
+## Implementation and verification closure
+
+The bounded blocker fix is implemented and merged. Verified implementation head `d7f95141e5f41c7a806c3fafb71e942fe5892dd8` merged as `c38940349a80d345f3e833b61e4bf4e5e761c0eb` with `0` changed files. External exact-package run `31780899805` passed full regression and the required LaunchServices → application-level Quit → complete cleanup → LaunchServices restart → persistence path. Exact tested ZIP SHA-256: `85f993a93082c4b3a36771318cf8c0c3abf02be56b1374a32a62d1a6b9279ee6`.
+
+The implementation preserves the decision boundary: native AppKit owns only application lifecycle; the existing bootstrap/Python launcher/backend own product runtime and data. Timeout behavior fails closed by cancelling Quit rather than force-killing the runtime owner.
+
 ## Authorization boundary
 
-Only the **D5 blocker fix — Native macOS application lifecycle** is authorized next by CR-015. D5 remains blocked until the fix is merged and the complete fresh automated + human rehearsal is repeated. No downstream release stage becomes authorized merely because this decision is accepted.
+CR-015 authorizes no further runtime slice after this closure. The next action is the fresh D5 human clean-Mac/clean-profile rehearsal on the fixed exact package. D5 itself remains open and no downstream release stage becomes authorized by this implementation closure.
