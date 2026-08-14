@@ -49,7 +49,6 @@ def append_once(path: Path, marker: str, block: str) -> None:
 for path in STATUS_FILES:
     replace_once(path, OLD_STATUS, NEW_STATUS)
 
-# The current task must stop authorizing docs-only D5 and authorize exactly the blocker fix.
 replace_once(
     Path("state/current-focus.md"),
     """## Current task
@@ -70,7 +69,6 @@ CR-015 authorizes one bounded runtime repair: a minimal native AppKit lifecycle 
 Do not start signing/notarization, DMG/PKG, public release hosting, GitHub Releases, auto-update/download, release channels, MDM/remote-management integration, Phase 12 or product release readiness claims.""",
 )
 
-# Implementation plan: D5 stays blocked; one repair slice becomes authorized.
 plan = Path("docs/implementation-plan.md")
 replace_once(
     plan,
@@ -111,7 +109,7 @@ The mandatory human D5 rehearsal on a clean Mac produced a product-level stop co
 
 Current code explains the boundary: `CFBundleExecutable` points to a shell bootstrap which `exec`s the bundled Python entrypoint. That Python process owns the local frontend/backend launcher but does not itself run an AppKit application event loop. The previous automated D5 smoke sent SIGTERM directly to that process and therefore did not prove the user-level Dock Quit contract.
 
-CR-015 / ADR 0022 authorizes one bounded repair: make a minimal native AppKit executable the `.app` lifecycle owner; have it launch the existing self-contained bootstrap/runtime as a child; translate ordinary macOS Quit into graceful child termination; remain responsive while shutdown completes; and allow a clean subsequent Finder launch. The native wrapper owns no business/domain/data logic. Browser UI, backend API, launcher, Restore, D4 update safety and external user-data semantics remain authoritative and unchanged.
+CR-015 / ADR 0022 authorizes one bounded repair: make a minimal native AppKit executable the `.app` lifecycle owner; have it launch the existing self-contained bootstrap/runtime as a child; translate ordinary macOS Quit into graceful child termination; remain responsive while shutdown completes; and allow a clean subsequent Finder launch. The native wrapper owns no business logic, domain service, database transaction, migration, backup, Restore or update-safety decision. Browser UI, backend API, launcher, Restore, D4 update safety and external user-data semantics remain authoritative and unchanged.
 
 D5 closure remains blocked until a fresh exact package containing the fix passes both automated package verification and the mandatory clean-Mac/clean-profile human rehearsal. `PHASE 12` and product release readiness remain unauthorized/not claimed.""",
 )
@@ -203,7 +201,7 @@ Its only responsibilities are:
 7. allow a later normal Finder launch to start a fresh runtime;
 8. on an ordinary reopen request while already running, reopen/foreground the local browser workspace rather than starting a second backend runtime.
 
-The native wrapper owns **no** business logic, domain service, database transaction, migration, backup, Restore or update-safety decision.
+The native wrapper owns no business logic, domain service, database transaction, migration, backup, Restore or update-safety decision.
 
 ## Bounded implementation choice
 
@@ -311,7 +309,6 @@ CR-015 does not authorize:
 Only the **D5 blocker fix — Native macOS application lifecycle** is authorized next by CR-015. D5 remains blocked until the fix is merged and the complete fresh automated + human rehearsal is repeated. No downstream release stage becomes authorized merely because this decision is accepted.
 """, encoding="utf-8")
 
-# Update lifecycle checker to recognize the new bounded authorization.
 checker = Path("scripts/check_documentation_lifecycle.py")
 text = checker.read_text(encoding="utf-8")
 text = text.replace(
