@@ -18,8 +18,9 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
+D5 — Remote install checklist — IMPLEMENTED — NOT LIFECYCLE-CLOSED
+D5 verification — AUTOMATED EXACT-PACKAGE + HUMAN CLEAN-MAC/CLEAN-PROFILE EVIDENCE REQUIRED
+D5 lifecycle closure — NOT COMPLETED
 PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
 Product release readiness — NOT CLAIMED
 ```
@@ -76,7 +77,7 @@ Final D4-D evidence:
 - one exact current-main `.app` was reused across the D4-C human-status/failure matrix and the accepted D4-B staging/interruption/newer-lineage matrix;
 - isolated user-data remained outside the repository/package and the repository postflight was clean.
 
-CR-014 authorizes D5 as the only next stage. D5 is not implemented or verified yet; signing/notarization/DMG/App Store/public release/auto-update, Phase 12 and product release readiness remain unauthorized or not claimed.
+This changeset implements the D5 install guide/checklist only. D5 is not lifecycle-closed and this changeset does not claim automated or human rehearsal evidence. Signing/notarization/DMG/App Store/public release/auto-update, Phase 12 and product release readiness remain unauthorized or not claimed.
 
 ## Core product invariants
 
@@ -94,4 +95,4 @@ CR-014 authorizes D5 as the only next stage. D5 is not implemented or verified y
 
 ## Development authority
 
-Read `AGENTS.md`, `docs/current-lifecycle.md`, relevant ADRs and the focused product/domain/test docs before changing behavior. D4 is closed. D5 work must follow ADR 0021 and remain documentation/rehearsal-only; any release/distribution/runtime expansion requires a separate decision and must not reopen the closed Restore boundary.
+Read `AGENTS.md`, `docs/current-lifecycle.md`, relevant ADRs and the focused product/domain/test docs before changing behavior. D4 is closed. D5 remains documentation/rehearsal-only under ADR 0021; merge/closure requires both automated exact-package and human clean-Mac/clean-profile evidence. Any release/distribution/runtime expansion requires a separate decision and must not reopen the closed Restore boundary.

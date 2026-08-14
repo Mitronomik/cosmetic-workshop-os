@@ -2,6 +2,8 @@
 
 Default user data directory: `~/Documents/Мастерская косметолога/`.
 
+Current lifecycle authority: `docs/current-lifecycle.md`. Dated Restore status prose later in this long-lived document is historical where it conflicts with that lifecycle profile. For D5 first-install rehearsal, use `docs/user-install.md` and `docs/remote-install-checklist.md`; backup creation remains the existing `/backups` product flow described here.
+
 Expected local user-data layout:
 
 ```text

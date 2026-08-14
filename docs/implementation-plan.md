@@ -18,8 +18,9 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
+D5 — Remote install checklist — IMPLEMENTED — NOT LIFECYCLE-CLOSED
+D5 verification — AUTOMATED EXACT-PACKAGE + HUMAN CLEAN-MAC/CLEAN-PROFILE EVIDENCE REQUIRED
+D5 lifecycle closure — NOT COMPLETED
 PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
 Product release readiness — NOT CLAIMED
 ```
@@ -99,11 +100,13 @@ Exact current main `ec88b09193c8ed041e17daef3e3ffc0193d1b559` passed final D4-D 
 
 ## D5 — Remote install checklist
 
-**AUTHORIZED NEXT — NOT IMPLEMENTED** under CR-014 / ADR 0021.
+**IMPLEMENTED — NOT LIFECYCLE-CLOSED** under CR-014 / ADR 0021.
 
-D5 is documentation + exact-package assisted-install rehearsal only. It must turn the existing install skeletons into a repeatable non-technical Finder/System Settings flow, then prove the roadmap client/component/recipe/restart scenario on a clean Mac or clean macOS user profile with exact artifact/environment evidence. Automated package smoke alone is insufficient for D5 closure; the human UI rehearsal is mandatory.
+Implementation scope is documentation-only: `docs/user-install.md` is the non-technical first-install guide and `docs/remote-install-checklist.md` records exact artifact/environment identity, Finder/System Settings human steps, backup/client/component/recipe creation, restart persistence, repeatability and result classification. `docs/update-guide.md` and `docs/backup-and-restore.md` cross-link the first-install flow without changing D4 or Restore semantics.
 
-D5 may not change product runtime behavior. If rehearsal exposes a product defect, stop and authorize/fix that defect separately before closure.
+Before this implementation head may merge, two independent evidence layers are mandatory: (1) external automated exact-package verification on the exact head/artifact and (2) a human clean-Mac/clean-profile Finder/System Settings rehearsal of the same exact artifact. Automated package smoke alone is insufficient. Final PASS/DONE belongs to a later lifecycle-only closure changeset.
+
+D5 changes no product runtime behavior. If rehearsal exposes a product defect, stop and authorize/fix that defect separately before closure.
 
 ## Release boundary
 
