@@ -19,6 +19,7 @@ FILES = {
     "user-install.md": "docs/user-install.md",
     "remote-install-checklist.md": "docs/remote-install-checklist.md",
     "docs-AGENTS.md": "docs/AGENTS.md",
+    "decisions-AGENTS.md": "docs/decisions/AGENTS.md",
     "current-focus.md": "state/current-focus.md",
     "progress.md": "state/progress.md",
     "handoff.md": "state/handoff.md",
@@ -40,14 +41,14 @@ for out_name, source_name in FILES.items():
 
 manifest = {
     "source_commit": BASE,
-    "purpose": "exact active lifecycle/install/checker surfaces immediately before CR-014 / ADR 0021",
+    "purpose": "exact active lifecycle/install/ADR-authority/checker surfaces immediately before CR-014 / ADR 0021",
     "files": blobs,
 }
 (DEST / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (DEST / "ABOUT.md").write_text(
     "# D5 pre-decision snapshot\n\n"
     f"Exact source commit: `{BASE}`.\n\n"
-    "This directory preserves the active lifecycle, install-document skeletons and lifecycle checker immediately before CR-014 / ADR 0021. "
+    "This directory preserves the active lifecycle, install-document skeletons, ADR authority rules and lifecycle checker immediately before CR-014 / ADR 0021. "
     "The snapshot is historical evidence only; current authority remains `docs/current-lifecycle.md`. "
     "Files are protected by exact Git blob identity through `manifest.json`.\n",
     encoding="utf-8",
