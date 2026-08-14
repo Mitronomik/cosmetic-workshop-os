@@ -33,8 +33,9 @@ D4-C — User-facing update status and packaged failure UX — DONE — MERGED A
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
+D5 — Remote install checklist — IMPLEMENTED — NOT LIFECYCLE-CLOSED
+D5 verification — AUTOMATED EXACT-PACKAGE + HUMAN CLEAN-MAC/CLEAN-PROFILE EVIDENCE REQUIRED
+D5 lifecycle closure — NOT COMPLETED
 PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
 Product release readiness — NOT CLAIMED
 ```
@@ -148,6 +149,12 @@ D5 may update the non-technical install/checklist documents and verify one exact
 The current package is unsigned and un-notarized. D5 may document only the normal macOS user-interface approval path actually observed during rehearsal; it may not use `xattr`, `spctl`, `sudo`, global Gatekeeper disabling or any other terminal/security bypass. A D5 PASS is bounded to the exact tested artifact, architecture and macOS environment; it does not imply untested Intel/Apple-Silicon/macOS support.
 
 D5 itself authorizes no backend/frontend/launcher/migration/package-runtime change. A product defect discovered during rehearsal blocks D5 closure and requires its own bounded fix. Signing, notarization, DMG/PKG, App Store, public release hosting, GitHub Releases, release channels, auto-update, MDM/remote-management integration, Phase 12 and product release readiness remain outside CR-014.
+
+## D5 implementation truth
+
+This changeset implements the non-technical first-install guide and the repeatable D5 rehearsal checklist. It does **not** change backend, frontend, launcher, migrations, package runtime or Restore behavior. It also does not claim D5 verification or closure.
+
+The implementation head may merge only after an external automated exact-package run against that exact head passes **and** a human clean-Mac/clean-profile Finder/System Settings rehearsal of the same exact artifact is recorded. The separate D5 lifecycle-closure changeset owns the final PASS evidence and DONE transition.
 
 ## Closed Restore boundary
 

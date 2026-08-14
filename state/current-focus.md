@@ -15,19 +15,20 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED
-D5 verification — NOT STARTED
+D5 — Remote install checklist — IMPLEMENTED — NOT LIFECYCLE-CLOSED
+D5 verification — AUTOMATED EXACT-PACKAGE + HUMAN CLEAN-MAC/CLEAN-PROFILE EVIDENCE REQUIRED
+D5 lifecycle closure — NOT COMPLETED
 PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014
 Product release readiness — NOT CLAIMED
 ```
 
 ## Current task
 
-**Implement D5 Remote Install Checklist only, under CR-014 / ADR 0021.**
+**Verify the exact D5 implementation head; do not merge it without both evidence layers.**
 
-D5 is the only authorized next stage. It is documentation + exact-package assisted-install rehearsal over the existing D3/D4 package, with mandatory clean-Mac/clean-profile human UI evidence before D5 closure. Do not modify backend/frontend/launcher/migrations/package runtime under this authorization. If rehearsal finds a product defect, stop and authorize/fix it separately.
+The D5 guide/checklist is implemented by the current changeset without runtime changes. Required next actions are: external automated exact-package verification of the exact head/artifact, then a human Finder/System Settings rehearsal on a clean Mac or clean macOS user profile using that same exact artifact. Final PASS/DONE is recorded only by a later lifecycle-only closure changeset.
 
-Do not start signing/notarization, DMG/PKG, public release hosting, GitHub Releases, auto-update/download, release channels, MDM/remote-management integration, Phase 12, product release readiness claims or Restore changes.
+Do not modify backend/frontend/launcher/migrations/package runtime under D5. If rehearsal finds a product defect, stop and authorize/fix it separately. Do not start signing/notarization, DMG/PKG, public release hosting, GitHub Releases, auto-update/download, release channels, MDM/remote-management integration, Phase 12, product release readiness claims or Restore changes.
 
 ## Final D4 evidence
 

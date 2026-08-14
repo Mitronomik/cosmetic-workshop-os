@@ -2,7 +2,8 @@
 """Guard closed Restore plus the CR-013 / D4-A implementation boundary.
 
 D4-A, D4-B, D4-C and D4-D are lifecycle-closed. D4 is complete.
-CR-014 authorizes D5 only as documentation + exact-package assisted-install rehearsal;
+CR-014 D5 guide/checklist implementation is documentation-only and not lifecycle-closed;
+exact-package plus human rehearsal evidence is required before merge/closure, while
 release/Phase-12/runtime expansion and Restore changes remain forbidden.
 
 The complete pre-CR-013 checker is preserved byte-identically under
@@ -131,8 +132,9 @@ D4_STATUS = (
 
 D5_STATUS = (
     "CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT",
-    "D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED",
-    "D5 verification — NOT STARTED",
+    "D5 — Remote install checklist — IMPLEMENTED — NOT LIFECYCLE-CLOSED",
+    "D5 verification — AUTOMATED EXACT-PACKAGE + HUMAN CLEAN-MAC/CLEAN-PROFILE EVIDENCE REQUIRED",
+    "D5 lifecycle closure — NOT COMPLETED",
     "PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014",
     "Product release readiness — NOT CLAIMED",
 )
@@ -161,7 +163,9 @@ FORBIDDEN_ACTIVE = (
     "Starting D5 requires a separate authorization decision/change request",
     "D5 remains unauthorized",
     "D5 is not authorized",
-    "D5 — Remote install checklist — IMPLEMENTED",
+    "D5 — Remote install checklist — AUTHORIZED NEXT — NOT IMPLEMENTED",
+    "D5 verification — NOT STARTED",
+    "DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED",
     "D5 — Remote install checklist — DONE",
     "D5 — Remote install checklist — CLOSED",
     "D5 verification — PASSED",
@@ -436,15 +440,28 @@ def check_current_lifecycle() -> None:
     for path in (README, CURRENT, FOCUS, PROGRESS, HANDOFF):
         require(path, CLOSED_TRUTH)
     require(CURRENT, ("ADR 0020", "ADR 0021", "D4-A closure truth", "D4-B closure truth", "D4-C closure truth", "D4-D closure truth", "D4 closure truth", "D5 decision truth", D4D_VERIFIED_HEAD, D4D_FINAL_RUN, "Restore remains closed"))
-    require(PLAN, ("Normative D4 decision", "Normative D5 decision", "D4-A", "D4-B", "D4-C", "D4-D", "## D5 — Remote install checklist", "**AUTHORIZED NEXT — NOT IMPLEMENTED**"))
+    require(PLAN, ("Normative D4 decision", "Normative D5 decision", "D4-A", "D4-B", "D4-C", "D4-D", "## D5 — Remote install checklist", "**IMPLEMENTED — NOT LIFECYCLE-CLOSED**", "human clean-Mac/clean-profile"))
     require(PACKAGING, ("backend/VERSION", "package-runtime.json", "scripts/verify_product_version.py"))
     require(DEPLOYMENT, ("changes **no deployment topology**", "external user-data directory", "D4-B"))
-    require(UPDATE_GUIDE, ("D4 Update Safety закрыт", "CR-014", "D5", "ещё не реализован/проверен", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
+    require(UPDATE_GUIDE, ("D4 Update Safety закрыт", "docs/user-install.md", "D5", "не lifecycle-closed", "старый пакет не является автоматическим откатом", "не включает автоматическое скачивание"))
     require(DOCS_AGENTS, ("ADR 0020", "docs/domain-model-d4-update-safety.md", "ADR 0021", "documentation + exact-package assisted-install rehearsal"))
     require(P("docs/decisions/AGENTS.md"), ("ADR 0021", "documentation + exact-package assisted-install rehearsal only", "not runtime changes"))
-    require(FOCUS, ("Implement D5 Remote Install Checklist only", "documentation + exact-package assisted-install rehearsal", "Do not modify backend/frontend/launcher/migrations/package runtime"))
-    require(USER_INSTALL, ("DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED", "Terminal/Git/Python/Node/Docker"))
-    require(REMOTE_INSTALL, ("DRAFT SKELETON — D5 AUTHORIZED BUT NOT IMPLEMENTED OR VERIFIED", "ADR 0021"))
+    require(FOCUS, ("Verify the exact D5 implementation head", "do not merge it without both evidence layers", "human Finder/System Settings rehearsal", "Do not modify backend/frontend/launcher/migrations/package runtime"))
+    require(USER_INSTALL, (
+        "D5 IMPLEMENTED — HUMAN REHEARSAL REQUIRED BEFORE LIFECYCLE CLOSURE",
+        "CosmeticWorkshopOS-mac.zip", "Finder", "System Settings → Privacy & Security",
+        "Настройки → Локальные данные", "Путь к папке данных",
+        "Создать резервную копию", "D5 Тестовый клиент", "D5 Тестовый компонент",
+        "D5 Тестовый рецепт", "Закройте и снова откройте приложение",
+    ))
+    forbid(USER_INSTALL, ("xattr ", "spctl ", "sudo ", "git clone", "python3 ", "node ", "docker "))
+    require(REMOTE_INSTALL, (
+        "IMPLEMENTED — NOT LIFECYCLE-CLOSED", "ADR 0021", "Exact Git commit SHA",
+        "Archive SHA-256", "Package architecture", "clean Mac", "clean macOS user profile",
+        "FAIL — PRODUCT", "INCONCLUSIVE — RUNNER", "INCONCLUSIVE — ENVIRONMENT",
+        "PASS — D5 REMOTE INSTALL REHEARSAL PASSED", "automated exact-package layer",
+        "human clean-Mac/clean-profile layer",
+    ))
 
 
 def check_adr20() -> None:
@@ -702,8 +719,8 @@ def main() -> int:
     print("Verified D4-A is lifecycle-closed on the exact merged-head evidence.")
     print("Verified D4-B is lifecycle-closed on exact PR-head and merged-head Level-5 evidence.")
     print("Verified D4 is lifecycle-closed on final D4-D exact-package evidence.")
-    print("Verified CR-014 authorizes D5 only as documentation + exact-package assisted-install rehearsal.")
-    print("Verified D5 is not implemented/verified and Phase 12/product release readiness remain gated.")
+    print("Verified D5 guide/checklist implementation is documentation-only and not lifecycle-closed.")
+    print("Verified automated exact-package plus human clean-profile evidence is required; Phase 12/release readiness remain gated.")
     return 0
 
 
