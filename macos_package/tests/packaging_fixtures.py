@@ -99,13 +99,16 @@ def build_app_bundle(root: Path, *, name: str = "CosmeticWorkshopOS.app") -> Pat
             }
         )
     )
-    # The real template, not a stub. The structure gate inspects the bootstrap
-    # that is actually inside a bundle, so the fixture has to carry the same
-    # script the build installs — otherwise these tests would validate a
-    # placeholder while the shipped script drifted.
+    # CR-015 topology: a native Mach-O is the CFBundleExecutable and the real
+    # isolation bootstrap remains a separate executable runtime helper. The
+    # synthetic native file only needs a valid Mach-O magic for pure structure
+    # inspection; live execution is covered by exact-package macOS smoke.
     executable = macos / "CosmeticWorkshopOS"
-    executable.write_text(bootstrap_template_source(), encoding="utf-8")
+    executable.write_bytes(b"\xcf\xfa\xed\xfe" + b"synthetic-native-lifecycle")
     executable.chmod(executable.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    runtime_helper = macos / "CosmeticWorkshopOSRuntime"
+    runtime_helper.write_text(bootstrap_template_source(), encoding="utf-8")
+    runtime_helper.chmod(runtime_helper.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     runtime_bin = resources / "runtime" / "bin"
     runtime_bin.mkdir(parents=True, exist_ok=True)

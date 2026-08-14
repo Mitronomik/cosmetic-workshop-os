@@ -38,6 +38,7 @@ PY
 command -v ditto  >/dev/null 2>&1 || fail "не найден /usr/bin/ditto — требуется macOS."
 command -v rsync  >/dev/null 2>&1 || fail "не найден rsync."
 command -v shasum >/dev/null 2>&1 || fail "не найден shasum."
+command -v xcrun  >/dev/null 2>&1 || fail "не найден xcrun — требуется стандартный macOS developer toolchain для сборки native lifecycle wrapper."
 
 BUILD_SUCCEEDED=0
 cleanup() {
@@ -62,7 +63,18 @@ mkdir -p "$BUNDLE_DIR/Contents/MacOS" "$BUNDLE_DIR/Contents/Resources/app"
 
 sed "s/__APP_VERSION__/$APP_VERSION/g" "$SCRIPT_DIR/macos/Info.plist.template" \
   > "$BUNDLE_DIR/Contents/Info.plist"
-cp "$SCRIPT_DIR/macos/bundle_bootstrap.sh" "$BUNDLE_DIR/Contents/MacOS/$APP_NAME"
+RUNTIME_HELPER="$BUNDLE_DIR/Contents/MacOS/${APP_NAME}Runtime"
+cp "$SCRIPT_DIR/macos/bundle_bootstrap.sh" "$RUNTIME_HELPER"
+chmod 755 "$RUNTIME_HELPER"
+
+# CR-015 / ADR 0022: the CFBundleExecutable must own a real AppKit event loop so
+# Finder/Dock Quit is a user-visible application lifecycle operation, not an
+# assumption that LaunchServices will signal a shell/Python process for us.
+xcrun --sdk macosx clang \
+  -fobjc-arc -mmacosx-version-min=12.0 -framework Cocoa \
+  "$SCRIPT_DIR/macos/app_lifecycle.m" \
+  -o "$BUNDLE_DIR/Contents/MacOS/$APP_NAME" \
+  || fail "не удалось собрать native macOS lifecycle wrapper"
 chmod 755 "$BUNDLE_DIR/Contents/MacOS/$APP_NAME"
 
 ditto "$RUNTIME_DIR" "$BUNDLE_DIR/Contents/Resources/runtime"

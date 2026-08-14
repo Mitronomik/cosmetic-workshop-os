@@ -62,6 +62,9 @@ def test_a_complete_bundle_passes_every_check(tmp_path):
         "app_bundle_exists",
         "info_plist",
         "bundle_executable",
+        "native_lifecycle_executable",
+        "bundle_runtime_helper",
+        "bootstrap_interpreter_isolation",
         "bundled_runtime",
         "required_application_files",
         "frontend_production_assets",
@@ -94,7 +97,7 @@ def test_the_bundle_must_declare_the_human_facing_display_name(tmp_path):
     assert "info_plist" in failures_of(bundle)
 
 
-def test_a_non_executable_bootstrap_fails(tmp_path):
+def test_a_non_executable_native_lifecycle_fails(tmp_path):
     """A bundle whose executable bit was lost is a bundle that will not open."""
     bundle = build_app_bundle(tmp_path)
     executable = bundle / "Contents" / "MacOS" / "CosmeticWorkshopOS"
@@ -102,11 +105,28 @@ def test_a_non_executable_bootstrap_fails(tmp_path):
     assert "bundle_executable" in failures_of(bundle)
 
 
-def test_a_missing_bootstrap_fails(tmp_path):
+def test_a_missing_native_lifecycle_fails(tmp_path):
     bundle = build_app_bundle(tmp_path)
     (bundle / "Contents" / "MacOS" / "CosmeticWorkshopOS").unlink()
     assert "bundle_executable" in failures_of(bundle)
 
+
+
+
+def test_the_main_executable_must_be_native_macho(tmp_path):
+    bundle = build_app_bundle(tmp_path)
+    executable = bundle / "Contents/MacOS/CosmeticWorkshopOS"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    assert "native_lifecycle_executable" in failures_of(bundle)
+
+
+def test_the_runtime_helper_is_required(tmp_path):
+    bundle = build_app_bundle(tmp_path)
+    helper = bundle / "Contents/MacOS/CosmeticWorkshopOSRuntime"
+    helper.unlink()
+    failures = failures_of(bundle)
+    assert "bundle_runtime_helper" in failures
+    assert "bootstrap_interpreter_isolation" in failures
 
 # -- packaged interpreter isolation ----------------------------------------
 
@@ -115,7 +135,7 @@ def test_the_shipped_bootstrap_isolates_the_packaged_interpreter(tmp_path):
     """The real template must pin the interpreter environment, not inherit it."""
     bundle = build_app_bundle(tmp_path)
     assert "bootstrap_interpreter_isolation" not in failures_of(bundle)
-    bootstrap = (bundle / "Contents/MacOS/CosmeticWorkshopOS").read_text(encoding="utf-8")
+    bootstrap = (bundle / "Contents/MacOS/CosmeticWorkshopOSRuntime").read_text(encoding="utf-8")
     assert 'export PYTHONPATH="$APP_ROOT"' in bootstrap
     assert "PYTHONNOUSERSITE=1" in bootstrap
     assert "unset PYTHONHOME" in bootstrap
@@ -134,7 +154,7 @@ def test_the_shipped_bootstrap_isolates_the_packaged_interpreter(tmp_path):
 )
 def test_an_inherited_external_pythonpath_is_rejected(tmp_path, corruption, expected_fragment):
     bundle = build_app_bundle(tmp_path)
-    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOS"
+    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOSRuntime"
     bootstrap.write_text(
         bootstrap.read_text(encoding="utf-8").replace(corruption, expected_fragment),
         encoding="utf-8",
@@ -148,7 +168,7 @@ def test_an_inherited_external_pythonpath_is_rejected(tmp_path, corruption, expe
 )
 def test_dropping_an_interpreter_isolation_setting_is_rejected(tmp_path, removed):
     bundle = build_app_bundle(tmp_path)
-    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOS"
+    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOSRuntime"
     bootstrap.write_text(
         bootstrap.read_text(encoding="utf-8").replace(removed, "true"), encoding="utf-8"
     )
@@ -157,7 +177,7 @@ def test_dropping_an_interpreter_isolation_setting_is_rejected(tmp_path, removed
 
 def test_a_bootstrap_that_runs_some_other_interpreter_is_rejected(tmp_path):
     bundle = build_app_bundle(tmp_path)
-    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOS"
+    bootstrap = bundle / "Contents/MacOS/CosmeticWorkshopOSRuntime"
     bootstrap.write_text(
         bootstrap.read_text(encoding="utf-8").replace(
             "$RESOURCES/runtime/bin/python3.12", "/usr/bin/python3"
