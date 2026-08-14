@@ -1,0 +1,53 @@
+name: PR205 D5 automated exact-package verification
+
+on:
+  push:
+    branches:
+      - verification/pr205-da01c1f8
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      EXPECTED_BASE: c91e62930915da357a2f9c74b9a054fe98e9df14
+      EXPECTED_HEAD: da01c1f879cbf3af1efa000252520cd9ef9c38b4
+      PR_BRANCH: docs/d5-remote-install-rehearsal
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: da01c1f879cbf3af1efa000252520cd9ef9c38b4
+          fetch-depth: 0
+
+      - name: Run external D5 automated exact-package verifier
+        shell: bash
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/pr205-d5-automated-evidence
+          COSMETIC_WORKSHOP_BUILD_DIR: ${{ runner.temp }}/d5-build
+          COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR: ${{ runner.temp }}/d5-dist
+          COSMETIC_WORKSHOP_USER_DATA_DIR: ${{ runner.temp }}/d5-user-data
+        run: |
+          set -euo pipefail
+          git fetch origin verification/pr205-da01c1f8
+          git show origin/verification/pr205-da01c1f8:verification/pr205_d5_automated_verify.py > "$RUNNER_TEMP/pr205_d5_automated_verify.py"
+          python3 -m py_compile "$RUNNER_TEMP/pr205_d5_automated_verify.py"
+          python3 "$RUNNER_TEMP/pr205_d5_automated_verify.py"
+
+      - name: Upload automated evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr205-d5-automated-evidence-da01c1f8
+          path: ${{ runner.temp }}/pr205-d5-automated-evidence
+          if-no-files-found: warn
+
+      - name: Upload exact D5 package for human rehearsal
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr205-d5-exact-package-da01c1f8
+          path: ${{ runner.temp }}/d5-dist/CosmeticWorkshopOS-mac.zip
+          if-no-files-found: error
