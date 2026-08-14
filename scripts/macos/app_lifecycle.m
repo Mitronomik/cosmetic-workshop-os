@@ -152,12 +152,17 @@ static const NSTimeInterval CWShutdownTimeoutSeconds = 20.0;
             }
             NSTask *stillRunning = strongSelf.runtimeTask;
             if (stillRunning != nil && stillRunning.running) {
+                // Fail closed. Killing the Python runtime owner here could orphan
+                // its backend child. Keep the AppKit owner alive and explicitly
+                // cancel this Quit instead of reporting a clean application exit.
                 [strongSelf showCriticalAlertWithMessage:
-                    @"Приложение не успело корректно завершить локальную работу. Оно будет закрыто принудительно. Перед следующим запуском убедитесь, что резервная копия доступна."];
-                kill(stillRunning.processIdentifier, SIGKILL);
+                    @"Приложение не успело корректно завершить локальную работу и осталось открытым. Подождите немного и попробуйте завершить приложение ещё раз. Ваши данные не удалялись."];
+                strongSelf.terminationReplyPending = NO;
+                [NSApp replyToApplicationShouldTerminate:NO];
+                return;
             }
-            strongSelf.terminationReplyPending = NO;
-            [NSApp replyToApplicationShouldTerminate:YES];
+            // The child ended between the timeout check and its termination
+            // callback. Let that callback own the affirmative termination reply.
         }
     );
     return NSTerminateLater;
