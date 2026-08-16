@@ -30,7 +30,9 @@ jobs:
               if 'if INSERT_AFTER not in t: raise SystemExit' in line:
                   continue
               lines.append(line)
-          p.write_text('\n'.join(lines)+'\n')
+          text='\n'.join(lines)+'\n'
+          text=text.replace('"support operator"', '"support-operator"')
+          p.write_text(text)
           PY
       - name: Transform
         run: python3 /tmp/build_cr017_decision.py
