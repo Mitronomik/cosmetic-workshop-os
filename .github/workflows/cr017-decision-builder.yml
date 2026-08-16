@@ -1,0 +1,36 @@
+name: CR-017 decision builder
+on:
+  push:
+    branches: [automation/cr017-builder-actual]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/cr017-operator-assisted-install-clean
+          fetch-depth: 0
+      - name: Verify exact base
+        run: test "$(git rev-parse HEAD)" = "d2aef241f46be58a1f4c535718f93d15f8209ed8"
+      - name: Fetch builder
+        run: |
+          git show origin/automation/cr017-builder-actual:tools/build_cr017_decision.py > /tmp/build_cr017_decision.py
+      - name: Transform
+        run: python3 /tmp/build_cr017_decision.py
+      - name: Validate
+        run: |
+          git diff --check
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+          changed="$(git status --short | wc -l | tr -d ' ')"
+          echo "changed entries: $changed"
+          git status --short
+      - name: Commit and publish
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add README.md docs/current-lifecycle.md docs/implementation-plan.md docs/packaging.md docs/deployment.md docs/decisions/0023-single-client-assisted-install-bootstrap.md docs/decisions/0024-single-client-operator-assisted-install.md state/current-focus.md state/progress.md state/handoff.md state/change-requests.md scripts/check_documentation_lifecycle.py
+          git commit -m "CR-017 — Decide single-client operator-assisted install/update"
+          git push origin HEAD:docs/cr017-operator-assisted-install-clean
