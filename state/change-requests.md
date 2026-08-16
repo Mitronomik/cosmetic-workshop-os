@@ -30,11 +30,14 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
+D5 — Remote install checklist — PILOT OPERATOR-ASSISTED PATH AUTHORIZED — FULL D5 PASS NOT CLAIMED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
 D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
+CR-016 — ACCEPTED DECISION — IMPLEMENTATION REJECTED BY HUMAN FINDER REHEARSAL
+CR-017 — ACCEPTED — SINGLE-CLIENT OPERATOR-ASSISTED INSTALL/UPDATE CONTRACT
+D5 pilot deployment — OPERATOR-ASSISTED PATH AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — CR-016 FAIL RECORDED; OPERATOR-ASSISTED REHEARSAL NOT STARTED
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015/CR-016/CR-017
 Product release readiness — NOT CLAIMED
 ```
 
@@ -64,7 +67,7 @@ Implemented by verified head `d7f95141e5f41c7a806c3fafb71e942fe5892dd8`, merged 
 
 ## CR-016 — Single-client assisted install and update bootstrap
 
-Status: **ACCEPTED — BOUNDED IMPLEMENTATION AUTHORIZED AFTER DECISION MERGE**.
+Status: **ACCEPTED DECISION — IMPLEMENTATION REJECTED BY HUMAN FINDER REHEARSAL**.
 
 Durable decision: `docs/decisions/0023-single-client-assisted-install-bootstrap.md`.
 
@@ -77,3 +80,18 @@ The same bounded bootstrap may handle first installation and later manual packag
 CR-016 does **not** authorize Developer ID, notarization, global Gatekeeper disable, SIP/Security Policy weakening, DMG/PKG, App Store, public release hosting, GitHub Releases, automatic update downloads, release channels, backend/frontend/domain changes, database/Restore changes, Phase 12 or product release readiness.
 
 The implementation must be separately tested and followed by a human clean-Mac rehearsal of the actual downloaded outer ZIP and Finder double-click `.command` flow. Success proves only the bounded single-client assisted-install mode; it does not prove signed/notarized/public/self-service distribution readiness.
+
+
+### CR-016 implementation outcome
+
+Implementation head `0179be9fa1758a47662f86c5a14a7f24341815c5` passed automated post-execution run `31959318870`, but the mandatory clean-Mac Finder rehearsal produced `FAIL — PRODUCT`: Gatekeeper blocked the downloaded `.command` before execution. PR #210 was closed without merge. The self-running bootstrap model is rejected.
+
+## CR-017 — Single-client operator-assisted install and update
+
+Status: **ACCEPTED — BOUNDED IMPLEMENTATION AUTHORIZED AFTER DECISION MERGE**.
+
+Durable decision: `docs/decisions/0024-single-client-operator-assisted-install.md`.
+
+CR-017 replaces only the failed CR-016 bootstrap mechanism. A qualified support operator may use Terminal/screen sharing to verify the exact product package, remove quarantine only from the verified staged `.app`, install/update under the current user's application space, and launch it. The client never types commands and Gatekeeper remains globally enabled.
+
+CR-017 does not authorize `sudo`, global Gatekeeper/SIP/security weakening, database/Restore/D4 changes, backend/frontend/domain changes, signing/notarization, public distribution, auto-update/download, Phase 12 or product release readiness. A clean-Mac operator-assisted rehearsal remains mandatory before any pilot PASS claim.
