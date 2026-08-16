@@ -1,4 +1,4 @@
-.PHONY: setup setup-backend setup-frontend check-backend-test-deps dev run-local test build test-backend test-backend-with-setup test-package build-frontend build-backend-runtime package-macos verify-package smoke
+.PHONY: setup setup-backend setup-frontend check-backend-test-deps dev run-local test build test-backend test-backend-with-setup test-package build-frontend build-backend-runtime package-macos package-single-client-macos verify-package smoke
 
 setup: setup-backend setup-frontend
 
@@ -41,6 +41,12 @@ build-backend-runtime:
 
 package-macos:
 	bash scripts/package_macos.sh
+
+# CR-016 one-client assisted distribution wrapper. This first builds the
+# canonical product ZIP unchanged, then generates the version-specific outer ZIP
+# containing the verified `.command` bootstrap.
+package-single-client-macos:
+	bash scripts/package_single_client_macos.sh
 
 verify-package:
 	python3 scripts/verify_macos_package.py --source-root .
