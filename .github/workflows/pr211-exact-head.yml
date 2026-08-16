@@ -1,0 +1,48 @@
+name: PR211 exact-head decision verification
+on:
+  push:
+    branches: [verification/pr211-ae95d1d9]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ae95d1d90444943e78e7605a1338d98c561cba43
+          fetch-depth: 0
+      - name: Exact head and main base
+        run: |
+          test "$(git rev-parse HEAD)" = "ae95d1d90444943e78e7605a1338d98c561cba43"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "d2aef241f46be58a1f4c535718f93d15f8209ed8"
+          test -z "$(git status --porcelain)"
+          git diff --check origin/main...HEAD
+      - name: Lifecycle checker
+        run: |
+          python3 -m py_compile scripts/check_documentation_lifecycle.py
+          python3 scripts/check_documentation_lifecycle.py
+      - name: Exact decision-only scope
+        run: |
+          python3 - <<'PY'
+          import subprocess
+          expected={
+            'README.md','docs/current-lifecycle.md','docs/implementation-plan.md','docs/packaging.md','docs/deployment.md',
+            'docs/decisions/0023-single-client-assisted-install-bootstrap.md','docs/decisions/0024-single-client-operator-assisted-install.md',
+            'scripts/check_documentation_lifecycle.py','state/change-requests.md','state/current-focus.md','state/handoff.md','state/progress.md'
+          }
+          got=set(subprocess.check_output(['git','diff','--name-only','origin/main...HEAD'],text=True).splitlines())
+          assert got==expected,(got-expected,expected-got)
+          PY
+      - name: Decision boundary probes
+        run: |
+          grep -q 'Gatekeeper remains globally enabled' docs/decisions/0024-single-client-operator-assisted-install.md
+          grep -q 'must not use `sudo`' docs/decisions/0024-single-client-operator-assisted-install.md
+          grep -q 'client must not be asked to type or paste Terminal commands' docs/decisions/0024-single-client-operator-assisted-install.md
+          grep -q 'OPERATOR-ASSISTED PATH AUTHORIZED NEXT — NOT IMPLEMENTED' docs/current-lifecycle.md
+          ! grep -q 'Product release readiness — READY' docs/current-lifecycle.md
+          ! grep -q 'PHASE 12 — MVP release preparation — AUTHORIZED' docs/current-lifecycle.md
+      - name: Clean postflight
+        run: |
+          test "$(git rev-parse HEAD)" = "ae95d1d90444943e78e7605a1338d98c561cba43"
+          test -z "$(git status --porcelain)"
+          echo 'PASS — CR-017 DECISION EXACT-HEAD VERIFIED'
