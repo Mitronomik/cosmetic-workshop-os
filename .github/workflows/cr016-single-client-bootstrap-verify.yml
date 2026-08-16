@@ -53,11 +53,11 @@ jobs:
           EXTRACT="$RUNNER_TEMP/cr016-outer"
           mkdir -p "$EXTRACT"
           ditto -x -k "$OUTER_ZIP" "$EXTRACT"
-          mapfile_compat() { while IFS= read -r line; do COMMANDS+=("$line"); done; }
-          COMMANDS=()
-          find "$EXTRACT" -type f -name '*.command' -not -path '*/__MACOSX/*' -print | mapfile_compat
-          test "${#COMMANDS[@]}" -eq 1
-          COMMAND="${COMMANDS[0]}"
+          find "$EXTRACT" -type f -name '*.command' -not -path '*/__MACOSX/*' -print > "$RUNNER_TEMP/commands.txt"
+          COMMAND_COUNT="$(wc -l < "$RUNNER_TEMP/commands.txt" | tr -d ' ')"
+          test "$COMMAND_COUNT" = "1"
+          COMMAND="$(head -n 1 "$RUNNER_TEMP/commands.txt")"
+          test -n "$COMMAND"
           test -x "$COMMAND"
           grep -q "EXPECTED_SHA256=\"$INNER_SHA\"" "$COMMAND"
           ! grep -q 'spctl --master-disable' "$COMMAND"
