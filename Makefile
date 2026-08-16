@@ -1,4 +1,4 @@
-.PHONY: setup setup-backend setup-frontend check-backend-test-deps dev run-local test build test-backend test-backend-with-setup test-package build-frontend build-backend-runtime package-macos verify-package smoke
+.PHONY: setup setup-backend setup-frontend check-backend-test-deps dev run-local test build test-backend test-backend-with-setup test-package build-frontend build-backend-runtime package-macos package-operator-assisted-macos verify-package smoke
 
 setup: setup-backend setup-frontend
 
@@ -41,6 +41,11 @@ build-backend-runtime:
 
 package-macos:
 	bash scripts/package_macos.sh
+
+# CR-017 one-client operator-assisted support wrapper. The canonical product
+# package remains independently buildable and unchanged.
+package-operator-assisted-macos:
+	bash scripts/package_operator_assisted_macos.sh
 
 verify-package:
 	python3 scripts/verify_macos_package.py --source-root .
