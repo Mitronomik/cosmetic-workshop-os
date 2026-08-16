@@ -1,0 +1,229 @@
+#!/bin/zsh
+
+set -u
+
+PRODUCT_NAME="Мастерская косметолога"
+INNER_ZIP_NAME="CosmeticWorkshopOS-mac.zip"
+EXPECTED_SHA256="__INNER_SHA256__"
+EXPECTED_VERSION="__APP_VERSION__"
+EXPECTED_ARCH="__ARCHITECTURE__"
+EXPECTED_BUNDLE_ID="ru.cosmetic-workshop-os.app"
+EXPECTED_EXECUTABLE="CosmeticWorkshopOS"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+INNER_ZIP="$SCRIPT_DIR/$INNER_ZIP_NAME"
+INSTALL_DIR="$HOME/Applications"
+DEST_APP="$INSTALL_DIR/CosmeticWorkshopOS.app"
+SUPPORT_DIR="$HOME/Library/Application Support/CosmeticWorkshopOSInstaller"
+BACKUP_DIR="$SUPPORT_DIR/previous-apps"
+RECEIPT="$SUPPORT_DIR/operator-install-receipt.txt"
+
+SHASUM="/usr/bin/shasum"
+AWK="/usr/bin/awk"
+DITTO="/usr/bin/ditto"
+XATTR="/usr/bin/xattr"
+PLISTBUDDY="/usr/libexec/PlistBuddy"
+FILE="/usr/bin/file"
+FIND="/usr/bin/find"
+WC="/usr/bin/wc"
+GREP="/usr/bin/grep"
+PGREP="/usr/bin/pgrep"
+OPEN="/usr/bin/open"
+OSASCRIPT="/usr/bin/osascript"
+MKTEMP="/usr/bin/mktemp"
+DATE="/bin/date"
+MKDIR="/bin/mkdir"
+MV="/bin/mv"
+RM="/bin/rm"
+SLEEP="/bin/sleep"
+
+STAGE_DIR=""
+TEMP_DEST=""
+OLD_HOLD=""
+PUBLISHED=0
+
+fail() {
+    echo >&2
+    echo "ОШИБКА: $1" >&2
+    exit 1
+}
+
+cleanup() {
+    if [[ -n "$STAGE_DIR" && -d "$STAGE_DIR" ]]; then
+        "$RM" -rf "$STAGE_DIR"
+    fi
+    if [[ -n "$TEMP_DEST" && -e "$TEMP_DEST" ]]; then
+        "$RM" -rf "$TEMP_DEST"
+    fi
+    if [[ "$PUBLISHED" -eq 0 && -n "$OLD_HOLD" && -e "$OLD_HOLD" && ! -e "$DEST_APP" ]]; then
+        "$MV" "$OLD_HOLD" "$DEST_APP" 2>/dev/null || true
+    fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+echo "========================================================"
+echo "$PRODUCT_NAME — операторская установка / обновление"
+echo "========================================================"
+echo "Версия пакета: $EXPECTED_VERSION"
+echo "Архитектура: $EXPECTED_ARCH"
+echo
+
+echo "Этот скрипт предназначен только для support-оператора."
+echo "Сначала проверяется exact ZIP; до успешной проверки установленное приложение не изменяется."
+echo
+
+[[ -f "$INNER_ZIP" ]] || fail "Рядом со скриптом не найден $INNER_ZIP_NAME."
+
+for tool in "$SHASUM" "$AWK" "$DITTO" "$XATTR" "$PLISTBUDDY" "$FILE" "$FIND" "$WC" "$GREP" "$PGREP" "$OPEN" "$OSASCRIPT" "$MKTEMP"; do
+    [[ -x "$tool" ]] || fail "На этом Mac отсутствует системный инструмент: $tool"
+done
+
+echo "[1/8] Проверяю SHA-256 exact product ZIP..."
+ACTUAL_SHA256="$($SHASUM -a 256 "$INNER_ZIP" | "$AWK" '{print $1}')" || fail "Не удалось вычислить SHA-256."
+[[ "$ACTUAL_SHA256" == "$EXPECTED_SHA256" ]] || fail "SHA-256 не совпадает. Ничего не будет распаковано, установлено или изменено."
+echo "✓ SHA-256 подтверждён: $ACTUAL_SHA256"
+
+STAGE_DIR="$($MKTEMP -d "${TMPDIR:-/tmp}/cosmetic-workshop-operator-install.XXXXXX")" || fail "Не удалось создать временную staging-папку."
+
+echo "[2/8] Распаковываю verified ZIP в staging..."
+"$DITTO" -x -k "$INNER_ZIP" "$STAGE_DIR" || fail "Не удалось распаковать verified ZIP."
+CANDIDATE_APP="$STAGE_DIR/CosmeticWorkshopOS.app"
+[[ -d "$CANDIDATE_APP" ]] || fail "В verified ZIP нет ожидаемого CosmeticWorkshopOS.app."
+[[ ! -L "$CANDIDATE_APP" ]] || fail "Staged application неожиданно является symbolic link."
+APP_COUNT="$($FIND "$STAGE_DIR" -maxdepth 1 -type d -name '*.app' -print | "$WC" -l | "$AWK" '{print $1}')"
+[[ "$APP_COUNT" == "1" ]] || fail "В verified ZIP неожиданное количество .app: $APP_COUNT."
+
+PLIST="$CANDIDATE_APP/Contents/Info.plist"
+MAIN_EXECUTABLE="$CANDIDATE_APP/Contents/MacOS/$EXPECTED_EXECUTABLE"
+RUNTIME_HELPER="$CANDIDATE_APP/Contents/MacOS/CosmeticWorkshopOSRuntime"
+RUNTIME_PYTHON="$CANDIDATE_APP/Contents/Resources/runtime/bin/python3.12"
+
+[[ -f "$PLIST" ]] || fail "У staged application отсутствует Info.plist."
+[[ -x "$MAIN_EXECUTABLE" ]] || fail "У staged application отсутствует native main executable."
+[[ -x "$RUNTIME_HELPER" ]] || fail "У staged application отсутствует runtime helper."
+[[ -x "$RUNTIME_PYTHON" ]] || fail "У staged application отсутствует bundled Python runtime."
+
+echo "[3/8] Проверяю bundle identity и версию..."
+BUNDLE_ID="$($PLISTBUDDY -c 'Print :CFBundleIdentifier' "$PLIST" 2>/dev/null)" || fail "Не удалось прочитать Bundle ID."
+VERSION="$($PLISTBUDDY -c 'Print :CFBundleShortVersionString' "$PLIST" 2>/dev/null)" || fail "Не удалось прочитать app version."
+EXECUTABLE_NAME="$($PLISTBUDDY -c 'Print :CFBundleExecutable' "$PLIST" 2>/dev/null)" || fail "Не удалось прочитать CFBundleExecutable."
+[[ "$BUNDLE_ID" == "$EXPECTED_BUNDLE_ID" ]] || fail "Bundle ID не совпадает."
+[[ "$VERSION" == "$EXPECTED_VERSION" ]] || fail "Версия приложения ($VERSION) не совпадает с ожидаемой ($EXPECTED_VERSION)."
+[[ "$EXECUTABLE_NAME" == "$EXPECTED_EXECUTABLE" ]] || fail "CFBundleExecutable не совпадает."
+
+echo "[4/8] Проверяю архитектуру executable/runtime..."
+MAIN_FILE_INFO="$($FILE "$MAIN_EXECUTABLE")" || fail "Не удалось проверить native executable."
+PYTHON_FILE_INFO="$($FILE "$RUNTIME_PYTHON")" || fail "Не удалось проверить bundled Python."
+if [[ "$EXPECTED_ARCH" == "arm64" ]]; then
+    echo "$MAIN_FILE_INFO" | "$GREP" -q 'Mach-O.*arm64' || fail "Native main не является arm64 Mach-O."
+    echo "$PYTHON_FILE_INFO" | "$GREP" -q 'Mach-O.*arm64' || fail "Bundled Python не является arm64 Mach-O."
+else
+    fail "Operator installer пока не поддерживает архитектуру $EXPECTED_ARCH."
+fi
+echo "✓ Bundle/version/architecture подтверждены"
+
+# CR-017 trust boundary: this is the first quarantine mutation in the script,
+# and it is intentionally below SHA + bundle + version + executable + arch gates.
+echo "[5/8] Снимаю quarantine только с verified staged application..."
+"$XATTR" -dr com.apple.quarantine "$CANDIDATE_APP" 2>/dev/null || true
+if "$XATTR" -lr "$CANDIDATE_APP" 2>/dev/null | "$GREP" -q 'com.apple.quarantine'; then
+    fail "macOS не позволила снять quarantine с verified staged application."
+fi
+
+# If the product is running, request ordinary macOS application Quit. Never
+# force-kill it as a successful update path.
+if "$PGREP" -x CosmeticWorkshopOS >/dev/null 2>&1 || "$PGREP" -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then
+    echo "[6/8] Приложение запущено; запрашиваю обычный macOS Quit..."
+    "$OSASCRIPT" -e 'tell application id "ru.cosmetic-workshop-os.app" to quit' >/dev/null 2>&1 || fail "Не удалось запросить обычный Quit. Закройте приложение вручную и повторите установку."
+    STOPPED=0
+    for _attempt in {1..20}; do
+        if ! "$PGREP" -x CosmeticWorkshopOS >/dev/null 2>&1 && ! "$PGREP" -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then
+            STOPPED=1
+            break
+        fi
+        "$SLEEP" 1
+    done
+    [[ "$STOPPED" -eq 1 ]] || fail "Приложение не завершилось штатно за 20 секунд. Force Quit не выполняется; остановите установку и разберитесь с причиной."
+else
+    echo "[6/8] Приложение не запущено — replacement gate свободен."
+fi
+
+"$MKDIR" -p "$INSTALL_DIR" "$BACKUP_DIR" || fail "Не удалось подготовить пользовательскую папку приложений."
+[[ ! -L "$DEST_APP" ]] || fail "Installed application path неожиданно является symbolic link."
+TEMP_DEST="$INSTALL_DIR/.CosmeticWorkshopOS.installing.$$.app"
+"$RM" -rf "$TEMP_DEST"
+"$DITTO" "$CANDIDATE_APP" "$TEMP_DEST" || fail "Не удалось скопировать verified candidate в пользовательскую папку приложений."
+
+FINAL_PLIST="$TEMP_DEST/Contents/Info.plist"
+FINAL_BUNDLE_ID="$($PLISTBUDDY -c 'Print :CFBundleIdentifier' "$FINAL_PLIST" 2>/dev/null)" || fail "Не удалось повторно проверить подготовленное приложение."
+FINAL_VERSION="$($PLISTBUDDY -c 'Print :CFBundleShortVersionString' "$FINAL_PLIST" 2>/dev/null)" || fail "Не удалось повторно проверить версию."
+[[ "$FINAL_BUNDLE_ID" == "$EXPECTED_BUNDLE_ID" && "$FINAL_VERSION" == "$EXPECTED_VERSION" ]] || fail "Подготовленная копия не прошла повторную identity verification."
+if "$XATTR" -lr "$TEMP_DEST" 2>/dev/null | "$GREP" -q 'com.apple.quarantine'; then
+    fail "Quarantine неожиданно появился снова после копирования verified candidate."
+fi
+
+PREVIOUS_BACKUP=""
+if [[ -d "$DEST_APP" ]]; then
+    CURRENT_VERSION="$($PLISTBUDDY -c 'Print :CFBundleShortVersionString' "$DEST_APP/Contents/Info.plist" 2>/dev/null || echo unknown)"
+    TIMESTAMP="$($DATE '+%Y%m%d-%H%M%S')"
+    PREVIOUS_BACKUP="$BACKUP_DIR/CosmeticWorkshopOS-${CURRENT_VERSION}-${TIMESTAMP}.app"
+    echo "[7/8] Сохраняю предыдущую .app и публикую verified candidate..."
+    "$DITTO" "$DEST_APP" "$PREVIOUS_BACKUP" || fail "Не удалось сохранить предыдущую .app; replacement не начат."
+    OLD_HOLD="$INSTALL_DIR/.CosmeticWorkshopOS.previous.$$.app"
+    "$RM" -rf "$OLD_HOLD"
+    "$MV" "$DEST_APP" "$OLD_HOLD" || fail "Не удалось подготовить замену установленной .app."
+    if ! "$MV" "$TEMP_DEST" "$DEST_APP"; then
+        "$MV" "$OLD_HOLD" "$DEST_APP" 2>/dev/null || true
+        OLD_HOLD=""
+        fail "Не удалось опубликовать новую .app; старая .app возвращена на место."
+    fi
+    TEMP_DEST=""
+    PUBLISHED=1
+    "$RM" -rf "$OLD_HOLD"
+    OLD_HOLD=""
+else
+    echo "[7/8] Выполняю первую публикацию verified application..."
+    "$MV" "$TEMP_DEST" "$DEST_APP" || fail "Не удалось установить verified application."
+    TEMP_DEST=""
+    PUBLISHED=1
+fi
+
+if "$XATTR" -lr "$DEST_APP" 2>/dev/null | "$GREP" -q 'com.apple.quarantine'; then
+    fail "Published application неожиданно имеет quarantine. Дополнительный xattr после публикации запрещён — остановите поддержку и разберитесь с причиной."
+fi
+
+"$MKDIR" -p "$SUPPORT_DIR"
+{
+    echo "product=$PRODUCT_NAME"
+    echo "version=$EXPECTED_VERSION"
+    echo "architecture=$EXPECTED_ARCH"
+    echo "sha256=$EXPECTED_SHA256"
+    echo "installed_app=$DEST_APP"
+    echo "installed_at=$($DATE '+%Y-%m-%dT%H:%M:%S%z')"
+    if [[ -n "$PREVIOUS_BACKUP" ]]; then
+        echo "previous_app=$PREVIOUS_BACKUP"
+    fi
+} > "$RECEIPT"
+
+echo "[8/8] Запускаю verified application обычным macOS способом..."
+"$OPEN" "$DEST_APP" || fail "Новая .app опубликована, но macOS не смогла запустить её автоматически. Не запускайте retained previous app как автоматический rollback; используйте D4/recovery guidance."
+
+STARTED=0
+for _attempt in {1..15}; do
+    if "$PGREP" -x CosmeticWorkshopOS >/dev/null 2>&1; then
+        STARTED=1
+        break
+    fi
+    "$SLEEP" 1
+done
+[[ "$STARTED" -eq 1 ]] || fail "Published application не появилась как macOS process в течение 15 секунд. Не выполняйте автоматический rollback .app после возможного D4 schema commit."
+
+echo
+echo "✓ Operator-assisted install/update completed"
+echo "✓ Exact SHA-256: $EXPECTED_SHA256"
+echo "✓ Installed: $DEST_APP"
+echo "✓ Running version: $EXPECTED_VERSION"
+if [[ -n "$PREVIOUS_BACKUP" ]]; then
+    echo "✓ Previous .app retained for support: $PREVIOUS_BACKUP"
+fi
