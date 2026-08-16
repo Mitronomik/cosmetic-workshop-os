@@ -1,6 +1,6 @@
 # ADR 0023 — Single-client assisted install and update bootstrap
 
-Status: **ACCEPTED — CR-016 BOUNDED IMPLEMENTATION AUTHORIZED AFTER MERGE**
+Status: **ACCEPTED DECISION — IMPLEMENTATION REJECTED BY HUMAN FINDER REHEARSAL; SUPERSEDED FOR PILOT DEPLOYMENT BY ADR 0024**
 
 Decision base: `93bdb1d51f6fe3e998051a7dda440c45ad17f30a`
 Date: `2026-08-16`
@@ -191,3 +191,10 @@ CR-016 does not authorize:
 D5's original self-service Finder/System Settings PASS remains unachieved. CR-016 introduces a narrower, explicitly documented **single-client assisted-install mode** so the one-client pilot can proceed without changing the product architecture or purchasing Developer ID at this stage.
 
 The CR-016 implementation and its clean-Mac human rehearsal must be recorded separately. Success does not retroactively claim the original unsigned self-service D5 distribution path passed, and it does not claim public release readiness.
+
+
+## Implementation outcome
+
+CR-016 was implemented on head `0179be9fa1758a47662f86c5a14a7f24341815c5`. Automated macOS run `31959318870` proved only post-execution behavior. The mandatory clean-Mac Finder rehearsal then produced `FAIL — PRODUCT`: Gatekeeper quarantined and blocked the downloaded `.command` before it could execute, so it could not perform its embedded verification or reach its bounded quarantine-removal step. PR #210 was closed without merge.
+
+The self-running downloaded bootstrap is therefore rejected as the pilot installation model. ADR 0024 supersedes only that deployment mechanism. The exact product package, CR-015 lifecycle fix, D4 safety and all application runtime semantics remain unchanged.

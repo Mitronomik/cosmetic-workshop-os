@@ -18,11 +18,14 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
+D5 — Remote install checklist — PILOT OPERATOR-ASSISTED PATH AUTHORIZED — FULL D5 PASS NOT CLAIMED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
 D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
+CR-016 — ACCEPTED DECISION — IMPLEMENTATION REJECTED BY HUMAN FINDER REHEARSAL
+CR-017 — ACCEPTED — SINGLE-CLIENT OPERATOR-ASSISTED INSTALL/UPDATE CONTRACT
+D5 pilot deployment — OPERATOR-ASSISTED PATH AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — CR-016 FAIL RECORDED; OPERATOR-ASSISTED REHEARSAL NOT STARTED
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015/CR-016/CR-017
 Product release readiness — NOT CLAIMED
 ```
 
@@ -116,3 +119,14 @@ The native AppKit executable owns only macOS application lifecycle; the existing
 ## Release boundary
 
 Product release readiness remains **NOT CLAIMED**. Signing, notarization, DMG/PKG, App Store, public release hosting, GitHub Releases, release channels, auto-update/download, MDM/remote-management integration and `PHASE 12 — MVP release preparation` remain out of CR-014 scope.
+
+
+## CR-017 — Single-client operator-assisted pilot path
+
+**AUTHORIZED NEXT — NOT IMPLEMENTED**.
+
+CR-016's downloaded `.command` model failed the mandatory clean-Mac Finder handoff and is not mergeable. CR-017 replaces only that bootstrap mechanism with a support-operator Terminal workflow for one known client.
+
+Implementation may add one operator-owned install/update script plus focused tests/documentation. It must verify package SHA-256 and staged app identity before quarantine removal, install under the user application directory without `sudo`, preserve the previous app during updates, use ordinary macOS Quit semantics, and leave all database/update safety to D4.
+
+A clean-Mac operator-assisted rehearsal is required before any pilot D5 PASS. Public/self-service distribution, Developer ID/notarization, Phase 12 and release readiness remain outside this stage.

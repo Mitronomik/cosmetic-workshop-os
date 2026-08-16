@@ -13,6 +13,8 @@ For historical pre-D4 decision state, see `docs/history/d4-pre-decision/`. The e
 - ADR 0020 is authoritative for D4 Update Safety.
 - ADR 0021 is authoritative for D5 Remote Install Rehearsal.
 - ADR 0022 is authoritative for the bounded CR-015 native macOS lifecycle blocker fix discovered by that rehearsal.
+- ADR 0023 records the rejected CR-016 self-running bootstrap experiment.
+- ADR 0024 is authoritative for the CR-017 single-client operator-assisted install/update pilot path.
 - `docs/roadmap.md` remains the product-scope source for D4 and D5.
 - `docs/domain-model-d4-update-safety.md` is the bounded D4 companion clarification.
 
@@ -34,11 +36,14 @@ D4-C — User-facing update status and packaged failure UX — DONE — MERGED A
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
+D5 — Remote install checklist — PILOT OPERATOR-ASSISTED PATH AUTHORIZED — FULL D5 PASS NOT CLAIMED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
 D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
+CR-016 — ACCEPTED DECISION — IMPLEMENTATION REJECTED BY HUMAN FINDER REHEARSAL
+CR-017 — ACCEPTED — SINGLE-CLIENT OPERATOR-ASSISTED INSTALL/UPDATE CONTRACT
+D5 pilot deployment — OPERATOR-ASSISTED PATH AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — CR-016 FAIL RECORDED; OPERATOR-ASSISTED REHEARSAL NOT STARTED
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015/CR-016/CR-017
 Product release readiness — NOT CLAIMED
 ```
 
@@ -187,3 +192,14 @@ Evidence:
 - application-level Quit proof used a macOS Quit Apple event after LaunchServices start; direct child SIGTERM was not accepted as the proof.
 
 D5 itself is **not** complete. The fixed exact package still requires the mandatory fresh human clean-Mac/clean-profile rehearsal and final D5 evidence. Phase 12 and product release readiness remain unauthorized/not claimed.
+
+
+## CR-016 implementation outcome
+
+CR-016's version-specific downloaded `.command` bootstrap was implemented and automated post-execution behavior passed on head `0179be9fa1758a47662f86c5a14a7f24341815c5` in run `31959318870`. The mandatory clean-Mac Finder rehearsal then produced `FAIL — PRODUCT`: Gatekeeper blocked the quarantined `.command` before it could execute. PR #210 was closed without merge. That self-running bootstrap is not an authorized current implementation target.
+
+## CR-017 operator-assisted pilot truth
+
+ADR 0024 authorizes the next bounded D5 pilot action: a qualified support operator may use Terminal/screen sharing to install or update one known client's exact package after mandatory SHA-256 and app-identity verification. Only the verified staged `.app` may have quarantine removed. The client must not type commands. Gatekeeper stays globally enabled; `sudo`, SIP/security weakening, database/Restore/D4 changes and public distribution remain forbidden.
+
+The operator-assisted path is **AUTHORIZED NEXT — NOT IMPLEMENTED**. Full D5 PASS, Phase 12 and product release readiness remain unclaimed.

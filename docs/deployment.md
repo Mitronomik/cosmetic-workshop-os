@@ -16,11 +16,14 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
+D5 — Remote install checklist — PILOT OPERATOR-ASSISTED PATH AUTHORIZED — FULL D5 PASS NOT CLAIMED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
 D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
+CR-016 — ACCEPTED DECISION — IMPLEMENTATION REJECTED BY HUMAN FINDER REHEARSAL
+CR-017 — ACCEPTED — SINGLE-CLIENT OPERATOR-ASSISTED INSTALL/UPDATE CONTRACT
+D5 pilot deployment — OPERATOR-ASSISTED PATH AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — CR-016 FAIL RECORDED; OPERATOR-ASSISTED REHEARSAL NOT STARTED
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015/CR-016/CR-017
 Product release readiness — NOT CLAIMED
 ```
 
@@ -55,3 +58,8 @@ CR-015 changes no deployment topology: the application remains local-first, the 
 ## CR-015 closure deployment truth
 
 The merged native lifecycle repair changes no deployment topology. The browser remains the product UI, the backend remains local, and user data remain external to the `.app`. The fixed package now participates correctly in the macOS application lifecycle for ordinary Quit/restart. D5 still requires a fresh human clean-Mac rehearsal; no remote-management or release topology is authorized.
+
+
+## CR-017 pilot distribution boundary
+
+The CR-016 self-running downloaded `.command` experiment failed the mandatory human Finder rehearsal because Gatekeeper blocked the bootstrap before execution. CR-017 therefore authorizes only a single-client **operator-assisted** install/update pilot: a qualified support operator may use Terminal to verify the exact package and remove quarantine only from the verified staged `.app`; the client does not type commands. Gatekeeper remains globally enabled. No public/self-service distribution, signing/notarization, Phase 12 or release-readiness claim is created.

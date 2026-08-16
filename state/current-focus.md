@@ -15,25 +15,26 @@ D4-B — Safe migration execution and durable UpdateLog — DONE — MERGED AND 
 D4-C — User-facing update status and packaged failure UX — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
 D4-D — Exact-package update verification and D4 lifecycle closure — DONE — FINAL EXACT-PACKAGE VERIFICATION PASSED
 CR-014 — ACCEPTED — D5 REMOTE INSTALL REHEARSAL CONTRACT
-D5 — Remote install checklist — BLOCKER FIXED — FRESH HUMAN REHEARSAL REQUIRED
+D5 — Remote install checklist — PILOT OPERATOR-ASSISTED PATH AUTHORIZED — FULL D5 PASS NOT CLAIMED
 CR-015 — ACCEPTED — NATIVE MACOS APPLICATION LIFECYCLE BLOCKER FIX
 D5 blocker fix — Native macOS application lifecycle — DONE — MERGED AND EXACT-HEAD/EXACT-PACKAGE VERIFIED
-D5 verification — AUTOMATED BLOCKER FIX VERIFIED — FULL D5 PASS NOT YET CLAIMED
-PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015
+CR-016 — ACCEPTED DECISION — IMPLEMENTATION REJECTED BY HUMAN FINDER REHEARSAL
+CR-017 — ACCEPTED — SINGLE-CLIENT OPERATOR-ASSISTED INSTALL/UPDATE CONTRACT
+D5 pilot deployment — OPERATOR-ASSISTED PATH AUTHORIZED NEXT — NOT IMPLEMENTED
+D5 verification — CR-016 FAIL RECORDED; OPERATOR-ASSISTED REHEARSAL NOT STARTED
+PHASE 12 — MVP release preparation — NOT AUTHORIZED BY CR-014/CR-015/CR-016/CR-017
 Product release readiness — NOT CLAIMED
 ```
 
 ## Current task
 
-**Implement only CR-016 — Single-client assisted install and update bootstrap after the decision changeset merges.**
+**Implement only CR-017 — Single-client operator-assisted install/update after this decision merges.**
 
-The clean-Mac rehearsal established that the remaining blocker is distribution trust for the unsigned/unnotarized package, not the product runtime. For the current single known client, ADR 0023 authorizes a bounded version-specific `.command` bootstrap instead of Developer ID/notarization or a product redesign.
+CR-016 implementation head `0179be9fa1758a47662f86c5a14a7f24341815c5` and automated run `31959318870` remain historical evidence only. The clean-Mac human rehearsal proved the downloaded `.command` cannot bootstrap itself because Gatekeeper blocks it before execution; PR #210 is closed without merge.
 
-Authorized implementation scope is only the packaging/support layer required to produce an outer ZIP containing the canonical exact `CosmeticWorkshopOS-mac.zip` plus `Установить или обновить Мастерскую.command`. The generated bootstrap must verify the companion ZIP SHA-256 and staged bundle identity first, then and only then remove quarantine from that verified staged `.app`, install it under the user's application space and support the same bounded flow for later manual updates.
+CR-017 authorizes a support operator Terminal workflow only. The operator verifies exact package SHA-256 and app identity before removing quarantine from the verified staged `.app`. The client never types commands. Gatekeeper stays globally enabled, no `sudo` is permitted, and product database/user-data/D4/Restore/runtime semantics remain untouched.
 
-Do not modify backend, frontend, domain logic, database/migrations, Restore or D4 update-safety semantics. Do not globally disable Gatekeeper, use `sudo`, weaken SIP/Security Policy, add signing/notarization, add automatic update downloads, public distribution, release channels, Phase 12 or product release-readiness claims.
-
-The implementation must remain fail-closed and must be followed by a human clean-Mac rehearsal of the actual downloaded outer ZIP and Finder double-click `.command` flow. Direct shell execution in CI is not a substitute for that human handoff.
+After the operator-assisted implementation is separately verified, repeat the clean-Mac D5 rehearsal using that operator procedure. Full D5 PASS, Phase 12 and product release readiness remain unclaimed.
 
 ## Prior CR-015 handoff truth
 
