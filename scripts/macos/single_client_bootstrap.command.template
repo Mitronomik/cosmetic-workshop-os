@@ -1,0 +1,248 @@
+#!/bin/zsh
+
+set -u
+
+PRODUCT_NAME="Мастерская косметолога"
+INNER_ZIP_NAME="CosmeticWorkshopOS-mac.zip"
+EXPECTED_SHA256="__INNER_SHA256__"
+EXPECTED_VERSION="__APP_VERSION__"
+EXPECTED_ARCH="__ARCHITECTURE__"
+EXPECTED_BUNDLE_ID="ru.cosmetic-workshop-os.app"
+EXPECTED_EXECUTABLE="CosmeticWorkshopOS"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+INNER_ZIP="$SCRIPT_DIR/$INNER_ZIP_NAME"
+INSTALL_DIR="$HOME/Applications"
+DEST_APP="$INSTALL_DIR/CosmeticWorkshopOS.app"
+SUPPORT_DIR="$HOME/Library/Application Support/CosmeticWorkshopOSInstaller"
+BACKUP_DIR="$SUPPORT_DIR/previous-apps"
+RECEIPT="$SUPPORT_DIR/install-receipt.txt"
+
+SHASUM="/usr/bin/shasum"
+AWK="/usr/bin/awk"
+DITTO="/usr/bin/ditto"
+XATTR="/usr/bin/xattr"
+PLISTBUDDY="/usr/libexec/PlistBuddy"
+FILE="/usr/bin/file"
+FIND="/usr/bin/find"
+WC="/usr/bin/wc"
+GREP="/usr/bin/grep"
+PGREP="/usr/bin/pgrep"
+OPEN="/usr/bin/open"
+MKTEMP="/usr/bin/mktemp"
+DATE="/bin/date"
+MKDIR="/bin/mkdir"
+MV="/bin/mv"
+RM="/bin/rm"
+SLEEP="/bin/sleep"
+
+STAGE_DIR=""
+TEMP_DEST=""
+OLD_HOLD=""
+
+pause_and_exit() {
+    local code="$1"
+    echo
+    if [[ "$code" -eq 0 ]]; then
+        echo "Готово. Нажмите Enter, чтобы закрыть это окно."
+    else
+        echo "Установка остановлена. Нажмите Enter, чтобы закрыть это окно."
+    fi
+    read -r _reply
+    exit "$code"
+}
+
+fail() {
+    echo
+    echo "ОШИБКА: $1"
+    pause_and_exit 1
+}
+
+cleanup() {
+    if [[ -n "$STAGE_DIR" && -d "$STAGE_DIR" ]]; then
+        "$RM" -rf "$STAGE_DIR"
+    fi
+    if [[ -n "$TEMP_DEST" && -e "$TEMP_DEST" ]]; then
+        "$RM" -rf "$TEMP_DEST"
+    fi
+    if [[ -n "$OLD_HOLD" && -e "$OLD_HOLD" ]]; then
+        # OLD_HOLD exists only during a pre-launch replacement swap. If the
+        # script exits unexpectedly before the new package is published, put
+        # the old app back rather than leave the user without an installed app.
+        if [[ ! -e "$DEST_APP" ]]; then
+            "$MV" "$OLD_HOLD" "$DEST_APP" 2>/dev/null || true
+        fi
+    fi
+}
+trap cleanup EXIT
+
+clear
+printf '%s\n' "=============================================="
+printf '%s\n' "$PRODUCT_NAME — установка / обновление"
+printf '%s\n' "=============================================="
+echo
+echo "Версия пакета: $EXPECTED_VERSION"
+echo "Архитектура: $EXPECTED_ARCH"
+echo
+echo "Сначала будет выполнена обязательная проверка файла."
+echo "До успешной проверки установленная программа не изменяется."
+echo
+
+[[ -f "$INNER_ZIP" ]] || fail "Рядом с этим файлом не найден $INNER_ZIP_NAME. Распакуйте полученный архив целиком и запустите .command ещё раз."
+
+for tool in "$SHASUM" "$AWK" "$DITTO" "$XATTR" "$PLISTBUDDY" "$FILE" "$FIND" "$WC" "$GREP" "$PGREP" "$OPEN" "$MKTEMP"; do
+    [[ -x "$tool" ]] || fail "На этом Mac отсутствует системный инструмент: $tool"
+done
+
+echo "[1/7] Проверяю SHA-256 пакета..."
+ACTUAL_SHA256="$($SHASUM -a 256 "$INNER_ZIP" | "$AWK" '{print $1}')" || fail "Не удалось вычислить SHA-256."
+[[ "$ACTUAL_SHA256" == "$EXPECTED_SHA256" ]] || fail "SHA-256 не совпадает. Этот файл не будет распакован или установлен. Получите пакет заново у разработчика."
+echo "✓ SHA-256 подтверждён"
+
+STAGE_DIR="$($MKTEMP -d "${TMPDIR:-/tmp}/cosmetic-workshop-install.XXXXXX")" || fail "Не удалось создать временную папку."
+
+echo "[2/7] Распаковываю проверенный пакет во временную папку..."
+"$DITTO" -x -k "$INNER_ZIP" "$STAGE_DIR" || fail "Не удалось распаковать проверенный пакет."
+CANDIDATE_APP="$STAGE_DIR/CosmeticWorkshopOS.app"
+[[ -d "$CANDIDATE_APP" ]] || fail "В пакете нет ожидаемого CosmeticWorkshopOS.app."
+APP_COUNT="$($FIND "$STAGE_DIR" -maxdepth 1 -type d -name '*.app' -print | "$WC" -l | tr -d ' ')"
+[[ "$APP_COUNT" == "1" ]] || fail "В пакете обнаружено неожиданное количество приложений: $APP_COUNT."
+
+PLIST="$CANDIDATE_APP/Contents/Info.plist"
+MAIN_EXECUTABLE="$CANDIDATE_APP/Contents/MacOS/$EXPECTED_EXECUTABLE"
+RUNTIME_HELPER="$CANDIDATE_APP/Contents/MacOS/CosmeticWorkshopOSRuntime"
+RUNTIME_PYTHON="$CANDIDATE_APP/Contents/Resources/runtime/bin/python3.12"
+
+[[ -f "$PLIST" ]] || fail "У приложения отсутствует Info.plist."
+[[ -x "$MAIN_EXECUTABLE" ]] || fail "У приложения отсутствует исполняемый macOS-файл."
+[[ -x "$RUNTIME_HELPER" ]] || fail "У приложения отсутствует runtime helper."
+[[ -x "$RUNTIME_PYTHON" ]] || fail "У приложения отсутствует встроенный Python runtime."
+
+echo "[3/7] Проверяю идентичность приложения..."
+BUNDLE_ID="$($PLISTBUDDY -c 'Print :CFBundleIdentifier' "$PLIST" 2>/dev/null)" || fail "Не удалось прочитать Bundle ID."
+VERSION="$($PLISTBUDDY -c 'Print :CFBundleShortVersionString' "$PLIST" 2>/dev/null)" || fail "Не удалось прочитать версию приложения."
+EXECUTABLE_NAME="$($PLISTBUDDY -c 'Print :CFBundleExecutable' "$PLIST" 2>/dev/null)" || fail "Не удалось прочитать имя исполняемого файла."
+
+[[ "$BUNDLE_ID" == "$EXPECTED_BUNDLE_ID" ]] || fail "Bundle ID не совпадает с ожидаемым."
+[[ "$VERSION" == "$EXPECTED_VERSION" ]] || fail "Версия приложения ($VERSION) не совпадает с версией установщика ($EXPECTED_VERSION)."
+[[ "$EXECUTABLE_NAME" == "$EXPECTED_EXECUTABLE" ]] || fail "Главный исполняемый файл приложения не совпадает с ожидаемым."
+
+echo "[4/7] Проверяю архитектуру..."
+MAIN_FILE_INFO="$($FILE "$MAIN_EXECUTABLE")" || fail "Не удалось проверить архитектуру приложения."
+PYTHON_FILE_INFO="$($FILE "$RUNTIME_PYTHON")" || fail "Не удалось проверить архитектуру runtime."
+if [[ "$EXPECTED_ARCH" == "arm64" ]]; then
+    echo "$MAIN_FILE_INFO" | "$GREP" -q 'Mach-O.*arm64' || fail "Главное приложение не является arm64 Mach-O."
+    echo "$PYTHON_FILE_INFO" | "$GREP" -q 'Mach-O.*arm64' || fail "Встроенный runtime не является arm64."
+else
+    fail "Этот bootstrap пока не поддерживает архитектуру $EXPECTED_ARCH."
+fi
+echo "✓ Пакет, версия и архитектура подтверждены"
+
+# Security boundary: quarantine removal is deliberately below every package
+# identity gate above. Nothing before this line removes quarantine or changes
+# an installed application.
+echo "[5/7] Подготавливаю только проверенное приложение к запуску..."
+"$XATTR" -dr com.apple.quarantine "$CANDIDATE_APP" 2>/dev/null || true
+if "$XATTR" -lr "$CANDIDATE_APP" 2>/dev/null | "$GREP" -q 'com.apple.quarantine'; then
+    fail "macOS не позволила снять quarantine с проверенной временной копии приложения."
+fi
+
+if "$PGREP" -x CosmeticWorkshopOS >/dev/null 2>&1 || "$PGREP" -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then
+    fail "Мастерская косметолога сейчас запущена. Закройте её обычной командой «Завершить» в Dock, затем снова откройте этот файл установки."
+fi
+
+"$MKDIR" -p "$INSTALL_DIR" "$BACKUP_DIR" || fail "Не удалось подготовить пользовательскую папку приложений."
+TEMP_DEST="$INSTALL_DIR/.CosmeticWorkshopOS.installing.$$.app"
+"$RM" -rf "$TEMP_DEST"
+"$DITTO" "$CANDIDATE_APP" "$TEMP_DEST" || fail "Не удалось подготовить новую версию в пользовательской папке приложений."
+
+FINAL_PLIST="$TEMP_DEST/Contents/Info.plist"
+FINAL_BUNDLE_ID="$($PLISTBUDDY -c 'Print :CFBundleIdentifier' "$FINAL_PLIST" 2>/dev/null)" || fail "Не удалось повторно проверить подготовленное приложение."
+FINAL_VERSION="$($PLISTBUDDY -c 'Print :CFBundleShortVersionString' "$FINAL_PLIST" 2>/dev/null)" || fail "Не удалось повторно проверить версию подготовленного приложения."
+[[ "$FINAL_BUNDLE_ID" == "$EXPECTED_BUNDLE_ID" && "$FINAL_VERSION" == "$EXPECTED_VERSION" ]] || fail "Подготовленная копия приложения не прошла повторную проверку."
+
+PREVIOUS_BACKUP=""
+if [[ -d "$DEST_APP" ]]; then
+    CURRENT_VERSION="$($PLISTBUDDY -c 'Print :CFBundleShortVersionString' "$DEST_APP/Contents/Info.plist" 2>/dev/null || echo unknown)"
+    TIMESTAMP="$($DATE '+%Y%m%d-%H%M%S')"
+    PREVIOUS_BACKUP="$BACKUP_DIR/CosmeticWorkshopOS-${CURRENT_VERSION}-${TIMESTAMP}.app"
+    echo "[6/7] Сохраняю предыдущую версию приложения..."
+    "$DITTO" "$DEST_APP" "$PREVIOUS_BACKUP" || fail "Не удалось сохранить предыдущую версию. Обновление не начато."
+
+    OLD_HOLD="$INSTALL_DIR/.CosmeticWorkshopOS.previous.$$.app"
+    "$RM" -rf "$OLD_HOLD"
+    "$MV" "$DEST_APP" "$OLD_HOLD" || fail "Не удалось подготовить замену старой версии."
+    if ! "$MV" "$TEMP_DEST" "$DEST_APP"; then
+        "$MV" "$OLD_HOLD" "$DEST_APP" 2>/dev/null || true
+        OLD_HOLD=""
+        fail "Не удалось установить новую версию. Старая версия восстановлена на прежнем месте."
+    fi
+    TEMP_DEST=""
+    "$RM" -rf "$OLD_HOLD"
+    OLD_HOLD=""
+else
+    echo "[6/7] Выполняю первую установку..."
+    "$MV" "$TEMP_DEST" "$DEST_APP" || fail "Не удалось установить приложение в $INSTALL_DIR."
+    TEMP_DEST=""
+fi
+
+# Re-assert the narrow quarantine boundary on the published copy. This still
+# applies only to the exact candidate already verified above.
+"$XATTR" -dr com.apple.quarantine "$DEST_APP" 2>/dev/null || true
+if "$XATTR" -lr "$DEST_APP" 2>/dev/null | "$GREP" -q 'com.apple.quarantine'; then
+    fail "Установленная копия приложения всё ещё имеет quarantine. Обратитесь к разработчику."
+fi
+
+"$MKDIR" -p "$SUPPORT_DIR"
+{
+    echo "product=$PRODUCT_NAME"
+    echo "version=$EXPECTED_VERSION"
+    echo "architecture=$EXPECTED_ARCH"
+    echo "sha256=$EXPECTED_SHA256"
+    echo "installed_app=$DEST_APP"
+    echo "installed_at=$($DATE '+%Y-%m-%dT%H:%M:%S%z')"
+    if [[ -n "$PREVIOUS_BACKUP" ]]; then
+        echo "previous_app=$PREVIOUS_BACKUP"
+    fi
+} > "$RECEIPT"
+
+echo "[7/7] Запускаю $PRODUCT_NAME..."
+if ! "$OPEN" "$DEST_APP"; then
+    echo
+    echo "Новая версия установлена, но macOS не смогла запустить её автоматически."
+    if [[ -n "$PREVIOUS_BACKUP" ]]; then
+        echo "Предыдущая версия сохранена: $PREVIOUS_BACKUP"
+        echo "Не запускайте её как автоматический откат после возможного обновления базы — обратитесь к разработчику."
+    fi
+    pause_and_exit 1
+fi
+
+STARTED=0
+for _attempt in {1..10}; do
+    if "$PGREP" -x CosmeticWorkshopOS >/dev/null 2>&1; then
+        STARTED=1
+        break
+    fi
+    "$SLEEP" 1
+done
+
+if [[ "$STARTED" -ne 1 ]]; then
+    echo
+    echo "Новая версия была установлена, но её процесс не появился в течение 10 секунд."
+    if [[ -n "$PREVIOUS_BACKUP" ]]; then
+        echo "Предыдущая версия сохранена: $PREVIOUS_BACKUP"
+        echo "Не выполняйте автоматический откат приложения после возможной миграции базы. Обратитесь к разработчику."
+    fi
+    pause_and_exit 1
+fi
+
+echo
+echo "✓ Проверка пакета пройдена"
+echo "✓ Установлено: $DEST_APP"
+echo "✓ Запущена версия: $EXPECTED_VERSION"
+if [[ -n "$PREVIOUS_BACKUP" ]]; then
+    echo "✓ Предыдущая .app сохранена для поддержки: $PREVIOUS_BACKUP"
+fi
+echo
+echo "Дальше приложение используется обычным способом. Terminal можно закрыть."
+pause_and_exit 0
