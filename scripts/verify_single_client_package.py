@@ -143,14 +143,7 @@ def verify_directory(directory: Path, *, expected_sha256: str, expected_version:
     if actual != expected_sha256:
         errors.append(f"inner ZIP SHA mismatch: {actual}")
     text = command.read_text(encoding="utf-8")
-    errors.extend(
-        verify_command(
-            text,
-            expected_sha256=expected_sha256,
-            expected_version=expected_version,
-            expected_arch=expected_arch,
-        )
-    )
+    errors.extend(verify_command(text, expected_sha256=expected_sha256, expected_version=expected_version, expected_arch=expected_arch))
     readme_text = readme.read_text(encoding="utf-8")
     for token in (expected_sha256, expected_version, expected_arch, COMMAND_NAME):
         if token not in readme_text:
@@ -173,6 +166,8 @@ def verify_zip(path: Path, *, expected_sha256: str, expected_version: str, expec
             if len(readme_infos) != 1:
                 errors.append(f"outer ZIP must contain exactly one readme; got {len(readme_infos)}")
             if errors:
+                decoded = [repr(normalized_basename(i.filename)) for i in infos if not i.is_dir()][:20]
+                errors.append(f"decoded outer ZIP basenames: {decoded}")
                 return errors
 
             command_info = command_infos[0]
@@ -187,14 +182,7 @@ def verify_zip(path: Path, *, expected_sha256: str, expected_version: str, expec
                 errors.append(f"outer ZIP inner product SHA mismatch: {actual}")
 
             text = archive.read(command_info).decode("utf-8")
-            errors.extend(
-                verify_command(
-                    text,
-                    expected_sha256=expected_sha256,
-                    expected_version=expected_version,
-                    expected_arch=expected_arch,
-                )
-            )
+            errors.extend(verify_command(text, expected_sha256=expected_sha256, expected_version=expected_version, expected_arch=expected_arch))
     except (OSError, zipfile.BadZipFile, UnicodeDecodeError) as exc:
         errors.append(f"outer ZIP unreadable: {exc}")
     return errors
@@ -215,11 +203,7 @@ def main() -> int:
         print("- expected SHA-256 is not a lowercase 64-hex digest")
         return 2
 
-    kwargs = dict(
-        expected_sha256=args.expected_sha256,
-        expected_version=args.expected_version,
-        expected_arch=args.expected_architecture,
-    )
+    kwargs = dict(expected_sha256=args.expected_sha256, expected_version=args.expected_version, expected_arch=args.expected_architecture)
     if args.directory is not None:
         errors = verify_directory(args.directory, **kwargs)
     else:
