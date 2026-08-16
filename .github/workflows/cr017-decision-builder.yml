@@ -31,7 +31,7 @@ jobs:
                   continue
               lines.append(line)
           text='\n'.join(lines)+'\n'
-          text=text.replace('"support operator"', '"support-operator"')
+          text=text.replace('support-operator Terminal workflow only', 'support operator Terminal workflow only')
           p.write_text(text)
           PY
       - name: Transform
