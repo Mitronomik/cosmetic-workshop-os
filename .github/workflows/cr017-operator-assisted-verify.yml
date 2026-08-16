@@ -1,0 +1,136 @@
+name: CR017 operator-assisted verification
+
+on:
+  push:
+    branches:
+      - verification/cr017-operator-560995c1
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      EXPECTED_HEAD: 560995c1c931f46fbace0267fddd3400e9525846
+      EXPECTED_BASE: 0ac96deace602248e0d31e7e56c7aed7fb63c62b
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 560995c1c931f46fbace0267fddd3400e9525846
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Exact-head operator-assisted smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --check "$EXPECTED_BASE...$EXPECTED_HEAD"
+
+          python3 -m pip install --disable-pip-version-check './backend[test]'
+          PYTHONPATH="$PWD/backend:$PWD" python3 -m pytest macos_package/tests -q
+          python3 scripts/check_documentation_lifecycle.py
+
+          export COSMETIC_WORKSHOP_BUILD_DIR="$RUNNER_TEMP/cr017-build"
+          export COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR="$RUNNER_TEMP/cr017-dist"
+          export COSMETIC_WORKSHOP_OPERATOR_OUTPUT_DIR="$RUNNER_TEMP/cr017-dist"
+          export COSMETIC_WORKSHOP_BUILD_CACHE_DIR="$RUNNER_TEMP/cr017-cache"
+          bash scripts/package_operator_assisted_macos.sh | tee "$RUNNER_TEMP/cr017-build.log"
+
+          OUTER_ZIP="$(find "$RUNNER_TEMP/cr017-dist" -maxdepth 1 -type f -name 'CosmeticWorkshopOS-operator-assisted-*.zip' -print -quit)"
+          test -n "$OUTER_ZIP"
+          INNER_ZIP="$RUNNER_TEMP/cr017-dist/CosmeticWorkshopOS-mac.zip"
+          test -f "$INNER_ZIP"
+          INNER_SHA="$(shasum -a 256 "$INNER_ZIP" | awk '{print $1}')"
+          OUTER_SHA="$(shasum -a 256 "$OUTER_ZIP" | awk '{print $1}')"
+
+          EXTRACT="$RUNNER_TEMP/cr017-outer"
+          mkdir -p "$EXTRACT"
+          ditto -x -k "$OUTER_ZIP" "$EXTRACT"
+          OPERATOR_SCRIPT="$(find "$EXTRACT" -type f -name 'operator_install_update.sh' -not -path '*/__MACOSX/*' -print -quit)"
+          test -n "$OPERATOR_SCRIPT"
+          test -x "$OPERATOR_SCRIPT"
+          grep -q "EXPECTED_SHA256=\"$INNER_SHA\"" "$OPERATOR_SCRIPT"
+          ! grep -q 'spctl --master-disable' "$OPERATOR_SCRIPT"
+          ! grep -q 'sudo ' "$OPERATOR_SCRIPT"
+          ! grep -q 'pkill ' "$OPERATOR_SCRIPT"
+          ! grep -q 'killall ' "$OPERATOR_SCRIPT"
+
+          PILOT_HOME="$RUNNER_TEMP/pilot-home"
+          mkdir -p "$PILOT_HOME"
+
+          # First installation. This is deliberately operator execution through
+          # zsh, not Finder double-click; CR-016 proved Finder cannot bootstrap
+          # an unsigned quarantined script reliably.
+          HOME="$PILOT_HOME" /bin/zsh "$OPERATOR_SCRIPT"
+          INSTALLED="$PILOT_HOME/Applications/CosmeticWorkshopOS.app"
+          RECEIPT="$PILOT_HOME/Library/Application Support/CosmeticWorkshopOSInstaller/operator-install-receipt.txt"
+          test -d "$INSTALLED"
+          test -f "$RECEIPT"
+          grep -q "sha256=$INNER_SHA" "$RECEIPT"
+          pgrep -x CosmeticWorkshopOS >/dev/null
+
+          # Run the exact operator tool while the product is running. The tool
+          # itself must request ordinary macOS Quit, wait for shutdown, retain
+          # the previous .app, publish the verified candidate, and relaunch.
+          HOME="$PILOT_HOME" /bin/zsh "$OPERATOR_SCRIPT"
+          pgrep -x CosmeticWorkshopOS >/dev/null
+          PREVIOUS_DIR="$PILOT_HOME/Library/Application Support/CosmeticWorkshopOSInstaller/previous-apps"
+          find "$PREVIOUS_DIR" -maxdepth 1 -type d -name 'CosmeticWorkshopOS-*.app' | grep -q .
+
+          # Verify ordinary app-level Quit after the update and complete cleanup.
+          osascript -e 'tell application id "ru.cosmetic-workshop-os.app" to quit'
+          for _ in {1..30}; do
+            if ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1 && ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1
+          ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1
+
+          # Finder-equivalent normal launch after installation/update must work
+          # without Terminal and then Quit normally again.
+          open "$INSTALLED"
+          for _ in {1..20}; do
+            if pgrep -x CosmeticWorkshopOS >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          pgrep -x CosmeticWorkshopOS >/dev/null
+          osascript -e 'tell application id "ru.cosmetic-workshop-os.app" to quit'
+          for _ in {1..30}; do
+            if ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1 && ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1
+          ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1
+
+          git diff --name-only "$EXPECTED_BASE...$EXPECTED_HEAD" | sort > "$RUNNER_TEMP/changed.txt"
+          cat > "$RUNNER_TEMP/expected.txt" <<'EOF'
+          Makefile
+          docs/operator-assisted-install.md
+          macos_package/tests/test_operator_assisted_install.py
+          scripts/macos/operator_install_update.sh.template
+          scripts/package_operator_assisted_macos.sh
+          scripts/verify_operator_assisted_package.py
+          EOF
+          sed -i '' 's/^          //' "$RUNNER_TEMP/expected.txt"
+          sort -o "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/expected.txt"
+          diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/changed.txt"
+          ! grep -E '^(backend/|frontend/|launcher/|migrations/)' "$RUNNER_TEMP/changed.txt"
+
+          mkdir -p "$RUNNER_TEMP/cr017-evidence"
+          cp "$RUNNER_TEMP/cr017-build.log" "$RUNNER_TEMP/cr017-evidence/build.log"
+          cp "$OUTER_ZIP" "$RUNNER_TEMP/cr017-evidence/"
+          printf 'exact_head=%s\nouter_zip=%s\nouter_sha256=%s\ninner_sha256=%s\nclassification=PASS — FULL AUTOMATED SMOKE PASSED\noperator_first_install=PASS\noperator_update_while_running=PASS\nordinary_quit=PASS\nprevious_app_retained=PASS\nnormal_post_install_launch=PASS\nsecond_quit=PASS\nhuman_clean_mac_operator_rehearsal=REQUIRED_NOT_EXECUTED\n' \
+            "$EXPECTED_HEAD" "$(basename "$OUTER_ZIP")" "$OUTER_SHA" "$INNER_SHA" > "$RUNNER_TEMP/cr017-evidence/summary.txt"
+      - name: Upload CR-017 operator evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cr017-operator-assisted-560995c1
+          path: ${{ runner.temp }}/cr017-evidence
+          if-no-files-found: error
