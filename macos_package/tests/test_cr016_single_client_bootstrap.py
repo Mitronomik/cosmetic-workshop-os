@@ -53,6 +53,19 @@ def run_verifier(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def verifier_args(path: Path, digest: str) -> tuple[str, ...]:
+    return (
+        "--zip",
+        str(path),
+        "--expected-sha256",
+        digest,
+        "--expected-version",
+        VERSION,
+        "--expected-architecture",
+        ARCH,
+    )
+
+
 def test_template_is_fail_closed_before_quarantine_removal():
     text = TEMPLATE.read_text(encoding="utf-8")
     sha_gate = text.index('[[ "$ACTUAL_SHA256" == "$EXPECTED_SHA256" ]]')
@@ -129,12 +142,25 @@ def test_directory_verifier_rejects_inner_zip_mismatch(tmp_path):
     assert "inner ZIP SHA mismatch" in result.stdout
 
 
-def write_outer_zip(directory: Path, archive_path: Path, *, nfd_names: bool = False, command_executable: bool = True) -> None:
+def write_outer_zip(
+    directory: Path,
+    archive_path: Path,
+    *,
+    nfd_names: bool = False,
+    garbled_localized_names: bool = False,
+    command_executable: bool = True,
+    include_appledouble: bool = False,
+    extra_real_command: bool = False,
+) -> None:
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
         root = directory.name
         for path in directory.iterdir():
             root_name = unicodedata.normalize("NFD", root) if nfd_names else root
             file_name = unicodedata.normalize("NFD", path.name) if nfd_names else path.name
+            if garbled_localized_names and path.name == COMMAND_NAME:
+                file_name = "decoded-localized-bootstrap.command"
+            if garbled_localized_names and path.name == README_NAME:
+                file_name = "decoded-localized-readme.txt"
             info = zipfile.ZipInfo(f"{root_name}/{file_name}")
             mode = path.stat().st_mode
             if path.name == COMMAND_NAME and not command_executable:
@@ -142,35 +168,27 @@ def write_outer_zip(directory: Path, archive_path: Path, *, nfd_names: bool = Fa
             info.external_attr = (mode & 0xFFFF) << 16
             archive.writestr(info, path.read_bytes())
 
+            if include_appledouble:
+                sidecar = zipfile.ZipInfo(f"__MACOSX/{root_name}/._{file_name}")
+                sidecar.external_attr = (0o100644 & 0xFFFF) << 16
+                archive.writestr(sidecar, b"appledouble-metadata")
+
+        if extra_real_command:
+            extra = zipfile.ZipInfo(f"{root}/unexpected.command")
+            extra.external_attr = (0o100755 & 0xFFFF) << 16
+            archive.writestr(extra, (directory / COMMAND_NAME).read_bytes())
+
 
 def test_outer_zip_must_preserve_command_executable_bit(tmp_path):
     directory, digest = build_distribution_dir(tmp_path)
     archive_path = tmp_path / "outer.zip"
     write_outer_zip(directory, archive_path)
-    result = run_verifier(
-        "--zip",
-        str(archive_path),
-        "--expected-sha256",
-        digest,
-        "--expected-version",
-        VERSION,
-        "--expected-architecture",
-        ARCH,
-    )
+    result = run_verifier(*verifier_args(archive_path, digest))
     assert result.returncode == 0, result.stdout + result.stderr
 
     broken = tmp_path / "outer-no-exec.zip"
     write_outer_zip(directory, broken, command_executable=False)
-    result = run_verifier(
-        "--zip",
-        str(broken),
-        "--expected-sha256",
-        digest,
-        "--expected-version",
-        VERSION,
-        "--expected-architecture",
-        ARCH,
-    )
+    result = run_verifier(*verifier_args(broken, digest))
     assert result.returncode == 1
     assert "does not preserve bootstrap executable bit" in result.stdout
 
@@ -179,17 +197,38 @@ def test_outer_zip_accepts_macos_nfd_filename_normalization(tmp_path):
     directory, digest = build_distribution_dir(tmp_path)
     archive_path = tmp_path / "outer-nfd.zip"
     write_outer_zip(directory, archive_path, nfd_names=True)
-    result = run_verifier(
-        "--zip",
-        str(archive_path),
-        "--expected-sha256",
-        digest,
-        "--expected-version",
-        VERSION,
-        "--expected-architecture",
-        ARCH,
-    )
+    result = run_verifier(*verifier_args(archive_path, digest))
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_outer_zip_uses_single_file_type_plus_content_identity_when_localized_name_decodes_differently(tmp_path):
+    directory, digest = build_distribution_dir(tmp_path)
+    archive_path = tmp_path / "outer-garbled-names.zip"
+    write_outer_zip(
+        directory,
+        archive_path,
+        garbled_localized_names=True,
+        include_appledouble=True,
+    )
+    result = run_verifier(*verifier_args(archive_path, digest))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_appledouble_sidecars_do_not_count_as_extra_bootstrap_or_readme(tmp_path):
+    directory, digest = build_distribution_dir(tmp_path)
+    archive_path = tmp_path / "outer-appledouble.zip"
+    write_outer_zip(directory, archive_path, include_appledouble=True)
+    result = run_verifier(*verifier_args(archive_path, digest))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_second_real_command_is_rejected_even_if_both_have_valid_content(tmp_path):
+    directory, digest = build_distribution_dir(tmp_path)
+    archive_path = tmp_path / "outer-two-commands.zip"
+    write_outer_zip(directory, archive_path, extra_real_command=True)
+    result = run_verifier(*verifier_args(archive_path, digest))
+    assert result.returncode == 1
+    assert "exactly one real .command bootstrap" in result.stdout
 
 
 def test_packager_wraps_but_does_not_redefine_canonical_product_package():
