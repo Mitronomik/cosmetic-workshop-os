@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import stat
-import sys
 import unicodedata
 import zipfile
 
@@ -26,20 +25,29 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def normalized_basename(value: str) -> str:
-    """Compare ZIP filenames independent of macOS NFD/NFC storage form."""
-    return unicodedata.normalize("NFC", Path(value).name)
+    """Normalize a decoded ZIP basename for extension/exact-ASCII comparison."""
+    return unicodedata.normalize("NFC", PurePosixPath(value).name)
 
 
-def verify_command(text: str, *, expected_sha256: str, expected_version: str, expected_arch: str) -> list[str]:
+def is_appledouble(info: zipfile.ZipInfo) -> bool:
+    """Ignore only metadata sidecars created by macOS `ditto --sequesterRsrc`."""
+    parts = PurePosixPath(info.filename).parts
+    base = normalized_basename(info.filename)
+    return "__MACOSX" in parts or base.startswith("._")
+
+
+def verify_command(
+    text: str, *, expected_sha256: str, expected_version: str, expected_arch: str
+) -> list[str]:
     errors: list[str] = []
     required = (
-        '#!/bin/zsh',
+        "#!/bin/zsh",
         f'EXPECTED_SHA256="{expected_sha256}"',
         f'EXPECTED_VERSION="{expected_version}"',
         f'EXPECTED_ARCH="{expected_arch}"',
         'EXPECTED_BUNDLE_ID="ru.cosmetic-workshop-os.app"',
         'INSTALL_DIR="$HOME/Applications"',
-        'ACTUAL_SHA256=',
+        "ACTUAL_SHA256=",
         '[[ "$ACTUAL_SHA256" == "$EXPECTED_SHA256" ]]',
         'CANDIDATE_APP="$STAGE_DIR/CosmeticWorkshopOS.app"',
         "Print :CFBundleIdentifier",
@@ -97,7 +105,15 @@ def verify_command(text: str, *, expected_sha256: str, expected_version: str, ex
             errors.append(f"bootstrap ordering checkpoint missing: {name}")
         positions[name] = position
 
-    if all(positions[name] >= 0 for name in ("sha_compare", "bundle_id_compare", "version_compare", "executable_compare", "architecture_gate", "first_xattr")):
+    first_gate_names = (
+        "sha_compare",
+        "bundle_id_compare",
+        "version_compare",
+        "executable_compare",
+        "architecture_gate",
+        "first_xattr",
+    )
+    if all(positions[name] >= 0 for name in first_gate_names):
         if not (
             positions["sha_compare"]
             < positions["bundle_id_compare"]
@@ -106,9 +122,19 @@ def verify_command(text: str, *, expected_sha256: str, expected_version: str, ex
             < positions["architecture_gate"]
             < positions["first_xattr"]
         ):
-            errors.append("quarantine removal is not ordered after all candidate verification gates")
+            errors.append(
+                "quarantine removal is not ordered after all candidate verification gates"
+            )
 
-    if all(positions[name] >= 0 for name in ("first_xattr", "running_guard", "prepare_destination", "backup", "replace", "launch")):
+    publication_names = (
+        "first_xattr",
+        "running_guard",
+        "prepare_destination",
+        "backup",
+        "replace",
+        "launch",
+    )
+    if all(positions[name] >= 0 for name in publication_names):
         if not (
             positions["first_xattr"]
             < positions["running_guard"]
@@ -117,16 +143,35 @@ def verify_command(text: str, *, expected_sha256: str, expected_version: str, ex
             < positions["replace"]
             < positions["launch"]
         ):
-            errors.append("update publication order does not preserve verify → guard → stage → backup → replace → launch")
+            errors.append(
+                "update publication order does not preserve verify → guard → stage → backup → replace → launch"
+            )
 
-    for needle in ("cosmetic_workshop.sqlite", "schema_migrations", "update-journal.json", "before_migration"):
+    for needle in (
+        "cosmetic_workshop.sqlite",
+        "schema_migrations",
+        "update-journal.json",
+        "before_migration",
+    ):
         if needle in text:
             errors.append(f"bootstrap reaches into product data/update semantics: {needle}")
 
     return errors
 
 
-def verify_directory(directory: Path, *, expected_sha256: str, expected_version: str, expected_arch: str) -> list[str]:
+def verify_readme(
+    text: str, *, expected_sha256: str, expected_version: str, expected_arch: str
+) -> list[str]:
+    errors: list[str] = []
+    for token in (expected_sha256, expected_version, expected_arch, COMMAND_NAME):
+        if token not in text:
+            errors.append(f"readme missing release identity token: {token}")
+    return errors
+
+
+def verify_directory(
+    directory: Path, *, expected_sha256: str, expected_version: str, expected_arch: str
+) -> list[str]:
     errors: list[str] = []
     command = directory / COMMAND_NAME
     inner_zip = directory / INNER_ZIP_NAME
@@ -142,36 +187,93 @@ def verify_directory(directory: Path, *, expected_sha256: str, expected_version:
     actual = hashlib.sha256(inner_zip.read_bytes()).hexdigest()
     if actual != expected_sha256:
         errors.append(f"inner ZIP SHA mismatch: {actual}")
-    text = command.read_text(encoding="utf-8")
-    errors.extend(verify_command(text, expected_sha256=expected_sha256, expected_version=expected_version, expected_arch=expected_arch))
-    readme_text = readme.read_text(encoding="utf-8")
-    for token in (expected_sha256, expected_version, expected_arch, COMMAND_NAME):
-        if token not in readme_text:
-            errors.append(f"readme missing release identity token: {token}")
+    errors.extend(
+        verify_command(
+            command.read_text(encoding="utf-8"),
+            expected_sha256=expected_sha256,
+            expected_version=expected_version,
+            expected_arch=expected_arch,
+        )
+    )
+    errors.extend(
+        verify_readme(
+            readme.read_text(encoding="utf-8"),
+            expected_sha256=expected_sha256,
+            expected_version=expected_version,
+            expected_arch=expected_arch,
+        )
+    )
     return errors
 
 
-def verify_zip(path: Path, *, expected_sha256: str, expected_version: str, expected_arch: str) -> list[str]:
+def verify_zip(
+    path: Path, *, expected_sha256: str, expected_version: str, expected_arch: str
+) -> list[str]:
+    """Verify the outer ZIP without trusting localized filename decoding.
+
+    `ditto` can store localized filenames in a way Python's generic ZIP decoder
+    renders differently from Finder. Filename spelling is therefore an UX
+    property, not the release-identity boundary. The outer archive must carry:
+    exactly one real `.command`, exactly one canonical ASCII inner product ZIP,
+    and exactly one real `.txt` readme. AppleDouble sidecars are ignored. The
+    command *contents* remain the security boundary and are fully verified.
+    """
     errors: list[str] = []
     try:
         with zipfile.ZipFile(path) as archive:
-            infos = archive.infolist()
-            command_infos = [i for i in infos if normalized_basename(i.filename) == COMMAND_NAME and not i.is_dir()]
-            inner_infos = [i for i in infos if normalized_basename(i.filename) == INNER_ZIP_NAME and not i.is_dir()]
-            readme_infos = [i for i in infos if normalized_basename(i.filename) == README_NAME and not i.is_dir()]
+            real_infos = [
+                info
+                for info in archive.infolist()
+                if not info.is_dir() and not is_appledouble(info)
+            ]
+            command_infos = [
+                info
+                for info in real_infos
+                if normalized_basename(info.filename).casefold().endswith(".command")
+            ]
+            inner_infos = [
+                info
+                for info in real_infos
+                if normalized_basename(info.filename) == INNER_ZIP_NAME
+            ]
+            readme_infos = [
+                info
+                for info in real_infos
+                if normalized_basename(info.filename).casefold().endswith(".txt")
+            ]
+
             if len(command_infos) != 1:
-                errors.append(f"outer ZIP must contain exactly one bootstrap; got {len(command_infos)}")
+                errors.append(
+                    f"outer ZIP must contain exactly one real .command bootstrap; got {len(command_infos)}"
+                )
             if len(inner_infos) != 1:
-                errors.append(f"outer ZIP must contain exactly one inner product ZIP; got {len(inner_infos)}")
+                errors.append(
+                    f"outer ZIP must contain exactly one {INNER_ZIP_NAME}; got {len(inner_infos)}"
+                )
             if len(readme_infos) != 1:
-                errors.append(f"outer ZIP must contain exactly one readme; got {len(readme_infos)}")
+                errors.append(
+                    f"outer ZIP must contain exactly one real .txt readme; got {len(readme_infos)}"
+                )
+
+            recognized_ids = {
+                id(info)
+                for info in command_infos + inner_infos + readme_infos
+            }
+            unexpected = [
+                info.filename for info in real_infos if id(info) not in recognized_ids
+            ]
+            if unexpected:
+                errors.append(f"outer ZIP contains unexpected real files: {unexpected[:10]}")
+
             if errors:
-                decoded = [repr(normalized_basename(i.filename)) for i in infos if not i.is_dir()][:20]
-                errors.append(f"decoded outer ZIP basenames: {decoded}")
+                decoded = [repr(info.filename) for info in real_infos[:20]]
+                errors.append(f"decoded real outer ZIP entries: {decoded}")
                 return errors
 
             command_info = command_infos[0]
             inner_info = inner_infos[0]
+            readme_info = readme_infos[0]
+
             command_mode = command_info.external_attr >> 16
             if not command_mode & stat.S_IXUSR:
                 errors.append("outer ZIP does not preserve bootstrap executable bit")
@@ -181,8 +283,24 @@ def verify_zip(path: Path, *, expected_sha256: str, expected_version: str, expec
             if actual != expected_sha256:
                 errors.append(f"outer ZIP inner product SHA mismatch: {actual}")
 
-            text = archive.read(command_info).decode("utf-8")
-            errors.extend(verify_command(text, expected_sha256=expected_sha256, expected_version=expected_version, expected_arch=expected_arch))
+            command_text = archive.read(command_info).decode("utf-8")
+            errors.extend(
+                verify_command(
+                    command_text,
+                    expected_sha256=expected_sha256,
+                    expected_version=expected_version,
+                    expected_arch=expected_arch,
+                )
+            )
+            readme_text = archive.read(readme_info).decode("utf-8")
+            errors.extend(
+                verify_readme(
+                    readme_text,
+                    expected_sha256=expected_sha256,
+                    expected_version=expected_version,
+                    expected_arch=expected_arch,
+                )
+            )
     except (OSError, zipfile.BadZipFile, UnicodeDecodeError) as exc:
         errors.append(f"outer ZIP unreadable: {exc}")
     return errors
@@ -198,12 +316,18 @@ def main() -> int:
     parser.add_argument("--expected-architecture", required=True)
     args = parser.parse_args()
 
-    if len(args.expected_sha256) != 64 or any(ch not in "0123456789abcdef" for ch in args.expected_sha256):
+    if len(args.expected_sha256) != 64 or any(
+        ch not in "0123456789abcdef" for ch in args.expected_sha256
+    ):
         print("Single-client distribution verification: FAIL")
         print("- expected SHA-256 is not a lowercase 64-hex digest")
         return 2
 
-    kwargs = dict(expected_sha256=args.expected_sha256, expected_version=args.expected_version, expected_arch=args.expected_architecture)
+    kwargs = dict(
+        expected_sha256=args.expected_sha256,
+        expected_version=args.expected_version,
+        expected_arch=args.expected_architecture,
+    )
     if args.directory is not None:
         errors = verify_directory(args.directory, **kwargs)
     else:
