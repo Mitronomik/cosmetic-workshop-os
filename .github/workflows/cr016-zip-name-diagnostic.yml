@@ -1,0 +1,46 @@
+name: CR016 outer ZIP filename diagnostic
+
+on:
+  push:
+    branches:
+      - verification/cr016-diagnostic-4f1bde90
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 4f1bde90e56e9c177c288bd98ec84c48b143c985
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Build until outer ZIP verifier reports decoded names
+        shell: bash
+        run: |
+          set -uo pipefail
+          export COSMETIC_WORKSHOP_BUILD_DIR="$RUNNER_TEMP/cr016-build"
+          export COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR="$RUNNER_TEMP/cr016-dist"
+          export COSMETIC_WORKSHOP_SINGLE_CLIENT_OUTPUT_DIR="$RUNNER_TEMP/cr016-dist"
+          export COSMETIC_WORKSHOP_BUILD_CACHE_DIR="$RUNNER_TEMP/cr016-cache"
+          bash scripts/package_single_client_macos.sh
+          status=$?
+          echo "packager_status=$status"
+          OUTER="$(find "$RUNNER_TEMP/cr016-dist" -maxdepth 1 -name 'CosmeticWorkshopOS-single-client-*.zip' -print -quit)"
+          if [ -n "$OUTER" ]; then
+            echo '=== ditto zip listing ==='
+            /usr/bin/zipinfo -1 "$OUTER" || true
+            echo '=== Python decoded repr ==='
+            python3 - "$OUTER" <<'PY'
+import sys, zipfile, unicodedata
+with zipfile.ZipFile(sys.argv[1]) as z:
+    for i in z.infolist():
+        if not i.is_dir():
+            print(repr(i.filename), 'basename NFC=', repr(unicodedata.normalize('NFC', i.filename.rsplit('/',1)[-1])), 'flag_bits=', hex(i.flag_bits))
+PY
+          fi
+          exit "$status"
