@@ -1,6 +1,6 @@
 # Current focus
 
-Updated: `2026-08-14`
+Updated: `2026-08-16`
 
 ## Current lifecycle
 
@@ -25,13 +25,26 @@ Product release readiness — NOT CLAIMED
 
 ## Current task
 
-**Repeat the D5 human clean-Mac/clean-profile rehearsal on the fixed exact package.**
+**Implement only CR-016 — Single-client assisted install and update bootstrap after the decision changeset merges.**
 
-CR-015 is implemented and verified. Runtime implementation head `d7f95141e5f41c7a806c3fafb71e942fe5892dd8` merged content-identically as `c38940349a80d345f3e833b61e4bf4e5e761c0eb` (`0` changed files from verified head to merge). External exact-package run `31780899805` proved LaunchServices start, macOS application-level Quit, complete packaged runtime/backend cleanup, released ports, LaunchServices restart and persistence using exact ZIP SHA-256 `85f993a93082c4b3a36771318cf8c0c3abf02be56b1374a32a62d1a6b9279ee6`.
+The clean-Mac rehearsal established that the remaining blocker is distribution trust for the unsigned/unnotarized package, not the product runtime. For the current single known client, ADR 0023 authorizes a bounded version-specific `.command` bootstrap instead of Developer ID/notarization or a product redesign.
 
-No new runtime implementation slice is authorized now. Use the fixed exact package for the mandatory human D5 rehearsal. If the ordinary Finder/Dock/Quit/restart path fails again, stop and classify the new observation before changing code. If it passes, D5 still needs its documentation/checklist evidence and lifecycle closure; do not silently claim release readiness.
+Authorized implementation scope is only the packaging/support layer required to produce an outer ZIP containing the canonical exact `CosmeticWorkshopOS-mac.zip` plus `Установить или обновить Мастерскую.command`. The generated bootstrap must verify the companion ZIP SHA-256 and staged bundle identity first, then and only then remove quarantine from that verified staged `.app`, install it under the user's application space and support the same bounded flow for later manual updates.
 
-Do not start signing/notarization, DMG/PKG, public release hosting, GitHub Releases, auto-update/download, release channels, MDM/remote-management integration, Phase 12 or product release readiness claims.
+Do not modify backend, frontend, domain logic, database/migrations, Restore or D4 update-safety semantics. Do not globally disable Gatekeeper, use `sudo`, weaken SIP/Security Policy, add signing/notarization, add automatic update downloads, public distribution, release channels, Phase 12 or product release-readiness claims.
+
+The implementation must remain fail-closed and must be followed by a human clean-Mac rehearsal of the actual downloaded outer ZIP and Finder double-click `.command` flow. Direct shell execution in CI is not a substitute for that human handoff.
+
+## Prior CR-015 handoff truth
+
+The CR-015 closure correctly recorded: **Repeat the D5 human clean-Mac/clean-profile rehearsal on the fixed exact package** and **No new runtime implementation slice is authorized now**. Those statements remain true for product runtime scope. CR-016 is a later, separate distribution/support decision and authorizes only the bounded packaging/bootstrap exception from ADR 0023; it does not reopen runtime, backend, frontend, database, Restore or D4 semantics.
+
+## CR-015 evidence retained
+
+- verified implementation head: `d7f95141e5f41c7a806c3fafb71e942fe5892dd8`;
+- content-identical merge: `c38940349a80d345f3e833b61e4bf4e5e761c0eb`;
+- external exact-package run: `31780899805`;
+- exact fixed ZIP SHA-256: `85f993a93082c4b3a36771318cf8c0c3abf02be56b1374a32a62d1a6b9279ee6`.
 
 ## Final D4 evidence
 

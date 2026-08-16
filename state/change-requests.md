@@ -1,6 +1,6 @@
 # Change requests
 
-Updated: `2026-08-13`
+Updated: `2026-08-16`
 
 The exact pre-CR-013 ledger is preserved in `docs/history/d4-pre-decision/change-requests.md`.
 
@@ -61,3 +61,19 @@ The mandatory D5 human rehearsal confirmed a product blocker: first launch and b
 ### CR-015 implementation evidence
 
 Implemented by verified head `d7f95141e5f41c7a806c3fafb71e942fe5892dd8`, merged as `c38940349a80d345f3e833b61e4bf4e5e761c0eb` with `0` changed files. External exact-package run `31780899805` passed the complete application-level Quit/restart blocker matrix; exact ZIP SHA-256 `85f993a93082c4b3a36771318cf8c0c3abf02be56b1374a32a62d1a6b9279ee6`. CR-015 is closed as an implementation blocker fix. D5 itself remains open for fresh human rehearsal and final evidence.
+
+## CR-016 — Single-client assisted install and update bootstrap
+
+Status: **ACCEPTED — BOUNDED IMPLEMENTATION AUTHORIZED AFTER DECISION MERGE**.
+
+Durable decision: `docs/decisions/0023-single-client-assisted-install-bootstrap.md`.
+
+The clean-Mac rehearsal exposed a second distribution blocker: the unsigned/unnotarized exact package can be rejected by Gatekeeper before product code runs. For the current single known client, paying for Developer ID/notarization is not presently justified and the product architecture must not be rolled back or redesigned.
+
+CR-016 authorizes only a version-specific assisted bootstrap delivered as an outer ZIP containing the canonical exact `CosmeticWorkshopOS-mac.zip` plus a double-clickable `.command`. The bootstrap must verify the exact companion ZIP SHA-256 and staged bundle identity before any quarantine metadata is removed. Only the verified staged `CosmeticWorkshopOS.app` may have `com.apple.quarantine` removed. Gatekeeper must remain enabled globally.
+
+The same bounded bootstrap may handle first installation and later manual package replacement for this one-client pilot. It must install in the user's application space without `sudo`, retain the previous `.app` before update publication, never touch the database or user-data directory, and leave all schema compatibility/backup/migration/UpdateLog semantics to the already-closed D4 implementation.
+
+CR-016 does **not** authorize Developer ID, notarization, global Gatekeeper disable, SIP/Security Policy weakening, DMG/PKG, App Store, public release hosting, GitHub Releases, automatic update downloads, release channels, backend/frontend/domain changes, database/Restore changes, Phase 12 or product release readiness.
+
+The implementation must be separately tested and followed by a human clean-Mac rehearsal of the actual downloaded outer ZIP and Finder double-click `.command` flow. Success proves only the bounded single-client assisted-install mode; it does not prove signed/notarized/public/self-service distribution readiness.
