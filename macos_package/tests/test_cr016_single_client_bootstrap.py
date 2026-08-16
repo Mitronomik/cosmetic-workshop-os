@@ -5,6 +5,7 @@ from pathlib import Path
 import stat
 import subprocess
 import sys
+import unicodedata
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -128,16 +129,24 @@ def test_directory_verifier_rejects_inner_zip_mismatch(tmp_path):
     assert "inner ZIP SHA mismatch" in result.stdout
 
 
-def test_outer_zip_must_preserve_command_executable_bit(tmp_path):
-    directory, digest = build_distribution_dir(tmp_path)
-    archive_path = tmp_path / "outer.zip"
+def write_outer_zip(directory: Path, archive_path: Path, *, nfd_names: bool = False, command_executable: bool = True) -> None:
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
         root = directory.name
         for path in directory.iterdir():
-            info = zipfile.ZipInfo(f"{root}/{path.name}")
+            root_name = unicodedata.normalize("NFD", root) if nfd_names else root
+            file_name = unicodedata.normalize("NFD", path.name) if nfd_names else path.name
+            info = zipfile.ZipInfo(f"{root_name}/{file_name}")
             mode = path.stat().st_mode
+            if path.name == COMMAND_NAME and not command_executable:
+                mode &= ~stat.S_IXUSR
             info.external_attr = (mode & 0xFFFF) << 16
             archive.writestr(info, path.read_bytes())
+
+
+def test_outer_zip_must_preserve_command_executable_bit(tmp_path):
+    directory, digest = build_distribution_dir(tmp_path)
+    archive_path = tmp_path / "outer.zip"
+    write_outer_zip(directory, archive_path)
     result = run_verifier(
         "--zip",
         str(archive_path),
@@ -151,15 +160,7 @@ def test_outer_zip_must_preserve_command_executable_bit(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
     broken = tmp_path / "outer-no-exec.zip"
-    with zipfile.ZipFile(broken, "w", zipfile.ZIP_DEFLATED) as archive:
-        root = directory.name
-        for path in directory.iterdir():
-            info = zipfile.ZipInfo(f"{root}/{path.name}")
-            mode = path.stat().st_mode
-            if path.name == COMMAND_NAME:
-                mode &= ~stat.S_IXUSR
-            info.external_attr = (mode & 0xFFFF) << 16
-            archive.writestr(info, path.read_bytes())
+    write_outer_zip(directory, broken, command_executable=False)
     result = run_verifier(
         "--zip",
         str(broken),
@@ -172,6 +173,23 @@ def test_outer_zip_must_preserve_command_executable_bit(tmp_path):
     )
     assert result.returncode == 1
     assert "does not preserve bootstrap executable bit" in result.stdout
+
+
+def test_outer_zip_accepts_macos_nfd_filename_normalization(tmp_path):
+    directory, digest = build_distribution_dir(tmp_path)
+    archive_path = tmp_path / "outer-nfd.zip"
+    write_outer_zip(directory, archive_path, nfd_names=True)
+    result = run_verifier(
+        "--zip",
+        str(archive_path),
+        "--expected-sha256",
+        digest,
+        "--expected-version",
+        VERSION,
+        "--expected-architecture",
+        ARCH,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_packager_wraps_but_does_not_redefine_canonical_product_package():
