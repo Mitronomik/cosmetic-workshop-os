@@ -22,6 +22,9 @@ jobs:
           p=Path('/tmp/build_cr017_decision.py')
           lines=[]
           for line in p.read_text().splitlines():
+              if line.startswith('ROOT='):
+                  lines.append('ROOT=Path.cwd()')
+                  continue
               if 'if old not in t: raise SystemExit' in line:
                   continue
               if 'if INSERT_AFTER not in t: raise SystemExit' in line:
