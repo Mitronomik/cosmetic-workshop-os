@@ -13,6 +13,7 @@ import hashlib
 from pathlib import Path
 import stat
 import sys
+import unicodedata
 import zipfile
 
 COMMAND_NAME = "Установить или обновить Мастерскую.command"
@@ -22,6 +23,11 @@ README_NAME = "Прочтите меня.txt"
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def normalized_basename(value: str) -> str:
+    """Compare ZIP filenames independent of macOS NFD/NFC storage form."""
+    return unicodedata.normalize("NFC", Path(value).name)
 
 
 def verify_command(text: str, *, expected_sha256: str, expected_version: str, expected_arch: str) -> list[str]:
@@ -71,8 +77,6 @@ def verify_command(text: str, *, expected_sha256: str, expected_version: str, ex
         if placeholder in text:
             errors.append(f"bootstrap contains unresolved placeholder: {placeholder}")
 
-    # Ordering is a security property: no quarantine removal or installed-app
-    # mutation may occur before checksum and staged identity/architecture gates.
     checkpoints = {
         "sha_compare": '[[ "$ACTUAL_SHA256" == "$EXPECTED_SHA256" ]]',
         "bundle_id_compare": '[[ "$BUNDLE_ID" == "$EXPECTED_BUNDLE_ID" ]]',
@@ -115,7 +119,6 @@ def verify_command(text: str, *, expected_sha256: str, expected_version: str, ex
         ):
             errors.append("update publication order does not preserve verify → guard → stage → backup → replace → launch")
 
-    # Bootstrap must not own database/data semantics.
     for needle in ("cosmetic_workshop.sqlite", "schema_migrations", "update-journal.json", "before_migration"):
         if needle in text:
             errors.append(f"bootstrap reaches into product data/update semantics: {needle}")
@@ -160,9 +163,9 @@ def verify_zip(path: Path, *, expected_sha256: str, expected_version: str, expec
     try:
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
-            command_infos = [i for i in infos if Path(i.filename).name == COMMAND_NAME and not i.is_dir()]
-            inner_infos = [i for i in infos if Path(i.filename).name == INNER_ZIP_NAME and not i.is_dir()]
-            readme_infos = [i for i in infos if Path(i.filename).name == README_NAME and not i.is_dir()]
+            command_infos = [i for i in infos if normalized_basename(i.filename) == COMMAND_NAME and not i.is_dir()]
+            inner_infos = [i for i in infos if normalized_basename(i.filename) == INNER_ZIP_NAME and not i.is_dir()]
+            readme_infos = [i for i in infos if normalized_basename(i.filename) == README_NAME and not i.is_dir()]
             if len(command_infos) != 1:
                 errors.append(f"outer ZIP must contain exactly one bootstrap; got {len(command_infos)}")
             if len(inner_infos) != 1:
