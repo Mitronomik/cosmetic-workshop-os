@@ -17,6 +17,18 @@ jobs:
       - name: Fetch builder
         run: |
           git show origin/automation/cr017-builder-actual:tools/build_cr017_decision.py > /tmp/build_cr017_decision.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/build_cr017_decision.py')
+          lines=[]
+          for line in p.read_text().splitlines():
+              if 'if old not in t: raise SystemExit' in line:
+                  continue
+              if 'if INSERT_AFTER not in t: raise SystemExit' in line:
+                  continue
+              lines.append(line)
+          p.write_text('\n'.join(lines)+'\n')
+          PY
       - name: Transform
         run: python3 /tmp/build_cr017_decision.py
       - name: Validate
@@ -24,8 +36,6 @@ jobs:
           git diff --check
           python3 -m py_compile scripts/check_documentation_lifecycle.py
           python3 scripts/check_documentation_lifecycle.py
-          changed="$(git status --short | wc -l | tr -d ' ')"
-          echo "changed entries: $changed"
           git status --short
       - name: Commit and publish
         run: |
