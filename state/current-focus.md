@@ -35,6 +35,10 @@ Do not modify backend, frontend, domain logic, database/migrations, Restore or D
 
 The implementation must remain fail-closed and must be followed by a human clean-Mac rehearsal of the actual downloaded outer ZIP and Finder double-click `.command` flow. Direct shell execution in CI is not a substitute for that human handoff.
 
+## Prior CR-015 handoff truth
+
+The CR-015 closure correctly recorded: **Repeat the D5 human clean-Mac/clean-profile rehearsal on the fixed exact package** and **No new runtime implementation slice is authorized now**. Those statements remain true for product runtime scope. CR-016 is a later, separate distribution/support decision and authorizes only the bounded packaging/bootstrap exception from ADR 0023; it does not reopen runtime, backend, frontend, database, Restore or D4 semantics.
+
 ## CR-015 evidence retained
 
 - verified implementation head: `d7f95141e5f41c7a806c3fafb71e942fe5892dd8`;
