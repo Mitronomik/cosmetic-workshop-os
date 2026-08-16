@@ -1,0 +1,100 @@
+name: CR016 single-client bootstrap verification
+
+on:
+  push:
+    branches:
+      - verification/cr016-bootstrap-1307440b
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      EXPECTED_HEAD: 1307440b389cdadc307b72048f6f083269a1327a
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 1307440b389cdadc307b72048f6f083269a1327a
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Test build and exercise CR-016 bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --check d2aef241f46be58a1f4c535718f93d15f8209ed8...HEAD
+
+          python3 -m pip install --disable-pip-version-check './backend[test]'
+          PYTHONPATH="$PWD/backend:$PWD" python3 -m pytest macos_package/tests -q
+          python3 scripts/check_documentation_lifecycle.py
+
+          export COSMETIC_WORKSHOP_BUILD_DIR="$RUNNER_TEMP/cr016-build"
+          export COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR="$RUNNER_TEMP/cr016-dist"
+          export COSMETIC_WORKSHOP_SINGLE_CLIENT_OUTPUT_DIR="$RUNNER_TEMP/cr016-dist"
+          export COSMETIC_WORKSHOP_BUILD_CACHE_DIR="$RUNNER_TEMP/cr016-cache"
+          bash scripts/package_single_client_macos.sh | tee "$RUNNER_TEMP/cr016-build.log"
+
+          OUTER_ZIP="$(find "$RUNNER_TEMP/cr016-dist" -maxdepth 1 -type f -name 'CosmeticWorkshopOS-single-client-*.zip' -print -quit)"
+          test -n "$OUTER_ZIP"
+          test -f "$RUNNER_TEMP/cr016-dist/CosmeticWorkshopOS-mac.zip"
+          INNER_SHA="$(shasum -a 256 "$RUNNER_TEMP/cr016-dist/CosmeticWorkshopOS-mac.zip" | awk '{print $1}')"
+
+          EXTRACT="$RUNNER_TEMP/cr016-outer"
+          mkdir -p "$EXTRACT"
+          ditto -x -k "$OUTER_ZIP" "$EXTRACT"
+          COMMAND="$(find "$EXTRACT" -type f -name 'Установить или обновить Мастерскую.command' -print -quit)"
+          test -n "$COMMAND"
+          test -x "$COMMAND"
+          grep -q "EXPECTED_SHA256=\"$INNER_SHA\"" "$COMMAND"
+          ! grep -q 'spctl --master-disable' "$COMMAND"
+          ! grep -q 'sudo ' "$COMMAND"
+
+          PILOT_HOME="$RUNNER_TEMP/pilot-home"
+          mkdir -p "$PILOT_HOME"
+
+          printf '\n' | HOME="$PILOT_HOME" zsh "$COMMAND"
+          test -d "$PILOT_HOME/Applications/CosmeticWorkshopOS.app"
+          test -f "$PILOT_HOME/Library/Application Support/CosmeticWorkshopOSInstaller/install-receipt.txt"
+          grep -q "sha256=$INNER_SHA" "$PILOT_HOME/Library/Application Support/CosmeticWorkshopOSInstaller/install-receipt.txt"
+          pgrep -x CosmeticWorkshopOS >/dev/null
+
+          osascript -e 'tell application id "ru.cosmetic-workshop-os.app" to quit'
+          for _ in {1..30}; do
+            if ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1 && ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1
+          ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1
+
+          printf '\n' | HOME="$PILOT_HOME" zsh "$COMMAND"
+          pgrep -x CosmeticWorkshopOS >/dev/null
+          find "$PILOT_HOME/Library/Application Support/CosmeticWorkshopOSInstaller/previous-apps" -maxdepth 1 -type d -name 'CosmeticWorkshopOS-*.app' | grep -q .
+
+          osascript -e 'tell application id "ru.cosmetic-workshop-os.app" to quit'
+          for _ in {1..30}; do
+            if ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1 && ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1
+          ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1
+
+          git diff --check
+          mkdir -p "$RUNNER_TEMP/cr016-evidence"
+          cp "$RUNNER_TEMP/cr016-build.log" "$RUNNER_TEMP/cr016-evidence/build.log"
+          printf 'exact_head=%s\nouter_zip=%s\ninner_sha256=%s\nclassification=PASS — FULL AUTOMATED SMOKE PASSED\nhuman_finder_rehearsal=REQUIRED_NOT_EXECUTED\n' \
+            "$EXPECTED_HEAD" "$(basename "$OUTER_ZIP")" "$INNER_SHA" > "$RUNNER_TEMP/cr016-evidence/summary.txt"
+          cp "$OUTER_ZIP" "$RUNNER_TEMP/cr016-evidence/"
+      - name: Upload CR-016 evidence and pilot outer ZIP
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cr016-single-client-bootstrap-1307440b
+          path: ${{ runner.temp }}/cr016-evidence
+          if-no-files-found: error
