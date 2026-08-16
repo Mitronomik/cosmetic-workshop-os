@@ -1,0 +1,125 @@
+name: CR016 single-client bootstrap verification
+
+on:
+  push:
+    branches:
+      - verification/cr016-bootstrap-0179be9f
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      EXPECTED_HEAD: 0179be9fa1758a47662f86c5a14a7f24341815c5
+      EXPECTED_BASE: d2aef241f46be58a1f4c535718f93d15f8209ed8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 0179be9fa1758a47662f86c5a14a7f24341815c5
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Test build and exercise CR-016 bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --check "$EXPECTED_BASE...$EXPECTED_HEAD"
+
+          python3 -m pip install --disable-pip-version-check './backend[test]'
+          PYTHONPATH="$PWD/backend:$PWD" python3 -m pytest macos_package/tests -q
+          python3 scripts/check_documentation_lifecycle.py
+
+          export COSMETIC_WORKSHOP_BUILD_DIR="$RUNNER_TEMP/cr016-build"
+          export COSMETIC_WORKSHOP_PACKAGE_OUTPUT_DIR="$RUNNER_TEMP/cr016-dist"
+          export COSMETIC_WORKSHOP_SINGLE_CLIENT_OUTPUT_DIR="$RUNNER_TEMP/cr016-dist"
+          export COSMETIC_WORKSHOP_BUILD_CACHE_DIR="$RUNNER_TEMP/cr016-cache"
+          bash scripts/package_single_client_macos.sh | tee "$RUNNER_TEMP/cr016-build.log"
+
+          OUTER_ZIP="$(find "$RUNNER_TEMP/cr016-dist" -maxdepth 1 -type f -name 'CosmeticWorkshopOS-single-client-*.zip' -print -quit)"
+          test -n "$OUTER_ZIP"
+          INNER_ZIP="$RUNNER_TEMP/cr016-dist/CosmeticWorkshopOS-mac.zip"
+          test -f "$INNER_ZIP"
+          INNER_SHA="$(shasum -a 256 "$INNER_ZIP" | awk '{print $1}')"
+          OUTER_SHA="$(shasum -a 256 "$OUTER_ZIP" | awk '{print $1}')"
+
+          EXTRACT="$RUNNER_TEMP/cr016-outer"
+          mkdir -p "$EXTRACT"
+          ditto -x -k "$OUTER_ZIP" "$EXTRACT"
+          mapfile_compat() { while IFS= read -r line; do COMMANDS+=("$line"); done; }
+          COMMANDS=()
+          find "$EXTRACT" -type f -name '*.command' -not -path '*/__MACOSX/*' -print | mapfile_compat
+          test "${#COMMANDS[@]}" -eq 1
+          COMMAND="${COMMANDS[0]}"
+          test -x "$COMMAND"
+          grep -q "EXPECTED_SHA256=\"$INNER_SHA\"" "$COMMAND"
+          ! grep -q 'spctl --master-disable' "$COMMAND"
+          ! grep -q 'sudo ' "$COMMAND"
+
+          PILOT_HOME="$RUNNER_TEMP/pilot-home"
+          mkdir -p "$PILOT_HOME"
+
+          # Automated support-layer execution. The final Finder double-click
+          # handoff remains mandatory human evidence on the clean second Mac.
+          printf '\n' | HOME="$PILOT_HOME" zsh "$COMMAND"
+          INSTALLED="$PILOT_HOME/Applications/CosmeticWorkshopOS.app"
+          RECEIPT="$PILOT_HOME/Library/Application Support/CosmeticWorkshopOSInstaller/install-receipt.txt"
+          test -d "$INSTALLED"
+          test -f "$RECEIPT"
+          grep -q "sha256=$INNER_SHA" "$RECEIPT"
+          pgrep -x CosmeticWorkshopOS >/dev/null
+
+          osascript -e 'tell application id "ru.cosmetic-workshop-os.app" to quit'
+          for _ in {1..30}; do
+            if ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1 && ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1
+          ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1
+
+          # Re-run the same exact bootstrap as a bounded manual update.
+          printf '\n' | HOME="$PILOT_HOME" zsh "$COMMAND"
+          pgrep -x CosmeticWorkshopOS >/dev/null
+          PREVIOUS_DIR="$PILOT_HOME/Library/Application Support/CosmeticWorkshopOSInstaller/previous-apps"
+          find "$PREVIOUS_DIR" -maxdepth 1 -type d -name 'CosmeticWorkshopOS-*.app' | grep -q .
+
+          osascript -e 'tell application id "ru.cosmetic-workshop-os.app" to quit'
+          for _ in {1..30}; do
+            if ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1 && ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          ! pgrep -x CosmeticWorkshopOS >/dev/null 2>&1
+          ! pgrep -x CosmeticWorkshopOSRuntime >/dev/null 2>&1
+
+          # Scope remains packaging/support only.
+          git diff --name-only "$EXPECTED_BASE...$EXPECTED_HEAD" | sort > "$RUNNER_TEMP/changed.txt"
+          cat > "$RUNNER_TEMP/expected.txt" <<'EOF'
+          Makefile
+          macos_package/tests/test_cr016_single_client_bootstrap.py
+          scripts/macos/single_client_bootstrap.command.template
+          scripts/package_single_client_macos.sh
+          scripts/verify_single_client_package.py
+          EOF
+          sed -i '' 's/^          //' "$RUNNER_TEMP/expected.txt"
+          sort -o "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/expected.txt"
+          diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/changed.txt"
+          ! grep -E '^(backend/|frontend/|launcher/|migrations/)' "$RUNNER_TEMP/changed.txt"
+
+          mkdir -p "$RUNNER_TEMP/cr016-evidence"
+          cp "$RUNNER_TEMP/cr016-build.log" "$RUNNER_TEMP/cr016-evidence/build.log"
+          cp "$OUTER_ZIP" "$RUNNER_TEMP/cr016-evidence/"
+          printf 'exact_head=%s\nouter_zip=%s\nouter_sha256=%s\ninner_sha256=%s\nclassification=PASS — FULL AUTOMATED SMOKE PASSED\nfirst_install=PASS\napplication_quit=PASS\nmanual_update=PASS\nprevious_app_retained=PASS\nsecond_quit=PASS\nhuman_finder_rehearsal=REQUIRED_NOT_EXECUTED\n' \
+            "$EXPECTED_HEAD" "$(basename "$OUTER_ZIP")" "$OUTER_SHA" "$INNER_SHA" > "$RUNNER_TEMP/cr016-evidence/summary.txt"
+      - name: Upload CR-016 evidence and pilot outer ZIP
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: cr016-single-client-bootstrap-0179be9f
+          path: ${{ runner.temp }}/cr016-evidence
+          if-no-files-found: error
